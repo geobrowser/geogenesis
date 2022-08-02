@@ -2,7 +2,19 @@
 
 a {
     text-decoration: underline;
-    @apply text-blue-800;
+    @apply bg-blue-800;
+}
+
+body {
+    margin: auto;
+    max-width: 70ch;
+    padding: 6ch 2ch;
+    @apply bg-stone-100 text-stone-900;
+
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-kerning: auto;
 }
 
 @tailwind components;
