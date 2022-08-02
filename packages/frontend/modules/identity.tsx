@@ -1,9 +1,10 @@
 import { RainbowKitProvider, getDefaultWallets } from '@rainbow-me/rainbowkit';
 import { chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
+import '@rainbow-me/rainbowkit/styles.css';
 
 const { chains, provider, webSocketProvider } = configureChains(
-    [chain.polygon, chain.goerli, chain.kovan, chain.rinkeby, chain.ropsten],
+    [chain.mainnet, chain.polygon, chain.goerli, chain.kovan, chain.rinkeby, chain.ropsten],
     [publicProvider()],
 );
 

@@ -2,7 +2,6 @@
 
 a {
     text-decoration: underline;
-    @apply bg-blue-800;
 }
 
 body {
@@ -14,6 +13,13 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-kerning: auto;
+}
+
+.navbar {
+    margin: auto;
+    padding: 2ch;
+    display: flex;
+    justify-content: space-between;
 }
 
 .layout {
