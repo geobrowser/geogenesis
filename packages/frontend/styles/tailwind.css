@@ -6,15 +6,20 @@ a {
 }
 
 body {
-    margin: auto;
-    max-width: 70ch;
-    padding: 6ch 2ch;
+    min-width: 100vw;
+    min-height: 100vh;
     @apply bg-stone-100 text-stone-900;
 
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-kerning: auto;
+}
+
+.layout {
+    margin: auto;
+    max-width: 70ch;
+    padding: 6ch 2ch;
 }
 
 @tailwind components;

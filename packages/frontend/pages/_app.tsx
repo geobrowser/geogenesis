@@ -6,7 +6,9 @@ import '@rainbow-me/rainbowkit/styles.css';
 function MyApp({ Component, pageProps }: AppProps) {
     return (
         <WalletProvider>
-            <Component {...pageProps} />
+            <div className='layout'>
+                <Component {...pageProps} />
+            </div>
         </WalletProvider>
     );
 }
