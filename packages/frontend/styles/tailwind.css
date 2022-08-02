@@ -1,3 +1,9 @@
 @tailwind base;
+
+a {
+    text-decoration: underline;
+    @apply text-blue-800;
+}
+
 @tailwind components;
 @tailwind utilities;
