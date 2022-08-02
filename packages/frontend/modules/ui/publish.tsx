@@ -21,7 +21,7 @@ export function PublishButton() {
     const onPublish = () => console.log(turndown.turndown(contentService.content));
 
     return (
-        <button className='rounded-lg px-6 py-4 bg-blue-700 text-slate-100 font-bold shadow-lg' onClick={onPublish}>
+        <button className='rounded-2xl px-6 py-4 bg-blue-700 text-slate-100 font-bold shadow-lg' onClick={onPublish}>
             Publish
         </button>
     );
