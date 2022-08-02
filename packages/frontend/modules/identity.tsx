@@ -4,7 +4,7 @@ import { publicProvider } from 'wagmi/providers/public';
 import '@rainbow-me/rainbowkit/styles.css';
 
 const { chains, provider, webSocketProvider } = configureChains(
-    [chain.mainnet, chain.polygon, chain.goerli, chain.kovan, chain.rinkeby, chain.ropsten],
+    [chain.rinkeby, chain.polygonMumbai, chain.mainnet, chain.polygon],
     [publicProvider()],
 );
 
