@@ -1,10 +1,11 @@
 import { AnimatePresence } from 'framer-motion';
-import type { NextPage } from 'next';
 import { useAccount } from 'wagmi';
 import { Animate } from '~/modules/ui/animate';
 import { Editor } from '~/modules/editor/editor';
+// This can come through context or something dependency injected as well
+import { contentService } from '~/modules/editor/content';
 
-const Home: NextPage = () => {
+const Home = () => {
     const { isConnected } = useAccount();
 
     return (
@@ -15,7 +16,7 @@ const Home: NextPage = () => {
                 </Animate>
             ) : (
                 <Animate key='Signed in' animation='fade'>
-                    <Editor />
+                    <Editor contentService={contentService} />
                 </Animate>
             )}
         </AnimatePresence>
