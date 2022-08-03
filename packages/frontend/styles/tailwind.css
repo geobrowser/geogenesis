@@ -45,7 +45,7 @@ body {
 
 .navbar {
   margin: auto;
-  padding: 2ch;
+  padding: 1.5rem;
   display: flex;
   justify-content: space-between;
 }
