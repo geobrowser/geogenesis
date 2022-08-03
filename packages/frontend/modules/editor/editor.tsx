@@ -27,12 +27,7 @@ export const Editor = memo(function Editor({
   )
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      LinkExtension.configure({
-        linkOnPaste: true,
-      }),
-    ],
+    extensions: [StarterKit, LinkExtension],
     content,
     editable,
     editorProps: {
