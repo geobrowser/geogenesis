@@ -14,13 +14,20 @@ async function main() {
   const geoDocument: GeoDocument = await GeoDocument.deploy(
     'https://geogenesis.vercel.app/'
   );
+
+  console.log(`Deploying GeoDocument at ${geoDocument.address}...`);
+
   await geoDocument.deployed();
 
-  saveAddress({
-    chainId,
-    contractName: 'GeoDocument',
-    address: geoDocument.address,
-  });
+  console.log(`Deployed GeoDocument at ${geoDocument.address}`);
+
+  if (process.env.HARDHAT_NETWORK !== 'localhost') {
+    saveAddress({
+      chainId,
+      contractName: 'GeoDocument',
+      address: geoDocument.address,
+    });
+  }
 }
 
 function saveAddress({

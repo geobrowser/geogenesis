@@ -1,5 +1,6 @@
 node_modules
 .env*
+!.env.template
 coverage
 coverage.json
 types
