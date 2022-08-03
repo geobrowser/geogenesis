@@ -1,9 +1,16 @@
-import { EditorContent, EditorOptions, useEditor } from '@tiptap/react'
+import Image from 'next/image'
+import {
+  BubbleMenu,
+  EditorContent,
+  EditorOptions,
+  useEditor,
+} from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import LinkExtension from '@tiptap/extension-link'
 import { memo, useState } from 'react'
 import showdown from 'showdown'
 import { Content } from './content'
+import { MenuItem } from './menu-item'
 
 interface Props {
   contentService: Content
@@ -40,5 +47,35 @@ export const Editor = memo(function Editor({
       contentService.setContent(converter.makeMarkdown(editor.getHTML())),
   })
 
-  return <EditorContent editor={editor} />
+  return (
+    <>
+      {editor && (
+        <BubbleMenu
+          className="bg-slate-50 shadow-lg p-4 space-x-4 rounded-xl"
+          editor={editor}
+          tippyOptions={{ duration: 100 }}
+        >
+          <MenuItem
+            onClick={editor.chain().focus().toggleBold().run}
+            isActive={editor.isActive('bold')}
+          >
+            Bold
+          </MenuItem>
+          <MenuItem
+            onClick={editor.chain().focus().toggleBold().run}
+            isActive={editor.isActive('italic')}
+          >
+            Italic
+          </MenuItem>
+          <MenuItem
+            onClick={editor.chain().focus().toggleBold().run}
+            isActive={editor.isActive('strike')}
+          >
+            Strikethrough
+          </MenuItem>
+        </BubbleMenu>
+      )}
+      <EditorContent editor={editor} />
+    </>
+  )
 })
