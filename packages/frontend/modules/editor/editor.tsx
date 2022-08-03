@@ -1,24 +1,42 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { EditorContent, EditorOptions, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { memo } from 'react'
+import { memo, useState } from 'react'
+import showdown from 'showdown'
 import { Content } from './content'
 
 interface Props {
   contentService: Content
+  initialContent?: string
+  editable?: EditorOptions['editable']
 }
 
+const converter = new showdown.Converter()
+
+const DEFAULT_CONTENT = 'In the hole in a ground there lived a hobbit.'
+
 // Don't want to rerender the editor over and over
-export const Editor = memo(function Editor({ contentService }: Props) {
+export const Editor = memo(function Editor({
+  contentService,
+  initialContent,
+  editable,
+}: Props) {
+  // Only convert markdown to html once on mount
+  const [content] = useState(() =>
+    converter.makeHtml(initialContent || DEFAULT_CONTENT)
+  )
+
   const editor = useEditor({
     extensions: [StarterKit],
-    content: '<p>In the hole in a ground there lived a hobbit.</p>',
+    content,
+    editable,
     editorProps: {
       attributes: {
         placeholder: 'In a hole in the ground there lived a hobbit...',
         class: 'editor',
       },
     },
-    onUpdate: ({ editor }) => contentService.setContent(editor.getHTML()),
+    onUpdate: ({ editor }) =>
+      contentService.setContent(converter.makeMarkdown(editor.getHTML())),
   })
 
   return <EditorContent editor={editor} />
