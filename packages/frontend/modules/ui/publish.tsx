@@ -23,6 +23,7 @@ export function PublishButton() {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
 
+  // TODO: xstate or something to manage publish effect and state
   // @ts-expect-error signer type mismatch
   const onPublish = () => contentService.publish(signer, chain)
 
