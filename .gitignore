@@ -1,6 +1,5 @@
 node_modules
 build
 .DS_Store
-api
 .vscode
 packages/frontend/app/styles/tailwind.css

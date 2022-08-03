@@ -2,6 +2,7 @@ import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
 import { Chain } from 'wagmi'
+import { getStorageClient } from '../api/storage'
 import { getContractAddress } from '../utils/getContractAddress'
 
 async function findEvent(
@@ -35,6 +36,12 @@ export class Content {
   async publish(signer: Signer | undefined, chain: Chain | undefined) {
     if (!signer || !chain) return
 
+    console.log('Uploading...')
+
+    const cid = await getStorageClient().upload(this.content)
+
+    console.log('Uploaded', cid)
+
     const contractAddress = getContractAddress(chain)
 
     if (!contractAddress) {
@@ -46,8 +53,7 @@ export class Content {
     console.log('Minting...')
 
     const mintTx = await contract.mint({
-      contentHash:
-        'bafkreibrl5n5w5wqpdcdxcwaazheualemevr7ttxzbutiw74stdvrfhn2m',
+      contentHash: cid,
       nextVersionId: 0,
       previousVersionId: 0,
     })
