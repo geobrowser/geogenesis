@@ -1,31 +1,66 @@
 @tailwind base;
 
+@font-face {
+  font-family: 'Apercu';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/apercu-regular-pro.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Apercu';
+  font-style: normal;
+  font-weight: 600;
+  src: url('/fonts/apercu-medium-pro.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Apercu';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/apercu-bold-pro.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Apercu';
+  font-style: normal;
+  font-weight: 800;
+  src: url('/fonts/apercu-black-pro.otf') format('opentype');
+}
+
 a {
-    text-decoration: underline;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 body {
-    min-width: 100vw;
-    min-height: 100vh;
-    @apply bg-stone-100 text-stone-900;
+  min-width: 100vw;
+  min-height: 100vh;
+  @apply bg-stone-100 text-stone-900 font-sans;
 
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-kerning: auto;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-kerning: auto;
 }
 
 .navbar {
-    margin: auto;
-    padding: 2ch;
-    display: flex;
-    justify-content: space-between;
+  @apply z-10;
+  position: sticky;
+  top: 0;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
 }
 
 .layout {
-    margin: auto;
-    max-width: 70ch;
-    padding: 6ch 2ch;
+  margin: auto;
+  max-width: 120ch;
+  padding: 6ch 2ch;
+}
+
+.editor {
+  @apply prose prose-lg prose-stone max-w-none focus:outline-none;
 }
 
 @tailwind components;
