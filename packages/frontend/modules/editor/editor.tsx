@@ -15,8 +15,7 @@ export const Editor = memo(function Editor({ contentService }: Props) {
     editorProps: {
       attributes: {
         placeholder: 'In a hole in the ground there lived a hobbit...',
-        class:
-          'prose prose-sm sm:prose prose-stone lg:prose-md xl:prose-lg mx-auto min-h-full focus:outline-none font-mono focus:ring rounded px-4 py-2',
+        class: 'editor',
       },
     },
     onUpdate: ({ editor }) => contentService.setContent(editor.getHTML()),

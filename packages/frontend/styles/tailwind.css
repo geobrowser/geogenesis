@@ -1,31 +1,37 @@
+@import url('https://rsms.me/inter/inter.css');
+
 @tailwind base;
 
 a {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 body {
-    min-width: 100vw;
-    min-height: 100vh;
-    @apply bg-stone-100 text-stone-900;
+  min-width: 100vw;
+  min-height: 100vh;
+  @apply bg-stone-100 text-stone-900 font-sans;
 
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-kerning: auto;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-kerning: auto;
 }
 
 .navbar {
-    margin: auto;
-    padding: 2ch;
-    display: flex;
-    justify-content: space-between;
+  margin: auto;
+  padding: 2ch;
+  display: flex;
+  justify-content: space-between;
 }
 
 .layout {
-    margin: auto;
-    max-width: 70ch;
-    padding: 6ch 2ch;
+  margin: auto;
+  max-width: 120ch;
+  padding: 6ch 2ch;
+}
+
+.editor {
+  @apply prose prose-stone max-w-none focus:outline-none;
 }
 
 @tailwind components;
