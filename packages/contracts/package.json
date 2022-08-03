@@ -13,6 +13,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
+    "postinstall": "pnpm run build",
     "preclean": "rm -rf build/ dist/",
     "clean": "npx hardhat clean",
     "precompile": "pnpm run clean",
