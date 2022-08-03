@@ -10,15 +10,15 @@
 @font-face {
   font-family: 'Apercu';
   font-style: normal;
-  font-weight: 700;
-  src: url('/fonts/apercu-bold-pro.otf') format('opentype');
+  font-weight: 600;
+  src: url('/fonts/apercu-medium-pro.otf') format('opentype');
 }
 
 @font-face {
   font-family: 'Apercu';
   font-style: normal;
-  font-weight: 600;
-  src: url('/fonts/apercu-medium-pro.otf') format('opentype');
+  font-weight: 700;
+  src: url('/fonts/apercu-bold-pro.otf') format('opentype');
 }
 
 @font-face {
@@ -57,7 +57,7 @@ body {
 }
 
 .editor {
-  @apply prose prose-stone max-w-none focus:outline-none;
+  @apply prose prose-lg prose-stone max-w-none focus:outline-none;
 }
 
 @tailwind components;

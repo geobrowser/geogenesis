@@ -12,7 +12,7 @@ interface Props {
 
 const converter = new showdown.Converter()
 
-const DEFAULT_CONTENT = 'In the hole in a ground there lived a hobbit.'
+const DEFAULT_CONTENT = '<h1>Give your page a title...</h1>'
 
 // Don't want to rerender the editor over and over
 export const Editor = memo(function Editor({
