@@ -17,6 +17,8 @@ import { Quote } from '../ui/icons/quote'
 import { Link } from '../ui/icons/link'
 import { List } from '../ui/icons/list'
 import { NumberedList } from '../ui/icons/numbered-list'
+import { LargeHeading } from '../ui/icons/large-heading'
+import { SmallHeading } from '../ui/icons/small-heading'
 
 interface Props {
   contentService: ContentService
@@ -62,6 +64,25 @@ export const Editor = memo(function Editor({
         >
           <div className="bg-slate-50 shadow-lg p-4 space-x-3 rounded-xl flex justify-between items-center w-full">
             <MenuItem
+              onClick={editor.chain().focus().toggleHeading({ level: 1 }).run}
+              isActive={editor.isActive('heading', { level: 1 })}
+            >
+              <LargeHeading
+                isActive={editor.isActive('heading', { level: 1 })}
+              />
+            </MenuItem>
+            <MenuItem
+              onClick={editor.chain().focus().toggleHeading({ level: 3 }).run}
+              isActive={editor.isActive('heading', { level: 3 })}
+            >
+              <SmallHeading
+                isActive={editor.isActive('heading', { level: 3 })}
+              />
+            </MenuItem>
+
+            <hr className=" bg-stone-300 w-px h-5" />
+
+            <MenuItem
               onClick={editor.chain().focus().toggleBold().run}
               isActive={editor.isActive('bold')}
             >
@@ -85,7 +106,9 @@ export const Editor = memo(function Editor({
             >
               <Link isActive={editor.isActive('link')} />
             </MenuItem>
-            <hr className=" bg-stone-300 w-0.5 h-5" />
+
+            <hr className=" bg-stone-300 w-px h-5" />
+
             <MenuItem
               onClick={editor.chain().focus().toggleBulletList().run}
               isActive={editor.isActive('bulletList')}
