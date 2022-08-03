@@ -10,12 +10,14 @@
     "README.md",
     "LICENSE"
   ],
+  "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "preclean": "rm -rf build/ dist/",
     "clean": "npx hardhat clean",
-    "precompile": "yarn clean",
-    "build": "yarn run compile",
-    "compile": "npx hardhat compile",
+    "precompile": "pnpm run clean",
+    "compile": "npx hardhat compile && npx tsc",
+    "build": "pnpm run compile",
     "start:node": "npx hardhat node",
     "deploy": "hardhat migrate",
     "deploy:local": "npx hardhat run --network localhost scripts/deploy.ts",
@@ -26,7 +28,8 @@
     "ganache": "ganache",
     "test:integration": "npx hardhat run --network localhost test:integration/index.test.ts",
     "test:report-gas": "REPORT_GAS=true npx hardhat test",
-    "test:coverage": "npx hardhat coverage"
+    "test:coverage": "npx hardhat coverage",
+    "prepublishOnly": "npx tsc"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.6.4",
@@ -73,12 +76,5 @@
   },
   "engines": {
     "node": "18"
-  },
-  "prettier": {
-    "bracketSpacing": false,
-    "jsxBracketSameLine": true,
-    "singleQuote": true,
-    "trailingComma": "es5",
-    "arrowParens": "avoid"
   }
 }

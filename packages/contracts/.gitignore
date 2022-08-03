@@ -8,3 +8,6 @@ types
 #Hardhat files
 cache
 artifacts
+
+#Compiled ts
+dist
