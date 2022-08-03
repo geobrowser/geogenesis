@@ -17,7 +17,17 @@ module.exports = {
       ],
       sans: ["'Apercu'"],
     },
-    extend: {},
+    extend: {
+      typography: {
+        DEFAULT: {
+          css: {
+            h1: {
+              fontWeight: 700,
+            },
+          },
+        },
+      },
+    },
   },
   plugins: [require('@tailwindcss/typography')],
 }
