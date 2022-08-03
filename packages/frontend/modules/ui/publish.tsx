@@ -1,8 +1,7 @@
 import TurndownService from 'turndown'
-// This can come through context or something dependency injected as well
-import { addresses, GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event } from 'ethers'
 import { useNetwork, useSigner } from 'wagmi'
+// This can come through context or something dependency injected as well
 import { contentService } from '~/modules/editor/content'
 
 const turndown = new TurndownService({
@@ -20,52 +19,12 @@ const turndown = new TurndownService({
   br: '  ',
 })
 
-function isSupportedChain(chainId: string): chainId is keyof typeof addresses {
-  return chainId in addresses
-}
-
-async function findEvent(
-  tx: ContractTransaction,
-  name: string
-): Promise<Event> {
-  const receipt = await tx.wait()
-  const event = receipt.events?.find((event) => event.event === name)
-  if (!event) throw new Error(`Event '${name}' wasn't emitted`)
-  return event
-}
-
 export function PublishButton() {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
 
-  const onPublish = async () => {
-    console.log(turndown.turndown(contentService.content))
-
-    if (!signer || !chain) return
-
-    const chainId = String(chain.id)
-
-    if (!isSupportedChain(chainId)) return
-
-    const contractAddress = addresses[chainId].GeoDocument.address
-
-    const contract = GeoDocument__factory.connect(contractAddress, signer)
-
-    console.log('Minting...')
-
-    const mintTx = await contract.mint({
-      contentHash:
-        'bafkreibrl5n5w5wqpdcdxcwaazheualemevr7ttxzbutiw74stdvrfhn2m',
-      nextVersionId: 0,
-      previousVersionId: 0,
-    })
-
-    const transferEvent = await findEvent(mintTx, 'Transfer')
-
-    if (transferEvent.args) {
-      console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
-    }
-  }
+  // @ts-expect-error signer type mismatch
+  const onPublish = () => contentService.publish(signer, chain)
 
   return (
     <button
