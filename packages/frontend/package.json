@@ -16,6 +16,7 @@
     "@tiptap/extension-link": "^2.0.0-beta.43",
     "@tiptap/react": "^2.0.0-beta.114",
     "@tiptap/starter-kit": "^2.0.0-beta.191",
+    "@xstate/react": "^3.0.0",
     "cors": "^2.8.5",
     "ethers": "^5.0.0",
     "framer-motion": "^6.5.1",
@@ -27,7 +28,8 @@
     "react": "^18.1.0",
     "react-dom": "^18.1.0",
     "showdown": "^2.1.0",
-    "wagmi": "^0.6.0"
+    "wagmi": "^0.6.0",
+    "xstate": "^4.32.1"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.4",
