@@ -1,11 +1,11 @@
-import { addresses, GeoDocument__factory } from '@geogenesis/contracts'
-import { makeAutoObservable } from 'mobx'
+import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
+import { makeAutoObservable } from 'mobx'
+import showdown from 'showdown'
 import { Chain } from 'wagmi'
+import { getContractAddress } from '../utils/getContractAddress'
 
-function isSupportedChain(chainId: string): chainId is keyof typeof addresses {
-  return chainId in addresses
-}
+const converter = new showdown.Converter()
 
 async function findEvent(
   tx: ContractTransaction,
@@ -29,14 +29,20 @@ export class Content {
     this.content = content
   }
 
+  get markdownContent() {
+    return converter.makeMarkdown(this.content)
+  }
+
   async publish(signer: Signer | undefined, chain: Chain | undefined) {
+    console.log(this.markdownContent)
+
     if (!signer || !chain) return
 
-    const chainId = String(chain.id)
+    const contractAddress = getContractAddress(chain)
 
-    if (!isSupportedChain(chainId)) return
-
-    const contractAddress = addresses[chainId].GeoDocument.address
+    if (!contractAddress) {
+      throw new Error(`Contract doesn't exist for chain '${chain.name}'`)
+    }
 
     const contract = GeoDocument__factory.connect(contractAddress, signer)
 

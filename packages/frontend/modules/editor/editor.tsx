@@ -1,17 +1,26 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { EditorContent, EditorOptions, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { memo } from 'react'
 import { Content } from './content'
 
 interface Props {
   contentService: Content
+  initialContent?: string
+  editable?: EditorOptions['editable']
 }
 
+const DEFAULT_CONTENT = '<p>In the hole in a ground there lived a hobbit.</p>'
+
 // Don't want to rerender the editor over and over
-export const Editor = memo(function Editor({ contentService }: Props) {
+export const Editor = memo(function Editor({
+  contentService,
+  initialContent,
+  editable,
+}: Props) {
   const editor = useEditor({
     extensions: [StarterKit],
-    content: '<p>In the hole in a ground there lived a hobbit.</p>',
+    content: initialContent || DEFAULT_CONTENT,
+    editable,
     editorProps: {
       attributes: {
         placeholder: 'In a hole in the ground there lived a hobbit...',
