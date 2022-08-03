@@ -15,7 +15,7 @@ async function findEvent(
   return event
 }
 
-export class Content {
+export class ContentService {
   /**
    * Markdown string
    */
@@ -66,4 +66,4 @@ export class Content {
   }
 }
 
-export const contentService = new Content()
+export const contentService = new ContentService()
