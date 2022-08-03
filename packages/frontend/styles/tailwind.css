@@ -44,7 +44,7 @@ body {
 }
 
 .navbar {
-  @apply z-10 backdrop-blur-md backdrop-saturate-100;
+  @apply z-10;
   position: sticky;
   top: 0;
   padding: 1.5rem;
