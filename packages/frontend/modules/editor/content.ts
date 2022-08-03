@@ -1,11 +1,8 @@
 import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
-import showdown from 'showdown'
 import { Chain } from 'wagmi'
 import { getContractAddress } from '../utils/getContractAddress'
-
-const converter = new showdown.Converter()
 
 async function findEvent(
   tx: ContractTransaction,
@@ -18,6 +15,9 @@ async function findEvent(
 }
 
 export class Content {
+  /**
+   * Markdown string
+   */
   content: string = ''
 
   // TODO: We should probably inject the contract factory so we can mock it for testing
@@ -25,17 +25,14 @@ export class Content {
     makeAutoObservable(this)
   }
 
+  /**
+   * Set markdown content
+   */
   setContent(content: string) {
     this.content = content
   }
 
-  get markdownContent() {
-    return converter.makeMarkdown(this.content)
-  }
-
   async publish(signer: Signer | undefined, chain: Chain | undefined) {
-    console.log(this.markdownContent)
-
     if (!signer || !chain) return
 
     const contractAddress = getContractAddress(chain)

@@ -1,30 +1,24 @@
 import { GetServerSideProps } from 'next'
-import showdown from 'showdown'
 import { chain } from 'wagmi'
 import { contentService } from '~/modules/editor/content'
 import { Editor } from '~/modules/editor/editor'
 import { fetchTokenURI } from '~/modules/utils/tokenAPI'
 
-const converter = new showdown.Converter()
-
 export default function Token({ tokenURI, errorMessage }: ServerProps) {
-  const fetchedText = `# Title
+  const content = `# Title
 
 Hello, world!`
 
-  const content = converter.makeHtml(fetchedText)
-
   return (
     <>
-      <code
-        style={{
-          lineBreak: 'anywhere',
-          fontSize: 12,
-        }}
-      >
+      <code style={{ lineBreak: 'anywhere', fontSize: 12 }}>
         {tokenURI || errorMessage}
       </code>
-      <Editor contentService={contentService} initialContent={content} />
+      <Editor
+        contentService={contentService}
+        initialContent={content}
+        editable={false}
+      />
     </>
   )
 }
