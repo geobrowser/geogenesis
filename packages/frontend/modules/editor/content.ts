@@ -20,6 +20,7 @@ async function findEvent(
 export class Content {
   content: string = ''
 
+  // TODO: We should probably inject the contract factory so we can mock it for testing
   constructor() {
     makeAutoObservable(this)
   }
