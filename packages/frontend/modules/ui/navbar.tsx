@@ -9,7 +9,7 @@ export function Navbar() {
   const { isConnected } = useAccount()
 
   return (
-    <nav className="navbar flex justify-between">
+    <nav className="navbar">
       <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
       <AnimatePresence exitBeforeEnter>
         <Animate
