@@ -14,7 +14,7 @@ export function PublishButton() {
   return (
     <motion.button
       whileTap={{ scale: 0.9 }}
-      className="rounded-2xl px-6 py-4 bg-blue-700 text-slate-100 font-bold shadow-lg"
+      className="rounded-xl px-4 bg-blue-700 text-slate-100 font-bold shadow-lg"
       onClick={onPublish}
     >
       Publish
