@@ -98,6 +98,7 @@ importers:
       '@rainbow-me/rainbowkit': ^0.4.5
       '@tailwindcss/typography': ^0.5.4
       '@tiptap/core': '>=2.0.0-beta.1 <3.0.0'
+      '@tiptap/extension-link': ^2.0.0-beta.43
       '@tiptap/react': ^2.0.0-beta.114
       '@tiptap/starter-kit': ^2.0.0-beta.191
       '@types/node': ^17.0.35
@@ -124,6 +125,7 @@ importers:
       '@geogenesis/contracts': link:../contracts
       '@rainbow-me/rainbowkit': 0.4.5_6d714b99968b59796086654bbf91ae41
       '@tiptap/core': 2.0.0-beta.182
+      '@tiptap/extension-link': 2.0.0-beta.43_@tiptap+core@2.0.0-beta.182
       '@tiptap/react': 2.0.0-beta.114_0fc4f2e476b6ad748e0721bf523e30f2
       '@tiptap/starter-kit': 2.0.0-beta.191
       ethers: 5.6.9
@@ -1611,6 +1613,17 @@ packages:
       '@tiptap/core': ^2.0.0-beta.1
     dependencies:
       '@tiptap/core': 2.0.0-beta.182
+    dev: false
+
+  /@tiptap/extension-link/2.0.0-beta.43_@tiptap+core@2.0.0-beta.182:
+    resolution: {integrity: sha512-AYueqfTW713KGVfWSWhVbj4ObeWudgawikm3m0uYcKSdsAz/CfEvOD2/NA0uyQzlxmYLA6Pf8HMxoKGN+O4Cmg==}
+    peerDependencies:
+      '@tiptap/core': ^2.0.0-beta.1
+    dependencies:
+      '@tiptap/core': 2.0.0-beta.182
+      linkifyjs: 3.0.5
+      prosemirror-model: 1.18.1
+      prosemirror-state: 1.4.1
     dev: false
 
   /@tiptap/extension-list-item/2.0.0-beta.23_@tiptap+core@2.0.0-beta.182:
@@ -8115,6 +8128,10 @@ packages:
     resolution: {integrity: sha512-9JROoBW7pobfsx+Sq2JsASvCo6Pfo6WWoUW79HuB1BCoBXD4PLWJPqDF6fNj67pqBYTbAHkE57M1kS/+L1neOg==}
     engines: {node: '>=10'}
     dev: true
+
+  /linkifyjs/3.0.5:
+    resolution: {integrity: sha512-1Y9XQH65eQKA9p2xtk+zxvnTeQBG7rdAXSkUG97DmuI/Xhji9uaUzaWxRj6rf9YC0v8KKHkxav7tnLX82Sz5Fg==}
+    dev: false
 
   /load-json-file/1.1.0:
     resolution: {integrity: sha512-cy7ZdNRXdablkXYNI049pthVeXFurRyb9+hA/dZzerZ0pGTx42z+y+ssxBaVV2l70t1muq5IdKhn4UtcoGUY9A==}

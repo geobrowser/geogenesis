@@ -1,5 +1,6 @@
 import { EditorContent, EditorOptions, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import LinkExtension from '@tiptap/extension-link'
 import { memo, useState } from 'react'
 import showdown from 'showdown'
 import { Content } from './content'
@@ -26,7 +27,12 @@ export const Editor = memo(function Editor({
   )
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      LinkExtension.configure({
+        linkOnPaste: true,
+      }),
+    ],
     content,
     editable,
     editorProps: {
