@@ -1,28 +1,11 @@
 import Cors from 'cors'
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { chain } from 'wagmi'
+import { getStorageClient } from '~/modules/api/storage'
+import { fetchTokenParameters } from '~/modules/api/token'
+import { runMiddleware } from '~/modules/server/middleware'
 
-// Helper method to wait for a middleware to execute before continuing
-// And to throw an error when an error happens in a middleware
-export function initMiddleware(middleware: any) {
-  return (req: any, res: any) =>
-    new Promise((resolve, reject) => {
-      middleware(req, res, (result: any) => {
-        if (result instanceof Error) {
-          return reject(result)
-        }
-        return resolve(result)
-      })
-    })
-}
-
-// Initialize the cors middleware
-const cors = initMiddleware(
-  // You can read more about the available options here: https://github.com/expressjs/cors#configuration-options
-  Cors({
-    // Only allow requests with GET, POST and OPTIONS
-    methods: ['GET', 'POST', 'OPTIONS'],
-  })
-)
+const cors = runMiddleware(Cors({ methods: ['GET', 'POST', 'OPTIONS'] }))
 
 type Data = {
   name: string
@@ -37,15 +20,38 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<Data>
 ) {
-  const { id } = req.query
+  let { id, contentHash } = req.query
 
   await cors(req, res)
 
+  // Support contentHash in query params, but look it up if needed
+  if (!contentHash) {
+    const parameters = await fetchTokenParameters(
+      chain.polygonMumbai,
+      id as string
+    )
+    contentHash = parameters.contentHash
+  }
+
+  const content = await getStorageClient().downloadText(contentHash as string)
+
+  const titleMatch = content.match(/^#\s+(.*)/)
+  const title = titleMatch ? titleMatch[1] : undefined
+  const summary = titleMatch
+    ? content
+        // Remove the title
+        .slice(titleMatch[0].length)
+        // Truncate if needed
+        .slice(0, 256)
+        // Remove excess whitespace
+        .trim()
+    : undefined
+
   res.status(200).json({
-    name: `Token #${id}`,
-    description: `Description`,
-    image: `https://picsum.photos/id/0/510/510`,
-    // external_url: item.url,
+    name: title ?? `Geo Document #${id}`,
+    description: summary ?? '',
+    image: `https://geogenesis.vercel.app/api/thumbnail/${id}`,
+    external_url: `https://geogenesis.vercel.app/token/${id}`,
     // animation_url: item.download_url,
     // attributes: [
     //   {
