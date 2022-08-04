@@ -3,7 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useAccount } from 'wagmi'
 // import { ConnectButton } from '../identity'
 import { Animate } from './animate'
-import { PublishButton } from './publish'
+import { PublishButton } from './publish-button'
 
 export function Navbar() {
   const { isConnected } = useAccount()
