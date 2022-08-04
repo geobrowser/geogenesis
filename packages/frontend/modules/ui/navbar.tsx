@@ -15,7 +15,7 @@ export function Navbar() {
         <Animate
           key={`navbar-actions-${isConnected}`}
           animation="fade"
-          className="flex space-x-8"
+          className="flex items-center space-x-8"
         >
           {isConnected && <PublishButton />}
           <ConnectButton

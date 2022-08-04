@@ -63,5 +63,10 @@ body {
   @apply prose prose-lg prose-stone max-w-none focus:outline-none;
 }
 
+.publish-tooltip {
+  @apply p-5 absolute w-80 bg-slate-50 shadow-lg rounded-lg overflow-hidden;
+  left: calc(-160px + 40px);
+}
+
 @tailwind components;
 @tailwind utilities;
