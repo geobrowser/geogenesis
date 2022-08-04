@@ -15,9 +15,14 @@ export function Navbar() {
         <Animate
           key={`navbar-actions-${isConnected}`}
           animation="fade"
-          className="flex items-center space-x-8"
+          className="flex items-center"
         >
-          {isConnected && <PublishButton />}
+          {isConnected && (
+            <>
+              <PublishButton />
+              <hr className="w-8 border-none" />
+            </>
+          )}
           <ConnectButton
             label="Sign in"
             chainStatus="none"
