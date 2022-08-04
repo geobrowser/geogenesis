@@ -2,44 +2,53 @@ import { motion } from 'framer-motion'
 import { useNetwork, useSigner } from 'wagmi'
 // This can come through context or something dependency injected as well
 import { useMachine } from '@xstate/react'
-import { assign, createMachine } from 'xstate'
+import { assign, createMachine, interpret } from 'xstate'
 import { contentService } from '~/modules/editor/content'
 
-interface PublishContext {
-  count: number
+type Events = { type: 'UPLOAD' } | { type: 'MINT' } | { type: 'DONE' }
+type States =
+  | ({ value: 'idle' } | { value: 'uploading' } | { value: 'minting' }) & {
+      context: Context
+    }
+type Context = {
+  cid: string
+  tokenId: string
 }
 
-const publishMachine = createMachine<PublishContext>({
+const publishMachine = createMachine<Context, Events, States>({
   id: 'publish',
   initial: 'idle',
   context: {
-    count: 0,
+    cid: '',
+    tokenId: '',
   },
   states: {
     idle: {
-      on: { PUBLISH: 'uploading' },
+      on: { UPLOAD: 'uploading' },
     },
-    uploading: {},
-    minting: {},
+    uploading: {
+      on: { MINT: 'minting' },
+    },
+    minting: {
+      on: { DONE: 'idle' },
+    },
+    done: {},
     error: {},
-    active: {
-      entry: assign({ count: (ctx) => ctx.count + 1 }),
-      on: { TOGGLE: 'idle' },
-    },
   },
 })
+
+const service = interpret(publishMachine).start()
 
 export function PublishButton() {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
+  const [current, send] = useMachine(publishMachine)
 
   // TODO: xstate or something to manage publish effect and state
   // @ts-expect-error signer type mismatch
-  const onPublish = () => contentService.publish(signer, chain)
+  const onPublish = () => contentService.publish(signer, chain, send)
 
-  const [current, send] = useMachine(publishMachine)
-  const uploading = current.matches('uploading')
-  const { count } = current.context
+  console.log(current.value)
 
   return (
     <motion.button
@@ -47,7 +56,9 @@ export function PublishButton() {
       className="rounded-xl px-4 bg-blue-700 text-slate-100 font-bold shadow-lg"
       onClick={onPublish}
     >
-      Publish
+      {current.matches('idle') && 'Publish'}
+      {current.matches('uploading') && 'Uploading...'}
+      {current.matches('minting') && 'Minting...'}
     </motion.button>
   )
 }

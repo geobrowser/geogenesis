@@ -2,6 +2,7 @@ import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
 import { Chain } from 'wagmi'
+import { AnyStateMachine, interpret, Interpreter } from 'xstate'
 import { getStorageClient } from '../api/storage'
 import { getContractAddress } from '../utils/getContractAddress'
 
@@ -33,11 +34,15 @@ export class ContentService {
     this.content = content
   }
 
-  async publish(signer: Signer | undefined, chain: Chain | undefined) {
+  async publish(
+    signer: Signer | undefined,
+    chain: Chain | undefined,
+    send: (nextState: 'UPLOAD' | 'MINT' | 'DONE') => void
+  ) {
     if (!signer || !chain) return
 
     console.log('Uploading...')
-
+    send('UPLOAD')
     const cid = await getStorageClient().upload(this.content)
 
     console.log('Uploaded', cid)
@@ -57,11 +62,13 @@ export class ContentService {
       nextVersionId: 0,
       previousVersionId: 0,
     })
+    send('MINT')
 
     const transferEvent = await findEvent(mintTx, 'Transfer')
 
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
+      send('DONE')
     }
   }
 }
