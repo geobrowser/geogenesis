@@ -1,10 +1,10 @@
 import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
-import { Chain } from 'wagmi'
-import { getStorageClient } from './storage'
-import { getContractAddress } from '../utils/getContractAddress'
 import { createContext, useContext } from 'react'
+import { Chain } from 'wagmi'
+import { getStorageClient } from '../api/storage'
+import { getContractAddress } from '../utils/getContractAddress'
 
 async function findEvent(
   tx: ContractTransaction,
@@ -62,9 +62,8 @@ export class PublishService {
     console.log('Minting...')
     setPublishState('minting')
     const mintTx = await contract.mint({
-      contentHash: cid,
-      nextVersionId: 0,
-      previousVersionId: 0,
+      cid,
+      parentId: 0,
     })
 
     const transferEvent = await findEvent(mintTx, 'Transfer')

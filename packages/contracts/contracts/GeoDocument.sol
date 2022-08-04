@@ -17,12 +17,16 @@ contract GeoDocument is ERC721, ReentrancyGuard, Ownable {
         customBaseURI = customBaseURI_;
     }
 
+    function originalSender() private view returns (address) {
+        // HACK: tx.origin isn't safe. Can we make the contract the operator?
+        return tx.origin;
+    }
+
     /** TOKEN PARAMETERS **/
 
     struct TokenParameters {
-        string contentHash;
-        uint256 previousVersionId;
-        uint256 nextVersionId;
+        string cid;
+        uint256 parentId;
     }
 
     mapping(uint256 => TokenParameters) private tokenParametersMap;
@@ -37,30 +41,26 @@ contract GeoDocument is ERC721, ReentrancyGuard, Ownable {
 
     /** MINTING **/
 
-    Counters.Counter private supplyCounter;
+    Counters.Counter private supplyCounter = Counters.Counter(1);
 
-    function mint(TokenParameters calldata parameters) public nonReentrant {
-        require(saleIsActive, 'Sale not active');
-
+    function mint(TokenParameters calldata parameters)
+        public
+        nonReentrant
+        returns (uint256)
+    {
         uint256 id = totalSupply();
 
-        _mint(msg.sender, id);
+        _mint(originalSender(), id);
 
         tokenParametersMap[id] = parameters;
 
         supplyCounter.increment();
+
+        return id;
     }
 
     function totalSupply() public view returns (uint256) {
         return supplyCounter.current();
-    }
-
-    /** ACTIVATION **/
-
-    bool public saleIsActive = true;
-
-    function setSaleIsActive(bool saleIsActive_) external onlyOwner {
-        saleIsActive = saleIsActive_;
     }
 
     /** URI HANDLING **/
@@ -88,14 +88,11 @@ contract GeoDocument is ERC721, ReentrancyGuard, Ownable {
                 abi.encodePacked(
                     super.tokenURI(tokenId),
                     '?',
-                    'contentHash=',
-                    parameters.contentHash,
+                    'cid=',
+                    parameters.cid,
                     '&',
-                    'previousVersionId=',
-                    parameters.previousVersionId.toString(),
-                    '&',
-                    'nextVersionId=',
-                    parameters.nextVersionId.toString()
+                    'parentId=',
+                    parameters.parentId.toString()
                 )
             )
         );
