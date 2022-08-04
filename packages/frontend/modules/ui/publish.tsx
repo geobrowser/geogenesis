@@ -1,15 +1,21 @@
 import { motion } from 'framer-motion'
 import { useNetwork, useSigner } from 'wagmi'
+import { useMachine } from '@xstate/react'
 // This can come through context or something dependency injected as well
-import { contentService } from '~/modules/editor/content'
+import { contentService, publishMachine } from '~/modules/editor/content'
+import { useRouter } from 'next/router'
 
 export function PublishButton() {
+  const router = useRouter()
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
+  const [current, send] = useMachine(publishMachine)
 
-  // TODO: xstate or something to manage publish effect and state
-  // @ts-expect-error signer type mismatch
-  const onPublish = () => contentService.publish(signer, chain)
+  const onPublish = async () => {
+    // @ts-expect-error signer type mismatch
+    const tokenId = await contentService.publish(signer, chain, send)
+    router.replace(`/token/${tokenId}`)
+  }
 
   return (
     <motion.button
@@ -17,7 +23,9 @@ export function PublishButton() {
       className="rounded-xl px-4 bg-blue-700 text-slate-100 font-bold shadow-lg"
       onClick={onPublish}
     >
-      Publish
+      {current.matches('idle') && 'Publish'}
+      {current.matches('uploading') && 'Uploading...'}
+      {current.matches('minting') && 'Minting...'}
     </motion.button>
   )
 }
