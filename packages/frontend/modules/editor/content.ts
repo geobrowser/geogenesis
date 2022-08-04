@@ -1,10 +1,35 @@
 import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
+import { Router } from 'next/router'
 import { Chain } from 'wagmi'
-import { AnyStateMachine, interpret, Interpreter } from 'xstate'
+import { AnyStateMachine, createMachine, interpret, Interpreter } from 'xstate'
 import { getStorageClient } from '../api/storage'
 import { getContractAddress } from '../utils/getContractAddress'
+
+type Events = { type: 'UPLOAD' } | { type: 'MINT' } | { type: 'DONE' }
+type States =
+  | ({ value: 'idle' } | { value: 'uploading' } | { value: 'minting' }) & {
+      context: null
+    }
+
+export const publishMachine = createMachine<null, Events, States>({
+  id: 'publish',
+  initial: 'idle',
+  states: {
+    idle: {
+      on: { UPLOAD: 'uploading' },
+    },
+    uploading: {
+      on: { MINT: 'minting' },
+    },
+    minting: {
+      on: { DONE: 'done' },
+    },
+    done: {},
+    error: {},
+  },
+})
 
 async function findEvent(
   tx: ContractTransaction,
@@ -69,7 +94,10 @@ export class ContentService {
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
       send('DONE')
+      return transferEvent.args.tokenId
     }
+
+    throw new Error('Minting failed')
   }
 }
 
