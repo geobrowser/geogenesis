@@ -16,7 +16,7 @@ async function findEvent(
   return event
 }
 
-type PublishState = 'idle' | 'uploading' | 'minting' | 'done' | 'error'
+export type PublishState = 'idle' | 'uploading' | 'minting' | 'done' | 'error'
 
 export class PublishService {
   /**
@@ -72,7 +72,7 @@ export class PublishService {
 
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
-      this.setPublishState('done')
+      this.setPublishState('idle')
       return transferEvent.args.tokenId
     }
 

@@ -3,7 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useAccount } from 'wagmi'
 // import { ConnectButton } from '../identity'
 import { Animate } from './animate'
-import { PublishButton } from './publish'
+import { PublishButton } from './publish-button'
 
 export function Navbar() {
   const { isConnected } = useAccount()
@@ -15,9 +15,14 @@ export function Navbar() {
         <Animate
           key={`navbar-actions-${isConnected}`}
           animation="fade"
-          className="flex space-x-8"
+          className="flex items-center"
         >
-          {isConnected && <PublishButton />}
+          {isConnected && (
+            <>
+              <PublishButton />
+              <hr className="w-8 border-none" />
+            </>
+          )}
           <ConnectButton
             label="Sign in"
             chainStatus="none"
