@@ -4,6 +4,7 @@ import { PublishState, usePublishService } from '~/modules/api/publish-service'
 import { useRouter } from 'next/router'
 import { observer } from 'mobx-react-lite'
 import { PuffLoader } from 'react-spinners'
+import { Animate } from './animate'
 
 export const PublishButton = observer(() => {
   const router = useRouter()
@@ -22,16 +23,25 @@ export const PublishButton = observer(() => {
   return (
     <div className="relative">
       <motion.button
-        layout
         whileTap={{ scale: 0.95 }}
         whileHover={{ scale: 1.05 }}
         disabled={isPublishing}
-        className={`rounded-xl px-4 py-2 bg-blue-700 text-slate-100 font-bold shadow-lg flex items-center ${
+        className={`rounded-xl w-20 py-2 bg-blue-700 text-slate-100 font-bold shadow-lg flex justify-center items-center ${
           isPublishing && 'cursor-not-allowed'
         }`}
         onClick={!isPublishing ? onPublish : undefined}
       >
-        {!isPublishing ? 'Publish' : <PuffLoader size={24} color="#ffffff" />}
+        <AnimatePresence exitBeforeEnter>
+          {!isPublishing ? (
+            <Animate key="Publish text" animation="fade">
+              <p>Publish</p>
+            </Animate>
+          ) : (
+            <Animate key="Loading spinner" animation="fade">
+              <PuffLoader size={24} color="#ffffff" />
+            </Animate>
+          )}
+        </AnimatePresence>
       </motion.button>
 
       {isPublishing && <Tooltip publishState={publishService.publishState} />}
