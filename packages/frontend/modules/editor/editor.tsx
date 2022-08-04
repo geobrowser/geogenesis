@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit'
 import LinkExtension from '@tiptap/extension-link'
 import { memo, useState } from 'react'
 import showdown from 'showdown'
-import { ContentService } from './content'
+import { PublishService } from '../api/publish-service'
 import { MenuItem } from './menu-item'
 import { Italic } from '../ui/icons/italic'
 import { Bold } from '../ui/icons/bold'
@@ -21,7 +21,7 @@ import { LargeHeading } from '../ui/icons/large-heading'
 import { SmallHeading } from '../ui/icons/small-heading'
 
 interface Props {
-  contentService: ContentService
+  publishService: PublishService
   initialContent?: string
   editable?: EditorOptions['editable']
 }
@@ -32,7 +32,7 @@ const DEFAULT_CONTENT = '<h1>Give your page a title...</h1>'
 
 // Don't want to rerender the editor over and over
 export const Editor = memo(function Editor({
-  contentService,
+  publishService,
   initialContent,
   editable,
 }: Props) {
@@ -52,7 +52,7 @@ export const Editor = memo(function Editor({
       },
     },
     onUpdate: ({ editor }) =>
-      contentService.setContent(converter.makeMarkdown(editor.getHTML())),
+      publishService.setContent(converter.makeMarkdown(editor.getHTML())),
   })
 
   return (

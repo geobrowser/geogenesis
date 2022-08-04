@@ -2,11 +2,12 @@ import { GetServerSideProps } from 'next'
 import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenParameters } from '~/modules/api/token'
-import { contentService } from '~/modules/editor/content'
+import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
+  const publishService = usePublishService()
 
   if (error) {
     return (
@@ -18,7 +19,7 @@ export default function Token({ data, error }: ServerProps) {
 
   return (
     <Editor
-      contentService={contentService}
+      publishService={publishService}
       initialContent={content}
       editable={false}
     />

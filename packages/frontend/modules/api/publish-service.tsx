@@ -1,35 +1,10 @@
 import { GeoDocument__factory } from '@geogenesis/contracts'
 import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
-import { Router } from 'next/router'
 import { Chain } from 'wagmi'
-import { AnyStateMachine, createMachine, interpret, Interpreter } from 'xstate'
-import { getStorageClient } from '../api/storage'
+import { getStorageClient } from './storage'
 import { getContractAddress } from '../utils/getContractAddress'
-
-type Events = { type: 'UPLOAD' } | { type: 'MINT' } | { type: 'DONE' }
-type States =
-  | ({ value: 'idle' } | { value: 'uploading' } | { value: 'minting' }) & {
-      context: null
-    }
-
-export const publishMachine = createMachine<null, Events, States>({
-  id: 'publish',
-  initial: 'idle',
-  states: {
-    idle: {
-      on: { UPLOAD: 'uploading' },
-    },
-    uploading: {
-      on: { MINT: 'minting' },
-    },
-    minting: {
-      on: { DONE: 'done' },
-    },
-    done: {},
-    error: {},
-  },
-})
+import { createContext, useContext } from 'react'
 
 async function findEvent(
   tx: ContractTransaction,
@@ -41,11 +16,16 @@ async function findEvent(
   return event
 }
 
-export class ContentService {
+type PublishState = 'idle' | 'uploading' | 'minting' | 'done' | 'error'
+
+export class PublishService {
   /**
    * Markdown string
    */
   content: string = ''
+
+  // Current step in the publish flow
+  publishState: PublishState = 'idle'
 
   // TODO: We should probably inject the contract factory so we can mock it for testing
   constructor() {
@@ -59,15 +39,15 @@ export class ContentService {
     this.content = content
   }
 
-  async publish(
-    signer: Signer | undefined,
-    chain: Chain | undefined,
-    send: (nextState: 'UPLOAD' | 'MINT' | 'DONE') => void
-  ) {
+  setPublishState(nextState: PublishState) {
+    this.publishState = nextState
+  }
+
+  async publish(signer: Signer | undefined, chain: Chain | undefined) {
     if (!signer || !chain) return
 
     console.log('Uploading...')
-    send('UPLOAD')
+    this.setPublishState('uploading')
     const cid = await getStorageClient().upload(this.content)
 
     console.log('Uploaded', cid)
@@ -81,24 +61,42 @@ export class ContentService {
     const contract = GeoDocument__factory.connect(contractAddress, signer)
 
     console.log('Minting...')
-
+    this.setPublishState('minting')
     const mintTx = await contract.mint({
       contentHash: cid,
       nextVersionId: 0,
       previousVersionId: 0,
     })
-    send('MINT')
 
     const transferEvent = await findEvent(mintTx, 'Transfer')
 
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
-      send('DONE')
+      this.setPublishState('done')
       return transferEvent.args.tokenId
     }
 
+    this.setPublishState('error')
     throw new Error('Minting failed')
   }
 }
 
-export const contentService = new ContentService()
+export const publishService = new PublishService()
+
+const PublishServiceContext = createContext<PublishService | undefined>(
+  undefined
+)
+
+export const PublishServiceProvider = PublishServiceContext.Provider
+
+export function usePublishService() {
+  const context = useContext(PublishServiceContext)
+
+  if (!context) {
+    throw new Error(
+      'usePublishService must be used within a PublishServiceProvider'
+    )
+  }
+
+  return context
+}
