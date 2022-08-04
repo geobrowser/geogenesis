@@ -12,7 +12,7 @@ async function main() {
 
   const GeoDocument = await ethers.getContractFactory('GeoDocument')
   const geoDocument: GeoDocument = await GeoDocument.deploy(
-    'https://geogenesis.vercel.app/'
+    'https://geogenesis.vercel.app/api/token/'
   )
 
   console.log(`Deploying GeoDocument at ${geoDocument.address}...`)

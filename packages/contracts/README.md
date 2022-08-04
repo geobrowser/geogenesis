@@ -2,7 +2,7 @@
 
 Solidity smart contracts used by Geo.
 
-To speed things up, the current version of the GeoDocument smart contract was generated using Studio 721: [contract configuration url](https://www.721.so/contract?config=%7B%22tokenName%22%3A%22GeoDocument%22%2C%22shortName%22%3A%22GEODE%22%2C%22tokenURI%22%3A%22https%3A%2F%2Fgeogenesis.vercel.app%2F%7BtokenId%7D%7Bparameters%7D%22%2C%22supply%22%3Anull%2C%22activateAutomatically%22%3Atrue%2C%22tokenParameters%22%3A%5B%7B%22name%22%3A%22contentHash%22%2C%22type%22%3A%22string%22%7D%2C%7B%22name%22%3A%22previousVersionId%22%2C%22type%22%3A%22uint256%22%7D%2C%7B%22name%22%3A%22nextVersionId%22%2C%22type%22%3A%22uint256%22%7D%5D%2C%22schemaVersion%22%3A%221.0.0%22%7D).
+To speed things up, the current version of the GeoDocument smart contract was generated using Studio 721: [contract configuration url](https://www.721.so/contract?config=%7B%22tokenName%22%3A%22GeoDocument%22%2C%22shortName%22%3A%22GEODE%22%2C%22tokenURI%22%3A%22https%3A%2F%2Fgeogenesis.vercel.app%2Fapi%2Ftoken%2F%7BtokenId%7D%7Bparameters%7D%22%2C%22supply%22%3Anull%2C%22activateAutomatically%22%3Atrue%2C%22tokenParameters%22%3A%5B%7B%22name%22%3A%22contentHash%22%2C%22type%22%3A%22string%22%7D%2C%7B%22name%22%3A%22previousVersionId%22%2C%22type%22%3A%22uint256%22%7D%2C%7B%22name%22%3A%22nextVersionId%22%2C%22type%22%3A%22uint256%22%7D%5D%2C%22schemaVersion%22%3A%221.0.0%22%7D).
 
 ## Commands
 
@@ -41,7 +41,7 @@ hardhat run --network polygon_mumbai scripts/deploy.ts
 Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
 
 ```shell
-npx hardhat verify --network polygon_mumbai DEPLOYED_CONTRACT_ADDRESS "https://geogenesis.vercel.app/"
+npx hardhat verify --network polygon_mumbai DEPLOYED_CONTRACT_ADDRESS "https://geogenesis.vercel.app/api/token/"
 ```
 
 ## Performance optimizations
