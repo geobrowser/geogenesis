@@ -14,7 +14,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
   const isMounted = useIsMounted()
   const isNewRoute = router.pathname === '/new'
-  const backgroundColor = isNewRoute ? '#f6f6f6' : '#ffffff'
+  const backgroundColor = isNewRoute ? '#f5f5f5' : '#ffffff'
 
   return (
     <PublishServiceProvider value={publishService}>
@@ -25,7 +25,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           <motion.div
             initial={{ backgroundColor: '#ffffff' }}
             animate={{ backgroundColor }}
-            transition={{ ease: 'easeIn', duration: 1 }}
+            transition={{ duration: 0.5 }}
             className="background-color-wrapper min-h-screen"
           >
             <Navbar />
