@@ -1,9 +1,4 @@
-import {
-  AnimatePresence,
-  AnimateSharedLayout,
-  LayoutGroup,
-  motion,
-} from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { AppProps } from 'next/app'
 import { useRouter } from 'next/router'
 import { Navbar } from '~/modules/ui/navbar'
@@ -35,20 +30,11 @@ function MyApp({ Component, pageProps }: AppProps) {
           >
             <Navbar />
 
-            {/* 
-                Animates content of /pages when it mounts/unmounts. Right now we have a root
-                animation for fading the content of /pages, but we can also write custom animations
-                based in the route itself if we prefer doing that.
-            */}
-            <LayoutGroup>
-              <AnimatePresence exitBeforeEnter>
-                <motion.div key={`page-${router.pathname}`}>
-                  <main className="layout">
-                    <Component {...pageProps} />
-                  </main>
-                </motion.div>
-              </AnimatePresence>
-            </LayoutGroup>
+            <AnimatePresence exitBeforeEnter>
+              <main key={`page-${router.pathname}`} className="layout">
+                <Component {...pageProps} />
+              </main>
+            </AnimatePresence>
           </motion.div>
         )}
       </WalletProvider>
