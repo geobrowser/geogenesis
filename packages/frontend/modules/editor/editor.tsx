@@ -122,12 +122,12 @@ export const Editor = memo(function Editor({
             >
               <Quote isActive={editor.isActive('blockquote')} />
             </MenuItem>
-            {/* <MenuItem
+            <MenuItem
               onClick={editor.chain().focus().toggleLink({ href: '' }).run}
               isActive={editor.isActive('link')}
             >
               <Link isActive={editor.isActive('link')} />
-            </MenuItem> */}
+            </MenuItem>
 
             <hr className=" bg-stone-300 w-px h-5" />
 
