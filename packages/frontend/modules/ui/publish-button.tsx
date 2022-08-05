@@ -12,20 +12,16 @@ export const PublishButton = observer(() => {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
+  const [publishState, setPublishState] = useState<PublishState>('idle')
   const [tokenId, setTokenId] = useState('')
-
-  // If the user navigates away or finishes the process we want to reset the publish state
-  useEffect(() => {
-    return () => publishService.setPublishState('idle')
-  }, [publishService])
 
   const onPublish = async () => {
     // @ts-expect-error type mismatch for signer
-    const tokenId = await publishService.publish(signer, chain)
+    const tokenId = await publishService.publish(signer, chain, setPublishState)
     setTokenId(tokenId)
   }
 
-  const isPublishing = publishService.publishState !== 'idle'
+  const isPublishing = publishState !== 'idle'
 
   return (
     <Popover.Root open={isPublishing}>

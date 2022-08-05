@@ -24,9 +24,6 @@ export class PublishService {
    */
   content: string = ''
 
-  // Current step in the publish flow
-  publishState: PublishState = 'idle'
-
   // TODO: We should probably inject the contract factory so we can mock it for testing
   constructor() {
     makeAutoObservable(this)
@@ -39,15 +36,17 @@ export class PublishService {
     this.content = content
   }
 
-  setPublishState(nextState: PublishState) {
-    this.publishState = nextState
-  }
-
-  async publish(signer: Signer | undefined, chain: Chain | undefined) {
+  async publish(
+    signer: Signer | undefined,
+    chain: Chain | undefined,
+    setPublishState: (
+      nextState: 'minting' | 'uploading' | 'done' | 'error'
+    ) => void
+  ) {
     if (!signer || !chain) return
 
     console.log('Uploading...')
-    this.setPublishState('uploading')
+    setPublishState('uploading')
     const cid = await getStorageClient().upload(this.content)
 
     console.log('Uploaded', cid)
@@ -61,7 +60,7 @@ export class PublishService {
     const contract = GeoDocument__factory.connect(contractAddress, signer)
 
     console.log('Minting...')
-    this.setPublishState('minting')
+    setPublishState('minting')
     const mintTx = await contract.mint({
       contentHash: cid,
       nextVersionId: 0,
@@ -72,11 +71,11 @@ export class PublishService {
 
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
-      this.setPublishState('done')
+      setPublishState('done')
       return transferEvent.args.tokenId
     }
 
-    this.setPublishState('error')
+    setPublishState('error')
     throw new Error('Minting failed')
   }
 }
