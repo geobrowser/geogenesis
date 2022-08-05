@@ -83,6 +83,7 @@ export const Editor = memo(function Editor({
         <BubbleMenu
           editor={editor}
           tippyOptions={{ hideOnClick: false, maxWidth: '100%' }}
+          className="bg-geo-white-100 z-50"
         >
           <div className="shadow-lg p-4 space-x-3 rounded-xl flex justify-between items-center w-full">
             <MenuItem
