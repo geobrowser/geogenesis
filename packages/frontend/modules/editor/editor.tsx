@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import {
   BubbleMenu,
   EditorContent,
@@ -56,13 +55,13 @@ export const Editor = memo(function Editor({
   })
 
   return (
-    <>
+    <div>
       {editor && (
         <BubbleMenu
           editor={editor}
           tippyOptions={{ hideOnClick: false, maxWidth: '100%' }}
         >
-          <div className="bg-slate-50 shadow-lg p-4 space-x-3 rounded-xl flex justify-between items-center w-full">
+          <div className="shadow-lg p-4 space-x-3 rounded-xl flex justify-between items-center w-full">
             <MenuItem
               onClick={editor.chain().focus().toggleHeading({ level: 1 }).run}
               isActive={editor.isActive('heading', { level: 1 })}
@@ -125,6 +124,6 @@ export const Editor = memo(function Editor({
         </BubbleMenu>
       )}
       <EditorContent editor={editor} />
-    </>
+    </div>
   )
 })

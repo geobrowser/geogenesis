@@ -1,6 +1,6 @@
 import { motion, AnimationProps } from 'framer-motion'
 
-type AnimationType = 'fade' | 'slide-up'
+type AnimationType = 'fade' | 'slide-up' | 'slide-down'
 
 interface AnimateProps {
   children: React.ReactNode
@@ -20,14 +20,28 @@ const animationMap: Record<AnimationType, AnimationProps> = {
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: 30 },
   },
+  'slide-down': {
+    initial: { opacity: 0, y: -30 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -30 },
+  },
 }
 
-export function Animate(props: AnimateProps) {
-  const animationProps = animationMap[props.animation]
+export function Animate({
+  delay = 0,
+  className,
+  animation,
+  children,
+}: AnimateProps) {
+  const animationProps = animationMap[animation]
 
   return (
-    <motion.div className={props.className} {...animationProps}>
-      {props.children}
+    <motion.div
+      className={className}
+      {...animationProps}
+      transition={{ delay: delay }}
+    >
+      {children}
     </motion.div>
   )
 }

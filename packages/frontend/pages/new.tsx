@@ -1,21 +1,23 @@
+import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 import { useAccount } from 'wagmi'
-import { Animate } from '~/modules/ui/animate'
-import { Editor } from '~/modules/ui/editor'
+import { usePublishService } from '~/modules/api/publish-service'
+import { Editor } from '~/modules/editor/editor'
 
 export default function New() {
   // TODO: Abstract guarded routes
   const { isConnected } = useAccount()
   const router = useRouter()
+  const publishService = usePublishService()
 
   useEffect(() => {
     if (!isConnected) router.push('/')
   }, [isConnected, router])
 
   return (
-    <Animate key="Sign out" animation="fade">
-      <Editor />
-    </Animate>
+    <motion.div layout="position">
+      <Editor publishService={publishService} />
+    </motion.div>
   )
 }

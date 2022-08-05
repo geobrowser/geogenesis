@@ -17,6 +17,7 @@
     "@tiptap/extension-link": "^2.0.0-beta.43",
     "@tiptap/react": "^2.0.0-beta.114",
     "@tiptap/starter-kit": "^2.0.0-beta.191",
+    "classnames": "^2.3.1",
     "cors": "^2.8.5",
     "ethers": "^5.0.0",
     "framer-motion": "^6.5.1",
