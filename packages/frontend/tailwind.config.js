@@ -18,6 +18,10 @@ module.exports = {
       sans: ["'Apercu'"],
     },
     extend: {
+      colors: {
+        'geo-blue-100': 'rgba(10, 132, 255, 1)',
+        'geo-green-100': '`rgba(46, 202, 127, 1)`',
+      },
       typography: {
         DEFAULT: {
           css: {

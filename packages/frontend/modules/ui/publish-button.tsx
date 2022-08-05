@@ -30,7 +30,7 @@ export const PublishButton = observer(() => {
         <motion.button
           whileTap={{ scale: 0.95 }}
           whileHover={{ scale: 1.05 }}
-          className={`rounded-xl w-20 py-2 bg-blue-700 text-slate-100 font-bold shadow-lg flex justify-center items-center ${
+          className={`rounded-xl w-20 py-2 bg-geo-blue-100 text-slate-100 font-bold shadow-lg flex justify-center items-center ${
             isPublishing && 'cursor-not-allowed'
           }`}
           onClick={!isPublishing ? onPublish : undefined}
@@ -96,7 +96,7 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.1 }}
-              className="text-blue-600 font-bold"
+              className="text-geo-blue-100 font-bold"
             >
               Step 1/2
             </motion.p>
@@ -160,7 +160,7 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.15 }}
-              className="text-stone-50 bg-blue-600 font-bold rounded-3xl w-36 py-2"
+              className="text-stone-50 bg-geo-blue-100 font-bold rounded-3xl w-36 py-2"
               onClick={copyTokenUrl}
             >
               {copyText}

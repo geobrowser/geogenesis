@@ -35,7 +35,7 @@ export default function Token({ data, error }: ServerProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="font-bold text-blue-700 mb-10"
+            className="font-bold text-geo-blue-100 mb-10"
           >
             thegreenalien.eth
           </motion.h1>
