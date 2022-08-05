@@ -6,21 +6,25 @@ import { observer } from 'mobx-react-lite'
 import { PuffLoader } from 'react-spinners'
 import * as Popover from '@radix-ui/react-popover'
 import { Animate } from './animate'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 export const PublishButton = observer(() => {
   const router = useRouter()
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
+  const [tokenId, setTokenId] = useState('')
+
+  // If the user navigates away or finishes the process we want to reset the publish state
+  useEffect(() => {
+    return () => publishService.setPublishState('idle')
+  }, [publishService])
 
   const onPublish = async () => {
     // @ts-expect-error type mismatch for signer
     const tokenId = await publishService.publish(signer, chain)
-    router.push(`/token/${tokenId}`)
-  }
-
-  const navigate = (tokenId: string) => {
-    router.push(`/token/${tokenId}`)
+    setTokenId(tokenId)
   }
 
   const isPublishing = publishService.publishState !== 'idle'
@@ -52,7 +56,10 @@ export const PublishButton = observer(() => {
 
       <Popover.Content sideOffset={12}>
         <Popover.Arrow width={20} height={8} className="fill-stone-50" />
-        <Tooltip publishState={publishService.publishState} />
+        <Tooltip
+          publishState={publishService.publishState}
+          tokenUrl={`http://localhost:3000/token/${tokenId}`}
+        />
       </Popover.Content>
     </Popover.Root>
   )
@@ -60,9 +67,17 @@ export const PublishButton = observer(() => {
 
 interface TooltipProps {
   publishState: PublishState
+  tokenUrl: string
 }
 
-function Tooltip({ publishState }: TooltipProps) {
+function Tooltip({ publishState, tokenUrl }: TooltipProps) {
+  const [copyText, setIsCopied] = useState<'Share' | 'Copied!'>('Share')
+
+  const copyTokenUrl = () => {
+    navigator.clipboard.writeText(tokenUrl)
+    setIsCopied('Copied!')
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -15 }}
@@ -127,26 +142,33 @@ function Tooltip({ publishState }: TooltipProps) {
           </>
         )}
         {publishState === 'done' && (
-          <div className="flex items-center justify-between">
-            <motion.button
-              key="done-view"
-              initial={{ opacity: 0, x: 60 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -360 }}
-              transition={{ delay: 0.1 }}
-              className="text-stone-600"
-            >
-              View
-            </motion.button>
+          <div className="flex items-center space-x-4">
+            <Link href={tokenUrl} className="flex justify-center">
+              <motion.a
+                key="done-view"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0, x: 60 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -360 }}
+                transition={{ delay: 0.1 }}
+                className="text-stone-600 rounded-3xl font-bold bg-gray-100 w-36 py-2 no-underline"
+              >
+                View
+              </motion.a>
+            </Link>
             <motion.button
               key="done-share"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               initial={{ opacity: 0, x: 60 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.15 }}
-              className="text-blue-600"
+              className="text-stone-50 bg-blue-600 font-bold rounded-3xl w-36 py-2"
+              onClick={copyTokenUrl}
             >
-              Share
+              {copyText}
             </motion.button>
           </div>
         )}
