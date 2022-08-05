@@ -91,6 +91,11 @@ body {
   padding: 0;
 }
 
+.editor blockquote {
+  @apply text-geo-body not-italic;
+  border: 0;
+}
+
 /* If we want placeholders for other tiptap node types this is how to do it */
 /* .editor [class or html element].is-empty::before {
   content: attr(data-placeholder);
