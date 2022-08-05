@@ -6,6 +6,8 @@ import {
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import LinkExtension from '@tiptap/extension-link'
+import Placeholder from '@tiptap/extension-placeholder'
+import Document from '@tiptap/extension-document'
 import { memo, useState } from 'react'
 import showdown from 'showdown'
 import { PublishService } from '../api/publish-service'
@@ -27,7 +29,11 @@ interface Props {
 
 const converter = new showdown.Converter()
 
-const DEFAULT_CONTENT = '<h1>Give your page a title...</h1>'
+const PLACEHOLDER = 'Start by giving your page a title...'
+
+const CustomDocument = Document.extend({
+  content: 'heading block*',
+})
 
 // Don't want to rerender the editor over and over
 export const Editor = memo(function Editor({
@@ -36,17 +42,34 @@ export const Editor = memo(function Editor({
   editable,
 }: Props) {
   // Only convert markdown to html once on mount
-  const [content] = useState(() =>
-    converter.makeHtml(initialContent || DEFAULT_CONTENT)
-  )
+  const [content] = useState(() => {
+    return initialContent ? converter.makeHtml(initialContent) : undefined
+  })
 
   const editor = useEditor({
-    extensions: [StarterKit, LinkExtension],
+    extensions: [
+      LinkExtension,
+      CustomDocument,
+      StarterKit.configure({
+        document: false,
+      }),
+      Placeholder.configure({
+        // Placeholder won't work if the editor is initially disabled on load. If this
+        // becomes an issue with the page viewer we can create a separate "Read Only" editor
+        showOnlyWhenEditable: false,
+        placeholder: ({ node }) => {
+          if (node.type.name === 'heading') {
+            return PLACEHOLDER
+          }
+
+          return ''
+        },
+      }),
+    ],
     content,
     editable,
     editorProps: {
       attributes: {
-        placeholder: 'In a hole in the ground there lived a hobbit...',
         class: 'editor',
       },
     },
@@ -55,7 +78,7 @@ export const Editor = memo(function Editor({
   })
 
   return (
-    <div>
+    <>
       {editor && (
         <BubbleMenu
           editor={editor}
@@ -124,6 +147,6 @@ export const Editor = memo(function Editor({
         </BubbleMenu>
       )}
       <EditorContent editor={editor} />
-    </div>
+    </>
   )
 })
