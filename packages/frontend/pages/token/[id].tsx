@@ -7,6 +7,7 @@ import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
 import { getDefaultProvider } from 'ethers'
+import { getEnsName } from '~/modules/api/ens'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
@@ -65,7 +66,6 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   context
 ) => {
   const { id: tokenID } = context.query
-  console.log(tokenID)
 
   try {
     const [{ contentHash }, { owner }] = await Promise.all([
@@ -73,9 +73,8 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
       fetchTokenOwner(chain.polygonMumbai, tokenID as string),
     ])
 
-    // TODO: Will need another provider for the ens lookup
     const [maybeEns, content] = await Promise.all([
-      getDefaultProvider().lookupAddress(owner),
+      getEnsName(owner),
       getStorageClient().downloadText(contentHash),
     ])
 

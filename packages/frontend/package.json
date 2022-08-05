@@ -23,6 +23,8 @@
     "cors": "^2.8.5",
     "ethers": "^5.0.0",
     "framer-motion": "^6.5.1",
+    "graphql": "16",
+    "graphql-request": "^4.3.0",
     "mobx": "^6.6.1",
     "mobx-react-lite": "^3.4.0",
     "next": "^12.1.6",
