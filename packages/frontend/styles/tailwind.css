@@ -37,7 +37,7 @@ body {
   font-size: 15px;
   min-width: 100vw;
   min-height: 100vh;
-  @apply bg-geo-white-100 text-geo-grey-100 font-sans;
+  @apply bg-geo-white-100 text-geo-grey-100 text-geo-body font-sans;
 
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
