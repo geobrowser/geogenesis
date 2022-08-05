@@ -1,6 +1,6 @@
 import { motion, AnimationProps } from 'framer-motion'
 
-type AnimationType = 'fade' | 'slide-up'
+type AnimationType = 'fade' | 'slide-up' | 'slide-down'
 
 interface AnimateProps {
   children: React.ReactNode
@@ -19,6 +19,11 @@ const animationMap: Record<AnimationType, AnimationProps> = {
     initial: { opacity: 0, y: 30 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: 30 },
+  },
+  'slide-down': {
+    initial: { opacity: 0, y: -30 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -30 },
   },
 }
 

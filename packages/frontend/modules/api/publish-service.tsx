@@ -72,7 +72,7 @@ export class PublishService {
 
     if (transferEvent.args) {
       console.log(`Successfully minted token ${transferEvent.args.tokenId}`)
-      this.setPublishState('idle')
+      this.setPublishState('done')
       return transferEvent.args.tokenId
     }
 

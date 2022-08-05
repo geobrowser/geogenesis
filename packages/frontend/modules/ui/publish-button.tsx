@@ -16,7 +16,11 @@ export const PublishButton = observer(() => {
   const onPublish = async () => {
     // @ts-expect-error type mismatch for signer
     const tokenId = await publishService.publish(signer, chain)
-    router.replace(`/token/${tokenId}`)
+    router.push(`/token/${tokenId}`)
+  }
+
+  const navigate = (tokenId: string) => {
+    router.push(`/token/${tokenId}`)
   }
 
   const isPublishing = publishService.publishState !== 'idle'
@@ -71,7 +75,7 @@ function Tooltip({ publishState }: TooltipProps) {
         animate={{ opacity: 1, y: 0 }}
         className="text-2xl font-bold mb-5"
       >
-        Publishing your page
+        {publishState !== 'done' ? 'Publishing your page' : 'Page published!'}
       </motion.h2>
       <AnimatePresence>
         {publishState === 'uploading' && (
@@ -121,6 +125,30 @@ function Tooltip({ publishState }: TooltipProps) {
               Writing your page to the blockchain
             </motion.p>
           </>
+        )}
+        {publishState === 'done' && (
+          <div className="flex items-center justify-between">
+            <motion.button
+              key="done-view"
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -360 }}
+              transition={{ delay: 0.1 }}
+              className="text-stone-600"
+            >
+              View
+            </motion.button>
+            <motion.button
+              key="done-share"
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -360 }}
+              transition={{ delay: 0.15 }}
+              className="text-blue-600"
+            >
+              Share
+            </motion.button>
+          </div>
         )}
       </AnimatePresence>
     </motion.div>
