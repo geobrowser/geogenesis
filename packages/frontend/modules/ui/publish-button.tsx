@@ -15,7 +15,7 @@ export const PublishButton = observer(() => {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
-  const [publishState, setPublishState] = useState<PublishState>('idle')
+  const [publishState, setPublishState] = useState<PublishState>('uploading')
   const [tokenId, setTokenId] = useState('')
 
   const onPublish = async () => {
@@ -95,38 +95,44 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
       initial={{ opacity: 0, y: -15 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
-      className="p-5 w-80 bg-slate-50 shadow-lg rounded-lg overflow-hidden z-10"
+      className="p-5 w-80 bg-slate-50 shadow-lg rounded-lg overflow-hidden z-10 flex-col items-center"
     >
       <motion.h2
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-2xl font-bold mb-5"
+        className="text-2xl font-bold mb-5 flex justify-center"
       >
-        {publishState !== 'done' ? 'Publishing your page' : 'Page published!'}
+        <Text variant="title2" weight="bold" color="grey-100">
+          {publishState !== 'done' ? 'Publishing your page' : 'Page published!'}
+        </Text>
       </motion.h2>
       <AnimatePresence>
         {publishState === 'uploading' && (
           <>
-            <motion.p
+            <motion.div
               key="Step 1"
               initial={{ opacity: 0, y: -15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.1 }}
-              className="text-geo-blue-100 font-bold"
+              className="text-geo-blue-100 font-bold mb-1 flex justify-center"
             >
-              Step 1/2
-            </motion.p>
-            <motion.p
+              <Text variant="subheadline" weight="bold" color="blue">
+                Step 1/2
+              </Text>
+            </motion.div>
+            <motion.div
               key="Uploading"
               initial={{ opacity: 0, y: -15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.15 }}
-              className="text-stone-600"
+              className="text-stone-600 flex justify-center"
             >
-              Uploading page content to IPFS
-            </motion.p>
+              <Text variant="body" color="grey-70">
+                Uploading page content to IPFS
+              </Text>
+            </motion.div>
           </>
         )}
         {publishState === 'minting' && (
@@ -137,9 +143,11 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.1 }}
-              className="text-blue-600 font-bold"
+              className="text-blue-600 font-bold flex justify-center"
             >
-              Step 2/2
+              <Text variant="subheadline" weight="bold" color="blue">
+                Step 2/2
+              </Text>
             </motion.p>
             <motion.p
               key="Minting"
@@ -147,9 +155,11 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -360 }}
               transition={{ delay: 0.15 }}
-              className="text-stone-600"
+              className="text-stone-600 flex justify-center"
             >
-              Writing your page to the blockchain
+              <Text variant="body" color="grey-70">
+                Writing your page to the blockchain
+              </Text>
             </motion.p>
           </>
         )}

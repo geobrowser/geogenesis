@@ -1,9 +1,9 @@
 import cx from 'classnames'
 import React, { ElementType, HTMLAttributes } from 'react'
 
-type Variant = 'subheadline'
+type Variant = 'subheadline' | 'body' | 'title2'
 type Weight = 'regular' | 'medium' | 'bold'
-type Color = 'gray' | 'white' | 'blue' | 'red' | 'green'
+type Color = 'grey-100' | 'grey-70' | 'white' | 'blue' | 'red' | 'green'
 
 interface TextProps extends HTMLAttributes<HTMLElement> {
   children: React.ReactNode
@@ -16,10 +16,13 @@ interface TextProps extends HTMLAttributes<HTMLElement> {
 
 const variants: Record<Variant, string> = {
   subheadline: 'text-geo-subheadline',
+  body: 'text-geo-body',
+  title2: 'text-geo-title2',
 }
 
 const colors: Record<Color, string> = {
-  gray: 'text-geo-gray-100',
+  'grey-100': 'text-geo-grey-100',
+  'grey-70': 'text-geo-grey-70',
   white: 'text-geo-white-100',
   blue: 'text-geo-blue-100',
   red: 'text-geo-red-100',

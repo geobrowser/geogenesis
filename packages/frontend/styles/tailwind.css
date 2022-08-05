@@ -69,5 +69,20 @@ body {
   @apply prose prose-lg prose-stone max-w-none focus:outline-none;
 }
 
+.text-geo-body {
+  font-size: 17px;
+  line-height: 24px;
+}
+
+.text-geo-subheadline {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.text-geo-title2 {
+  font-size: 22px;
+  line-height: 32px;
+}
+
 @tailwind components;
 @tailwind utilities;
