@@ -19,7 +19,7 @@ export function Navbar() {
       <div className="flex space-x-3 items-center">
         <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
         <Link href="/new">New</Link>
-        <Link href="/token/33">Viewer</Link>
+        <Link href="/token/68">Viewer</Link>
       </div>
       <AnimatePresence exitBeforeEnter>
         <div className="flex justify-center items-center">

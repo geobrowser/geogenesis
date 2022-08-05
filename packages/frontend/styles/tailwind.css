@@ -66,7 +66,7 @@ body {
 }
 
 .editor {
-  @apply prose max-w-none focus:outline-none text-geo-grey-100;
+  @apply prose max-w-none focus:outline-none text-geo-grey-100 text-geo-title2;
 }
 
 .editor h1.is-editor-empty:first-child::before {
@@ -81,12 +81,14 @@ body {
   @apply text-geo-name font-bold mb-10;
 }
 
-.editor p {
-  @apply text-geo-title2;
-}
-
 .editor h2 {
   @apply text-geo-largeTitle font-bold mb-5;
+}
+
+.editor ul li p {
+  @apply marker:text-geo-grey-100;
+  margin: 0;
+  padding: 0;
 }
 
 /* If we want placeholders for other tiptap node types this is how to do it */
