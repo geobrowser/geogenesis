@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import {
   BubbleMenu,
   EditorContent,
@@ -56,7 +55,7 @@ export const Editor = memo(function Editor({
   })
 
   return (
-    <>
+    <div>
       {editor && (
         <BubbleMenu
           editor={editor}
@@ -125,6 +124,6 @@ export const Editor = memo(function Editor({
         </BubbleMenu>
       )}
       <EditorContent editor={editor} />
-    </>
+    </div>
   )
 })

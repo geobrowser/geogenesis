@@ -1,4 +1,9 @@
-import { motion } from 'framer-motion'
+import {
+  AnimatePresence,
+  AnimateSharedLayout,
+  LayoutGroup,
+  motion,
+} from 'framer-motion'
 import { AppProps } from 'next/app'
 import { useRouter } from 'next/router'
 import { Navbar } from '~/modules/ui/navbar'
@@ -9,7 +14,6 @@ import {
   publishService,
   PublishServiceProvider,
 } from '~/modules/api/publish-service'
-import { Animate } from '~/modules/ui/animate'
 
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
@@ -26,6 +30,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           <motion.div
             initial={{ backgroundColor: '#ffffff' }}
             animate={{ backgroundColor }}
+            transition={{ ease: 'easeIn', duration: 1 }}
             className="background-color-wrapper min-h-screen"
           >
             <Navbar />
@@ -35,17 +40,15 @@ function MyApp({ Component, pageProps }: AppProps) {
                 animation for fading the content of /pages, but we can also write custom animations
                 based in the route itself if we prefer doing that.
             */}
-            {/* <AnimatePresence exitBeforeEnter>
-              <Animate
-                key={`page-${router.pathname}`}
-                animation="fade"
-                className="layout"
-              > */}
-            <main key={`page-${router.pathname}`} className="layout">
-              <Component {...pageProps} />
-            </main>
-            {/* </Animate>
-            </AnimatePresence> */}
+            <LayoutGroup>
+              <AnimatePresence exitBeforeEnter>
+                <motion.div key={`page-${router.pathname}`}>
+                  <main className="layout">
+                    <Component {...pageProps} />
+                  </main>
+                </motion.div>
+              </AnimatePresence>
+            </LayoutGroup>
           </motion.div>
         )}
       </WalletProvider>

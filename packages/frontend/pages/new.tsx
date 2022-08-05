@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 import { useAccount } from 'wagmi'
@@ -14,5 +15,9 @@ export default function New() {
     if (!isConnected) router.push('/')
   }, [isConnected, router])
 
-  return <Editor publishService={publishService} />
+  return (
+    <motion.div layout="position">
+      <Editor publishService={publishService} />
+    </motion.div>
+  )
 }

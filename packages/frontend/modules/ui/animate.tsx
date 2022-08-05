@@ -27,12 +27,21 @@ const animationMap: Record<AnimationType, AnimationProps> = {
   },
 }
 
-export function Animate(props: AnimateProps) {
-  const animationProps = animationMap[props.animation]
+export function Animate({
+  delay = 0,
+  className,
+  animation,
+  children,
+}: AnimateProps) {
+  const animationProps = animationMap[animation]
 
   return (
-    <motion.div className={props.className} {...animationProps}>
-      {props.children}
+    <motion.div
+      className={className}
+      {...animationProps}
+      transition={{ delay: delay }}
+    >
+      {children}
     </motion.div>
   )
 }
