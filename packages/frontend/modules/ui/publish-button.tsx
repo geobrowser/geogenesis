@@ -54,7 +54,7 @@ export const PublishButton = observer(() => {
             )}
             {isPublishing && !isDone && (
               <Animate key="Loading spinner" animation="fade">
-                <PuffLoader size={24} color="#ffffff" />
+                <PuffLoader size={20} color="#ffffff" />
               </Animate>
             )}
             {isDone && (
