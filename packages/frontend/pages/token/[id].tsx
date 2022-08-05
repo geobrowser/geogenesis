@@ -10,6 +10,7 @@ import { Editor } from '~/modules/editor/editor'
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
   const owner = data ? data.owner : undefined
+  const readingTime = data ? data.readingTime : undefined
   const publishService = usePublishService()
   const [renderMetadata, setRenderMetadata] = useState(false)
 
@@ -32,14 +33,15 @@ export default function Token({ data, error }: ServerProps) {
     <AnimatePresence exitBeforeEnter>
       <LayoutGroup>
         {renderMetadata && (
-          <motion.h1
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="font-bold text-geo-blue-100 mb-10"
+            className="font-bold mb-10 space-x-3 flex items-center"
           >
-            {owner}
-          </motion.h1>
+            <h1 className="text-geo-blue-100">{owner}</h1>
+            <p>~{readingTime}m read</p>
+          </motion.div>
         )}
         <motion.div layout>
           <Editor
@@ -54,7 +56,7 @@ export default function Token({ data, error }: ServerProps) {
 }
 
 interface ServerProps {
-  data?: { content: string; owner: string }
+  data?: { content: string; owner: string; readingTime: number }
   error?: { message: string }
 }
 
@@ -73,9 +75,10 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
     const content = await getStorageClient().downloadText(contentHash)
 
     context.res.setHeader('Cache-Control', 'maxage=86400')
+    const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
 
     return {
-      props: { data: { content, owner } },
+      props: { data: { content, owner, readingTime } },
     }
   } catch (e) {
     return {
