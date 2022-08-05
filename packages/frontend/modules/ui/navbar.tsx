@@ -50,7 +50,7 @@ export function Navbar() {
                       <Animate animation="fade" className="flex" delay={0.5}>
                         <button
                           key="edit-button"
-                          className="flex items-center space-x-2 font-bold rounded-3xl bg-gray-100 px-4 py-2"
+                          className="flex items-center space-x-2 font-bold rounded-3xl bg-geo-grey-4 px-4 py-2"
                           onClick={() => alert('edit!')}
                         >
                           Edit

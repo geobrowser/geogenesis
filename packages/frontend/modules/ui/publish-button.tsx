@@ -8,6 +8,8 @@ import * as Popover from '@radix-ui/react-popover'
 import { PublishState, usePublishService } from '~/modules/api/publish-service'
 import { Animate } from './animate'
 import { getBaseUrl } from '../utils/get-base-url'
+import { Checkmark } from './icons/checkmark'
+import { Text } from './text'
 
 export const PublishButton = observer(() => {
   const { chain } = useNetwork()
@@ -23,26 +25,41 @@ export const PublishButton = observer(() => {
   }
 
   const isPublishing = publishState !== 'idle'
+  const isDone = publishState === 'done'
 
   return (
     <Popover.Root open={isPublishing}>
-      <Popover.Trigger className="flex justify-center" asChild>
+      <Popover.Trigger className="flex" asChild>
         <motion.button
           whileTap={{ scale: 0.95 }}
           whileHover={{ scale: 1.05 }}
-          className={`rounded-xl w-20 py-2 bg-geo-blue-100 text-slate-100 font-bold shadow-lg flex justify-center items-center ${
+          initial={{ backgroundColor: 'rgba(10, 132, 255, 1)' }}
+          animate={{
+            backgroundColor: isDone
+              ? 'rgba(46, 202, 127, 1)'
+              : 'rgba(10, 132, 255, 1)',
+          }}
+          className={`rounded-3xl w-20 gpy-10 text-slate-100 font-bold shadow-lg flex justify-center items-center ${
             isPublishing && 'cursor-not-allowed'
           }`}
           onClick={!isPublishing ? onPublish : undefined}
         >
           <AnimatePresence exitBeforeEnter>
-            {!isPublishing ? (
+            {!isPublishing && (
               <Animate key="Publish text" animation="fade">
-                <p>Publish</p>
+                <Text variant="subheadline" weight="bold" color="white">
+                  Publish
+                </Text>
               </Animate>
-            ) : (
+            )}
+            {isPublishing && !isDone && (
               <Animate key="Loading spinner" animation="fade">
                 <PuffLoader size={24} color="#ffffff" />
+              </Animate>
+            )}
+            {isDone && (
+              <Animate key="Publish text" animation="fade">
+                <Checkmark />
               </Animate>
             )}
           </AnimatePresence>
@@ -147,7 +164,7 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -360 }}
                 transition={{ delay: 0.1 }}
-                className="text-stone-600 rounded-3xl font-bold bg-gray-100 w-36 py-2 no-underline flex justify-center"
+                className="text-stone-600 rounded-3xl font-bold bg-gray-100 w-36 no-underline flex justify-center py-2"
               >
                 View
               </motion.a>
