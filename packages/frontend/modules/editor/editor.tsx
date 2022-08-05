@@ -95,11 +95,11 @@ export const Editor = memo(function Editor({
               />
             </MenuItem>
             <MenuItem
-              onClick={editor.chain().focus().toggleHeading({ level: 3 }).run}
-              isActive={editor.isActive('heading', { level: 3 })}
+              onClick={editor.chain().focus().toggleHeading({ level: 2 }).run}
+              isActive={editor.isActive('heading', { level: 2 })}
             >
               <SmallHeading
-                isActive={editor.isActive('heading', { level: 3 })}
+                isActive={editor.isActive('heading', { level: 2 })}
               />
             </MenuItem>
 
