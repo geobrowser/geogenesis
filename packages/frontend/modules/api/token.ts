@@ -50,3 +50,16 @@ export async function fetchTokenParameters(
 
   return { contentHash: cid }
 }
+
+export async function fetchTokenOwner(
+  chain: Chain,
+  tokenId: string | number
+): Promise<{ owner: string }> {
+  const url = getEtherActorURL(chain, 'ownerOf', String(tokenId))
+
+  const response = await fetch(url)
+  // If we use JSON it will crash due to the "0x" prefix in addresses
+  const owner = await response.text()
+
+  return { owner }
+}

@@ -3,12 +3,16 @@ import { GetServerSideProps } from 'next'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
-import { fetchTokenParameters } from '~/modules/api/token'
+import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
+import { getDefaultProvider } from 'ethers'
+import { getEnsName } from '~/modules/api/ens'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
+  const owner = data ? data.owner : undefined
+  const readingTime = data ? data.readingTime : undefined
   const publishService = usePublishService()
   const [renderMetadata, setRenderMetadata] = useState(false)
 
@@ -31,14 +35,15 @@ export default function Token({ data, error }: ServerProps) {
     <AnimatePresence exitBeforeEnter>
       <LayoutGroup>
         {renderMetadata && (
-          <motion.h1
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="font-bold text-geo-blue-100 mb-10"
+            className="font-bold mb-10 space-x-3 flex items-center"
           >
-            thegreenalien.eth
-          </motion.h1>
+            <h1 className="text-geo-blue-100">{owner}</h1>
+            <p>~{readingTime}m read</p>
+          </motion.div>
         )}
         <motion.div layout>
           <Editor
@@ -53,7 +58,7 @@ export default function Token({ data, error }: ServerProps) {
 }
 
 interface ServerProps {
-  data?: { content: string }
+  data?: { content: string; owner: string; readingTime: number }
   error?: { message: string }
 }
 
@@ -63,17 +68,21 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   const { id: tokenID } = context.query
 
   try {
-    const { contentHash } = await fetchTokenParameters(
-      chain.polygonMumbai,
-      tokenID as string
-    )
+    const [{ contentHash }, { owner }] = await Promise.all([
+      fetchTokenParameters(chain.polygonMumbai, tokenID as string),
+      fetchTokenOwner(chain.polygonMumbai, tokenID as string),
+    ])
 
-    const content = await getStorageClient().downloadText(contentHash)
+    const [maybeEns, content] = await Promise.all([
+      getEnsName(owner),
+      getStorageClient().downloadText(contentHash),
+    ])
 
     context.res.setHeader('Cache-Control', 'maxage=86400')
+    const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
 
     return {
-      props: { data: { content } },
+      props: { data: { content, owner: maybeEns ?? owner, readingTime } },
     }
   } catch (e) {
     return {
