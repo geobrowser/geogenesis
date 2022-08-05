@@ -15,7 +15,7 @@ export const PublishButton = observer(() => {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
-  const [publishState, setPublishState] = useState<PublishState>('minting')
+  const [publishState, setPublishState] = useState<PublishState>('idle')
   const [tokenId, setTokenId] = useState('')
 
   const onPublish = async () => {
