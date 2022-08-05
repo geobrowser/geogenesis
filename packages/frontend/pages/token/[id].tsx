@@ -3,12 +3,13 @@ import { GetServerSideProps } from 'next'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
-import { fetchTokenParameters } from '~/modules/api/token'
+import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
+  const owner = data ? data.owner : undefined
   const publishService = usePublishService()
   const [renderMetadata, setRenderMetadata] = useState(false)
 
@@ -37,7 +38,7 @@ export default function Token({ data, error }: ServerProps) {
             transition={{ delay: 0.5 }}
             className="font-bold text-geo-blue-100 mb-10"
           >
-            thegreenalien.eth
+            {owner}
           </motion.h1>
         )}
         <motion.div layout>
@@ -53,7 +54,7 @@ export default function Token({ data, error }: ServerProps) {
 }
 
 interface ServerProps {
-  data?: { content: string }
+  data?: { content: string; owner: string }
   error?: { message: string }
 }
 
@@ -61,19 +62,20 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   context
 ) => {
   const { id: tokenID } = context.query
+  console.log(tokenID)
 
   try {
-    const { contentHash } = await fetchTokenParameters(
-      chain.polygonMumbai,
-      tokenID as string
-    )
+    const [{ contentHash }, { owner }] = await Promise.all([
+      fetchTokenParameters(chain.polygonMumbai, tokenID as string),
+      fetchTokenOwner(chain.polygonMumbai, tokenID as string),
+    ])
 
     const content = await getStorageClient().downloadText(contentHash)
 
     context.res.setHeader('Cache-Control', 'maxage=86400')
 
     return {
-      props: { data: { content } },
+      props: { data: { content, owner } },
     }
   } catch (e) {
     return {
