@@ -7,6 +7,7 @@ import { PuffLoader } from 'react-spinners'
 import * as Popover from '@radix-ui/react-popover'
 import { PublishState, usePublishService } from '~/modules/api/publish-service'
 import { Animate } from './animate'
+import { getBaseUrl } from '../utils/get-base-url'
 
 export const PublishButton = observer(() => {
   const { chain } = useNetwork()
@@ -51,8 +52,8 @@ export const PublishButton = observer(() => {
       <Popover.Content sideOffset={12}>
         <Popover.Arrow width={20} height={8} className="fill-stone-50" />
         <Tooltip
-          publishState={publishService.publishState}
-          tokenUrl={`http://localhost:3000/token/${tokenId}`}
+          publishState={publishState}
+          tokenUrl={`${getBaseUrl()}/token/${tokenId}`}
         />
       </Popover.Content>
     </Popover.Root>
