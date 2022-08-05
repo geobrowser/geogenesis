@@ -12,8 +12,6 @@ export function Navbar() {
   const router = useRouter()
   const isNewRoute = router.pathname === '/new'
 
-  console.log(router.pathname)
-
   // TODO: Pass "action element group" to Navbar so different route context can inject
   // the elements they want to render in the navbar.
   return (

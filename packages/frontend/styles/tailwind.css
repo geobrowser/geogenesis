@@ -69,6 +69,23 @@ body {
   @apply prose prose-lg prose-stone max-w-none focus:outline-none;
 }
 
+.editor h1.is-editor-empty:first-child::before {
+  @apply text-geo-grey-16;
+  content: attr(data-placeholder);
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+
+/* If we want placeholders for other tiptap node types this is how to do it */
+/* .editor [class or html element].is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #ced4da;
+  pointer-events: none;
+  height: 0;
+} */
+
 .text-geo-body {
   font-size: 17px;
   line-height: 24px;

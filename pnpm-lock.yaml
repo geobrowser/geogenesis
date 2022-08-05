@@ -99,7 +99,9 @@ importers:
       '@rainbow-me/rainbowkit': ^0.4.5
       '@tailwindcss/typography': ^0.5.4
       '@tiptap/core': '>=2.0.0-beta.1 <3.0.0'
+      '@tiptap/extension-document': ^2.0.0-beta.17
       '@tiptap/extension-link': ^2.0.0-beta.43
+      '@tiptap/extension-placeholder': ^2.0.0-beta.53
       '@tiptap/react': ^2.0.0-beta.114
       '@tiptap/starter-kit': ^2.0.0-beta.191
       '@types/cors': ^2.8.12
@@ -133,7 +135,9 @@ importers:
       '@radix-ui/react-popover': 1.0.0_08741bd84ef3e6fa073678331eea05f2
       '@rainbow-me/rainbowkit': 0.4.5_6d714b99968b59796086654bbf91ae41
       '@tiptap/core': 2.0.0-beta.182
+      '@tiptap/extension-document': 2.0.0-beta.17_@tiptap+core@2.0.0-beta.182
       '@tiptap/extension-link': 2.0.0-beta.43_@tiptap+core@2.0.0-beta.182
+      '@tiptap/extension-placeholder': 2.0.0-beta.53_@tiptap+core@2.0.0-beta.182
       '@tiptap/react': 2.0.0-beta.114_0fc4f2e476b6ad748e0721bf523e30f2
       '@tiptap/starter-kit': 2.0.0-beta.191
       classnames: 2.3.1
@@ -2019,6 +2023,17 @@ packages:
       '@tiptap/core': ^2.0.0-beta.1
     dependencies:
       '@tiptap/core': 2.0.0-beta.182
+    dev: false
+
+  /@tiptap/extension-placeholder/2.0.0-beta.53_@tiptap+core@2.0.0-beta.182:
+    resolution: {integrity: sha512-NGU/a+GvcJVBjFqb2vI45+rNa3Cjsq/M+R/2xg9olb1w/HBr17NKf/5WSoqcc1S2cdnmMH6rB0/mVhG7Ciur+Q==}
+    peerDependencies:
+      '@tiptap/core': ^2.0.0-beta.1
+    dependencies:
+      '@tiptap/core': 2.0.0-beta.182
+      prosemirror-model: 1.18.1
+      prosemirror-state: 1.4.1
+      prosemirror-view: 1.26.2
     dev: false
 
   /@tiptap/extension-strike/2.0.0-beta.29_@tiptap+core@2.0.0-beta.182:
