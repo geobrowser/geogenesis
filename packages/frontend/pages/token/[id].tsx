@@ -6,6 +6,7 @@ import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
+import { getDefaultProvider } from 'ethers'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
@@ -72,13 +73,17 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
       fetchTokenOwner(chain.polygonMumbai, tokenID as string),
     ])
 
-    const content = await getStorageClient().downloadText(contentHash)
+    // TODO: Will need another provider for the ens lookup
+    const [maybeEns, content] = await Promise.all([
+      getDefaultProvider().lookupAddress(owner),
+      getStorageClient().downloadText(contentHash),
+    ])
 
     context.res.setHeader('Cache-Control', 'maxage=86400')
     const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
 
     return {
-      props: { data: { content, owner, readingTime } },
+      props: { data: { content, owner: maybeEns ?? owner, readingTime } },
     }
   } catch (e) {
     return {
