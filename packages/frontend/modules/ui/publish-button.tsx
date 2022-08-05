@@ -9,7 +9,6 @@ import { PublishState, usePublishService } from '~/modules/api/publish-service'
 import { Animate } from './animate'
 import { getBaseUrl } from '../utils/get-base-url'
 import { Checkmark } from './icons/checkmark'
-import { Text } from './text'
 
 export const PublishButton = observer(() => {
   const { chain } = useNetwork()
