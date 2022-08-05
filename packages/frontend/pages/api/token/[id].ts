@@ -47,6 +47,7 @@ export default async function handler(
         .trim()
     : undefined
 
+  res.setHeader('Cache-Control', 'max-age=86400')
   res.status(200).json({
     name: title ?? `Geo Document #${id}`,
     description: summary ?? '',
