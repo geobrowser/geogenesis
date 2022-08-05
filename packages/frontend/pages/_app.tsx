@@ -37,17 +37,17 @@ function MyApp({ Component, pageProps }: AppProps) {
                 animation for fading the content of /pages, but we can also write custom animations
                 based in the route itself if we prefer doing that.
             */}
-            <AnimatePresence exitBeforeEnter>
+            {/* <AnimatePresence exitBeforeEnter>
               <Animate
                 key={`page-${router.pathname}`}
                 animation="fade"
                 className="layout"
-              >
-                <main>
-                  <Component {...pageProps} />
-                </main>
-              </Animate>
-            </AnimatePresence>
+              > */}
+            <main key={`page-${router.pathname}`} className="layout">
+              <Component {...pageProps} />
+            </main>
+            {/* </Animate>
+            </AnimatePresence> */}
           </motion.div>
         )}
       </WalletProvider>
