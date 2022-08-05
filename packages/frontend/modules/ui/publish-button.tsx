@@ -1,16 +1,14 @@
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNetwork, useSigner } from 'wagmi'
-import { PublishState, usePublishService } from '~/modules/api/publish-service'
-import { useRouter } from 'next/router'
 import { observer } from 'mobx-react-lite'
 import { PuffLoader } from 'react-spinners'
 import * as Popover from '@radix-ui/react-popover'
+import { PublishState, usePublishService } from '~/modules/api/publish-service'
 import { Animate } from './animate'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
 
 export const PublishButton = observer(() => {
-  const router = useRouter()
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
@@ -143,24 +141,24 @@ function Tooltip({ publishState, tokenUrl }: TooltipProps) {
         )}
         {publishState === 'done' && (
           <div className="flex items-center space-x-4">
-            <Link href={tokenUrl} className="flex justify-center">
+            <Link href={tokenUrl}>
               <motion.a
                 key="done-view"
-                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.05 }}
                 initial={{ opacity: 0, x: 60 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -360 }}
                 transition={{ delay: 0.1 }}
-                className="text-stone-600 rounded-3xl font-bold bg-gray-100 w-36 py-2 no-underline"
+                className="text-stone-600 rounded-3xl font-bold bg-gray-100 w-36 py-2 no-underline flex justify-center"
               >
                 View
               </motion.a>
             </Link>
             <motion.button
               key="done-share"
-              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.05 }}
               initial={{ opacity: 0, x: 60 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -360 }}
