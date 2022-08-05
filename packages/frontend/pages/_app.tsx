@@ -1,7 +1,7 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { AppProps } from 'next/app'
 import { useRouter } from 'next/router'
-import { PublishNavbar, ViewNavbar } from '~/modules/ui/navbar'
+import { Navbar } from '~/modules/ui/navbar'
 import { WalletProvider } from '~/modules/identity'
 import '~/styles/tailwind.css'
 import { useIsMounted } from '~/modules/ui/hooks/use-is-mounted'
@@ -28,9 +28,7 @@ function MyApp({ Component, pageProps }: AppProps) {
             animate={{ backgroundColor }}
             className="background-color-wrapper min-h-screen"
           >
-            <AnimatePresence exitBeforeEnter>
-              {isNewRoute ? <PublishNavbar /> : <ViewNavbar />}
-            </AnimatePresence>
+            <Navbar />
 
             {/* 
                 Animates content of /pages when it mounts/unmounts. Right now we have a root

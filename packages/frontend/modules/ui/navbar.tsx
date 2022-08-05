@@ -1,59 +1,59 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import { Animate } from './animate'
+import { Heart } from './icons/heart'
 import { PublishButton } from './publish-button'
 
-export function PublishNavbar() {
+export function Navbar() {
   const { isConnected } = useAccount()
+  const router = useRouter()
+  const isNewRoute = router.pathname === '/new'
+
+  console.log(router.pathname)
 
   return (
     <nav className="navbar">
       <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
       <AnimatePresence exitBeforeEnter>
-        <Animate
-          key={`publish-navbar-actions-${isConnected}`}
-          animation="fade"
-          className="flex items-center"
-        >
+        <div className="flex justify-center items-center">
           {isConnected && (
-            <Animate
-              animation="fade"
-              className="flex items-center justify-between"
-            >
-              <PublishButton />
-              <hr className="w-8 border-none" />
-            </Animate>
+            <>
+              {isNewRoute && (
+                <>
+                  <PublishButton />
+                  <hr className="w-8 border-none" />
+                </>
+              )}
+              {!isNewRoute && (
+                <>
+                  <div className="flex items-center space-x-6">
+                    <motion.button
+                      className="flex items-center space-x-2 font-bold"
+                      onClick={() => alert('save!')}
+                    >
+                      <Heart />
+                      <p>Save</p>
+                    </motion.button>
+                    <motion.button
+                      className="flex items-center space-x-2 font-bold rounded-3xl bg-gray-100 px-4 py-2"
+                      onClick={() => alert('edit!')}
+                    >
+                      Edit
+                    </motion.button>
+                  </div>
+                  <hr className="w-8 border-none" />
+                </>
+              )}
+            </>
           )}
           <ConnectButton
             label="Sign in"
             chainStatus="none"
             showBalance={false}
           />
-        </Animate>
-      </AnimatePresence>
-    </nav>
-  )
-}
-
-export function ViewNavbar() {
-  const { isConnected } = useAccount()
-
-  return (
-    <nav className="navbar">
-      <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
-      <AnimatePresence exitBeforeEnter>
-        <Animate
-          key={`view-navbar-actions-${isConnected}`}
-          animation="fade"
-          className="flex items-center"
-        >
-          <ConnectButton
-            label="Sign in"
-            chainStatus="none"
-            showBalance={false}
-          />
-        </Animate>
+        </div>
       </AnimatePresence>
     </nav>
   )
