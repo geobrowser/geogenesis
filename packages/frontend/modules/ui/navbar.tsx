@@ -39,7 +39,7 @@ export function Navbar({ backgroundColor }: Props) {
                 {!isNewRoute && (
                   <>
                     <div className="flex items-center space-x-6">
-                      <Animate animation="fade" className="flex" delay={0.6}>
+                      <Animate animation="fade" className="flex" delay={0.65}>
                         <button
                           key="save-button"
                           className="flex items-center space-x-2 font-bold"

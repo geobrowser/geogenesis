@@ -25,15 +25,27 @@ function MyApp({ Component, pageProps }: AppProps) {
           <motion.div
             initial={{ backgroundColor: '#ffffff' }}
             animate={{ backgroundColor }}
-            transition={{ duration: 0.5 }}
             className="background-color-wrapper min-h-screen"
           >
             <Navbar backgroundColor={backgroundColor} />
 
             <AnimatePresence exitBeforeEnter>
-              <main key={`page-${router.pathname}`} className="layout">
+              {/* 
+                  HACK to force the page's children to animate out. We don't want
+                  to fade the content but do want the children to do their exit
+                  animations. If we don't have an actual animation on motion.main
+                  then the page transition will be instant.
+              */}
+              <motion.main
+                initial={{ opacity: 0.99 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0.99 }}
+                transition={{ duration: 0.5 }}
+                key={`page-${router.pathname}`}
+                className="layout"
+              >
                 <Component {...pageProps} />
-              </main>
+              </motion.main>
             </AnimatePresence>
           </motion.div>
         )}
