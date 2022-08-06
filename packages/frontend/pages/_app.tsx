@@ -28,7 +28,7 @@ function MyApp({ Component, pageProps }: AppProps) {
             transition={{ duration: 0.5 }}
             className="background-color-wrapper min-h-screen"
           >
-            <Navbar />
+            <Navbar backgroundColor={backgroundColor} />
 
             <AnimatePresence exitBeforeEnter>
               <main key={`page-${router.pathname}`} className="layout">

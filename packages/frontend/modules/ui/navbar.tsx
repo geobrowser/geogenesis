@@ -7,7 +7,11 @@ import { Animate } from './animate'
 import { Heart } from './icons/heart'
 import { PublishButton } from './publish-button'
 
-export function Navbar() {
+interface Props {
+  backgroundColor: string
+}
+
+export function Navbar({ backgroundColor }: Props) {
   const { isConnected } = useAccount()
   const router = useRouter()
   const isNewRoute = router.pathname === '/new'
@@ -15,7 +19,7 @@ export function Navbar() {
   // TODO: Pass "action element group" to Navbar so different route context can inject
   // the elements they want to render in the navbar.
   return (
-    <nav className="navbar">
+    <motion.nav animate={{ backgroundColor }} className="navbar">
       <div className="flex space-x-3 items-center">
         <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
         <Link href="/new">New</Link>
@@ -68,6 +72,6 @@ export function Navbar() {
           />
         </div>
       </AnimatePresence>
-    </nav>
+    </motion.nav>
   )
 }
