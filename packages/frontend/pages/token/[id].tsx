@@ -5,7 +5,7 @@ import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { usePublishService } from '~/modules/api/publish-service'
-import { Editor } from '~/modules/editor/editor'
+import { Editor, ReadOnlyEditor } from '~/modules/editor/editor'
 import { getDefaultProvider } from 'ethers'
 import { getEnsName } from '~/modules/api/ens'
 
@@ -45,12 +45,8 @@ export default function Token({ data, error }: ServerProps) {
             <p>~{readingTime}m read</p>
           </motion.div>
         )}
-        <motion.div layout>
-          <Editor
-            publishService={publishService}
-            initialContent={content}
-            editable={false}
-          />
+        <motion.div layout="position">
+          <ReadOnlyEditor content={content ?? ''} />
         </motion.div>
       </LayoutGroup>
     </AnimatePresence>

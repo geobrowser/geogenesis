@@ -36,16 +36,7 @@ const CustomDocument = Document.extend({
 })
 
 // Don't want to rerender the editor over and over
-export const Editor = memo(function Editor({
-  publishService,
-  initialContent,
-  editable,
-}: Props) {
-  // Only convert markdown to html once on mount
-  const [content] = useState(() => {
-    return initialContent ? converter.makeHtml(initialContent) : undefined
-  })
-
+export const Editor = memo(function Editor({ publishService }: Props) {
   const editor = useEditor({
     extensions: [
       LinkExtension,
@@ -66,8 +57,6 @@ export const Editor = memo(function Editor({
         },
       }),
     ],
-    content,
-    editable,
     editorProps: {
       attributes: {
         class: 'editor',
@@ -151,3 +140,18 @@ export const Editor = memo(function Editor({
     </>
   )
 })
+
+export function ReadOnlyEditor({ content }: { content: string }) {
+  const editor = useEditor({
+    extensions: [LinkExtension, StarterKit],
+    content: converter.makeHtml(content),
+    editable: false,
+    editorProps: {
+      attributes: {
+        class: 'editor',
+      },
+    },
+  })
+
+  return <EditorContent editor={editor} />
+}
