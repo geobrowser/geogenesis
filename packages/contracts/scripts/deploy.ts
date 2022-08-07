@@ -37,7 +37,7 @@ async function deployDocumentContract() {
 async function deployProposalContract() {
   const Factory = await ethers.getContractFactory('Proposal')
   const contract: Proposal = await Factory.deploy(
-    'https://geogenesis.vercel.app/api/token/'
+    'https://geogenesis.vercel.app/api/proposal/'
   )
 
   console.log(`Deploying Proposal at ${contract.address}...`)
@@ -118,7 +118,15 @@ function saveAddress({
 }) {
   const addresses = JSON.parse(readFileSync('addresses.json').toString())
 
-  addresses[chainId] = { [contractName]: { address } }
+  if (!addresses[chainId]) {
+    addresses[chainId] = {}
+  }
+
+  if (!addresses[chainId][contractName]) {
+    addresses[chainId][contractName] = {}
+  }
+
+  addresses[chainId][contractName].address = address
 
   writeFileSync('addresses.json', JSON.stringify(addresses, null, 2))
 }
