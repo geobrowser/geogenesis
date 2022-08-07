@@ -42,13 +42,13 @@ export async function fetchTokenURI(chain: Chain, tokenId: string | number) {
 export async function fetchTokenParameters(
   chain: Chain,
   tokenId: string | number
-): Promise<{ contentHash: string }> {
+): Promise<{ cid: string }> {
   const url = getEtherActorURL(chain, 'tokenParameters', String(tokenId))
 
   const response = await fetch(url)
   const [cid] = await response.json()
 
-  return { contentHash: cid }
+  return { cid }
 }
 
 export async function fetchTokenOwner(

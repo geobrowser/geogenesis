@@ -20,20 +20,20 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<Data>
 ) {
-  let { id, contentHash } = req.query
+  let { id, cid } = req.query
 
   await cors(req, res)
 
-  // Support contentHash in query params, but look it up if needed
-  if (!contentHash) {
+  // Support cid in query params, but look it up if needed
+  if (!cid) {
     const parameters = await fetchTokenParameters(
       chain.polygonMumbai,
       id as string
     )
-    contentHash = parameters.contentHash
+    cid = parameters.cid
   }
 
-  const content = await getStorageClient().downloadText(contentHash as string)
+  const content = await getStorageClient().downloadText(cid as string)
 
   const titleMatch = content.match(/^#\s+(.*)/)
   const title = titleMatch ? titleMatch[1] : undefined
