@@ -72,9 +72,9 @@ export const Editor = memo(function Editor({ publishService }: Props) {
         <BubbleMenu
           editor={editor}
           tippyOptions={{ hideOnClick: false, maxWidth: '100%' }}
-          className="bg-geo-white-100 z-50"
+          className="bg-geo-white-100 z-50 rounded-xl overflow-hidden"
         >
-          <div className="shadow-lg p-4 space-x-3 rounded-xl flex justify-between items-center w-full">
+          <div className="shadow-lg p-4 space-x-3 flex justify-between items-center w-full">
             <MenuItem
               onClick={editor.chain().focus().toggleHeading({ level: 1 }).run}
               isActive={editor.isActive('heading', { level: 1 })}
