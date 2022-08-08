@@ -1,5 +1,7 @@
 import { NFTStorage, toGatewayURL } from 'nft.storage'
 
+export type StorageClient = ReturnType<typeof getStorageClient>
+
 export function getStorageClient() {
   const client = new NFTStorage({
     token:
