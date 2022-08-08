@@ -12,7 +12,7 @@ const nextConfig = {
       },
       {
         source: `/nft/${addresses[80001].GeoDocument.address}/:slug`,
-        destination: `/token/:slug`,
+        destination: `/page/:slug`,
         permanent: false,
       },
     ]

@@ -15,7 +15,7 @@ export default async function handler(
   const host = req.headers.host
 
   const url = getScreenshotServiceURL({
-    targetURL: `http://${host}/token/${id}`,
+    targetURL: `http://${host}/page/${id}`,
     waitForSelector: '.editor',
   })
 

@@ -39,7 +39,7 @@ hardhat run --network polygon_mumbai scripts/deploy.ts
 Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
 
 ```shell
-npx hardhat verify --network polygon_mumbai DEPLOYED_CONTRACT_ADDRESS "https://geogenesis.vercel.app/api/token/"
+npx hardhat verify --network polygon_mumbai DEPLOYED_CONTRACT_ADDRESS "https://geogenesis.vercel.app/api/page/"
 ```
 
 ## Performance optimizations
