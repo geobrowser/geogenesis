@@ -12,6 +12,7 @@ import {
 } from '~/modules/api/publish-service'
 import { getStorageClient } from '~/modules/api/storage'
 import { GeoDocument__factory } from '~/../contracts'
+import { Navbar } from '~/modules/ui/navbar'
 
 const publishService = new PublishService(
   getStorageClient(),
@@ -33,8 +34,9 @@ function MyApp({ Component, pageProps }: AppProps) {
           <motion.div
             initial={{ backgroundColor: '#ffffff' }}
             animate={{ backgroundColor }}
-            className="background-color-wrapper min-h-screen"
+            className="background-color-wrapper min-h-screen relative"
           >
+            <Navbar />
             <ActionBar backgroundColor={backgroundColor} />
 
             <AnimatePresence exitBeforeEnter>

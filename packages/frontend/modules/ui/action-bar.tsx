@@ -20,11 +20,8 @@ export function ActionBar({ backgroundColor }: Props) {
   // the elements they want to render in the navbar.
   return (
     <motion.div animate={{ backgroundColor }} className="action-bar">
-      <div className="flex space-x-3 items-center">
-        <h1 className="text-2xl font-bold tracking-tighter">GEO</h1>
-        <Link href="/new">New</Link>
-        <Link href="/token/68">Viewer</Link>
-      </div>
+      {/* TODO: Byron fix this HACK */}
+      <div />
       <AnimatePresence exitBeforeEnter>
         <div className="flex justify-center items-center">
           <AnimatePresence exitBeforeEnter>

@@ -46,6 +46,7 @@ body {
 }
 
 .action-bar {
+  /* Stacking context needs to be higher than the editor and lower than the side nav */
   @apply z-10 bg-geo-white-100;
   position: sticky;
   top: 0;
