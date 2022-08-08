@@ -19,6 +19,7 @@ module.exports = {
     },
     extend: {
       colors: {
+        'geo-blue-56': 'rgba(10, 132, 255, 0.56)',
         'geo-blue-100': 'rgba(10, 132, 255, 1)',
         'geo-green-100': 'rgba(46, 202, 127, 1)',
         'geo-red-100': 'rgba(234, 68, 88, 1)',

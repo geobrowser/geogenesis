@@ -1,10 +1,12 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { AnimatePresence, motion } from 'framer-motion'
-import Link from 'next/link'
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { useRouter } from 'next/router'
+import { useState } from 'react'
 import { useAccount } from 'wagmi'
+import { getBaseUrl } from '../utils/get-base-url'
 import { Animate } from './animate'
 import { Heart } from './icons/heart'
+import { Share } from './icons/share'
 import { PublishButton } from './publish-button'
 
 interface Props {
@@ -38,17 +40,13 @@ export function ActionBar({ backgroundColor }: Props) {
                   </Animate>
                 )}
                 {!isNewRoute && (
-                  <>
+                  <LayoutGroup>
                     <div className="flex items-center space-x-6">
+                      <Animate animation="fade" className="flex" delay={0.75}>
+                        <ShareButton />
+                      </Animate>
                       <Animate animation="fade" className="flex" delay={0.65}>
-                        <button
-                          key="save-button"
-                          className="flex items-center space-x-2 font-bold"
-                          onClick={() => alert('save!')}
-                        >
-                          <Heart />
-                          <p>Save</p>
-                        </button>
+                        <SaveButton />
                       </Animate>
                       <Animate animation="fade" className="flex" delay={0.5}>
                         <button
@@ -61,7 +59,7 @@ export function ActionBar({ backgroundColor }: Props) {
                       </Animate>
                     </div>
                     <hr className="w-8 border-none" />
-                  </>
+                  </LayoutGroup>
                 )}
               </>
             )}
@@ -74,5 +72,68 @@ export function ActionBar({ backgroundColor }: Props) {
         </div>
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+function SaveButton() {
+  const [isHovered, setHovered] = useState(false)
+
+  // TODO: This is a stateful HACK to demo the "active" state.
+  const [isActive, setActive] = useState(false)
+
+  return (
+    <motion.button
+      layout="position"
+      key="save-button"
+      className="flex items-center space-x-2 font-bold"
+      onClick={() => {
+        setActive((prev) => !prev)
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      whileHover={{ scale: 1.05 }}
+    >
+      <LayoutGroup>
+        <motion.div layout="position">
+          <Heart isActive={isActive} isHovered={isHovered} />
+        </motion.div>
+        <p>{isActive ? 'Saved' : 'Save'}</p>
+      </LayoutGroup>
+    </motion.button>
+  )
+}
+
+function ShareButton() {
+  const router = useRouter()
+  const [isHovered, setHovered] = useState(false)
+
+  // TODO: This is a stateful HACK to demo the "active" state.
+  const [isActive, setActive] = useState(false)
+
+  function copyUrlToClipboard() {
+    const url = `${getBaseUrl()}${router.asPath}`
+    navigator.clipboard.writeText(url)
+  }
+
+  return (
+    <motion.button
+      layout="position"
+      key="share-button"
+      className="flex items-center space-x-2 font-bold"
+      onClick={() => {
+        copyUrlToClipboard()
+        setActive((prev) => !prev)
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      whileHover={{ scale: 1.05 }}
+    >
+      <LayoutGroup>
+        <motion.div layout="position">
+          <Share isActive={isActive} isHovered={isHovered} />
+        </motion.div>
+        <p>{isActive ? 'Copied' : 'Share'}</p>
+      </LayoutGroup>
+    </motion.button>
   )
 }

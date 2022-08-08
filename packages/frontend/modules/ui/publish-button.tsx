@@ -82,11 +82,11 @@ interface TooltipProps {
 }
 
 function Tooltip({ publishState, tokenUrl }: TooltipProps) {
-  const [copyText, setIsCopied] = useState<'Share' | 'Copied!'>('Share')
+  const [copyText, setIsCopied] = useState<'Share' | 'Copied'>('Share')
 
   const copyTokenUrl = () => {
     navigator.clipboard.writeText(tokenUrl)
-    setIsCopied('Copied!')
+    setIsCopied('Copied')
   }
 
   return (
