@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react'
-import { GetServerSideProps } from 'next'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
+import { GetServerSideProps } from 'next'
+import { useEffect, useState } from 'react'
 import { chain } from 'wagmi'
+import { getEnsName } from '~/modules/api/ens'
+import { usePublishService } from '~/modules/api/publish-service'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
-import { usePublishService } from '~/modules/api/publish-service'
-import { Editor, ReadOnlyEditor } from '~/modules/editor/editor'
-import { getDefaultProvider } from 'ethers'
-import { getEnsName } from '~/modules/api/ens'
+import { ReadOnlyEditor } from '~/modules/editor/editor'
 
 export default function Token({ data, error }: ServerProps) {
   const content = data ? data.content : undefined
@@ -64,14 +63,14 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   const { id: tokenID } = context.query
 
   try {
-    const [{ contentHash }, { owner }] = await Promise.all([
+    const [{ cid }, { owner }] = await Promise.all([
       fetchTokenParameters(chain.polygonMumbai, tokenID as string),
       fetchTokenOwner(chain.polygonMumbai, tokenID as string),
     ])
 
     const [maybeEns, content] = await Promise.all([
       getEnsName(owner),
-      getStorageClient().downloadText(contentHash),
+      getStorageClient().downloadText(cid),
     ])
 
     context.res.setHeader('Cache-Control', 'maxage=86400')

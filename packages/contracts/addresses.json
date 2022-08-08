@@ -1,7 +1,16 @@
 {
   "80001": {
     "GeoDocument": {
-      "address": "0x3fcf2ce06aF7AD306576fE31d576F87F1694D4Dd"
+      "address": "0x6C67287547942F7519BCe4846fB690c0B16580bB"
+    },
+    "Proposal": {
+      "address": "0x55Ee6898e304BC391Bc53FED5E5Fc240A3f55505"
+    },
+    "Geode": {
+      "address": "0xA2aE3Ed389356d32D9f8a94A4ce8a36cC26c7aF0"
+    },
+    "Controller": {
+      "address": "0x26C8604A2384C944905498e7412BFab96491245F"
     }
   }
 }
