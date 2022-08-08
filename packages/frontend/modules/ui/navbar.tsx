@@ -21,7 +21,7 @@ export function Navbar() {
         </Link>
         <Link href="/token/3">
           <a>
-            <Stack />
+            <Stack isActive={router.pathname === '/token/[id]'} />
           </a>
         </Link>
         <GeoInactive />
