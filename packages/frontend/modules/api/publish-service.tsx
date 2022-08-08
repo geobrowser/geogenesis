@@ -4,6 +4,7 @@ import { makeAutoObservable } from 'mobx'
 import { createContext, useContext } from 'react'
 import { Chain } from 'wagmi'
 import { getContractAddress } from '../utils/getContractAddress'
+import { StorageClient } from './storage'
 
 async function findEvent(
   tx: ContractTransaction,
