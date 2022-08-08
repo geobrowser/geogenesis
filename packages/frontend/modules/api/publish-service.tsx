@@ -6,7 +6,7 @@ import { Chain } from 'wagmi'
 import { getContractAddress } from '../utils/getContractAddress'
 import { StorageClient } from './storage'
 
-async function findEvent(
+export async function findEvent(
   tx: ContractTransaction,
   name: string
 ): Promise<Event> {
@@ -57,7 +57,7 @@ export class PublishService {
 
     console.log('Uploaded', cid)
 
-    const contractAddress = getContractAddress(chain)
+    const contractAddress = getContractAddress(chain, 'GeoDocument')
 
     if (!contractAddress) {
       throw new Error(`Contract doesn't exist for chain '${chain.name}'`)

@@ -47,12 +47,14 @@ export default async function handler(
         .trim()
     : undefined
 
-  res.setHeader('Cache-Control', 'max-age=86400')
+  const host = req.headers.host
+
+  // res.setHeader('Cache-Control', 'max-age=86400')
   res.status(200).json({
     name: title ?? `Geo Document #${id}`,
     description: summary ?? '',
-    image: `https://geogenesis.vercel.app/api/thumbnail/${id}`,
-    external_url: `https://geogenesis.vercel.app/token/${id}`,
+    image: `http://${host}/api/thumbnail/${id}`,
+    external_url: `http://${host}/token/${id}`,
     // animation_url: item.download_url,
     // attributes: [
     //   {
