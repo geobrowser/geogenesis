@@ -8,7 +8,9 @@ export default function New() {
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
 
-  const [contractAddress, setContractAddress] = useState('')
+  const [contractAddress, setContractAddress] = useState<string>(
+    chain ? getContractAddress(chain, 'Geode') ?? '' : ''
+  )
   const [tokenId, setTokenId] = useState('')
 
   const router = useRouter()
@@ -18,19 +20,17 @@ export default function New() {
 
     if (!signer || !chain) return
 
-    const tokenIdNumber = Number(tokenId)
-
     if (!contractAddress.startsWith('0x')) {
       throw new Error('Contract address must start with 0x')
     }
 
-    if (!Number.isInteger(tokenIdNumber)) {
+    if (!Number.isInteger(Number(tokenId))) {
       throw new Error('Token id must be integer')
     }
 
     const id = await createGeode(signer, chain, {
       contractAddress,
-      tokenId: tokenIdNumber,
+      tokenId: tokenId,
     })
 
     router.push(
@@ -59,7 +59,7 @@ export default function New() {
           <input
             id="token-id"
             type="text"
-            placeholder=""
+            placeholder="42"
             value={tokenId}
             onChange={(event) => {
               setTokenId(event.target.value)

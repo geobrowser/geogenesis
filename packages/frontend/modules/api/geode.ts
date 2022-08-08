@@ -1,13 +1,14 @@
 import { Signer } from 'ethers'
-import { Chain } from 'wagmi'
+import { Chain, chain } from 'wagmi'
 import { Geode__factory } from '~/../contracts'
+import { getEtherActorURL } from '~/modules/api/ether-actor'
 import { findEvent } from '~/modules/api/publish-service'
 import { getContractAddress } from '~/modules/utils/getContractAddress'
 
 export async function createGeode(
   signer: Signer,
   chain: Chain,
-  box: { contractAddress: string; tokenId: number }
+  box: BoxParameters
 ): Promise<number> {
   const contractAddress = getContractAddress(chain, 'Geode')
 
@@ -29,4 +30,27 @@ export async function createGeode(
   }
 
   throw new Error('Minting failed')
+}
+
+export type BoxParameters = {
+  contractAddress: string
+  tokenId: string
+}
+
+export async function fetchGeodeTarget(
+  geodeId: string
+): Promise<BoxParameters> {
+  const geodeContractAddress = getContractAddress(chain.polygonMumbai, 'Geode')!
+
+  const targetUrl = getEtherActorURL(
+    chain.polygonMumbai,
+    geodeContractAddress,
+    'boxParameters',
+    geodeId
+  )
+
+  const response = await fetch(targetUrl)
+  const [contractAddress, tokenId] = await response.json()
+
+  return { contractAddress, tokenId }
 }
