@@ -45,7 +45,7 @@ body {
   font-kerning: auto;
 }
 
-.navbar {
+.action-bar {
   @apply z-10 bg-geo-white-100;
   position: sticky;
   top: 0;

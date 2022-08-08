@@ -1,9 +1,10 @@
+import '~/styles/tailwind.css'
+
 import { AnimatePresence, motion } from 'framer-motion'
 import { AppProps } from 'next/app'
 import { useRouter } from 'next/router'
-import { Navbar } from '~/modules/ui/navbar'
+import { ActionBar } from '~/modules/ui/action-bar'
 import { WalletProvider } from '~/modules/identity'
-import '~/styles/tailwind.css'
 import { useIsMounted } from '~/modules/ui/hooks/use-is-mounted'
 import {
   PublishService,
@@ -34,7 +35,7 @@ function MyApp({ Component, pageProps }: AppProps) {
             animate={{ backgroundColor }}
             className="background-color-wrapper min-h-screen"
           >
-            <Navbar backgroundColor={backgroundColor} />
+            <ActionBar backgroundColor={backgroundColor} />
 
             <AnimatePresence exitBeforeEnter>
               {/* 
