@@ -13,7 +13,7 @@ contract GeoDocument is ERC721, ReentrancyGuard, Ownable {
 
     using Strings for uint256;
 
-    constructor(string memory customBaseURI_) ERC721('GeoDocument', 'GEODE') {
+    constructor(string memory customBaseURI_) ERC721('GeoDocument', 'DOC') {
         customBaseURI = customBaseURI_;
     }
 

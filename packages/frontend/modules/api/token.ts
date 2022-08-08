@@ -1,37 +1,27 @@
-import { Chain, chain as chainOptions } from 'wagmi'
+import { Chain } from 'wagmi'
 import { getContractAddress } from '../utils/getContractAddress'
+import { getEtherActorURL } from './ether-actor'
+import { NFTMetadata } from './nft'
 
-function getEtherActorBaseURL(chain: Chain) {
-  function getChainName(id: number) {
-    switch (id) {
-      case chainOptions.polygon.id:
-        return 'polygon'
-      case chainOptions.polygonMumbai.id:
-        return 'mumbai'
-      default:
-        throw new Error(`Chain '${chain.name}' not supported yet`)
-    }
+function getGeoDocumentAddress(chain: Chain) {
+  const address = getContractAddress(chain, 'GeoDocument')
+
+  if (!address) {
+    throw new Error(`GeoDocument address not found for ${chain.name}`)
   }
 
-  return `https://${getChainName(chain.id)}.ether.actor`
-}
-
-function getEtherActorURL(chain: Chain, methodName: string, ...args: string[]) {
-  const contractAddress = getContractAddress(chain)
-
-  // mumbai.ether.actor/0xContractAddress/methodName/arg0/arg1
-  const pathComponents = [
-    getEtherActorBaseURL(chain),
-    contractAddress,
-    methodName,
-    ...args,
-  ]
-
-  return pathComponents.join('/')
+  return address
 }
 
 export async function fetchTokenURI(chain: Chain, tokenId: string | number) {
-  const url = getEtherActorURL(chain, 'tokenURI', String(tokenId))
+  const contractAddress = getGeoDocumentAddress(chain)
+
+  const url = getEtherActorURL(
+    chain,
+    contractAddress,
+    'tokenURI',
+    String(tokenId)
+  )
 
   const response = await fetch(url)
   const tokenURI = await response.text()
@@ -39,11 +29,39 @@ export async function fetchTokenURI(chain: Chain, tokenId: string | number) {
   return tokenURI
 }
 
+export async function fetchNFTMetadata(
+  chain: Chain,
+  contractAddress: string,
+  tokenId: string | number
+) {
+  const url = getEtherActorURL(
+    chain,
+    contractAddress,
+    'tokenURI',
+    String(tokenId)
+  )
+
+  const tokenURIResponse = await fetch(url)
+  const tokenURI = await tokenURIResponse.text()
+
+  const metadataResponse = await fetch(tokenURI)
+  const metadata = await metadataResponse.json()
+
+  return metadata as NFTMetadata
+}
+
 export async function fetchTokenParameters(
   chain: Chain,
   tokenId: string | number
 ): Promise<{ cid: string }> {
-  const url = getEtherActorURL(chain, 'tokenParameters', String(tokenId))
+  const contractAddress = getGeoDocumentAddress(chain)
+
+  const url = getEtherActorURL(
+    chain,
+    contractAddress,
+    'tokenParameters',
+    String(tokenId)
+  )
 
   const response = await fetch(url)
   const [cid] = await response.json()
@@ -55,7 +73,14 @@ export async function fetchTokenOwner(
   chain: Chain,
   tokenId: string | number
 ): Promise<{ owner: string }> {
-  const url = getEtherActorURL(chain, 'ownerOf', String(tokenId))
+  const contractAddress = getGeoDocumentAddress(chain)
+
+  const url = getEtherActorURL(
+    chain,
+    contractAddress,
+    'ownerOf',
+    String(tokenId)
+  )
 
   const response = await fetch(url)
   // If we use JSON it will crash due to the "0x" prefix in addresses

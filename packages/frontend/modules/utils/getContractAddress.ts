@@ -5,10 +5,12 @@ function isSupportedChain(chainId: string): chainId is keyof typeof addresses {
   return chainId in addresses
 }
 
-export function getContractAddress(chain: Chain) {
+type ContractName = 'GeoDocument' | 'Proposal' | 'Geode' | 'Controller'
+
+export function getContractAddress(chain: Chain, contractName: ContractName) {
   const chainId = String(chain.id)
 
   if (!isSupportedChain(chainId)) return
 
-  return addresses[chainId].GeoDocument.address
+  return addresses[chainId][contractName].address
 }

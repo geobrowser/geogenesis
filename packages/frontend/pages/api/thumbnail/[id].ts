@@ -12,8 +12,10 @@ export default async function handler(
 
   await cors(req, res)
 
+  const host = req.headers.host
+
   const url = getScreenshotServiceURL({
-    targetURL: `https://geogenesis.vercel.app/token/${id}`,
+    targetURL: `http://${host}/token/${id}`,
     waitForSelector: '.editor',
   })
 
