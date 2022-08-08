@@ -54,7 +54,7 @@ export default async function handler(
     name: title ?? `Geo Document #${id}`,
     description: summary ?? '',
     image: `http://${host}/api/thumbnail/${id}`,
-    external_url: `http://${host}/token/${id}`,
+    external_url: `http://${host}/page/${id}`,
     // animation_url: item.download_url,
     // attributes: [
     //   {

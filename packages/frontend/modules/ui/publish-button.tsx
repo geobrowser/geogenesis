@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { AnimatePresence, motion } from 'framer-motion'
-import { useNetwork, useSigner } from 'wagmi'
-import { observer } from 'mobx-react-lite'
-import { PuffLoader } from 'react-spinners'
 import * as Popover from '@radix-ui/react-popover'
+import { AnimatePresence, motion } from 'framer-motion'
+import { observer } from 'mobx-react-lite'
+import Link from 'next/link'
+import { useState } from 'react'
+import { PuffLoader } from 'react-spinners'
+import { useNetwork, useSigner } from 'wagmi'
 import { PublishState, usePublishService } from '~/modules/api/publish-service'
-import { Animate } from './animate'
 import { getBaseUrl } from '../utils/get-base-url'
+import { Animate } from './animate'
 import { Checkmark } from './icons/checkmark'
 
 export const PublishButton = observer(() => {
@@ -69,7 +69,7 @@ export const PublishButton = observer(() => {
         <Popover.Arrow width={20} height={8} className="fill-stone-50" />
         <Tooltip
           publishState={publishState}
-          tokenUrl={`${getBaseUrl()}/token/${tokenId}`}
+          tokenUrl={`${getBaseUrl()}/page/${tokenId}`}
         />
       </Popover.Content>
     </Popover.Root>
