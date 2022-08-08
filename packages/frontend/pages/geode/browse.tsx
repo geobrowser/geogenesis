@@ -2,6 +2,7 @@ import range from 'lodash.range'
 import { GetServerSideProps } from 'next'
 import { chain } from 'wagmi'
 import { getEtherActorURL } from '~/modules/api/ether-actor'
+import { BoxParameters, fetchGeodeTarget } from '~/modules/api/geode'
 import { NFTMetadata } from '~/modules/api/nft'
 import { NFTCard } from '~/modules/ui/nft-card'
 import { getContractAddress } from '~/modules/utils/getContractAddress'
@@ -13,6 +14,7 @@ interface ServerProps {
     tokens: {
       id: number
       metadata: NFTMetadata
+      target: BoxParameters
     }[]
   }
   error?: { message: string }
@@ -22,6 +24,8 @@ export default function Browse(props: ServerProps) {
   if (!props.data) return null
 
   const { contractAddress, totalSupply, tokens } = props.data
+
+  console.log(tokens)
 
   return (
     <div>
@@ -36,13 +40,15 @@ export default function Browse(props: ServerProps) {
         }}
       >
         {tokens.map((token) => (
-          <a
-            style={{ flex: 1 }}
-            key={token.id}
-            href={`/nft/${contractAddress}/${token.id}`}
-          >
-            <NFTCard metadata={token.metadata} />
-          </a>
+          <div key={token.id}>
+            <h3>ID: {token.id}</h3>
+            <a
+              style={{ flex: 1 }}
+              href={`/nft/${token.target.contractAddress}/${token.target.tokenId}`}
+            >
+              <NFTCard metadata={token.metadata} />
+            </a>
+          </div>
         ))}
       </div>
     </div>
@@ -76,7 +82,8 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
         const url = `http://${host}/api/nft/${contractAddress}/${id}`
         const response = await fetch(url)
         const metadata = await response.json()
-        return { id, metadata }
+        const target = await fetchGeodeTarget(String(id))
+        return { id, metadata, target }
       })
     )
 
