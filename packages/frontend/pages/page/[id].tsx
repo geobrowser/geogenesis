@@ -31,24 +31,26 @@ export default function Token({ data, error }: ServerProps) {
   }
 
   return (
-    <AnimatePresence exitBeforeEnter>
-      <LayoutGroup>
-        {renderMetadata && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="font-bold mb-10 space-x-3 flex items-center"
-          >
-            <h1 className="text-geo-blue-100">{owner}</h1>
-            <p>~{readingTime}m read</p>
+    <div className="layout">
+      <AnimatePresence exitBeforeEnter>
+        <LayoutGroup>
+          {renderMetadata && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="font-bold mb-10 space-x-3 flex items-center"
+            >
+              <h1 className="text-geo-blue-100">{owner}</h1>
+              <p>~{readingTime}m read</p>
+            </motion.div>
+          )}
+          <motion.div layout="position">
+            <ReadOnlyEditor content={content ?? ''} />
           </motion.div>
-        )}
-        <motion.div layout="position">
-          <ReadOnlyEditor content={content ?? ''} />
-        </motion.div>
-      </LayoutGroup>
-    </AnimatePresence>
+        </LayoutGroup>
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -73,7 +75,7 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
       getStorageClient().downloadText(cid),
     ])
 
-    context.res.setHeader('Cache-Control', 'maxage=86400')
+    // context.res.setHeader('Cache-Control', 'maxage=86400')
     const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
 
     return {

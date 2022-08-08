@@ -39,7 +39,7 @@ export default function New() {
   }
 
   return (
-    <div>
+    <div className="layout">
       <h1 className="text-geo-largeTitle">Create Geode</h1>
       <form onSubmit={handleSubmit}>
         <div>

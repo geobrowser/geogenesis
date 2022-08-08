@@ -16,7 +16,7 @@ export default function New() {
   }, [isConnected, router])
 
   return (
-    <motion.div layout="position">
+    <motion.div className="layout" layout="position">
       <Editor publishService={publishService} />
     </motion.div>
   )

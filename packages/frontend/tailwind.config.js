@@ -27,6 +27,7 @@ module.exports = {
         'geo-grey-8': 'rgba(28, 28, 28, 0.08)',
         'geo-grey-16': 'rgba(28, 28, 28, 0.16)',
         'geo-grey-32': 'rgba(28, 28, 28, 0.32)',
+        'geo-grey-56': 'rgba(28, 28, 28, 0.56)',
         'geo-grey-70': 'rgba(28, 28, 28, 0.7)',
         'geo-grey-100': 'rgba(28, 28, 28, 1)',
         'geo-white-100': 'rgba(255, 255, 255, 1)',

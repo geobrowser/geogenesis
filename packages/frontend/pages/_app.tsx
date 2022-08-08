@@ -52,7 +52,6 @@ function MyApp({ Component, pageProps }: AppProps) {
                 exit={{ opacity: 0.99 }}
                 transition={{ duration: 0.5 }}
                 key={`page-${router.pathname}`}
-                className="layout"
               >
                 <Component {...pageProps} />
               </motion.main>

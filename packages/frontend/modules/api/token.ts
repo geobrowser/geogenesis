@@ -62,6 +62,8 @@ export async function fetchTokenParameters(
     'tokenParameters',
     String(tokenId)
   )
+  console.log(tokenId)
+  console.log(url)
 
   const response = await fetch(url)
   const [cid] = await response.json()

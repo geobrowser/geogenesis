@@ -66,6 +66,16 @@ body {
   padding: 6ch 2ch;
 }
 
+.proposal {
+  max-width: 1565px;
+  margin: auto;
+  padding: 6ch 2ch;
+}
+
+.proposal-editor {
+  min-width: 50%;
+}
+
 .gpy-10 {
   padding: 10px 0;
 }
