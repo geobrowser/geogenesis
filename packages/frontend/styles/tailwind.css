@@ -56,6 +56,10 @@ body {
   justify-content: space-between;
 }
 
+.navbar-icon {
+  padding: 14px;
+}
+
 .layout {
   margin: auto;
   max-width: 930px;

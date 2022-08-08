@@ -1,4 +1,4 @@
-export function GeoSmall() {
+export function GeoActive() {
   return (
     <svg
       width="48"
