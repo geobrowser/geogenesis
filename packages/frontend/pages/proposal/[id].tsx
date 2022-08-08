@@ -12,8 +12,6 @@ import { getContractAddress } from '~/modules/utils/getContractAddress'
 
 interface ServerProps {
   data?: {
-    parameters: ProposalParameters
-    geodeContent: BoxParameters
     proposedContent: string
     targetContent: string
   }
@@ -25,11 +23,7 @@ export default function Proposal({ error, data }: ServerProps) {
     return <div>{error.message}</div>
   }
 
-  const { parameters, geodeContent, proposedContent, targetContent } = data!
-
-  const geodePath = `${parameters.target.contractAddress}/${parameters.target.tokenId}`
-  const currentPath = `${geodeContent.contractAddress}/${geodeContent.tokenId}`
-  const proposedPath = `${parameters.proposed.contractAddress}/${parameters.proposed.tokenId}`
+  const { proposedContent, targetContent } = data!
 
   return (
     <div className="proposal flex space-x-10">
@@ -65,13 +59,12 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   try {
     const parameters = await fetchProposalParameters(id)
     const geodeContent = await fetchGeodeContent(parameters.target.tokenId)
-    const { target, proposed } = parameters
 
     // We fetch token parameters individually since there's some strange caching/duplication
     // bug when doing Promise.all. Might be ethers.actor or something else we can't figure out.
     const { cid: proposedCID } = await fetchTokenParameters(
       chain.polygonMumbai,
-      proposed.tokenId as string
+      parameters.proposed.tokenId as string
     )
 
     const { cid: targetCID } = await fetchTokenParameters(
@@ -87,8 +80,6 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
     return {
       props: {
         data: {
-          parameters,
-          geodeContent,
           targetContent, // markdown for the live version
           proposedContent, // markdown for proposed version
         },
