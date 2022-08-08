@@ -3,8 +3,8 @@ import { ContractTransaction, Event, Signer } from 'ethers'
 import { makeAutoObservable } from 'mobx'
 import { createContext, useContext } from 'react'
 import { Chain } from 'wagmi'
-import { getStorageClient } from '../api/storage'
 import { getContractAddress } from '../utils/getContractAddress'
+import { StorageClient } from './storage'
 
 async function findEvent(
   tx: ContractTransaction,
@@ -24,9 +24,15 @@ export class PublishService {
    */
   content: string = ''
 
+  storage: StorageClient
+  geo: typeof GeoDocument__factory
+
   // TODO: We should probably inject the contract factory so we can mock it for testing
-  constructor() {
+  constructor(storage: StorageClient, geo: typeof GeoDocument__factory) {
     makeAutoObservable(this)
+
+    this.storage = storage
+    this.geo = geo
   }
 
   /**
@@ -47,7 +53,7 @@ export class PublishService {
 
     console.log('Uploading...')
     setPublishState('uploading')
-    const cid = await getStorageClient().upload(this.content)
+    const cid = await this.storage.upload(this.content)
 
     console.log('Uploaded', cid)
 
@@ -57,7 +63,7 @@ export class PublishService {
       throw new Error(`Contract doesn't exist for chain '${chain.name}'`)
     }
 
-    const contract = GeoDocument__factory.connect(contractAddress, signer)
+    const contract = this.geo.connect(contractAddress, signer)
 
     console.log('Minting...')
     setPublishState('minting')
@@ -78,8 +84,6 @@ export class PublishService {
     throw new Error('Minting failed')
   }
 }
-
-export const publishService = new PublishService()
 
 const PublishServiceContext = createContext<PublishService | undefined>(
   undefined

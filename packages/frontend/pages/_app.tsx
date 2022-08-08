@@ -6,9 +6,16 @@ import { WalletProvider } from '~/modules/identity'
 import '~/styles/tailwind.css'
 import { useIsMounted } from '~/modules/ui/hooks/use-is-mounted'
 import {
-  publishService,
+  PublishService,
   PublishServiceProvider,
 } from '~/modules/api/publish-service'
+import { getStorageClient } from '~/modules/api/storage'
+import { GeoDocument__factory } from '~/../contracts'
+
+const publishService = new PublishService(
+  getStorageClient(),
+  GeoDocument__factory
+)
 
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
