@@ -23,7 +23,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
   const isMounted = useIsMounted()
   const isNewRoute = router.pathname === '/new'
-  const backgroundColor = isNewRoute ? '#f5f5f5' : '#ffffff'
+  const backgroundColor = isNewRoute ? '#ededed' : '#ffffff'
 
   return (
     <PublishServiceProvider value={publishService}>

@@ -19,7 +19,11 @@ export function ActionBar({ backgroundColor }: Props) {
   // TODO: Pass "action element group" to Navbar so different route context can inject
   // the elements they want to render in the navbar.
   return (
-    <motion.div animate={{ backgroundColor }} className="action-bar">
+    <motion.div
+      initial={{ backgroundColor: '#ffffff' }}
+      animate={{ backgroundColor }}
+      className="action-bar"
+    >
       {/* TODO: Byron fix this HACK */}
       <div />
       <AnimatePresence exitBeforeEnter>
