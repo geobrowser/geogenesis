@@ -12,9 +12,11 @@ const Home = () => {
   }, [isConnected, router])
 
   return (
-    <h1 className="text-lg font-medium">
-      Sign in to your wallet to start publishing content in Geo
-    </h1>
+    <div className="layout">
+      <h1 className="text-lg font-medium">
+        Sign in to your wallet to start publishing content in Geo
+      </h1>
+    </div>
   )
 }
 

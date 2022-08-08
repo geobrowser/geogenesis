@@ -2,7 +2,7 @@ import range from 'lodash.range'
 import { GetServerSideProps } from 'next'
 import { chain } from 'wagmi'
 import { getEtherActorURL } from '~/modules/api/ether-actor'
-import { BoxParameters, fetchGeodeTarget } from '~/modules/api/geode'
+import { BoxParameters, fetchGeodeContent } from '~/modules/api/geode'
 import { NFTMetadata } from '~/modules/api/nft'
 import { NFTCard } from '~/modules/ui/nft-card'
 import { getContractAddress } from '~/modules/utils/getContractAddress'
@@ -28,7 +28,7 @@ export default function Browse(props: ServerProps) {
   console.log(tokens)
 
   return (
-    <div>
+    <div className="layout">
       <div>
         {totalSupply} Geode{totalSupply === 1 ? '' : 's'}
       </div>
@@ -82,7 +82,7 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
         const url = `http://${host}/api/nft/${contractAddress}/${id}`
         const response = await fetch(url)
         const metadata = await response.json()
-        const target = await fetchGeodeTarget(String(id))
+        const target = await fetchGeodeContent(String(id))
         return { id, metadata, target }
       })
     )

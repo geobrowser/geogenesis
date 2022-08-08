@@ -38,6 +38,7 @@ export default function New() {
       contractAddress: getContractAddress(chain, 'Geode')!,
       tokenId: geodeId,
     }
+
     const proposed = {
       contractAddress: proposedContractAddress,
       tokenId: proposedTokenId,
@@ -51,7 +52,7 @@ export default function New() {
   }
 
   return (
-    <div>
+    <div className="layout">
       <h1 className="text-geo-largeTitle">Create Proposal</h1>
       <form onSubmit={handleSubmit}>
         <div>
