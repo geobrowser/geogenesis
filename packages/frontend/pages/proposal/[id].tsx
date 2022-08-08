@@ -32,20 +32,21 @@ export default function Proposal({ error, data }: ServerProps) {
   const proposedPath = `${parameters.proposed.contractAddress}/${parameters.proposed.tokenId}`
 
   return (
-    <div className="proposal space-y-20">
-      <div className="flex space-x-10">
-        <div className="proposal-editor">
-          <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
-            Current live version
-          </h2>
-          <ReadOnlyEditor content={targetContent} />
-        </div>
-        <div className="proposal-editor">
-          <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
-            Your version
-          </h2>
-          <ReadOnlyEditor content={proposedContent} />
-        </div>
+    <div className="proposal flex space-x-10">
+      <div className="proposal-editor">
+        <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
+          Current live version
+        </h2>
+        <ReadOnlyEditor content={targetContent} />
+      </div>
+
+      <div className="h-auto w-px border-r border-geo-grey-8" />
+
+      <div className="proposal-editor">
+        <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
+          Your version
+        </h2>
+        <ReadOnlyEditor content={proposedContent} />
       </div>
     </div>
   )

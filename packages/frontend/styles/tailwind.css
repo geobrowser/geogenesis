@@ -68,6 +68,8 @@ body {
 
 .proposal {
   max-width: 1565px;
+  min-height: calc(100vh * 0.9);
+  /* background: red; */
   margin: auto;
   padding: 6ch 2ch;
 }
