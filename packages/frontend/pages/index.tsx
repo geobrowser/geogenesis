@@ -39,7 +39,7 @@ function PageCard({ page, token }: { page: Page; token: BoxParameters }) {
           class="editor-card"
           content={ellipsize(page.content, 256)}
         />
-        <div className="flex">
+        <div className="flex items-center">
           <Avatar addressOrName={addressOrName} />
           <div style={{ flexBasis: 8 }} />
           <p className="geo-text-subheadline font-bold">{addressOrName}</p>
