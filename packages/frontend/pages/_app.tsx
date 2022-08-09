@@ -24,7 +24,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   const isMounted = useIsMounted()
   const isNewRoute = router.pathname === '/new'
   const isPageListRoute = router.pathname === '/'
-  const backgroundColor = isNewRoute || isPageListRoute ? '#ededed' : '#ffffff'
+  const backgroundColor = isNewRoute || isPageListRoute ? '#f6f6f6' : '#ffffff'
 
   return (
     <PublishServiceProvider value={publishService}>
