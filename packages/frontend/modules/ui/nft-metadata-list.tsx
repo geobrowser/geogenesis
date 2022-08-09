@@ -3,7 +3,7 @@ import { NFTMetadata } from '~/modules/api/nft'
 export function NFTMetadataList({ metadata }: { metadata: NFTMetadata }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <h1 className="text-geo-largeTitle">{metadata.name}</h1>
+      <h1 className="text-geo-largeTitle font-bold mb-4">{metadata.name}</h1>
       <div style={{ flexBasis: 8 }} />
       {metadata.description && (
         <div className="text-geo-body">{metadata.description}</div>

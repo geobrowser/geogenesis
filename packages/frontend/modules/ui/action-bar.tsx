@@ -18,8 +18,7 @@ export function ActionBar({ backgroundColor }: Props) {
   const router = useRouter()
   const isNewRoute = router.pathname === '/new'
   const isPageRoute = router.pathname === '/page/[id]'
-
-  console.log(router.pathname)
+  const isEditRoute = router.pathname === '/page/[id]/edit'
 
   // TODO: Pass "action element group" to Navbar so different route context can inject
   // the elements they want to render in the navbar.
@@ -55,7 +54,9 @@ export function ActionBar({ backgroundColor }: Props) {
                         <button
                           key="edit-button"
                           className="flex items-center space-x-2 font-bold rounded-3xl bg-geo-grey-4 px-4 py-2"
-                          onClick={() => alert('edit!')}
+                          onClick={() => {
+                            router.push(router.asPath + '/edit')
+                          }}
                         >
                           Edit
                         </button>
@@ -63,6 +64,12 @@ export function ActionBar({ backgroundColor }: Props) {
                     </div>
                     <hr className="w-8 border-none" />
                   </LayoutGroup>
+                )}
+                {isEditRoute && (
+                  <Animate animation="fade" className="flex" delay={0.5}>
+                    <PublishButton key="publish-button" />
+                    <hr className="w-8 border-none" />
+                  </Animate>
                 )}
               </>
             )}

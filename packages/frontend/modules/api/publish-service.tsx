@@ -16,7 +16,7 @@ export async function findEvent(
   return event
 }
 
-export type PublishState = 'idle' | 'uploading' | 'minting' | 'done' | 'error'
+export type PublishState = 'idle' | 'uploading' | 'minting' | 'done'
 
 export class PublishService {
   /**
@@ -45,9 +45,8 @@ export class PublishService {
   async publish(
     signer: Signer | undefined,
     chain: Chain | undefined,
-    setPublishState: (
-      nextState: 'minting' | 'uploading' | 'done' | 'error'
-    ) => void
+    previousPageId: string | undefined,
+    setPublishState: (nextState: PublishState) => void
   ) {
     if (!signer || !chain) return
 
@@ -69,7 +68,7 @@ export class PublishService {
     setPublishState('minting')
     const mintTx = await contract.mint({
       cid,
-      parentId: 0,
+      parentId: Number(previousPageId),
     })
 
     const transferEvent = await findEvent(mintTx, 'Transfer')
@@ -80,7 +79,6 @@ export class PublishService {
       return transferEvent.args.tokenId
     }
 
-    setPublishState('error')
     throw new Error('Minting failed')
   }
 }
