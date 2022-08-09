@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import { useAccount } from 'wagmi'
 import { Avatar } from './icons/avatar'
 import { EditorActive } from './icons/editor-active'
 import { GeoInactive } from './icons/geo-inactive'
@@ -8,10 +9,11 @@ import { Stack } from './icons/stack'
 
 export function Navbar() {
   const router = useRouter()
+  const { isConnected } = useAccount()
 
-  return (
+  return isConnected ? (
     // Stacking context needs to be higher than the action bar
-    <nav className="bg-geo-white-100 shadow-lg absolute left-0 h-screen w-24 z-20 flex flex-col items-center justify-between">
+    <nav className="bg-geo-white-100 shadow-lg sticky h-screen top-0 w-24 z-20 flex flex-col items-center justify-between">
       <Link href="/">
         <a>
           <GeoLarge />
@@ -36,5 +38,5 @@ export function Navbar() {
       {/* TODO: Byron fix position HACK */}
       <div />
     </nav>
-  )
+  ) : null
 }
