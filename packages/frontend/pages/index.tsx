@@ -34,14 +34,19 @@ function PageCard({ page, token }: { page: Page; token: BoxParameters }) {
 
   return (
     <Link href={`/page/${token.tokenId}`}>
-      <a style={{ textDecoration: 'none' }}>
-        <ReadOnlyEditor content={ellipsize(page.content, 256)} />
-        <div style={{ display: 'flex' }}>
+      <a className="no-underline">
+        <ReadOnlyEditor
+          class="editor-card"
+          content={ellipsize(page.content, 256)}
+        />
+        <div className="flex">
           <Avatar addressOrName={addressOrName} />
           <div style={{ flexBasis: 8 }} />
-          <div>{addressOrName}</div>
+          <p className="geo-text-subheadline font-bold">{addressOrName}</p>
           <div style={{ flex: 1 }} />
-          <div>~{page.readingTime}m read</div>
+          <p className="text-geo-grey-32 geo-text-subheadline font-bold">
+            ~{page.readingTime}m read
+          </p>
         </div>
         {/* <div>ipfs://{page.cid}</div>
         <div>
@@ -59,23 +64,17 @@ export default function Home(props: ServerProps) {
 
   return (
     <div className="layout">
-      <div style={{ gap: 20, display: 'flex', flexDirection: 'column' }}>
+      <div className="flex flex-col space-y-4">
         {tokens.map((token) => (
           <div
             key={token.id}
-            style={{
-              overflow: 'hidden',
-              borderRadius: 16,
-              background: 'white',
-              boxShadow: '0 8px 14px 3px rgba(28,28,28,0.04)',
-              padding: 20,
-            }}
+            className="overflow-hidden rounded-2xl bg-geo-white-100 shadow-sm p-5"
           >
             {token.page ? (
               <PageCard token={token.target} page={token.page} />
             ) : (
               <a
-                style={{ flex: 1, display: 'flex', textDecoration: 'none' }}
+                className="flex no-underline"
                 href={`/nft/${token.target.contractAddress}/${token.target.tokenId}`}
               >
                 <NFTImage

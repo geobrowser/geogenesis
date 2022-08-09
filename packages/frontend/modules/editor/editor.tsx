@@ -141,7 +141,12 @@ export const Editor = memo(function Editor({ publishService }: Props) {
   )
 })
 
-export function ReadOnlyEditor({ content }: { content: string }) {
+export function ReadOnlyEditor({
+  content,
+}: {
+  content: string
+  class?: string
+}) {
   const editor = useEditor({
     extensions: [LinkExtension, StarterKit],
     content: converter.makeHtml(content),

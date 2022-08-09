@@ -83,7 +83,7 @@ body {
 }
 
 .editor {
-  @apply prose max-w-none focus:outline-none text-geo-grey-100 text-geo-title2;
+  @apply prose max-w-none focus:outline-none text-geo-grey-100 text-geo-body;
 }
 
 .editor h1.is-editor-empty:first-child::before {
@@ -95,11 +95,23 @@ body {
 }
 
 .editor h1 {
-  @apply text-geo-name font-bold mb-10;
+  @apply text-geo-largeTitle font-bold mb-4;
 }
 
+.editor h1 strong {
+  @apply font-bold;
+}
+
+/* .editor h2 strong {
+  @apply font-bold;
+}
+
+.editor h3 strong {
+  @apply font-bold;
+} */
+
 .editor h2 {
-  @apply text-geo-largeTitle font-bold mb-5;
+  @apply text-geo-title2 font-bold mb-2;
 }
 
 .editor ul li p {
