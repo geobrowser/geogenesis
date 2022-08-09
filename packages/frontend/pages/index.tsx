@@ -39,11 +39,19 @@ function PageCard({ page, token }: { page: Page; token: BoxParameters }) {
           class="editor-card"
           content={ellipsize(page.content, 256)}
         />
-        <div className="flex items-center">
-          <Avatar addressOrName={addressOrName} />
-          <div style={{ flexBasis: 8 }} />
-          <p className="geo-text-subheadline font-bold">{addressOrName}</p>
-          <div style={{ flex: 1 }} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="mr-2">
+              <Avatar addressOrName={addressOrName} />
+            </div>
+            {/* 
+                margin-top to fix weird alignment issue where text is not optically aligned
+                even though it's technically aligned.
+            */}
+            <p className="geo-text-subheadline font-bold mt-0.5">
+              {addressOrName}
+            </p>
+          </div>
           <p className="text-geo-grey-32 geo-text-subheadline font-bold">
             ~{page.readingTime}m read
           </p>
