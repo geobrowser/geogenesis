@@ -76,7 +76,7 @@ export default function Home(props: ServerProps) {
         {tokens.map((token) => (
           <div
             key={token.id}
-            className="overflow-hidden rounded-2xl bg-geo-white-100 shadow-sm p-5"
+            className="overflow-hidden rounded-2xl bg-geo-white-100 shadow-lg p-5"
           >
             {token.page ? (
               <PageCard token={token.target} page={token.page} />
