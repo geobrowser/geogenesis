@@ -17,6 +17,9 @@ export function ActionBar({ backgroundColor }: Props) {
   const { isConnected } = useAccount()
   const router = useRouter()
   const isNewRoute = router.pathname === '/new'
+  const isPageRoute = router.pathname === '/page/[id]'
+
+  console.log(router.pathname)
 
   // TODO: Pass "action element group" to Navbar so different route context can inject
   // the elements they want to render in the navbar.
@@ -39,7 +42,7 @@ export function ActionBar({ backgroundColor }: Props) {
                     <hr className="w-8 border-none" />
                   </Animate>
                 )}
-                {!isNewRoute && (
+                {isPageRoute && (
                   <LayoutGroup>
                     <div className="flex items-center space-x-6">
                       <Animate animation="fade" className="flex" delay={0.75}>
