@@ -10,7 +10,11 @@ export function extractMetadata(markdown: string) {
     .slice(titleMatch[0].length)
     .trim()
 
-  let summary = body
+  return { title, summary: ellipsize(body, 256) }
+}
+
+export function ellipsize(content: string, length: number) {
+  let summary = content
     // Truncate if needed
     .slice(0, 256)
     // Remove excess whitespace
@@ -20,5 +24,9 @@ export function extractMetadata(markdown: string) {
     summary += '...'
   }
 
-  return { title, summary }
+  return summary
+}
+
+export function getReadingTime(content: string) {
+  return Math.ceil(content.split(' ').length / 250) // minutes
 }

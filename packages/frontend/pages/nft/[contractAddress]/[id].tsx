@@ -1,6 +1,7 @@
 import { GetServerSideProps } from 'next'
 import { NFTMetadata } from '~/modules/api/nft'
-import { NFTCard } from '~/modules/ui/nft-card'
+import { NFTImage } from '~/modules/ui/nft-image'
+import { NFTMetadataList } from '~/modules/ui/nft-metadata-list'
 
 interface ServerProps {
   metadata?: NFTMetadata
@@ -15,7 +16,15 @@ export default function NFT(props: ServerProps) {
     return <div>{props.error.message}</div>
   }
 
-  return <NFTCard metadata={metadata} />
+  return (
+    <div className="layout">
+      <div style={{ display: 'flex' }}>
+        <NFTImage maxWidth={400} minWidth={200} metadata={metadata} />
+        <div style={{ flexBasis: 40 }} />
+        <NFTMetadataList metadata={metadata} />
+      </div>
+    </div>
+  )
 }
 
 export const getServerSideProps: GetServerSideProps<ServerProps> = async (

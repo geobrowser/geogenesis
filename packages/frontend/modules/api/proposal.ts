@@ -33,6 +33,28 @@ export async function createProposal(
   throw new Error('Minting failed')
 }
 
+export async function mergeProposal(
+  signer: Signer,
+  chain: Chain,
+  proposalId: string
+): Promise<void> {
+  const contractAddress = getContractAddress(chain, 'Proposal')
+
+  if (!contractAddress) {
+    throw new Error(`Contract doesn't exist for chain '${chain.name}'`)
+  }
+
+  const contract = Proposal__factory.connect(contractAddress, signer)
+
+  console.log('Merging...')
+
+  const mergeTx = await contract.merge(proposalId)
+
+  const event = await findEvent(mergeTx, 'SetBoxParameters')
+
+  console.log('Successfully merged', event)
+}
+
 export type ProposalParameters = {
   target: BoxParameters
   targetVersion: string

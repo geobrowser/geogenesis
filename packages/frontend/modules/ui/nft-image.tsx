@@ -1,14 +1,20 @@
+import { CSSProperties } from 'react'
 import { NFTMetadata } from '../api/nft'
 
-export function NFTCard({ metadata }: { metadata: NFTMetadata }) {
-  // <h1>{metadata.name}</h1>
-  // <h2>{metadata.description}</h2>
-
+export function NFTImage({
+  metadata,
+  maxWidth,
+  minWidth,
+}: {
+  metadata: NFTMetadata
+  maxWidth: CSSProperties['maxWidth']
+  minWidth: CSSProperties['minWidth']
+}) {
   return (
     <div
       style={{
-        maxWidth: 400,
-        minWidth: 200,
+        maxWidth,
+        minWidth,
         aspectRatio: '1/1',
         overflow: 'hidden',
         borderRadius: 16,

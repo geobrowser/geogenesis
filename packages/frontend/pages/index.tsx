@@ -7,7 +7,10 @@ import { BoxParameters, fetchGeodeContent } from '~/modules/api/geode'
 import { NFTMetadata } from '~/modules/api/nft'
 import { fetchPage, Page } from '~/modules/api/page'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
-import { NFTCard } from '~/modules/ui/nft-card'
+import { Avatar } from '~/modules/ui/avatar'
+import { NFTImage } from '~/modules/ui/nft-image'
+import { NFTMetadataList } from '~/modules/ui/nft-metadata-list'
+import { ellipsize } from '~/modules/utils/content'
 import { getContractAddress } from '~/modules/utils/getContractAddress'
 
 type ListItem = {
@@ -24,6 +27,29 @@ interface ServerProps {
     tokens: ListItem[]
   }
   error?: { message: string }
+}
+
+function PageCard({ page, token }: { page: Page; token: BoxParameters }) {
+  const addressOrName = page.ens ?? page.owner
+
+  return (
+    <Link href={`/page/${token.tokenId}`}>
+      <a style={{ textDecoration: 'none' }}>
+        <ReadOnlyEditor content={ellipsize(page.content, 256)} />
+        <div style={{ display: 'flex' }}>
+          <Avatar addressOrName={addressOrName} />
+          <div style={{ flexBasis: 8 }} />
+          <div>{addressOrName}</div>
+          <div style={{ flex: 1 }} />
+          <div>~{page.readingTime}m read</div>
+        </div>
+        {/* <div>ipfs://{page.cid}</div>
+        <div>
+          {target.contractAddress}/{target.tokenId}
+        </div> */}
+      </a>
+    </Link>
+  )
 }
 
 export default function Home(props: ServerProps) {
@@ -46,22 +72,24 @@ export default function Home(props: ServerProps) {
             }}
           >
             {token.page ? (
-              <Link href={`/page/${token.target.tokenId}`}>
-                <a style={{ textDecoration: 'none' }}>
-                  <ReadOnlyEditor content={token.page.content.slice(0, 256)} />
-                  <div>{token.page.ens ?? token.page.owner}</div>
-                  {/* <div>ipfs://{token.page.cid}</div>
-                  <div>
-                    {token.target.contractAddress}/{token.target.tokenId}
-                  </div> */}
-                </a>
-              </Link>
+              <PageCard token={token.target} page={token.page} />
             ) : (
               <a
-                style={{ flex: 1 }}
+                style={{ flex: 1, display: 'flex', textDecoration: 'none' }}
                 href={`/nft/${token.target.contractAddress}/${token.target.tokenId}`}
               >
-                <NFTCard metadata={token.metadata} />
+                <NFTImage
+                  maxWidth={150}
+                  minWidth={150}
+                  metadata={token.metadata}
+                />
+                <div style={{ flexBasis: 20 }} />
+                <NFTMetadataList
+                  metadata={{
+                    name: token.metadata.name,
+                    description: token.metadata.description,
+                  }}
+                />
               </a>
             )}
           </div>

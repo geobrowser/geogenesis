@@ -4,7 +4,7 @@ import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenParameters } from '~/modules/api/token'
 import { runMiddleware } from '~/modules/server/middleware'
-import { extractMetadata } from '~/modules/utils/extractMetadata'
+import { extractMetadata } from '~/modules/utils/content'
 
 const cors = runMiddleware(Cors({ methods: ['GET', 'POST', 'OPTIONS'] }))
 
