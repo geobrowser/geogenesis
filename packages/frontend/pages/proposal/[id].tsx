@@ -1,10 +1,7 @@
 import { GetServerSideProps } from 'next'
-import { chain } from 'wagmi'
-import { BoxParameters, fetchGeodeContent } from '~/modules/api/geode'
-import {
-  fetchProposalParameters,
-  ProposalParameters,
-} from '~/modules/api/proposal'
+import { chain, useNetwork, useSigner } from 'wagmi'
+import { fetchGeodeContent } from '~/modules/api/geode'
+import { fetchProposalParameters, mergeProposal } from '~/modules/api/proposal'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenParameters } from '~/modules/api/token'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
@@ -12,6 +9,7 @@ import { getContractAddress } from '~/modules/utils/getContractAddress'
 
 interface ServerProps {
   data?: {
+    proposalId: string
     proposedContent: string
     targetContent: string
   }
@@ -19,29 +17,43 @@ interface ServerProps {
 }
 
 export default function Proposal({ error, data }: ServerProps) {
+  const { chain } = useNetwork()
+  const { data: signer } = useSigner()
+
   if (error) {
     return <div>{error.message}</div>
   }
 
-  const { proposedContent, targetContent } = data!
+  const { proposedContent, targetContent, proposalId } = data!
 
   return (
-    <div className="proposal flex space-x-10">
-      <div className="proposal-editor">
-        <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
-          Current live version
-        </h2>
-        <ReadOnlyEditor content={targetContent} />
-      </div>
+    <div>
+      <div className="proposal flex space-x-10">
+        <div className="proposal-editor">
+          <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
+            Current live version
+          </h2>
+          <ReadOnlyEditor content={targetContent} />
+        </div>
 
-      <div className="h-auto w-px border-r border-geo-grey-8" />
+        <div className="h-auto w-px border-r border-geo-grey-8" />
 
-      <div className="proposal-editor">
-        <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
-          Your version
-        </h2>
-        <ReadOnlyEditor content={proposedContent} />
+        <div className="proposal-editor">
+          <h2 className="text-geo-grey-56 py-5 border-y border-geo-grey-8 mb-10">
+            Your version
+          </h2>
+          <ReadOnlyEditor content={proposedContent} />
+        </div>
       </div>
+      {signer && chain && (
+        <button
+          onClick={() => {
+            mergeProposal(signer, chain, proposalId)
+          }}
+        >
+          Merge
+        </button>
+      )}
     </div>
   )
 }
@@ -50,14 +62,14 @@ export default function Proposal({ error, data }: ServerProps) {
 export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   context
 ) => {
-  const id = context.query.id as string
+  const proposalId = context.query.id as string
   const contractAddress = getContractAddress(chain.polygonMumbai, 'Proposal')!
 
   const host = context.req.headers.host
-  const url = `http://${host}/api/nft/${contractAddress}/${id}`
+  const url = `http://${host}/api/nft/${contractAddress}/${proposalId}`
 
   try {
-    const parameters = await fetchProposalParameters(id)
+    const parameters = await fetchProposalParameters(proposalId)
     const geodeContent = await fetchGeodeContent(parameters.target.tokenId)
 
     // We fetch token parameters individually since there's some strange caching/duplication
@@ -80,6 +92,7 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
     return {
       props: {
         data: {
+          proposalId,
           targetContent, // markdown for the live version
           proposedContent, // markdown for proposed version
         },

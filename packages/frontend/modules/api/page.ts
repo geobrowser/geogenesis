@@ -1,4 +1,5 @@
 import { Chain } from 'wagmi'
+import { getReadingTime } from '../utils/content'
 import { getEnsName } from './ens'
 import { getStorageClient } from './storage'
 import { fetchTokenOwner, fetchTokenParameters } from './token'
@@ -8,6 +9,7 @@ export type Page = {
   owner: string
   ens?: string
   content: string
+  readingTime: number
 }
 
 export async function fetchPage(chain: Chain, tokenId: string): Promise<Page> {
@@ -23,5 +25,11 @@ export async function fetchPage(chain: Chain, tokenId: string): Promise<Page> {
     ownerPromise.then(({ owner }) => getEnsName(owner)),
   ])
 
-  return { cid, owner, content, ...(ens && { ens }) }
+  return {
+    cid,
+    owner,
+    content,
+    readingTime: getReadingTime(content),
+    ...(ens && { ens }),
+  }
 }

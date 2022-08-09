@@ -7,6 +7,7 @@ import { usePublishService } from '~/modules/api/publish-service'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
+import { getReadingTime } from '~/modules/utils/content'
 
 export default function Token({ data, error }: ServerProps) {
   const publishService = usePublishService()
@@ -89,7 +90,7 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
     ])
 
     // context.res.setHeader('Cache-Control', 'maxage=86400')
-    const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
+    const readingTime = getReadingTime(content)
 
     return {
       props: {
