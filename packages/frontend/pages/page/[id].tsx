@@ -9,9 +9,6 @@ import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
 
 export default function Token({ data, error }: ServerProps) {
-  const content = data ? data.content : undefined
-  const owner = data ? data.owner : undefined
-  const readingTime = data ? data.readingTime : undefined
   const publishService = usePublishService()
   const [renderMetadata, setRenderMetadata] = useState(false)
 
@@ -29,6 +26,10 @@ export default function Token({ data, error }: ServerProps) {
       </code>
     )
   }
+
+  if (!data) return null
+
+  const { content, owner, readingTime, cid, tokenId } = data
 
   return (
     <div className="layout">
@@ -48,6 +49,12 @@ export default function Token({ data, error }: ServerProps) {
           <motion.div layout="position">
             <ReadOnlyEditor content={content ?? ''} />
           </motion.div>
+          {/* <motion.div>
+            <p style={{ opacity: 0.4 }}>ipfs://{cid}</p>
+            <p style={{ opacity: 0.4 }}>
+              {getContractAddress(chain.polygonMumbai, 'GeoDocument')}/{tokenId}
+            </p>
+          </motion.div> */}
         </LayoutGroup>
       </AnimatePresence>
     </div>
@@ -55,7 +62,13 @@ export default function Token({ data, error }: ServerProps) {
 }
 
 interface ServerProps {
-  data?: { content: string; owner: string; readingTime: number }
+  data?: {
+    content: string
+    owner: string
+    readingTime: number
+    cid: string
+    tokenId: string
+  }
   error?: { message: string }
 }
 
@@ -79,7 +92,15 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
     const readingTime = Math.ceil(content.split(' ').length / 250) // minutes
 
     return {
-      props: { data: { content, owner: maybeEns ?? owner, readingTime } },
+      props: {
+        data: {
+          content,
+          owner: maybeEns ?? owner,
+          readingTime,
+          cid,
+          tokenId: tokenID as string,
+        },
+      },
     }
   } catch (e) {
     return {

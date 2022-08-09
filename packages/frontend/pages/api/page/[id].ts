@@ -4,6 +4,7 @@ import { chain } from 'wagmi'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenParameters } from '~/modules/api/token'
 import { runMiddleware } from '~/modules/server/middleware'
+import { extractMetadata } from '~/modules/utils/extractMetadata'
 
 const cors = runMiddleware(Cors({ methods: ['GET', 'POST', 'OPTIONS'] }))
 
@@ -35,17 +36,7 @@ export default async function handler(
 
   const content = await getStorageClient().downloadText(cid as string)
 
-  const titleMatch = content.match(/^#\s+(.*)/)
-  const title = titleMatch ? titleMatch[1] : undefined
-  const summary = titleMatch
-    ? content
-        // Remove the title
-        .slice(titleMatch[0].length)
-        // Truncate if needed
-        .slice(0, 256)
-        // Remove excess whitespace
-        .trim()
-    : undefined
+  const { title, summary } = extractMetadata(content)
 
   const host = req.headers.host
 

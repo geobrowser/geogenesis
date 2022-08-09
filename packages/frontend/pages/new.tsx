@@ -1,6 +1,4 @@
 import { motion } from 'framer-motion'
-import { useRouter } from 'next/router'
-import { useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
@@ -8,12 +6,17 @@ import { Editor } from '~/modules/editor/editor'
 export default function New() {
   // TODO: Abstract guarded routes
   const { isConnected } = useAccount()
-  const router = useRouter()
   const publishService = usePublishService()
 
-  useEffect(() => {
-    if (!isConnected) router.push('/')
-  }, [isConnected, router])
+  if (!isConnected) {
+    return (
+      <div className="layout">
+        <h1 className="text-lg font-medium">
+          Sign in to your wallet to start publishing content in Geo
+        </h1>
+      </div>
+    )
+  }
 
   return (
     <motion.div className="layout" layout="position">
