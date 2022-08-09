@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { Avatar } from './icons/avatar'
 import { EditorActive } from './icons/editor-active'
-import { GeoInactive } from './icons/geo-inactive'
+import { Geo } from './icons/geo'
 import { GeoLarge } from './icons/geo-large'
 import { Stack } from './icons/stack'
 
@@ -18,17 +18,17 @@ export function Navbar() {
         </a>
       </Link>
       <div className="flex flex-col items-center space-y-2">
+        <Link href="/">
+          <a>
+            <Geo isActive={router.pathname === '/'} />
+          </a>
+        </Link>
         <Link href="/new">
           <a>
             <EditorActive isActive={router.pathname === '/new'} />
           </a>
         </Link>
-        <Link href="/">
-          <a>
-            <Stack isActive={router.pathname === '/'} />
-          </a>
-        </Link>
-        <GeoInactive />
+        <Stack isActive={router.pathname === '/proposals'} />
         <Avatar />
         {/* <Star /> */}
       </div>
