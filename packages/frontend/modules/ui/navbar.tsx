@@ -14,7 +14,11 @@ export function Navbar() {
   return isConnected ? (
     // Stacking context needs to be higher than the action bar
     <nav className="bg-geo-white-100 shadow-lg sticky h-screen top-0 w-24 z-20 flex flex-col items-center justify-between">
-      <GeoLarge />
+      <Link href="/">
+        <a>
+          <GeoLarge />
+        </a>
+      </Link>
       <div className="flex flex-col items-center space-y-2">
         <Link href="/new">
           <a>

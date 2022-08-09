@@ -3,15 +3,15 @@ import '~/styles/tailwind.css'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AppProps } from 'next/app'
 import { useRouter } from 'next/router'
-import { ActionBar } from '~/modules/ui/action-bar'
-import { WalletProvider } from '~/modules/identity'
-import { useIsMounted } from '~/modules/ui/hooks/use-is-mounted'
+import { GeoDocument__factory } from '~/../contracts'
 import {
   PublishService,
   PublishServiceProvider,
 } from '~/modules/api/publish-service'
 import { getStorageClient } from '~/modules/api/storage'
-import { GeoDocument__factory } from '~/../contracts'
+import { WalletProvider } from '~/modules/identity'
+import { ActionBar } from '~/modules/ui/action-bar'
+import { useIsMounted } from '~/modules/ui/hooks/use-is-mounted'
 import { Navbar } from '~/modules/ui/navbar'
 
 const publishService = new PublishService(
@@ -23,7 +23,8 @@ function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
   const isMounted = useIsMounted()
   const isNewRoute = router.pathname === '/new'
-  const backgroundColor = isNewRoute ? '#ededed' : '#ffffff'
+  const isPageListRoute = router.pathname === '/'
+  const backgroundColor = isNewRoute || isPageListRoute ? '#ededed' : '#ffffff'
 
   return (
     <PublishServiceProvider value={publishService}>
