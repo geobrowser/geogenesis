@@ -2,6 +2,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { AnimatePresence, motion } from 'framer-motion'
 import { observer } from 'mobx-react-lite'
 import Link from 'next/link'
+import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { PuffLoader } from 'react-spinners'
 import { useNetwork, useSigner } from 'wagmi'
@@ -11,16 +12,32 @@ import { Animate } from './animate'
 import { Checkmark } from './icons/checkmark'
 
 export const PublishButton = observer(() => {
+  const router = useRouter()
   const { chain } = useNetwork()
   const { data: signer } = useSigner()
   const publishService = usePublishService()
   const [publishState, setPublishState] = useState<PublishState>('idle')
   const [tokenId, setTokenId] = useState('')
+  const isEditRoute = router.pathname === '/page/[id]/edit'
 
   const onPublish = async () => {
-    // @ts-expect-error type mismatch for signer
-    const tokenId = await publishService.publish(signer, chain, setPublishState)
-    setTokenId(tokenId)
+    if (!signer) return
+
+    const currentPageId = isEditRoute ? (router.query.id as string) : undefined
+
+    try {
+      const tokenId = await publishService.publish(
+        signer,
+        chain,
+        currentPageId,
+        setPublishState
+      )
+
+      setTokenId(tokenId)
+    } catch (e) {
+      console.warn(e)
+      setPublishState('idle')
+    }
   }
 
   const isPublishing = publishState !== 'idle'

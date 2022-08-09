@@ -1,3 +1,6 @@
+import Document from '@tiptap/extension-document'
+import LinkExtension from '@tiptap/extension-link'
+import Placeholder from '@tiptap/extension-placeholder'
 import {
   BubbleMenu,
   EditorContent,
@@ -5,21 +8,18 @@ import {
   useEditor,
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import LinkExtension from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
-import Document from '@tiptap/extension-document'
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import showdown from 'showdown'
 import { PublishService } from '../api/publish-service'
-import { MenuItem } from './menu-item'
-import { Italic } from '../ui/icons/italic'
 import { Bold } from '../ui/icons/bold'
-import { Quote } from '../ui/icons/quote'
+import { Italic } from '../ui/icons/italic'
+import { LargeHeading } from '../ui/icons/large-heading'
 import { Link } from '../ui/icons/link'
 import { List } from '../ui/icons/list'
 import { NumberedList } from '../ui/icons/numbered-list'
-import { LargeHeading } from '../ui/icons/large-heading'
+import { Quote } from '../ui/icons/quote'
 import { SmallHeading } from '../ui/icons/small-heading'
+import { MenuItem } from './menu-item'
 
 interface Props {
   publishService: PublishService
@@ -36,8 +36,12 @@ const CustomDocument = Document.extend({
 })
 
 // Don't want to rerender the editor over and over
-export const Editor = memo(function Editor({ publishService }: Props) {
+export const Editor = memo(function Editor({
+  publishService,
+  initialContent,
+}: Props) {
   const editor = useEditor({
+    ...(initialContent && { content: converter.makeHtml(initialContent) }),
     extensions: [
       LinkExtension,
       CustomDocument,

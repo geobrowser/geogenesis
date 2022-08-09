@@ -2,15 +2,10 @@ import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { GetServerSideProps } from 'next'
 import { useEffect, useState } from 'react'
 import { chain } from 'wagmi'
-import { getEnsName } from '~/modules/api/ens'
-import { usePublishService } from '~/modules/api/publish-service'
-import { getStorageClient } from '~/modules/api/storage'
-import { fetchTokenOwner, fetchTokenParameters } from '~/modules/api/token'
+import { fetchPage } from '~/modules/api/page'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
-import { getReadingTime } from '~/modules/utils/content'
 
 export default function Token({ data, error }: ServerProps) {
-  const publishService = usePublishService()
   const [renderMetadata, setRenderMetadata] = useState(false)
 
   // In order to do trigger a layout transition on the editor
@@ -50,11 +45,12 @@ export default function Token({ data, error }: ServerProps) {
           <motion.div layout="position">
             <ReadOnlyEditor content={content ?? ''} />
           </motion.div>
-          {/* <motion.div>
-            <p style={{ opacity: 0.4 }}>ipfs://{cid}</p>
-            <p style={{ opacity: 0.4 }}>
-              {getContractAddress(chain.polygonMumbai, 'GeoDocument')}/{tokenId}
+          {/* <motion.div style={{ opacity: 0.4 }}>
+            <p>Source: ipfs://{cid}</p>
+            <p>
+              Contract: {getContractAddress(chain.polygonMumbai, 'GeoDocument')}
             </p>
+            <p>Token ID: {tokenId}</p>
           </motion.div> */}
         </LayoutGroup>
       </AnimatePresence>
@@ -79,26 +75,15 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   const { id: tokenID } = context.query
 
   try {
-    const [{ cid }, { owner }] = await Promise.all([
-      fetchTokenParameters(chain.polygonMumbai, tokenID as string),
-      fetchTokenOwner(chain.polygonMumbai, tokenID as string),
-    ])
-
-    const [maybeEns, content] = await Promise.all([
-      getEnsName(owner),
-      getStorageClient().downloadText(cid),
-    ])
-
-    // context.res.setHeader('Cache-Control', 'maxage=86400')
-    const readingTime = getReadingTime(content)
+    const page = await fetchPage(chain.polygonMumbai, tokenID as string)
 
     return {
       props: {
         data: {
-          content,
-          owner: maybeEns ?? owner,
-          readingTime,
-          cid,
+          content: page.content,
+          owner: page.ens ?? page.owner,
+          readingTime: page.readingTime,
+          cid: page.cid,
           tokenId: tokenID as string,
         },
       },

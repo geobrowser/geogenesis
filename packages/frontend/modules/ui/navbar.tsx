@@ -28,7 +28,11 @@ export function Navbar() {
             <EditorActive isActive={router.pathname === '/new'} />
           </a>
         </Link>
-        <Stack isActive={router.pathname === '/proposals'} />
+        <Link href="/">
+          <a>
+            <Stack isActive={router.pathname === '/proposals'} />
+          </a>
+        </Link>
         <Avatar />
         {/* <Star /> */}
       </div>
