@@ -1,11 +1,13 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { GetServerSideProps } from 'next'
 import { useEffect, useState } from 'react'
-import { chain } from 'wagmi'
-import { fetchPage } from '~/modules/api/page'
+import { fetchGeodeItem, GeodeItem } from '~/modules/api/geode-item'
+import { Page } from '~/modules/api/page'
 import { ReadOnlyEditor } from '~/modules/editor/editor'
+import { NFTImage } from '~/modules/ui/nft-image'
+import { NFTMetadataList } from '~/modules/ui/nft-metadata-list'
 
-export default function Token({ data, error }: ServerProps) {
+export function GeoDocumentPage({ page }: { page: Page }) {
   const [renderMetadata, setRenderMetadata] = useState(false)
 
   // In order to do trigger a layout transition on the editor
@@ -15,17 +17,7 @@ export default function Token({ data, error }: ServerProps) {
     setTimeout(() => setRenderMetadata(true), 750)
   }, [setRenderMetadata])
 
-  if (error) {
-    return (
-      <code style={{ lineBreak: 'anywhere', fontSize: 12 }}>
-        {error.message}
-      </code>
-    )
-  }
-
-  if (!data) return null
-
-  const { content, owner, readingTime, cid, tokenId } = data
+  const { content, ens, owner, readingTime } = page
 
   return (
     <div className="layout">
@@ -38,7 +30,7 @@ export default function Token({ data, error }: ServerProps) {
               transition={{ delay: 0.5 }}
               className="font-bold mb-10 space-x-3 flex items-center"
             >
-              <h1 className="text-geo-blue-100">{owner}</h1>
+              <h1 className="text-geo-blue-100">{ens ?? owner}</h1>
               <p>~{readingTime}m read</p>
             </motion.div>
           )}
@@ -58,13 +50,39 @@ export default function Token({ data, error }: ServerProps) {
   )
 }
 
+export default function PageComponent({ data, error }: ServerProps) {
+  if (error) {
+    return (
+      <code style={{ lineBreak: 'anywhere', fontSize: 12 }}>
+        {error.message}
+      </code>
+    )
+  }
+
+  if (!data) return null
+
+  if (!data.item.page) {
+    return (
+      <div className="layout">
+        <div style={{ display: 'flex' }}>
+          <NFTImage
+            maxWidth={400}
+            minWidth={200}
+            metadata={data.item.innerMetadata}
+          />
+          <div style={{ flexBasis: 40 }} />
+          <NFTMetadataList metadata={data.item.innerMetadata} />
+        </div>
+      </div>
+    )
+  }
+
+  return <GeoDocumentPage page={data.item.page} />
+}
+
 interface ServerProps {
   data?: {
-    content: string
-    owner: string
-    readingTime: number
-    cid: string
-    tokenId: string
+    item: GeodeItem
   }
   error?: { message: string }
 }
@@ -72,19 +90,14 @@ interface ServerProps {
 export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   context
 ) => {
-  const { id: tokenID } = context.query
+  const { id: geodeId } = context.query
+  const host = context.req.headers.host!
 
   try {
-    const page = await fetchPage(chain.polygonMumbai, tokenID as string)
-
     return {
       props: {
         data: {
-          content: page.content,
-          owner: page.ens ?? page.owner,
-          readingTime: page.readingTime,
-          cid: page.cid,
-          tokenId: tokenID as string,
+          item: await fetchGeodeItem(host, geodeId as string),
         },
       },
     }

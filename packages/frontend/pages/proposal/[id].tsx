@@ -1,6 +1,6 @@
 import { GetServerSideProps } from 'next'
 import { chain, useNetwork, useSigner } from 'wagmi'
-import { fetchGeodeContent } from '~/modules/api/geode'
+import { fetchGeodeInner } from '~/modules/api/geode'
 import { fetchProposalParameters, mergeProposal } from '~/modules/api/proposal'
 import { getStorageClient } from '~/modules/api/storage'
 import { fetchTokenParameters } from '~/modules/api/token'
@@ -70,7 +70,7 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
 
   try {
     const parameters = await fetchProposalParameters(proposalId)
-    const geodeContent = await fetchGeodeContent(parameters.target.tokenId)
+    const geodeContent = await fetchGeodeInner(parameters.target.tokenId)
 
     // We fetch token parameters individually since there's some strange caching/duplication
     // bug when doing Promise.all. Might be ethers.actor or something else we can't figure out.

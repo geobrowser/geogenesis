@@ -37,9 +37,7 @@ export type BoxParameters = {
   tokenId: string
 }
 
-export async function fetchGeodeContent(
-  geodeId: string
-): Promise<BoxParameters> {
+export async function fetchGeodeInner(geodeId: string): Promise<BoxParameters> {
   const geodeContractAddress = getContractAddress(chain.polygonMumbai, 'Geode')!
 
   const targetUrl = getEtherActorURL(

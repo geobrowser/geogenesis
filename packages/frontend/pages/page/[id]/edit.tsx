@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { GetServerSideProps } from 'next'
-import { chain, useAccount } from 'wagmi'
-import { fetchPage, Page } from '~/modules/api/page'
+import { useAccount } from 'wagmi'
+import { fetchGeodeItem, GeodeItem } from '~/modules/api/geode-item'
 import { usePublishService } from '~/modules/api/publish-service'
 import { Editor } from '~/modules/editor/editor'
 
@@ -13,7 +13,7 @@ export default function Edit(props: ServerProps) {
     return <div>{props.error.message}</div>
   }
 
-  const { page } = props.data
+  const { item } = props.data
 
   if (!isConnected) {
     return (
@@ -25,9 +25,14 @@ export default function Edit(props: ServerProps) {
     )
   }
 
+  if (!item.page) return <div>Can only edit pages</div>
+
   return (
     <motion.div className="layout" layout="position">
-      <Editor publishService={publishService} initialContent={page.content} />
+      <Editor
+        publishService={publishService}
+        initialContent={item.page.content}
+      />
     </motion.div>
   )
 }
@@ -35,7 +40,7 @@ export default function Edit(props: ServerProps) {
 type ServerProps =
   | {
       data: {
-        page: Page
+        item: GeodeItem
       }
     }
   | {
@@ -46,11 +51,12 @@ export const getServerSideProps: GetServerSideProps<ServerProps> = async (
   context
 ) => {
   const { id: tokenID } = context.query
+  const host = context.req.headers.host!
 
   try {
-    const page = await fetchPage(chain.polygonMumbai, tokenID as string)
+    const item = await fetchGeodeItem(host, tokenID as string)
 
-    return { props: { data: { page } } }
+    return { props: { data: { item } } }
   } catch (e) {
     return { props: { error: { message: (e as Error).message } } }
   }
