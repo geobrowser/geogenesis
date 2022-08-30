@@ -10,9 +10,9 @@ All we do is provide functions for reading and writing data. The rest of the bin
 
 - Easy DX
 
-  ?? Surface area for interacting with mutations and reads is mostly from the same place
+  ++ Surface area for interacting with mutations and reads is mostly from the same place.
 
-  ?? Easy to mock and test the entire read/write system using dependency injection
+  ++ Easy to mock and test the entire read/write system using dependency injection
 
   -- Types could be annoying to reason about since we have to use types generated from GraphQL
 
