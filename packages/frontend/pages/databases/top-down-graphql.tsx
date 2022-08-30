@@ -1,19 +1,19 @@
-import { topDownGraphQl } from '@geogenesis/database'
-import useSWR, { useSWRConfig } from 'swr'
+import { network } from '@geogenesis/database'
+import useSWR from 'swr'
 
 export default function TopDownGraphQlExample() {
   const {
     data: snapshot,
     error,
     mutate,
-  } = useSWR('topDownGraphQl.read.getFacts', topDownGraphQl.read.getFacts)
+  } = useSWR('topDownGraphQl.read.getFacts', network.read.getFacts)
 
   if (!snapshot) return <div className="layout"> Loading...</div>
 
   const createFact = async () => {
     mutate([
       ...snapshot,
-      await topDownGraphQl.write.writeFact({
+      await network.write.writeFact({
         id: '1487',
         entityId: '1023948124',
         attribute: 'Died in',

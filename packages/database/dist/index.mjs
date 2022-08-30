@@ -35,33 +35,33 @@ function w(e, t) {
   };
 }
 function re(e) {
-  return $(
+  return G(
     e.source,
     w(e.source, e.start)
   );
 }
-function $(e, t) {
+function G(e, t) {
   const n = e.locationOffset.column - 1, s = "".padStart(n) + e.body, i = t.line - 1, r = e.locationOffset.line - 1, a = t.line + r, u = t.line === 1 ? n : 0, l = t.column + u, E = `${e.name}:${a}:${l}
 `, p = s.split(/\r\n|[\n\r]/g), m = p[i];
   if (m.length > 120) {
     const N = Math.floor(l / 80), R = l % 80, f = [];
     for (let I = 0; I < m.length; I += 80)
       f.push(m.slice(I, I + 80));
-    return E + B([
+    return E + V([
       [`${a} |`, f[0]],
       ...f.slice(1, N + 1).map((I) => ["|", I]),
       ["|", "^".padStart(R)],
       ["|", f[N + 1]]
     ]);
   }
-  return E + B([
+  return E + V([
     [`${a - 1} |`, p[i - 1]],
     [`${a} |`, m],
     ["|", "^".padStart(l)],
     [`${a + 1} |`, p[i + 1]]
   ]);
 }
-function B(e) {
+function V(e) {
   const t = e.filter(([s, i]) => i !== void 0), n = Math.max(...t.map(([s]) => s.length));
   return t.map(([s, i]) => s.padStart(n) + (i ? " " + i : "")).join(`
 `);
@@ -77,14 +77,14 @@ function oe(e) {
     extensions: e[5]
   } : t;
 }
-class U extends Error {
+class B extends Error {
   constructor(t, ...n) {
     var s, i, r;
     const { nodes: a, source: u, positions: l, path: E, originalError: p, extensions: m } = oe(n);
-    super(t), this.name = "GraphQLError", this.path = E != null ? E : void 0, this.originalError = p != null ? p : void 0, this.nodes = V(
+    super(t), this.name = "GraphQLError", this.path = E != null ? E : void 0, this.originalError = p != null ? p : void 0, this.nodes = j(
       Array.isArray(a) ? a : a ? [a] : void 0
     );
-    const N = V(
+    const N = j(
       (s = this.nodes) === null || s === void 0 ? void 0 : s.map((f) => f.loc).filter((f) => f != null)
     );
     this.source = u != null ? u : N == null || (i = N[0]) === null || i === void 0 ? void 0 : i.source, this.positions = l != null ? l : N == null ? void 0 : N.map((f) => f.start), this.locations = l && u ? l.map((f) => w(u, f)) : N == null ? void 0 : N.map((f) => w(f.source, f.start));
@@ -115,7 +115,7 @@ class U extends Error {
       value: p.stack,
       writable: !0,
       configurable: !0
-    }) : Error.captureStackTrace ? Error.captureStackTrace(this, U) : Object.defineProperty(this, "stack", {
+    }) : Error.captureStackTrace ? Error.captureStackTrace(this, B) : Object.defineProperty(this, "stack", {
       value: Error().stack,
       writable: !0,
       configurable: !0
@@ -135,7 +135,7 @@ class U extends Error {
       for (const n of this.locations)
         t += `
 
-` + $(this.source, n);
+` + G(this.source, n);
     return t;
   }
   toJSON() {
@@ -145,11 +145,11 @@ class U extends Error {
     return this.locations != null && (t.locations = this.locations), this.path != null && (t.path = this.path), this.extensions != null && Object.keys(this.extensions).length > 0 && (t.extensions = this.extensions), t;
   }
 }
-function V(e) {
+function j(e) {
   return e === void 0 || e.length === 0 ? void 0 : e;
 }
 function d(e, t, n) {
-  return new U(`Syntax Error: ${n}`, {
+  return new B(`Syntax Error: ${n}`, {
     source: e,
     positions: [t]
   });
@@ -480,14 +480,14 @@ function Te(e, t) {
   );
 }
 function Ie(e, t) {
-  const n = e.source.body, s = j(n, t + 2);
+  const n = e.source.body, s = $(n, t + 2);
   if (O(s))
     return {
       value: String.fromCodePoint(s),
       size: 6
     };
   if (z(s) && n.charCodeAt(t + 6) === 92 && n.charCodeAt(t + 7) === 117) {
-    const i = j(n, t + 8);
+    const i = $(n, t + 8);
     if (X(i))
       return {
         value: String.fromCodePoint(s, i),
@@ -500,7 +500,7 @@ function Ie(e, t) {
     `Invalid Unicode escape sequence: "${n.slice(t, t + 6)}".`
   );
 }
-function j(e, t) {
+function $(e, t) {
   return y(e.charCodeAt(t)) << 12 | y(e.charCodeAt(t + 1)) << 8 | y(e.charCodeAt(t + 2)) << 4 | y(e.charCodeAt(t + 3));
 }
 function y(e) {
@@ -1552,7 +1552,14 @@ var A = {
   e.gql = A.gql, e.resetCaches = A.resetCaches, e.disableFragmentWarnings = A.disableFragmentWarnings, e.enableExperimentalFragmentVariables = A.enableExperimentalFragmentVariables, e.disableExperimentalFragmentVariables = A.disableExperimentalFragmentVariables;
 })(_ || (_ = {}));
 _.default = _;
-const je = _;
+const je = _, U = [
+  {
+    id: "21340987",
+    entityId: "1234567890",
+    attribute: "name",
+    value: "Jesus Christ"
+  }
+];
 je`
   query something {
     attributes {
@@ -1564,18 +1571,11 @@ je`
     }
   }
 `;
-const G = [
-  {
-    id: "21340987",
-    entityId: "1234567890",
-    attribute: "name",
-    value: "Jesus Christ"
-  }
-], Ge = (e) => new Promise((t) => setTimeout(t, e));
+const $e = (e) => new Promise((t) => setTimeout(t, e));
 async function te(e) {
-  return await Ge(2e3), e ? G.filter((t) => t.id === e) : G;
+  return await $e(2e3), e ? U.filter((t) => t.id === e) : U;
 }
-async function $e() {
+async function Ge() {
   return await te();
 }
 async function Ye(e) {
@@ -1583,24 +1583,20 @@ async function Ye(e) {
 }
 const Je = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  getFacts: $e,
+  getFacts: Ge,
   getFact: Ye
 }, Symbol.toStringTag, { value: "Module" }));
-function qe(e) {
-  return e.store();
+async function qe(e) {
+  return U.push(e), e;
 }
-function ze(e) {
-  return e.create();
-}
-const Xe = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const ze = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  writeToIpfs: qe,
-  writeToContract: ze
-}, Symbol.toStringTag, { value: "Module" })), Qe = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  writeFact: qe
+}, Symbol.toStringTag, { value: "Module" })), Xe = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   read: Je,
-  write: Xe
+  write: ze
 }, Symbol.toStringTag, { value: "Module" }));
 export {
-  Qe as topDownGraphQl
+  Xe as network
 };

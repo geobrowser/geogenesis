@@ -1,1 +1,1 @@
-export * as topDownGraphQl from './top-down-graphql'
+export * as network from './network-only'
