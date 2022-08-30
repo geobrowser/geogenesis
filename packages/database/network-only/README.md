@@ -2,6 +2,12 @@ This approach uses plain GraphQL as the top-level API for reading from subgraphs
 
 **This means there's no internal, typed, representation for our data at all and instead we just get back whatever type the GraphQL generates for us based on the query.**
 
+### Design
+
+All we do is provide functions for reading and writing data. The rest of the bindings and functionality are done through swr and its React hooks.
+
+### Requirements from database/ root README
+
 - Easy DX
 
   ?? Surface area for interacting with mutations and reads is mostly from the same place
