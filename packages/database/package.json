@@ -5,9 +5,11 @@
   "license": "MIT",
   "version": "0.1.0",
   "files": [
-    "dist/**/*"
+    "dist",
+    "README.md"
   ],
-  "main": "index.ts",
+  "main": "dist/index.umd.js",
+  "module": "dist/index.mjs",
   "scripts": {
     "build": "vite build",
     "test": "vitest",
@@ -20,8 +22,7 @@
     "graphql": "16",
     "graphql-tag": "^2.12.6",
     "ipfs-http-client": "^57.0.3",
-    "undici": "*",
-    "uuid": "^8.3.2"
+    "undici": "*"
   },
   "devDependencies": {
     "@types/uuid": "^8.3.4",

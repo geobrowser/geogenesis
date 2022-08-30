@@ -1,16 +1,16 @@
-import { topDownGraphQl } from '../../../database'
+import { topDownGraphQl } from '@geogenesis/database'
 import useSWR from 'swr'
 
 export default function TopDownGraphQlExample() {
   const { data: snapshot, error } = useSWR(
-    'getFacts',
+    'topDownGraphQl.read.getFacts',
     topDownGraphQl.read.getFacts
   )
 
-  if (!snapshot) return 'Loading...'
+  if (!snapshot) return <div className="layout"> Loading...</div>
 
   return (
-    <div>
+    <div className="layout">
       {snapshot.map((fact) => (
         <div key={fact.id}>
           <p>id: {fact.id}</p>
