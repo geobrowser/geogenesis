@@ -1567,13 +1567,13 @@ je`
 const G = [
   {
     id: "21340987",
-    entityId: "askldj",
+    entityId: "1234567890",
     attribute: "name",
     value: "Jesus Christ"
   }
 ], Ge = (e) => new Promise((t) => setTimeout(t, e));
 async function te(e) {
-  return await Ge(1e4), e ? G.filter((t) => t.id === e) : G;
+  return await Ge(2e3), e ? G.filter((t) => t.id === e) : G;
 }
 async function $e() {
   return await te();

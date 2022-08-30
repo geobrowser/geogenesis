@@ -31,7 +31,7 @@ type ResolvedFact = {
 const MOCK_FACTS: ResolvedFact[] = [
   {
     id: '21340987',
-    entityId: 'askldj',
+    entityId: '1234567890',
     attribute: 'name',
     value: 'Jesus Christ',
   },
@@ -43,7 +43,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 // implementation. We have an in-memory object that stores all our facts that we just read from.
 async function mockedFetch(id?: string) {
   // Adding an artificial delay so we can test the caching in-app
-  await sleep(10000)
+  await sleep(2000)
 
   // or .find
   if (id) return MOCK_FACTS.filter((fact) => fact.id === id)

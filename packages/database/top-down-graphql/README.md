@@ -12,17 +12,23 @@ This approach uses plain GraphQL as the top-level API for reading from subgraphs
 - Simple as possible
 - Reactive
   ++ swr can re-run queries if there has been a mutation (see mutate API)
+  ++ We're using swr as the "react bindings" in this case since all we're doing is network calls and not actually interacting with a local in-memory store that we control.
 - State is subscribable
   -- This approach has no "subscribability" aspect at all since we're relying on caching instead of in-memory state
 - Cacheable
-  ++ We're caching through swr or react-query
+  ++ We're caching through swr
 - "Sync"-able
   ++ swr has a polling mechanism we can use internally
 - Optimistic updates
   ++ swr has optimistic updates (see mutate API)
+  ++ Caches should be break-able when there's a write from the user
   ?? State should be rollback-able if there's an error
-  ?? Caches should be break-able when there's a write from the user
 - Observable + debuggable
   We should be able to observe changes to state and the call paths throughout our system to understand what's happening internally if there are errors.
-- "Global state" lives outside of this library.
-  -- This library is purely for handling reads, writes, and caching for IPFS, Contracts, and Subgraphs. This is basically react-query, swr, et al with real-time sync...?
+  ++ We write our own functions, so can add whatever observability functionality on top of those as we want. Additionally, swr has middleware so we can write observability directly into swr.
+
+### Notes
+
+This approach using swr does a lot of what we want for v1 out of the box. It also has middlewares so we can extend the functionality on-fetch or add things like observability.
+
+We can probably extend this approach of "plain functions" to a future ORM-y approach where we write out own library for syncing.
