@@ -8,8 +8,6 @@ export default function TopDownGraphQlExample() {
     mutate,
   } = useSWR('topDownGraphQl.read.getFacts', topDownGraphQl.read.getFacts)
 
-  console.log(snapshot)
-
   if (!snapshot) return <div className="layout"> Loading...</div>
 
   const createFact = async () => {
