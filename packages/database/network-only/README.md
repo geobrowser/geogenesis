@@ -11,7 +11,9 @@ All we do is provide functions for reading and writing data. The rest of the bin
 - Easy DX
 
   ?? Surface area for interacting with mutations and reads is mostly from the same place
+
   ?? Easy to mock and test the entire read/write system using dependency injection
+
   -- Types could be annoying to reason about since we have to use types generated from GraphQL
   -- We have to generate types whenever we change the schema or the queries in the app
 
@@ -28,9 +30,12 @@ All we do is provide functions for reading and writing data. The rest of the bin
 - Optimistic updates
   ++ swr has optimistic updates (see mutate API)
   ++ Caches should be break-able when there's a write from the user
+
   ?? State should be rollback-able if there's an error
+
 - Observable + debuggable
   We should be able to observe changes to state and the call paths throughout our system to understand what's happening internally if there are errors.
+
   ++ We write our own functions, so can add whatever observability functionality on top of those as we want. Additionally, swr has middleware so we can write observability directly into swr.
 
 ### Notes
