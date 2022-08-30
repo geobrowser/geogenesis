@@ -4,3 +4,6 @@ build
 .vscode
 packages/frontend/app/styles/tailwind.css
 .vercel
+
+packages/database/dist/index.mjs
+packages/database/dist/index.umd.js

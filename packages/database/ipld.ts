@@ -59,6 +59,14 @@ export function createGeoIpfsClient(
   }
 }
 
+export function writeToIpfs(ipfs: IGeoIpfsClient) {
+  return ipfs.store()
+}
+
+export function writeToContract(contract: IGeoContract) {
+  return contract.create()
+}
+
 // 1. Create base IPLD implementation that we can mock
 // 2. Create Geo-specific IPLD implementation that we can mock. This is what is used throughout the app. Has things like "store", "load", "add"?
 

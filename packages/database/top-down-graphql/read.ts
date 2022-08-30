@@ -1,5 +1,6 @@
 import { createGraphQlClient, graphqlFetch } from '../graphql-client'
 import gql from 'graphql-tag'
+import { MOCK_FACTS } from './database'
 
 // -------------------------------------
 // In a real implementation with a backend we would be using a graphQL client like this
@@ -20,22 +21,6 @@ const FACTS_QUERY = gql`
 `
 // End of unused implementations we would use in an actual implementation with a backend
 // --------------------------------------
-
-type ResolvedFact = {
-  id: string
-  entityId: string
-  attribute: string
-  value: string | number
-}
-
-const MOCK_FACTS: ResolvedFact[] = [
-  {
-    id: '21340987',
-    entityId: '1234567890',
-    attribute: 'name',
-    value: 'Jesus Christ',
-  },
-]
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
