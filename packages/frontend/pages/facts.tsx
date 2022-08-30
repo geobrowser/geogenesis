@@ -1,6 +1,7 @@
 import { Button, Dropdown, Input, Menu, Table, Tag } from 'antd'
 import { motion } from 'framer-motion'
 import React, { useEffect, useState } from 'react'
+import { contracts } from '~/../contracts'
 
 import { DataScriptStore } from '~/modules/datascript/store'
 

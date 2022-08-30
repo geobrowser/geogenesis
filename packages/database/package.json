@@ -1,0 +1,31 @@
+{
+  "name": "@geogenesis/database",
+  "description": "Interface for interacting with the Geo backend",
+  "author": "Geo team",
+  "license": "MIT",
+  "version": "0.1.0",
+  "files": [
+    "dist/**/*"
+  ],
+  "main": "index.ts",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest",
+    "coverage": "vitest run --coverage"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "graphql": "16",
+    "graphql-tag": "^2.12.6",
+    "ipfs-http-client": "^57.0.3",
+    "undici": "*",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "@types/uuid": "^8.3.4",
+    "vite": "^3.0.9",
+    "vitest": "^0.22.1"
+  }
+}

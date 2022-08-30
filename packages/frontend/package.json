@@ -38,6 +38,7 @@
     "react-spinners": "^0.13.4",
     "reset-css": "^5.0.1",
     "showdown": "^2.1.0",
+    "swr": "^1.3.0",
     "wagmi": "^0.6.0"
   },
   "devDependencies": {
