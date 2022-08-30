@@ -15,20 +15,32 @@ All we do is provide functions for reading and writing data. The rest of the bin
   ?? Easy to mock and test the entire read/write system using dependency injection
 
   -- Types could be annoying to reason about since we have to use types generated from GraphQL
+
   -- We have to generate types whenever we change the schema or the queries in the app
 
 - Simple as possible
 - Reactive
+
   ++ swr can re-run queries if there has been a mutation (see mutate API)
+
   ++ We're using swr as the "react bindings" in this case since all we're doing is network calls and not actually interacting with a local in-memory store that we control.
+
 - State is subscribable
+
   -- This approach has no "subscribability" aspect at all since we're relying on caching instead of in-memory state
+
 - Cacheable
+
   ++ We're caching through swr
+
 - "Sync"-able
+
   ++ swr has a polling mechanism we can use internally
+
 - Optimistic updates
+
   ++ swr has optimistic updates (see mutate API)
+
   ++ Caches should be break-able when there's a write from the user
 
   ?? State should be rollback-able if there's an error
