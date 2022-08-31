@@ -9,11 +9,9 @@ type IFact = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const dedupe = (facts: IFact[], fact: IFact) => {
-  const ids = new Set(facts.map((fact) => fact.id))
-  return facts.filter(({ id }, index) => !ids.has(id))
-}
-
+// TODO:
+// Enable editing attributes and values
+// Enable tracking changes to attributes and values and triggering updates
 export class State {
   mockDatabase: MockDatabase
 
