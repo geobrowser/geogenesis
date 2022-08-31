@@ -16,7 +16,6 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
     [stateContainer]
   )
 
-  // Light wrapper over useSyncExternalStore
   return useSyncExternalStore(
     subscription.subscribe,
     subscription.getCurrentValue,
