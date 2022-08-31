@@ -37,7 +37,7 @@ const getRemoteFacts = () => {
 }
 
 // Runs "getRemoveFacts" every 10 seconds and pushes the new fact to the remoteFacts$ stream
-const remoteFacts$ = interval(10000).pipe(switchMap((_) => getRemoteFacts()))
+const remoteFacts$ = interval(1000).pipe(switchMap((_) => getRemoteFacts()))
 
 // Stores all the local facts that are being tracked. These are added by the user.
 export const facts$ = new BehaviorSubject<IFact[]>(localFacts)
@@ -46,6 +46,3 @@ export const facts$ = new BehaviorSubject<IFact[]>(localFacts)
 remoteFacts$.subscribe((value) => {
   facts$.next([...facts$.getValue(), value])
 })
-
-// Create a hook that subscribes to above Observable value and tells React to update when there are changes
-export * from './use'

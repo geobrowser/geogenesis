@@ -1,8 +1,9 @@
 import { sync } from '@geogenesis/database'
-import { BehaviorSubject as Observable } from 'rxjs'
-import * as React from 'react'
+import { BehaviorSubject } from 'rxjs'
+import React, { useMemo } from 'react'
+import { useSubscription } from 'use-subscription'
 
-function useSharedObservable<T>(stateContainer: Observable<T>): T {
+function useSharedObservable<T>(stateContainer: BehaviorSubject<T>): T {
   // State is stored in the observable passed from the parent. We need to tell React to
   // re-render when it changes so the UI actually updates.
   const rerender = React.useState({})[1]
@@ -13,11 +14,7 @@ function useSharedObservable<T>(stateContainer: Observable<T>): T {
     // is tracking has changed.
     //
     // We set up the state tracking in the Proxy in `get()`
-    const sub = stateContainer.subscribe({
-      next: () => {
-        rerender({})
-      },
-    })
+    const sub = stateContainer.subscribe(() => rerender({}))
 
     return () => sub.unsubscribe()
   }, [stateContainer])
@@ -25,8 +22,28 @@ function useSharedObservable<T>(stateContainer: Observable<T>): T {
   return stateContainer.getValue()
 }
 
-export default function TopDownGraphQlExample() {
-  const snapshot = useSharedObservable(sync.facts$)
+function useSharedObservableExternalStore<T>(
+  stateContainer: BehaviorSubject<T>
+) {
+  const subscription = useMemo(
+    () => ({
+      getCurrentValue: () => stateContainer.getValue(),
+      subscribe: (callback: () => void) => {
+        const subscription = stateContainer.subscribe(callback)
+        return () => subscription.unsubscribe()
+      },
+    }),
+
+    // Re-subscribe any time the behaviorSubject changes
+    [stateContainer]
+  )
+
+  // Light wrapper over useSyncExternalStore
+  return useSubscription(subscription)
+}
+
+export default function SyncExample() {
+  const snapshot = useSharedObservableExternalStore(sync.facts$)
 
   console.log(sync.facts$)
 
