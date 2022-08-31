@@ -6,7 +6,7 @@ This approach uses plain GraphQL as the top-level API for reading from subgraphs
 
 All we do is provide functions for reading and writing data. The rest of the bindings and functionality are done through swr and its React hooks.
 
-### Requirements from database/ root README
+### Ideal properties of a local database/store
 
 - Easy DX
 
