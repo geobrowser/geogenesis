@@ -7,17 +7,53 @@ type IFact = {
   value: string | number
 }
 
-const localFacts = [
-  {
-    id: '134245',
-    entityId: '130948lk',
-    attribute: 'name',
-    value: 'Jesus Christ',
-  },
-]
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const getRemoteFacts = async () => {
-  return [
+const dedupe = (facts: IFact[], fact: IFact) => {
+  const ids = new Set(facts.map((fact) => fact.id))
+  return facts.filter(({ id }, index) => !ids.has(id))
+}
+
+export class State {
+  mockDatabase: MockDatabase
+
+  // Stores all the local facts that are being tracked. These are added by the user.
+  facts$ = new BehaviorSubject<IFact[]>([])
+
+  constructor(mockDatabase: MockDatabase) {
+    this.mockDatabase = mockDatabase
+
+    // Merges the remote facts with the user's local facts.
+    this.mockDatabase.syncer$.subscribe((value) => {
+      // Only pass the union of the local and remote stores
+      // state = (local - remote) + remote
+      const merged = [...new Set([...this.facts$.getValue(), ...value])]
+      this.facts$.next(merged)
+    })
+  }
+
+  createFact = async (fact: IFact) => {
+    // Optimistically add fact to the local store if it doesn't already exist
+    const ids = new Set(this.facts$.getValue().map((fact) => fact.id))
+
+    if (!ids.has(fact.id)) {
+      this.facts$.next([...this.facts$.getValue(), fact])
+      await this._uploadFact(fact)
+    }
+  }
+
+  private _uploadFact = async (fact: IFact) => {
+    // Simulating hitting network
+    await sleep(2000)
+
+    return this.mockDatabase.insertFact(fact)
+  }
+}
+
+// This service mocks a remote database. In the real implementation this will be read
+// from the subgraph
+export class MockDatabase {
+  REMOTE_FACTS: IFact[] = [
     {
       id: Math.random().toString(),
       entityId: Math.random().toString(),
@@ -25,19 +61,19 @@ const getRemoteFacts = async () => {
       value: 'Van Horn',
     },
   ]
-}
 
-// Runs "getRemoveFacts" every 10 seconds and pushes the new fact to the remoteFacts$ stream
-const remoteFacts$ = interval(1000).pipe(switchMap((_) => getRemoteFacts()))
+  // Runs "getRemoteFacts" every 5 seconds and pushes the new fact to the facts$ stream
+  syncer$ = interval(5000).pipe(switchMap((_) => this.getRemoteFacts()))
 
-// Stores all the local facts that are being tracked. These are added by the user.
-export const facts$ = new BehaviorSubject<IFact[]>(localFacts)
+  insertFact = (fact: IFact) => {
+    const ids = new Set(this.REMOTE_FACTS.map((fact) => fact.id))
 
-// Merges the remote facts with the user's local facts.
-remoteFacts$.subscribe((value) => {
-  facts$.next([...facts$.getValue(), ...value])
-})
+    if (ids.has(fact.id)) return this.REMOTE_FACTS
+    this.REMOTE_FACTS.push(fact)
+    return this.REMOTE_FACTS.concat(fact)
+  }
 
-export const createFact = (fact: IFact) => {
-  facts$.next([...facts$.getValue(), fact])
+  getRemoteFacts = async () => {
+    return this.REMOTE_FACTS
+  }
 }

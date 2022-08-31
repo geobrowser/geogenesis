@@ -27,7 +27,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 // We aren't using the actual gqlFetch since we need to simulate a "real" backend for this
 // implementation. We have an in-memory object that stores all our facts that we just read from.
 async function mockedFetch(id?: string) {
-  // Adding an artificial delay so we can test the caching in-app
+  // Simulating hitting network
   await sleep(2000)
 
   // or .find
