@@ -5,6 +5,101 @@ importers:
   .:
     specifiers: {}
 
+  apps/frontend:
+    specifiers:
+      '@babel/core': '>=7.4.0 <8.0.0'
+      '@geogenesis/contracts': workspace:*
+      '@geogenesis/database': workspace:*
+      '@radix-ui/react-popover': ^1.0.0
+      '@rainbow-me/rainbowkit': ^0.4.5
+      '@tailwindcss/typography': ^0.5.4
+      '@tiptap/core': '>=2.0.0-beta.1 <3.0.0'
+      '@tiptap/extension-document': ^2.0.0-beta.17
+      '@tiptap/extension-link': ^2.0.0-beta.43
+      '@tiptap/extension-placeholder': ^2.0.0-beta.53
+      '@tiptap/react': ^2.0.0-beta.114
+      '@tiptap/starter-kit': ^2.0.0-beta.191
+      '@types/cors': ^2.8.12
+      '@types/lodash.range': ^3.2.7
+      '@types/node': ^17.0.35
+      '@types/react': ^18.0.9
+      '@types/showdown': ^2.0.0
+      '@types/turndown': ^5.0.1
+      antd: ^4.22.7
+      autoprefixer: ^10.4.8
+      classnames: ^2.3.1
+      cors: ^2.8.5
+      datascript: ^1.3.15
+      eslint: ^8.15.0
+      eslint-config-next: ^12.1.6
+      ethers: ^5.0.0
+      framer-motion: ^6.5.1
+      graphql: '16'
+      graphql-request: ^4.3.0
+      lodash.range: ^3.2.0
+      mobx: ^6.6.1
+      mobx-react-lite: ^3.4.0
+      next: ^12.1.6
+      nft.storage: ^7.0.0
+      node-fetch: ^3.2.10
+      postcss: ^8.4.14
+      react: ^18.1.0
+      react-dom: ^18.1.0
+      react-spinners: ^0.13.4
+      reset-css: ^5.0.1
+      showdown: ^2.1.0
+      swr: ^1.3.0
+      tailwindcss: ^3.1.7
+      typescript: ^4.7.2
+      wagmi: ^0.6.0
+    dependencies:
+      '@babel/core': 7.18.10
+      '@geogenesis/contracts': link:../../packages/contracts
+      '@geogenesis/database': link:../../packages/database
+      '@radix-ui/react-popover': 1.0.0_bb2bxwco6ptpubzwpazr52qf6i
+      '@rainbow-me/rainbowkit': 0.4.5_nvyuxgmwrnmxsyegmvf37enoie
+      '@tiptap/core': 2.0.0-beta.182
+      '@tiptap/extension-document': 2.0.0-beta.17_jdrcmhoxj44u3cq7gnenksjiqq
+      '@tiptap/extension-link': 2.0.0-beta.43_jdrcmhoxj44u3cq7gnenksjiqq
+      '@tiptap/extension-placeholder': 2.0.0-beta.53_jdrcmhoxj44u3cq7gnenksjiqq
+      '@tiptap/react': 2.0.0-beta.114_b7cpfzdww2wxjdqheg7veprq6i
+      '@tiptap/starter-kit': 2.0.0-beta.191
+      antd: 4.22.7_biqbaboplfbrettd7655fr4n2y
+      classnames: 2.3.1
+      cors: 2.8.5
+      datascript: 1.3.15
+      ethers: 5.6.9
+      framer-motion: 6.5.1_biqbaboplfbrettd7655fr4n2y
+      graphql: 16.5.0
+      graphql-request: 4.3.0_graphql@16.5.0
+      lodash.range: 3.2.0
+      mobx: 6.6.1
+      mobx-react-lite: 3.4.0_m26jawr67gnusmh4egzqtnhxru
+      next: 12.2.3_twoewwu6sg7cdf3ao6njtbftne
+      nft.storage: 7.0.0_node-fetch@3.2.10
+      node-fetch: 3.2.10
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+      react-spinners: 0.13.4_biqbaboplfbrettd7655fr4n2y
+      reset-css: 5.0.1
+      showdown: 2.1.0
+      swr: 1.3.0_react@18.2.0
+      wagmi: 0.6.0_v53yskzlb7auon6fdtjnpmvxqu
+    devDependencies:
+      '@tailwindcss/typography': 0.5.4_tailwindcss@3.1.7
+      '@types/cors': 2.8.12
+      '@types/lodash.range': 3.2.7
+      '@types/node': 17.0.45
+      '@types/react': 18.0.15
+      '@types/showdown': 2.0.0
+      '@types/turndown': 5.0.1
+      autoprefixer: 10.4.8_postcss@8.4.16
+      eslint: 8.21.0
+      eslint-config-next: 12.2.3_qugx7qdu5zevzvxaiqyxfiwquq
+      postcss: 8.4.16
+      tailwindcss: 3.1.7_postcss@8.4.16
+      typescript: 4.7.4
+
   packages/contracts:
     specifiers:
       '@ethersproject/abi': ^5.6.4
@@ -121,101 +216,6 @@ importers:
       '@types/uuid': 8.3.4
       vite: 3.0.9
       vitest: 0.22.1
-
-  packages/frontend:
-    specifiers:
-      '@babel/core': '>=7.4.0 <8.0.0'
-      '@geogenesis/contracts': workspace:*
-      '@geogenesis/database': workspace:*
-      '@radix-ui/react-popover': ^1.0.0
-      '@rainbow-me/rainbowkit': ^0.4.5
-      '@tailwindcss/typography': ^0.5.4
-      '@tiptap/core': '>=2.0.0-beta.1 <3.0.0'
-      '@tiptap/extension-document': ^2.0.0-beta.17
-      '@tiptap/extension-link': ^2.0.0-beta.43
-      '@tiptap/extension-placeholder': ^2.0.0-beta.53
-      '@tiptap/react': ^2.0.0-beta.114
-      '@tiptap/starter-kit': ^2.0.0-beta.191
-      '@types/cors': ^2.8.12
-      '@types/lodash.range': ^3.2.7
-      '@types/node': ^17.0.35
-      '@types/react': ^18.0.9
-      '@types/showdown': ^2.0.0
-      '@types/turndown': ^5.0.1
-      antd: ^4.22.7
-      autoprefixer: ^10.4.8
-      classnames: ^2.3.1
-      cors: ^2.8.5
-      datascript: ^1.3.15
-      eslint: ^8.15.0
-      eslint-config-next: ^12.1.6
-      ethers: ^5.0.0
-      framer-motion: ^6.5.1
-      graphql: '16'
-      graphql-request: ^4.3.0
-      lodash.range: ^3.2.0
-      mobx: ^6.6.1
-      mobx-react-lite: ^3.4.0
-      next: ^12.1.6
-      nft.storage: ^7.0.0
-      node-fetch: ^3.2.10
-      postcss: ^8.4.14
-      react: ^18.1.0
-      react-dom: ^18.1.0
-      react-spinners: ^0.13.4
-      reset-css: ^5.0.1
-      showdown: ^2.1.0
-      swr: ^1.3.0
-      tailwindcss: ^3.1.7
-      typescript: ^4.7.2
-      wagmi: ^0.6.0
-    dependencies:
-      '@babel/core': 7.18.10
-      '@geogenesis/contracts': link:../contracts
-      '@geogenesis/database': link:../database
-      '@radix-ui/react-popover': 1.0.0_bb2bxwco6ptpubzwpazr52qf6i
-      '@rainbow-me/rainbowkit': 0.4.5_nvyuxgmwrnmxsyegmvf37enoie
-      '@tiptap/core': 2.0.0-beta.182
-      '@tiptap/extension-document': 2.0.0-beta.17_jdrcmhoxj44u3cq7gnenksjiqq
-      '@tiptap/extension-link': 2.0.0-beta.43_jdrcmhoxj44u3cq7gnenksjiqq
-      '@tiptap/extension-placeholder': 2.0.0-beta.53_jdrcmhoxj44u3cq7gnenksjiqq
-      '@tiptap/react': 2.0.0-beta.114_b7cpfzdww2wxjdqheg7veprq6i
-      '@tiptap/starter-kit': 2.0.0-beta.191
-      antd: 4.22.7_biqbaboplfbrettd7655fr4n2y
-      classnames: 2.3.1
-      cors: 2.8.5
-      datascript: 1.3.15
-      ethers: 5.6.9
-      framer-motion: 6.5.1_biqbaboplfbrettd7655fr4n2y
-      graphql: 16.5.0
-      graphql-request: 4.3.0_graphql@16.5.0
-      lodash.range: 3.2.0
-      mobx: 6.6.1
-      mobx-react-lite: 3.4.0_m26jawr67gnusmh4egzqtnhxru
-      next: 12.2.3_twoewwu6sg7cdf3ao6njtbftne
-      nft.storage: 7.0.0_node-fetch@3.2.10
-      node-fetch: 3.2.10
-      react: 18.2.0
-      react-dom: 18.2.0_react@18.2.0
-      react-spinners: 0.13.4_biqbaboplfbrettd7655fr4n2y
-      reset-css: 5.0.1
-      showdown: 2.1.0
-      swr: 1.3.0_react@18.2.0
-      wagmi: 0.6.0_v53yskzlb7auon6fdtjnpmvxqu
-    devDependencies:
-      '@tailwindcss/typography': 0.5.4_tailwindcss@3.1.7
-      '@types/cors': 2.8.12
-      '@types/lodash.range': 3.2.7
-      '@types/node': 17.0.45
-      '@types/react': 18.0.15
-      '@types/showdown': 2.0.0
-      '@types/turndown': 5.0.1
-      autoprefixer: 10.4.8_postcss@8.4.14
-      eslint: 8.21.0
-      eslint-config-next: 12.2.3_qugx7qdu5zevzvxaiqyxfiwquq
-      postcss: 8.4.14
-      tailwindcss: 3.1.7_postcss@8.4.14
-      typescript: 4.7.4
 
 packages:
 
@@ -2092,7 +2092,7 @@ packages:
       lodash.castarray: 4.4.0
       lodash.isplainobject: 4.0.6
       lodash.merge: 4.6.2
-      tailwindcss: 3.1.7_postcss@8.4.14
+      tailwindcss: 3.1.7_postcss@8.4.16
     dev: true
 
   /@tiptap/core/2.0.0-beta.182:
@@ -3796,7 +3796,7 @@ packages:
     hasBin: true
     dev: true
 
-  /autoprefixer/10.4.8_postcss@8.4.14:
+  /autoprefixer/10.4.8_postcss@8.4.16:
     resolution: {integrity: sha512-75Jr6Q/XpTqEf6D2ltS5uMewJIx5irCU1oBYJrWjFenq/m12WRRrz6g15L1EIoYvPLXTbEry7rDOwrcYNj77xw==}
     engines: {node: ^10 || ^12 || >=14}
     hasBin: true
@@ -3808,7 +3808,7 @@ packages:
       fraction.js: 4.2.0
       normalize-range: 0.1.2
       picocolors: 1.0.0
-      postcss: 8.4.14
+      postcss: 8.4.16
       postcss-value-parser: 4.2.0
     dev: true
 
@@ -11472,29 +11472,29 @@ packages:
     engines: {node: '>=0.10.0'}
     dev: true
 
-  /postcss-import/14.1.0_postcss@8.4.14:
+  /postcss-import/14.1.0_postcss@8.4.16:
     resolution: {integrity: sha512-flwI+Vgm4SElObFVPpTIT7SU7R3qk2L7PyduMcokiaVKuWv9d/U+Gm/QAd8NDLuykTWTkcrjOeD2Pp1rMeBTGw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       postcss: ^8.0.0
     dependencies:
-      postcss: 8.4.14
+      postcss: 8.4.16
       postcss-value-parser: 4.2.0
       read-cache: 1.0.0
       resolve: 1.22.1
     dev: true
 
-  /postcss-js/4.0.0_postcss@8.4.14:
+  /postcss-js/4.0.0_postcss@8.4.16:
     resolution: {integrity: sha512-77QESFBwgX4irogGVPgQ5s07vLvFqWr228qZY+w6lW599cRlK/HmnlivnnVUxkjHnCu4J16PDMHcH+e+2HbvTQ==}
     engines: {node: ^12 || ^14 || >= 16}
     peerDependencies:
       postcss: ^8.3.3
     dependencies:
       camelcase-css: 2.0.1
-      postcss: 8.4.14
+      postcss: 8.4.16
     dev: true
 
-  /postcss-load-config/3.1.4_postcss@8.4.14:
+  /postcss-load-config/3.1.4_postcss@8.4.16:
     resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
     engines: {node: '>= 10'}
     peerDependencies:
@@ -11507,17 +11507,17 @@ packages:
         optional: true
     dependencies:
       lilconfig: 2.0.6
-      postcss: 8.4.14
+      postcss: 8.4.16
       yaml: 1.10.2
     dev: true
 
-  /postcss-nested/5.0.6_postcss@8.4.14:
+  /postcss-nested/5.0.6_postcss@8.4.16:
     resolution: {integrity: sha512-rKqm2Fk0KbA8Vt3AdGN0FB9OBOMDVajMG6ZCf/GoHgdxUJ4sBFp0A/uMIRm+MJUdo33YXEtjqIz8u7DAp8B7DA==}
     engines: {node: '>=12.0'}
     peerDependencies:
       postcss: ^8.2.14
     dependencies:
-      postcss: 8.4.14
+      postcss: 8.4.16
       postcss-selector-parser: 6.0.10
     dev: true
 
@@ -11540,6 +11540,7 @@ packages:
       nanoid: 3.3.4
       picocolors: 1.0.0
       source-map-js: 1.0.2
+    dev: false
 
   /postcss/8.4.16:
     resolution: {integrity: sha512-ipHE1XBvKzm5xI7hiHCZJCSugxvsdq2mPnsq5+UF+VHCjiBvtDrlxJfMBToWaP9D5XlgNmcFGqoHmUn0EYEaRQ==}
@@ -14005,7 +14006,7 @@ packages:
       strip-ansi: 6.0.1
     dev: true
 
-  /tailwindcss/3.1.7_postcss@8.4.14:
+  /tailwindcss/3.1.7_postcss@8.4.16:
     resolution: {integrity: sha512-r7mgumZ3k0InfVPpGWcX8X/Ut4xBfv+1O/+C73ar/m01LxGVzWvPxF/w6xIUPEztrCoz7axfx0SMdh8FH8ZvRQ==}
     engines: {node: '>=12.13.0'}
     hasBin: true
@@ -14025,11 +14026,11 @@ packages:
       normalize-path: 3.0.0
       object-hash: 3.0.0
       picocolors: 1.0.0
-      postcss: 8.4.14
-      postcss-import: 14.1.0_postcss@8.4.14
-      postcss-js: 4.0.0_postcss@8.4.14
-      postcss-load-config: 3.1.4_postcss@8.4.14
-      postcss-nested: 5.0.6_postcss@8.4.14
+      postcss: 8.4.16
+      postcss-import: 14.1.0_postcss@8.4.16
+      postcss-js: 4.0.0_postcss@8.4.16
+      postcss-load-config: 3.1.4_postcss@8.4.16
+      postcss-nested: 5.0.6_postcss@8.4.16
       postcss-selector-parser: 6.0.10
       postcss-value-parser: 4.2.0
       quick-lru: 5.1.1

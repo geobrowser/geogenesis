@@ -1,5 +1,5 @@
 {
-  "name": "@geogenesis/app",
+  "name": "@geogenesis/web",
   "private": true,
   "version": "0.1.0",
   "scripts": {
