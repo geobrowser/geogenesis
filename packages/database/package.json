@@ -16,7 +16,8 @@
     "build": "vite build",
     "build:watch": "vite build --watch",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "postinstall": "pnpm run build"
   },
   "engines": {
     "node": "18"
