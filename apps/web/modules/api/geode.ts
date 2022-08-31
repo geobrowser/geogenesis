@@ -1,6 +1,6 @@
 import { Signer } from 'ethers'
 import { Chain, chain } from 'wagmi'
-import { Geode__factory } from '~/../contracts'
+import { Geode__factory } from '@geogenesis/contracts'
 import { getEtherActorURL } from '~/modules/api/ether-actor'
 import { findEvent } from '~/modules/api/publish-service'
 import { getContractAddress } from '~/modules/utils/getContractAddress'

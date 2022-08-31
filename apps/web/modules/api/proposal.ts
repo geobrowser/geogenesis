@@ -1,6 +1,6 @@
 import { BigNumber, Signer } from 'ethers'
 import { chain, Chain } from 'wagmi'
-import { Proposal__factory } from '~/../contracts'
+import { Proposal__factory } from '@geogenesis/contracts'
 import { findEvent } from '~/modules/api/publish-service'
 import { getContractAddress } from '~/modules/utils/getContractAddress'
 import { getEtherActorURL } from './ether-actor'
