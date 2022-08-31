@@ -1,4 +1,4 @@
-const addresses = require('../contracts/addresses.json')
+const { addresses } = require('@geogenesis/contracts')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

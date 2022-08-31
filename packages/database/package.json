@@ -1,0 +1,48 @@
+{
+  "private": true,
+  "name": "@geogenesis/database",
+  "description": "Interface for interacting with the Geo backend",
+  "author": "Geo team",
+  "license": "MIT",
+  "version": "0.1.0",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "dist/index.umd.js",
+  "module": "dist/index.mjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:watch": "vite build --watch",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "postinstall": "pnpm run build"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@types/react": "^18.0.9",
+    "@types/react-dom": "^18.0.6",
+    "@vitejs/plugin-react": "^2.0.1",
+    "graphql": "16",
+    "graphql-tag": "^2.12.6",
+    "ipfs-http-client": "^57.0.3",
+    "react": "^18.1.0",
+    "react-dom": "^18.1.0",
+    "rxjs": "^7.5.6",
+    "undici": "*"
+  },
+  "devDependencies": {
+    "@types/uuid": "^8.3.4",
+    "vite": "^3.0.9",
+    "vitest": "^0.22.1"
+  },
+  "peerDependencies": {
+    "@types/react": "^18.0.9",
+    "@types/react-dom": "^18.0.6",
+    "react": "^18.1.0",
+    "react-dom": "^18.1.0"
+  }
+}
