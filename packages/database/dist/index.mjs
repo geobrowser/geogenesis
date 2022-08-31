@@ -1,97 +1,301 @@
-var k = function() {
-  return k = Object.assign || function(t) {
-    for (var n, s = 1, i = arguments.length; s < i; s++) {
-      n = arguments[s];
-      for (var r in n)
-        Object.prototype.hasOwnProperty.call(n, r) && (t[r] = n[r]);
-    }
-    return t;
-  }, k.apply(this, arguments);
+var H = function(e, n) {
+  return H = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(t, i) {
+    t.__proto__ = i;
+  } || function(t, i) {
+    for (var r in i)
+      Object.prototype.hasOwnProperty.call(i, r) && (t[r] = i[r]);
+  }, H(e, n);
 };
-function L(e, t) {
-  if (!Boolean(e))
-    throw new Error(t);
+function _(e, n) {
+  if (typeof n != "function" && n !== null)
+    throw new TypeError("Class extends value " + String(n) + " is not a constructor or null");
+  H(e, n);
+  function t() {
+    this.constructor = e;
+  }
+  e.prototype = n === null ? Object.create(n) : (t.prototype = n.prototype, new t());
 }
-function ne(e) {
+var V = function() {
+  return V = Object.assign || function(n) {
+    for (var t, i = 1, r = arguments.length; i < r; i++) {
+      t = arguments[i];
+      for (var s in t)
+        Object.prototype.hasOwnProperty.call(t, s) && (n[s] = t[s]);
+    }
+    return n;
+  }, V.apply(this, arguments);
+};
+function Be(e, n, t, i) {
+  function r(s) {
+    return s instanceof t ? s : new t(function(o) {
+      o(s);
+    });
+  }
+  return new (t || (t = Promise))(function(s, o) {
+    function c(f) {
+      try {
+        l(i.next(f));
+      } catch (d) {
+        o(d);
+      }
+    }
+    function u(f) {
+      try {
+        l(i.throw(f));
+      } catch (d) {
+        o(d);
+      }
+    }
+    function l(f) {
+      f.done ? s(f.value) : r(f.value).then(c, u);
+    }
+    l((i = i.apply(e, n || [])).next());
+  });
+}
+function Ee(e, n) {
+  var t = { label: 0, sent: function() {
+    if (s[0] & 1)
+      throw s[1];
+    return s[1];
+  }, trys: [], ops: [] }, i, r, s, o;
+  return o = { next: c(0), throw: c(1), return: c(2) }, typeof Symbol == "function" && (o[Symbol.iterator] = function() {
+    return this;
+  }), o;
+  function c(l) {
+    return function(f) {
+      return u([l, f]);
+    };
+  }
+  function u(l) {
+    if (i)
+      throw new TypeError("Generator is already executing.");
+    for (; t; )
+      try {
+        if (i = 1, r && (s = l[0] & 2 ? r.return : l[0] ? r.throw || ((s = r.return) && s.call(r), 0) : r.next) && !(s = s.call(r, l[1])).done)
+          return s;
+        switch (r = 0, s && (l = [l[0] & 2, s.value]), l[0]) {
+          case 0:
+          case 1:
+            s = l;
+            break;
+          case 4:
+            return t.label++, { value: l[1], done: !1 };
+          case 5:
+            t.label++, r = l[1], l = [0];
+            continue;
+          case 7:
+            l = t.ops.pop(), t.trys.pop();
+            continue;
+          default:
+            if (s = t.trys, !(s = s.length > 0 && s[s.length - 1]) && (l[0] === 6 || l[0] === 2)) {
+              t = 0;
+              continue;
+            }
+            if (l[0] === 3 && (!s || l[1] > s[0] && l[1] < s[3])) {
+              t.label = l[1];
+              break;
+            }
+            if (l[0] === 6 && t.label < s[1]) {
+              t.label = s[1], s = l;
+              break;
+            }
+            if (s && t.label < s[2]) {
+              t.label = s[2], t.ops.push(l);
+              break;
+            }
+            s[2] && t.ops.pop(), t.trys.pop();
+            continue;
+        }
+        l = n.call(e, t);
+      } catch (f) {
+        l = [6, f], r = 0;
+      } finally {
+        i = s = 0;
+      }
+    if (l[0] & 5)
+      throw l[1];
+    return { value: l[0] ? l[1] : void 0, done: !0 };
+  }
+}
+function A(e) {
+  var n = typeof Symbol == "function" && Symbol.iterator, t = n && e[n], i = 0;
+  if (t)
+    return t.call(e);
+  if (e && typeof e.length == "number")
+    return {
+      next: function() {
+        return e && i >= e.length && (e = void 0), { value: e && e[i++], done: !e };
+      }
+    };
+  throw new TypeError(n ? "Object is not iterable." : "Symbol.iterator is not defined.");
+}
+function O(e, n) {
+  var t = typeof Symbol == "function" && e[Symbol.iterator];
+  if (!t)
+    return e;
+  var i = t.call(e), r, s = [], o;
+  try {
+    for (; (n === void 0 || n-- > 0) && !(r = i.next()).done; )
+      s.push(r.value);
+  } catch (c) {
+    o = { error: c };
+  } finally {
+    try {
+      r && !r.done && (t = i.return) && t.call(i);
+    } finally {
+      if (o)
+        throw o.error;
+    }
+  }
+  return s;
+}
+function S(e, n, t) {
+  if (t || arguments.length === 2)
+    for (var i = 0, r = n.length, s; i < r; i++)
+      (s || !(i in n)) && (s || (s = Array.prototype.slice.call(n, 0, i)), s[i] = n[i]);
+  return e.concat(s || Array.prototype.slice.call(n));
+}
+function g(e) {
+  return this instanceof g ? (this.v = e, this) : new g(e);
+}
+function Ve(e, n, t) {
+  if (!Symbol.asyncIterator)
+    throw new TypeError("Symbol.asyncIterator is not defined.");
+  var i = t.apply(e, n || []), r, s = [];
+  return r = {}, o("next"), o("throw"), o("return"), r[Symbol.asyncIterator] = function() {
+    return this;
+  }, r;
+  function o(p) {
+    i[p] && (r[p] = function(T) {
+      return new Promise(function(y, v) {
+        s.push([p, T, y, v]) > 1 || c(p, T);
+      });
+    });
+  }
+  function c(p, T) {
+    try {
+      u(i[p](T));
+    } catch (y) {
+      d(s[0][3], y);
+    }
+  }
+  function u(p) {
+    p.value instanceof g ? Promise.resolve(p.value.v).then(l, f) : d(s[0][2], p);
+  }
+  function l(p) {
+    c("next", p);
+  }
+  function f(p) {
+    c("throw", p);
+  }
+  function d(p, T) {
+    p(T), s.shift(), s.length && c(s[0][0], s[0][1]);
+  }
+}
+function je(e) {
+  if (!Symbol.asyncIterator)
+    throw new TypeError("Symbol.asyncIterator is not defined.");
+  var n = e[Symbol.asyncIterator], t;
+  return n ? n.call(e) : (e = typeof A == "function" ? A(e) : e[Symbol.iterator](), t = {}, i("next"), i("throw"), i("return"), t[Symbol.asyncIterator] = function() {
+    return this;
+  }, t);
+  function i(s) {
+    t[s] = e[s] && function(o) {
+      return new Promise(function(c, u) {
+        o = e[s](o), r(c, u, o.done, o.value);
+      });
+    };
+  }
+  function r(s, o, c, u) {
+    Promise.resolve(u).then(function(l) {
+      s({ value: l, done: c });
+    }, o);
+  }
+}
+function q(e, n) {
+  if (!Boolean(e))
+    throw new Error(n);
+}
+function Ye(e) {
   return typeof e == "object" && e !== null;
 }
-function ie(e, t) {
+function $e(e, n) {
   if (!Boolean(e))
     throw new Error(
-      t != null ? t : "Unexpected invariant triggered."
+      n != null ? n : "Unexpected invariant triggered."
     );
 }
-const se = /\r\n|[\n\r]/g;
-function w(e, t) {
-  let n = 0, s = 1;
-  for (const i of e.body.matchAll(se)) {
-    if (typeof i.index == "number" || ie(!1), i.index >= t)
+const Ge = /\r\n|[\n\r]/g;
+function W(e, n) {
+  let t = 0, i = 1;
+  for (const r of e.body.matchAll(Ge)) {
+    if (typeof r.index == "number" || $e(!1), r.index >= n)
       break;
-    n = i.index + i[0].length, s += 1;
+    t = r.index + r[0].length, i += 1;
   }
   return {
-    line: s,
-    column: t + 1 - n
+    line: i,
+    column: n + 1 - t
   };
 }
-function re(e) {
-  return G(
+function Je(e) {
+  return me(
     e.source,
-    w(e.source, e.start)
+    W(e.source, e.start)
   );
 }
-function G(e, t) {
-  const n = e.locationOffset.column - 1, s = "".padStart(n) + e.body, i = t.line - 1, r = e.locationOffset.line - 1, a = t.line + r, u = t.line === 1 ? n : 0, l = t.column + u, E = `${e.name}:${a}:${l}
-`, p = s.split(/\r\n|[\n\r]/g), m = p[i];
-  if (m.length > 120) {
-    const N = Math.floor(l / 80), R = l % 80, f = [];
-    for (let I = 0; I < m.length; I += 80)
-      f.push(m.slice(I, I + 80));
-    return E + V([
-      [`${a} |`, f[0]],
-      ...f.slice(1, N + 1).map((I) => ["|", I]),
-      ["|", "^".padStart(R)],
-      ["|", f[N + 1]]
+function me(e, n) {
+  const t = e.locationOffset.column - 1, i = "".padStart(t) + e.body, r = n.line - 1, s = e.locationOffset.line - 1, o = n.line + s, c = n.line === 1 ? t : 0, u = n.column + c, l = `${e.name}:${o}:${u}
+`, f = i.split(/\r\n|[\n\r]/g), d = f[r];
+  if (d.length > 120) {
+    const p = Math.floor(u / 80), T = u % 80, y = [];
+    for (let v = 0; v < d.length; v += 80)
+      y.push(d.slice(v, v + 80));
+    return l + ce([
+      [`${o} |`, y[0]],
+      ...y.slice(1, p + 1).map((v) => ["|", v]),
+      ["|", "^".padStart(T)],
+      ["|", y[p + 1]]
     ]);
   }
-  return E + V([
-    [`${a - 1} |`, p[i - 1]],
-    [`${a} |`, m],
-    ["|", "^".padStart(l)],
-    [`${a + 1} |`, p[i + 1]]
+  return l + ce([
+    [`${o - 1} |`, f[r - 1]],
+    [`${o} |`, d],
+    ["|", "^".padStart(u)],
+    [`${o + 1} |`, f[r + 1]]
   ]);
 }
-function V(e) {
-  const t = e.filter(([s, i]) => i !== void 0), n = Math.max(...t.map(([s]) => s.length));
-  return t.map(([s, i]) => s.padStart(n) + (i ? " " + i : "")).join(`
+function ce(e) {
+  const n = e.filter(([i, r]) => r !== void 0), t = Math.max(...n.map(([i]) => i.length));
+  return n.map(([i, r]) => i.padStart(t) + (r ? " " + r : "")).join(`
 `);
 }
-function oe(e) {
-  const t = e[0];
-  return t == null || "kind" in t || "length" in t ? {
-    nodes: t,
+function qe(e) {
+  const n = e[0];
+  return n == null || "kind" in n || "length" in n ? {
+    nodes: n,
     source: e[1],
     positions: e[2],
     path: e[3],
     originalError: e[4],
     extensions: e[5]
-  } : t;
+  } : n;
 }
-class B extends Error {
-  constructor(t, ...n) {
-    var s, i, r;
-    const { nodes: a, source: u, positions: l, path: E, originalError: p, extensions: m } = oe(n);
-    super(t), this.name = "GraphQLError", this.path = E != null ? E : void 0, this.originalError = p != null ? p : void 0, this.nodes = j(
-      Array.isArray(a) ? a : a ? [a] : void 0
+class ie extends Error {
+  constructor(n, ...t) {
+    var i, r, s;
+    const { nodes: o, source: c, positions: u, path: l, originalError: f, extensions: d } = qe(t);
+    super(n), this.name = "GraphQLError", this.path = l != null ? l : void 0, this.originalError = f != null ? f : void 0, this.nodes = ue(
+      Array.isArray(o) ? o : o ? [o] : void 0
     );
-    const N = j(
-      (s = this.nodes) === null || s === void 0 ? void 0 : s.map((f) => f.loc).filter((f) => f != null)
+    const p = ue(
+      (i = this.nodes) === null || i === void 0 ? void 0 : i.map((y) => y.loc).filter((y) => y != null)
     );
-    this.source = u != null ? u : N == null || (i = N[0]) === null || i === void 0 ? void 0 : i.source, this.positions = l != null ? l : N == null ? void 0 : N.map((f) => f.start), this.locations = l && u ? l.map((f) => w(u, f)) : N == null ? void 0 : N.map((f) => w(f.source, f.start));
-    const R = ne(
-      p == null ? void 0 : p.extensions
-    ) ? p == null ? void 0 : p.extensions : void 0;
-    this.extensions = (r = m != null ? m : R) !== null && r !== void 0 ? r : /* @__PURE__ */ Object.create(null), Object.defineProperties(this, {
+    this.source = c != null ? c : p == null || (r = p[0]) === null || r === void 0 ? void 0 : r.source, this.positions = u != null ? u : p == null ? void 0 : p.map((y) => y.start), this.locations = u && c ? u.map((y) => W(c, y)) : p == null ? void 0 : p.map((y) => W(y.source, y.start));
+    const T = Ye(
+      f == null ? void 0 : f.extensions
+    ) ? f == null ? void 0 : f.extensions : void 0;
+    this.extensions = (s = d != null ? d : T) !== null && s !== void 0 ? s : /* @__PURE__ */ Object.create(null), Object.defineProperties(this, {
       message: {
         writable: !0,
         enumerable: !0
@@ -111,11 +315,11 @@ class B extends Error {
       originalError: {
         enumerable: !1
       }
-    }), p != null && p.stack ? Object.defineProperty(this, "stack", {
-      value: p.stack,
+    }), f != null && f.stack ? Object.defineProperty(this, "stack", {
+      value: f.stack,
       writable: !0,
       configurable: !0
-    }) : Error.captureStackTrace ? Error.captureStackTrace(this, B) : Object.defineProperty(this, "stack", {
+    }) : Error.captureStackTrace ? Error.captureStackTrace(this, ie) : Object.defineProperty(this, "stack", {
       value: Error().stack,
       writable: !0,
       configurable: !0
@@ -125,38 +329,38 @@ class B extends Error {
     return "GraphQLError";
   }
   toString() {
-    let t = this.message;
+    let n = this.message;
     if (this.nodes)
-      for (const n of this.nodes)
-        n.loc && (t += `
+      for (const t of this.nodes)
+        t.loc && (n += `
 
-` + re(n.loc));
+` + Je(t.loc));
     else if (this.source && this.locations)
-      for (const n of this.locations)
-        t += `
+      for (const t of this.locations)
+        n += `
 
-` + G(this.source, n);
-    return t;
+` + me(this.source, t);
+    return n;
   }
   toJSON() {
-    const t = {
+    const n = {
       message: this.message
     };
-    return this.locations != null && (t.locations = this.locations), this.path != null && (t.path = this.path), this.extensions != null && Object.keys(this.extensions).length > 0 && (t.extensions = this.extensions), t;
+    return this.locations != null && (n.locations = this.locations), this.path != null && (n.path = this.path), this.extensions != null && Object.keys(this.extensions).length > 0 && (n.extensions = this.extensions), n;
   }
 }
-function j(e) {
+function ue(e) {
   return e === void 0 || e.length === 0 ? void 0 : e;
 }
-function d(e, t, n) {
-  return new B(`Syntax Error: ${n}`, {
+function m(e, n, t) {
+  return new ie(`Syntax Error: ${t}`, {
     source: e,
-    positions: [t]
+    positions: [n]
   });
 }
-class ae {
-  constructor(t, n, s) {
-    this.start = t.start, this.end = n.end, this.startToken = t, this.endToken = n, this.source = s;
+class ze {
+  constructor(n, t, i) {
+    this.start = n.start, this.end = t.end, this.startToken = n, this.endToken = t, this.source = i;
   }
   get [Symbol.toStringTag]() {
     return "Location";
@@ -168,9 +372,9 @@ class ae {
     };
   }
 }
-class Y {
-  constructor(t, n, s, i, r, a) {
-    this.kind = t, this.start = n, this.end = s, this.line = i, this.column = r, this.value = a, this.prev = null, this.next = null;
+class be {
+  constructor(n, t, i, r, s, o) {
+    this.kind = n, this.start = t, this.end = i, this.line = r, this.column = s, this.value = o, this.prev = null, this.next = null;
   }
   get [Symbol.toStringTag]() {
     return "Token";
@@ -188,56 +392,56 @@ let x;
 (function(e) {
   e.QUERY = "query", e.MUTATION = "mutation", e.SUBSCRIPTION = "subscription";
 })(x || (x = {}));
-let P;
+let Z;
 (function(e) {
   e.QUERY = "QUERY", e.MUTATION = "MUTATION", e.SUBSCRIPTION = "SUBSCRIPTION", e.FIELD = "FIELD", e.FRAGMENT_DEFINITION = "FRAGMENT_DEFINITION", e.FRAGMENT_SPREAD = "FRAGMENT_SPREAD", e.INLINE_FRAGMENT = "INLINE_FRAGMENT", e.VARIABLE_DEFINITION = "VARIABLE_DEFINITION", e.SCHEMA = "SCHEMA", e.SCALAR = "SCALAR", e.OBJECT = "OBJECT", e.FIELD_DEFINITION = "FIELD_DEFINITION", e.ARGUMENT_DEFINITION = "ARGUMENT_DEFINITION", e.INTERFACE = "INTERFACE", e.UNION = "UNION", e.ENUM = "ENUM", e.ENUM_VALUE = "ENUM_VALUE", e.INPUT_OBJECT = "INPUT_OBJECT", e.INPUT_FIELD_DEFINITION = "INPUT_FIELD_DEFINITION";
-})(P || (P = {}));
-let c;
+})(Z || (Z = {}));
+let h;
 (function(e) {
   e.NAME = "Name", e.DOCUMENT = "Document", e.OPERATION_DEFINITION = "OperationDefinition", e.VARIABLE_DEFINITION = "VariableDefinition", e.SELECTION_SET = "SelectionSet", e.FIELD = "Field", e.ARGUMENT = "Argument", e.FRAGMENT_SPREAD = "FragmentSpread", e.INLINE_FRAGMENT = "InlineFragment", e.FRAGMENT_DEFINITION = "FragmentDefinition", e.VARIABLE = "Variable", e.INT = "IntValue", e.FLOAT = "FloatValue", e.STRING = "StringValue", e.BOOLEAN = "BooleanValue", e.NULL = "NullValue", e.ENUM = "EnumValue", e.LIST = "ListValue", e.OBJECT = "ObjectValue", e.OBJECT_FIELD = "ObjectField", e.DIRECTIVE = "Directive", e.NAMED_TYPE = "NamedType", e.LIST_TYPE = "ListType", e.NON_NULL_TYPE = "NonNullType", e.SCHEMA_DEFINITION = "SchemaDefinition", e.OPERATION_TYPE_DEFINITION = "OperationTypeDefinition", e.SCALAR_TYPE_DEFINITION = "ScalarTypeDefinition", e.OBJECT_TYPE_DEFINITION = "ObjectTypeDefinition", e.FIELD_DEFINITION = "FieldDefinition", e.INPUT_VALUE_DEFINITION = "InputValueDefinition", e.INTERFACE_TYPE_DEFINITION = "InterfaceTypeDefinition", e.UNION_TYPE_DEFINITION = "UnionTypeDefinition", e.ENUM_TYPE_DEFINITION = "EnumTypeDefinition", e.ENUM_VALUE_DEFINITION = "EnumValueDefinition", e.INPUT_OBJECT_TYPE_DEFINITION = "InputObjectTypeDefinition", e.DIRECTIVE_DEFINITION = "DirectiveDefinition", e.SCHEMA_EXTENSION = "SchemaExtension", e.SCALAR_TYPE_EXTENSION = "ScalarTypeExtension", e.OBJECT_TYPE_EXTENSION = "ObjectTypeExtension", e.INTERFACE_TYPE_EXTENSION = "InterfaceTypeExtension", e.UNION_TYPE_EXTENSION = "UnionTypeExtension", e.ENUM_TYPE_EXTENSION = "EnumTypeExtension", e.INPUT_OBJECT_TYPE_EXTENSION = "InputObjectTypeExtension";
-})(c || (c = {}));
-function ce(e) {
+})(h || (h = {}));
+function Xe(e) {
   return e === 9 || e === 32;
 }
-function g(e) {
+function R(e) {
   return e >= 48 && e <= 57;
 }
-function J(e) {
+function Te(e) {
   return e >= 97 && e <= 122 || e >= 65 && e <= 90;
 }
-function q(e) {
-  return J(e) || e === 95;
+function Ie(e) {
+  return Te(e) || e === 95;
 }
-function ue(e) {
-  return J(e) || g(e) || e === 95;
+function Qe(e) {
+  return Te(e) || R(e) || e === 95;
 }
-function le(e) {
-  var t;
-  let n = Number.MAX_SAFE_INTEGER, s = null, i = -1;
-  for (let a = 0; a < e.length; ++a) {
-    var r;
-    const u = e[a], l = he(u);
-    l !== u.length && (s = (r = s) !== null && r !== void 0 ? r : a, i = a, a !== 0 && l < n && (n = l));
+function He(e) {
+  var n;
+  let t = Number.MAX_SAFE_INTEGER, i = null, r = -1;
+  for (let o = 0; o < e.length; ++o) {
+    var s;
+    const c = e[o], u = We(c);
+    u !== c.length && (i = (s = i) !== null && s !== void 0 ? s : o, r = o, o !== 0 && u < t && (t = u));
   }
-  return e.map((a, u) => u === 0 ? a : a.slice(n)).slice(
-    (t = s) !== null && t !== void 0 ? t : 0,
-    i + 1
+  return e.map((o, c) => c === 0 ? o : o.slice(t)).slice(
+    (n = i) !== null && n !== void 0 ? n : 0,
+    r + 1
   );
 }
-function he(e) {
-  let t = 0;
-  for (; t < e.length && ce(e.charCodeAt(t)); )
-    ++t;
-  return t;
+function We(e) {
+  let n = 0;
+  for (; n < e.length && Xe(e.charCodeAt(n)); )
+    ++n;
+  return n;
 }
-let o;
+let a;
 (function(e) {
   e.SOF = "<SOF>", e.EOF = "<EOF>", e.BANG = "!", e.DOLLAR = "$", e.AMP = "&", e.PAREN_L = "(", e.PAREN_R = ")", e.SPREAD = "...", e.COLON = ":", e.EQUALS = "=", e.AT = "@", e.BRACKET_L = "[", e.BRACKET_R = "]", e.BRACE_L = "{", e.PIPE = "|", e.BRACE_R = "}", e.NAME = "Name", e.INT = "Int", e.FLOAT = "Float", e.STRING = "String", e.BLOCK_STRING = "BlockString", e.COMMENT = "Comment";
-})(o || (o = {}));
-class pe {
-  constructor(t) {
-    const n = new Y(o.SOF, 0, 0, 0, 0);
-    this.source = t, this.lastToken = n, this.token = n, this.line = 1, this.lineStart = 0;
+})(a || (a = {}));
+class Ze {
+  constructor(n) {
+    const t = new be(a.SOF, 0, 0, 0, 0);
+    this.source = n, this.lastToken = t, this.token = t, this.line = 1, this.lineStart = 0;
   }
   get [Symbol.toStringTag]() {
     return "Lexer";
@@ -246,269 +450,269 @@ class pe {
     return this.lastToken = this.token, this.token = this.lookahead();
   }
   lookahead() {
-    let t = this.token;
-    if (t.kind !== o.EOF)
+    let n = this.token;
+    if (n.kind !== a.EOF)
       do
-        if (t.next)
-          t = t.next;
+        if (n.next)
+          n = n.next;
         else {
-          const n = fe(this, t.end);
-          t.next = n, n.prev = t, t = n;
+          const t = et(this, n.end);
+          n.next = t, t.prev = n, n = t;
         }
-      while (t.kind === o.COMMENT);
-    return t;
+      while (n.kind === a.COMMENT);
+    return n;
   }
 }
-function de(e) {
-  return e === o.BANG || e === o.DOLLAR || e === o.AMP || e === o.PAREN_L || e === o.PAREN_R || e === o.SPREAD || e === o.COLON || e === o.EQUALS || e === o.AT || e === o.BRACKET_L || e === o.BRACKET_R || e === o.BRACE_L || e === o.PIPE || e === o.BRACE_R;
+function Ke(e) {
+  return e === a.BANG || e === a.DOLLAR || e === a.AMP || e === a.PAREN_L || e === a.PAREN_R || e === a.SPREAD || e === a.COLON || e === a.EQUALS || e === a.AT || e === a.BRACKET_L || e === a.BRACKET_R || e === a.BRACE_L || e === a.PIPE || e === a.BRACE_R;
 }
-function O(e) {
+function k(e) {
   return e >= 0 && e <= 55295 || e >= 57344 && e <= 1114111;
 }
-function v(e, t) {
-  return z(e.charCodeAt(t)) && X(e.charCodeAt(t + 1));
+function G(e, n) {
+  return _e(e.charCodeAt(n)) && Ne(e.charCodeAt(n + 1));
 }
-function z(e) {
+function _e(e) {
   return e >= 55296 && e <= 56319;
 }
-function X(e) {
+function Ne(e) {
   return e >= 56320 && e <= 57343;
 }
-function T(e, t) {
-  const n = e.source.body.codePointAt(t);
-  if (n === void 0)
-    return o.EOF;
-  if (n >= 32 && n <= 126) {
-    const s = String.fromCodePoint(n);
-    return s === '"' ? `'"'` : `"${s}"`;
+function N(e, n) {
+  const t = e.source.body.codePointAt(n);
+  if (t === void 0)
+    return a.EOF;
+  if (t >= 32 && t <= 126) {
+    const i = String.fromCodePoint(t);
+    return i === '"' ? `'"'` : `"${i}"`;
   }
-  return "U+" + n.toString(16).toUpperCase().padStart(4, "0");
+  return "U+" + t.toString(16).toUpperCase().padStart(4, "0");
 }
-function h(e, t, n, s, i) {
-  const r = e.line, a = 1 + n - e.lineStart;
-  return new Y(t, n, s, r, a, i);
+function E(e, n, t, i, r) {
+  const s = e.line, o = 1 + t - e.lineStart;
+  return new be(n, t, i, s, o, r);
 }
-function fe(e, t) {
-  const n = e.source.body, s = n.length;
-  let i = t;
-  for (; i < s; ) {
-    const r = n.charCodeAt(i);
-    switch (r) {
+function et(e, n) {
+  const t = e.source.body, i = t.length;
+  let r = n;
+  for (; r < i; ) {
+    const s = t.charCodeAt(r);
+    switch (s) {
       case 65279:
       case 9:
       case 32:
       case 44:
-        ++i;
+        ++r;
         continue;
       case 10:
-        ++i, ++e.line, e.lineStart = i;
+        ++r, ++e.line, e.lineStart = r;
         continue;
       case 13:
-        n.charCodeAt(i + 1) === 10 ? i += 2 : ++i, ++e.line, e.lineStart = i;
+        t.charCodeAt(r + 1) === 10 ? r += 2 : ++r, ++e.line, e.lineStart = r;
         continue;
       case 35:
-        return Ee(e, i);
+        return tt(e, r);
       case 33:
-        return h(e, o.BANG, i, i + 1);
+        return E(e, a.BANG, r, r + 1);
       case 36:
-        return h(e, o.DOLLAR, i, i + 1);
+        return E(e, a.DOLLAR, r, r + 1);
       case 38:
-        return h(e, o.AMP, i, i + 1);
+        return E(e, a.AMP, r, r + 1);
       case 40:
-        return h(e, o.PAREN_L, i, i + 1);
+        return E(e, a.PAREN_L, r, r + 1);
       case 41:
-        return h(e, o.PAREN_R, i, i + 1);
+        return E(e, a.PAREN_R, r, r + 1);
       case 46:
-        if (n.charCodeAt(i + 1) === 46 && n.charCodeAt(i + 2) === 46)
-          return h(e, o.SPREAD, i, i + 3);
+        if (t.charCodeAt(r + 1) === 46 && t.charCodeAt(r + 2) === 46)
+          return E(e, a.SPREAD, r, r + 3);
         break;
       case 58:
-        return h(e, o.COLON, i, i + 1);
+        return E(e, a.COLON, r, r + 1);
       case 61:
-        return h(e, o.EQUALS, i, i + 1);
+        return E(e, a.EQUALS, r, r + 1);
       case 64:
-        return h(e, o.AT, i, i + 1);
+        return E(e, a.AT, r, r + 1);
       case 91:
-        return h(e, o.BRACKET_L, i, i + 1);
+        return E(e, a.BRACKET_L, r, r + 1);
       case 93:
-        return h(e, o.BRACKET_R, i, i + 1);
+        return E(e, a.BRACKET_R, r, r + 1);
       case 123:
-        return h(e, o.BRACE_L, i, i + 1);
+        return E(e, a.BRACE_L, r, r + 1);
       case 124:
-        return h(e, o.PIPE, i, i + 1);
+        return E(e, a.PIPE, r, r + 1);
       case 125:
-        return h(e, o.BRACE_R, i, i + 1);
+        return E(e, a.BRACE_R, r, r + 1);
       case 34:
-        return n.charCodeAt(i + 1) === 34 && n.charCodeAt(i + 2) === 34 ? _e(e, i) : me(e, i);
+        return t.charCodeAt(r + 1) === 34 && t.charCodeAt(r + 2) === 34 ? at(e, r) : rt(e, r);
     }
-    if (g(r) || r === 45)
-      return Ne(e, i, r);
-    if (q(r))
-      return Oe(e, i);
-    throw d(
+    if (R(s) || s === 45)
+      return nt(e, r, s);
+    if (Ie(s))
+      return ct(e, r);
+    throw m(
       e.source,
-      i,
-      r === 39 ? `Unexpected single quote character ('), did you mean to use a double quote (")?` : O(r) || v(n, i) ? `Unexpected character: ${T(e, i)}.` : `Invalid character: ${T(e, i)}.`
+      r,
+      s === 39 ? `Unexpected single quote character ('), did you mean to use a double quote (")?` : k(s) || G(t, r) ? `Unexpected character: ${N(e, r)}.` : `Invalid character: ${N(e, r)}.`
     );
   }
-  return h(e, o.EOF, s, s);
+  return E(e, a.EOF, i, i);
 }
-function Ee(e, t) {
-  const n = e.source.body, s = n.length;
-  let i = t + 1;
-  for (; i < s; ) {
-    const r = n.charCodeAt(i);
-    if (r === 10 || r === 13)
+function tt(e, n) {
+  const t = e.source.body, i = t.length;
+  let r = n + 1;
+  for (; r < i; ) {
+    const s = t.charCodeAt(r);
+    if (s === 10 || s === 13)
       break;
-    if (O(r))
-      ++i;
-    else if (v(n, i))
-      i += 2;
+    if (k(s))
+      ++r;
+    else if (G(t, r))
+      r += 2;
     else
       break;
   }
-  return h(
+  return E(
     e,
-    o.COMMENT,
-    t,
-    i,
-    n.slice(t + 1, i)
+    a.COMMENT,
+    n,
+    r,
+    t.slice(n + 1, r)
   );
 }
-function Ne(e, t, n) {
-  const s = e.source.body;
-  let i = t, r = n, a = !1;
-  if (r === 45 && (r = s.charCodeAt(++i)), r === 48) {
-    if (r = s.charCodeAt(++i), g(r))
-      throw d(
+function nt(e, n, t) {
+  const i = e.source.body;
+  let r = n, s = t, o = !1;
+  if (s === 45 && (s = i.charCodeAt(++r)), s === 48) {
+    if (s = i.charCodeAt(++r), R(s))
+      throw m(
         e.source,
-        i,
-        `Invalid number, unexpected digit after 0: ${T(
+        r,
+        `Invalid number, unexpected digit after 0: ${N(
           e,
-          i
+          r
         )}.`
       );
   } else
-    i = F(e, i, r), r = s.charCodeAt(i);
-  if (r === 46 && (a = !0, r = s.charCodeAt(++i), i = F(e, i, r), r = s.charCodeAt(i)), (r === 69 || r === 101) && (a = !0, r = s.charCodeAt(++i), (r === 43 || r === 45) && (r = s.charCodeAt(++i)), i = F(e, i, r), r = s.charCodeAt(i)), r === 46 || q(r))
-    throw d(
+    r = z(e, r, s), s = i.charCodeAt(r);
+  if (s === 46 && (o = !0, s = i.charCodeAt(++r), r = z(e, r, s), s = i.charCodeAt(r)), (s === 69 || s === 101) && (o = !0, s = i.charCodeAt(++r), (s === 43 || s === 45) && (s = i.charCodeAt(++r)), r = z(e, r, s), s = i.charCodeAt(r)), s === 46 || Ie(s))
+    throw m(
       e.source,
-      i,
-      `Invalid number, expected digit but got: ${T(
+      r,
+      `Invalid number, expected digit but got: ${N(
         e,
-        i
+        r
       )}.`
     );
-  return h(
+  return E(
     e,
-    a ? o.FLOAT : o.INT,
-    t,
-    i,
-    s.slice(t, i)
+    o ? a.FLOAT : a.INT,
+    n,
+    r,
+    i.slice(n, r)
   );
 }
-function F(e, t, n) {
-  if (!g(n))
-    throw d(
+function z(e, n, t) {
+  if (!R(t))
+    throw m(
       e.source,
-      t,
-      `Invalid number, expected digit but got: ${T(
+      n,
+      `Invalid number, expected digit but got: ${N(
         e,
-        t
+        n
       )}.`
     );
-  const s = e.source.body;
-  let i = t + 1;
-  for (; g(s.charCodeAt(i)); )
-    ++i;
-  return i;
+  const i = e.source.body;
+  let r = n + 1;
+  for (; R(i.charCodeAt(r)); )
+    ++r;
+  return r;
 }
-function me(e, t) {
-  const n = e.source.body, s = n.length;
-  let i = t + 1, r = i, a = "";
-  for (; i < s; ) {
-    const u = n.charCodeAt(i);
-    if (u === 34)
-      return a += n.slice(r, i), h(e, o.STRING, t, i + 1, a);
-    if (u === 92) {
-      a += n.slice(r, i);
-      const l = n.charCodeAt(i + 1) === 117 ? n.charCodeAt(i + 2) === 123 ? Te(e, i) : Ie(e, i) : xe(e, i);
-      a += l.value, i += l.size, r = i;
+function rt(e, n) {
+  const t = e.source.body, i = t.length;
+  let r = n + 1, s = r, o = "";
+  for (; r < i; ) {
+    const c = t.charCodeAt(r);
+    if (c === 34)
+      return o += t.slice(s, r), E(e, a.STRING, n, r + 1, o);
+    if (c === 92) {
+      o += t.slice(s, r);
+      const u = t.charCodeAt(r + 1) === 117 ? t.charCodeAt(r + 2) === 123 ? it(e, r) : st(e, r) : ot(e, r);
+      o += u.value, r += u.size, s = r;
       continue;
     }
-    if (u === 10 || u === 13)
+    if (c === 10 || c === 13)
       break;
-    if (O(u))
-      ++i;
-    else if (v(n, i))
-      i += 2;
+    if (k(c))
+      ++r;
+    else if (G(t, r))
+      r += 2;
     else
-      throw d(
+      throw m(
         e.source,
-        i,
-        `Invalid character within String: ${T(
+        r,
+        `Invalid character within String: ${N(
           e,
-          i
+          r
         )}.`
       );
   }
-  throw d(e.source, i, "Unterminated string.");
+  throw m(e.source, r, "Unterminated string.");
 }
-function Te(e, t) {
-  const n = e.source.body;
-  let s = 0, i = 3;
-  for (; i < 12; ) {
-    const r = n.charCodeAt(t + i++);
-    if (r === 125) {
-      if (i < 5 || !O(s))
+function it(e, n) {
+  const t = e.source.body;
+  let i = 0, r = 3;
+  for (; r < 12; ) {
+    const s = t.charCodeAt(n + r++);
+    if (s === 125) {
+      if (r < 5 || !k(i))
         break;
       return {
-        value: String.fromCodePoint(s),
-        size: i
+        value: String.fromCodePoint(i),
+        size: r
       };
     }
-    if (s = s << 4 | y(r), s < 0)
+    if (i = i << 4 | D(s), i < 0)
       break;
   }
-  throw d(
+  throw m(
     e.source,
-    t,
-    `Invalid Unicode escape sequence: "${n.slice(
-      t,
-      t + i
+    n,
+    `Invalid Unicode escape sequence: "${t.slice(
+      n,
+      n + r
     )}".`
   );
 }
-function Ie(e, t) {
-  const n = e.source.body, s = $(n, t + 2);
-  if (O(s))
+function st(e, n) {
+  const t = e.source.body, i = le(t, n + 2);
+  if (k(i))
     return {
-      value: String.fromCodePoint(s),
+      value: String.fromCodePoint(i),
       size: 6
     };
-  if (z(s) && n.charCodeAt(t + 6) === 92 && n.charCodeAt(t + 7) === 117) {
-    const i = $(n, t + 8);
-    if (X(i))
+  if (_e(i) && t.charCodeAt(n + 6) === 92 && t.charCodeAt(n + 7) === 117) {
+    const r = le(t, n + 8);
+    if (Ne(r))
       return {
-        value: String.fromCodePoint(s, i),
+        value: String.fromCodePoint(i, r),
         size: 12
       };
   }
-  throw d(
+  throw m(
     e.source,
-    t,
-    `Invalid Unicode escape sequence: "${n.slice(t, t + 6)}".`
+    n,
+    `Invalid Unicode escape sequence: "${t.slice(n, n + 6)}".`
   );
 }
-function $(e, t) {
-  return y(e.charCodeAt(t)) << 12 | y(e.charCodeAt(t + 1)) << 8 | y(e.charCodeAt(t + 2)) << 4 | y(e.charCodeAt(t + 3));
+function le(e, n) {
+  return D(e.charCodeAt(n)) << 12 | D(e.charCodeAt(n + 1)) << 8 | D(e.charCodeAt(n + 2)) << 4 | D(e.charCodeAt(n + 3));
 }
-function y(e) {
+function D(e) {
   return e >= 48 && e <= 57 ? e - 48 : e >= 65 && e <= 70 ? e - 55 : e >= 97 && e <= 102 ? e - 87 : -1;
 }
-function xe(e, t) {
-  const n = e.source.body;
-  switch (n.charCodeAt(t + 1)) {
+function ot(e, n) {
+  const t = e.source.body;
+  switch (t.charCodeAt(n + 1)) {
     case 34:
       return {
         value: '"',
@@ -551,149 +755,149 @@ function xe(e, t) {
         size: 2
       };
   }
-  throw d(
+  throw m(
     e.source,
-    t,
-    `Invalid character escape sequence: "${n.slice(
-      t,
-      t + 2
+    n,
+    `Invalid character escape sequence: "${t.slice(
+      n,
+      n + 2
     )}".`
   );
 }
-function _e(e, t) {
-  const n = e.source.body, s = n.length;
-  let i = e.lineStart, r = t + 3, a = r, u = "";
-  const l = [];
-  for (; r < s; ) {
-    const E = n.charCodeAt(r);
-    if (E === 34 && n.charCodeAt(r + 1) === 34 && n.charCodeAt(r + 2) === 34) {
-      u += n.slice(a, r), l.push(u);
-      const p = h(
+function at(e, n) {
+  const t = e.source.body, i = t.length;
+  let r = e.lineStart, s = n + 3, o = s, c = "";
+  const u = [];
+  for (; s < i; ) {
+    const l = t.charCodeAt(s);
+    if (l === 34 && t.charCodeAt(s + 1) === 34 && t.charCodeAt(s + 2) === 34) {
+      c += t.slice(o, s), u.push(c);
+      const f = E(
         e,
-        o.BLOCK_STRING,
-        t,
-        r + 3,
-        le(l).join(`
+        a.BLOCK_STRING,
+        n,
+        s + 3,
+        He(u).join(`
 `)
       );
-      return e.line += l.length - 1, e.lineStart = i, p;
+      return e.line += u.length - 1, e.lineStart = r, f;
     }
-    if (E === 92 && n.charCodeAt(r + 1) === 34 && n.charCodeAt(r + 2) === 34 && n.charCodeAt(r + 3) === 34) {
-      u += n.slice(a, r), a = r + 1, r += 4;
+    if (l === 92 && t.charCodeAt(s + 1) === 34 && t.charCodeAt(s + 2) === 34 && t.charCodeAt(s + 3) === 34) {
+      c += t.slice(o, s), o = s + 1, s += 4;
       continue;
     }
-    if (E === 10 || E === 13) {
-      u += n.slice(a, r), l.push(u), E === 13 && n.charCodeAt(r + 1) === 10 ? r += 2 : ++r, u = "", a = r, i = r;
+    if (l === 10 || l === 13) {
+      c += t.slice(o, s), u.push(c), l === 13 && t.charCodeAt(s + 1) === 10 ? s += 2 : ++s, c = "", o = s, r = s;
       continue;
     }
-    if (O(E))
-      ++r;
-    else if (v(n, r))
-      r += 2;
+    if (k(l))
+      ++s;
+    else if (G(t, s))
+      s += 2;
     else
-      throw d(
+      throw m(
         e.source,
-        r,
-        `Invalid character within String: ${T(
+        s,
+        `Invalid character within String: ${N(
           e,
-          r
+          s
         )}.`
       );
   }
-  throw d(e.source, r, "Unterminated string.");
+  throw m(e.source, s, "Unterminated string.");
 }
-function Oe(e, t) {
-  const n = e.source.body, s = n.length;
-  let i = t + 1;
-  for (; i < s; ) {
-    const r = n.charCodeAt(i);
-    if (ue(r))
-      ++i;
+function ct(e, n) {
+  const t = e.source.body, i = t.length;
+  let r = n + 1;
+  for (; r < i; ) {
+    const s = t.charCodeAt(r);
+    if (Qe(s))
+      ++r;
     else
       break;
   }
-  return h(
+  return E(
     e,
-    o.NAME,
-    t,
-    i,
-    n.slice(t, i)
+    a.NAME,
+    n,
+    r,
+    t.slice(n, r)
   );
 }
-const Ae = 10, Q = 2;
-function H(e) {
-  return b(e, []);
+const ut = 10, xe = 2;
+function ge(e) {
+  return J(e, []);
 }
-function b(e, t) {
+function J(e, n) {
   switch (typeof e) {
     case "string":
       return JSON.stringify(e);
     case "function":
       return e.name ? `[function ${e.name}]` : "[function]";
     case "object":
-      return ye(e, t);
+      return lt(e, n);
     default:
       return String(e);
   }
 }
-function ye(e, t) {
+function lt(e, n) {
   if (e === null)
     return "null";
-  if (t.includes(e))
+  if (n.includes(e))
     return "[Circular]";
-  const n = [...t, e];
-  if (ge(e)) {
-    const s = e.toJSON();
-    if (s !== e)
-      return typeof s == "string" ? s : b(s, n);
+  const t = [...n, e];
+  if (ht(e)) {
+    const i = e.toJSON();
+    if (i !== e)
+      return typeof i == "string" ? i : J(i, t);
   } else if (Array.isArray(e))
-    return De(e, n);
-  return Ce(e, n);
+    return pt(e, t);
+  return ft(e, t);
 }
-function ge(e) {
+function ht(e) {
   return typeof e.toJSON == "function";
 }
-function Ce(e, t) {
-  const n = Object.entries(e);
-  if (n.length === 0)
+function ft(e, n) {
+  const t = Object.entries(e);
+  if (t.length === 0)
     return "{}";
-  if (t.length > Q)
-    return "[" + ke(e) + "]";
-  const s = n.map(
-    ([i, r]) => i + ": " + b(r, t)
+  if (n.length > xe)
+    return "[" + dt(e) + "]";
+  const i = t.map(
+    ([r, s]) => r + ": " + J(s, n)
   );
-  return "{ " + s.join(", ") + " }";
+  return "{ " + i.join(", ") + " }";
 }
-function De(e, t) {
+function pt(e, n) {
   if (e.length === 0)
     return "[]";
-  if (t.length > Q)
+  if (n.length > xe)
     return "[Array]";
-  const n = Math.min(Ae, e.length), s = e.length - n, i = [];
-  for (let r = 0; r < n; ++r)
-    i.push(b(e[r], t));
-  return s === 1 ? i.push("... 1 more item") : s > 1 && i.push(`... ${s} more items`), "[" + i.join(", ") + "]";
+  const t = Math.min(ut, e.length), i = e.length - t, r = [];
+  for (let s = 0; s < t; ++s)
+    r.push(J(e[s], n));
+  return i === 1 ? r.push("... 1 more item") : i > 1 && r.push(`... ${i} more items`), "[" + r.join(", ") + "]";
 }
-function ke(e) {
-  const t = Object.prototype.toString.call(e).replace(/^\[object /, "").replace(/]$/, "");
-  if (t === "Object" && typeof e.constructor == "function") {
-    const n = e.constructor.name;
-    if (typeof n == "string" && n !== "")
-      return n;
+function dt(e) {
+  const n = Object.prototype.toString.call(e).replace(/^\[object /, "").replace(/]$/, "");
+  if (n === "Object" && typeof e.constructor == "function") {
+    const t = e.constructor.name;
+    if (typeof t == "string" && t !== "")
+      return t;
   }
-  return t;
+  return n;
 }
-const Se = process.env.NODE_ENV === "production" ? function(t, n) {
-  return t instanceof n;
-} : function(t, n) {
-  if (t instanceof n)
+const yt = process.env.NODE_ENV === "production" ? function(n, t) {
+  return n instanceof t;
+} : function(n, t) {
+  if (n instanceof t)
     return !0;
-  if (typeof t == "object" && t !== null) {
-    var s;
-    const i = n.prototype[Symbol.toStringTag], r = Symbol.toStringTag in t ? t[Symbol.toStringTag] : (s = t.constructor) === null || s === void 0 ? void 0 : s.name;
-    if (i === r) {
-      const a = H(t);
-      throw new Error(`Cannot use ${i} "${a}" from another module or realm.
+  if (typeof n == "object" && n !== null) {
+    var i;
+    const r = t.prototype[Symbol.toStringTag], s = Symbol.toStringTag in n ? n[Symbol.toStringTag] : (i = n.constructor) === null || i === void 0 ? void 0 : i.name;
+    if (r === s) {
+      const o = ge(n);
+      throw new Error(`Cannot use ${r} "${o}" from another module or realm.
 
 Ensure that there is only one instance of "graphql" in the node_modules
 directory. If different versions of "graphql" are the dependencies of other
@@ -709,15 +913,15 @@ spurious results.`);
   }
   return !1;
 };
-class W {
-  constructor(t, n = "GraphQL request", s = {
+class Ae {
+  constructor(n, t = "GraphQL request", i = {
     line: 1,
     column: 1
   }) {
-    typeof t == "string" || L(!1, `Body must be a string. Received: ${H(t)}.`), this.body = t, this.name = n, this.locationOffset = s, this.locationOffset.line > 0 || L(
+    typeof n == "string" || q(!1, `Body must be a string. Received: ${ge(n)}.`), this.body = n, this.name = t, this.locationOffset = i, this.locationOffset.line > 0 || q(
       !1,
       "line in locationOffset is 1-indexed and must be positive."
-    ), this.locationOffset.column > 0 || L(
+    ), this.locationOffset.column > 0 || q(
       !1,
       "column in locationOffset is 1-indexed and must be positive."
     );
@@ -726,40 +930,40 @@ class W {
     return "Source";
   }
 }
-function ve(e) {
-  return Se(e, W);
+function vt(e) {
+  return yt(e, Ae);
 }
-function be(e, t) {
-  return new Re(e, t).parseDocument();
+function Et(e, n) {
+  return new mt(e, n).parseDocument();
 }
-class Re {
-  constructor(t, n) {
-    const s = ve(t) ? t : new W(t);
-    this._lexer = new pe(s), this._options = n;
+class mt {
+  constructor(n, t) {
+    const i = vt(n) ? n : new Ae(n);
+    this._lexer = new Ze(i), this._options = t;
   }
   parseName() {
-    const t = this.expectToken(o.NAME);
-    return this.node(t, {
-      kind: c.NAME,
-      value: t.value
+    const n = this.expectToken(a.NAME);
+    return this.node(n, {
+      kind: h.NAME,
+      value: n.value
     });
   }
   parseDocument() {
     return this.node(this._lexer.token, {
-      kind: c.DOCUMENT,
+      kind: h.DOCUMENT,
       definitions: this.many(
-        o.SOF,
+        a.SOF,
         this.parseDefinition,
-        o.EOF
+        a.EOF
       )
     });
   }
   parseDefinition() {
-    if (this.peek(o.BRACE_L))
+    if (this.peek(a.BRACE_L))
       return this.parseOperationDefinition();
-    const t = this.peekDescription(), n = t ? this._lexer.lookahead() : this._lexer.token;
-    if (n.kind === o.NAME) {
-      switch (n.value) {
+    const n = this.peekDescription(), t = n ? this._lexer.lookahead() : this._lexer.token;
+    if (t.kind === a.NAME) {
+      switch (t.value) {
         case "schema":
           return this.parseSchemaDefinition();
         case "scalar":
@@ -777,13 +981,13 @@ class Re {
         case "directive":
           return this.parseDirectiveDefinition();
       }
-      if (t)
-        throw d(
+      if (n)
+        throw m(
           this._lexer.source,
           this._lexer.token.start,
           "Unexpected description, descriptions are supported only on type definitions."
         );
-      switch (n.value) {
+      switch (t.value) {
         case "query":
         case "mutation":
         case "subscription":
@@ -794,33 +998,33 @@ class Re {
           return this.parseTypeSystemExtension();
       }
     }
-    throw this.unexpected(n);
+    throw this.unexpected(t);
   }
   parseOperationDefinition() {
-    const t = this._lexer.token;
-    if (this.peek(o.BRACE_L))
-      return this.node(t, {
-        kind: c.OPERATION_DEFINITION,
+    const n = this._lexer.token;
+    if (this.peek(a.BRACE_L))
+      return this.node(n, {
+        kind: h.OPERATION_DEFINITION,
         operation: x.QUERY,
         name: void 0,
         variableDefinitions: [],
         directives: [],
         selectionSet: this.parseSelectionSet()
       });
-    const n = this.parseOperationType();
-    let s;
-    return this.peek(o.NAME) && (s = this.parseName()), this.node(t, {
-      kind: c.OPERATION_DEFINITION,
-      operation: n,
-      name: s,
+    const t = this.parseOperationType();
+    let i;
+    return this.peek(a.NAME) && (i = this.parseName()), this.node(n, {
+      kind: h.OPERATION_DEFINITION,
+      operation: t,
+      name: i,
       variableDefinitions: this.parseVariableDefinitions(),
       directives: this.parseDirectives(!1),
       selectionSet: this.parseSelectionSet()
     });
   }
   parseOperationType() {
-    const t = this.expectToken(o.NAME);
-    switch (t.value) {
+    const n = this.expectToken(a.NAME);
+    switch (n.value) {
       case "query":
         return x.QUERY;
       case "mutation":
@@ -828,98 +1032,98 @@ class Re {
       case "subscription":
         return x.SUBSCRIPTION;
     }
-    throw this.unexpected(t);
+    throw this.unexpected(n);
   }
   parseVariableDefinitions() {
     return this.optionalMany(
-      o.PAREN_L,
+      a.PAREN_L,
       this.parseVariableDefinition,
-      o.PAREN_R
+      a.PAREN_R
     );
   }
   parseVariableDefinition() {
     return this.node(this._lexer.token, {
-      kind: c.VARIABLE_DEFINITION,
+      kind: h.VARIABLE_DEFINITION,
       variable: this.parseVariable(),
-      type: (this.expectToken(o.COLON), this.parseTypeReference()),
-      defaultValue: this.expectOptionalToken(o.EQUALS) ? this.parseConstValueLiteral() : void 0,
+      type: (this.expectToken(a.COLON), this.parseTypeReference()),
+      defaultValue: this.expectOptionalToken(a.EQUALS) ? this.parseConstValueLiteral() : void 0,
       directives: this.parseConstDirectives()
     });
   }
   parseVariable() {
-    const t = this._lexer.token;
-    return this.expectToken(o.DOLLAR), this.node(t, {
-      kind: c.VARIABLE,
+    const n = this._lexer.token;
+    return this.expectToken(a.DOLLAR), this.node(n, {
+      kind: h.VARIABLE,
       name: this.parseName()
     });
   }
   parseSelectionSet() {
     return this.node(this._lexer.token, {
-      kind: c.SELECTION_SET,
+      kind: h.SELECTION_SET,
       selections: this.many(
-        o.BRACE_L,
+        a.BRACE_L,
         this.parseSelection,
-        o.BRACE_R
+        a.BRACE_R
       )
     });
   }
   parseSelection() {
-    return this.peek(o.SPREAD) ? this.parseFragment() : this.parseField();
+    return this.peek(a.SPREAD) ? this.parseFragment() : this.parseField();
   }
   parseField() {
-    const t = this._lexer.token, n = this.parseName();
-    let s, i;
-    return this.expectOptionalToken(o.COLON) ? (s = n, i = this.parseName()) : i = n, this.node(t, {
-      kind: c.FIELD,
-      alias: s,
-      name: i,
+    const n = this._lexer.token, t = this.parseName();
+    let i, r;
+    return this.expectOptionalToken(a.COLON) ? (i = t, r = this.parseName()) : r = t, this.node(n, {
+      kind: h.FIELD,
+      alias: i,
+      name: r,
       arguments: this.parseArguments(!1),
       directives: this.parseDirectives(!1),
-      selectionSet: this.peek(o.BRACE_L) ? this.parseSelectionSet() : void 0
+      selectionSet: this.peek(a.BRACE_L) ? this.parseSelectionSet() : void 0
     });
   }
-  parseArguments(t) {
-    const n = t ? this.parseConstArgument : this.parseArgument;
-    return this.optionalMany(o.PAREN_L, n, o.PAREN_R);
+  parseArguments(n) {
+    const t = n ? this.parseConstArgument : this.parseArgument;
+    return this.optionalMany(a.PAREN_L, t, a.PAREN_R);
   }
-  parseArgument(t = !1) {
-    const n = this._lexer.token, s = this.parseName();
-    return this.expectToken(o.COLON), this.node(n, {
-      kind: c.ARGUMENT,
-      name: s,
-      value: this.parseValueLiteral(t)
+  parseArgument(n = !1) {
+    const t = this._lexer.token, i = this.parseName();
+    return this.expectToken(a.COLON), this.node(t, {
+      kind: h.ARGUMENT,
+      name: i,
+      value: this.parseValueLiteral(n)
     });
   }
   parseConstArgument() {
     return this.parseArgument(!0);
   }
   parseFragment() {
-    const t = this._lexer.token;
-    this.expectToken(o.SPREAD);
-    const n = this.expectOptionalKeyword("on");
-    return !n && this.peek(o.NAME) ? this.node(t, {
-      kind: c.FRAGMENT_SPREAD,
+    const n = this._lexer.token;
+    this.expectToken(a.SPREAD);
+    const t = this.expectOptionalKeyword("on");
+    return !t && this.peek(a.NAME) ? this.node(n, {
+      kind: h.FRAGMENT_SPREAD,
       name: this.parseFragmentName(),
       directives: this.parseDirectives(!1)
-    }) : this.node(t, {
-      kind: c.INLINE_FRAGMENT,
-      typeCondition: n ? this.parseNamedType() : void 0,
+    }) : this.node(n, {
+      kind: h.INLINE_FRAGMENT,
+      typeCondition: t ? this.parseNamedType() : void 0,
       directives: this.parseDirectives(!1),
       selectionSet: this.parseSelectionSet()
     });
   }
   parseFragmentDefinition() {
-    var t;
-    const n = this._lexer.token;
-    return this.expectKeyword("fragment"), ((t = this._options) === null || t === void 0 ? void 0 : t.allowLegacyFragmentVariables) === !0 ? this.node(n, {
-      kind: c.FRAGMENT_DEFINITION,
+    var n;
+    const t = this._lexer.token;
+    return this.expectKeyword("fragment"), ((n = this._options) === null || n === void 0 ? void 0 : n.allowLegacyFragmentVariables) === !0 ? this.node(t, {
+      kind: h.FRAGMENT_DEFINITION,
       name: this.parseFragmentName(),
       variableDefinitions: this.parseVariableDefinitions(),
       typeCondition: (this.expectKeyword("on"), this.parseNamedType()),
       directives: this.parseDirectives(!1),
       selectionSet: this.parseSelectionSet()
-    }) : this.node(n, {
-      kind: c.FRAGMENT_DEFINITION,
+    }) : this.node(t, {
+      kind: h.FRAGMENT_DEFINITION,
       name: this.parseFragmentName(),
       typeCondition: (this.expectKeyword("on"), this.parseNamedType()),
       directives: this.parseDirectives(!1),
@@ -931,59 +1135,59 @@ class Re {
       throw this.unexpected();
     return this.parseName();
   }
-  parseValueLiteral(t) {
-    const n = this._lexer.token;
-    switch (n.kind) {
-      case o.BRACKET_L:
-        return this.parseList(t);
-      case o.BRACE_L:
-        return this.parseObject(t);
-      case o.INT:
-        return this._lexer.advance(), this.node(n, {
-          kind: c.INT,
-          value: n.value
+  parseValueLiteral(n) {
+    const t = this._lexer.token;
+    switch (t.kind) {
+      case a.BRACKET_L:
+        return this.parseList(n);
+      case a.BRACE_L:
+        return this.parseObject(n);
+      case a.INT:
+        return this._lexer.advance(), this.node(t, {
+          kind: h.INT,
+          value: t.value
         });
-      case o.FLOAT:
-        return this._lexer.advance(), this.node(n, {
-          kind: c.FLOAT,
-          value: n.value
+      case a.FLOAT:
+        return this._lexer.advance(), this.node(t, {
+          kind: h.FLOAT,
+          value: t.value
         });
-      case o.STRING:
-      case o.BLOCK_STRING:
+      case a.STRING:
+      case a.BLOCK_STRING:
         return this.parseStringLiteral();
-      case o.NAME:
-        switch (this._lexer.advance(), n.value) {
+      case a.NAME:
+        switch (this._lexer.advance(), t.value) {
           case "true":
-            return this.node(n, {
-              kind: c.BOOLEAN,
+            return this.node(t, {
+              kind: h.BOOLEAN,
               value: !0
             });
           case "false":
-            return this.node(n, {
-              kind: c.BOOLEAN,
+            return this.node(t, {
+              kind: h.BOOLEAN,
               value: !1
             });
           case "null":
-            return this.node(n, {
-              kind: c.NULL
+            return this.node(t, {
+              kind: h.NULL
             });
           default:
-            return this.node(n, {
-              kind: c.ENUM,
-              value: n.value
+            return this.node(t, {
+              kind: h.ENUM,
+              value: t.value
             });
         }
-      case o.DOLLAR:
-        if (t)
-          if (this.expectToken(o.DOLLAR), this._lexer.token.kind === o.NAME) {
-            const s = this._lexer.token.value;
-            throw d(
+      case a.DOLLAR:
+        if (n)
+          if (this.expectToken(a.DOLLAR), this._lexer.token.kind === a.NAME) {
+            const i = this._lexer.token.value;
+            throw m(
               this._lexer.source,
-              n.start,
-              `Unexpected variable "$${s}" in constant value.`
+              t.start,
+              `Unexpected variable "$${i}" in constant value.`
             );
           } else
-            throw this.unexpected(n);
+            throw this.unexpected(t);
         return this.parseVariable();
       default:
         throw this.unexpected();
@@ -993,266 +1197,266 @@ class Re {
     return this.parseValueLiteral(!0);
   }
   parseStringLiteral() {
-    const t = this._lexer.token;
-    return this._lexer.advance(), this.node(t, {
-      kind: c.STRING,
-      value: t.value,
-      block: t.kind === o.BLOCK_STRING
+    const n = this._lexer.token;
+    return this._lexer.advance(), this.node(n, {
+      kind: h.STRING,
+      value: n.value,
+      block: n.kind === a.BLOCK_STRING
     });
   }
-  parseList(t) {
-    const n = () => this.parseValueLiteral(t);
+  parseList(n) {
+    const t = () => this.parseValueLiteral(n);
     return this.node(this._lexer.token, {
-      kind: c.LIST,
-      values: this.any(o.BRACKET_L, n, o.BRACKET_R)
+      kind: h.LIST,
+      values: this.any(a.BRACKET_L, t, a.BRACKET_R)
     });
   }
-  parseObject(t) {
-    const n = () => this.parseObjectField(t);
+  parseObject(n) {
+    const t = () => this.parseObjectField(n);
     return this.node(this._lexer.token, {
-      kind: c.OBJECT,
-      fields: this.any(o.BRACE_L, n, o.BRACE_R)
+      kind: h.OBJECT,
+      fields: this.any(a.BRACE_L, t, a.BRACE_R)
     });
   }
-  parseObjectField(t) {
-    const n = this._lexer.token, s = this.parseName();
-    return this.expectToken(o.COLON), this.node(n, {
-      kind: c.OBJECT_FIELD,
-      name: s,
-      value: this.parseValueLiteral(t)
+  parseObjectField(n) {
+    const t = this._lexer.token, i = this.parseName();
+    return this.expectToken(a.COLON), this.node(t, {
+      kind: h.OBJECT_FIELD,
+      name: i,
+      value: this.parseValueLiteral(n)
     });
   }
-  parseDirectives(t) {
-    const n = [];
-    for (; this.peek(o.AT); )
-      n.push(this.parseDirective(t));
-    return n;
+  parseDirectives(n) {
+    const t = [];
+    for (; this.peek(a.AT); )
+      t.push(this.parseDirective(n));
+    return t;
   }
   parseConstDirectives() {
     return this.parseDirectives(!0);
   }
-  parseDirective(t) {
-    const n = this._lexer.token;
-    return this.expectToken(o.AT), this.node(n, {
-      kind: c.DIRECTIVE,
+  parseDirective(n) {
+    const t = this._lexer.token;
+    return this.expectToken(a.AT), this.node(t, {
+      kind: h.DIRECTIVE,
       name: this.parseName(),
-      arguments: this.parseArguments(t)
+      arguments: this.parseArguments(n)
     });
   }
   parseTypeReference() {
-    const t = this._lexer.token;
-    let n;
-    if (this.expectOptionalToken(o.BRACKET_L)) {
-      const s = this.parseTypeReference();
-      this.expectToken(o.BRACKET_R), n = this.node(t, {
-        kind: c.LIST_TYPE,
-        type: s
+    const n = this._lexer.token;
+    let t;
+    if (this.expectOptionalToken(a.BRACKET_L)) {
+      const i = this.parseTypeReference();
+      this.expectToken(a.BRACKET_R), t = this.node(n, {
+        kind: h.LIST_TYPE,
+        type: i
       });
     } else
-      n = this.parseNamedType();
-    return this.expectOptionalToken(o.BANG) ? this.node(t, {
-      kind: c.NON_NULL_TYPE,
-      type: n
-    }) : n;
+      t = this.parseNamedType();
+    return this.expectOptionalToken(a.BANG) ? this.node(n, {
+      kind: h.NON_NULL_TYPE,
+      type: t
+    }) : t;
   }
   parseNamedType() {
     return this.node(this._lexer.token, {
-      kind: c.NAMED_TYPE,
+      kind: h.NAMED_TYPE,
       name: this.parseName()
     });
   }
   peekDescription() {
-    return this.peek(o.STRING) || this.peek(o.BLOCK_STRING);
+    return this.peek(a.STRING) || this.peek(a.BLOCK_STRING);
   }
   parseDescription() {
     if (this.peekDescription())
       return this.parseStringLiteral();
   }
   parseSchemaDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("schema");
-    const s = this.parseConstDirectives(), i = this.many(
-      o.BRACE_L,
+    const i = this.parseConstDirectives(), r = this.many(
+      a.BRACE_L,
       this.parseOperationTypeDefinition,
-      o.BRACE_R
+      a.BRACE_R
     );
-    return this.node(t, {
-      kind: c.SCHEMA_DEFINITION,
-      description: n,
-      directives: s,
-      operationTypes: i
+    return this.node(n, {
+      kind: h.SCHEMA_DEFINITION,
+      description: t,
+      directives: i,
+      operationTypes: r
     });
   }
   parseOperationTypeDefinition() {
-    const t = this._lexer.token, n = this.parseOperationType();
-    this.expectToken(o.COLON);
-    const s = this.parseNamedType();
-    return this.node(t, {
-      kind: c.OPERATION_TYPE_DEFINITION,
-      operation: n,
-      type: s
+    const n = this._lexer.token, t = this.parseOperationType();
+    this.expectToken(a.COLON);
+    const i = this.parseNamedType();
+    return this.node(n, {
+      kind: h.OPERATION_TYPE_DEFINITION,
+      operation: t,
+      type: i
     });
   }
   parseScalarTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("scalar");
-    const s = this.parseName(), i = this.parseConstDirectives();
-    return this.node(t, {
-      kind: c.SCALAR_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      directives: i
+    const i = this.parseName(), r = this.parseConstDirectives();
+    return this.node(n, {
+      kind: h.SCALAR_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      directives: r
     });
   }
   parseObjectTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("type");
-    const s = this.parseName(), i = this.parseImplementsInterfaces(), r = this.parseConstDirectives(), a = this.parseFieldsDefinition();
-    return this.node(t, {
-      kind: c.OBJECT_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      interfaces: i,
-      directives: r,
-      fields: a
+    const i = this.parseName(), r = this.parseImplementsInterfaces(), s = this.parseConstDirectives(), o = this.parseFieldsDefinition();
+    return this.node(n, {
+      kind: h.OBJECT_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      interfaces: r,
+      directives: s,
+      fields: o
     });
   }
   parseImplementsInterfaces() {
-    return this.expectOptionalKeyword("implements") ? this.delimitedMany(o.AMP, this.parseNamedType) : [];
+    return this.expectOptionalKeyword("implements") ? this.delimitedMany(a.AMP, this.parseNamedType) : [];
   }
   parseFieldsDefinition() {
     return this.optionalMany(
-      o.BRACE_L,
+      a.BRACE_L,
       this.parseFieldDefinition,
-      o.BRACE_R
+      a.BRACE_R
     );
   }
   parseFieldDefinition() {
-    const t = this._lexer.token, n = this.parseDescription(), s = this.parseName(), i = this.parseArgumentDefs();
-    this.expectToken(o.COLON);
-    const r = this.parseTypeReference(), a = this.parseConstDirectives();
-    return this.node(t, {
-      kind: c.FIELD_DEFINITION,
-      description: n,
-      name: s,
-      arguments: i,
-      type: r,
-      directives: a
+    const n = this._lexer.token, t = this.parseDescription(), i = this.parseName(), r = this.parseArgumentDefs();
+    this.expectToken(a.COLON);
+    const s = this.parseTypeReference(), o = this.parseConstDirectives();
+    return this.node(n, {
+      kind: h.FIELD_DEFINITION,
+      description: t,
+      name: i,
+      arguments: r,
+      type: s,
+      directives: o
     });
   }
   parseArgumentDefs() {
     return this.optionalMany(
-      o.PAREN_L,
+      a.PAREN_L,
       this.parseInputValueDef,
-      o.PAREN_R
+      a.PAREN_R
     );
   }
   parseInputValueDef() {
-    const t = this._lexer.token, n = this.parseDescription(), s = this.parseName();
-    this.expectToken(o.COLON);
-    const i = this.parseTypeReference();
-    let r;
-    this.expectOptionalToken(o.EQUALS) && (r = this.parseConstValueLiteral());
-    const a = this.parseConstDirectives();
-    return this.node(t, {
-      kind: c.INPUT_VALUE_DEFINITION,
-      description: n,
-      name: s,
-      type: i,
-      defaultValue: r,
-      directives: a
+    const n = this._lexer.token, t = this.parseDescription(), i = this.parseName();
+    this.expectToken(a.COLON);
+    const r = this.parseTypeReference();
+    let s;
+    this.expectOptionalToken(a.EQUALS) && (s = this.parseConstValueLiteral());
+    const o = this.parseConstDirectives();
+    return this.node(n, {
+      kind: h.INPUT_VALUE_DEFINITION,
+      description: t,
+      name: i,
+      type: r,
+      defaultValue: s,
+      directives: o
     });
   }
   parseInterfaceTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("interface");
-    const s = this.parseName(), i = this.parseImplementsInterfaces(), r = this.parseConstDirectives(), a = this.parseFieldsDefinition();
-    return this.node(t, {
-      kind: c.INTERFACE_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      interfaces: i,
-      directives: r,
-      fields: a
+    const i = this.parseName(), r = this.parseImplementsInterfaces(), s = this.parseConstDirectives(), o = this.parseFieldsDefinition();
+    return this.node(n, {
+      kind: h.INTERFACE_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      interfaces: r,
+      directives: s,
+      fields: o
     });
   }
   parseUnionTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("union");
-    const s = this.parseName(), i = this.parseConstDirectives(), r = this.parseUnionMemberTypes();
-    return this.node(t, {
-      kind: c.UNION_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      directives: i,
-      types: r
+    const i = this.parseName(), r = this.parseConstDirectives(), s = this.parseUnionMemberTypes();
+    return this.node(n, {
+      kind: h.UNION_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      directives: r,
+      types: s
     });
   }
   parseUnionMemberTypes() {
-    return this.expectOptionalToken(o.EQUALS) ? this.delimitedMany(o.PIPE, this.parseNamedType) : [];
+    return this.expectOptionalToken(a.EQUALS) ? this.delimitedMany(a.PIPE, this.parseNamedType) : [];
   }
   parseEnumTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("enum");
-    const s = this.parseName(), i = this.parseConstDirectives(), r = this.parseEnumValuesDefinition();
-    return this.node(t, {
-      kind: c.ENUM_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      directives: i,
-      values: r
+    const i = this.parseName(), r = this.parseConstDirectives(), s = this.parseEnumValuesDefinition();
+    return this.node(n, {
+      kind: h.ENUM_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      directives: r,
+      values: s
     });
   }
   parseEnumValuesDefinition() {
     return this.optionalMany(
-      o.BRACE_L,
+      a.BRACE_L,
       this.parseEnumValueDefinition,
-      o.BRACE_R
+      a.BRACE_R
     );
   }
   parseEnumValueDefinition() {
-    const t = this._lexer.token, n = this.parseDescription(), s = this.parseEnumValueName(), i = this.parseConstDirectives();
-    return this.node(t, {
-      kind: c.ENUM_VALUE_DEFINITION,
-      description: n,
-      name: s,
-      directives: i
+    const n = this._lexer.token, t = this.parseDescription(), i = this.parseEnumValueName(), r = this.parseConstDirectives();
+    return this.node(n, {
+      kind: h.ENUM_VALUE_DEFINITION,
+      description: t,
+      name: i,
+      directives: r
     });
   }
   parseEnumValueName() {
     if (this._lexer.token.value === "true" || this._lexer.token.value === "false" || this._lexer.token.value === "null")
-      throw d(
+      throw m(
         this._lexer.source,
         this._lexer.token.start,
-        `${C(
+        `${F(
           this._lexer.token
         )} is reserved and cannot be used for an enum value.`
       );
     return this.parseName();
   }
   parseInputObjectTypeDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
+    const n = this._lexer.token, t = this.parseDescription();
     this.expectKeyword("input");
-    const s = this.parseName(), i = this.parseConstDirectives(), r = this.parseInputFieldsDefinition();
-    return this.node(t, {
-      kind: c.INPUT_OBJECT_TYPE_DEFINITION,
-      description: n,
-      name: s,
-      directives: i,
-      fields: r
+    const i = this.parseName(), r = this.parseConstDirectives(), s = this.parseInputFieldsDefinition();
+    return this.node(n, {
+      kind: h.INPUT_OBJECT_TYPE_DEFINITION,
+      description: t,
+      name: i,
+      directives: r,
+      fields: s
     });
   }
   parseInputFieldsDefinition() {
     return this.optionalMany(
-      o.BRACE_L,
+      a.BRACE_L,
       this.parseInputValueDef,
-      o.BRACE_R
+      a.BRACE_R
     );
   }
   parseTypeSystemExtension() {
-    const t = this._lexer.lookahead();
-    if (t.kind === o.NAME)
-      switch (t.value) {
+    const n = this._lexer.lookahead();
+    if (n.kind === a.NAME)
+      switch (n.value) {
         case "schema":
           return this.parseSchemaExtension();
         case "scalar":
@@ -1268,291 +1472,291 @@ class Re {
         case "input":
           return this.parseInputObjectTypeExtension();
       }
-    throw this.unexpected(t);
+    throw this.unexpected(n);
   }
   parseSchemaExtension() {
-    const t = this._lexer.token;
+    const n = this._lexer.token;
     this.expectKeyword("extend"), this.expectKeyword("schema");
-    const n = this.parseConstDirectives(), s = this.optionalMany(
-      o.BRACE_L,
+    const t = this.parseConstDirectives(), i = this.optionalMany(
+      a.BRACE_L,
       this.parseOperationTypeDefinition,
-      o.BRACE_R
+      a.BRACE_R
     );
-    if (n.length === 0 && s.length === 0)
+    if (t.length === 0 && i.length === 0)
       throw this.unexpected();
-    return this.node(t, {
-      kind: c.SCHEMA_EXTENSION,
-      directives: n,
-      operationTypes: s
+    return this.node(n, {
+      kind: h.SCHEMA_EXTENSION,
+      directives: t,
+      operationTypes: i
     });
   }
   parseScalarTypeExtension() {
-    const t = this._lexer.token;
+    const n = this._lexer.token;
     this.expectKeyword("extend"), this.expectKeyword("scalar");
-    const n = this.parseName(), s = this.parseConstDirectives();
-    if (s.length === 0)
+    const t = this.parseName(), i = this.parseConstDirectives();
+    if (i.length === 0)
       throw this.unexpected();
-    return this.node(t, {
-      kind: c.SCALAR_TYPE_EXTENSION,
-      name: n,
-      directives: s
+    return this.node(n, {
+      kind: h.SCALAR_TYPE_EXTENSION,
+      name: t,
+      directives: i
     });
   }
   parseObjectTypeExtension() {
-    const t = this._lexer.token;
+    const n = this._lexer.token;
     this.expectKeyword("extend"), this.expectKeyword("type");
-    const n = this.parseName(), s = this.parseImplementsInterfaces(), i = this.parseConstDirectives(), r = this.parseFieldsDefinition();
-    if (s.length === 0 && i.length === 0 && r.length === 0)
+    const t = this.parseName(), i = this.parseImplementsInterfaces(), r = this.parseConstDirectives(), s = this.parseFieldsDefinition();
+    if (i.length === 0 && r.length === 0 && s.length === 0)
       throw this.unexpected();
-    return this.node(t, {
-      kind: c.OBJECT_TYPE_EXTENSION,
-      name: n,
-      interfaces: s,
-      directives: i,
-      fields: r
+    return this.node(n, {
+      kind: h.OBJECT_TYPE_EXTENSION,
+      name: t,
+      interfaces: i,
+      directives: r,
+      fields: s
     });
   }
   parseInterfaceTypeExtension() {
-    const t = this._lexer.token;
+    const n = this._lexer.token;
     this.expectKeyword("extend"), this.expectKeyword("interface");
-    const n = this.parseName(), s = this.parseImplementsInterfaces(), i = this.parseConstDirectives(), r = this.parseFieldsDefinition();
-    if (s.length === 0 && i.length === 0 && r.length === 0)
+    const t = this.parseName(), i = this.parseImplementsInterfaces(), r = this.parseConstDirectives(), s = this.parseFieldsDefinition();
+    if (i.length === 0 && r.length === 0 && s.length === 0)
       throw this.unexpected();
-    return this.node(t, {
-      kind: c.INTERFACE_TYPE_EXTENSION,
-      name: n,
-      interfaces: s,
+    return this.node(n, {
+      kind: h.INTERFACE_TYPE_EXTENSION,
+      name: t,
+      interfaces: i,
+      directives: r,
+      fields: s
+    });
+  }
+  parseUnionTypeExtension() {
+    const n = this._lexer.token;
+    this.expectKeyword("extend"), this.expectKeyword("union");
+    const t = this.parseName(), i = this.parseConstDirectives(), r = this.parseUnionMemberTypes();
+    if (i.length === 0 && r.length === 0)
+      throw this.unexpected();
+    return this.node(n, {
+      kind: h.UNION_TYPE_EXTENSION,
+      name: t,
+      directives: i,
+      types: r
+    });
+  }
+  parseEnumTypeExtension() {
+    const n = this._lexer.token;
+    this.expectKeyword("extend"), this.expectKeyword("enum");
+    const t = this.parseName(), i = this.parseConstDirectives(), r = this.parseEnumValuesDefinition();
+    if (i.length === 0 && r.length === 0)
+      throw this.unexpected();
+    return this.node(n, {
+      kind: h.ENUM_TYPE_EXTENSION,
+      name: t,
+      directives: i,
+      values: r
+    });
+  }
+  parseInputObjectTypeExtension() {
+    const n = this._lexer.token;
+    this.expectKeyword("extend"), this.expectKeyword("input");
+    const t = this.parseName(), i = this.parseConstDirectives(), r = this.parseInputFieldsDefinition();
+    if (i.length === 0 && r.length === 0)
+      throw this.unexpected();
+    return this.node(n, {
+      kind: h.INPUT_OBJECT_TYPE_EXTENSION,
+      name: t,
       directives: i,
       fields: r
     });
   }
-  parseUnionTypeExtension() {
-    const t = this._lexer.token;
-    this.expectKeyword("extend"), this.expectKeyword("union");
-    const n = this.parseName(), s = this.parseConstDirectives(), i = this.parseUnionMemberTypes();
-    if (s.length === 0 && i.length === 0)
-      throw this.unexpected();
-    return this.node(t, {
-      kind: c.UNION_TYPE_EXTENSION,
-      name: n,
-      directives: s,
-      types: i
-    });
-  }
-  parseEnumTypeExtension() {
-    const t = this._lexer.token;
-    this.expectKeyword("extend"), this.expectKeyword("enum");
-    const n = this.parseName(), s = this.parseConstDirectives(), i = this.parseEnumValuesDefinition();
-    if (s.length === 0 && i.length === 0)
-      throw this.unexpected();
-    return this.node(t, {
-      kind: c.ENUM_TYPE_EXTENSION,
-      name: n,
-      directives: s,
-      values: i
-    });
-  }
-  parseInputObjectTypeExtension() {
-    const t = this._lexer.token;
-    this.expectKeyword("extend"), this.expectKeyword("input");
-    const n = this.parseName(), s = this.parseConstDirectives(), i = this.parseInputFieldsDefinition();
-    if (s.length === 0 && i.length === 0)
-      throw this.unexpected();
-    return this.node(t, {
-      kind: c.INPUT_OBJECT_TYPE_EXTENSION,
-      name: n,
-      directives: s,
-      fields: i
-    });
-  }
   parseDirectiveDefinition() {
-    const t = this._lexer.token, n = this.parseDescription();
-    this.expectKeyword("directive"), this.expectToken(o.AT);
-    const s = this.parseName(), i = this.parseArgumentDefs(), r = this.expectOptionalKeyword("repeatable");
+    const n = this._lexer.token, t = this.parseDescription();
+    this.expectKeyword("directive"), this.expectToken(a.AT);
+    const i = this.parseName(), r = this.parseArgumentDefs(), s = this.expectOptionalKeyword("repeatable");
     this.expectKeyword("on");
-    const a = this.parseDirectiveLocations();
-    return this.node(t, {
-      kind: c.DIRECTIVE_DEFINITION,
-      description: n,
-      name: s,
-      arguments: i,
-      repeatable: r,
-      locations: a
+    const o = this.parseDirectiveLocations();
+    return this.node(n, {
+      kind: h.DIRECTIVE_DEFINITION,
+      description: t,
+      name: i,
+      arguments: r,
+      repeatable: s,
+      locations: o
     });
   }
   parseDirectiveLocations() {
-    return this.delimitedMany(o.PIPE, this.parseDirectiveLocation);
+    return this.delimitedMany(a.PIPE, this.parseDirectiveLocation);
   }
   parseDirectiveLocation() {
-    const t = this._lexer.token, n = this.parseName();
-    if (Object.prototype.hasOwnProperty.call(P, n.value))
-      return n;
-    throw this.unexpected(t);
+    const n = this._lexer.token, t = this.parseName();
+    if (Object.prototype.hasOwnProperty.call(Z, t.value))
+      return t;
+    throw this.unexpected(n);
   }
-  node(t, n) {
-    var s;
-    return ((s = this._options) === null || s === void 0 ? void 0 : s.noLocation) !== !0 && (n.loc = new ae(
-      t,
+  node(n, t) {
+    var i;
+    return ((i = this._options) === null || i === void 0 ? void 0 : i.noLocation) !== !0 && (t.loc = new ze(
+      n,
       this._lexer.lastToken,
       this._lexer.source
-    )), n;
+    )), t;
   }
-  peek(t) {
-    return this._lexer.token.kind === t;
+  peek(n) {
+    return this._lexer.token.kind === n;
   }
-  expectToken(t) {
-    const n = this._lexer.token;
-    if (n.kind === t)
-      return this._lexer.advance(), n;
-    throw d(
+  expectToken(n) {
+    const t = this._lexer.token;
+    if (t.kind === n)
+      return this._lexer.advance(), t;
+    throw m(
       this._lexer.source,
-      n.start,
-      `Expected ${Z(t)}, found ${C(n)}.`
+      t.start,
+      `Expected ${Oe(n)}, found ${F(t)}.`
     );
   }
-  expectOptionalToken(t) {
-    return this._lexer.token.kind === t ? (this._lexer.advance(), !0) : !1;
+  expectOptionalToken(n) {
+    return this._lexer.token.kind === n ? (this._lexer.advance(), !0) : !1;
   }
-  expectKeyword(t) {
-    const n = this._lexer.token;
-    if (n.kind === o.NAME && n.value === t)
+  expectKeyword(n) {
+    const t = this._lexer.token;
+    if (t.kind === a.NAME && t.value === n)
       this._lexer.advance();
     else
-      throw d(
+      throw m(
         this._lexer.source,
-        n.start,
-        `Expected "${t}", found ${C(n)}.`
+        t.start,
+        `Expected "${n}", found ${F(t)}.`
       );
   }
-  expectOptionalKeyword(t) {
-    const n = this._lexer.token;
-    return n.kind === o.NAME && n.value === t ? (this._lexer.advance(), !0) : !1;
+  expectOptionalKeyword(n) {
+    const t = this._lexer.token;
+    return t.kind === a.NAME && t.value === n ? (this._lexer.advance(), !0) : !1;
   }
-  unexpected(t) {
-    const n = t != null ? t : this._lexer.token;
-    return d(
+  unexpected(n) {
+    const t = n != null ? n : this._lexer.token;
+    return m(
       this._lexer.source,
-      n.start,
-      `Unexpected ${C(n)}.`
+      t.start,
+      `Unexpected ${F(t)}.`
     );
   }
-  any(t, n, s) {
-    this.expectToken(t);
-    const i = [];
-    for (; !this.expectOptionalToken(s); )
-      i.push(n.call(this));
-    return i;
+  any(n, t, i) {
+    this.expectToken(n);
+    const r = [];
+    for (; !this.expectOptionalToken(i); )
+      r.push(t.call(this));
+    return r;
   }
-  optionalMany(t, n, s) {
-    if (this.expectOptionalToken(t)) {
-      const i = [];
+  optionalMany(n, t, i) {
+    if (this.expectOptionalToken(n)) {
+      const r = [];
       do
-        i.push(n.call(this));
-      while (!this.expectOptionalToken(s));
-      return i;
+        r.push(t.call(this));
+      while (!this.expectOptionalToken(i));
+      return r;
     }
     return [];
   }
-  many(t, n, s) {
-    this.expectToken(t);
+  many(n, t, i) {
+    this.expectToken(n);
+    const r = [];
+    do
+      r.push(t.call(this));
+    while (!this.expectOptionalToken(i));
+    return r;
+  }
+  delimitedMany(n, t) {
+    this.expectOptionalToken(n);
     const i = [];
     do
-      i.push(n.call(this));
-    while (!this.expectOptionalToken(s));
+      i.push(t.call(this));
+    while (this.expectOptionalToken(n));
     return i;
   }
-  delimitedMany(t, n) {
-    this.expectOptionalToken(t);
-    const s = [];
-    do
-      s.push(n.call(this));
-    while (this.expectOptionalToken(t));
-    return s;
-  }
 }
-function C(e) {
-  const t = e.value;
-  return Z(e.kind) + (t != null ? ` "${t}"` : "");
+function F(e) {
+  const n = e.value;
+  return Oe(e.kind) + (n != null ? ` "${n}"` : "");
 }
-function Z(e) {
-  return de(e) ? `"${e}"` : e;
+function Oe(e) {
+  return Ke(e) ? `"${e}"` : e;
 }
-var D = /* @__PURE__ */ new Map(), M = /* @__PURE__ */ new Map(), K = !0, S = !1;
-function ee(e) {
+var U = /* @__PURE__ */ new Map(), K = /* @__PURE__ */ new Map(), Se = !0, j = !1;
+function we(e) {
   return e.replace(/[\s,]+/g, " ").trim();
 }
-function Le(e) {
-  return ee(e.source.body.substring(e.start, e.end));
+function bt(e) {
+  return we(e.source.body.substring(e.start, e.end));
 }
-function Fe(e) {
-  var t = /* @__PURE__ */ new Set(), n = [];
-  return e.definitions.forEach(function(s) {
-    if (s.kind === "FragmentDefinition") {
-      var i = s.name.value, r = Le(s.loc), a = M.get(i);
-      a && !a.has(r) ? K && console.warn("Warning: fragment with name " + i + ` already exists.
+function Tt(e) {
+  var n = /* @__PURE__ */ new Set(), t = [];
+  return e.definitions.forEach(function(i) {
+    if (i.kind === "FragmentDefinition") {
+      var r = i.name.value, s = bt(i.loc), o = K.get(r);
+      o && !o.has(s) ? Se && console.warn("Warning: fragment with name " + r + ` already exists.
 graphql-tag enforces all fragment names across your application to be unique; read more about
-this in the docs: http://dev.apollodata.com/core/fragments.html#unique-names`) : a || M.set(i, a = /* @__PURE__ */ new Set()), a.add(r), t.has(r) || (t.add(r), n.push(s));
+this in the docs: http://dev.apollodata.com/core/fragments.html#unique-names`) : o || K.set(r, o = /* @__PURE__ */ new Set()), o.add(s), n.has(s) || (n.add(s), t.push(i));
     } else
-      n.push(s);
-  }), k(k({}, e), { definitions: n });
+      t.push(i);
+  }), V(V({}, e), { definitions: t });
 }
-function we(e) {
-  var t = new Set(e.definitions);
-  t.forEach(function(s) {
-    s.loc && delete s.loc, Object.keys(s).forEach(function(i) {
-      var r = s[i];
-      r && typeof r == "object" && t.add(r);
+function It(e) {
+  var n = new Set(e.definitions);
+  n.forEach(function(i) {
+    i.loc && delete i.loc, Object.keys(i).forEach(function(r) {
+      var s = i[r];
+      s && typeof s == "object" && n.add(s);
     });
   });
-  var n = e.loc;
-  return n && (delete n.startToken, delete n.endToken), e;
+  var t = e.loc;
+  return t && (delete t.startToken, delete t.endToken), e;
 }
-function Pe(e) {
-  var t = ee(e);
-  if (!D.has(t)) {
-    var n = be(e, {
-      experimentalFragmentVariables: S,
-      allowLegacyFragmentVariables: S
+function _t(e) {
+  var n = we(e);
+  if (!U.has(n)) {
+    var t = Et(e, {
+      experimentalFragmentVariables: j,
+      allowLegacyFragmentVariables: j
     });
-    if (!n || n.kind !== "Document")
+    if (!t || t.kind !== "Document")
       throw new Error("Not a valid GraphQL document.");
-    D.set(t, we(Fe(n)));
+    U.set(n, It(Tt(t)));
   }
-  return D.get(t);
+  return U.get(n);
 }
-function _(e) {
-  for (var t = [], n = 1; n < arguments.length; n++)
-    t[n - 1] = arguments[n];
+function w(e) {
+  for (var n = [], t = 1; t < arguments.length; t++)
+    n[t - 1] = arguments[t];
   typeof e == "string" && (e = [e]);
-  var s = e[0];
-  return t.forEach(function(i, r) {
-    i && i.kind === "Document" ? s += i.loc.source.body : s += i, s += e[r + 1];
-  }), Pe(s);
+  var i = e[0];
+  return n.forEach(function(r, s) {
+    r && r.kind === "Document" ? i += r.loc.source.body : i += r, i += e[s + 1];
+  }), _t(i);
 }
-function Me() {
-  D.clear(), M.clear();
+function Nt() {
+  U.clear(), K.clear();
 }
-function Ue() {
-  K = !1;
+function xt() {
+  Se = !1;
 }
-function Be() {
-  S = !0;
+function gt() {
+  j = !0;
 }
-function Ve() {
-  S = !1;
+function At() {
+  j = !1;
 }
-var A = {
-  gql: _,
-  resetCaches: Me,
-  disableFragmentWarnings: Ue,
-  enableExperimentalFragmentVariables: Be,
-  disableExperimentalFragmentVariables: Ve
+var C = {
+  gql: w,
+  resetCaches: Nt,
+  disableFragmentWarnings: xt,
+  enableExperimentalFragmentVariables: gt,
+  disableExperimentalFragmentVariables: At
 };
 (function(e) {
-  e.gql = A.gql, e.resetCaches = A.resetCaches, e.disableFragmentWarnings = A.disableFragmentWarnings, e.enableExperimentalFragmentVariables = A.enableExperimentalFragmentVariables, e.disableExperimentalFragmentVariables = A.disableExperimentalFragmentVariables;
-})(_ || (_ = {}));
-_.default = _;
-const je = _, U = [
+  e.gql = C.gql, e.resetCaches = C.resetCaches, e.disableFragmentWarnings = C.disableFragmentWarnings, e.enableExperimentalFragmentVariables = C.enableExperimentalFragmentVariables, e.disableExperimentalFragmentVariables = C.disableExperimentalFragmentVariables;
+})(w || (w = {}));
+w.default = w;
+const Ot = w, ee = [
   {
     id: "21340987",
     entityId: "1234567890",
@@ -1560,7 +1764,7 @@ const je = _, U = [
     value: "Jesus Christ"
   }
 ];
-je`
+Ot`
   query something {
     attributes {
       id
@@ -1571,32 +1775,887 @@ je`
     }
   }
 `;
-const $e = (e) => new Promise((t) => setTimeout(t, e));
-async function te(e) {
-  return await $e(2e3), e ? U.filter((t) => t.id === e) : U;
+const St = (e) => new Promise((n) => setTimeout(n, e));
+async function ke(e) {
+  return await St(2e3), e ? ee.filter((n) => n.id === e) : ee;
 }
-async function Ge() {
-  return await te();
+async function wt() {
+  return await ke();
 }
-async function Ye(e) {
-  return await te(e);
+async function kt(e) {
+  return await ke(e);
 }
-const Je = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const Ct = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  getFacts: Ge,
-  getFact: Ye
+  getFacts: wt,
+  getFact: kt
 }, Symbol.toStringTag, { value: "Module" }));
-async function qe(e) {
-  return U.push(e), e;
+async function Dt(e) {
+  return ee.push(e), e;
 }
-const ze = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const Rt = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  writeFact: qe
-}, Symbol.toStringTag, { value: "Module" })), Xe = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  writeFact: Dt
+}, Symbol.toStringTag, { value: "Module" })), Nn = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  read: Je,
-  write: ze
+  read: Ct,
+  write: Rt
+}, Symbol.toStringTag, { value: "Module" }));
+function b(e) {
+  return typeof e == "function";
+}
+function Ce(e) {
+  var n = function(i) {
+    Error.call(i), i.stack = new Error().stack;
+  }, t = e(n);
+  return t.prototype = Object.create(Error.prototype), t.prototype.constructor = t, t;
+}
+var X = Ce(function(e) {
+  return function(t) {
+    e(this), this.message = t ? t.length + ` errors occurred during unsubscription:
+` + t.map(function(i, r) {
+      return r + 1 + ") " + i.toString();
+    }).join(`
+  `) : "", this.name = "UnsubscriptionError", this.errors = t;
+  };
+});
+function Y(e, n) {
+  if (e) {
+    var t = e.indexOf(n);
+    0 <= t && e.splice(t, 1);
+  }
+}
+var L = function() {
+  function e(n) {
+    this.initialTeardown = n, this.closed = !1, this._parentage = null, this._finalizers = null;
+  }
+  return e.prototype.unsubscribe = function() {
+    var n, t, i, r, s;
+    if (!this.closed) {
+      this.closed = !0;
+      var o = this._parentage;
+      if (o)
+        if (this._parentage = null, Array.isArray(o))
+          try {
+            for (var c = A(o), u = c.next(); !u.done; u = c.next()) {
+              var l = u.value;
+              l.remove(this);
+            }
+          } catch (v) {
+            n = { error: v };
+          } finally {
+            try {
+              u && !u.done && (t = c.return) && t.call(c);
+            } finally {
+              if (n)
+                throw n.error;
+            }
+          }
+        else
+          o.remove(this);
+      var f = this.initialTeardown;
+      if (b(f))
+        try {
+          f();
+        } catch (v) {
+          s = v instanceof X ? v.errors : [v];
+        }
+      var d = this._finalizers;
+      if (d) {
+        this._finalizers = null;
+        try {
+          for (var p = A(d), T = p.next(); !T.done; T = p.next()) {
+            var y = T.value;
+            try {
+              he(y);
+            } catch (v) {
+              s = s != null ? s : [], v instanceof X ? s = S(S([], O(s)), O(v.errors)) : s.push(v);
+            }
+          }
+        } catch (v) {
+          i = { error: v };
+        } finally {
+          try {
+            T && !T.done && (r = p.return) && r.call(p);
+          } finally {
+            if (i)
+              throw i.error;
+          }
+        }
+      }
+      if (s)
+        throw new X(s);
+    }
+  }, e.prototype.add = function(n) {
+    var t;
+    if (n && n !== this)
+      if (this.closed)
+        he(n);
+      else {
+        if (n instanceof e) {
+          if (n.closed || n._hasParent(this))
+            return;
+          n._addParent(this);
+        }
+        (this._finalizers = (t = this._finalizers) !== null && t !== void 0 ? t : []).push(n);
+      }
+  }, e.prototype._hasParent = function(n) {
+    var t = this._parentage;
+    return t === n || Array.isArray(t) && t.includes(n);
+  }, e.prototype._addParent = function(n) {
+    var t = this._parentage;
+    this._parentage = Array.isArray(t) ? (t.push(n), t) : t ? [t, n] : n;
+  }, e.prototype._removeParent = function(n) {
+    var t = this._parentage;
+    t === n ? this._parentage = null : Array.isArray(t) && Y(t, n);
+  }, e.prototype.remove = function(n) {
+    var t = this._finalizers;
+    t && Y(t, n), n instanceof e && n._removeParent(this);
+  }, e.EMPTY = function() {
+    var n = new e();
+    return n.closed = !0, n;
+  }(), e;
+}(), De = L.EMPTY;
+function Re(e) {
+  return e instanceof L || e && "closed" in e && b(e.remove) && b(e.add) && b(e.unsubscribe);
+}
+function he(e) {
+  b(e) ? e() : e.unsubscribe();
+}
+var se = {
+  onUnhandledError: null,
+  onStoppedNotification: null,
+  Promise: void 0,
+  useDeprecatedSynchronousErrorHandling: !1,
+  useDeprecatedNextContext: !1
+}, te = {
+  setTimeout: function(e, n) {
+    for (var t = [], i = 2; i < arguments.length; i++)
+      t[i - 2] = arguments[i];
+    var r = te.delegate;
+    return r != null && r.setTimeout ? r.setTimeout.apply(r, S([e, n], O(t))) : setTimeout.apply(void 0, S([e, n], O(t)));
+  },
+  clearTimeout: function(e) {
+    var n = te.delegate;
+    return ((n == null ? void 0 : n.clearTimeout) || clearTimeout)(e);
+  },
+  delegate: void 0
+};
+function Le(e) {
+  te.setTimeout(function() {
+    throw e;
+  });
+}
+function fe() {
+}
+var P = null;
+function B(e) {
+  if (se.useDeprecatedSynchronousErrorHandling) {
+    var n = !P;
+    if (n && (P = { errorThrown: !1, error: null }), e(), n) {
+      var t = P, i = t.errorThrown, r = t.error;
+      if (P = null, i)
+        throw r;
+    }
+  } else
+    e();
+}
+var oe = function(e) {
+  _(n, e);
+  function n(t) {
+    var i = e.call(this) || this;
+    return i.isStopped = !1, t ? (i.destination = t, Re(t) && t.add(i)) : i.destination = Mt, i;
+  }
+  return n.create = function(t, i, r) {
+    return new ne(t, i, r);
+  }, n.prototype.next = function(t) {
+    this.isStopped || this._next(t);
+  }, n.prototype.error = function(t) {
+    this.isStopped || (this.isStopped = !0, this._error(t));
+  }, n.prototype.complete = function() {
+    this.isStopped || (this.isStopped = !0, this._complete());
+  }, n.prototype.unsubscribe = function() {
+    this.closed || (this.isStopped = !0, e.prototype.unsubscribe.call(this), this.destination = null);
+  }, n.prototype._next = function(t) {
+    this.destination.next(t);
+  }, n.prototype._error = function(t) {
+    try {
+      this.destination.error(t);
+    } finally {
+      this.unsubscribe();
+    }
+  }, n.prototype._complete = function() {
+    try {
+      this.destination.complete();
+    } finally {
+      this.unsubscribe();
+    }
+  }, n;
+}(L), Lt = Function.prototype.bind;
+function Q(e, n) {
+  return Lt.call(e, n);
+}
+var Ft = function() {
+  function e(n) {
+    this.partialObserver = n;
+  }
+  return e.prototype.next = function(n) {
+    var t = this.partialObserver;
+    if (t.next)
+      try {
+        t.next(n);
+      } catch (i) {
+        M(i);
+      }
+  }, e.prototype.error = function(n) {
+    var t = this.partialObserver;
+    if (t.error)
+      try {
+        t.error(n);
+      } catch (i) {
+        M(i);
+      }
+    else
+      M(n);
+  }, e.prototype.complete = function() {
+    var n = this.partialObserver;
+    if (n.complete)
+      try {
+        n.complete();
+      } catch (t) {
+        M(t);
+      }
+  }, e;
+}(), ne = function(e) {
+  _(n, e);
+  function n(t, i, r) {
+    var s = e.call(this) || this, o;
+    if (b(t) || !t)
+      o = {
+        next: t != null ? t : void 0,
+        error: i != null ? i : void 0,
+        complete: r != null ? r : void 0
+      };
+    else {
+      var c;
+      s && se.useDeprecatedNextContext ? (c = Object.create(t), c.unsubscribe = function() {
+        return s.unsubscribe();
+      }, o = {
+        next: t.next && Q(t.next, c),
+        error: t.error && Q(t.error, c),
+        complete: t.complete && Q(t.complete, c)
+      }) : o = t;
+    }
+    return s.destination = new Ft(o), s;
+  }
+  return n;
+}(oe);
+function M(e) {
+  Le(e);
+}
+function Pt(e) {
+  throw e;
+}
+var Mt = {
+  closed: !0,
+  next: fe,
+  error: Pt,
+  complete: fe
+}, ae = function() {
+  return typeof Symbol == "function" && Symbol.observable || "@@observable";
+}();
+function Ut(e) {
+  return e;
+}
+function Bt(e) {
+  return e.length === 0 ? Ut : e.length === 1 ? e[0] : function(t) {
+    return e.reduce(function(i, r) {
+      return r(i);
+    }, t);
+  };
+}
+var I = function() {
+  function e(n) {
+    n && (this._subscribe = n);
+  }
+  return e.prototype.lift = function(n) {
+    var t = new e();
+    return t.source = this, t.operator = n, t;
+  }, e.prototype.subscribe = function(n, t, i) {
+    var r = this, s = jt(n) ? n : new ne(n, t, i);
+    return B(function() {
+      var o = r, c = o.operator, u = o.source;
+      s.add(c ? c.call(s, u) : u ? r._subscribe(s) : r._trySubscribe(s));
+    }), s;
+  }, e.prototype._trySubscribe = function(n) {
+    try {
+      return this._subscribe(n);
+    } catch (t) {
+      n.error(t);
+    }
+  }, e.prototype.forEach = function(n, t) {
+    var i = this;
+    return t = pe(t), new t(function(r, s) {
+      var o = new ne({
+        next: function(c) {
+          try {
+            n(c);
+          } catch (u) {
+            s(u), o.unsubscribe();
+          }
+        },
+        error: s,
+        complete: r
+      });
+      i.subscribe(o);
+    });
+  }, e.prototype._subscribe = function(n) {
+    var t;
+    return (t = this.source) === null || t === void 0 ? void 0 : t.subscribe(n);
+  }, e.prototype[ae] = function() {
+    return this;
+  }, e.prototype.pipe = function() {
+    for (var n = [], t = 0; t < arguments.length; t++)
+      n[t] = arguments[t];
+    return Bt(n)(this);
+  }, e.prototype.toPromise = function(n) {
+    var t = this;
+    return n = pe(n), new n(function(i, r) {
+      var s;
+      t.subscribe(function(o) {
+        return s = o;
+      }, function(o) {
+        return r(o);
+      }, function() {
+        return i(s);
+      });
+    });
+  }, e.create = function(n) {
+    return new e(n);
+  }, e;
+}();
+function pe(e) {
+  var n;
+  return (n = e != null ? e : se.Promise) !== null && n !== void 0 ? n : Promise;
+}
+function Vt(e) {
+  return e && b(e.next) && b(e.error) && b(e.complete);
+}
+function jt(e) {
+  return e && e instanceof oe || Vt(e) && Re(e);
+}
+function Yt(e) {
+  return b(e == null ? void 0 : e.lift);
+}
+function $t(e) {
+  return function(n) {
+    if (Yt(n))
+      return n.lift(function(t) {
+        try {
+          return e(t, this);
+        } catch (i) {
+          this.error(i);
+        }
+      });
+    throw new TypeError("Unable to lift unknown Observable type");
+  };
+}
+function de(e, n, t, i, r) {
+  return new Gt(e, n, t, i, r);
+}
+var Gt = function(e) {
+  _(n, e);
+  function n(t, i, r, s, o, c) {
+    var u = e.call(this, t) || this;
+    return u.onFinalize = o, u.shouldUnsubscribe = c, u._next = i ? function(l) {
+      try {
+        i(l);
+      } catch (f) {
+        t.error(f);
+      }
+    } : e.prototype._next, u._error = s ? function(l) {
+      try {
+        s(l);
+      } catch (f) {
+        t.error(f);
+      } finally {
+        this.unsubscribe();
+      }
+    } : e.prototype._error, u._complete = r ? function() {
+      try {
+        r();
+      } catch (l) {
+        t.error(l);
+      } finally {
+        this.unsubscribe();
+      }
+    } : e.prototype._complete, u;
+  }
+  return n.prototype.unsubscribe = function() {
+    var t;
+    if (!this.shouldUnsubscribe || this.shouldUnsubscribe()) {
+      var i = this.closed;
+      e.prototype.unsubscribe.call(this), !i && ((t = this.onFinalize) === null || t === void 0 || t.call(this));
+    }
+  }, n;
+}(oe), Jt = Ce(function(e) {
+  return function() {
+    e(this), this.name = "ObjectUnsubscribedError", this.message = "object unsubscribed";
+  };
+}), Fe = function(e) {
+  _(n, e);
+  function n() {
+    var t = e.call(this) || this;
+    return t.closed = !1, t.currentObservers = null, t.observers = [], t.isStopped = !1, t.hasError = !1, t.thrownError = null, t;
+  }
+  return n.prototype.lift = function(t) {
+    var i = new ye(this, this);
+    return i.operator = t, i;
+  }, n.prototype._throwIfClosed = function() {
+    if (this.closed)
+      throw new Jt();
+  }, n.prototype.next = function(t) {
+    var i = this;
+    B(function() {
+      var r, s;
+      if (i._throwIfClosed(), !i.isStopped) {
+        i.currentObservers || (i.currentObservers = Array.from(i.observers));
+        try {
+          for (var o = A(i.currentObservers), c = o.next(); !c.done; c = o.next()) {
+            var u = c.value;
+            u.next(t);
+          }
+        } catch (l) {
+          r = { error: l };
+        } finally {
+          try {
+            c && !c.done && (s = o.return) && s.call(o);
+          } finally {
+            if (r)
+              throw r.error;
+          }
+        }
+      }
+    });
+  }, n.prototype.error = function(t) {
+    var i = this;
+    B(function() {
+      if (i._throwIfClosed(), !i.isStopped) {
+        i.hasError = i.isStopped = !0, i.thrownError = t;
+        for (var r = i.observers; r.length; )
+          r.shift().error(t);
+      }
+    });
+  }, n.prototype.complete = function() {
+    var t = this;
+    B(function() {
+      if (t._throwIfClosed(), !t.isStopped) {
+        t.isStopped = !0;
+        for (var i = t.observers; i.length; )
+          i.shift().complete();
+      }
+    });
+  }, n.prototype.unsubscribe = function() {
+    this.isStopped = this.closed = !0, this.observers = this.currentObservers = null;
+  }, Object.defineProperty(n.prototype, "observed", {
+    get: function() {
+      var t;
+      return ((t = this.observers) === null || t === void 0 ? void 0 : t.length) > 0;
+    },
+    enumerable: !1,
+    configurable: !0
+  }), n.prototype._trySubscribe = function(t) {
+    return this._throwIfClosed(), e.prototype._trySubscribe.call(this, t);
+  }, n.prototype._subscribe = function(t) {
+    return this._throwIfClosed(), this._checkFinalizedStatuses(t), this._innerSubscribe(t);
+  }, n.prototype._innerSubscribe = function(t) {
+    var i = this, r = this, s = r.hasError, o = r.isStopped, c = r.observers;
+    return s || o ? De : (this.currentObservers = null, c.push(t), new L(function() {
+      i.currentObservers = null, Y(c, t);
+    }));
+  }, n.prototype._checkFinalizedStatuses = function(t) {
+    var i = this, r = i.hasError, s = i.thrownError, o = i.isStopped;
+    r ? t.error(s) : o && t.complete();
+  }, n.prototype.asObservable = function() {
+    var t = new I();
+    return t.source = this, t;
+  }, n.create = function(t, i) {
+    return new ye(t, i);
+  }, n;
+}(I), ye = function(e) {
+  _(n, e);
+  function n(t, i) {
+    var r = e.call(this) || this;
+    return r.destination = t, r.source = i, r;
+  }
+  return n.prototype.next = function(t) {
+    var i, r;
+    (r = (i = this.destination) === null || i === void 0 ? void 0 : i.next) === null || r === void 0 || r.call(i, t);
+  }, n.prototype.error = function(t) {
+    var i, r;
+    (r = (i = this.destination) === null || i === void 0 ? void 0 : i.error) === null || r === void 0 || r.call(i, t);
+  }, n.prototype.complete = function() {
+    var t, i;
+    (i = (t = this.destination) === null || t === void 0 ? void 0 : t.complete) === null || i === void 0 || i.call(t);
+  }, n.prototype._subscribe = function(t) {
+    var i, r;
+    return (r = (i = this.source) === null || i === void 0 ? void 0 : i.subscribe(t)) !== null && r !== void 0 ? r : De;
+  }, n;
+}(Fe), qt = function(e) {
+  _(n, e);
+  function n(t) {
+    var i = e.call(this) || this;
+    return i._value = t, i;
+  }
+  return Object.defineProperty(n.prototype, "value", {
+    get: function() {
+      return this.getValue();
+    },
+    enumerable: !1,
+    configurable: !0
+  }), n.prototype._subscribe = function(t) {
+    var i = e.prototype._subscribe.call(this, t);
+    return !i.closed && t.next(this._value), i;
+  }, n.prototype.getValue = function() {
+    var t = this, i = t.hasError, r = t.thrownError, s = t._value;
+    if (i)
+      throw r;
+    return this._throwIfClosed(), s;
+  }, n.prototype.next = function(t) {
+    e.prototype.next.call(this, this._value = t);
+  }, n;
+}(Fe), Pe = {
+  now: function() {
+    return (Pe.delegate || Date).now();
+  },
+  delegate: void 0
+}, zt = function(e) {
+  _(n, e);
+  function n(t, i) {
+    return e.call(this) || this;
+  }
+  return n.prototype.schedule = function(t, i) {
+    return this;
+  }, n;
+}(L), $ = {
+  setInterval: function(e, n) {
+    for (var t = [], i = 2; i < arguments.length; i++)
+      t[i - 2] = arguments[i];
+    var r = $.delegate;
+    return r != null && r.setInterval ? r.setInterval.apply(r, S([e, n], O(t))) : setInterval.apply(void 0, S([e, n], O(t)));
+  },
+  clearInterval: function(e) {
+    var n = $.delegate;
+    return ((n == null ? void 0 : n.clearInterval) || clearInterval)(e);
+  },
+  delegate: void 0
+}, Xt = function(e) {
+  _(n, e);
+  function n(t, i) {
+    var r = e.call(this, t, i) || this;
+    return r.scheduler = t, r.work = i, r.pending = !1, r;
+  }
+  return n.prototype.schedule = function(t, i) {
+    if (i === void 0 && (i = 0), this.closed)
+      return this;
+    this.state = t;
+    var r = this.id, s = this.scheduler;
+    return r != null && (this.id = this.recycleAsyncId(s, r, i)), this.pending = !0, this.delay = i, this.id = this.id || this.requestAsyncId(s, this.id, i), this;
+  }, n.prototype.requestAsyncId = function(t, i, r) {
+    return r === void 0 && (r = 0), $.setInterval(t.flush.bind(t, this), r);
+  }, n.prototype.recycleAsyncId = function(t, i, r) {
+    if (r === void 0 && (r = 0), r != null && this.delay === r && this.pending === !1)
+      return i;
+    $.clearInterval(i);
+  }, n.prototype.execute = function(t, i) {
+    if (this.closed)
+      return new Error("executing a cancelled action");
+    this.pending = !1;
+    var r = this._execute(t, i);
+    if (r)
+      return r;
+    this.pending === !1 && this.id != null && (this.id = this.recycleAsyncId(this.scheduler, this.id, null));
+  }, n.prototype._execute = function(t, i) {
+    var r = !1, s;
+    try {
+      this.work(t);
+    } catch (o) {
+      r = !0, s = o || new Error("Scheduled action threw falsy error");
+    }
+    if (r)
+      return this.unsubscribe(), s;
+  }, n.prototype.unsubscribe = function() {
+    if (!this.closed) {
+      var t = this, i = t.id, r = t.scheduler, s = r.actions;
+      this.work = this.state = this.scheduler = null, this.pending = !1, Y(s, this), i != null && (this.id = this.recycleAsyncId(r, i, null)), this.delay = null, e.prototype.unsubscribe.call(this);
+    }
+  }, n;
+}(zt), ve = function() {
+  function e(n, t) {
+    t === void 0 && (t = e.now), this.schedulerActionCtor = n, this.now = t;
+  }
+  return e.prototype.schedule = function(n, t, i) {
+    return t === void 0 && (t = 0), new this.schedulerActionCtor(this, n).schedule(i, t);
+  }, e.now = Pe.now, e;
+}(), Qt = function(e) {
+  _(n, e);
+  function n(t, i) {
+    i === void 0 && (i = ve.now);
+    var r = e.call(this, t, i) || this;
+    return r.actions = [], r._active = !1, r._scheduled = void 0, r;
+  }
+  return n.prototype.flush = function(t) {
+    var i = this.actions;
+    if (this._active) {
+      i.push(t);
+      return;
+    }
+    var r;
+    this._active = !0;
+    do
+      if (r = t.execute(t.state, t.delay))
+        break;
+    while (t = i.shift());
+    if (this._active = !1, r) {
+      for (; t = i.shift(); )
+        t.unsubscribe();
+      throw r;
+    }
+  }, n;
+}(ve), Me = new Qt(Xt), Ht = Me;
+function Wt(e) {
+  return e && b(e.schedule);
+}
+var Zt = function(e) {
+  return e && typeof e.length == "number" && typeof e != "function";
+};
+function Kt(e) {
+  return b(e == null ? void 0 : e.then);
+}
+function en(e) {
+  return b(e[ae]);
+}
+function tn(e) {
+  return Symbol.asyncIterator && b(e == null ? void 0 : e[Symbol.asyncIterator]);
+}
+function nn(e) {
+  return new TypeError("You provided " + (e !== null && typeof e == "object" ? "an invalid object" : "'" + e + "'") + " where a stream was expected. You can provide an Observable, Promise, ReadableStream, Array, AsyncIterable, or Iterable.");
+}
+function rn() {
+  return typeof Symbol != "function" || !Symbol.iterator ? "@@iterator" : Symbol.iterator;
+}
+var sn = rn();
+function on(e) {
+  return b(e == null ? void 0 : e[sn]);
+}
+function an(e) {
+  return Ve(this, arguments, function() {
+    var t, i, r, s;
+    return Ee(this, function(o) {
+      switch (o.label) {
+        case 0:
+          t = e.getReader(), o.label = 1;
+        case 1:
+          o.trys.push([1, , 9, 10]), o.label = 2;
+        case 2:
+          return [4, g(t.read())];
+        case 3:
+          return i = o.sent(), r = i.value, s = i.done, s ? [4, g(void 0)] : [3, 5];
+        case 4:
+          return [2, o.sent()];
+        case 5:
+          return [4, g(r)];
+        case 6:
+          return [4, o.sent()];
+        case 7:
+          return o.sent(), [3, 2];
+        case 8:
+          return [3, 10];
+        case 9:
+          return t.releaseLock(), [7];
+        case 10:
+          return [2];
+      }
+    });
+  });
+}
+function cn(e) {
+  return b(e == null ? void 0 : e.getReader);
+}
+function un(e) {
+  if (e instanceof I)
+    return e;
+  if (e != null) {
+    if (en(e))
+      return ln(e);
+    if (Zt(e))
+      return hn(e);
+    if (Kt(e))
+      return fn(e);
+    if (tn(e))
+      return Ue(e);
+    if (on(e))
+      return pn(e);
+    if (cn(e))
+      return dn(e);
+  }
+  throw nn(e);
+}
+function ln(e) {
+  return new I(function(n) {
+    var t = e[ae]();
+    if (b(t.subscribe))
+      return t.subscribe(n);
+    throw new TypeError("Provided object does not correctly implement Symbol.observable");
+  });
+}
+function hn(e) {
+  return new I(function(n) {
+    for (var t = 0; t < e.length && !n.closed; t++)
+      n.next(e[t]);
+    n.complete();
+  });
+}
+function fn(e) {
+  return new I(function(n) {
+    e.then(function(t) {
+      n.closed || (n.next(t), n.complete());
+    }, function(t) {
+      return n.error(t);
+    }).then(null, Le);
+  });
+}
+function pn(e) {
+  return new I(function(n) {
+    var t, i;
+    try {
+      for (var r = A(e), s = r.next(); !s.done; s = r.next()) {
+        var o = s.value;
+        if (n.next(o), n.closed)
+          return;
+      }
+    } catch (c) {
+      t = { error: c };
+    } finally {
+      try {
+        s && !s.done && (i = r.return) && i.call(r);
+      } finally {
+        if (t)
+          throw t.error;
+      }
+    }
+    n.complete();
+  });
+}
+function Ue(e) {
+  return new I(function(n) {
+    yn(e, n).catch(function(t) {
+      return n.error(t);
+    });
+  });
+}
+function dn(e) {
+  return Ue(an(e));
+}
+function yn(e, n) {
+  var t, i, r, s;
+  return Be(this, void 0, void 0, function() {
+    var o, c;
+    return Ee(this, function(u) {
+      switch (u.label) {
+        case 0:
+          u.trys.push([0, 5, 6, 11]), t = je(e), u.label = 1;
+        case 1:
+          return [4, t.next()];
+        case 2:
+          if (i = u.sent(), !!i.done)
+            return [3, 4];
+          if (o = i.value, n.next(o), n.closed)
+            return [2];
+          u.label = 3;
+        case 3:
+          return [3, 1];
+        case 4:
+          return [3, 11];
+        case 5:
+          return c = u.sent(), r = { error: c }, [3, 11];
+        case 6:
+          return u.trys.push([6, , 9, 10]), i && !i.done && (s = t.return) ? [4, s.call(t)] : [3, 8];
+        case 7:
+          u.sent(), u.label = 8;
+        case 8:
+          return [3, 10];
+        case 9:
+          if (r)
+            throw r.error;
+          return [7];
+        case 10:
+          return [7];
+        case 11:
+          return n.complete(), [2];
+      }
+    });
+  });
+}
+function vn(e) {
+  return e instanceof Date && !isNaN(e);
+}
+function En(e, n, t) {
+  e === void 0 && (e = 0), t === void 0 && (t = Ht);
+  var i = -1;
+  return n != null && (Wt(n) ? t = n : i = n), new I(function(r) {
+    var s = vn(e) ? +e - t.now() : e;
+    s < 0 && (s = 0);
+    var o = 0;
+    return t.schedule(function() {
+      r.closed || (r.next(o++), 0 <= i ? this.schedule(void 0, i) : r.complete());
+    }, s);
+  });
+}
+function mn(e, n) {
+  return e === void 0 && (e = 0), n === void 0 && (n = Me), e < 0 && (e = 0), En(e, e, n);
+}
+function bn(e, n) {
+  return $t(function(t, i) {
+    var r = null, s = 0, o = !1, c = function() {
+      return o && !r && i.complete();
+    };
+    t.subscribe(de(i, function(u) {
+      r == null || r.unsubscribe();
+      var l = 0, f = s++;
+      un(e(u, f)).subscribe(r = de(i, function(d) {
+        return i.next(n ? n(u, d, f, l++) : d);
+      }, function() {
+        r = null, c();
+      }));
+    }, function() {
+      o = !0, c();
+    }));
+  });
+}
+const Tn = [
+  {
+    id: "134245",
+    entityId: "130948lk",
+    attribute: "name",
+    value: "Jesus Christ"
+  }
+], In = () => [
+  {
+    id: Math.random().toString(),
+    entityId: Math.random().toString(),
+    attribute: "name",
+    value: "Van Horn"
+  }
+], _n = mn(1e4).pipe(bn((e) => In())), re = new qt(Tn);
+_n.subscribe((e) => {
+  re.next([...re.getValue(), e]);
+});
+const xn = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  facts$: re
 }, Symbol.toStringTag, { value: "Module" }));
 export {
-  Xe as network
+  Nn as network,
+  xn as sync
 };

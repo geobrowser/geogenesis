@@ -6,7 +6,9 @@ export default function TopDownGraphQlExample() {
     data: snapshot,
     error,
     mutate,
-  } = useSWR('topDownGraphQl.read.getFacts', network.read.getFacts)
+  } = useSWR('topDownGraphQl.read.getFacts', network.read.getFacts, {
+    refreshInterval: 2000,
+  })
 
   if (!snapshot) return <div className="layout"> Loading...</div>
 
@@ -24,7 +26,7 @@ export default function TopDownGraphQlExample() {
 
   return (
     <div className="layout">
-      <>
+      <div className="mb-4 space-y-4">
         {snapshot?.map((fact) => (
           <div key={fact.id}>
             <p>id: {fact.id}</p>
@@ -33,7 +35,7 @@ export default function TopDownGraphQlExample() {
             <p>value: {fact.value}</p>
           </div>
         ))}
-      </>
+      </div>
 
       <button
         className="bg-geo-blue-100 text-geo-white-100 px-4 py-2 rounded"

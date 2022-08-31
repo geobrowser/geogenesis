@@ -25,11 +25,18 @@
     "graphql": "16",
     "graphql-tag": "^2.12.6",
     "ipfs-http-client": "^57.0.3",
+    "rxjs": "^7.5.6",
     "undici": "*"
   },
   "devDependencies": {
     "@types/uuid": "^8.3.4",
     "vite": "^3.0.9",
     "vitest": "^0.22.1"
+  },
+  "peerDependencies": {
+    "react": "^18.1.0",
+    "react-dom": "^18.1.0",
+    "@types/react": "^18.0.9",
+    "@types/react-dom": "^18.0.6"
   }
 }
