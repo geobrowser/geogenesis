@@ -25,7 +25,7 @@ const localFacts = [
   },
 ]
 
-const getRemoteFacts = () => {
+const getRemoteFacts = async () => {
   return [
     {
       id: Math.random().toString(),
@@ -44,5 +44,11 @@ export const facts$ = new BehaviorSubject<IFact[]>(localFacts)
 
 // Merges the remote facts with the user's local facts.
 remoteFacts$.subscribe((value) => {
-  facts$.next([...facts$.getValue(), value])
+  facts$.next([...facts$.getValue(), ...value])
 })
+
+export const createFact = (fact: IFact) => {
+  facts$.next([...facts$.getValue(), fact])
+}
+
+export { useSharedObservable } from './use'
