@@ -1,3 +1,7 @@
+// Used to extend vite's defineConfig with vitest's defineConfig
+// https://vitest.dev/config/#configuration
+/// <reference types="vitest" />
+
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
@@ -20,5 +24,9 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
   },
 })
