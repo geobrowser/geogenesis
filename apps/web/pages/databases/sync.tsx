@@ -1,9 +1,18 @@
 import { sync } from '@geogenesis/database'
 
-const factsStore = new sync.State(new sync.MockDatabase())
+// Would probably be dependency injected with Context in the real implementation
+const factsStore = new sync.State(new sync.MockApi())
 
 export default function SyncExample() {
   const snapshot = sync.useSharedObservable(factsStore.facts$)
+
+  const createFact = () =>
+    factsStore.createFact({
+      id: (Math.random() * 100).toString(),
+      entityId: 'askldjasd',
+      attribute: 'Died in',
+      value: 0,
+    })
 
   return (
     <div className="layout">
@@ -20,14 +29,7 @@ export default function SyncExample() {
 
       <button
         className="bg-geo-blue-100 text-geo-white-100 px-4 py-2 rounded"
-        onClick={() =>
-          factsStore.createFact({
-            id: (Math.random() * 100).toString(),
-            entityId: 'askldjasd',
-            attribute: 'Died in',
-            value: 0,
-          })
-        }
+        onClick={createFact}
       >
         Create fact
       </button>

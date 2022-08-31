@@ -1,4 +1,4 @@
-import { BehaviorSubject, interval, switchMap } from 'rxjs'
+import { BehaviorSubject, interval, Observable, switchMap } from 'rxjs'
 
 type IFact = {
   id: string
@@ -7,22 +7,38 @@ type IFact = {
   value: string | number
 }
 
+interface IMockApi {
+  /**
+   * Runs "getRemoteFacts" every 5 seconds and pushes the new fact to subscribers.
+   *
+   * This should fetch _all_ data the app needs at once. Each subscriber charge of
+   * massaging the data pushed to it.
+   *
+   * We _might_ want multiple syncers for the different data that we have in the app.
+   * We also want to make sure we're only fetching once instead of once for each
+   * subscriber. We can also do some optimizations here by checking if the data has
+   * changed or not
+   */
+  syncer$: Observable<IFact[]>
+  insertFact: (fact: IFact) => IFact[]
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // TODO:
 // Enable editing attributes and values
 // Enable tracking changes to attributes and values and triggering updates
 export class State {
-  mockDatabase: MockDatabase
+  mockApi: IMockApi
 
   // Stores all the local facts that are being tracked. These are added by the user.
   facts$ = new BehaviorSubject<IFact[]>([])
 
-  constructor(mockDatabase: MockDatabase) {
-    this.mockDatabase = mockDatabase
+  constructor(mockApi: IMockApi) {
+    this.mockApi = mockApi
 
     // Merges the remote facts with the user's local facts.
-    this.mockDatabase.syncer$.subscribe((value) => {
+    this.mockApi.syncer$.subscribe((value) => {
       // Only pass the union of the local and remote stores
       // state = (local - remote) + remote
       const merged = [...new Set([...this.facts$.getValue(), ...value])]
@@ -44,14 +60,14 @@ export class State {
     // Simulating hitting network
     await sleep(2000)
 
-    return this.mockDatabase.insertFact(fact)
+    return this.mockApi.insertFact(fact)
   }
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
-export class MockDatabase {
-  REMOTE_FACTS: IFact[] = [
+export class MockApi implements IMockApi {
+  private REMOTE_FACTS: IFact[] = [
     {
       id: Math.random().toString(),
       entityId: Math.random().toString(),
@@ -60,7 +76,17 @@ export class MockDatabase {
     },
   ]
 
-  // Runs "getRemoteFacts" every 5 seconds and pushes the new fact to the facts$ stream
+  /**
+   * Runs "getRemoteFacts" every 5 seconds and pushes the new fact to subscribers.
+   *
+   * This should fetch _all_ data the app needs at once. Each subscriber charge of
+   * massaging the data pushed to it.
+   *
+   * We _might_ want multiple syncers for the different data that we have in the app.
+   * We also want to make sure we're only fetching once instead of once for each
+   * subscriber. We can also do some optimizations here by checking if the data has
+   * changed or not
+   */
   syncer$ = interval(5000).pipe(switchMap((_) => this.getRemoteFacts()))
 
   insertFact = (fact: IFact) => {
@@ -71,7 +97,7 @@ export class MockDatabase {
     return this.REMOTE_FACTS.concat(fact)
   }
 
-  getRemoteFacts = async () => {
+  private getRemoteFacts = async () => {
     return this.REMOTE_FACTS
   }
 }
