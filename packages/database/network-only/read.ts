@@ -36,6 +36,7 @@ async function mockedFetch(id?: string) {
 }
 
 export async function getFacts() {
+  // GraphQL query
   return await mockedFetch()
 }
 

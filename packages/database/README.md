@@ -7,11 +7,11 @@ The `/network-only` directory houses an approach that relies on swr for caching.
 **Pros**
 
 - Less library code to maintain at the expense of more complex React code
-- swr has a lot of functionality that we want out of the box
+- swr/RQ/apollo/urql/suspense has a lot of functionality that we want out of the box
 
 **Cons**
 
-- There will be more code in React-land to manage things like optimistic updates
+- There will be more code in React-land to manage things like optimistic updates and async states
 - Async network calls will "infect" our React components as the fetching happens in the component
 - Types are more complex in app since we rely on GraphQL types instead of static app-specific types
 

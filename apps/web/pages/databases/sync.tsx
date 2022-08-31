@@ -1,7 +1,7 @@
 import { sync } from '@geogenesis/database'
 
 // Would probably be dependency injected with Context in the real implementation
-const factsStore = new sync.State(new sync.MockApi())
+const factsStore = new sync.Facts(new sync.MockApi())
 
 export default function SyncExample() {
   const snapshot = sync.useSharedObservable(factsStore.facts$)

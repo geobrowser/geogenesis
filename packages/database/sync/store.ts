@@ -28,7 +28,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 // TODO:
 // Enable editing attributes and values
 // Enable tracking changes to attributes and values and triggering updates
-export class State {
+//
+// This could be literally any type of store. Doesn't have to be rxjs-based. Could be mobx or anything.
+// Just depends on how we want to do the React bindings
+export class Facts {
   mockApi: IMockApi
 
   // Stores all the local facts that are being tracked. These are added by the user.
@@ -54,6 +57,10 @@ export class State {
       this.facts$.next([...this.facts$.getValue(), fact])
       await this._uploadFact(fact)
     }
+  }
+
+  get facts() {
+    return this.facts$.getValue()
   }
 
   private _uploadFact = async (fact: IFact) => {
