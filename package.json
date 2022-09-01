@@ -2,9 +2,10 @@
   "name": "geogenesis",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "dev": "turbo run dev"
   },
   "author": "Byron Guina",
   "license": "ISC",
@@ -12,5 +13,10 @@
     "singleQuote": true,
     "trailingComma": "es5",
     "semi": false
+  },
+  "devDependencies": {
+    "eslint": "^8.15.0",
+    "eslint-config-turbo": "^0.0.3",
+    "turbo": "^1.4.4"
   }
 }
