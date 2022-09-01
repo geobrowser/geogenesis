@@ -1,10 +1,10 @@
-import { sync } from '@geogenesis/database'
+import { Facts, MockApi, useSharedObservable } from '@geogenesis/database'
 
 // Would probably be dependency injected with Context in the real implementation
-const factsStore = new sync.Facts(new sync.MockApi())
+const factsStore = new Facts(new MockApi())
 
 export default function SyncExample() {
-  const snapshot = sync.useSharedObservable(factsStore.facts$)
+  const snapshot = useSharedObservable(factsStore.facts$)
 
   const createFact = () =>
     factsStore.createFact({
