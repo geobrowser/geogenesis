@@ -12,9 +12,8 @@
   "main": "dist/index.umd.js",
   "module": "dist/index.mjs",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
-    "build:watch": "vite build --watch",
+    "dev": "vite build --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "postinstall": "pnpm run build"
