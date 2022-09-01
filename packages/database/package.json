@@ -14,9 +14,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "test": "vitest",
-    "coverage": "vitest run --coverage",
-    "postinstall": "pnpm run build"
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "coverage": "vitest run --coverage"
   },
   "engines": {
     "node": "18"
