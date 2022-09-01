@@ -18,7 +18,7 @@
     "precompile": "pnpm run clean",
     "compile": "npx hardhat compile",
     "build": "pnpm run compile && npx tsc",
-    "start:node": "npx hardhat node",
+    "devnet": "npx hardhat node",
     "deploy": "hardhat migrate",
     "deploy:local": "npx hardhat run --network localhost scripts/deploy.ts",
     "deploy:devnet": "npx hardhat run --network devnet scripts/deploy.ts",

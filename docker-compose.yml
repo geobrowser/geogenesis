@@ -1,0 +1,26 @@
+version: '3'
+services:
+  devnet:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+      target: contracts
+    ports:
+      - '8545:8545'
+    command: pnpm run --filter contracts devnet
+    healthcheck:
+      test: curl -sf -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  deploy-contracts:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+      target: contracts
+    environment:
+      DEVNET_URL: http://devnet:8545
+    command: pnpm run --filter contracts deploy:local
+    depends_on:
+      devnet:
+        condition: service_healthy
