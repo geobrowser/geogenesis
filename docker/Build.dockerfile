@@ -1,4 +1,4 @@
-### base ###
+# Setup
 
 FROM node:18.8.0-alpine3.16 AS base
 
@@ -12,12 +12,10 @@ COPY pnpm-lock.yaml .
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
   pnpm fetch
 
-### contracts ###
-
-FROM base as contracts
+# Install
 
 COPY package.json pnpm-workspace.yaml .nvmrc .
 COPY ./packages/contracts ./packages/contracts
+COPY ./packages/subgraph ./packages/subgraph
 
 RUN pnpm install --recursive --offline --frozen-lockfile
-

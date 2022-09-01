@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/Build.dockerfile
-      target: contracts
     ports:
       - '8545:8545'
     command: pnpm run --filter contracts devnet
@@ -17,10 +16,9 @@ services:
     build:
       context: .
       dockerfile: ./docker/Build.dockerfile
-      target: contracts
     environment:
       DEVNET_URL: http://devnet:8545
-    command: pnpm run --filter contracts deploy:local
+    command: pnpm --filter contracts run deploy:local
     depends_on:
       devnet:
         condition: service_healthy
@@ -42,7 +40,9 @@ services:
     volumes:
       - ./build/postgres:/var/lib/postgresql/data
   graph-node:
-    image: graphprotocol/graph-node:latest
+    build:
+      context: .
+      dockerfile: ./docker/Graph.dockerfile
     ports:
       - '8000:8000'
       - '8001:8001'
@@ -63,3 +63,22 @@ services:
       # ethereum: "mainnet:http://host.docker.internal:8545"
       ethereum: 'mainnet:http://devnet:8545'
       GRAPH_LOG: info
+    healthcheck:
+      test: curl http://localhost:8030
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  build-subgraph:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+    tty: true
+    environment:
+      GRAPH_NODE_URL: http://graph-node:8020
+      IPFS_URL: http://ipfs:5001
+    command: >
+      sh -c "pnpm --filter subgraph run create &&
+      pnpm --filter subgraph run deploy"
+    depends_on:
+      graph-node:
+        condition: service_healthy

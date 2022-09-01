@@ -1,15 +1,16 @@
 {
-  "private": "true",
+  "private": true,
   "name": "@geogenesis/subgraph",
   "version": "0.0.1",
   "license": "MIT",
   "scripts": {
-    "create": "graph create example --node https://api.thegraph.com/deploy/",
-    "create-local": "graph create example --node http://127.0.0.1:8020",
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy example --ipfs https://api.thegraph.com/ipfs/ --node https://api.thegraph.com/deploy/",
-    "deploy-local": "graph deploy example --ipfs http://127.0.0.1:5001 --node http://127.0.0.1:8020"
+    "create": "graph create example --node $GRAPH_NODE_URL",
+    "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL",
+    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=http://127.0.0.1:5001 npm run",
+    "local:create": "npm run local create",
+    "local:deploy": "npm run local deploy"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "^0.30.2",
