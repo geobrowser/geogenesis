@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "pnpm turbo run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Byron Guina",
@@ -12,5 +13,8 @@
     "singleQuote": true,
     "trailingComma": "es5",
     "semi": false
+  },
+  "devDependencies": {
+    "turbo": "^1.4.4"
   }
 }

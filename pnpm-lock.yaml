@@ -3,7 +3,10 @@ lockfileVersion: 5.4
 importers:
 
   .:
-    specifiers: {}
+    specifiers:
+      turbo: ^1.4.4
+    devDependencies:
+      turbo: 1.4.4
 
   apps/web:
     specifiers:
@@ -14634,6 +14637,139 @@ packages:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
     dependencies:
       safe-buffer: 5.2.1
+    dev: true
+
+  /turbo-android-arm64/1.4.4:
+    resolution: {integrity: sha512-c1e8KQz4UogMbTjaxBMSdS0qH8QYmmnQStmVsA9S+wuNQQdCoRW/BOSLPNhkoZKS+a0rF8/O8MdESznFFDo+DA==}
+    cpu: [arm64]
+    os: [android]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-darwin-64/1.4.4:
+    resolution: {integrity: sha512-PjrHLXYkyvIuGG9PO7chcQ/7zpHB+QIdSfQ7IXhnjT+XsF+AAHQAvtwAkpRKGnFwtqUfs5WVeo2uxa9l/4BFfA==}
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-darwin-arm64/1.4.4:
+    resolution: {integrity: sha512-pqNDIjhaC58j3gVgjTd6cwWzem5yWizp32y+VyIrLEqXYr0Va+BDRzWoUvrW4y/vSZSEPExB3bvm2xKFnsVWVg==}
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-freebsd-64/1.4.4:
+    resolution: {integrity: sha512-LAe25iEfNDjV0RF/86ex6xm/qyYwBrxewzlX5dH8xEVS4BMXF+oPPldjjWp6kgZBF1toARQ2UKBTYLcX5ewmpg==}
+    cpu: [x64]
+    os: [freebsd]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-freebsd-arm64/1.4.4:
+    resolution: {integrity: sha512-ee8BJUdX0zK0f0Ef87O3RrxA6k1I1QEtvwTbIxm+wvccpRDpgrCVAGwpGBW8AQk/+YbKzUUPCi8O5LH+Rmgorg==}
+    cpu: [arm64]
+    os: [freebsd]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-32/1.4.4:
+    resolution: {integrity: sha512-xQ4HbaTb7xEgt+25CmjMQU0iy/bRo1cIQLjNdMognIBA/ORIxAhZtpGcYTBKX8jvk/vn/f2NBI0gPGkQVOvrOQ==}
+    cpu: [ia32]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-64/1.4.4:
+    resolution: {integrity: sha512-HXqY94BH/lCn4oDj/hli4hbb3HmGpoQAtVFLnE7EBPbk/6M3N4HAfU3V24JAKcpXNQ0GN9av0yhnv9y1X/C+0A==}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-arm/1.4.4:
+    resolution: {integrity: sha512-2Q1rFz5jEJuFIo3ZjkmFj06xSDRbXq1LBmAFqmA+q0CuzDK6j3UlD8dG2xw5oBiLZaGTlZUVDRSL5/+2F5Kx3g==}
+    cpu: [arm]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-arm64/1.4.4:
+    resolution: {integrity: sha512-etJ/BTgN0Bbx0SwLhXT8OHLVvVUn5Zr98yheORVqwyNUCvQW9HtJB53TKc1h2cRQzK6fj4a78rhyDwdQckLaBA==}
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-mips64le/1.4.4:
+    resolution: {integrity: sha512-IlgovsyVBauKuZW8Gk8ae0nVrjt8rLZLcwgE6U4F12Dh7uBfFtfIZIl5DKg3HSymHuPtGo/dQO6tgJKDuNWMxw==}
+    cpu: [mipsel]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-linux-ppc64le/1.4.4:
+    resolution: {integrity: sha512-Y5MXpCu/gKi2F+KRFvjx4zmFbscHLlDx4laWuzkSrrud+vU1sIm/Xkop3enTAVT10D0nMpCkbWcuqeNZB00fEg==}
+    cpu: [ppc64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-windows-32/1.4.4:
+    resolution: {integrity: sha512-CXc2e4oppgyXuFToZRYHGBhvaICAct4GHxFwTtVcDnIG9ikHTCnvnT/xs9WeVK6Pcd0SuWUm+LG4++hdeQAQ4g==}
+    cpu: [ia32]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-windows-64/1.4.4:
+    resolution: {integrity: sha512-xf85pgmsi7bAgWmaVVCsymA4n/lmNP/HMtyBvtprsnyiUPnP7moTsqXo5RC5WyJI9w8/N09mu4pN6BjWmUeHYQ==}
+    cpu: [x64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo-windows-arm64/1.4.4:
+    resolution: {integrity: sha512-ClsIbotkuJzhsPsCRjCKCiDasSZM8ik2y3B3VE5wxxd6bei6RXFNzK4GEFCq+hPfI3G1m/YPYr1GsrwOwxgQUA==}
+    cpu: [arm64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
+
+  /turbo/1.4.4:
+    resolution: {integrity: sha512-kNPcHOl68guQ6Fto05cxSVILyodz+OBZej+PFvuNKtswgD1ghzlZ9ZVhBDvlAuwguZklb5cFwpvCqSBsVMHUzw==}
+    hasBin: true
+    requiresBuild: true
+    optionalDependencies:
+      turbo-android-arm64: 1.4.4
+      turbo-darwin-64: 1.4.4
+      turbo-darwin-arm64: 1.4.4
+      turbo-freebsd-64: 1.4.4
+      turbo-freebsd-arm64: 1.4.4
+      turbo-linux-32: 1.4.4
+      turbo-linux-64: 1.4.4
+      turbo-linux-arm: 1.4.4
+      turbo-linux-arm64: 1.4.4
+      turbo-linux-mips64le: 1.4.4
+      turbo-linux-ppc64le: 1.4.4
+      turbo-windows-32: 1.4.4
+      turbo-windows-64: 1.4.4
+      turbo-windows-arm64: 1.4.4
     dev: true
 
   /tweetnacl-util/0.15.1:

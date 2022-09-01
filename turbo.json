@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "dist/**", "build/**"]
+    },
+    "web": {
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/database#build"]
+    },
+    "deploy": {
+      "dependsOn": ["build", "test", "lint"],
+      "outputs": []
+    }
+  }
+}
