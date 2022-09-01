@@ -2,10 +2,7 @@ node_modules
 build
 .DS_Store
 .vscode
-packages/frontend/app/styles/tailwind.css
 .vercel
 .turbo
+dist
 
-
-packages/database/dist/index.mjs
-packages/database/dist/index.umd.js
