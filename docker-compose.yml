@@ -1,0 +1,84 @@
+version: '3'
+services:
+  devnet:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+    ports:
+      - '8545:8545'
+    command: pnpm run --filter contracts devnet
+    healthcheck:
+      test: curl -sf -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  deploy-contracts:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+    environment:
+      DEVNET_URL: http://devnet:8545
+    command: pnpm --filter contracts run deploy:local
+    depends_on:
+      devnet:
+        condition: service_healthy
+  ipfs:
+    image: ipfs/go-ipfs:v0.4.23
+    ports:
+      - '5001:5001'
+    volumes:
+      - ./build/ipfs:/data/ipfs
+  postgres:
+    image: postgres
+    ports:
+      - '5432:5432'
+    command: ['postgres', '-cshared_preload_libraries=pg_stat_statements']
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+    volumes:
+      - ./build/postgres:/var/lib/postgresql/data
+  graph-node:
+    build:
+      context: .
+      dockerfile: ./docker/Graph.dockerfile
+    ports:
+      - '8000:8000'
+      - '8001:8001'
+      - '8020:8020'
+      - '8030:8030'
+      - '8040:8040'
+    depends_on:
+      - devnet
+      - deploy-contracts
+      - ipfs
+      - postgres
+    environment:
+      postgres_host: postgres
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+      ipfs: 'ipfs:5001'
+      # ethereum: "mainnet:http://host.docker.internal:8545"
+      ethereum: 'mainnet:http://devnet:8545'
+      GRAPH_LOG: info
+    healthcheck:
+      test: curl http://localhost:8030
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  build-subgraph:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+    tty: true
+    environment:
+      GRAPH_NODE_URL: http://graph-node:8020
+      IPFS_URL: http://ipfs:5001
+    command: >
+      sh -c "pnpm --filter subgraph run create &&
+      pnpm --filter subgraph run deploy"
+    depends_on:
+      graph-node:
+        condition: service_healthy

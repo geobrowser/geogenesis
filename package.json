@@ -5,7 +5,9 @@
   "scripts": {
     "test": "turbo run test",
     "build": "turbo run build",
-    "dev": "turbo run dev"
+    "dev": "turbo run dev",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up"
   },
   "author": "Byron Guina",
   "license": "ISC",

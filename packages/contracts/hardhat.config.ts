@@ -42,7 +42,7 @@ const config: HardhatUserConfig = {
     },
     localhost: {
       chainId: 31337,
-      url: 'http://127.0.0.1:8545',
+      url: process.env.DEVNET_URL || 'http://127.0.0.1:8545',
     },
     polygon_mainnet: {
       chainId: 137,
