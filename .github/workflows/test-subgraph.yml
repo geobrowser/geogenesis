@@ -1,0 +1,20 @@
+name: Subgraph Integration Test
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: docker-practice/actions-setup-docker@master
+      - run: docker compose build
+      - run: docker compose up -d
+      - run: >
+          curl http://localhost:8000/subgraphs/name/example 
+            -X POST 
+            -H "Content-Type: application/json" 
+            -d '{"query": "query{gravatars{id}}"}'
+            --retry-connrefused
+            --retry-delay 10
+            --retry 10
