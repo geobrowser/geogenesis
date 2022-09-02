@@ -7,8 +7,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - uses: docker-practice/actions-setup-docker@master
-      - run: docker compose build
-      - run: docker compose up -d
-      - run: >
-          curl http://localhost:8000/subgraphs/name/example -X POST -H "Content-Type: application/json" -d '{"query": "query{gravatars{id}}"}' --retry-connrefused --retry-delay 10 --retry 10
+
+      # Pull the latest image to build, and avoid caching pull-only images.
+      - run: docker-compose pull
+
+      # In this step, this action saves a list of existing images,
+      # the cache is created without them in the post run.
+      # It also restores the cache if it exists.
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        # Ignore the failure of a step and avoid terminating the job.
+        continue-on-error: true
+
+      - run: docker compose up --build -d
+
+      - run: pnpm --filter integration run test
