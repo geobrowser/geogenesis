@@ -12,16 +12,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  deploy-contracts:
-    build:
-      context: .
-      dockerfile: ./docker/Build.dockerfile
-    environment:
-      DEVNET_URL: http://devnet:8545
-    command: pnpm --filter contracts run deploy:local
-    depends_on:
-      devnet:
-        condition: service_healthy
   ipfs:
     image: ipfs/go-ipfs:v0.4.23
     ports:
@@ -51,7 +41,6 @@ services:
       - '8040:8040'
     depends_on:
       - devnet
-      - deploy-contracts
       - ipfs
       - postgres
     environment:
@@ -68,6 +57,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  deploy-contracts:
+    build:
+      context: .
+      dockerfile: ./docker/Build.dockerfile
+    environment:
+      DEVNET_URL: http://devnet:8545
+    command: pnpm --filter contracts run deploy:local
+    volumes:
+      - shared-volume:/app
+    depends_on:
+      devnet:
+        condition: service_healthy
   build-subgraph:
     build:
       context: .
@@ -79,6 +80,12 @@ services:
     command: >
       sh -c "pnpm --filter subgraph run create &&
       pnpm --filter subgraph run deploy"
+    volumes:
+      - shared-volume:/app
     depends_on:
+      deploy-contracts:
+        condition: service_completed_successfully
       graph-node:
         condition: service_healthy
+volumes:
+  shared-volume:
