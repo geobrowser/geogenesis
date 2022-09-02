@@ -7,7 +7,9 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "docker:build": "docker compose build",
-    "docker:up": "docker compose up"
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down -v --rmi all",
+    "docker:clean": "rimraf build"
   },
   "author": "Byron Guina",
   "license": "ISC",
@@ -19,6 +21,7 @@
   "devDependencies": {
     "eslint": "^8.15.0",
     "eslint-config-turbo": "^0.0.3",
+    "rimraf": "^3.0.2",
     "turbo": "^1.4.4"
   }
 }
