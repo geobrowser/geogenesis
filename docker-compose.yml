@@ -73,7 +73,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/Build.dockerfile
-    tty: true
     environment:
       GRAPH_NODE_URL: http://graph-node:8020
       IPFS_URL: http://ipfs:5001
