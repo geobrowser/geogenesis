@@ -192,12 +192,14 @@ importers:
       '@graphprotocol/graph-ts': ^0.27.0
       babel-polyfill: ^6.26.0
       babel-register: ^6.26.0
+      rimraf: ^3.0.2
     dependencies:
       babel-polyfill: 6.26.0
       babel-register: 6.26.0
     devDependencies:
       '@graphprotocol/graph-cli': 0.30.4
       '@graphprotocol/graph-ts': 0.27.0
+      rimraf: 3.0.2
 
 packages:
 

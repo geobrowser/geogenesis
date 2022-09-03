@@ -56,5 +56,9 @@ test('subgraph runs', async () => {
     },
   })
 
-  expect(data).toEqual({ data: { gravatars: [] } })
+  expect(data).toEqual({
+    data: {
+      statements: [{ id: '0x0' }, { id: '0x1' }],
+    },
+  })
 })

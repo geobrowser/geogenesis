@@ -2,7 +2,7 @@
 
 FROM node:18.8.0-alpine3.16 AS base
 
-RUN apk --no-cache add curl python3 build-base
+RUN apk --no-cache add curl python3 build-base jq yq
 
 RUN curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm
 
