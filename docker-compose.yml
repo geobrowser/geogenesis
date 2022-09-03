@@ -77,7 +77,8 @@ services:
       GRAPH_NODE_URL: http://graph-node:8020
       IPFS_URL: http://ipfs:5001
     command: >
-      sh -c "pnpm --filter subgraph run codegen &&
+      sh -c "pnpm --filter subgraph run update-contract-address &&
+      pnpm --filter subgraph run codegen &&
       pnpm --filter subgraph run build &&
       pnpm --filter subgraph run create &&
       pnpm --filter subgraph run deploy"

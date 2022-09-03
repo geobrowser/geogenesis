@@ -4,17 +4,20 @@
   "version": "0.0.1",
   "license": "MIT",
   "scripts": {
+    "clean": "rimraf build generated",
     "codegen": "graph codegen",
     "build": "graph build",
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=http://127.0.0.1:5001 npm run",
     "local:create": "npm run local create",
-    "local:deploy": "npm run local deploy"
+    "local:deploy": "npm run local deploy",
+    "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .StatementHistory.address ../contracts/addresses/31337.json)\" subgraph.yaml"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "^0.30.2",
-    "@graphprotocol/graph-ts": "^0.27.0"
+    "@graphprotocol/graph-ts": "^0.27.0",
+    "rimraf": "^3.0.2"
   },
   "dependencies": {
     "babel-polyfill": "^6.26.0",

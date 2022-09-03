@@ -24,7 +24,7 @@ async function checkRunning() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: 'query { gravatars { id } }',
+        query: 'query { statements { id } }',
       }),
     })
 
@@ -51,10 +51,14 @@ test('subgraph runs', async () => {
     factor: 1,
     minTimeout: 5 * 1000,
     maxTimeout: 5 * 1000,
-    onFailedAttempt: error => {
+    onFailedAttempt: (error) => {
       console.log(`(${error.attemptNumber}/${retries}) ${error.message}`)
     },
   })
 
-  expect(data).toEqual({ data: { gravatars: [] } })
+  expect(data).toEqual({
+    data: {
+      statements: [{ id: '0x0' }, { id: '0x1' }],
+    },
+  })
 })
