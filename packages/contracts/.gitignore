@@ -11,3 +11,6 @@ artifacts
 
 #Compiled ts
 dist
+
+# Local chain
+addresses/31337.json

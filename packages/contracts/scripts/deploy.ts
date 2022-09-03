@@ -1,110 +1,30 @@
 /* eslint-disable node/no-missing-import */
 import dotenv from 'dotenv'
-import { readFileSync, writeFileSync } from 'fs'
-import { config, ethers } from 'hardhat'
-import { Controller, Geode, GeoDocument, Proposal } from '../build/types'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { config } from 'hardhat'
+import set from 'lodash.set'
+import { deployStatementHistory } from '../src/deploy'
+import { addStatement } from '../src/statement'
 
 dotenv.config()
 
-async function deployGeodeContract() {
-  const Factory = await ethers.getContractFactory('Geode')
-  const contract: Geode = await Factory.deploy()
-
-  console.log(`Deploying Geode at ${contract.address}...`)
-
-  await contract.deployed()
-
-  console.log(`Deployed Geode at ${contract.address}`)
-
-  return contract
-}
-
-async function deployDocumentContract() {
-  const Factory = await ethers.getContractFactory('GeoDocument')
-  const contract: GeoDocument = await Factory.deploy(
-    'https://geogenesis.vercel.app/api/page/'
-  )
-
-  console.log(`Deploying GeoDocument at ${contract.address}...`)
-
-  await contract.deployed()
-
-  console.log(`Deployed GeoDocument at ${contract.address}`)
-
-  return contract
-}
-
-async function deployProposalContract() {
-  const Factory = await ethers.getContractFactory('Proposal')
-  const contract: Proposal = await Factory.deploy(
-    'https://geogenesis.vercel.app/api/proposal/'
-  )
-
-  console.log(`Deploying Proposal at ${contract.address}...`)
-
-  await contract.deployed()
-
-  console.log(`Deployed Proposal at ${contract.address}`)
-
-  return contract
-}
-
-async function deployControllerContract(options: {
-  geodeContractAddress: string
-  proposalContractAddress: string
-  documentContractAddress: string
-}) {
-  const Factory = await ethers.getContractFactory('Controller')
-  const contract: Controller = await Factory.deploy(
-    options.geodeContractAddress,
-    options.proposalContractAddress,
-    options.documentContractAddress
-  )
-
-  console.log(`Deploying Controller at ${contract.address}...`)
-
-  await contract.deployed()
-
-  console.log(`Deployed Controller at ${contract.address}`)
-
-  return contract
-}
-
 async function main() {
-  const network = config.networks![process.env.HARDHAT_NETWORK!]!
-  const chainId = network.chainId!.toString()
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  const networkId = process.env.HARDHAT_NETWORK as string
 
-  const geodeContract = await deployGeodeContract()
-  const proposalContract = await deployProposalContract()
-  const documentContract = await deployDocumentContract()
-  const controllerContract = await deployControllerContract({
-    geodeContractAddress: geodeContract.address,
-    proposalContractAddress: proposalContract.address,
-    documentContractAddress: documentContract.address,
+  const networkConfig = config.networks![networkId]!
+  const chainId = networkConfig.chainId!.toString()
+
+  const statementHistoryContract = await deployStatementHistory({ debug: true })
+
+  await addStatement(statementHistoryContract, 'abc')
+  await addStatement(statementHistoryContract, 'def')
+
+  saveAddress({
+    chainId,
+    contractName: 'StatementHistory',
+    address: statementHistoryContract.address,
   })
-
-  if (process.env.HARDHAT_NETWORK !== 'localhost') {
-    saveAddress({
-      chainId,
-      contractName: 'GeoDocument',
-      address: documentContract.address,
-    })
-    saveAddress({
-      chainId,
-      contractName: 'Proposal',
-      address: proposalContract.address,
-    })
-    saveAddress({
-      chainId,
-      contractName: 'Geode',
-      address: geodeContract.address,
-    })
-    saveAddress({
-      chainId,
-      contractName: 'Controller',
-      address: controllerContract.address,
-    })
-  }
 }
 
 function saveAddress({
@@ -116,19 +36,19 @@ function saveAddress({
   contractName: string
   address: string
 }) {
-  const addresses = JSON.parse(readFileSync('addresses.json').toString())
+  const file = `addresses/${chainId}.json`
+  let json: any
 
-  if (!addresses[chainId]) {
-    addresses[chainId] = {}
+  try {
+    json = JSON.parse(readFileSync(file).toString())
+  } catch {
+    json = {}
   }
 
-  if (!addresses[chainId][contractName]) {
-    addresses[chainId][contractName] = {}
-  }
+  set(json, [contractName, 'address'], address)
 
-  addresses[chainId][contractName].address = address
-
-  writeFileSync('addresses.json', JSON.stringify(addresses, null, 2))
+  mkdirSync('addresses', { recursive: true })
+  writeFileSync(file, JSON.stringify(json, null, 2))
 }
 
 main().catch((error) => {
