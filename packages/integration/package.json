@@ -1,0 +1,35 @@
+{
+  "private": true,
+  "name": "@geogenesis/integration",
+  "version": "0.0.1",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@tsconfig/node16": "^1.0.3",
+    "@types/jest": "^29.0.0",
+    "@types/node": "^18.7.14",
+    "jest": "^28.1.3",
+    "p-retry": "^5.1.1",
+    "ts-jest": "^28.0.8",
+    "typescript": "^4.8.2"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "transform": {
+      ".+\\.(j|t)sx?$": "ts-jest"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/.pnpm/(?!p-retry)"
+    ],
+    "moduleFileExtensions": [
+      "ts",
+      "js"
+    ]
+  },
+  "dependencies": {
+    "node-fetch": "^3.2.10"
+  }
+}
