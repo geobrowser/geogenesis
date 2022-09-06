@@ -1,12 +1,13 @@
-export * from './serialize';
-export * from './deserialize';
-export * from './util';
+export class DataURI {
+  mimeType: string | null
+  data: Uint8Array
 
-export type Value =
-  | {[key: string]: Value}
-  | Array<Value>
-  | Uint8Array
-  | string
-  | number
-  | boolean
-  | null;
+  constructor(mimeType: string | null, data: Uint8Array) {
+    this.mimeType = mimeType
+    this.data = data
+  }
+
+  static parse(encoded: string): DataURI {
+    return new DataURI('text/plain', new Uint8Array([]))
+  }
+}

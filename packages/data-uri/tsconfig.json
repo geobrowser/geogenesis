@@ -7,7 +7,7 @@
     "isolatedModules": true,
     "allowJs": true,
     "strict": true,
-    "rootDirs": ["lib", "test"],
+    "rootDirs": ["libetc", "test"],
     "outDir": "dist",
     "lib": ["dom"]
   }
