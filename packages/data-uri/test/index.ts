@@ -11,10 +11,16 @@ const loadAssembly = async (): Promise<typeof AssemblyExports> =>
           throw 'abort'
         },
       },
+      index: {
+        log: {
+          log: (level: number, msg: string) =>
+            console.log(`WASM log (${level}): ${msg}`),
+        },
+      },
     }
   )
 
-const helloWorldBytes = new TextEncoder().encode('Hello world')
+const helloWorldBytes = new TextEncoder().encode('Hello, World!')
 const helloWorldBase64 = Buffer.from(helloWorldBytes).toString('base64')
 
 ;(async () => {

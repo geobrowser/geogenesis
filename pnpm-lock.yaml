@@ -211,6 +211,7 @@ importers:
 
   packages/subgraph:
     specifiers:
+      '@geogenesis/data-uri': workspace:^0.0.1
       '@graphprotocol/graph-cli': ^0.33.1
       '@graphprotocol/graph-ts': ^0.27.0
       as-base64: ^0.2.0
@@ -222,6 +223,7 @@ importers:
       babel-polyfill: 6.26.0
       babel-register: 6.26.0
     devDependencies:
+      '@geogenesis/data-uri': link:../data-uri
       '@graphprotocol/graph-cli': 0.33.1
       '@graphprotocol/graph-ts': 0.27.0
       rimraf: 3.0.2
