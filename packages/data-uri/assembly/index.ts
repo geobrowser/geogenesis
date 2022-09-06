@@ -1,3 +1,4 @@
+import { log } from '@graphprotocol/graph-ts'
 import { decode } from 'as-base64/assembly'
 
 const PREFIX = 'data:'
@@ -11,9 +12,10 @@ export class DataURI {
     this.data = data
   }
 
-  static parse(uri: string): DataURI {
+  static parse(uri: string): DataURI | null {
     if (!uri.startsWith(PREFIX)) {
-      throw new Error(`Invalid data URI: '${uri}'`)
+      log.warning(`Invalid data URI: '${uri}'`, [])
+      return null
     }
 
     const commaIndex = uri.indexOf(',', PREFIX.length) // Start after "data:"
@@ -35,6 +37,7 @@ export class DataURI {
       }
     }
 
-    throw new Error(`Failed to decode data uri: ${uri.slice(0, 30)}`)
+    log.warning(`Failed to decode data uri: ${uri.slice(0, 30)}`, [])
+    return null
   }
 }

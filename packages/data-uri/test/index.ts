@@ -30,4 +30,6 @@ const helloWorldBase64 = Buffer.from(helloWorldBytes).toString('base64')
 
   assert.equal(await mimeType(base64Text), 'text/plain')
   assert.deepEqual(await data(base64Text), helloWorldBytes)
+
+  console.log('OK!')
 })()

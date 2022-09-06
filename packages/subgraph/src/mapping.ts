@@ -14,35 +14,12 @@ export function handleStatementAdded(event: StatementAdded): void {
 
   if (uri.startsWith('data:')) {
     const dataURI = DataURI.parse(uri)
-    statement.mimeType = dataURI.mimeType
-    statement.decoded = Bytes.fromUint8Array(dataURI.data)
+
+    if (dataURI) {
+      statement.mimeType = dataURI.mimeType
+      statement.decoded = Bytes.fromUint8Array(dataURI.data)
+    }
   }
-
-  // const decoded = decode('SGVsbG8sIFdvcmxkIQ==')
-  // statement.decoded = Bytes.fromUint8Array(decoded)
-  // statement.mimeType = 'text/plain'
-
-  // if (uri.startsWith('data:')) {
-  //   const commaIndex = uri.indexOf(',', 5) // Start after "data:"
-
-  //   if (commaIndex !== -1) {
-  //     const meta = uri.slice(5, commaIndex)
-  //     const components = meta.split(';')
-  //     const mimeType = components[0]
-
-  //     statement.mimeType = mimeType
-
-  //     if (components.length === 2) {
-  //       const encoding = components[1]
-
-  //       if (encoding === 'base64') {
-  //         const rest = uri.slice(commaIndex + 1)
-  //         const decoded = decode(rest)
-  //         statement.decoded = Bytes.fromUint8Array(decoded)
-  //       }
-  //     }
-  //   }
-  // }
 
   statement.save()
 
