@@ -17,7 +17,10 @@ async function main() {
 
   const statementHistoryContract = await deployStatementHistory({ debug: true })
 
-  await addStatement(statementHistoryContract, 'abc')
+  await addStatement(
+    statementHistoryContract,
+    'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ=='
+  )
   await addStatement(statementHistoryContract, 'def')
 
   saveAddress({

@@ -2,4 +2,6 @@ type Statement @entity {
   id: ID!
   uri: String!
   author: Bytes!
+  mimeType: String
+  decoded: Bytes
 }

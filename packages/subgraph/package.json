@@ -15,11 +15,12 @@
     "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .StatementHistory.address ../contracts/addresses/31337.json)\" subgraph.yaml"
   },
   "devDependencies": {
-    "@graphprotocol/graph-cli": "^0.30.2",
+    "@graphprotocol/graph-cli": "^0.33.1",
     "@graphprotocol/graph-ts": "^0.27.0",
     "rimraf": "^3.0.2"
   },
   "dependencies": {
+    "as-base64": "^0.2.0",
     "babel-polyfill": "^6.26.0",
     "babel-register": "^6.26.0"
   }
