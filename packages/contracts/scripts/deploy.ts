@@ -21,7 +21,10 @@ async function main() {
     statementHistoryContract,
     'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ=='
   )
-  await addStatement(statementHistoryContract, 'def')
+  await addStatement(
+    statementHistoryContract,
+    'data:application/json;base64,eyJpZCI6ImFiYyJ9'
+  )
 
   saveAddress({
     chainId,
