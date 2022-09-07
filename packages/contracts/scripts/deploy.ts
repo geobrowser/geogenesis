@@ -21,6 +21,23 @@ async function main() {
     statementHistoryContract,
     'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ=='
   )
+
+  // const addFact = {
+  //   commands: [
+  //     {
+  //       type: 'add',
+  //       value: {
+  //         entityId: '123',
+  //         attributeId: '456',
+  //         value: {
+  //           type: 'string',
+  //           value: 'Devin',
+  //         },
+  //       },
+  //     },
+  //   ],
+  // }
+
   await addStatement(
     statementHistoryContract,
     'data:application/json;base64,eyJpZCI6ImFiYyJ9'

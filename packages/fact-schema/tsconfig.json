@@ -1,0 +1,12 @@
+{
+  "extends": "@tsconfig/node16/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "jest"],
+    "allowJs": true,
+    "strictNullChecks": true,
+    "resolveJsonModule": true,
+    "outDir": "dist",
+    "declaration": true
+  },
+  "exclude": ["node_modules", "dist"]
+}
