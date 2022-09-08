@@ -1,6 +1,11 @@
 import { JSON } from 'assemblyscript-json/assembly'
 import { mapOrNull } from './collections'
 
+// interface Base {
+//   type: string
+//   toJSON(): JSON.Value
+// }
+
 class Command {
   type: string
 

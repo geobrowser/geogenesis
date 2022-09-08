@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`generates 1`] = `
+exports[`generates files 1`] = `
 Object {
   "/dist/NumberValue.ts": "class NumberValue {
   type: string;
@@ -24,6 +24,8 @@ Object {
     return new NumberValue(type.valueOf());
   }
 }
+",
+  "/dist/index.ts": "export * from \\"./NumberValue\\";
 ",
 }
 `;

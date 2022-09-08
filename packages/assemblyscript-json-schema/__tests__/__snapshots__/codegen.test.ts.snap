@@ -1,0 +1,49 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`generates object type 1`] = `
+"import { Value } from \\"./Value\\";
+
+class NumberValue implements Value {
+  type: string;
+  value: number;
+
+  constructor(type: string, value: number) {
+    this.type = type;
+    this.value = value;
+  }
+
+  static fromJSON(__json: JSON.Value): NumberValue | null {
+    if (!__json.isObj) return null;
+    const __obj = <JSON.Obj>__json;
+    const type = __obj.getString(\\"type\\");
+    const value = __obj.getNum(\\"value\\");
+
+    if (type == null || value == null) {
+      return null;
+    }
+
+    return new NumberValue(type.valueOf());
+  }
+}
+"
+`;
+
+exports[`generates union type 1`] = `
+"class Value {
+  static fromJSON(__json: JSON.Value): Value | null {
+    if (!__json.isObj) return null;
+    const __obj = <JSON.Obj>__json;
+    const __type = __obj.getString(\\"type\\");
+    if (!type) return null;
+    switch (type.valueOf()) {
+      case \\"NumberValue\\":
+        return NumberValue.fromJSON(__json);
+      case \\"StringValue\\":
+        return StringValue.fromJSON(__json);
+      default:
+        return null;
+    }
+  }
+}
+"
+`;

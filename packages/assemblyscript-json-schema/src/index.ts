@@ -1,5 +1,6 @@
 import { copy, createFs, IFS } from 'buffs'
 import { JSONSchema7 } from 'json-schema'
+import path from 'path'
 import { generateType } from './codegen'
 import { formatDirectory } from './format'
 
@@ -24,11 +25,12 @@ export async function generate({
 
   const generatedTypes = getTypeNames(schema).map((name) => [
     `/${name}.ts`,
-    generateType(name, schema.definitions![name] as JSONSchema7),
+    generateType(schema, name),
   ])
 
   const generatedFs = createFs(Object.fromEntries(generatedTypes))
 
+  await generateIndexFile(generatedFs, '/')
   await formatDirectory(generatedFs, '/')
 
   // Write the generated files to the output fs
@@ -37,4 +39,17 @@ export async function generate({
 
 export function getTypeNames(schema: JSONSchema7) {
   return Object.keys(schema.definitions ?? {})
+}
+
+/**
+ * Generate an index file that re-exports all the source files in a directory
+ */
+async function generateIndexFile(fs: IFS, directoryPath: string) {
+  const files = await fs.promises.readdir(directoryPath, 'utf8')
+
+  const source = files
+    .map((name) => `export * from "./${path.basename(name, '.ts')}"`)
+    .join('\n')
+
+  await fs.promises.writeFile(path.join(directoryPath, 'index.ts'), source)
 }

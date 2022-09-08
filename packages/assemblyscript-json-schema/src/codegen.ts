@@ -1,10 +1,50 @@
 import { JSONSchema7 } from 'json-schema'
+import {
+  getAnyOfTypeNames,
+  getDefinition,
+  getUnionsContainingType,
+} from './schemaUtils'
 
-export function generateType(name: string, definition: JSONSchema7) {
-  const { properties = {} } = definition
+export function generateUnionType(
+  schema: JSONSchema7,
+  name: string,
+  definition: JSONSchema7
+) {
+  const anyOfTypeNames = getAnyOfTypeNames(definition)
 
   return `
   class ${name} {
+    static fromJSON(__json: JSON.Value): ${name} | null {
+      if (!__json.isObj) return null
+      const __obj = <JSON.Obj>__json
+      const __type = __obj.getString('type')
+      if (!type) return null
+      switch (type.valueOf()) {
+        ${anyOfTypeNames
+          .map(
+            (typeName) =>
+              `case '${typeName}': return ${typeName}.fromJSON(__json)`
+          )
+          .join('\n')}
+        default: return null;
+      }
+    }
+  }
+  `
+}
+
+export function generateObjectType(
+  schema: JSONSchema7,
+  name: string,
+  definition: JSONSchema7
+) {
+  const { properties = {} } = definition
+  const unions = getUnionsContainingType(schema, name)
+
+  return `
+  ${unions.map((unionName) => `import {${unionName}} from './${unionName}'`)}
+
+  class ${name} ${unions.length > 0 ? `implements ${unions.join(', ')}` : ''} {
     ${Object.entries(properties)
       .map(([property, value]) => `${property}: ${(value as JSONSchema7).type}`)
       .join('\n')}
@@ -40,6 +80,20 @@ export function generateType(name: string, definition: JSONSchema7) {
     }
   }
   `
+}
+
+export function generateType(schema: JSONSchema7, name: string) {
+  const definition = getDefinition(schema, name)
+
+  if (definition.properties) {
+    return generateObjectType(schema, name, definition)
+  }
+
+  if (definition.anyOf) {
+    return generateUnionType(schema, name, definition)
+  }
+
+  throw new Error(`Unrecognized type: ${name}`)
 }
 
 function getDecoderFunction(property: string, type: JSONSchema7['type']) {

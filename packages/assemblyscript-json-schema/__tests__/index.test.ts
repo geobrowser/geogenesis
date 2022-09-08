@@ -1,5 +1,6 @@
 import { createFs, toJSON } from 'buffs'
 import 'jest'
+import { JSONSchema7 } from 'json-schema'
 import { generate, Paths } from '../src'
 
 const paths: Paths = {
@@ -7,7 +8,7 @@ const paths: Paths = {
   outputPath: '/dist',
 }
 
-const simple = {
+const simple: JSONSchema7 = {
   $ref: '#/definitions/Root',
   $schema: 'http://json-schema.org/draft-07/schema#',
   definitions: {
@@ -27,7 +28,7 @@ const simple = {
   },
 }
 
-it('generates', async () => {
+it('generates files', async () => {
   const inputFs = createFs({
     [`/schema.json`]: JSON.stringify(simple),
   })
