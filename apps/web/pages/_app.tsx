@@ -2,13 +2,16 @@ import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/colors';
-import '../reset.css';
+import '../styles/reset.css';
+import '../styles/fonts.css';
 
 const Body = styled.div`
   min-height: 100vh;
   max-width: 100vw;
   overflow: hidden;
   background-color: ${colors.bg};
+
+  font-family: 'Apercu';
 `;
 
 const Layout = styled.main`

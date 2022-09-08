@@ -4,8 +4,8 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { typography } from '~/modules/design-system/typography';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
-  width: 125,
-  height: 125,
+  width: 150,
+  height: 150,
   borderRadius: 4,
   backgroundColor: `${props.color}`,
 }));
@@ -25,7 +25,7 @@ const Colors = Object.entries(colors).map(([name, color]) => {
 const Box = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 50px;
+  gap: 25px;
 `;
 
 const Heading = styled.h1({
@@ -36,7 +36,7 @@ export default function Dev() {
   return (
     <Box>
       <Heading>Colors</Heading>
-      <Spacer height={20} />
+      <Spacer height={12} />
       <Box>{Colors}</Box>
     </Box>
   );
