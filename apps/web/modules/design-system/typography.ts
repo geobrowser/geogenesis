@@ -1,5 +1,9 @@
 import { colors } from './colors';
 
+export type TypographyScale = typeof typography;
+export type Typeography = keyof TypographyScale;
+export type TypographyValue = TypographyScale[Typeography];
+
 const baseTypography = {
   mainPage: {
     color: colors.text,

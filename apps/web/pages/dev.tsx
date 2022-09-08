@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { colors, ColorValue } from '~/modules/design-system/colors';
 import { Spacer } from '~/modules/design-system/spacer';
-import { typography } from '~/modules/design-system/typography';
+import { Typeography, typography, TypographyValue } from '~/modules/design-system/typography';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
   width: 150,
@@ -29,10 +29,30 @@ const Colors = Object.entries(colors).map(([name, color]) => {
   );
 });
 
-const Box = styled.div`
+const TypeSwatch = styled.p<{ styles: TypographyValue }>(props => ({
+  ...props.styles,
+}));
+
+const Typography = Object.entries(typography).map(([name, value], index) => {
+  console.log(value);
+  return (
+    <TypeSwatch key={index} styles={value}>
+      {name}
+    </TypeSwatch>
+  );
+});
+
+const HorizontalBox = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 25px;
+`;
+
+const VerticalBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 12px;
 `;
 
 const Heading = styled.h1({
@@ -41,10 +61,18 @@ const Heading = styled.h1({
 
 export default function Dev() {
   return (
-    <Box>
-      <Heading>Colors</Heading>
-      <Spacer height={12} />
-      <Box>{Colors}</Box>
-    </Box>
+    <VerticalBox>
+      <HorizontalBox>
+        <Heading>Colors</Heading>
+        <Spacer height={12} />
+        <HorizontalBox>{Colors}</HorizontalBox>
+
+        <Spacer height={32} />
+      </HorizontalBox>
+      <VerticalBox>
+        <Heading>Typography</Heading>
+        <VerticalBox>{Typography}</VerticalBox>
+      </VerticalBox>
+    </VerticalBox>
   );
 }
