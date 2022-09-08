@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`generates 1`] = `
+Object {
+  "/dist/NumberValue.ts": "class NumberValue {
+  type: string;
+  value: number;
+
+  constructor(type: string, value: number) {
+    this.type = type;
+    this.value = value;
+  }
+
+  static fromJSON(__json: JSON.Value): NumberValue | null {
+    if (!__json.isObj) return null;
+    const __obj = <JSON.Obj>__json;
+    const type = __obj.getString(\\"type\\");
+    const value = __obj.getNum(\\"value\\");
+
+    if (type == null || value == null) {
+      return null;
+    }
+
+    return new NumberValue(type.valueOf());
+  }
+}
+",
+}
+`;
