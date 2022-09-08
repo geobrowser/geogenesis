@@ -1,5 +1,8 @@
-import { Facts, MockApi, useSharedObservable } from '@geogenesis/database'
+import styled from '@emotion/styled';
+import { Facts, MockApi, useSharedObservable } from '@geogenesis/database';
 import { Spacer } from '~/modules/design-system/spacer';
+
+const FactLayout = styled.div``;
 
 // Would probably be dependency injected with Context in the real implementation
 const factsStore = new Facts(new MockApi());
@@ -18,12 +21,13 @@ export default function SyncExample() {
   return (
     <div>
       {snapshot.map(fact => (
-        <div key={fact.id}>
+        <FactLayout key={fact.id}>
           <p>id: {fact.id}</p>
           <p>entityId: {fact.entityId}</p>
           <p>attribute: {fact.attribute}</p>
           <p>value: {fact.value}</p>
-        </div>
+          <Spacer height={8} />
+        </FactLayout>
       ))}
 
       <Spacer height={20} />

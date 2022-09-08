@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 
-const Box = styled.div<{ height: number; width: number }>(props => ({
+const Box = styled.div<Props>(props => ({
   margin: `${props.height}px ${props.width}px`,
 }));
 
