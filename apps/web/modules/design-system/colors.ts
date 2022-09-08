@@ -6,7 +6,7 @@ export const colors = {
   white: '#FFFFFF',
   text: '#202020',
   ctaPrimary: '#3963FE',
-  ctaHover: '#FF5F1B',
+  ctaHover: '#002FD9',
   ctaTertiary: '#F0F3FF',
   purple: '#6833FF',
   pink: '#FE31C5',
