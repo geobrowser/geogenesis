@@ -48,7 +48,7 @@ const schema: JSONSchema7 = {
       properties: {
         values: {
           items: {
-            $ref: '#/definitions/Values',
+            $ref: '#/definitions/Value',
           },
           type: 'array',
         },
@@ -75,6 +75,12 @@ it('generates union type', async () => {
   expect(containing).toEqual(['Value'])
 
   const types = formatTypeScript(generateType(schema, 'Value'))
+
+  expect(types).toMatchSnapshot()
+})
+
+it('generates array type', async () => {
+  const types = formatTypeScript(generateType(schema, 'ValuesContainer'))
 
   expect(types).toMatchSnapshot()
 })

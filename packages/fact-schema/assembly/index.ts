@@ -1,12 +1,15 @@
 import { JSON } from 'assemblyscript-json/assembly'
 import { mapOrNull } from './collections'
 
-// interface Base {
-//   type: string
-//   toJSON(): JSON.Value
-// }
+interface IEncodable {
+  toJSON(): JSON.Value
+}
 
-class Command {
+interface BaseObject {
+  type: string
+}
+
+class Command implements IEncodable, BaseObject {
   type: string
 
   constructor(type: string) {

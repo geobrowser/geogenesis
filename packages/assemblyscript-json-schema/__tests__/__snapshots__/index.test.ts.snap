@@ -14,14 +14,14 @@ Object {
   static fromJSON(__json: JSON.Value): NumberValue | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
-    const type = __obj.getString(\\"type\\");
-    const value = __obj.getNum(\\"value\\");
+    const __type = __obj.getString(\\"type\\");
+    if (__type == null) return null;
+    const type = __type.valueOf();
+    const __value = __obj.getNum(\\"value\\");
+    if (__value == null) return null;
+    const value = __value.valueOf();
 
-    if (type == null || value == null) {
-      return null;
-    }
-
-    return new NumberValue(type.valueOf());
+    return new NumberValue(type, value);
   }
 }
 ",

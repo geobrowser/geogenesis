@@ -1,5 +1,36 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`generates array type 1`] = `
+"class ValuesContainer {
+  values: Value[];
+  type: string;
+
+  constructor(values: Value[], type: string) {
+    this.values = values;
+    this.type = type;
+  }
+
+  static fromJSON(__json: JSON.Value): ValuesContainer | null {
+    if (!__json.isObj) return null;
+    const __obj = <JSON.Obj>__json;
+    const __values = __obj.getArr(\\"values\\");
+    if (__values == null) return null;
+    const __valuesArray = __values.valueOf();
+    const values = mapOrNull<JSON.Value, Value>(
+      __valuesArray,
+      (item: JSON.Value): Value | null => Value.fromJSON(item)
+    );
+    if (!values) return null;
+    const __type = __obj.getString(\\"type\\");
+    if (__type == null) return null;
+    const type = __type.valueOf();
+
+    return new ValuesContainer(values, type);
+  }
+}
+"
+`;
+
 exports[`generates object type 1`] = `
 "import { Value } from \\"./Value\\";
 
@@ -15,14 +46,14 @@ class NumberValue implements Value {
   static fromJSON(__json: JSON.Value): NumberValue | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
-    const type = __obj.getString(\\"type\\");
-    const value = __obj.getNum(\\"value\\");
+    const __type = __obj.getString(\\"type\\");
+    if (__type == null) return null;
+    const type = __type.valueOf();
+    const __value = __obj.getNum(\\"value\\");
+    if (__value == null) return null;
+    const value = __value.valueOf();
 
-    if (type == null || value == null) {
-      return null;
-    }
-
-    return new NumberValue(type.valueOf());
+    return new NumberValue(type, value);
   }
 }
 "

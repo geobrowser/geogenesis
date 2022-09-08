@@ -27,6 +27,10 @@ export function getResolvedReference<T = unknown>(
   throw new Error(`Unable to resolve reference: ${ref}`)
 }
 
+export function getReferenceName($ref: string) {
+  return $ref!.split('/').at(-1)!
+}
+
 export function getAnyOfTypeNames(definition: JSONSchema7) {
   const anyOf = (definition.anyOf || []).flatMap((schema) =>
     typeof schema === 'boolean' ? [] : [schema]
@@ -36,7 +40,7 @@ export function getAnyOfTypeNames(definition: JSONSchema7) {
     throw new Error(`Missing anyOf ref in: ${name}`)
   }
 
-  const typeNames = anyOf.map((option) => option.$ref!.split('/').at(-1)!)
+  const typeNames = anyOf.map((option) => getReferenceName(option.$ref!))
 
   return typeNames
 }
