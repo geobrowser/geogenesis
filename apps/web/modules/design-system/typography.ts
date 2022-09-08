@@ -30,12 +30,14 @@ const baseTypography = {
     fontSize: '1rem',
     lineHeight: '1.8125rem',
     fontWeight: 400,
+    fontFamily: 'IBM Plex Serif',
   },
   tableCell: {
     color: colors.text,
     fontSize: '1rem',
     lineHeight: '1.3125rem',
     fontWeight: 400,
+    fontFamily: 'IBM Plex Serif',
   },
   textLink: {
     color: colors.text,
@@ -43,6 +45,7 @@ const baseTypography = {
     lineHeight: '1.8125rem',
     fontWeight: 400,
     textDecoration: 'underline',
+    fontFamily: 'IBM Plex Serif',
   },
   quote: {
     color: colors.text,

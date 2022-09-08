@@ -10,14 +10,21 @@ const Swatch = styled.div<{ color: ColorValue }>(props => ({
   backgroundColor: `${props.color}`,
 }));
 
+const ColorTitle = styled.h2({
+  ...typography.bodyBold,
+});
+
+const ColorValueSpan = styled.p({
+  ...typography.body,
+});
+
 const Colors = Object.entries(colors).map(([name, color]) => {
   return (
     <div key={name}>
       <Swatch color={color} />
       <Spacer height={8} />
-      <h2>{name}</h2>
-      <Spacer height={4} />
-      <p>{color}</p>
+      <ColorTitle>{name}</ColorTitle>
+      <ColorValueSpan>{color}</ColorValueSpan>
     </div>
   );
 });
