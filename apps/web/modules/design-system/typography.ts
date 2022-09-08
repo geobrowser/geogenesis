@@ -67,7 +67,7 @@ const baseTypography = {
     color: colors.text,
     fontSize: '0.875rem',
     lineHeight: '1.125rem',
-    fontWeight: 600,
+    fontWeight: 500,
   },
   input: {
     color: colors.text,
@@ -111,18 +111,18 @@ export const typography = {
   },
   quoteMedium: {
     ...baseTypography.quote,
-    fontWeight: 600,
+    fontWeight: 500,
   },
   inputMedium: {
     ...baseTypography.input,
-    fontWeight: 600,
+    fontWeight: 500,
   },
   metadataMedium: {
     ...baseTypography.metadata,
-    fontWeight: 600,
+    fontWeight: 500,
   },
   footnoteMedium: {
     ...baseTypography.footnote,
-    fontWeight: 600,
+    fontWeight: 500,
   },
 };
