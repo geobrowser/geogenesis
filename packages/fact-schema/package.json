@@ -10,7 +10,7 @@
     "clean": "rimraf build dist",
     "build": "pnpm run build:schema && pnpm run build:ts",
     "build:wasm": "asc assembly/index.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw",
-    "build:schema": "npx typescript-json-schema 'src/fact.ts' Root -o build/schema.json --noExtraProps --topRef --required --aliasRefs",
+    "build:schema": "npx ts-json-schema-generator --path 'src/fact.ts' --type Root --out build/schema.json --additional-properties false --expose all",
     "build:ts": "npx tsc"
   },
   "devDependencies": {
@@ -23,6 +23,7 @@
     "jest": "^28.1.3",
     "rimraf": "^3.0.2",
     "ts-jest": "^28.0.8",
+    "ts-json-schema-generator": "^1.0.0",
     "ts-node": "^10.7.0",
     "typescript": "^4.8.2",
     "typescript-json-schema": "^0.54.0"
@@ -32,6 +33,11 @@
   },
   "jest": {
     "preset": "ts-jest",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/dist/",
+      "/build/"
+    ]
   }
 }
