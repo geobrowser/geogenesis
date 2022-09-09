@@ -2,7 +2,8 @@
 
 exports[`generates files 1`] = `
 Object {
-  "/dist/NumberValue.ts": "import { JSON } from \\"assemblyscript-json/assembly\\";
+  "/dist/NumberValue.ts": "import { log } from \\"@graphprotocol/graph-ts\\";
+import { JSON } from \\"assemblyscript-json/assembly\\";
 
 export class NumberValue {
   type: string;
@@ -24,13 +25,22 @@ export class NumberValue {
   }
 
   static fromJSON(__json: JSON.Value): NumberValue | null {
-    if (!__json.isObj) return null;
-    const __obj = <JSON.Obj>__json;
+    if (!__json.isObj) {
+      log.debug(\\"NumberValue.fromJSON(): __json.isObj is false\\", []);
+      return null;
+    }
+    const __obj = __json as JSON.Obj;
     const __type = __obj.getString(\\"type\\");
-    if (__type == null) return null;
+    if (__type == null) {
+      log.debug(\\"NumberValue.fromJSON(): __type is null\\", []);
+      return null;
+    }
     const type = __type.valueOf();
     const __value = __obj.getNum(\\"value\\");
-    if (__value == null) return null;
+    if (__value == null) {
+      log.debug(\\"NumberValue.fromJSON(): __value is null\\", []);
+      return null;
+    }
     const value = __value.valueOf();
 
     return new NumberValue(type, value);

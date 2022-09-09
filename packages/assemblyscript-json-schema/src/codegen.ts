@@ -4,6 +4,7 @@ import {
   findRefs,
   getAnyOfTypeNames,
   getDefinition,
+  getDiscriminator,
   getRefName,
   getUnionsContainingType,
   hasArrayOfComplexTypes,
@@ -22,6 +23,7 @@ export function generateUnionType(
   const anyOfTypeNames = getAnyOfTypeNames(definition)
 
   return `
+  import { log } from '@graphprotocol/graph-ts'
   import { JSON } from 'assemblyscript-json/assembly'
   ${anyOfTypeNames.map(generateImport).join('\n')}
 
@@ -37,24 +39,35 @@ export function generateUnionType(
       ${anyOfTypeNames
         .map(
           (typeName) =>
-            `if (typeName == '${typeName}') return (<${typeName}>this).toJSON()`
+            `if (typeName == '${getDiscriminator(
+              getDefinition(schema, typeName)
+            )}') return (this as ${typeName}).toJSON()`
         )
         .join('\n')}
       throw "undefined variant of: ${name}"
     }
 
     static fromJSON(__json: JSON.Value): ${name} | null {
-      if (!__json.isObj) return null
+      if (!__json.isObj) {
+        log.debug("${name}.fromJSON(): __json.isObj is false", [])
+        return null
+      }
       const __obj = <JSON.Obj>__json
       const type = __obj.getString('type')
-      if (!type) return null
+      if (type == null) {
+        log.debug("${name}.fromJSON(): type is null", [])
+        return null
+      }
       const typeName = type.valueOf()
       ${anyOfTypeNames
         .map(
           (typeName) =>
-            `if (typeName == '${typeName}') return ${typeName}.fromJSON(__json)`
+            `if (typeName == '${getDiscriminator(
+              getDefinition(schema, typeName)
+            )}') return ${typeName}.fromJSON(__json)`
         )
         .join('\n')}
+      log.debug(\`${name}.fromJSON(): unhandled variant '\${typeName}'\`, [])
       return null;
     }
   }
@@ -74,6 +87,7 @@ export function generateObjectType(
   ])
 
   return `
+  import { log } from '@graphprotocol/graph-ts'
   import { JSON } from 'assemblyscript-json/assembly'
   ${importedNames.map(generateImport).join('\n')}
   ${
@@ -133,8 +147,11 @@ export function generateObjectType(
     }
 
     static fromJSON(__json: JSON.Value): ${name} | null {
-      if (!__json.isObj) return null
-      const __obj = <JSON.Obj>__json
+      if (!__json.isObj) {
+        log.debug("${name}.fromJSON(): __json.isObj is false", [])
+        return null
+      }
+      const __obj = __json as JSON.Obj
       ${Object.entries(properties)
         .map(([property, value]) => {
           let result = `
@@ -142,7 +159,10 @@ export function generateObjectType(
             property,
             value as JSONSchema7
           )}
-          if (__${property} == null) return null
+          if (__${property} == null) {
+            log.debug("${name}.fromJSON(): __${property} is null", [])
+            return null
+          }
           `
           if ((value as JSONSchema7).type === 'array') {
             const itemType = (value as JSONSchema7).items! as JSONSchema7
@@ -152,11 +172,17 @@ export function generateObjectType(
               __${property}Array,
               (item: JSON.Value): ${refName} | null => ${refName}.fromJSON(item)
             )
-            if (!${property}) return null`
+            if (${property} == null) {
+              log.debug("${name}.fromJSON(): __${property} is null", [])
+              return null
+            }`
           } else if ((value as JSONSchema7).$ref) {
             const refName = getRefName((value as JSONSchema7).$ref!)
             result += `const ${property} = ${refName}.fromJSON(__${property})
-            if (!${property}) return null`
+            if (${property} == null) {
+              log.debug("${name}.fromJSON(): __${property} is null", [])
+              return null
+            }`
           } else {
             result += `const ${property} = __${property}.valueOf()`
           }

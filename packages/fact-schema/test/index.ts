@@ -11,12 +11,32 @@ const loadAssembly = async (): Promise<typeof AssemblyExports> =>
           throw 'abort'
         },
       },
+      index: {
+        log: {
+          log: (level: number, msg: string) =>
+            console.log(`WASM log (${level}): ${msg}`),
+        },
+      },
     }
   )
 
 const root: Root = {
   type: 'root',
-  commands: [],
+  commands: [
+    {
+      type: 'create',
+      value: {
+        type: 'fact',
+        id: 'i',
+        entityId: 'e',
+        attributeId: 'a',
+        value: {
+          type: 'string',
+          value: 'hi',
+        },
+      },
+    },
+  ],
 }
 
 ;(async () => {

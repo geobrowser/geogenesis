@@ -99,3 +99,11 @@ export function hasArrayOfComplexTypes(schema: JSONSchema7) {
       '$ref' in value
   )
 }
+
+export function getDiscriminator(definition: JSONSchema7) {
+  const properties = definition.properties || {}
+  const typeProperty = properties.type as JSONSchema7 | undefined
+  return typeof typeProperty?.const === 'string'
+    ? typeProperty.const
+    : undefined
+}
