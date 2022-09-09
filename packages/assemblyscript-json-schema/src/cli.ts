@@ -21,8 +21,14 @@ export async function cli({ argv }: { argv: string[] }) {
     return process.exit(0)
   }
 
-  if (!schema) throw new Error(`Missing 'schema' arg`)
-  if (!output) throw new Error(`Missing 'output' arg`)
+  if (!schema) {
+    console.error(`Missing 'schema' arg`)
+    return process.exit(1)
+  }
+  if (!output) {
+    console.error(`Missing 'output' arg`)
+    return process.exit(1)
+  }
 
   generate({
     paths: {

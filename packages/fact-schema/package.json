@@ -14,6 +14,7 @@
     "build:ts": "npx tsc"
   },
   "devDependencies": {
+    "@geogenesis/assemblyscript-json-schema": "workspace:^0.0.1",
     "@graphprotocol/graph-ts": "^0.27.0",
     "@types/jest": "^29.0.0",
     "@types/node": "^18.7.15",

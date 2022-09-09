@@ -4,8 +4,12 @@
   "version": "0.0.1",
   "license": "MIT",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc && cp -r static dist/static"
   },
+  "main": "./dist/src/index.js",
+  "bin": "./dist/src/bin.js",
   "devDependencies": {
     "@tsconfig/node16": "^1.0.3",
     "@types/jest": "^29.0.0",
@@ -15,6 +19,7 @@
     "ajv": "^8.11.0",
     "arg": "^5.0.2",
     "jest": "^28.1.3",
+    "rimraf": "^3.0.2",
     "ts-jest": "^28.0.8",
     "ts-node": "^10.7.0",
     "typescript": "^4.8.2"

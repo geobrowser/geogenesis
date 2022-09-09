@@ -31,15 +31,14 @@ export function generateUnionType(
       const __obj = <JSON.Obj>__json
       const type = __obj.getString('type')
       if (!type) return null
-      switch (type.valueOf()) {
-        ${anyOfTypeNames
-          .map(
-            (typeName) =>
-              `case '${typeName}': return ${typeName}.fromJSON(__json)`
-          )
-          .join('\n')}
-        default: return null;
-      }
+      const typeName = type.valueOf()
+      ${anyOfTypeNames
+        .map(
+          (typeName) =>
+            `if (typeName == '${typeName}') return ${typeName}.fromJSON(__json)`
+        )
+        .join('\n')}
+      return null;
     }
   }
   `
@@ -67,7 +66,7 @@ export function generateObjectType(
   }  
 
   export class ${name} ${
-    unions.length > 0 ? `implements ${unions.join(', ')}` : ''
+    unions.length > 0 ? `extends ${unions.join(', ')}` : ''
   } {
     ${Object.entries(properties)
       .map(
@@ -80,6 +79,7 @@ export function generateObjectType(
       ([property, value]) =>
         `${property}: ${convertTypeName(schema, value as JSONSchema7)}`
     )}) {
+      ${unions.length > 0 ? 'super()' : ''}
       ${Object.keys(properties)
         .map((property) => `this.${property} = ${property}`)
         .join('\n')}
