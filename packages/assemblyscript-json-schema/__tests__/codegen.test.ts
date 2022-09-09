@@ -60,6 +60,19 @@ const schema: JSONSchema7 = {
       required: ['type', 'values'],
       type: 'object',
     },
+    ValueContainer: {
+      properties: {
+        value: {
+          $ref: '#/definitions/Value',
+        },
+        type: {
+          const: 'ValueContainer',
+          type: 'string',
+        },
+      },
+      required: ['type', 'value'],
+      type: 'object',
+    },
   },
 }
 
@@ -81,6 +94,12 @@ it('generates union type', async () => {
 
 it('generates array type', async () => {
   const types = formatTypeScript(generateType(schema, 'ValuesContainer'))
+
+  expect(types).toMatchSnapshot()
+})
+
+it('generates object type', async () => {
+  const types = formatTypeScript(generateType(schema, 'ValueContainer'))
 
   expect(types).toMatchSnapshot()
 })

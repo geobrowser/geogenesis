@@ -70,7 +70,7 @@ export function generateObjectType(
           let result = `
           const __${property} = ${getDecoderFunction(
             property,
-            (value as JSONSchema7).type
+            value as JSONSchema7
           )}
           if (__${property} == null) return null
           `
@@ -82,6 +82,10 @@ export function generateObjectType(
               __${property}Array,
               (item: JSON.Value): ${refName} | null => ${refName}.fromJSON(item)
             )
+            if (!${property}) return null`
+          } else if ((value as JSONSchema7).$ref) {
+            const refName = getReferenceName((value as JSONSchema7).$ref!)
+            result += `const ${property} = ${refName}.fromJSON(item)
             if (!${property}) return null`
           } else {
             result += `const ${property} = __${property}.valueOf()`
@@ -125,9 +129,9 @@ function convertTypeName(schema: JSONSchema7, property: JSONSchema7) {
   }
 }
 
-function getDecoderFunction(property: string, type: JSONSchema7['type']) {
-  if (typeof type === 'string') {
-    switch (type) {
+function getDecoderFunction(property: string, value: JSONSchema7) {
+  if (typeof value.type === 'string') {
+    switch (value.type) {
       case 'number':
         return `__obj.getNum("${property}")`
       case 'string':
@@ -141,5 +145,9 @@ function getDecoderFunction(property: string, type: JSONSchema7['type']) {
     }
   }
 
-  throw new Error(`Unsupported 'type': ${JSON.stringify(type)}`)
+  if (typeof value.$ref === 'string') {
+    return `__obj.getObj("${property}")`
+  }
+
+  throw new Error(`Unsupported property: ${JSON.stringify(value)}`)
 }

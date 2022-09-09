@@ -59,6 +59,33 @@ class NumberValue implements Value {
 "
 `;
 
+exports[`generates object type 2`] = `
+"class ValueContainer {
+  value: undefined;
+  type: string;
+
+  constructor(value: undefined, type: string) {
+    this.value = value;
+    this.type = type;
+  }
+
+  static fromJSON(__json: JSON.Value): ValueContainer | null {
+    if (!__json.isObj) return null;
+    const __obj = <JSON.Obj>__json;
+    const __value = __obj.getObj(\\"value\\");
+    if (__value == null) return null;
+    const value = Value.fromJSON(item);
+    if (!value) return null;
+    const __type = __obj.getString(\\"type\\");
+    if (__type == null) return null;
+    const type = __type.valueOf();
+
+    return new ValueContainer(value, type);
+  }
+}
+"
+`;
+
 exports[`generates union type 1`] = `
 "class Value {
   static fromJSON(__json: JSON.Value): Value | null {
