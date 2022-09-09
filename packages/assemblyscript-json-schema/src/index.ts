@@ -7,6 +7,7 @@ import { formatDirectory } from './format'
 export interface Paths {
   schemaPath: string
   outputPath: string
+  staticPath?: string
 }
 
 type Configuration = {
@@ -29,6 +30,11 @@ export async function generate({
   ])
 
   const generatedFs = createFs(Object.fromEntries(generatedTypes))
+
+  const staticPath = paths.staticPath ?? path.join(__dirname, '../static')
+
+  // Copy all static files
+  copy(inputFs, generatedFs, staticPath, '/')
 
   await generateIndexFile(generatedFs, '/')
   await formatDirectory(generatedFs, '/')

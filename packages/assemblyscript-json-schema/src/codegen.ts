@@ -6,6 +6,7 @@ import {
   getDefinition,
   getRefName,
   getUnionsContainingType,
+  hasArrayOfComplexTypes,
   unique,
 } from './schemaUtils'
 
@@ -21,6 +22,9 @@ export function generateUnionType(
   const anyOfTypeNames = getAnyOfTypeNames(definition)
 
   return `
+  import { JSON } from 'assemblyscript-json/assembly'
+  ${anyOfTypeNames.map(generateImport).join('\n')}
+
   export class ${name} {
     static fromJSON(__json: JSON.Value): ${name} | null {
       if (!__json.isObj) return null
@@ -54,9 +58,17 @@ export function generateObjectType(
   ])
 
   return `
+  import { JSON } from 'assemblyscript-json/assembly'
   ${importedNames.map(generateImport).join('\n')}
+  ${
+    hasArrayOfComplexTypes(definition)
+      ? `import { mapOrNull } from "./collection-utils"`
+      : ''
+  }  
 
-  class ${name} ${unions.length > 0 ? `implements ${unions.join(', ')}` : ''} {
+  export class ${name} ${
+    unions.length > 0 ? `implements ${unions.join(', ')}` : ''
+  } {
     ${Object.entries(properties)
       .map(
         ([property, value]) =>
@@ -96,7 +108,7 @@ export function generateObjectType(
             if (!${property}) return null`
           } else if ((value as JSONSchema7).$ref) {
             const refName = getRefName((value as JSONSchema7).$ref!)
-            result += `const ${property} = ${refName}.fromJSON(item)
+            result += `const ${property} = ${refName}.fromJSON(__${property})
             if (!${property}) return null`
           } else {
             result += `const ${property} = __${property}.valueOf()`

@@ -6,6 +6,7 @@ import { generate, Paths } from '../src'
 const paths: Paths = {
   schemaPath: '/schema.json',
   outputPath: '/dist',
+  staticPath: '/static',
 }
 
 const simple: JSONSchema7 = {
@@ -31,6 +32,7 @@ const simple: JSONSchema7 = {
 it('generates files', async () => {
   const inputFs = createFs({
     [`/schema.json`]: JSON.stringify(simple),
+    ['/static']: null,
   })
 
   const outputFs = createFs()

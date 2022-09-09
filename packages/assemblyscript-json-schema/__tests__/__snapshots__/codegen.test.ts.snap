@@ -1,9 +1,11 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`generates array type 1`] = `
-"import { Value } from \\"./Value\\";
+"import { JSON } from \\"assemblyscript-json/assembly\\";
+import { Value } from \\"./Value\\";
+import { mapOrNull } from \\"./collection-utils\\";
 
-class ValuesContainer {
+export class ValuesContainer {
   values: Value[];
   type: string;
 
@@ -34,9 +36,10 @@ class ValuesContainer {
 `;
 
 exports[`generates object type 1`] = `
-"import { Value } from \\"./Value\\";
+"import { JSON } from \\"assemblyscript-json/assembly\\";
+import { Value } from \\"./Value\\";
 
-class NumberValue implements Value {
+export class NumberValue implements Value {
   type: string;
   value: number;
 
@@ -62,9 +65,10 @@ class NumberValue implements Value {
 `;
 
 exports[`generates object type 2`] = `
-"import { Value } from \\"./Value\\";
+"import { JSON } from \\"assemblyscript-json/assembly\\";
+import { Value } from \\"./Value\\";
 
-class ValueContainer {
+export class ValueContainer {
   value: Value;
   type: string;
 
@@ -78,7 +82,7 @@ class ValueContainer {
     const __obj = <JSON.Obj>__json;
     const __value = __obj.getObj(\\"value\\");
     if (__value == null) return null;
-    const value = Value.fromJSON(item);
+    const value = Value.fromJSON(__value);
     if (!value) return null;
     const __type = __obj.getString(\\"type\\");
     if (__type == null) return null;
@@ -91,7 +95,11 @@ class ValueContainer {
 `;
 
 exports[`generates union type 1`] = `
-"export class Value {
+"import { JSON } from \\"assemblyscript-json/assembly\\";
+import { NumberValue } from \\"./NumberValue\\";
+import { StringValue } from \\"./StringValue\\";
+
+export class Value {
   static fromJSON(__json: JSON.Value): Value | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;

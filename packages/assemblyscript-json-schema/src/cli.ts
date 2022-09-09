@@ -7,15 +7,16 @@ export async function cli({ argv }: { argv: string[] }) {
       '--help': Boolean,
       '--schema': String,
       '--output': String,
+      '--static': String,
     },
     { argv }
   )
 
-  const { '--schema': schema, '--output': output } = result
+  const { '--schema': schema, '--output': output, '--static': static_ } = result
 
   if (result['--help']) {
     console.log(
-      `assemblyscript-json-schema --schema <SCHEMA_PATH> --output <OUTPUT_PATH> `
+      `assemblyscript-json-schema --schema <SCHEMA_PATH> --static <STATIC_PATH> --output <OUTPUT_PATH>`
     )
     return process.exit(0)
   }
@@ -27,6 +28,7 @@ export async function cli({ argv }: { argv: string[] }) {
     paths: {
       schemaPath: schema,
       outputPath: output,
+      staticPath: static_,
     },
   })
 }

@@ -88,3 +88,14 @@ export function findRefs(schema: JSONSchema7) {
       .flatMap(([, value]) => (typeof value === 'string' ? [value] : []))
   )
 }
+
+export function hasArrayOfComplexTypes(schema: JSONSchema7) {
+  return !!traverse.find(
+    ['', schema as JSONValue],
+    ([key, value]) =>
+      key === 'items' &&
+      typeof value === 'object' &&
+      value != null &&
+      '$ref' in value
+  )
+}

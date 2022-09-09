@@ -2,7 +2,9 @@
 
 exports[`generates files 1`] = `
 Object {
-  "/dist/NumberValue.ts": "class NumberValue {
+  "/dist/NumberValue.ts": "import { JSON } from \\"assemblyscript-json/assembly\\";
+
+export class NumberValue {
   type: string;
   value: number;
 
