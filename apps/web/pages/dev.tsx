@@ -30,18 +30,18 @@ const Typography = Object.keys(typography).map((name, index) => {
   );
 });
 
-const HorizontalBox = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 25px;
-`;
+const HorizontalBox = styled.div({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '25px',
+});
 
-const VerticalBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  gap: 12px;
-`;
+const VerticalBox = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+  flexWrap: 'wrap',
+  gap: '12px',
+});
 
 export default function Dev() {
   return (

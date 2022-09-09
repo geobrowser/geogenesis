@@ -28,6 +28,7 @@ importers:
       next: ^12.1.6
       react: ^18.1.0
       react-dom: ^18.1.0
+      reset-css: ^5.0.1
       typescript: ^4.7.2
     dependencies:
       '@emotion/react': 11.10.4_hbgfqniqg2qt6ignwsnxswzwmy
@@ -37,6 +38,7 @@ importers:
       next: 12.2.3_vyk55zyolcaieh7zfm7nf7uva4
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
+      reset-css: 5.0.1
     devDependencies:
       '@babel/core': 7.19.0
       '@types/node': 17.0.45
@@ -13060,6 +13062,10 @@ packages:
   /requires-port/1.0.0:
     resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
     dev: true
+
+  /reset-css/5.0.1:
+    resolution: {integrity: sha512-VyuJdNFfp5x/W6e5wauJM59C02Vs0P22sxzZGhQMPaqu/NGTeFxlBFOOw3eq9vQd19gIDdZp7zi89ylyKOJ33Q==}
+    dev: false
 
   /resolve-cwd/3.0.0:
     resolution: {integrity: sha512-OrZaX2Mb+rJCpH/6CpSqt9xFVpN++x01XnN2ie9g6P5/3xelLAkXWVADpdz1IHD/KFfEXyE6V0U01OQ3UO2rEg==}

@@ -2,24 +2,23 @@ import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
-import '../styles/reset.css';
+import 'reset-css';
 import '../styles/fonts.css';
 
-const Body = styled.div`
-  min-height: 100vh;
-  max-width: 100vw;
-  overflow: hidden;
-  background-color: ${colors.bg};
+const Body = styled.div({
+  minHeight: '100vh',
+  maxWidth: '100vw',
+  overflow: 'hidden',
+  backgroundColor: `${colors.bg}`,
+  fontFamily: 'Apercu',
+});
 
-  font-family: 'Apercu';
-`;
-
-const Layout = styled.main`
-  padding: 2ch;
-  padding-top: 6ch;
-  margin: 0 auto;
-  max-width: 120ch;
-`;
+const Layout = styled.main({
+  padding: '2ch',
+  paddingTop: '6ch',
+  margin: '0 auto',
+  maxWidth: '120ch',
+});
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
