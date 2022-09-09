@@ -1,5 +1,24 @@
 import { JSONSchema7 } from 'json-schema'
 import get from 'lodash.get'
+import { withOptions } from 'tree-visit'
+
+type JSONValue =
+  | null
+  | boolean
+  | number
+  | string
+  | { [x: string]: JSONValue }
+  | Array<JSONValue>
+
+const traverse = withOptions<[string, JSONValue]>({
+  getChildren: ([, value]) => {
+    if (typeof value === 'object' && value !== null) {
+      return Object.entries(value)
+    } else {
+      return []
+    }
+  },
+})
 
 export function getTypeNames(schema: JSONSchema7) {
   return Object.keys(schema.definitions ?? {})
@@ -27,7 +46,7 @@ export function getResolvedReference<T = unknown>(
   throw new Error(`Unable to resolve reference: ${ref}`)
 }
 
-export function getReferenceName($ref: string) {
+export function getRefName($ref: string) {
   return $ref!.split('/').at(-1)!
 }
 
@@ -40,7 +59,7 @@ export function getAnyOfTypeNames(definition: JSONSchema7) {
     throw new Error(`Missing anyOf ref in: ${name}`)
   }
 
-  const typeNames = anyOf.map((option) => getReferenceName(option.$ref!))
+  const typeNames = anyOf.map((option) => getRefName(option.$ref!))
 
   return typeNames
 }
@@ -58,6 +77,14 @@ export function getUnionsContainingType(schema: JSONSchema7, name: string) {
   return unique(unionTypeNames)
 }
 
-function unique<T>(array: T[]): T[] {
+export function unique<T>(array: T[]): T[] {
   return [...new Set(array)]
+}
+
+export function findRefs(schema: JSONSchema7) {
+  return unique(
+    traverse
+      .findAll(['', schema as JSONValue], ([key]) => key === '$ref')
+      .flatMap(([, value]) => (typeof value === 'string' ? [value] : []))
+  )
 }

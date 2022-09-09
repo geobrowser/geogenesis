@@ -1,10 +1,17 @@
 import { JSONSchema7 } from 'json-schema'
+
 import {
+  findRefs,
   getAnyOfTypeNames,
   getDefinition,
-  getReferenceName,
+  getRefName,
   getUnionsContainingType,
+  unique,
 } from './schemaUtils'
+
+function generateImport(name: string) {
+  return `import { ${name} } from "./${name}"`
+}
 
 export function generateUnionType(
   schema: JSONSchema7,
@@ -14,11 +21,11 @@ export function generateUnionType(
   const anyOfTypeNames = getAnyOfTypeNames(definition)
 
   return `
-  class ${name} {
+  export class ${name} {
     static fromJSON(__json: JSON.Value): ${name} | null {
       if (!__json.isObj) return null
       const __obj = <JSON.Obj>__json
-      const __type = __obj.getString('type')
+      const type = __obj.getString('type')
       if (!type) return null
       switch (type.valueOf()) {
         ${anyOfTypeNames
@@ -41,9 +48,13 @@ export function generateObjectType(
 ) {
   const { properties = {} } = definition
   const unions = getUnionsContainingType(schema, name)
+  const importedNames = unique([
+    ...findRefs(definition).map(getRefName),
+    ...unions,
+  ])
 
   return `
-  ${unions.map((unionName) => `import {${unionName}} from './${unionName}'`)}
+  ${importedNames.map(generateImport).join('\n')}
 
   class ${name} ${unions.length > 0 ? `implements ${unions.join(', ')}` : ''} {
     ${Object.entries(properties)
@@ -76,7 +87,7 @@ export function generateObjectType(
           `
           if ((value as JSONSchema7).type === 'array') {
             const itemType = (value as JSONSchema7).items! as JSONSchema7
-            const refName = getReferenceName(itemType.$ref!)
+            const refName = getRefName(itemType.$ref!)
             result += `const __${property}Array = __${property}.valueOf()
             const ${property} = mapOrNull<JSON.Value, ${refName}>(
               __${property}Array,
@@ -84,7 +95,7 @@ export function generateObjectType(
             )
             if (!${property}) return null`
           } else if ((value as JSONSchema7).$ref) {
-            const refName = getReferenceName((value as JSONSchema7).$ref!)
+            const refName = getRefName((value as JSONSchema7).$ref!)
             result += `const ${property} = ${refName}.fromJSON(item)
             if (!${property}) return null`
           } else {
@@ -124,9 +135,15 @@ function convertTypeName(schema: JSONSchema7, property: JSONSchema7) {
     case 'string':
       return property.type
     case 'array':
-      const name = getReferenceName((property.items as JSONSchema7).$ref!)
+      const name = getRefName((property.items as JSONSchema7).$ref!)
       return `${name}[]`
   }
+
+  if (property.$ref) {
+    return getRefName(property.$ref)
+  }
+
+  throw new Error(`Failed to get type name: ${JSON.stringify(property)}`)
 }
 
 function getDecoderFunction(property: string, value: JSONSchema7) {

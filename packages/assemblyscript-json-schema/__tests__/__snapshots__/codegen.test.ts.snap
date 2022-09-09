@@ -1,7 +1,9 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`generates array type 1`] = `
-"class ValuesContainer {
+"import { Value } from \\"./Value\\";
+
+class ValuesContainer {
   values: Value[];
   type: string;
 
@@ -60,11 +62,13 @@ class NumberValue implements Value {
 `;
 
 exports[`generates object type 2`] = `
-"class ValueContainer {
-  value: undefined;
+"import { Value } from \\"./Value\\";
+
+class ValueContainer {
+  value: Value;
   type: string;
 
-  constructor(value: undefined, type: string) {
+  constructor(value: Value, type: string) {
     this.value = value;
     this.type = type;
   }
@@ -87,11 +91,11 @@ exports[`generates object type 2`] = `
 `;
 
 exports[`generates union type 1`] = `
-"class Value {
+"export class Value {
   static fromJSON(__json: JSON.Value): Value | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
-    const __type = __obj.getString(\\"type\\");
+    const type = __obj.getString(\\"type\\");
     if (!type) return null;
     switch (type.valueOf()) {
       case \\"NumberValue\\":
