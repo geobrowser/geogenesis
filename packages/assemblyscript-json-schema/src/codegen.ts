@@ -26,6 +26,23 @@ export function generateUnionType(
   ${anyOfTypeNames.map(generateImport).join('\n')}
 
   export class ${name} {
+    type: string
+
+    constructor(type: string) {
+      this.type = type;
+    } 
+
+    toJSON(): JSON.Value {
+      const typeName = this.type;
+      ${anyOfTypeNames
+        .map(
+          (typeName) =>
+            `if (typeName == '${typeName}') return (<${typeName}>this).toJSON()`
+        )
+        .join('\n')}
+      throw "undefined variant of: ${name}"
+    }
+
     static fromJSON(__json: JSON.Value): ${name} | null {
       if (!__json.isObj) return null
       const __obj = <JSON.Obj>__json
@@ -79,10 +96,40 @@ export function generateObjectType(
       ([property, value]) =>
         `${property}: ${convertTypeName(schema, value as JSONSchema7)}`
     )}) {
-      ${unions.length > 0 ? 'super()' : ''}
+      ${unions.length > 0 ? 'super(type)' : ''}
       ${Object.keys(properties)
         .map((property) => `this.${property} = ${property}`)
         .join('\n')}
+    }
+
+    toJSON(): JSON.Value {
+      const __obj = new JSON.Obj()
+      ${Object.entries(properties)
+        .map(([property, value]) => {
+          let result = ``
+
+          if ((value as JSONSchema7).type === 'array') {
+            result += `const ${property} = new JSON.Arr()
+            for (let i = 0; i < this.${property}.length; i++) {
+              ${property}.push(this.${property}[i].toJSON())
+            }`
+          } else if ((value as JSONSchema7).$ref) {
+            result += `const ${property} = this.${property}.toJSON()`
+          } else {
+            result += `const ${property} = ${getEncoderFunction(
+              value as JSONSchema7
+            )}(this.${property})`
+          }
+
+          result += `
+          __obj.set('${property}', ${property})
+          `
+
+          return result.trim()
+        })
+        .join('\n')}
+
+      return __obj
     }
 
     static fromJSON(__json: JSON.Value): ${name} | null {
@@ -176,6 +223,29 @@ function getDecoderFunction(property: string, value: JSONSchema7) {
 
   if (typeof value.$ref === 'string') {
     return `__obj.getObj("${property}")`
+  }
+
+  throw new Error(`Unsupported property: ${JSON.stringify(value)}`)
+}
+
+function getEncoderFunction(value: JSONSchema7) {
+  if (typeof value.type === 'string') {
+    switch (value.type) {
+      case 'number':
+        return `new JSON.Num`
+      case 'string':
+        return `new JSON.Str`
+      case 'boolean':
+        return `new JSON.Bool`
+      case 'array':
+        return `new JSON.Arr`
+      default:
+        break
+    }
+  }
+
+  if (typeof value.$ref === 'string') {
+    return `new JSON.Obj`
   }
 
   throw new Error(`Unsupported property: ${JSON.stringify(value)}`)

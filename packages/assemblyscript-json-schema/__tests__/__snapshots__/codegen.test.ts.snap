@@ -14,6 +14,19 @@ export class ValuesContainer {
     this.type = type;
   }
 
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj();
+    const values = new JSON.Arr();
+    for (let i = 0; i < this.values.length; i++) {
+      values.push(this.values[i].toJSON());
+    }
+    __obj.set(\\"values\\", values);
+    const type = new JSON.Str(this.type);
+    __obj.set(\\"type\\", type);
+
+    return __obj;
+  }
+
   static fromJSON(__json: JSON.Value): ValuesContainer | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
@@ -44,9 +57,19 @@ export class NumberValue extends Value {
   value: number;
 
   constructor(type: string, value: number) {
-    super();
+    super(type);
     this.type = type;
     this.value = value;
+  }
+
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj();
+    const type = new JSON.Str(this.type);
+    __obj.set(\\"type\\", type);
+    const value = new JSON.Num(this.value);
+    __obj.set(\\"value\\", value);
+
+    return __obj;
   }
 
   static fromJSON(__json: JSON.Value): NumberValue | null {
@@ -78,6 +101,16 @@ export class ValueContainer {
     this.type = type;
   }
 
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj();
+    const value = this.value.toJSON();
+    __obj.set(\\"value\\", value);
+    const type = new JSON.Str(this.type);
+    __obj.set(\\"type\\", type);
+
+    return __obj;
+  }
+
   static fromJSON(__json: JSON.Value): ValueContainer | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
@@ -101,6 +134,19 @@ import { NumberValue } from \\"./NumberValue\\";
 import { StringValue } from \\"./StringValue\\";
 
 export class Value {
+  type: string;
+
+  constructor(type: string) {
+    this.type = type;
+  }
+
+  toJSON(): JSON.Value {
+    const typeName = this.type;
+    if (typeName == \\"NumberValue\\") return (<NumberValue>this).toJSON();
+    if (typeName == \\"StringValue\\") return (<StringValue>this).toJSON();
+    throw \\"undefined variant of: Value\\";
+  }
+
   static fromJSON(__json: JSON.Value): Value | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;

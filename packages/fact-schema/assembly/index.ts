@@ -71,7 +71,6 @@ export function test(json: string): string | null {
   let value: JSON.Value = <JSON.Value>JSON.parse(json)
   let root = Root.fromJSON(value)
   if (!root) return null
-  return 'OK'
-  // const serialized = root.toJSON()
-  // return serialized.stringify()
+  const serialized = root.toJSON()
+  return serialized.stringify()
 }

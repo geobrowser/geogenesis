@@ -13,6 +13,16 @@ export class NumberValue {
     this.value = value;
   }
 
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj();
+    const type = new JSON.Str(this.type);
+    __obj.set(\\"type\\", type);
+    const value = new JSON.Num(this.value);
+    __obj.set(\\"value\\", value);
+
+    return __obj;
+  }
+
   static fromJSON(__json: JSON.Value): NumberValue | null {
     if (!__json.isObj) return null;
     const __obj = <JSON.Obj>__json;
