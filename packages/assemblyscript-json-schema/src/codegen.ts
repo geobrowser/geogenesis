@@ -32,19 +32,29 @@ export function generateUnionType(
 
     constructor(type: string) {
       this.type = type;
-    } 
+    }
+
+    ${anyOfTypeNames
+      .map(
+        (typeName) =>
+          `as${typeName}(): ${typeName} | null {
+            return this.type == '${getDiscriminator(
+              getDefinition(schema, typeName)
+            )}' ? (this as ${typeName}) : null;
+          }`
+      )
+      .join('\n\n')}
 
     toJSON(): JSON.Value {
-      const typeName = this.type;
       ${anyOfTypeNames
         .map(
           (typeName) =>
-            `if (typeName == '${getDiscriminator(
+            `if (this.type == '${getDiscriminator(
               getDefinition(schema, typeName)
             )}') return (this as ${typeName}).toJSON()`
         )
         .join('\n')}
-      throw "undefined variant of: ${name}"
+      throw \`undefined variant of: ${name}.\${this.type}\`
     }
 
     static fromJSON(__json: JSON.Value): ${name} | null {
