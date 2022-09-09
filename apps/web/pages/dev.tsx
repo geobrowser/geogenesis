@@ -1,7 +1,8 @@
 import styled from '@emotion/styled';
-import { colors, ColorValue } from '~/modules/design-system/colors';
+import { colors, ColorValue } from '~/modules/design-system/theme/colors';
 import { Spacer } from '~/modules/design-system/spacer';
-import { Typeography, typography, TypographyValue } from '~/modules/design-system/typography';
+import { Typography, typography } from '~/modules/design-system/theme/typography';
+import { Text } from '~/modules/design-system/text';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
   width: 150,
@@ -10,35 +11,22 @@ const Swatch = styled.div<{ color: ColorValue }>(props => ({
   backgroundColor: `${props.color}`,
 }));
 
-const ColorTitle = styled.h2({
-  ...typography.bodyBold,
-});
-
-const ColorValueSpan = styled.p({
-  ...typography.body,
-});
-
 const Colors = Object.entries(colors).map(([name, color]) => {
   return (
     <div key={name}>
       <Swatch color={color} />
       <Spacer height={8} />
-      <ColorTitle>{name}</ColorTitle>
-      <ColorValueSpan>{color}</ColorValueSpan>
+      <Text variant="bodyBold">{name}</Text>
+      <Text>{color}</Text>
     </div>
   );
 });
 
-const TypeSwatch = styled.p<{ styles: TypographyValue }>(props => ({
-  ...props.styles,
-}));
-
-const Typography = Object.entries(typography).map(([name, value], index) => {
-  console.log(value);
+const Typography = Object.keys(typography).map((name, index) => {
   return (
-    <TypeSwatch key={index} styles={value}>
+    <Text key={index} variant={name as Typography}>
       {name}
-    </TypeSwatch>
+    </Text>
   );
 });
 
@@ -55,22 +43,18 @@ const VerticalBox = styled.div`
   gap: 12px;
 `;
 
-const Heading = styled.h1({
-  ...typography.mediumTitle,
-});
-
 export default function Dev() {
   return (
     <VerticalBox>
       <HorizontalBox>
-        <Heading>Colors</Heading>
+        <Text variant="mediumTitle">Colors</Text>
         <Spacer height={12} />
         <HorizontalBox>{Colors}</HorizontalBox>
 
         <Spacer height={32} />
       </HorizontalBox>
       <VerticalBox>
-        <Heading>Typography</Heading>
+        <Text variant="mediumTitle">Typography</Text>
         <VerticalBox>{Typography}</VerticalBox>
       </VerticalBox>
     </VerticalBox>

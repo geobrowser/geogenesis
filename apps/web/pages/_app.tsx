@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
-import { colors } from '~/modules/design-system/colors';
+import { colors } from '~/modules/design-system/theme/colors';
 import '../styles/reset.css';
 import '../styles/fonts.css';
 
