@@ -1,3 +1,4 @@
+import assert from 'assert'
 import { readFileSync } from 'fs'
 import { instantiate, __AdaptedExports as AssemblyExports } from '../build/test'
 import { Root } from '../src'
@@ -36,13 +37,26 @@ const root: Root = {
         },
       },
     },
+    {
+      type: 'create',
+      value: {
+        type: 'fact',
+        id: 'i',
+        entityId: 'e',
+        attributeId: 'a',
+        value: {
+          type: 'number',
+          value: 42,
+        },
+      },
+    },
   ],
 }
 
 ;(async () => {
-  const { test } = await loadAssembly()
+  const { testRootSerialization } = await loadAssembly()
 
-  const result = await test(JSON.stringify(root))
+  const result = await testRootSerialization(JSON.stringify(root))
 
-  console.log('OK!', result)
+  assert.deepEqual(JSON.parse(result!), root)
 })()

@@ -7,9 +7,9 @@ import { JSON } from 'assemblyscript-json/assembly'
 
 export class NumberValue {
   type: string
-  value: number
+  value: f64
 
-  constructor(type: string, value: number) {
+  constructor(type: string, value: f64) {
     this.type = type
     this.value = value
   }
@@ -30,13 +30,20 @@ export class NumberValue {
       return null
     }
     const __obj = __json as JSON.Obj
-    const __type = __obj.getString('type')
+    let __type = __obj.getString('type')
+
     if (__type == null) {
       log.debug('NumberValue.fromJSON(): __type is null', [])
       return null
     }
     const type = __type.valueOf()
-    const __value = __obj.getNum('value')
+    let __value = __obj.getNum('value')
+    if (__value == null) {
+      const integer = __obj.getInteger('value')
+      if (integer != null) {
+        __value = new JSON.Num(integer as f64)
+      }
+    }
     if (__value == null) {
       log.debug('NumberValue.fromJSON(): __value is null', [])
       return null

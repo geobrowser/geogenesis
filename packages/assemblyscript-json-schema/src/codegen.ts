@@ -62,7 +62,7 @@ export function generateUnionType(
         log.debug("${name}.fromJSON(): __json.isObj is false", [])
         return null
       }
-      const __obj = <JSON.Obj>__json
+      const __obj = __json as JSON.Obj
       const type = __obj.getString('type')
       if (type == null) {
         log.debug("${name}.fromJSON(): type is null", [])
@@ -164,17 +164,28 @@ export function generateObjectType(
       const __obj = __json as JSON.Obj
       ${Object.entries(properties)
         .map(([property, value]) => {
+          const valueSchemaType = (value as JSONSchema7).type
           let result = `
-          const __${property} = ${getDecoderFunction(
+          let __${property} = ${getDecoderFunction(
             property,
             value as JSONSchema7
           )}
+          ${
+            valueSchemaType === 'number'
+              ? `if (__${property} == null) {
+                  const integer = __obj.getInteger("${property}")
+                  if (integer != null) {
+                    __${property} = new JSON.Num(integer.valueOf() as f64)
+                  }
+                }`
+              : ''
+          }
           if (__${property} == null) {
             log.debug("${name}.fromJSON(): __${property} is null", [])
             return null
           }
           `
-          if ((value as JSONSchema7).type === 'array') {
+          if (valueSchemaType === 'array') {
             const itemType = (value as JSONSchema7).items! as JSONSchema7
             const refName = getRefName(itemType.$ref!)
             result += `const __${property}Array = __${property}.valueOf()
@@ -226,9 +237,10 @@ export function generateType(schema: JSONSchema7, name: string) {
 function convertTypeName(schema: JSONSchema7, property: JSONSchema7) {
   switch (property.type) {
     case 'boolean':
-    case 'number':
     case 'string':
       return property.type
+    case 'number':
+      return 'f64'
     case 'array':
       const name = getRefName((property.items as JSONSchema7).$ref!)
       return `${name}[]`

@@ -9,7 +9,7 @@
     "test:ts": "jest",
     "clean": "rimraf build dist",
     "build": "pnpm run build:schema && pnpm run build:ts",
-    "build:wasm": "asc assembly/index.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw",
+    "build:wasm": "asc assembly/index.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw --disableWarning 235",
     "build:schema": "npx ts-json-schema-generator --path 'src/fact.ts' --type Root --out build/schema.json --additional-properties false --expose all",
     "build:ts": "npx tsc"
   },
