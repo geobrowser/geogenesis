@@ -17,12 +17,14 @@
   },
   "devDependencies": {
     "@geogenesis/data-uri": "workspace:^0.0.1",
+    "@geogenesis/fact-schema": "workspace:^0.0.1",
     "@graphprotocol/graph-cli": "^0.33.1",
     "@graphprotocol/graph-ts": "^0.27.0",
     "rimraf": "^3.0.2"
   },
   "dependencies": {
     "as-base64": "^0.2.0",
+    "assemblyscript-json": "^1.1.0",
     "babel-polyfill": "^6.26.0",
     "babel-register": "^6.26.0"
   }

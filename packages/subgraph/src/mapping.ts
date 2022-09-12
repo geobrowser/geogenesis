@@ -1,5 +1,7 @@
 import { DataURI } from '@geogenesis/data-uri/assembly'
-import { Bytes, json, log } from '@graphprotocol/graph-ts'
+import { Root } from '@geogenesis/fact-schema/assembly'
+import { Bytes, log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
 import { Statement } from '../generated/schema'
 import { StatementAdded } from '../generated/StatementHistory/StatementHistory'
 
@@ -22,8 +24,17 @@ export function handleStatementAdded(event: StatementAdded): void {
       statement.decoded = bytes
 
       if (statement.mimeType == 'application/json') {
-        const result = json.fromBytes(bytes)
-        log.debug(`Testing: ${result.toObject().mustGet('id').toString()}`, [])
+        const json = JSON.parse(bytes)
+        // const result = json.fromBytes(bytes)
+        // log.debug(`Testing: ${result.toObject().mustGet('id').toString()}`, [])
+        const root = Root.fromJSON(json)
+        if (root) {
+          log.debug(`XXX Decoded Root`, [])
+          const encoded = root.toJSON()
+          log.debug(`XXX Encoded Root`, [])
+          const out = encoded.stringify()
+          log.debug(`XXX Encoded JSON ${out}`, [])
+        }
       }
     }
   }

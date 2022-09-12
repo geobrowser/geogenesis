@@ -81,6 +81,7 @@ importers:
       '@ethersproject/abi': ^5.6.4
       '@ethersproject/bytes': ^5.6.1
       '@ethersproject/providers': ^5.6.8
+      '@geogenesis/fact-schema': workspace:^0.0.1
       '@nomiclabs/hardhat-ethers': ^2.0.6
       '@nomiclabs/hardhat-etherscan': ^3.0.3
       '@nomiclabs/hardhat-waffle': ^2.0.3
@@ -127,6 +128,7 @@ importers:
       '@ethersproject/abi': 5.6.4
       '@ethersproject/bytes': 5.6.1
       '@ethersproject/providers': 5.6.8
+      '@geogenesis/fact-schema': link:../fact-schema
       '@nomiclabs/hardhat-ethers': 2.1.0_72jgnctblym52z6vqt46lbuldu
       '@nomiclabs/hardhat-etherscan': 3.1.0_hardhat@2.10.1
       '@nomiclabs/hardhat-waffle': 2.0.3_q2ktf46bpuaddom63xwo7uqczm
@@ -282,18 +284,22 @@ importers:
   packages/subgraph:
     specifiers:
       '@geogenesis/data-uri': workspace:^0.0.1
+      '@geogenesis/fact-schema': workspace:^0.0.1
       '@graphprotocol/graph-cli': ^0.33.1
       '@graphprotocol/graph-ts': ^0.27.0
       as-base64: ^0.2.0
+      assemblyscript-json: ^1.1.0
       babel-polyfill: ^6.26.0
       babel-register: ^6.26.0
       rimraf: ^3.0.2
     dependencies:
       as-base64: 0.2.0
+      assemblyscript-json: 1.1.0
       babel-polyfill: 6.26.0
       babel-register: 6.26.0
     devDependencies:
       '@geogenesis/data-uri': link:../data-uri
+      '@geogenesis/fact-schema': link:../fact-schema
       '@graphprotocol/graph-cli': 0.33.1
       '@graphprotocol/graph-ts': 0.27.0
       rimraf: 3.0.2
@@ -3408,7 +3414,6 @@ packages:
 
   /assemblyscript-json/1.1.0:
     resolution: {integrity: sha512-UbE8ts8csTWQgd5TnSPN7MRV9NveuHv1bVnKmDLoo/tzjqxkmsZb3lu59Uk8H7SGoqdkDSEE049alx/nHnSdFw==}
-    dev: true
 
   /assemblyscript/0.19.10:
     resolution: {integrity: sha512-HavcUBXB3mBTRGJcpvaQjmnmaqKHBGREjSPNsIvnAk2f9dj78y4BkMaSSdvBQYWcDDzsHQjyUC8stICFkD1Odg==}
@@ -7652,6 +7657,18 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.1
+    dev: true
+
+  /follow-redirects/1.15.1_debug@4.3.4:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dependencies:
+      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:
@@ -13766,7 +13783,7 @@ packages:
     dependencies:
       command-exists: 1.2.9
       commander: 3.0.2
-      follow-redirects: 1.15.1_debug@4.3.1
+      follow-redirects: 1.15.1_debug@4.3.4
       fs-extra: 0.30.0
       js-sha3: 0.8.0
       memorystream: 0.3.1

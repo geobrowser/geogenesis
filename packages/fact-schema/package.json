@@ -3,6 +3,7 @@
   "name": "@geogenesis/fact-schema",
   "version": "0.0.1",
   "license": "MIT",
+  "main": "./dist/src/index",
   "scripts": {
     "test": "pnpm run test:ts && pnpm run test:wasm",
     "test:wasm": "yarn build:wasm && ts-node test/index.ts",
