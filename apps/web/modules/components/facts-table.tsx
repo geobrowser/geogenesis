@@ -60,8 +60,6 @@ export function FactsTable() {
     getCoreRowModel: getCoreRowModel(),
   });
 
-  console.log(table.getHeaderGroups());
-
   return (
     <div>
       <Table>
