@@ -1,5 +1,8 @@
 import styled from '@emotion/styled';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { Text } from '../design-system/text';
+import { colors } from '../design-system/theme/colors';
+import { typography } from '../design-system/theme/typography';
 
 type Fact = {
   id: string;
@@ -28,29 +31,42 @@ const columnHelper = createColumnHelper<Fact>();
 const columns = [
   columnHelper.accessor(row => row.entityId, {
     id: 'entityId',
-    header: () => 'Entity ID',
+    header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => info.getValue(),
   }),
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
-    header: () => 'Attribute',
+    header: () => <Text variant="smallTitle">Attribute</Text>,
     cell: info => info.getValue(),
   }),
   columnHelper.accessor('value', {
-    header: () => 'Value',
+    header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => info.getValue(),
   }),
 ];
 
 const Table = styled.table({
-  border: '1px solid lightgray',
+  border: `1px solid ${colors['grey-02']}`,
   width: '100%',
+  borderRadius: '12px',
+  borderStyle: 'hidden',
+
+  // Adding borders to a table is complex, so we can use box-shadow instead
+  boxShadow: `0 0 0 1px ${colors['grey-02']}`,
 });
 
 const TableHeader = styled.th({
-  borderBottom: '1px solid lightgray',
-  borderRight: '1px solid lightgray',
-  padding: '2px 4px',
+  border: `1px solid ${colors['grey-02']}`,
+  padding: '10px',
+});
+
+const TableCell = styled.td({
+  border: `1px solid ${colors['grey-02']}`,
+  padding: '10px',
+});
+
+const THead = styled.thead({
+  borderRadius: '10px',
 });
 
 export function FactsTable() {
@@ -78,7 +94,9 @@ export function FactsTable() {
           {table.getRowModel().rows.map(row => (
             <tr key={row.id}>
               {row.getVisibleCells().map(cell => (
-                <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                <TableCell key={cell.id}>
+                  <Text variant="tableCell">{flexRender(cell.column.columnDef.cell, cell.getContext())}</Text>
+                </TableCell>
               ))}
             </tr>
           ))}
