@@ -13,6 +13,7 @@
     "@emotion/styled": "^11.10.4",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/database": "workspace:*",
+    "@tanstack/react-table": "^8.5.13",
     "next": "^12.1.6",
     "react": "^18.1.0",
     "react-dom": "^18.1.0",
