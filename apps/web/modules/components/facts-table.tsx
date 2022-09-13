@@ -2,7 +2,6 @@ import styled from '@emotion/styled';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Text } from '../design-system/text';
 import { colors } from '../design-system/theme/colors';
-import { typography } from '../design-system/theme/typography';
 
 type Fact = {
   id: string;
@@ -58,15 +57,12 @@ const Table = styled.table({
 const TableHeader = styled.th({
   border: `1px solid ${colors['grey-02']}`,
   padding: '10px',
+  textAlign: 'left',
 });
 
 const TableCell = styled.td({
   border: `1px solid ${colors['grey-02']}`,
   padding: '10px',
-});
-
-const THead = styled.thead({
-  borderRadius: '10px',
 });
 
 export function FactsTable() {
