@@ -10,5 +10,5 @@
     "lib": ["dom"],
     "esModuleInterop": true
   },
-  "exclude": ["node_modules", "dist", "assembly"]
+  "exclude": ["node_modules", "dist", "assembly", "test"]
 }

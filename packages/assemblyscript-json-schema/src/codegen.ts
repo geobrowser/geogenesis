@@ -110,6 +110,7 @@ export function generateObjectType(
     unions.length > 0 ? `extends ${unions.join(', ')}` : ''
   } {
     ${Object.entries(properties)
+      .filter(([property]) => unions.length === 0 || property !== 'type')
       .map(
         ([property, value]) =>
           `${property}: ${convertTypeName(schema, value as JSONSchema7)}`

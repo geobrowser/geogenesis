@@ -6,7 +6,6 @@ Object {
 import { JSON } from 'assemblyscript-json/assembly'
 
 export class NumberValue {
-  type: string
   value: f64
 
   constructor(type: string, value: f64) {
@@ -41,7 +40,7 @@ export class NumberValue {
     if (__value == null) {
       const integer = __obj.getInteger('value')
       if (integer != null) {
-        __value = new JSON.Num(integer as f64)
+        __value = new JSON.Num(integer.valueOf() as f64)
       }
     }
     if (__value == null) {

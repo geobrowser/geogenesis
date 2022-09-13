@@ -8,7 +8,6 @@ import { mapOrNull } from './collection-utils'
 
 export class ValuesContainer {
   values: Value[]
-  type: string
 
   constructor(values: Value[], type: string) {
     this.values = values
@@ -69,7 +68,6 @@ import { JSON } from 'assemblyscript-json/assembly'
 import { Value } from './Value'
 
 export class NumberValue extends Value {
-  type: string
   value: f64
 
   constructor(type: string, value: f64) {
@@ -105,7 +103,7 @@ export class NumberValue extends Value {
     if (__value == null) {
       const integer = __obj.getInteger('value')
       if (integer != null) {
-        __value = new JSON.Num(integer as f64)
+        __value = new JSON.Num(integer.valueOf() as f64)
       }
     }
     if (__value == null) {
@@ -127,7 +125,6 @@ import { Value } from './Value'
 
 export class ValueContainer {
   value: Value
-  type: string
 
   constructor(value: Value, type: string) {
     this.value = value

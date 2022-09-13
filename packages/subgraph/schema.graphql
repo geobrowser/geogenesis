@@ -5,24 +5,3 @@ type Statement @entity {
   mimeType: String
   decoded: Bytes
 }
-
-type Triple @entity {
-  id: ID!
-  entity: Entity!
-  attribute: Entity!
-  valueType: ValueType!
-  numberValue: BigDecimal
-  stringValue: String
-  entityValue: Entity
-}
-
-type Entity @entity {
-  id: ID!
-}
-
-enum ValueType {
-  NULL
-  NUMBER
-  STRING
-  ENTITY
-}

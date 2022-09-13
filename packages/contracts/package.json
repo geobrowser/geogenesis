@@ -6,6 +6,7 @@
   "version": "0.1.0",
   "files": [
     "dist/**/*",
+    "build/**/*",
     "addresses.json",
     "README.md",
     "LICENSE"
@@ -13,10 +14,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "preclean": "rm -rf build/ dist/",
-    "clean": "npx hardhat clean",
-    "precompile": "pnpm run clean",
-    "compile": "npx hardhat compile",
+    "clean": "npx hardhat clean && rimraf build dist",
+    "compile": "pnpm run clean && npx hardhat compile",
     "build": "pnpm run compile && npx tsc",
     "devnet": "npx hardhat node",
     "deploy": "hardhat migrate",
@@ -69,6 +68,7 @@
     "nanoid": "^3.3.4",
     "prettier": "^2.6.2",
     "prettier-plugin-solidity": "^1.0.0-beta.19",
+    "rimraf": "^3.0.2",
     "solhint": "^3.3.7",
     "solidity-coverage": "^0.7.21",
     "ts-node": "^10.7.0",
