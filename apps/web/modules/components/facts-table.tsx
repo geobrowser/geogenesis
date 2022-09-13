@@ -26,22 +26,25 @@ const data: Fact[] = [
 const columnHelper = createColumnHelper<Fact>();
 
 const columns = [
-  columnHelper.accessor('entityId', {
+  columnHelper.accessor(row => row.entityId, {
+    id: 'entityId',
+    header: () => 'Entity ID',
     cell: info => info.getValue(),
   }),
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
-    cell: info => <i>{info.getValue()}</i>,
-    header: () => <span>Attribute</span>,
+    header: () => 'Attribute',
+    cell: info => info.getValue(),
   }),
   columnHelper.accessor('value', {
     header: () => 'Value',
-    cell: info => info.renderValue(),
+    cell: info => info.getValue(),
   }),
 ];
 
 const Table = styled.table({
   border: '1px solid lightgray',
+  width: '100%',
 });
 
 const TableHeader = styled.th({
@@ -57,6 +60,8 @@ export function FactsTable() {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  console.log(table.getHeaderGroups());
+
   return (
     <div>
       <Table>
@@ -65,7 +70,7 @@ export function FactsTable() {
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
                 <TableHeader key={header.id}>
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  {flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHeader>
               ))}
             </tr>
@@ -80,17 +85,6 @@ export function FactsTable() {
             </tr>
           ))}
         </tbody>
-        <tfoot>
-          {table.getFooterGroups().map(footerGroup => (
-            <tr key={footerGroup.id}>
-              {footerGroup.headers.map(header => (
-                <th key={header.id}>
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.footer, header.getContext())}
-                </th>
-              ))}
-            </tr>
-          ))}
-        </tfoot>
       </Table>
     </div>
   );

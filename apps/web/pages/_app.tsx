@@ -17,7 +17,7 @@ const Layout = styled.main({
   padding: '2ch',
   paddingTop: '6ch',
   margin: '0 auto',
-  maxWidth: '120ch',
+  maxWidth: '1060px',
 });
 
 function MyApp({ Component, pageProps }: AppProps) {
