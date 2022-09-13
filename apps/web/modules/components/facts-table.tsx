@@ -1,5 +1,14 @@
 import styled from '@emotion/styled';
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { useState } from 'react';
+import {
+  createColumnHelper,
+  FilterFn,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import { rankItem } from '@tanstack/match-sorter-utils';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { colors } from '../design-system/theme/colors';
@@ -98,10 +107,22 @@ const PageContainer = styled.div({
 });
 
 export function FactsTable() {
+  const [globalFilter, setGlobalFilter] = useState<string>('');
+
+  console.log(globalFilter);
+
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      globalFilter,
+    },
+    globalFilterFn: fuzzyFilter,
+    filterFns: {
+      fuzzy: fuzzyFilter,
+    },
   });
 
   return (
@@ -113,7 +134,7 @@ export function FactsTable() {
 
       <Spacer height={12} />
 
-      <Input placeholder="Search facts..." />
+      <Input placeholder="Search facts..." onChange={e => setGlobalFilter(e.target.value)} />
 
       <Spacer height={12} />
 
@@ -142,3 +163,18 @@ export function FactsTable() {
     </PageContainer>
   );
 }
+
+const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+  console.log('Running fuzzyFilter');
+
+  // Rank the item
+  const itemRank = rankItem(row.getValue(columnId), value);
+
+  // Store the itemRank info
+  addMeta({
+    itemRank,
+  });
+
+  // Return if the item should be filtered in/out
+  return itemRank.passed;
+};
