@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1
 
 exports[`generates array type 1`] = `
 "import { log } from '@graphprotocol/graph-ts'
@@ -8,6 +8,7 @@ import { mapOrNull } from './collection-utils'
 
 export class ValuesContainer {
   values: Value[]
+  type: string
 
   constructor(values: Value[], type: string) {
     this.values = values
@@ -125,6 +126,7 @@ import { Value } from './Value'
 
 export class ValueContainer {
   value: Value
+  type: string
 
   constructor(value: Value, type: string) {
     this.value = value
