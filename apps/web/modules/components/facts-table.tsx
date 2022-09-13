@@ -78,6 +78,25 @@ const Input = styled.input({
   padding: '9px 12px',
 });
 
+const PageHeader = styled.div({
+  display: 'flex',
+  justifyContent: 'space-between',
+});
+
+const Button = styled.button({
+  padding: '12px 9.5px',
+  backgroundColor: colors.ctaPrimary,
+  color: colors.white,
+  border: 'none',
+  outline: 'none',
+  borderRadius: '6px',
+});
+
+const PageContainer = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+});
+
 export function FactsTable() {
   const table = useReactTable({
     data,
@@ -86,10 +105,17 @@ export function FactsTable() {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <PageContainer>
+      <PageHeader>
+        <Text variant="largeTitle">Facts</Text>
+        <Button>Add</Button>
+      </PageHeader>
+
+      <Spacer height={12} />
+
       <Input placeholder="Search facts..." />
 
-      <Spacer height={20} />
+      <Spacer height={12} />
 
       <Table>
         <thead>
@@ -113,6 +139,6 @@ export function FactsTable() {
           ))}
         </tbody>
       </Table>
-    </div>
+    </PageContainer>
   );
 }
