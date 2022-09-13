@@ -1,3 +1,5 @@
+// Matches the assemblyscript API
+// TODO: Implement fully if we need a js version
 export class DataURI {
   mimeType: string | null
   data: Uint8Array

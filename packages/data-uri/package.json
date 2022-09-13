@@ -4,9 +4,11 @@
   "private": true,
   "main": "dist",
   "scripts": {
-    "build": "tsc lib/index.ts --outDir dist -d",
-    "test": "yarn build:wasm && ts-node test/index.ts",
-    "build:wasm": "asc test/assembly.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw"
+    "clean": "rimraf build",
+    "build": "pnpm run build:ts && pnpm run build:wasm",
+    "build:ts": "tsc lib/index.ts --outDir dist -d",
+    "build:wasm": "asc test/assembly.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw",
+    "test": "ts-node test/index.ts"
   },
   "dependencies": {
     "@ipld/dag-cbor": "^7.0.1",
@@ -17,6 +19,7 @@
     "@types/node": "^17.0.31",
     "as-base64": "^0.2.0",
     "assemblyscript": "^0.20.6",
+    "rimraf": "^3.0.2",
     "ts-node": "^10.7.0",
     "typescript": "4.6.4"
   }
