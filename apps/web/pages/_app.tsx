@@ -10,7 +10,7 @@ const Body = styled.div({
   maxWidth: '100vw',
   overflow: 'hidden',
   backgroundColor: `${colors.bg}`,
-  fontFamily: 'Apercu',
+  fontFamily: 'Calibre',
 });
 
 const Layout = styled.main({

@@ -1,27 +1,42 @@
 @font-face {
-  font-family: 'Apercu';
+  font-family: 'Calibre';
   font-style: normal;
   font-weight: 400;
-  src: url('/fonts/apercu-regular-pro.otf') format('opentype');
+  src: url('/fonts/TestCalibre-Regular.otf') format('opentype');
 }
 
 @font-face {
-  font-family: 'Apercu';
+  font-family: 'Calibre';
+  font-style: italic;
+  font-weight: 400;
+  src: url('/fonts/TestCalibre-RegularItalic.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Calibre';
   font-style: normal;
   font-weight: 500;
-  src: url('/fonts/apercu-medium-pro.otf') format('opentype');
+  src: url('/fonts/TestCalibre-Medium.otf') format('opentype');
 }
 
 @font-face {
-  font-family: 'Apercu';
+  font-family: 'Calibre';
+  font-style: italic;
+  font-weight: 500;
+  src: url('/fonts/TestCalibre-MediumItalic.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Calibre';
   font-style: normal;
   font-weight: 700;
-  src: url('/fonts/apercu-bold-pro.otf') format('opentype');
+  src: url('/fonts/TestCalibre-Bold.otf') format('opentype');
 }
 
 @font-face {
-  font-family: 'Apercu';
-  font-style: normal;
-  font-weight: 800;
-  src: url('/fonts/apercu-black-pro.otf') format('opentype');
+  font-family: 'Calibre';
+  font-style: italic;
+  font-weight: 700;
+  src: url('/fonts/TestCalibre-BoldItalic.otf') format('opentype');
 }
+
