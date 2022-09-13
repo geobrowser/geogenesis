@@ -3,6 +3,13 @@ import { decode } from 'as-base64/assembly'
 
 const PREFIX = 'data:'
 
+/**
+ * Data URIs have the format:
+ * data:[<mediatype>][;base64],<data>
+ *
+ * For more info:
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URLs
+ */
 export class DataURI {
   mimeType: string | null
   data: Uint8Array

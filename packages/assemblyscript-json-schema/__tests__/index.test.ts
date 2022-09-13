@@ -1,6 +1,6 @@
 import { createFs, toJSON } from 'buffs'
-import 'jest'
 import { JSONSchema7 } from 'json-schema'
+import { expect, it } from 'vitest'
 import { generate, Paths } from '../src'
 
 const paths: Paths = {
