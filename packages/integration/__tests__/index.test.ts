@@ -58,4 +58,4 @@ it('subgraph runs', async () => {
       statements: [{ id: '0x0' }, { id: '0x1' }],
     },
   })
-}, 60000)
+}, 120000)
