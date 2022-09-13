@@ -25,8 +25,8 @@ jobs:
 
       - uses: docker-practice/actions-setup-docker@master
 
-      - run: docker compose build
+      - run: pnpm docker:build
 
       - run: |
-          docker compose up -d
+          pnpm docker:up --detach
           pnpm --filter integration run test
