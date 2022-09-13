@@ -1,5 +1,5 @@
-import 'jest'
 import { JSONSchema7 } from 'json-schema'
+import { expect, it } from 'vitest'
 import { generateType } from '../src/codegen'
 import { formatTypeScript } from '../src/format'
 import { getUnionsContainingType } from '../src/schemaUtils'

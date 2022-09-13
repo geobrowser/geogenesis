@@ -29,4 +29,4 @@ jobs:
 
       - run: |
           pnpm docker:up --detach
-          pnpm --filter integration run test
+          pnpm --filter integration run start

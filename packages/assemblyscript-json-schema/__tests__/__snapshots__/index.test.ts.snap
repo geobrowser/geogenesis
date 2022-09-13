@@ -1,11 +1,12 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1
 
 exports[`generates files 1`] = `
-Object {
+{
   "/dist/NumberValue.ts": "import { log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 
 export class NumberValue {
+  type: string
   value: f64
 
   constructor(type: string, value: f64) {

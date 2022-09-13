@@ -1,7 +1,7 @@
 {
   "extends": "@tsconfig/node16/tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "jest"],
+    "types": ["node"],
     "allowJs": true,
     "strictNullChecks": true,
     "resolveJsonModule": true,

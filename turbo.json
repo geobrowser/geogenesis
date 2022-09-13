@@ -16,7 +16,7 @@
       "outputs": [".next/**", "dist/**", "build/**"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["build"]
     },
     "web": {
       "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/database#build"]
