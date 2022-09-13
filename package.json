@@ -7,7 +7,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "clean": "turbo run clean && rimraf \"**/.turbo\"",
-    "docker:build": "docker compose build",
+    "docker:build": "docker compose build --build-arg TURBO_TEAM --build-arg TURBO_TOKEN",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down -v --rmi all",
     "docker:clean": "rimraf build",
