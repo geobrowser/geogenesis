@@ -1,7 +1,9 @@
 import styled from '@emotion/styled';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { colors } from '../design-system/theme/colors';
+import { typography } from '../design-system/theme/typography';
 
 type Fact = {
   id: string;
@@ -31,23 +33,27 @@ const columns = [
   columnHelper.accessor(row => row.entityId, {
     id: 'entityId',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
-    cell: info => info.getValue(),
+    cell: info => (
+      <Text color="ctaPrimary" variant="tableCell">
+        {info.getValue()}
+      </Text>
+    ),
   }),
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => info.getValue(),
+    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
   }),
   columnHelper.accessor('value', {
     header: () => <Text variant="smallTitle">Value</Text>,
-    cell: info => info.getValue(),
+    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
   }),
 ];
 
 const Table = styled.table({
   border: `1px solid ${colors['grey-02']}`,
   width: '100%',
-  borderRadius: '12px',
+  borderRadius: '6px',
   borderStyle: 'hidden',
 
   // Adding borders to a table is complex, so we can use box-shadow instead
@@ -65,6 +71,13 @@ const TableCell = styled.td({
   padding: '10px',
 });
 
+const Input = styled.input({
+  ...typography.input,
+  border: `1px solid ${colors['grey-02']}`,
+  borderRadius: '6px',
+  padding: '9px 12px',
+});
+
 export function FactsTable() {
   const table = useReactTable({
     data,
@@ -73,7 +86,11 @@ export function FactsTable() {
   });
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <Input placeholder="Search facts..." />
+
+      <Spacer height={20} />
+
       <Table>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
@@ -90,9 +107,7 @@ export function FactsTable() {
           {table.getRowModel().rows.map(row => (
             <tr key={row.id}>
               {row.getVisibleCells().map(cell => (
-                <TableCell key={cell.id}>
-                  <Text variant="tableCell">{flexRender(cell.column.columnDef.cell, cell.getContext())}</Text>
-                </TableCell>
+                <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
               ))}
             </tr>
           ))}
