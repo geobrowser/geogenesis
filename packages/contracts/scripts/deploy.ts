@@ -1,4 +1,5 @@
 /* eslint-disable node/no-missing-import */
+import { Root } from '@geogenesis/fact-schema'
 import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
@@ -17,8 +18,49 @@ async function main() {
 
   const statementHistoryContract = await deployStatementHistory({ debug: true })
 
-  await addStatement(statementHistoryContract, 'abc')
-  await addStatement(statementHistoryContract, 'def')
+  await addStatement(
+    statementHistoryContract,
+    'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ=='
+  )
+
+  const root: Root = {
+    type: 'root',
+    commands: [
+      {
+        type: 'create',
+        value: {
+          type: 'fact',
+          id: 'i',
+          entityId: 'e',
+          attributeId: 'a',
+          value: {
+            type: 'string',
+            value: 'hi',
+          },
+        },
+      },
+      {
+        type: 'create',
+        value: {
+          type: 'fact',
+          id: 'i',
+          entityId: 'e',
+          attributeId: 'a',
+          value: {
+            type: 'number',
+            value: 42,
+          },
+        },
+      },
+    ],
+  }
+
+  await addStatement(
+    statementHistoryContract,
+    `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
+      'base64'
+    )}`
+  )
 
   saveAddress({
     chainId,

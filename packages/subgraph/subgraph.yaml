@@ -8,11 +8,11 @@ dataSources:
     name: StatementHistory
     network: mainnet
     source:
-      address: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
+      address: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
       abi: StatementHistory
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.5
+      apiVersion: 0.0.6
       language: wasm/assemblyscript
       entities:
         - Statement

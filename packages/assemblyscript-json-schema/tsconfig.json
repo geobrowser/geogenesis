@@ -1,0 +1,11 @@
+{
+  "extends": "@tsconfig/node16/tsconfig.json",
+  "compilerOptions": {
+    "lib": ["DOM"], // so we can use fetch() in node
+    "types": ["node", "jest"],
+    "allowJs": true,
+    "target": "ES2020",
+    "outDir": "dist"
+  },
+  "exclude": ["node_modules", "dist", "static"]
+}

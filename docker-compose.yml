@@ -6,6 +6,8 @@ services:
       dockerfile: ./docker/Build.dockerfile
     ports:
       - '8545:8545'
+    volumes:
+      - shared-volume:/app
     command: pnpm run --filter contracts devnet
     healthcheck:
       test: curl -sf -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545
@@ -51,7 +53,14 @@ services:
       ipfs: 'ipfs:5001'
       # ethereum: "mainnet:http://host.docker.internal:8545"
       ethereum: 'mainnet:http://devnet:8545'
-      GRAPH_LOG: info
+      GRAPH_LOG: debug
+      GRAPH_IPFS_TIMEOUT: 10
+      GRAPH_LOG_QUERY_TIMING: gql
+      GRAPH_ETH_CALL_FULL_LOG: true
+      GRAPH_EXPERIMENTAL_SUBGRAPH_VERSION_SWITCHING_MODE: synced
+      GRAPH_ALLOW_NON_DETERMINISTIC_IPFS: true
+      GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: false
+      GRAPH_MAX_GAS_PER_HANDLER: 1_000_000_000_000_000
     healthcheck:
       test: curl http://localhost:8030
       interval: 5s

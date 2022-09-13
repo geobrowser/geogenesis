@@ -14,8 +14,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 # Install
 
-COPY package.json pnpm-workspace.yaml .nvmrc .
-COPY ./packages/contracts ./packages/contracts
-COPY ./packages/subgraph ./packages/subgraph
+COPY . .
 
 RUN pnpm install --recursive --offline --frozen-lockfile
+RUN pnpm build
