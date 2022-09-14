@@ -6,19 +6,16 @@ import { Text } from '~/modules/design-system/text';
 import { typography } from '~/modules/design-system/theme/typography';
 import { Button } from '~/modules/design-system/button';
 
-const Input = styled.input(props => {
-  console.log(props.theme);
-  return {
-    ...props.theme.typography.input,
-    border: `1px solid ${props.theme.colors['grey-02']}`,
-    borderRadius: '6px',
-    padding: '9px 12px',
+const Input = styled.input(props => ({
+  ...props.theme.typography.input,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderRadius: '6px',
+  padding: '9px 12px',
 
-    '::placeholder': {
-      color: props.theme.colors['grey-03'],
-    },
-  };
-});
+  '::placeholder': {
+    color: props.theme.colors['grey-03'],
+  },
+}));
 
 const PageHeader = styled.div({
   display: 'flex',
