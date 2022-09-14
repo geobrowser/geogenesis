@@ -9,25 +9,27 @@ const baseTypography = {
     color: colors.text,
     fontSize: '2.5rem',
     lineHeight: '3.25rem',
-    fontWeight: 700,
+    letterSpacing: '0.37px',
+    fontWeight: 600,
   },
   largeTitle: {
     color: colors.text,
     fontSize: '1.875rem',
     lineHeight: '2.5rem',
-    fontWeight: 700,
+    letterSpacing: '0.25px',
+    fontWeight: 600,
   },
   mediumTitle: {
     color: colors.text,
     fontSize: '1.375rem',
     lineHeight: '1.8125rem',
-    fontWeight: 700,
+    fontWeight: 600,
   },
   smallTitle: {
     color: colors.text,
     fontSize: '1rem',
     lineHeight: '1.3125rem',
-    fontWeight: 700,
+    fontWeight: 600,
   },
   body: {
     color: colors.text,
@@ -52,7 +54,7 @@ const baseTypography = {
     color: colors.text,
     fontSize: '0.9375rem',
     lineHeight: '1.375rem',
-    fontWeight: 400,
+    fontWeight: 700,
   },
   listItem: {
     color: colors.text,
@@ -94,17 +96,17 @@ const baseTypography = {
 
 export const typography = {
   ...baseTypography,
-  bodyBold: {
+  bodySemibold: {
     ...baseTypography.body,
-    fontWeight: 700,
+    fontWeight: 600,
   },
-  textLinkBold: {
+  textLinkSemibold: {
     ...baseTypography.textLink,
-    fontWeight: 700,
+    fontWeight: 600,
   },
-  listBold: {
+  listSemibold: {
     ...baseTypography.listItem,
-    fontWeight: 700,
+    fontWeight: 600,
   },
   quoteMedium: {
     ...baseTypography.quote,

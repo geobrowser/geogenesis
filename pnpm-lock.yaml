@@ -27,7 +27,9 @@ importers:
       '@types/react': ^18.0.9
       eslint: ^8.15.0
       eslint-config-next: ^12.1.6
+      modern-normalize: ^1.1.0
       next: ^12.1.6
+      normalize.css: ^8.0.1
       react: ^18.1.0
       react-dom: ^18.1.0
       reset-css: ^5.0.1
@@ -39,7 +41,9 @@ importers:
       '@geogenesis/database': link:../../packages/database
       '@tanstack/match-sorter-utils': 8.1.1
       '@tanstack/react-table': 8.5.13_biqbaboplfbrettd7655fr4n2y
+      modern-normalize: 1.1.0
       next: 12.2.3_vyk55zyolcaieh7zfm7nf7uva4
+      normalize.css: 8.0.1
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       reset-css: 5.0.1
@@ -11342,6 +11346,11 @@ packages:
     resolution: {integrity: sha512-qYvlv/exQ4+svI3UOvPUpLDF0OMX5euvUH0Ny4N5QyRyhNdgAgUrVH3iUINSzEPLvx0kbo/Bp28GJKIqvE7URw==}
     dev: true
 
+  /modern-normalize/1.1.0:
+    resolution: {integrity: sha512-2lMlY1Yc1+CUy0gw4H95uNN7vjbpoED7NNRSBHE25nWfLBdmMzFCsPshlzbxHz+gYMcBEUN8V4pU16prcdPSgA==}
+    engines: {node: '>=6'}
+    dev: false
+
   /ms/2.0.0:
     resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
 
@@ -11744,6 +11753,10 @@ packages:
     resolution: {integrity: sha512-9UZCFRHQdNrfTpGg8+1INIg93B6zE0aXMVFkw1WFwvO4SlZywU6aLg5Of0Ap/PgcbSw4LNxvMWXMeugwMCX0AA==}
     engines: {node: '>=8'}
     dev: true
+
+  /normalize.css/8.0.1:
+    resolution: {integrity: sha512-qizSNPO93t1YUuUhP22btGOo3chcvDFqFaj2TRybP0DMxkHOCTYwp3n34fel4a31ORXy4m1Xq0Gyqpb5m33qIg==}
+    dev: false
 
   /npm-run-path/4.0.1:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}

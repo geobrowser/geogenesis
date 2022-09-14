@@ -61,6 +61,7 @@ const Table = styled.table({
   width: '100%',
   borderRadius: '6px',
   borderStyle: 'hidden',
+  borderCollapse: 'collapse',
 
   // Adding borders to a table is complex, so we can use box-shadow instead
   boxShadow: `0 0 0 1px ${colors['grey-02']}`,

@@ -30,8 +30,12 @@ export default function Facts() {
   return (
     <PageContainer>
       <PageHeader>
-        <Text variant="largeTitle">Facts</Text>
-        <Button onClick={() => console.log('Add!')}>Add</Button>
+        <Text variant="largeTitle" as="h1">
+          Facts
+        </Text>
+        <Button variant="secondary" onClick={() => console.log('Add!')}>
+          Add
+        </Button>
       </PageHeader>
 
       <Spacer height={12} />

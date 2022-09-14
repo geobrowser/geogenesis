@@ -2,16 +2,23 @@ import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
-import 'reset-css';
-import '../styles/fonts.css';
+import 'modern-normalize';
+import '../styles/styles.css';
+import { css, Global } from '@emotion/react';
 
 const Body = styled.div({
   minHeight: '100vh',
   maxWidth: '100vw',
   overflow: 'hidden',
   backgroundColor: `${colors.bg}`,
-  fontFamily: 'Calibre',
 });
+
+const globalStyles = css`
+  body {
+    font-family: 'Calibre';
+    text-rendering: 'optimizeLegibility';
+  }
+`;
 
 const Layout = styled.main({
   padding: '2ch',
@@ -23,6 +30,7 @@ const Layout = styled.main({
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <Body>
+      <Global styles={globalStyles} />
       <Link href="/dev">
         <a>Design system</a>
       </Link>
