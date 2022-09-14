@@ -15,6 +15,11 @@ const StyledButton = styled.button<Pick<Props, 'variant'>>(props => ({
 
   display: 'flex',
   alignItems: 'center',
+
+  ':hover': {
+    backgroundColor: props.variant === 'primary' ? colors.ctaHover : colors.white,
+    border: props.variant === 'primary' ? 'none' : `1px solid ${colors.text}`,
+  },
 }));
 
 interface Props {
@@ -29,7 +34,7 @@ export function Button({ children, onClick, icon, variant = 'primary' }: Props) 
     <StyledButton variant={variant} onClick={onClick}>
       {icon ? (
         <>
-          <Create color="white" />
+          <Create color={variant === 'primary' ? 'white' : 'ctaPrimary'} />
           <Spacer width={8} />
         </>
       ) : null}
