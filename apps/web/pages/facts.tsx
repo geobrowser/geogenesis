@@ -12,6 +12,10 @@ const Input = styled.input({
   border: `1px solid ${colors['grey-02']}`,
   borderRadius: '6px',
   padding: '9px 12px',
+
+  '::placeholder': {
+    color: colors['grey-03'],
+  },
 });
 
 const PageHeader = styled.div({
@@ -33,7 +37,9 @@ export default function Facts() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button onClick={() => console.log('Add!')}>Add</Button>
+        <Button icon="create" onClick={() => console.log('Add!')}>
+          Add
+        </Button>
       </PageHeader>
 
       <Spacer height={12} />
