@@ -22,7 +22,7 @@ const StyledButton = styled.button<Pick<Props, 'variant'>>(props => ({
   boxShadow: props.variant === 'primary' ? '0 0 0 1px transparent' : `0 0 0 1px ${colors['grey-02']}`,
 
   // TODO: Placeholder until we do motion design
-  transition: '100ms all ease-in',
+  transition: '200ms all ease-in-out',
 
   ':hover': {
     boxShadow: props.variant === 'primary' ? `none` : `0 0 0 1px ${colors.text}`,
