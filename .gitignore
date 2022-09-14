@@ -5,4 +5,5 @@ build
 .vercel
 .turbo
 dist
+.env
 
