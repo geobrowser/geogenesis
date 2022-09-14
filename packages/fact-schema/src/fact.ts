@@ -25,7 +25,7 @@ interface Fact {
 
 interface NumberValue {
   type: 'number'
-  value: number
+  value: string
 }
 
 interface StringValue {

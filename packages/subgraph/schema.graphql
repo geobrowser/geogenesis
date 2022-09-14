@@ -5,3 +5,24 @@ type Statement @entity {
   mimeType: String
   decoded: Bytes
 }
+
+type Triple @entity {
+  id: ID!
+  entity: GeoEntity!
+  attribute: GeoEntity!
+  valueType: ValueType!
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+}
+
+type GeoEntity @entity {
+  id: ID!
+}
+
+enum ValueType {
+  NULL
+  NUMBER
+  STRING
+  ENTITY
+}

@@ -24,6 +24,9 @@
     "@geogenesis/fact-schema#codegen": {
       "dependsOn": ["@geogenesis/assemblyscript-json-schema#build"]
     },
+    "@geogenesis/subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"]
+    },
     "deploy": {
       "dependsOn": ["build", "test", "lint"],
       "outputs": []

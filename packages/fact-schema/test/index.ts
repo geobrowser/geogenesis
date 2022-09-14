@@ -46,7 +46,7 @@ const root: Root = {
         attributeId: 'a',
         value: {
           type: 'number',
-          value: 42,
+          value: '42',
         },
       },
     },

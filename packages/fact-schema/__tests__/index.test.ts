@@ -12,7 +12,7 @@ it('validates', () => {
           entityId: '',
           attributeId: '',
           type: 'fact',
-          value: { type: 'number', value: 42 },
+          value: { type: 'number', value: '42' },
         },
       },
     ],
