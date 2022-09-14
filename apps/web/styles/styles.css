@@ -29,7 +29,22 @@
 @font-face {
   font-family: 'Calibre';
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
+  src: url('/fonts/TestCalibre-Semibold.otf') format('opentype');
+}
+
+@font-face {
+  font-family: 'Calibre';
+  font-style: italic;
+  font-weight: 600;
+  src: url('/fonts/TestCalibre-SemiboldItalic.otf') format('opentype');
+}
+
+
+@font-face {
+  font-family: 'Calibre';
+  font-style: normal;
+  font-weight: 600;
   src: url('/fonts/TestCalibre-Bold.otf') format('opentype');
 }
 
