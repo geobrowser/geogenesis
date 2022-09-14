@@ -4,14 +4,50 @@ import { Spacer } from './spacer';
 import { colors, ColorValue } from './theme/colors';
 import { typography } from './theme/typography';
 
-const StyledButton = styled.button<Pick<Props, 'variant'>>(props => {
-  console.log(props);
+type ButtonVariant = 'primary' | 'secondary';
+
+function getButtonColors(variant: ButtonVariant, disabled: boolean) {
+  if (disabled) {
+    return {
+      color: colors['grey-03'],
+      backgroundColor: colors.divider,
+      backgroundColorHover: colors.divider,
+      borderColor: 'transparent',
+      borderColorHover: 'transparent',
+      borderColorFocus: 'transparent',
+    };
+  }
+
+  switch (variant) {
+    case 'primary':
+      return {
+        color: colors.white,
+        backgroundColor: colors.ctaPrimary,
+        backgroundColorHover: colors.ctaHover,
+        borderColor: 'transparent',
+        borderColorHover: 'transparent',
+        borderColorFocus: colors.ctaHover,
+      };
+    case 'secondary':
+      return {
+        color: colors.text,
+        backgroundColor: colors.white,
+        backgroundColorHover: colors.white,
+        borderColor: colors['grey-02'],
+        borderColorHover: colors.text,
+        borderColorFocus: colors.text,
+      };
+  }
+}
+
+const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>>(props => {
+  const buttonColors = getButtonColors(props.variant, props.disabled);
 
   return {
     ...typography.button,
     boxSizing: 'border-box',
-    backgroundColor: props.variant === 'primary' ? colors.ctaPrimary : colors.white,
-    color: props.variant === 'primary' ? colors.white : colors.text,
+    backgroundColor: buttonColors.backgroundColor,
+    color: buttonColors.color,
     padding: '8.5px 12px', // TODO: Spacing tokens
     borderRadius: '6px', // TODO: Spacing tokens
     cursor: 'pointer',
@@ -22,30 +58,28 @@ const StyledButton = styled.button<Pick<Props, 'variant'>>(props => {
 
     // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes. There's
     // other things we can do like toggling padding but this seems simplest.
-    boxShadow: props.variant === 'primary' ? '0 0 0 1px transparent' : `0 0 0 1px ${colors['grey-02']}`,
+    boxShadow: `0 0 0 1px ${buttonColors.borderColor}`,
 
     // TODO: Placeholder until we do motion design
     transition: '200ms all ease-in-out',
 
     ':hover': {
-      boxShadow: props.variant === 'primary' ? `none` : `0 0 0 1px ${colors.text}`,
-      backgroundColor: props.variant === 'primary' ? colors.ctaHover : colors.white,
+      boxShadow: `0 0 0 1px ${buttonColors.borderColorHover}`,
+      backgroundColor: buttonColors.backgroundColorHover,
     },
 
     ':focus': {
-      boxShadow: props.variant === 'primary' ? `0 0 0 2px ${colors.ctaHover}` : `0 0 0 2px ${colors.text}`,
+      boxShadow: `0 0 0 2px ${buttonColors.borderColorFocus}`,
       outline: 'none',
     },
 
     ':disabled': {
-      color: colors['grey-03'],
-      backgroundColor: colors.divider,
       boxShadow: 'none',
+      cursor: 'not-allowed',
     },
   };
 });
 
-type ButtonVariant = 'primary' | 'secondary';
 
 interface Props {
   children: React.ReactNode;
