@@ -2,16 +2,17 @@ import styled from '@emotion/styled';
 import { Create } from './icons/create';
 import { Spacer } from './spacer';
 import { colors, ColorValue } from './theme/colors';
+import { Theme } from './theme';
 import { typography } from './theme/typography';
 
 type ButtonVariant = 'primary' | 'secondary';
 
-function getButtonColors(variant: ButtonVariant, disabled: boolean) {
+function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme) {
   if (disabled) {
     return {
-      color: colors['grey-03'],
-      backgroundColor: colors.divider,
-      backgroundColorHover: colors.divider,
+      color: theme.colors['grey-03'],
+      backgroundColor: theme.colors.divider,
+      backgroundColorHover: theme.colors.divider,
       borderColor: 'transparent',
       borderColorHover: 'transparent',
       borderColorFocus: 'transparent',
@@ -21,27 +22,28 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean) {
   switch (variant) {
     case 'primary':
       return {
-        color: colors.white,
-        backgroundColor: colors.ctaPrimary,
-        backgroundColorHover: colors.ctaHover,
+        color: theme.colors.white,
+        backgroundColor: theme.colors.ctaPrimary,
+        backgroundColorHover: theme.colors.ctaHover,
         borderColor: 'transparent',
         borderColorHover: 'transparent',
-        borderColorFocus: colors.ctaHover,
+        borderColorFocus: theme.colors.ctaHover,
       };
     case 'secondary':
       return {
-        color: colors.text,
-        backgroundColor: colors.white,
-        backgroundColorHover: colors.white,
-        borderColor: colors['grey-02'],
-        borderColorHover: colors.text,
-        borderColorFocus: colors.text,
+        color: theme.colors.text,
+        backgroundColor: theme.colors.white,
+        backgroundColorHover: theme.colors.white,
+        borderColor: theme.colors['grey-02'],
+        borderColorHover: theme.colors.text,
+        borderColorFocus: theme.colors.text,
       };
   }
 }
 
 const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>>(props => {
-  const buttonColors = getButtonColors(props.variant, props.disabled);
+  console.log(props.theme);
+  const buttonColors = getButtonColors(props.variant, props.disabled, props.theme as Theme);
 
   return {
     ...typography.button,
@@ -80,7 +82,6 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   };
 });
 
-
 interface Props {
   children: React.ReactNode;
   onClick: () => void;
@@ -90,8 +91,8 @@ interface Props {
 }
 
 function getIconColor(variant: ButtonVariant, disabled: boolean): ColorValue {
-  if (disabled) return colors['grey-03'];
-  return variant === 'primary' ? colors.white : colors.ctaPrimary;
+  if (disabled) return colors.light['grey-03'];
+  return variant === 'primary' ? colors.light.white : colors.light.ctaPrimary;
 }
 
 export function Button({ children, onClick, icon, variant = 'primary', disabled = false }: Props) {

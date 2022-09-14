@@ -1,3 +1,4 @@
+import { ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
@@ -10,7 +11,7 @@ const Body = styled.div({
   minHeight: '100vh',
   maxWidth: '100vw',
   overflow: 'hidden',
-  backgroundColor: `${colors.bg}`,
+  backgroundColor: `${colors.light.bg}`,
 });
 
 const globalStyles = css`
@@ -27,17 +28,23 @@ const Layout = styled.main({
   maxWidth: '1060px',
 });
 
+const theme = {
+  colors: colors.light,
+};
+
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <Body>
-      <Global styles={globalStyles} />
-      <Link href="/dev">
-        <a>Design system</a>
-      </Link>
-      <Layout>
-        <Component {...pageProps} />
-      </Layout>
-    </Body>
+    <ThemeProvider theme={theme}>
+      <Body>
+        <Global styles={globalStyles} />
+        <Link href="/dev">
+          <a>Design system</a>
+        </Link>
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+      </Body>
+    </ThemeProvider>
   );
 }
 
