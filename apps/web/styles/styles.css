@@ -40,6 +40,10 @@
   src: url('/fonts/TestCalibre-BoldItalic.otf') format('opentype');
 }
 
+/* 
+  Additional resets based on Tailwind's Preflight
+  https://tailwindcss.com/docs/preflight
+*/
 blockquote,
 dl,
 dd,
