@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { useState } from 'react';
 import {
   createColumnHelper,
   FilterFn,
@@ -9,10 +8,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
-import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { colors } from '../design-system/theme/colors';
-import { typography } from '../design-system/theme/typography';
 
 type Fact = {
   id: string;
@@ -80,37 +77,11 @@ const TableCell = styled.td({
   padding: '10px',
 });
 
-const Input = styled.input({
-  ...typography.input,
-  border: `1px solid ${colors['grey-02']}`,
-  borderRadius: '6px',
-  padding: '9px 12px',
-});
+interface Props {
+  globalFilter: string;
+}
 
-const PageHeader = styled.div({
-  display: 'flex',
-  justifyContent: 'space-between',
-});
-
-const Button = styled.button({
-  padding: '12px 9.5px',
-  backgroundColor: colors.ctaPrimary,
-  color: colors.white,
-  border: 'none',
-  outline: 'none',
-  borderRadius: '6px',
-});
-
-const PageContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-});
-
-export function FactsTable() {
-  const [globalFilter, setGlobalFilter] = useState<string>('');
-
-  console.log(globalFilter);
-
+export function FactsTable({ globalFilter }: Props) {
   const table = useReactTable({
     data,
     columns,
@@ -126,41 +97,28 @@ export function FactsTable() {
   });
 
   return (
-    <PageContainer>
-      <PageHeader>
-        <Text variant="largeTitle">Facts</Text>
-        <Button>Add</Button>
-      </PageHeader>
-
-      <Spacer height={12} />
-
-      <Input placeholder="Search facts..." onChange={e => setGlobalFilter(e.target.value)} />
-
-      <Spacer height={12} />
-
-      <Table>
-        <thead>
-          {table.getHeaderGroups().map(headerGroup => (
-            <tr key={headerGroup.id}>
-              {headerGroup.headers.map(header => (
-                <TableHeader key={header.id}>
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHeader>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map(row => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map(cell => (
-                <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </PageContainer>
+    <Table>
+      <thead>
+        {table.getHeaderGroups().map(headerGroup => (
+          <tr key={headerGroup.id}>
+            {headerGroup.headers.map(header => (
+              <TableHeader key={header.id}>
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHeader>
+            ))}
+          </tr>
+        ))}
+      </thead>
+      <tbody>
+        {table.getRowModel().rows.map(row => (
+          <tr key={row.id}>
+            {row.getVisibleCells().map(cell => (
+              <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
