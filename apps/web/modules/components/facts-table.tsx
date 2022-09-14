@@ -112,7 +112,7 @@ export function FactsTable({ globalFilter, facts }: Props) {
   );
 }
 
-function TableRow({ children,  }: { children: React.ReactNode;  }) {
+function TableRow({ children }: { children: React.ReactNode }) {
   const isPresent = useIsPresent();
 
   return (
@@ -121,13 +121,12 @@ function TableRow({ children,  }: { children: React.ReactNode;  }) {
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.2 }}
       style={{
         width: '100%',
         position: isPresent ? 'relative' : 'absolute',
         display: isPresent ? 'table-row' : 'flex',
         alignItems: isPresent ? 'center' : 'center',
-        originX: 0,
       }}
     >
       {children}
@@ -148,7 +147,7 @@ function ResizablePanel({ children }: { children: React.ReactNode }) {
   const [ref, { height }] = useMeasure();
 
   return (
-    <MotionContainer layout animate={{ height }} transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}>
+    <MotionContainer layout animate={{ height }} transition={{ duration: 0.1 }}>
       <div ref={ref}>{children}</div>
     </MotionContainer>
   );
