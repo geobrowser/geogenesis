@@ -8,29 +8,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
+import useMeasure from 'react-use-measure';
 import { Text } from '../design-system/text';
-
-type Fact = {
-  id: string;
-  entityId: string;
-  attribute: string;
-  value: string | number;
-};
-
-const data: Fact[] = [
-  {
-    id: '1',
-    entityId: 'askldjasd',
-    attribute: 'Died in',
-    value: 0,
-  },
-  {
-    id: '2',
-    entityId: 'askldjasd',
-    attribute: 'name',
-    value: 'Jesus Christ',
-  },
-];
+import { Fact } from '../state';
 
 const columnHelper = createColumnHelper<Fact>();
 
@@ -58,32 +39,37 @@ const columns = [
 const Table = styled.table(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   width: '100%',
-  borderRadius: '6px',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
-
-  // Adding borders to a table is complex, so we can use box-shadow instead
-  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
 }));
+
+const AnimatedTable = motion(Table);
 
 const TableHeader = styled.th(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
   textAlign: 'left',
+  width: '33%',
 }));
 
 const TableCell = styled.td(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
+  width: '33%',
 }));
 
+const TBody = styled.tbody({
+  position: 'relative',
+});
+
 interface Props {
+  facts: Fact[];
   globalFilter: string;
 }
 
-export function FactsTable({ globalFilter }: Props) {
+export function FactsTable({ globalFilter, facts }: Props) {
   const table = useReactTable({
-    data,
+    data: facts,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -97,34 +83,78 @@ export function FactsTable({ globalFilter }: Props) {
   });
 
   return (
-    <Table>
-      <thead>
-        {table.getHeaderGroups().map(headerGroup => (
-          <tr key={headerGroup.id}>
-            {headerGroup.headers.map(header => (
-              <TableHeader key={header.id}>
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHeader>
+    <ResizablePanel>
+      <AnimatePresence initial={false} mode="popLayout">
+        <Table cellPadding={0}>
+          <thead>
+            {table.getHeaderGroups().map(headerGroup => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map(header => (
+                  <TableHeader key={header.id}>
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHeader>
+                ))}
+              </tr>
             ))}
-          </tr>
-        ))}
-      </thead>
-      <tbody>
-        {table.getRowModel().rows.map(row => (
-          <tr key={row.id}>
-            {row.getVisibleCells().map(cell => (
-              <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+          </thead>
+          <TBody>
+            {table.getRowModel().rows.map(row => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map(cell => (
+                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                ))}
+              </TableRow>
             ))}
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+          </TBody>
+        </Table>
+      </AnimatePresence>
+    </ResizablePanel>
+  );
+}
+
+function TableRow({ children,  }: { children: React.ReactNode;  }) {
+  const isPresent = useIsPresent();
+
+  return (
+    <motion.tr
+      layout
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{
+        width: '100%',
+        position: isPresent ? 'relative' : 'absolute',
+        display: isPresent ? 'table-row' : 'flex',
+        alignItems: isPresent ? 'center' : 'center',
+        originX: 0,
+      }}
+    >
+      {children}
+    </motion.tr>
+  );
+}
+
+const Container = styled.div(props => ({
+  // Adding borders to a table is complex, so we can use box-shadow instead
+  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
+  borderRadius: '6px',
+  // overflow: 'hidden',
+}));
+
+const MotionContainer = motion(Container);
+
+function ResizablePanel({ children }: { children: React.ReactNode }) {
+  const [ref, { height }] = useMeasure();
+
+  return (
+    <MotionContainer layout animate={{ height }} transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}>
+      <div ref={ref}>{children}</div>
+    </MotionContainer>
   );
 }
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  console.log('Running fuzzyFilter');
-
   // Rank the item
   const itemRank = rankItem(row.getValue(columnId), value);
 
