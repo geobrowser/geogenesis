@@ -9,7 +9,7 @@ import { Button } from '~/modules/design-system/button';
 const Input = styled.input(props => {
   console.log(props.theme);
   return {
-    ...typography.input,
+    ...props.theme.typography.input,
     border: `1px solid ${props.theme.colors['grey-02']}`,
     borderRadius: '6px',
     padding: '9px 12px',

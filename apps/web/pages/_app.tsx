@@ -1,18 +1,18 @@
-import { ThemeProvider } from '@emotion/react';
+import { ThemeProvider, css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
+import { typography } from '~/modules/design-system/theme/typography';
 import 'modern-normalize';
 import '../styles/styles.css';
-import { css, Global } from '@emotion/react';
 
-const Body = styled.div({
+const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
   overflow: 'hidden',
-  backgroundColor: `${colors.light.bg}`,
-});
+  backgroundColor: `${props.theme.colors.bg}`,
+}));
 
 const globalStyles = css`
   body {
@@ -30,6 +30,7 @@ const Layout = styled.main({
 
 const theme = {
   colors: colors.light,
+  typography: typography.light,
 };
 
 function MyApp({ Component, pageProps }: AppProps) {

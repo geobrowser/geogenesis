@@ -3,7 +3,6 @@ import { Create } from './icons/create';
 import { Spacer } from './spacer';
 import { ColorValue } from './theme/colors';
 import { Theme } from './theme';
-import { typography } from './theme/typography';
 import { useTheme } from '@emotion/react';
 
 type ButtonVariant = 'primary' | 'secondary';
@@ -46,7 +45,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   const buttonColors = getButtonColors(props.variant, props.disabled, props.theme);
 
   return {
-    ...typography.button,
+    ...props.theme.typography.button,
     boxSizing: 'border-box',
     backgroundColor: buttonColors.backgroundColor,
     color: buttonColors.color,
