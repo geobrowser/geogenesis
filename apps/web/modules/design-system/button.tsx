@@ -1,9 +1,10 @@
 import styled from '@emotion/styled';
 import { Create } from './icons/create';
 import { Spacer } from './spacer';
-import { colors, ColorValue } from './theme/colors';
+import { ColorValue } from './theme/colors';
 import { Theme } from './theme';
 import { typography } from './theme/typography';
+import { useTheme } from '@emotion/react';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -42,8 +43,7 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
 }
 
 const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>>(props => {
-  console.log(props.theme);
-  const buttonColors = getButtonColors(props.variant, props.disabled, props.theme as Theme);
+  const buttonColors = getButtonColors(props.variant, props.disabled, props.theme);
 
   return {
     ...typography.button,
@@ -90,13 +90,14 @@ interface Props {
   disabled?: boolean;
 }
 
-function getIconColor(variant: ButtonVariant, disabled: boolean): ColorValue {
-  if (disabled) return colors.light['grey-03'];
-  return variant === 'primary' ? colors.light.white : colors.light.ctaPrimary;
+function getIconColor(variant: ButtonVariant, disabled: boolean, theme: Theme): ColorValue {
+  if (disabled) return theme.colors['grey-03'];
+  return variant === 'primary' ? theme.colors.white : theme.colors.ctaPrimary;
 }
 
 export function Button({ children, onClick, icon, variant = 'primary', disabled = false }: Props) {
-  const iconColor = getIconColor(variant, disabled);
+  const theme = useTheme();
+  const iconColor = getIconColor(variant, disabled, theme);
 
   return (
     <StyledButton disabled={disabled} variant={variant} onClick={onClick}>

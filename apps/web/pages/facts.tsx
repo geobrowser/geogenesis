@@ -3,19 +3,21 @@ import styled from '@emotion/styled';
 import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
 import { Button } from '~/modules/design-system/button';
 
-const Input = styled.input({
-  ...typography.input,
-  border: `1px solid ${colors['grey-02']}`,
-  borderRadius: '6px',
-  padding: '9px 12px',
+const Input = styled.input(props => {
+  console.log(props.theme);
+  return {
+    ...typography.input,
+    border: `1px solid ${props.theme.colors['grey-02']}`,
+    borderRadius: '6px',
+    padding: '9px 12px',
 
-  '::placeholder': {
-    color: colors['grey-03'],
-  },
+    '::placeholder': {
+      color: props.theme.colors['grey-03'],
+    },
+  };
 });
 
 const PageHeader = styled.div({

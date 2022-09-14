@@ -11,7 +11,7 @@ interface Props {
 
 const BaseText = styled.p<Required<Props>>(props => ({
   ...typography[props.variant],
-  color: colors[props.color],
+  color: props.theme.colors[props.color],
 }));
 
 export function Text({ children, color = 'text', variant = 'body', as = 'p' }: Props) {

@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { colors } from '../design-system/theme/colors';
 
 type Fact = {
   id: string;
@@ -56,27 +55,27 @@ const columns = [
   }),
 ];
 
-const Table = styled.table({
-  border: `1px solid ${colors['grey-02']}`,
+const Table = styled.table(props => ({
+  border: `1px solid ${props.theme.colors['grey-02']}`,
   width: '100%',
   borderRadius: '6px',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
 
   // Adding borders to a table is complex, so we can use box-shadow instead
-  boxShadow: `0 0 0 1px ${colors['grey-02']}`,
-});
+  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
+}));
 
-const TableHeader = styled.th({
-  border: `1px solid ${colors['grey-02']}`,
+const TableHeader = styled.th(props => ({
+  border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
   textAlign: 'left',
-});
+}));
 
-const TableCell = styled.td({
-  border: `1px solid ${colors['grey-02']}`,
+const TableCell = styled.td(props => ({
+  border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
-});
+}));
 
 interface Props {
   globalFilter: string;
