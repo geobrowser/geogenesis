@@ -24,15 +24,18 @@ const columns = [
         {info.getValue()}
       </Text>
     ),
+    size: 160,
   }),
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    size: 450,
   }),
   columnHelper.accessor('value', {
     header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    size: 450,
   }),
 ];
 
@@ -43,19 +46,16 @@ const Table = styled.table(props => ({
   borderCollapse: 'collapse',
 }));
 
-const AnimatedTable = motion(Table);
-
-const TableHeader = styled.th(props => ({
+const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
   textAlign: 'left',
-  width: '33%',
+  width: props.width,
 }));
 
 const TableCell = styled.td(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
-  width: '33%',
 }));
 
 const TBody = styled.tbody({
@@ -90,7 +90,7 @@ export function FactsTable({ globalFilter, facts }: Props) {
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
-                  <TableHeader key={header.id}>
+                  <TableHeader width={header.column.getSize()} key={header.id}>
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHeader>
                 ))}
@@ -101,7 +101,9 @@ export function FactsTable({ globalFilter, facts }: Props) {
             {table.getRowModel().rows.map(row => (
               <TableRow key={row.id}>
                 {row.getVisibleCells().map(cell => (
-                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  <TableCell width={cell.column.getSize()} key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
             ))}
