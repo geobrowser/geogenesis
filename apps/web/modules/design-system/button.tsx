@@ -12,13 +12,22 @@ const StyledButton = styled.button<Pick<Props, 'variant'>>(props => ({
   padding: '8.5px 12px', // TODO: Spacing tokens
   borderRadius: '6px', // TODO: Spacing tokens
   cursor: 'pointer',
+  outline: 'none',
 
   display: 'flex',
   alignItems: 'center',
 
+  // TODO: Placeholder until we do motion design
+  transition: '100ms all ease-in',
+
   ':hover': {
     backgroundColor: props.variant === 'primary' ? colors.ctaHover : colors.white,
     border: props.variant === 'primary' ? 'none' : `1px solid ${colors.text}`,
+  },
+
+  ':focus': {
+    border: props.variant === 'primary' ? `2px solid ${colors.ctaHover}` : `2px solid ${colors.text}`,
+    outline: 'none',
   },
 }));
 
