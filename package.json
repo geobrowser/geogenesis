@@ -6,10 +6,12 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "docker:build": "docker compose build",
+    "clean": "turbo run clean && rimraf \"**/.turbo\"",
+    "docker:build": "docker compose build --build-arg TURBO_TEAM --build-arg TURBO_TOKEN",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down -v --rmi all",
-    "docker:clean": "rimraf build"
+    "docker:clean": "rimraf build",
+    "clean-node-modules": "rimraf \"**/node_modules\""
   },
   "author": "Byron Guina",
   "license": "ISC",
@@ -22,6 +24,6 @@
     "eslint": "^8.15.0",
     "eslint-config-turbo": "^0.0.3",
     "rimraf": "^3.0.2",
-    "turbo": "^1.4.4"
+    "turbo": "^1.4.6"
   }
 }

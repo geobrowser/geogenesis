@@ -1,0 +1,32 @@
+{
+  "private": true,
+  "name": "@geogenesis/assemblyscript-json-schema",
+  "version": "0.0.1",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc && cp -r static dist/static"
+  },
+  "main": "./dist/src/index.js",
+  "bin": "./dist/src/bin.js",
+  "devDependencies": {
+    "@tsconfig/node16": "^1.0.3",
+    "@types/json-schema": "^7.0.11",
+    "@types/lodash.get": "^4.4.7",
+    "@types/node": "^18.7.14",
+    "ajv": "^8.11.0",
+    "arg": "^5.0.2",
+    "rimraf": "^3.0.2",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.8.2",
+    "vite": "^3.0.9",
+    "vitest": "^0.22.1"
+  },
+  "dependencies": {
+    "buffs": "^0.6.0",
+    "lodash.get": "^4.4.2",
+    "prettier": "^2.6.2",
+    "tree-visit": "^0.1.2"
+  }
+}

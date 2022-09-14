@@ -1,0 +1,223 @@
+// Vitest Snapshot v1
+
+exports[`generates array type 1`] = `
+"import { log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
+import { Value } from './Value'
+import { mapOrNull } from './collection-utils'
+
+export class ValuesContainer {
+  values: Value[]
+  type: string
+
+  constructor(values: Value[], type: string) {
+    this.values = values
+    this.type = type
+  }
+
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj()
+    const values = new JSON.Arr()
+    for (let i = 0; i < this.values.length; i++) {
+      values.push(this.values[i].toJSON())
+    }
+    __obj.set('values', values)
+    const type = new JSON.Str(this.type)
+    __obj.set('type', type)
+
+    return __obj
+  }
+
+  static fromJSON(__json: JSON.Value): ValuesContainer | null {
+    if (!__json.isObj) {
+      log.debug('ValuesContainer.fromJSON(): __json.isObj is false', [])
+      return null
+    }
+    const __obj = __json as JSON.Obj
+    let __values = __obj.getArr('values')
+
+    if (__values == null) {
+      log.debug('ValuesContainer.fromJSON(): __values is null', [])
+      return null
+    }
+    const __valuesArray = __values.valueOf()
+    const values = mapOrNull<JSON.Value, Value>(
+      __valuesArray,
+      (item: JSON.Value): Value | null => Value.fromJSON(item)
+    )
+    if (values == null) {
+      log.debug('ValuesContainer.fromJSON(): __values is null', [])
+      return null
+    }
+    let __type = __obj.getString('type')
+
+    if (__type == null) {
+      log.debug('ValuesContainer.fromJSON(): __type is null', [])
+      return null
+    }
+    const type = __type.valueOf()
+
+    return new ValuesContainer(values, type)
+  }
+}
+"
+`;
+
+exports[`generates object type 1`] = `
+"import { log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
+import { Value } from './Value'
+
+export class NumberValue extends Value {
+  value: f64
+
+  constructor(type: string, value: f64) {
+    super(type)
+    this.type = type
+    this.value = value
+  }
+
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj()
+    const type = new JSON.Str(this.type)
+    __obj.set('type', type)
+    const value = new JSON.Num(this.value)
+    __obj.set('value', value)
+
+    return __obj
+  }
+
+  static fromJSON(__json: JSON.Value): NumberValue | null {
+    if (!__json.isObj) {
+      log.debug('NumberValue.fromJSON(): __json.isObj is false', [])
+      return null
+    }
+    const __obj = __json as JSON.Obj
+    let __type = __obj.getString('type')
+
+    if (__type == null) {
+      log.debug('NumberValue.fromJSON(): __type is null', [])
+      return null
+    }
+    const type = __type.valueOf()
+    let __value = __obj.getNum('value')
+    if (__value == null) {
+      const integer = __obj.getInteger('value')
+      if (integer != null) {
+        __value = new JSON.Num(integer.valueOf() as f64)
+      }
+    }
+    if (__value == null) {
+      log.debug('NumberValue.fromJSON(): __value is null', [])
+      return null
+    }
+    const value = __value.valueOf()
+
+    return new NumberValue(type, value)
+  }
+}
+"
+`;
+
+exports[`generates object type 2`] = `
+"import { log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
+import { Value } from './Value'
+
+export class ValueContainer {
+  value: Value
+  type: string
+
+  constructor(value: Value, type: string) {
+    this.value = value
+    this.type = type
+  }
+
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj()
+    const value = this.value.toJSON()
+    __obj.set('value', value)
+    const type = new JSON.Str(this.type)
+    __obj.set('type', type)
+
+    return __obj
+  }
+
+  static fromJSON(__json: JSON.Value): ValueContainer | null {
+    if (!__json.isObj) {
+      log.debug('ValueContainer.fromJSON(): __json.isObj is false', [])
+      return null
+    }
+    const __obj = __json as JSON.Obj
+    let __value = __obj.getObj('value')
+
+    if (__value == null) {
+      log.debug('ValueContainer.fromJSON(): __value is null', [])
+      return null
+    }
+    const value = Value.fromJSON(__value)
+    if (value == null) {
+      log.debug('ValueContainer.fromJSON(): __value is null', [])
+      return null
+    }
+    let __type = __obj.getString('type')
+
+    if (__type == null) {
+      log.debug('ValueContainer.fromJSON(): __type is null', [])
+      return null
+    }
+    const type = __type.valueOf()
+
+    return new ValueContainer(value, type)
+  }
+}
+"
+`;
+
+exports[`generates union type 1`] = `
+"import { log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
+import { NumberValue } from './NumberValue'
+import { StringValue } from './StringValue'
+
+export class Value {
+  type: string
+
+  constructor(type: string) {
+    this.type = type
+  }
+
+  asNumberValue(): NumberValue | null {
+    return this.type == 'number' ? (this as NumberValue) : null
+  }
+
+  asStringValue(): StringValue | null {
+    return this.type == 'string' ? (this as StringValue) : null
+  }
+
+  toJSON(): JSON.Value {
+    if (this.type == 'number') return (this as NumberValue).toJSON()
+    if (this.type == 'string') return (this as StringValue).toJSON()
+    throw \`undefined variant of: Value.\${this.type}\`
+  }
+
+  static fromJSON(__json: JSON.Value): Value | null {
+    if (!__json.isObj) {
+      log.debug('Value.fromJSON(): __json.isObj is false', [])
+      return null
+    }
+    const __obj = __json as JSON.Obj
+    const type = __obj.getString('type')
+    if (type == null) {
+      log.debug('Value.fromJSON(): type is null', [])
+      return null
+    }
+    const typeName = type.valueOf()
+    if (typeName == 'number') return NumberValue.fromJSON(__json)
+    if (typeName == 'string') return StringValue.fromJSON(__json)
+    log.debug(\`Value.fromJSON(): unhandled variant '\${typeName}'\`, [])
+    return null
+  }
+}
+"
+`;

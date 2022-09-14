@@ -1,0 +1,60 @@
+// Vitest Snapshot v1
+
+exports[`generates files 1`] = `
+{
+  "/dist/NumberValue.ts": "import { log } from '@graphprotocol/graph-ts'
+import { JSON } from 'assemblyscript-json/assembly'
+
+export class NumberValue {
+  type: string
+  value: f64
+
+  constructor(type: string, value: f64) {
+    this.type = type
+    this.value = value
+  }
+
+  toJSON(): JSON.Value {
+    const __obj = new JSON.Obj()
+    const type = new JSON.Str(this.type)
+    __obj.set('type', type)
+    const value = new JSON.Num(this.value)
+    __obj.set('value', value)
+
+    return __obj
+  }
+
+  static fromJSON(__json: JSON.Value): NumberValue | null {
+    if (!__json.isObj) {
+      log.debug('NumberValue.fromJSON(): __json.isObj is false', [])
+      return null
+    }
+    const __obj = __json as JSON.Obj
+    let __type = __obj.getString('type')
+
+    if (__type == null) {
+      log.debug('NumberValue.fromJSON(): __type is null', [])
+      return null
+    }
+    const type = __type.valueOf()
+    let __value = __obj.getNum('value')
+    if (__value == null) {
+      const integer = __obj.getInteger('value')
+      if (integer != null) {
+        __value = new JSON.Num(integer.valueOf() as f64)
+      }
+    }
+    if (__value == null) {
+      log.debug('NumberValue.fromJSON(): __value is null', [])
+      return null
+    }
+    const value = __value.valueOf()
+
+    return new NumberValue(type, value)
+  }
+}
+",
+  "/dist/index.ts": "export * from './NumberValue'
+",
+}
+`;

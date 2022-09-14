@@ -1,8 +1,5 @@
-import 'jest'
 import pRetry from 'p-retry'
-
-// 1 minute
-jest.setTimeout(120000)
+import { expect, it } from 'vitest'
 
 type NodeError = {
   errno: number
@@ -44,7 +41,7 @@ async function checkRunning() {
   return json
 }
 
-test('subgraph runs', async () => {
+it('subgraph runs', async () => {
   const retries = 20
   const data = await pRetry(checkRunning, {
     retries,
@@ -61,4 +58,4 @@ test('subgraph runs', async () => {
       statements: [{ id: '0x0' }, { id: '0x1' }],
     },
   })
-})
+}, 120000)

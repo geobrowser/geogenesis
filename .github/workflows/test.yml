@@ -1,4 +1,4 @@
-name: Subgraph Integration Test
+name: Unit Tests
 
 on: push
 
@@ -19,10 +19,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: docker-practice/actions-setup-docker@master
-
-      - run: pnpm docker:build
-
-      - run: |
-          pnpm docker:up --detach
-          pnpm --filter integration run start
+      - run: pnpm test

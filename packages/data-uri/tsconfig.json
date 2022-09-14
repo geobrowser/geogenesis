@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "allowJs": true,
+    "strict": true,
+    "rootDirs": ["libetc", "test"],
+    "outDir": "dist",
+    "lib": ["dom"]
+  }
+}

@@ -2,6 +2,9 @@
 
 FROM node:18.8.0-alpine3.16 AS base
 
+ARG TURBO_TEAM
+ARG TURBO_TOKEN
+
 RUN apk --no-cache add curl python3 build-base jq yq
 
 RUN curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm
@@ -14,8 +17,11 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 # Install
 
-COPY package.json pnpm-workspace.yaml .nvmrc .
-COPY ./packages/contracts ./packages/contracts
-COPY ./packages/subgraph ./packages/subgraph
+ENV TURBO_TEAM=$TURBO_TEAM
+ENV TURBO_TOKEN=$TURBO_TOKEN
+ENV TURBO_REMOTE_ONLY=true
+
+COPY . .
 
 RUN pnpm install --recursive --offline --frozen-lockfile
+RUN pnpm build
