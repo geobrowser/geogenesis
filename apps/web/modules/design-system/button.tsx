@@ -17,7 +17,8 @@ const StyledButton = styled.button<Pick<Props, 'variant'>>(props => ({
   display: 'flex',
   alignItems: 'center',
 
-  // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes
+  // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes. There's
+  // other things we can do like toggling padding but this seems simplest.
   boxShadow: props.variant === 'primary' ? '0 0 0 1px transparent' : `0 0 0 1px ${colors['grey-02']}`,
 
   // TODO: Placeholder until we do motion design
