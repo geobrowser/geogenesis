@@ -1,6 +1,6 @@
 export type ColorScale = typeof colors;
 export type Color = keyof ColorScale;
-export type ColorValue = ColorScale[Color][keyof ColorScale[Color]];
+export type ColorValue = ColorScale[Color];
 
 export const colors = {
   white: '#FFFFFF',
@@ -19,4 +19,4 @@ export const colors = {
   orange: '#FFA134',
   green: '#14D28E',
   red: '#FF523A',
-};
+} as const;
