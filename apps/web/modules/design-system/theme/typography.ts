@@ -64,8 +64,9 @@ const baseTypography = {
   },
   button: {
     color: colors.text,
-    fontSize: '0.875rem',
-    lineHeight: '1.125rem',
+    fontSize: '1.0625rem',
+    lineHeight: '1.1875rem',
+    letterSpacing: '-0.17px',
     fontWeight: 500,
   },
   input: {

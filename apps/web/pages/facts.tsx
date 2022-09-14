@@ -33,9 +33,7 @@ export default function Facts() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button variant="secondary" onClick={() => console.log('Add!')}>
-          Add
-        </Button>
+        <Button onClick={() => console.log('Add!')}>Add</Button>
       </PageHeader>
 
       <Spacer height={12} />
