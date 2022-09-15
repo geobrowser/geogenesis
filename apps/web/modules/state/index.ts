@@ -16,6 +16,8 @@ export const data: Fact[] = Array.from({ length: 25 }, (_, index) => {
   };
 });
 
+
+// TODO: Abstract to domain store
 export function useFacts() {
   const [facts, setFacts] = useState(data);
 
