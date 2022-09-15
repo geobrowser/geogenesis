@@ -54,6 +54,7 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 }));
 
 const TableCell = styled.td(props => ({
+  ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
 }));
@@ -84,55 +85,31 @@ export function FactsTable({ globalFilter, facts }: Props) {
 
   return (
     <ResizablePanel>
-      <AnimatePresence initial={false} mode="popLayout">
-        <Table cellPadding={0}>
-          <thead>
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => (
-                  <TableHeader width={header.column.getSize()} key={header.id}>
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHeader>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <TBody>
-            {table.getRowModel().rows.map(row => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map(cell => (
-                  <TableCell width={cell.column.getSize()} key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TBody>
-        </Table>
-      </AnimatePresence>
+      <Table>
+        <thead>
+          {table.getHeaderGroups().map(headerGroup => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map(header => (
+                <TableHeader width={header.column.getSize()} key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHeader>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <TBody>
+          {table.getRowModel().rows.map(row => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map(cell => (
+                <TableCell width={cell.column.getSize()} key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </tr>
+          ))}
+        </TBody>
+      </Table>
     </ResizablePanel>
-  );
-}
-
-function TableRow({ children }: { children: React.ReactNode }) {
-  const isPresent = useIsPresent();
-
-  return (
-    <motion.tr
-      layout
-      initial={{ opacity: 1 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      style={{
-        width: '100%',
-        position: isPresent ? 'relative' : 'absolute',
-        display: isPresent ? 'table-row' : 'flex',
-        alignItems: isPresent ? 'center' : 'center',
-      }}
-    >
-      {children}
-    </motion.tr>
   );
 }
 

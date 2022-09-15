@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styled from '@emotion/styled';
+import debounce from 'lodash.debounce';
 import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -31,6 +32,8 @@ export default function Facts() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const { facts, addFact } = useFacts();
 
+  const debouncedFilter = debounce(setGlobalFilter, 150);
+
   return (
     <PageContainer>
       <PageHeader>
@@ -44,7 +47,7 @@ export default function Facts() {
 
       <Spacer height={12} />
 
-      <Input placeholder="Search facts..." onChange={e => setGlobalFilter(e.target.value)} />
+      <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
 
       <Spacer height={12} />
 

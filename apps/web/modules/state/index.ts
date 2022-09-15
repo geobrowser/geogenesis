@@ -7,20 +7,14 @@ export type Fact = {
   value: string | number;
 };
 
-export const data: Fact[] = [
-  {
-    id: '1',
-    entityId: 'askldjasd',
-    attribute: 'Died in',
-    value: 0,
-  },
-  {
-    id: '2',
-    entityId: 'askldjasd',
+export const data: Fact[] = Array.from({ length: 25 }, (_, index) => {
+  return {
+    id: index.toString(),
+    entityId: index.toString(),
     attribute: 'name',
-    value: 'Jesus Christ',
-  },
-];
+    value: 'John Doe' + ' ' + index,
+  };
+});
 
 export function useFacts() {
   const [facts, setFacts] = useState(data);

@@ -36,19 +36,19 @@ const baseTypography = {
     },
     body: {
       color: colors.light.text,
-      fontSize: '1rem',
+      fontSize: '1.1875rem',
       lineHeight: '1.8125rem',
       fontWeight: 400,
     },
     tableCell: {
       color: colors.light.text,
-      fontSize: '1rem',
+      fontSize: '1.1875rem',
       lineHeight: '1.3125rem',
       fontWeight: 400,
     },
     textLink: {
       color: colors.light.text,
-      fontSize: '1rem',
+      fontSize: '1.1875rem',
       lineHeight: '1.8125rem',
       fontWeight: 400,
       textDecoration: 'underline',

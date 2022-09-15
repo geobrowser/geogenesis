@@ -15,6 +15,10 @@ const Body = styled.div(props => ({
 }));
 
 const globalStyles = css`
+  html {
+    scrollbar-gutter: stable both-edges;
+    overflow: auto;
+  }
   body {
     font-family: 'Calibre';
     text-rendering: 'optimizeLegibility';
