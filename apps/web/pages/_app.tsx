@@ -6,6 +6,7 @@ import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
 import 'modern-normalize';
 import '../styles/styles.css';
+import { Spacer } from '~/modules/design-system/spacer';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -46,6 +47,12 @@ function MyApp({ Component, pageProps }: AppProps) {
         <Global styles={globalStyles} />
         <Link href="/dev">
           <a>Design system</a>
+        </Link>
+
+        <Spacer width={4} />
+
+        <Link href="/facts">
+          <a>Facts database</a>
         </Link>
         <Layout>
           <Component {...pageProps} />
