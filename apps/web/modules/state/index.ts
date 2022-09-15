@@ -22,7 +22,7 @@ export function useFacts() {
   const addFact = () => {
     setFacts([
       {
-        id: '3',
+        id: Math.random().toString(),
         entityId: 'askldjasd',
         attribute: '',
         value: '',
