@@ -59,18 +59,18 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 
     // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes. There's
     // other things we can do like toggling padding but this seems simplest.
-    boxShadow: `0 0 0 1px ${buttonColors.borderColor}`,
+    boxShadow: `inset 0 0 0 1px ${buttonColors.borderColor}`,
 
     // TODO: Placeholder until we do motion design
     transition: '200ms all ease-in-out',
 
     ':hover': {
-      boxShadow: `0 0 0 1px ${buttonColors.borderColorHover}`,
+      boxShadow: `inset 0 0 0 1px ${buttonColors.borderColorHover}`,
       backgroundColor: buttonColors.backgroundColorHover,
     },
 
     ':focus': {
-      boxShadow: `0 0 0 2px ${buttonColors.borderColorFocus}`,
+      boxShadow: `inset 0 0 0 2px ${buttonColors.borderColorFocus}`,
       outline: 'none',
     },
 

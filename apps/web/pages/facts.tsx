@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import styled from '@emotion/styled';
+import debounce from 'lodash.debounce';
 import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { typography } from '~/modules/design-system/theme/typography';
 import { Button } from '~/modules/design-system/button';
+import { useFacts } from '~/modules/state';
 
 const Input = styled.input(props => ({
   ...props.theme.typography.input,
@@ -29,6 +30,9 @@ const PageContainer = styled.div({
 
 export default function Facts() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
+  const { facts, addFact } = useFacts();
+
+  const debouncedFilter = debounce(setGlobalFilter, 150);
 
   return (
     <PageContainer>
@@ -36,18 +40,18 @@ export default function Facts() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={() => console.log('Add!')}>
+        <Button icon="create" onClick={addFact}>
           Add
         </Button>
       </PageHeader>
 
       <Spacer height={12} />
 
-      <Input placeholder="Search facts..." onChange={e => setGlobalFilter(e.target.value)} />
+      <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
 
       <Spacer height={12} />
 
-      <FactsTable globalFilter={globalFilter} />
+      <FactsTable facts={facts} globalFilter={globalFilter} />
     </PageContainer>
   );
 }

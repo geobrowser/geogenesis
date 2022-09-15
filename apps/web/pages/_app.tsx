@@ -1,4 +1,4 @@
-import { ThemeProvider, css, Global } from '@emotion/react';
+import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
@@ -6,15 +6,20 @@ import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
 import 'modern-normalize';
 import '../styles/styles.css';
+import { Spacer } from '~/modules/design-system/spacer';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
   overflow: 'hidden',
-  backgroundColor: `${props.theme.colors.bg}`,
+  backgroundColor: `${props.theme.colors.white}`,
 }));
 
 const globalStyles = css`
+  html {
+    scrollbar-gutter: stable;
+    overflow: auto;
+  }
   body {
     font-family: 'Calibre';
     text-rendering: 'optimizeLegibility';
@@ -28,9 +33,11 @@ const Layout = styled.main({
   maxWidth: '1060px',
 });
 
-const theme = {
+const theme: Theme = {
   colors: colors.light,
   typography: typography.light,
+  space: 4,
+  radius: 6,
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
@@ -40,6 +47,12 @@ function MyApp({ Component, pageProps }: AppProps) {
         <Global styles={globalStyles} />
         <Link href="/dev">
           <a>Design system</a>
+        </Link>
+
+        <Spacer width={4} />
+
+        <Link href="/facts">
+          <a>Facts database</a>
         </Link>
         <Layout>
           <Component {...pageProps} />

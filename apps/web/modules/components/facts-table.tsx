@@ -8,29 +8,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
+import useMeasure from 'react-use-measure';
 import { Text } from '../design-system/text';
-
-type Fact = {
-  id: string;
-  entityId: string;
-  attribute: string;
-  value: string | number;
-};
-
-const data: Fact[] = [
-  {
-    id: '1',
-    entityId: 'askldjasd',
-    attribute: 'Died in',
-    value: 0,
-  },
-  {
-    id: '2',
-    entityId: 'askldjasd',
-    attribute: 'name',
-    value: 'Jesus Christ',
-  },
-];
+import { Fact } from '../state';
 
 const columnHelper = createColumnHelper<Fact>();
 
@@ -43,47 +24,53 @@ const columns = [
         {info.getValue()}
       </Text>
     ),
+    size: 160,
   }),
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    size: 450,
   }),
   columnHelper.accessor('value', {
     header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    size: 450,
   }),
 ];
 
 const Table = styled.table(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   width: '100%',
-  borderRadius: '6px',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
-
-  // Adding borders to a table is complex, so we can use box-shadow instead
-  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
 }));
 
-const TableHeader = styled.th(props => ({
+const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
   textAlign: 'left',
+  width: props.width,
 }));
 
 const TableCell = styled.td(props => ({
+  ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: '10px',
 }));
 
+const TBody = styled.tbody({
+  position: 'relative',
+});
+
 interface Props {
+  facts: Fact[];
   globalFilter: string;
 }
 
-export function FactsTable({ globalFilter }: Props) {
+export function FactsTable({ globalFilter, facts }: Props) {
   const table = useReactTable({
-    data,
+    data: facts,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -97,34 +84,55 @@ export function FactsTable({ globalFilter }: Props) {
   });
 
   return (
-    <Table>
-      <thead>
-        {table.getHeaderGroups().map(headerGroup => (
-          <tr key={headerGroup.id}>
-            {headerGroup.headers.map(header => (
-              <TableHeader key={header.id}>
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHeader>
-            ))}
-          </tr>
-        ))}
-      </thead>
-      <tbody>
-        {table.getRowModel().rows.map(row => (
-          <tr key={row.id}>
-            {row.getVisibleCells().map(cell => (
-              <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <ResizablePanel>
+      <Table>
+        <thead>
+          {table.getHeaderGroups().map(headerGroup => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map(header => (
+                <TableHeader width={header.column.getSize()} key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHeader>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <TBody>
+          {table.getRowModel().rows.map(row => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map(cell => (
+                <TableCell width={cell.column.getSize()} key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </tr>
+          ))}
+        </TBody>
+      </Table>
+    </ResizablePanel>
+  );
+}
+
+const Container = styled.div(props => ({
+  // Adding borders to a table is complex, so we can use box-shadow instead
+  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
+  borderRadius: '6px',
+  // overflow: 'hidden',
+}));
+
+const MotionContainer = motion(Container);
+
+function ResizablePanel({ children }: { children: React.ReactNode }) {
+  const [ref, { height }] = useMeasure();
+
+  return (
+    <MotionContainer layout animate={{ height }} transition={{ duration: 0.1 }}>
+      <div ref={ref}>{children}</div>
+    </MotionContainer>
   );
 }
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  console.log('Running fuzzyFilter');
-
   // Rank the item
   const itemRank = rankItem(row.getValue(columnId), value);
 
