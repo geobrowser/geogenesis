@@ -1,4 +1,4 @@
-import { ThemeProvider, css, Global } from '@emotion/react';
+import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
@@ -11,12 +11,12 @@ const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
   overflow: 'hidden',
-  backgroundColor: `${props.theme.colors.bg}`,
+  backgroundColor: `${props.theme.colors.white}`,
 }));
 
 const globalStyles = css`
   html {
-    scrollbar-gutter: stable both-edges;
+    scrollbar-gutter: stable;
     overflow: auto;
   }
   body {
@@ -32,9 +32,11 @@ const Layout = styled.main({
   maxWidth: '1060px',
 });
 
-const theme = {
+const theme: Theme = {
   colors: colors.light,
   typography: typography.light,
+  space: 4,
+  radius: 6,
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
