@@ -4,9 +4,7 @@ export const Input = styled.input(props => ({
   ...props.theme.typography.input,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
-
-  // TODO: Figure out what's going on here. Design padding doesn't match the design system spacing increments.
-  padding: `${props.theme.space * 2 + 0.5}px ${props.theme.space * 2.5}px`,
+  padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
 
   transition: '100ms all ease-in-out',
 

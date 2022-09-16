@@ -4,9 +4,9 @@ import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
+import { Spacer } from '~/modules/design-system/spacer';
 import 'modern-normalize';
 import '../styles/styles.css';
-import { Spacer } from '~/modules/design-system/spacer';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',

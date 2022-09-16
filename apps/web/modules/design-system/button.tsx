@@ -49,8 +49,8 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
     boxSizing: 'border-box',
     backgroundColor: buttonColors.backgroundColor,
     color: buttonColors.color,
-    padding: '8.5px 12px', // TODO: Spacing tokens
-    borderRadius: '6px', // TODO: Spacing tokens
+    padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
+    borderRadius: props.theme.radius,
     cursor: 'pointer',
     outline: 'none',
 
@@ -84,7 +84,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 interface Props {
   children: React.ReactNode;
   onClick: () => void;
-  icon?: 'create'; // TODO: Icons
+  icon?: 'create';
   variant?: ButtonVariant;
   disabled?: boolean;
 }
