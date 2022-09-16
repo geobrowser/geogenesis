@@ -34,7 +34,7 @@ export default function Facts() {
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
-  const addFact = () => {
+  const onAddFact = () => {
     createFact({
       id: Math.random().toString(),
       entityId: Math.random().toString(),
@@ -49,7 +49,7 @@ export default function Facts() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={addFact}>
+        <Button icon="create" onClick={onAddFact}>
           Add
         </Button>
       </PageHeader>
