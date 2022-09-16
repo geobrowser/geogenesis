@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@geogenesis/database",
+  "name": "@geogenesis/sync-store",
   "description": "Interface for interacting with the Geo backend",
   "author": "Geo team",
   "license": "MIT",

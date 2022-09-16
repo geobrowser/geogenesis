@@ -1,4 +1,4 @@
-import { Facts, MockApi, useSharedObservable } from '@geogenesis/database';
+import { Facts, MockApi, useSharedObservable } from '@geogenesis/sync-store';
 import { Spacer } from '~/modules/design-system/spacer';
 
 // Would probably be dependency injected with Context in the real implementation

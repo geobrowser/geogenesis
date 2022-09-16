@@ -7,7 +7,7 @@ export type Fact = {
   value: string | number;
 };
 
-export const data: Fact[] = Array.from({ length: 25 }, (_, index) => {
+export const data: Fact[] = Array.from({ length: 3 }, (_, index) => {
   return {
     id: index.toString(),
     entityId: index.toString(),

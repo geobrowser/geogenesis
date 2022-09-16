@@ -8,8 +8,6 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
-import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
-import useMeasure from 'react-use-measure';
 import { Text } from '../design-system/text';
 import { Fact } from '../state';
 
@@ -84,53 +82,34 @@ export function FactsTable({ globalFilter, facts }: Props) {
   });
 
   return (
-    <ResizablePanel>
-      <Table>
-        <thead>
-          {table.getHeaderGroups().map(headerGroup => (
-            <tr key={headerGroup.id}>
-              {headerGroup.headers.map(header => (
-                <TableHeader width={header.column.getSize()} key={header.id}>
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHeader>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <TBody>
-          {table.getRowModel().rows.map(row => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map(cell => (
-                <TableCell width={cell.column.getSize()} key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </tr>
-          ))}
-        </TBody>
-      </Table>
-    </ResizablePanel>
+    <Table>
+      <thead>
+        {table.getHeaderGroups().map(headerGroup => (
+          <tr key={headerGroup.id}>
+            {headerGroup.headers.map(header => (
+              <TableHeader width={header.column.getSize()} key={header.id}>
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHeader>
+            ))}
+          </tr>
+        ))}
+      </thead>
+      <TBody>
+        {table.getRowModel().rows.map(row => (
+          <tr key={row.id}>
+            {row.getVisibleCells().map(cell => (
+              <TableCell width={cell.column.getSize()} key={cell.id}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </TableCell>
+            ))}
+          </tr>
+        ))}
+      </TBody>
+    </Table>
   );
 }
 
-const Container = styled.div(props => ({
-  // Adding borders to a table is complex, so we can use box-shadow instead
-  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
-  borderRadius: '6px',
-  // overflow: 'hidden',
-}));
 
-const MotionContainer = motion(Container);
-
-function ResizablePanel({ children }: { children: React.ReactNode }) {
-  const [ref, { height }] = useMeasure();
-
-  return (
-    <MotionContainer layout animate={{ height }} transition={{ duration: 0.1 }}>
-      <div ref={ref}>{children}</div>
-    </MotionContainer>
-  );
-}
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   // Rank the item
