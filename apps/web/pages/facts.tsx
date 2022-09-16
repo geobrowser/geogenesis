@@ -5,7 +5,9 @@ import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
-import { useFacts } from '~/modules/state/facts';
+import { FactsStore, useFacts } from '~/modules/state/facts';
+import { MockNetwork } from '~/modules/services/network';
+import { IFact } from '~/modules/types';
 
 const Input = styled.input(props => ({
   ...props.theme.typography.input,
@@ -28,9 +30,20 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
+const data: IFact[] = Array.from({ length: 3 }, (_, index) => {
+  return {
+    id: index.toString(),
+    entityId: index.toString(),
+    attribute: 'name',
+    value: 'John Doe' + ' ' + index,
+  };
+});
+
+const factsStore = new FactsStore({ api: new MockNetwork(), initialFacts: [] });
+
 export default function Facts() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { facts, createFact } = useFacts();
+  const { facts, createFact } = useFacts(factsStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
