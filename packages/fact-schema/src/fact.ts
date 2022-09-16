@@ -33,9 +33,9 @@ interface StringValue {
   value: string
 }
 
-interface RefValue {
-  type: 'ref'
+interface EntityValue {
+  type: 'entity'
   value: string
 }
 
-type Value = NumberValue | StringValue | RefValue
+type Value = NumberValue | StringValue | EntityValue

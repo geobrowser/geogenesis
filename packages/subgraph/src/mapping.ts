@@ -70,7 +70,7 @@ function handleCreateCommand(createCommand: CreateCommand): void {
     triple.valueType = 'NUMBER'
   }
 
-  const entityValue = fact.value.asRefValue()
+  const entityValue = fact.value.asEntityValue()
   if (entityValue) {
     triple.entityValue = entityValue.value
     triple.valueType = 'ENTITY'
