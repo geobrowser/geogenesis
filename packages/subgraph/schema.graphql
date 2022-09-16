@@ -6,6 +6,18 @@ type Statement @entity {
   decoded: Bytes
 }
 
+"""
+A node within the knowledge graph.
+"""
+type GeoEntity @entity {
+  id: ID!
+}
+
+"""
+An edge within the knowledge graph.
+
+Triples are 3-tuples of (entity, attribute, value).
+"""
 type Triple @entity {
   id: ID!
   entity: GeoEntity!
@@ -14,12 +26,6 @@ type Triple @entity {
   numberValue: BigDecimal
   stringValue: String
   entityValue: GeoEntity
-}
-
-type GeoEntity @entity {
-  id: ID!
-  attributeOf: [Triple!]! @derivedFrom(field: "attribute")
-  valueOf: [Triple!]! @derivedFrom(field: "entityValue")
 }
 
 enum ValueType {
