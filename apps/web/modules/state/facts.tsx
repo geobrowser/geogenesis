@@ -28,13 +28,8 @@ export class FactsStore {
   }
 
   createFact = async (fact: IFact) => {
-    // Optimistically add fact to the local store if it doesn't already exist
-    const ids = new Set(this.facts$.getValue().map(fact => fact.id));
-
-    if (!ids.has(fact.id)) {
-      this.facts$.next([...this.facts$.getValue(), fact]);
-      return await this._uploadFact(fact);
-    }
+    this.facts$.next([...this.facts$.getValue(), fact]);
+    return await this._uploadFact(fact);
   };
 
   get facts() {
