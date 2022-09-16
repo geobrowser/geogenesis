@@ -2,14 +2,14 @@ import { Observable } from 'rxjs';
 import { IFact } from '../types';
 import { createSyncService } from './sync';
 
-export interface IMockApi {
+export interface INetwork {
   syncer$: Observable<IFact[]>;
   insertFact: (fact: IFact) => IFact[];
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
-export class MockApi {
+export class MockNetwork implements INetwork {
   private REMOTE_FACTS: IFact[] = [
     {
       id: Math.random().toString(),
@@ -21,9 +21,9 @@ export class MockApi {
 
   syncer$: Observable<IFact[]>;
 
-  contructor() {
+  constructor() {
     // This needs to be composed rather than initialized like this :thinking:
-    this.syncer$ = createSyncService({ interval: 1000, callback: this.getRemoteFacts });
+    this.syncer$ = createSyncService({ interval: 5000, callback: this.getRemoteFacts });
   }
 
   insertFact = (fact: IFact) => {

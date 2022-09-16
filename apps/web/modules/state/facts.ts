@@ -1,5 +1,5 @@
 import { useSharedObservable } from '~/modules/state/hook';
-import { IMockApi, MockApi } from '~/modules/services/network';
+import { INetwork, MockNetwork } from '~/modules/services/network';
 import { BehaviorSubject } from 'rxjs';
 import { IFact } from '../types';
 
@@ -13,7 +13,7 @@ export const data: IFact[] = Array.from({ length: 3 }, (_, index) => {
 });
 
 interface IFactsConfig {
-  api: IMockApi;
+  api: INetwork;
   initialFacts?: IFact[];
 }
 
@@ -21,7 +21,7 @@ interface IFactsConfig {
 // Enable editing attributes and values
 // Enable tracking changes to attributes and values and triggering updates
 export class Facts {
-  api: IMockApi;
+  api: INetwork;
 
   // Stores all the local facts that are being tracked. These are added by the user.
   facts$: BehaviorSubject<IFact[]>;
@@ -59,7 +59,7 @@ export class Facts {
   };
 }
 
-const FactsStore = new Facts({ api: new MockApi(), initialFacts: data });
+const FactsStore = new Facts({ api: new MockNetwork(), initialFacts: data });
 
 // TODO: Inject FactsStore via context
 export const useFacts = () => {
