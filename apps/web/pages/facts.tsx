@@ -9,17 +9,8 @@ import { FactsStore } from '~/modules/state/facts';
 import { MockNetwork } from '~/modules/services/network';
 import { IFact } from '~/modules/types';
 import { useFacts } from '~/modules/state/hook';
+import { Input } from '~/modules/design-system/input';
 
-const Input = styled.input(props => ({
-  ...props.theme.typography.input,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: '6px',
-  padding: '9px 12px',
-
-  '::placeholder': {
-    color: props.theme.colors['grey-03'],
-  },
-}));
 
 const PageHeader = styled.div({
   display: 'flex',
