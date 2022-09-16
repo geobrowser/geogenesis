@@ -5,7 +5,7 @@ import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
-import { useFacts } from '~/modules/state';
+import { useFacts } from '~/modules/state/facts';
 
 const Input = styled.input(props => ({
   ...props.theme.typography.input,
@@ -30,9 +30,18 @@ const PageContainer = styled.div({
 
 export default function Facts() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { facts, addFact } = useFacts();
+  const { facts, createFact } = useFacts();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
+
+  const addFact = () => {
+    createFact({
+      id: Math.random().toString(),
+      entityId: Math.random().toString(),
+      attribute: 'Died in',
+      value: '2021',
+    });
+  };
 
   return (
     <PageContainer>

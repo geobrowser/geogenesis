@@ -23,26 +23,28 @@ interface IMockApi {
   insertFact: (fact: IFact) => IFact[]
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+// const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+interface IFactsConfig {
+  api: IMockApi
+  initialFacts?: IFact[]
+}
 
 // TODO:
 // Enable editing attributes and values
 // Enable tracking changes to attributes and values and triggering updates
-//
-// This could be literally any type of store. Doesn't have to be rxjs-based. Could be mobx or anything.
-// Just depends on how we want to do the React bindings
 export class Facts {
-  mockApi: IMockApi
+  api: IMockApi
 
   // Stores all the local facts that are being tracked. These are added by the user.
-  facts$ = new BehaviorSubject<IFact[]>([])
+  facts$: BehaviorSubject<IFact[]>
 
-  constructor(mockApi: IMockApi) {
-    this.mockApi = mockApi
+  constructor({ api, initialFacts = [] }: IFactsConfig) {
+    this.api = api
+    this.facts$ = new BehaviorSubject(initialFacts)
 
-    // Merges the remote facts with the user's local facts.
-    this.mockApi.syncer$.subscribe((value) => {
-      // Only pass the union of the local and remote stores
+    this.api.syncer$.subscribe((value) => {
+      // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
       const merged = [...new Set([...this.facts$.getValue(), ...value])]
       this.facts$.next(merged)
@@ -52,6 +54,8 @@ export class Facts {
   createFact = async (fact: IFact) => {
     // Optimistically add fact to the local store if it doesn't already exist
     const ids = new Set(this.facts$.getValue().map((fact) => fact.id))
+
+    console.log(fact)
 
     if (!ids.has(fact.id)) {
       this.facts$.next([...this.facts$.getValue(), fact])
@@ -64,10 +68,7 @@ export class Facts {
   }
 
   private _uploadFact = async (fact: IFact) => {
-    // Simulating hitting network
-    await sleep(2000)
-
-    return this.mockApi.insertFact(fact)
+    return this.api.insertFact(fact)
   }
 }
 

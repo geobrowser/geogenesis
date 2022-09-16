@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { Fact } from '../state';
+import { Fact } from '../state/facts';
 
 const columnHelper = createColumnHelper<Fact>();
 
@@ -58,7 +58,8 @@ const TableCell = styled.td(props => ({
 }));
 
 // Using a container to wrap the table to make styling borders around
-// the table easier
+// the table easier. Otherwise we need to do some pseudoselector shenanigans
+// or use box-shadow instead of border.
 const Container = styled.div(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
