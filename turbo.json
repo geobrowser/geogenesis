@@ -19,7 +19,7 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/database#build"]
+      "dependsOn": ["@geogenesis/contracts#build"]
     },
     "@geogenesis/fact-schema#codegen": {
       "dependsOn": ["@geogenesis/assemblyscript-json-schema#build"]

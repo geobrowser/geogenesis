@@ -9,9 +9,9 @@ import {
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { Fact } from '../state/facts';
+import { IFact } from '../types';
 
-const columnHelper = createColumnHelper<Fact>();
+const columnHelper = createColumnHelper<IFact>();
 
 const columns = [
   columnHelper.accessor(row => row.entityId, {
@@ -67,7 +67,7 @@ const Container = styled.div(props => ({
 }));
 
 interface Props {
-  facts: Fact[];
+  facts: IFact[];
   globalFilter: string;
 }
 
