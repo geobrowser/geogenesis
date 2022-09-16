@@ -2,47 +2,53 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
 
-import { deployStatementHistory } from '../src/deploy'
-import { addStatement } from '../src/statement'
+import { deployLog } from '../src/deploy'
+import { addEntry } from '../src/entry'
 
-describe('StatementHistory', () => {
-  it('add statement', async () => {
+describe('Log', () => {
+  it('add entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deployStatementHistory({ signer: deployer })
+    const contract = await deployLog({ signer: deployer })
 
     const uri1 = 'abc'
-    const statement1 = await addStatement(contract, uri1)
+    const entry1 = await addEntry(contract, uri1)
 
-    expect(statement1.author).to.be.eq(deployer.address.toString())
-    expect(statement1.uri).to.be.eq(uri1)
-    expect(statement1.index).to.be.eq(0)
+    expect(entry1.author).to.be.eq(deployer.address.toString())
+    expect(entry1.uri).to.be.eq(uri1)
+    expect(entry1.index).to.be.eq(0)
 
     const uri2 = 'def'
-    const statement2 = await addStatement(contract, uri2)
+    const entry2 = await addEntry(contract, uri2)
 
-    expect(statement2.author).to.be.eq(deployer.address.toString())
-    expect(statement2.uri).to.be.eq(uri2)
-    expect(statement2.index).to.be.eq(1)
+    expect(entry2.author).to.be.eq(deployer.address.toString())
+    expect(entry2.uri).to.be.eq(uri2)
+    expect(entry2.index).to.be.eq(1)
   })
 
-  it('read statement', async () => {
+  it('read entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deployStatementHistory({ signer: deployer })
+    const contract = await deployLog({ signer: deployer })
 
     const uri1 = 'abc'
-    await addStatement(contract, uri1)
+    await addEntry(contract, uri1)
 
     const uri2 = 'def'
-    await addStatement(contract, uri2)
+    await addEntry(contract, uri2)
 
-    expect(await contract.totalStatements()).to.be.eq(2)
+    expect(await contract.entryCount()).to.be.eq(2)
 
-    const statement1 = await contract.statementAtIndex(0)
-    expect(statement1.author).to.be.eq(deployer.address.toString())
-    expect(statement1.uri).to.be.eq(uri1)
+    const entry1 = await contract.entryAtIndex(0)
+    expect(entry1.author).to.be.eq(deployer.address.toString())
+    expect(entry1.uri).to.be.eq(uri1)
 
-    const statement2 = await contract.statementAtIndex(1)
-    expect(statement2.author).to.be.eq(deployer.address.toString())
-    expect(statement2.uri).to.be.eq(uri2)
+    const entry2 = await contract.entryAtIndex(1)
+    expect(entry2.author).to.be.eq(deployer.address.toString())
+    expect(entry2.uri).to.be.eq(uri2)
+
+    const entries = await contract.entries(0, 10)
+    expect(entries).to.be.deep.eq([
+      ['abc', deployer.address],
+      ['def', deployer.address],
+    ])
   })
 })

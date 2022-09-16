@@ -2,10 +2,13 @@
 
 The GeoGenesis subgraph is a triple store, derived from an immutable log of commands.
 
-## Challenges
+## Schema Design
 
 The unique challenges we face influence our schema design.
 
+- IDs
+- Uniqueness
+- Cardinality
 - [Batch operations](#batch-operations)
 - [Nested queries](#nested-queries)
 

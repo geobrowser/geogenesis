@@ -2,8 +2,8 @@ import { DataURI } from '@geogenesis/data-uri/assembly'
 import { CreateCommand, Root } from '@geogenesis/fact-schema/assembly'
 import { BigDecimal, Bytes, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
-import { GeoEntity, Statement, Triple } from '../generated/schema'
-import { StatementAdded } from '../generated/StatementHistory/StatementHistory'
+import { EntryAdded } from '../generated/Log/Log'
+import { GeoEntity, LogEntry, Triple } from '../generated/schema'
 
 function bootstrap(): void {
   const type = new GeoEntity('e:type')
@@ -79,14 +79,14 @@ function handleCreateCommand(createCommand: CreateCommand): void {
   triple.save()
 }
 
-export function handleStatementAdded(event: StatementAdded): void {
-  let statement = new Statement(event.params.index.toHex())
+export function handleEntryAdded(event: EntryAdded): void {
+  let entry = new LogEntry(event.params.index.toHex())
 
   const author = event.params.author
   const uri = event.params.uri
 
-  statement.author = author
-  statement.uri = uri
+  entry.author = author
+  entry.uri = uri
 
   if (uri.startsWith('data:')) {
     const dataURI = DataURI.parse(uri)
@@ -94,10 +94,10 @@ export function handleStatementAdded(event: StatementAdded): void {
     if (dataURI) {
       const bytes = Bytes.fromUint8Array(dataURI.data)
 
-      statement.mimeType = dataURI.mimeType
-      statement.decoded = bytes
+      entry.mimeType = dataURI.mimeType
+      entry.decoded = bytes
 
-      if (statement.mimeType == 'application/json') {
+      if (entry.mimeType == 'application/json') {
         const json = JSON.parse(bytes)
         // const result = json.fromBytes(bytes)
         // log.debug(`Testing: ${result.toObject().mustGet('id').toString()}`, [])
@@ -121,7 +121,7 @@ export function handleStatementAdded(event: StatementAdded): void {
     }
   }
 
-  statement.save()
+  entry.save()
 
-  log.debug(`Indexed: ${statement.uri}`, [])
+  log.debug(`Indexed: ${entry.uri}`, [])
 }

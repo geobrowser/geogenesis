@@ -2,6 +2,15 @@
 
 Summary
 
+## Architecture
+
+```mermaid
+graph LR
+  W[Web Client] --> |Add Entry| L
+  L[(Log Contract)] --> |EntryAdded Event| B
+  B[Subgraph] --> |Triples| W
+```
+
 ### Monorepo dependencies
 
 - pnpm (version 7+)
