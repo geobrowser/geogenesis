@@ -5,9 +5,10 @@ import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
-import { FactsStore, useFacts } from '~/modules/state/facts';
+import { FactsStore } from '~/modules/state/facts';
 import { MockNetwork } from '~/modules/services/network';
 import { IFact } from '~/modules/types';
+import { useFacts } from '~/modules/state/hook';
 
 const Input = styled.input(props => ({
   ...props.theme.typography.input,
