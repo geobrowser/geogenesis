@@ -5,6 +5,43 @@ import { JSON } from 'assemblyscript-json/assembly'
 import { GeoEntity, Statement, Triple } from '../generated/schema'
 import { StatementAdded } from '../generated/StatementHistory/StatementHistory'
 
+function bootstrap(): void {
+  const type = new GeoEntity('e:type')
+  type.save()
+
+  const name = new GeoEntity('e:name')
+  name.save()
+
+  const person = new GeoEntity('e:person')
+  person.save()
+
+  const devin = new GeoEntity('e:devin')
+  devin.save()
+
+  const devinTypeTriple = new Triple('t:devin-type')
+  devinTypeTriple.entity = devin.id
+  devinTypeTriple.attribute = type.id
+  devinTypeTriple.valueType = 'ENTITY'
+  devinTypeTriple.entityValue = person.id
+  devinTypeTriple.save()
+
+  const devinNameTriple = new Triple('t:devin-name')
+  devinNameTriple.entity = devin.id
+  devinNameTriple.attribute = name.id
+  devinNameTriple.valueType = 'STRING'
+  devinNameTriple.stringValue = 'Devin'
+  devinNameTriple.save()
+
+  const personTypeTriple = new Triple('t:person-type')
+  personTypeTriple.entity = person.id
+  personTypeTriple.attribute = type.id
+  personTypeTriple.valueType = 'ENTITY'
+  personTypeTriple.entityValue = personTypeTriple.id
+  personTypeTriple.save()
+}
+
+bootstrap()
+
 function handleCreateCommand(createCommand: CreateCommand): void {
   const fact = createCommand.value
 
@@ -31,6 +68,12 @@ function handleCreateCommand(createCommand: CreateCommand): void {
   if (numberValue) {
     triple.numberValue = BigDecimal.fromString(numberValue.value)
     triple.valueType = 'NUMBER'
+  }
+
+  const entityValue = fact.value.asRefValue()
+  if (entityValue) {
+    triple.entityValue = entityValue.value
+    triple.valueType = 'ENTITY'
   }
 
   triple.save()

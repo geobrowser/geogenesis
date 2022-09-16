@@ -30,7 +30,7 @@ async function main() {
         type: 'create',
         value: {
           type: 'fact',
-          id: 'i',
+          id: 'i1',
           entityId: 'e',
           attributeId: 'a',
           value: {
@@ -43,7 +43,7 @@ async function main() {
         type: 'create',
         value: {
           type: 'fact',
-          id: 'i',
+          id: 'i2',
           entityId: 'e',
           attributeId: 'a',
           value: {
