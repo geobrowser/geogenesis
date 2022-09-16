@@ -46,7 +46,7 @@ const Table = styled.table(props => ({
 
 const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: '10px',
+  padding: props.theme.space * 2.5,
   textAlign: 'left',
   width: props.width,
 }));
@@ -54,12 +54,16 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 const TableCell = styled.td(props => ({
   ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: '10px',
+  padding: props.theme.space * 2.5,
 }));
 
-const TBody = styled.tbody({
-  position: 'relative',
-});
+// Using a container to wrap the table to make styling borders around
+// the table easier
+const Container = styled.div(props => ({
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderRadius: props.theme.radius,
+  overflow: 'hidden',
+}));
 
 interface Props {
   facts: Fact[];
@@ -82,30 +86,32 @@ export function FactsTable({ globalFilter, facts }: Props) {
   });
 
   return (
-    <Table>
-      <thead>
-        {table.getHeaderGroups().map(headerGroup => (
-          <tr key={headerGroup.id}>
-            {headerGroup.headers.map(header => (
-              <TableHeader width={header.column.getSize()} key={header.id}>
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHeader>
-            ))}
-          </tr>
-        ))}
-      </thead>
-      <TBody>
-        {table.getRowModel().rows.map(row => (
-          <tr key={row.id}>
-            {row.getVisibleCells().map(cell => (
-              <TableCell width={cell.column.getSize()} key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </tr>
-        ))}
-      </TBody>
-    </Table>
+    <Container>
+      <Table>
+        <thead>
+          {table.getHeaderGroups().map(headerGroup => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map(header => (
+                <TableHeader width={header.column.getSize()} key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHeader>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map(row => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map(cell => (
+                <TableCell width={cell.column.getSize()} key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Container>
   );
 }
 
