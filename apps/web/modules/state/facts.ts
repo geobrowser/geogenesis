@@ -17,9 +17,6 @@ interface IFactsConfig {
   initialFacts?: IFact[];
 }
 
-// TODO:
-// Enable editing attributes and values
-// Enable tracking changes to attributes and values and triggering updates
 export class Facts {
   api: INetwork;
 
@@ -30,6 +27,7 @@ export class Facts {
     this.api = api;
     this.facts$ = new BehaviorSubject(initialFacts);
 
+    // If you want to keep the local facts in sync with the remote facts, you can do this:
     this.api.syncer$.subscribe(value => {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
@@ -67,3 +65,14 @@ export const useFacts = () => {
   const createFact = (fact: IFact) => FactsStore.createFact(fact);
   return { facts: snapshot, createFact };
 };
+
+// We create a domain model that lives completely outside of React is in charge of several things:
+// 1. Stores the state of local data
+// 2. Exposes APIs for manipulating the local data
+// 3. Can subscribe to a syncing mechanism to keep local state in sync with remote state
+// (class Facts)
+
+// We create a hook that bridges the domain model to React. All this hook does is sync the external
+// domain model with the React tree, telling React to update when there are changes. (useSharedObservable)
+
+// We can create usecase-specific hooks that use the generic hook and wrap it with more specific APIs. (useFacts)
