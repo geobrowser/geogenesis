@@ -9,7 +9,7 @@ interface IFactsStoreConfig {
 }
 
 export class FactsStore {
-  private api: INetwork;
+  api: INetwork;
 
   // Stores all the local facts that are being tracked. These are added by the user.
   facts$: BehaviorSubject<IFact[]>;
@@ -33,7 +33,7 @@ export class FactsStore {
 
     if (!ids.has(fact.id)) {
       this.facts$.next([...this.facts$.getValue(), fact]);
-      await this._uploadFact(fact);
+      return await this._uploadFact(fact);
     }
   };
 

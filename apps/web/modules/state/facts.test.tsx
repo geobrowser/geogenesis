@@ -46,4 +46,36 @@ describe('FactsStore', () => {
       },
     ]);
   });
+
+  it("Merges 'remote' facts into local facts", async () => {
+    const store = new FactsStore({ api: new MockNetwork(500) });
+
+    store.createFact({
+      id: '1',
+      entityId: '1',
+      attribute: 'name',
+      value: 'John Doe',
+    });
+
+    // Janky as hell but works.
+    // TODO: Wait for syncer$ to emit a value instead of sleeping.
+    await sleep(1000);
+
+    console.log(store.facts);
+
+    expect(store.facts).toStrictEqual([
+      {
+        id: '1',
+        entityId: '1',
+        attribute: 'name',
+        value: 'John Doe',
+      },
+      {
+        id: '293487',
+        entityId: '234897',
+        attribute: 'name',
+        value: 'Van Horn',
+      },
+    ]);
+  });
 });
