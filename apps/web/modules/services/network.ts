@@ -25,9 +25,9 @@ export class MockNetwork implements INetwork {
 
   syncer$: Observable<IFact[]>;
 
-  constructor() {
+  constructor(syncInterval = 5000) {
     // This needs to be composed rather than initialized like this :thinking:
-    this.syncer$ = createSyncService({ interval: 1, callback: this.getRemoteFacts });
+    this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
   }
 
   insertFact = (fact: IFact) => {

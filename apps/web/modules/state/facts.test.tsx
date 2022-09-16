@@ -31,7 +31,7 @@ describe('FactsStore', () => {
   });
 
   it("Syncs 'remote' facts with local facts", async () => {
-    const store = new FactsStore({ api: new MockNetwork() });
+    const store = new FactsStore({ api: new MockNetwork(500) });
 
     // Janky as hell but works.
     // TODO: Wait for syncer$ to emit a value instead of sleeping.
