@@ -23,9 +23,9 @@ const loadAssembly = async (): Promise<typeof AssemblyExports> =>
 
 const root: Root = {
   type: 'root',
-  commands: [
+  actions: [
     {
-      type: 'create',
+      type: 'createTriple',
       value: {
         type: 'fact',
         id: 'i',
@@ -38,7 +38,7 @@ const root: Root = {
       },
     },
     {
-      type: 'create',
+      type: 'createTriple',
       value: {
         type: 'fact',
         id: 'i',

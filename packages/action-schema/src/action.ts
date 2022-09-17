@@ -1,17 +1,17 @@
 export interface Root {
   type: 'root'
-  commands: Command[]
+  actions: Action[]
 }
 
-type Command = CreateCommand | DeleteCommand
+type Action = CreateEntityAction | CreateTripleAction
 
-interface CreateCommand {
-  type: 'create'
+interface CreateTripleAction {
+  type: 'createTriple'
   value: Fact
 }
 
-interface DeleteCommand {
-  type: 'delete'
+interface CreateEntityAction {
+  type: 'createEntity'
   value: Fact
 }
 

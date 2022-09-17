@@ -1,4 +1,4 @@
-import { CreateCommand, Root } from '@geogenesis/action-schema/assembly'
+import { CreateEntityAction, Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { BigDecimal, Bytes, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
@@ -42,8 +42,10 @@ function bootstrap(): void {
 
 bootstrap()
 
-function handleCreateCommand(createCommand: CreateCommand): void {
-  const fact = createCommand.value
+function handleCreateEntityAction(
+  createEntityAction: CreateEntityAction
+): void {
+  const fact = createEntityAction.value
 
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
@@ -109,11 +111,11 @@ export function handleEntryAdded(event: EntryAdded): void {
           const out = encoded.stringify()
           log.debug(`XXX Encoded JSON ${out}`, [])
 
-          for (let i = 0; i < root.commands.length; i++) {
-            const command = root.commands[i]
-            const createCommand = command.asCreateCommand()
-            if (createCommand) {
-              handleCreateCommand(createCommand)
+          for (let i = 0; i < root.actions.length; i++) {
+            const action = root.actions[i]
+            const createEntityAction = action.asCreateEntityAction()
+            if (createEntityAction) {
+              handleCreateEntityAction(createEntityAction)
             }
           }
         }

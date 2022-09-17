@@ -22,9 +22,9 @@ async function main() {
 
   const root: Root = {
     type: 'root',
-    commands: [
+    actions: [
       {
-        type: 'create',
+        type: 'createTriple',
         value: {
           type: 'fact',
           id: 'i1',
@@ -37,7 +37,7 @@ async function main() {
         },
       },
       {
-        type: 'create',
+        type: 'createTriple',
         value: {
           type: 'fact',
           id: 'i2',
