@@ -1,5 +1,5 @@
+import { CreateCommand, Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
-import { CreateCommand, Root } from '@geogenesis/fact-schema/assembly'
 import { BigDecimal, Bytes, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { EntryAdded } from '../generated/Log/Log'

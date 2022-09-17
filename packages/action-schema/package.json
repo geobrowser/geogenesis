@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@geogenesis/fact-schema",
+  "name": "@geogenesis/action-schema",
   "version": "0.0.1",
   "license": "MIT",
   "main": "./dist/src/index",

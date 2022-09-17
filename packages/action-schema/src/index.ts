@@ -1,6 +1,6 @@
 import Ajv from 'ajv'
 import schema from '../build/schema.json'
-import { Root } from '../src/fact'
+import { Root } from './fact'
 
 const ajv = new Ajv()
 

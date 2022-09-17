@@ -1,5 +1,5 @@
 /* eslint-disable node/no-missing-import */
-import { Root } from '@geogenesis/fact-schema'
+import { Root } from '@geogenesis/action-schema'
 import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
