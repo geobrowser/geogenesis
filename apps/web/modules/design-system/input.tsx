@@ -12,7 +12,7 @@ export const Input = styled.input(props => ({
     color: props.theme.colors['grey-03'],
   },
 
-  ':hover': {
+  ':hover:enabled': {
     outline: `1px solid ${props.theme.colors.ctaPrimary}`,
   },
 
