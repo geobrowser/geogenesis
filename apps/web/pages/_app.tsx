@@ -7,6 +7,8 @@ import { typography } from '~/modules/design-system/theme/typography';
 import { Spacer } from '~/modules/design-system/spacer';
 import 'modern-normalize';
 import '../styles/styles.css';
+import { WalletProvider } from '~/modules/wallet';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -43,21 +45,24 @@ const theme: Theme = {
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider theme={theme}>
-      <Body>
-        <Global styles={globalStyles} />
-        <Link href="/dev">
-          <a>Design system</a>
-        </Link>
+      <WalletProvider>
+        <Body>
+          <Global styles={globalStyles} />
+          <Link href="/dev">
+            <a>Design system</a>
+          </Link>
 
-        <Spacer width={4} />
+          <Spacer width={4} />
 
-        <Link href="/facts">
-          <a>Facts database</a>
-        </Link>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-      </Body>
+          <Link href="/facts">
+            <a>Facts database</a>
+          </Link>
+          <ConnectButton accountStatus="avatar" showBalance={false} />
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </Body>
+      </WalletProvider>
     </ThemeProvider>
   );
 }

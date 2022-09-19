@@ -28,7 +28,7 @@ export class FactsStore {
   }
 
   createFact = async (fact: IFact) => {
-    this.facts$.next([...this.facts$.getValue(), fact]);
+    this.facts$.next([fact, ...this.facts$.getValue()]);
     return await this._uploadFact(fact);
   };
 
