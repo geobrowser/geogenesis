@@ -22,31 +22,24 @@ async function main() {
 
   const root: Root = {
     type: 'root',
+    version: '0.0.1',
     actions: [
       {
         type: 'createTriple',
+        entityId: 'e',
+        attributeId: 'a',
         value: {
-          type: 'fact',
-          id: 'i1',
-          entityId: 'e',
-          attributeId: 'a',
-          value: {
-            type: 'string',
-            value: 'hi',
-          },
+          type: 'string',
+          value: 'hi',
         },
       },
       {
         type: 'createTriple',
+        entityId: 'e',
+        attributeId: 'a',
         value: {
-          type: 'fact',
-          id: 'i2',
-          entityId: 'e',
-          attributeId: 'a',
-          value: {
-            type: 'number',
-            value: '42',
-          },
+          type: 'number',
+          value: '42',
         },
       },
     ],

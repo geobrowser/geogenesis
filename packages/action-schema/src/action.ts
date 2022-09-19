@@ -1,23 +1,25 @@
 export interface Root {
   type: 'root'
+  version: string
   actions: Action[]
 }
 
-type Action = CreateEntityAction | CreateTripleAction
-
-interface CreateTripleAction {
-  type: 'createTriple'
-  value: Fact
-}
+type Action = CreateEntityAction | CreateTripleAction | DeleteTripleAction
 
 interface CreateEntityAction {
   type: 'createEntity'
-  value: Fact
+  entityId: string
 }
 
-interface Fact {
-  type: 'fact'
-  id: string
+interface CreateTripleAction {
+  type: 'createTriple'
+  entityId: string
+  attributeId: string
+  value: Value
+}
+
+interface DeleteTripleAction {
+  type: 'deleteTriple'
   entityId: string
   attributeId: string
   value: Value

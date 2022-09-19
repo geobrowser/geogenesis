@@ -4,16 +4,13 @@ import { ActionSchema, Root } from '../src'
 it('validates', () => {
   const data: Root = {
     type: 'root',
+    version: '0.0.1',
     actions: [
       {
         type: 'createTriple',
-        value: {
-          id: '',
-          entityId: '',
-          attributeId: '',
-          type: 'fact',
-          value: { type: 'number', value: '42' },
-        },
+        entityId: 'e',
+        attributeId: 'a',
+        value: { type: 'number', value: '42' },
       },
     ],
   }

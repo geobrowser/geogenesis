@@ -1,6 +1,12 @@
-import { CreateEntityAction, Root } from '@geogenesis/action-schema/assembly'
+import {
+  CreateEntityAction,
+  CreateTripleAction,
+  DeleteTripleAction,
+  Root,
+  Value,
+} from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
-import { BigDecimal, Bytes, log } from '@graphprotocol/graph-ts'
+import { BigDecimal, Bytes, log, store } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { EntryAdded } from '../generated/Log/Log'
 import { GeoEntity, LogEntry, Triple } from '../generated/schema'
@@ -42,11 +48,28 @@ function bootstrap(): void {
 
 bootstrap()
 
-function handleCreateEntityAction(
-  createEntityAction: CreateEntityAction
-): void {
-  const fact = createEntityAction.value
+function createValueId(value: Value): string {
+  const stringValue = value.asStringValue()
+  if (stringValue) return `STRING-${stringValue.value}`
 
+  const numberValue = value.asNumberValue()
+  if (numberValue) return `NUMBER-${numberValue.value}`
+
+  const entityValue = value.asEntityValue()
+  if (entityValue) return `ENTITY-${entityValue.value}`
+
+  throw new Error('Bad serialization')
+}
+
+function createTripleId(
+  entityId: string,
+  attributeId: string,
+  value: Value
+): string {
+  return `${entityId}/${attributeId}/${createValueId(value)}`
+}
+
+function handleCreateTripleAction(fact: CreateTripleAction): void {
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
   entity.save()
@@ -55,7 +78,9 @@ function handleCreateEntityAction(
     new GeoEntity(fact.attributeId))!
   attribute.save()
 
-  const triple = (Triple.load(fact.id) || new Triple(fact.id))!
+  const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
+
+  const triple = (Triple.load(tripleId) || new Triple(tripleId))!
   triple.entity = entity.id
   triple.attribute = attribute.id
   triple.valueType = fact.value.type
@@ -81,6 +106,18 @@ function handleCreateEntityAction(
   triple.save()
 }
 
+function handleDeleteTripleAction(fact: DeleteTripleAction): void {
+  const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
+
+  store.remove('Triple', tripleId)
+}
+
+function handleCreateEntityAction(action: CreateEntityAction) {
+  const entity = (GeoEntity.load(action.entityId) ||
+    new GeoEntity(action.entityId))!
+  entity.save()
+}
+
 export function handleEntryAdded(event: EntryAdded): void {
   let entry = new LogEntry(event.params.index.toHex())
 
@@ -101,8 +138,7 @@ export function handleEntryAdded(event: EntryAdded): void {
 
       if (entry.mimeType == 'application/json') {
         const json = JSON.parse(bytes)
-        // const result = json.fromBytes(bytes)
-        // log.debug(`Testing: ${result.toObject().mustGet('id').toString()}`, [])
+
         const root = Root.fromJSON(json)
         if (root) {
           log.debug(`XXX Decoded Root`, [])
@@ -113,6 +149,18 @@ export function handleEntryAdded(event: EntryAdded): void {
 
           for (let i = 0; i < root.actions.length; i++) {
             const action = root.actions[i]
+
+            const createTripleAction = action.asCreateTripleAction()
+            if (createTripleAction) {
+              handleCreateTripleAction(createTripleAction)
+              continue
+            }
+
+            const deleteTripleAction = action.asDeleteTripleAction()
+            if (deleteTripleAction) {
+              handleDeleteTripleAction(deleteTripleAction)
+            }
+
             const createEntityAction = action.asCreateEntityAction()
             if (createEntityAction) {
               handleCreateEntityAction(createEntityAction)
