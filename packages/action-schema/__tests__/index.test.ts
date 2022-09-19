@@ -1,24 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { FactSchema, Root } from '../src'
+import { ActionSchema, Root } from '../src'
 
 it('validates', () => {
   const data: Root = {
     type: 'root',
-    commands: [
+    version: '0.0.1',
+    actions: [
       {
-        type: 'create',
-        value: {
-          id: '',
-          entityId: '',
-          attributeId: '',
-          type: 'fact',
-          value: { type: 'number', value: 42 },
-        },
+        type: 'createTriple',
+        entityId: 'e',
+        attributeId: 'a',
+        value: { type: 'number', value: '42' },
       },
     ],
   }
 
-  const ok = FactSchema.validate(data)
+  const ok = ActionSchema.validate(data)
 
   expect(ok).toEqual(true)
 })
@@ -29,7 +26,7 @@ describe('invalid', () => {
       type: 'root',
     }
 
-    const ok = FactSchema.validate(data)
+    const ok = ActionSchema.validate(data)
 
     expect(ok).toEqual(false)
   })
@@ -40,7 +37,7 @@ describe('invalid', () => {
       hi: true,
     }
 
-    const ok = FactSchema.validate(data)
+    const ok = ActionSchema.validate(data)
 
     expect(ok).toEqual(false)
   })

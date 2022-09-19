@@ -5,19 +5,20 @@
   "license": "MIT",
   "scripts": {
     "clean": "rimraf build generated .turbo",
-    "build": "graph codegen && graph build",
+    "codegen": "graph codegen",
+    "build": "graph build",
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=http://127.0.0.1:5001 npm run",
     "local:create": "npm run local create",
     "local:deploy": "npm run local deploy",
-    "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .StatementHistory.address ../contracts/addresses/31337.json)\" subgraph.yaml",
+    "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .Log.address ../contracts/addresses/31337.json)\" subgraph.yaml",
     "copy-subgraph-config": "docker cp $(docker ps -q --filter=\"name=devnet\"):/app/packages/subgraph/subgraph.yaml ."
   },
   "devDependencies": {
     "@geogenesis/contracts": "workspace:^0.1.0",
     "@geogenesis/data-uri": "workspace:^0.0.1",
-    "@geogenesis/fact-schema": "workspace:^0.0.1",
+    "@geogenesis/action-schema": "workspace:^0.0.1",
     "@graphprotocol/graph-cli": "^0.33.1",
     "@graphprotocol/graph-ts": "^0.27.0",
     "rimraf": "^3.0.2"

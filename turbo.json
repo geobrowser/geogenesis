@@ -21,8 +21,11 @@
     "web": {
       "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/database#build"]
     },
-    "@geogenesis/fact-schema#codegen": {
+    "@geogenesis/action-schema#codegen": {
       "dependsOn": ["@geogenesis/assemblyscript-json-schema#build"]
+    },
+    "@geogenesis/subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint"],

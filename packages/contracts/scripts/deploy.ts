@@ -1,11 +1,11 @@
 /* eslint-disable node/no-missing-import */
-import { Root } from '@geogenesis/fact-schema'
+import { Root } from '@geogenesis/action-schema'
 import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
-import { deployStatementHistory } from '../src/deploy'
-import { addStatement } from '../src/statement'
+import { deployLog } from '../src/deploy'
+import { addEntry } from '../src/entry'
 
 dotenv.config()
 
@@ -16,47 +16,37 @@ async function main() {
   const networkConfig = config.networks![networkId]!
   const chainId = networkConfig.chainId!.toString()
 
-  const statementHistoryContract = await deployStatementHistory({ debug: true })
+  const logContract = await deployLog({ debug: true })
 
-  await addStatement(
-    statementHistoryContract,
-    'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ=='
-  )
+  await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
   const root: Root = {
     type: 'root',
-    commands: [
+    version: '0.0.1',
+    actions: [
       {
-        type: 'create',
+        type: 'createTriple',
+        entityId: 'e',
+        attributeId: 'a',
         value: {
-          type: 'fact',
-          id: 'i',
-          entityId: 'e',
-          attributeId: 'a',
-          value: {
-            type: 'string',
-            value: 'hi',
-          },
+          type: 'string',
+          value: 'hi',
         },
       },
       {
-        type: 'create',
+        type: 'createTriple',
+        entityId: 'e',
+        attributeId: 'a',
         value: {
-          type: 'fact',
-          id: 'i',
-          entityId: 'e',
-          attributeId: 'a',
-          value: {
-            type: 'number',
-            value: 42,
-          },
+          type: 'number',
+          value: '42',
         },
       },
     ],
   }
 
-  await addStatement(
-    statementHistoryContract,
+  await addEntry(
+    logContract,
     `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
       'base64'
     )}`
@@ -64,8 +54,8 @@ async function main() {
 
   saveAddress({
     chainId,
-    contractName: 'StatementHistory',
-    address: statementHistoryContract.address,
+    contractName: 'Log',
+    address: logContract.address,
   })
 }
 
