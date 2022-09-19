@@ -1,8 +1,11 @@
 import {
+  Action,
   CreateEntityAction,
   CreateTripleAction,
   DeleteTripleAction,
+  EntityValue,
   Root,
+  StringValue,
   Value,
 } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
@@ -12,51 +15,51 @@ import { EntryAdded } from '../generated/Log/Log'
 import { GeoEntity, LogEntry, Triple } from '../generated/schema'
 
 function bootstrap(): void {
-  const type = new GeoEntity('e:type')
-  type.save()
+  const typeEntity = new CreateEntityAction('type')
+  const nameEntity = new CreateEntityAction('name')
 
-  const name = new GeoEntity('e:name')
-  name.save()
+  const personTriple = new CreateTripleAction(
+    'person',
+    'type',
+    new EntityValue('type')
+  )
+  const devinTriple = new CreateTripleAction(
+    'devin',
+    'type',
+    new EntityValue('person')
+  )
+  const devinNameTriple = new CreateTripleAction(
+    'devin',
+    'name',
+    new StringValue('Devin')
+  )
 
-  const person = new GeoEntity('e:person')
-  person.save()
+  handleAction(typeEntity)
+  handleAction(nameEntity)
+  handleAction(personTriple)
+  handleAction(devinTriple)
+  handleAction(devinNameTriple)
 
-  const devin = new GeoEntity('e:devin')
-  devin.save()
+  // const deleteDevinNameTriple = new DeleteTripleAction(
+  //   'devin',
+  //   'name',
+  //   new StringValue('Devin')
+  // )
 
-  const devinTypeTriple = new Triple('t:devin-type')
-  devinTypeTriple.entity = devin.id
-  devinTypeTriple.attribute = type.id
-  devinTypeTriple.valueType = 'ENTITY'
-  devinTypeTriple.entityValue = person.id
-  devinTypeTriple.save()
-
-  const devinNameTriple = new Triple('t:devin-name')
-  devinNameTriple.entity = devin.id
-  devinNameTriple.attribute = name.id
-  devinNameTriple.valueType = 'STRING'
-  devinNameTriple.stringValue = 'Devin'
-  devinNameTriple.save()
-
-  const personTypeTriple = new Triple('t:person-type')
-  personTypeTriple.entity = person.id
-  personTypeTriple.attribute = type.id
-  personTypeTriple.valueType = 'ENTITY'
-  personTypeTriple.entityValue = personTypeTriple.id
-  personTypeTriple.save()
+  // handleAction(deleteDevinNameTriple)
 }
 
 bootstrap()
 
 function createValueId(value: Value): string {
   const stringValue = value.asStringValue()
-  if (stringValue) return `STRING-${stringValue.value}`
+  if (stringValue) return `s~${stringValue.value}`
 
   const numberValue = value.asNumberValue()
-  if (numberValue) return `NUMBER-${numberValue.value}`
+  if (numberValue) return `n~${numberValue.value}`
 
   const entityValue = value.asEntityValue()
-  if (entityValue) return `ENTITY-${entityValue.value}`
+  if (entityValue) return `e~${entityValue.value}`
 
   throw new Error('Bad serialization')
 }
@@ -66,7 +69,7 @@ function createTripleId(
   attributeId: string,
   value: Value
 ): string {
-  return `${entityId}/${attributeId}/${createValueId(value)}`
+  return `${entityId}:${attributeId}:${createValueId(value)}`
 }
 
 function handleCreateTripleAction(fact: CreateTripleAction): void {
@@ -112,10 +115,32 @@ function handleDeleteTripleAction(fact: DeleteTripleAction): void {
   store.remove('Triple', tripleId)
 }
 
-function handleCreateEntityAction(action: CreateEntityAction) {
+function handleCreateEntityAction(action: CreateEntityAction): void {
   const entity = (GeoEntity.load(action.entityId) ||
     new GeoEntity(action.entityId))!
   entity.save()
+}
+
+function handleAction(action: Action): void {
+  const createTripleAction = action.asCreateTripleAction()
+  if (createTripleAction) {
+    handleCreateTripleAction(createTripleAction)
+    return
+  }
+
+  const deleteTripleAction = action.asDeleteTripleAction()
+  if (deleteTripleAction) {
+    handleDeleteTripleAction(deleteTripleAction)
+    return
+  }
+
+  const createEntityAction = action.asCreateEntityAction()
+  if (createEntityAction) {
+    handleCreateEntityAction(createEntityAction)
+    return
+  }
+
+  log.debug(`Unhandled action '${action.type}'`, [])
 }
 
 export function handleEntryAdded(event: EntryAdded): void {
@@ -150,21 +175,7 @@ export function handleEntryAdded(event: EntryAdded): void {
           for (let i = 0; i < root.actions.length; i++) {
             const action = root.actions[i]
 
-            const createTripleAction = action.asCreateTripleAction()
-            if (createTripleAction) {
-              handleCreateTripleAction(createTripleAction)
-              continue
-            }
-
-            const deleteTripleAction = action.asDeleteTripleAction()
-            if (deleteTripleAction) {
-              handleDeleteTripleAction(deleteTripleAction)
-            }
-
-            const createEntityAction = action.asCreateEntityAction()
-            if (createEntityAction) {
-              handleCreateEntityAction(createEntityAction)
-            }
+            handleAction(action)
           }
         }
       }
