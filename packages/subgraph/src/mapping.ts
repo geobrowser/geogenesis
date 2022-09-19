@@ -15,38 +15,26 @@ import { EntryAdded } from '../generated/Log/Log'
 import { GeoEntity, LogEntry, Triple } from '../generated/schema'
 
 function bootstrap(): void {
-  const typeEntity = new CreateEntityAction('type')
-  const nameEntity = new CreateEntityAction('name')
+  handleAction(new CreateEntityAction('type'))
+  handleAction(new CreateEntityAction('name'))
 
-  const personTriple = new CreateTripleAction(
-    'person',
-    'type',
-    new EntityValue('type')
+  handleAction(new CreateTripleAction('type', 'name', new StringValue('Is a')))
+  handleAction(
+    new CreateTripleAction('person', 'type', new EntityValue('type'))
   )
-  const devinTriple = new CreateTripleAction(
-    'devin',
-    'type',
-    new EntityValue('person')
+  handleAction(
+    new CreateTripleAction('person', 'name', new StringValue('Person'))
   )
-  const devinNameTriple = new CreateTripleAction(
-    'devin',
-    'name',
-    new StringValue('Devin')
+  handleAction(
+    new CreateTripleAction('devin', 'type', new EntityValue('person'))
+  )
+  handleAction(
+    new CreateTripleAction('devin', 'name', new StringValue('Devin'))
   )
 
-  handleAction(typeEntity)
-  handleAction(nameEntity)
-  handleAction(personTriple)
-  handleAction(devinTriple)
-  handleAction(devinNameTriple)
-
-  // const deleteDevinNameTriple = new DeleteTripleAction(
-  //   'devin',
-  //   'name',
-  //   new StringValue('Devin')
+  // handleAction(
+  //   new DeleteTripleAction('devin', 'name', new StringValue('Devin'))
   // )
-
-  // handleAction(deleteDevinNameTriple)
 }
 
 bootstrap()

@@ -135,11 +135,13 @@ Suppose a user wants to delete the entity (node) with id `entity-abc`. In terms 
 Potential solutions:
 
 1. No deletions allowed
-2. "Holes" in triples (`value: null`) (presumably possible?)
+2. "Holes" in triples (`value: null`) (possible, but requires `Triple.entity` to be nullable)
 3. Soft deletion (`isDeleted`)
 4. Deleted entities table (`GeoDeletedEntity`)
 
 Solutions typically involve offloading the work to the client, e.g. filtering for only non-deleted values: `entities(where: {value: {isDeleted: false}})`.
+
+Note that deleting triples is easy if we don't allow referencing other triples and don't delete entities that have no triples about them.
 
 #### Attribute Schemas
 
