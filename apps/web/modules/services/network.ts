@@ -7,10 +7,6 @@ export interface INetwork {
   insertFact: (fact: IFact) => IFact[];
 }
 
-// export interface INetworkConfig {
-//   syncInterval?: number;
-// }
-
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class MockNetwork implements INetwork {
@@ -26,7 +22,7 @@ export class MockNetwork implements INetwork {
   syncer$: Observable<IFact[]>;
 
   constructor(syncInterval = 5000) {
-    // This needs to be composed rather than initialized like this :thinking:
+    // This could be composed in a functional way rather than initialized like this :thinking:
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
   }
 
