@@ -3,6 +3,7 @@ import { colors, ColorValue } from '~/modules/design-system/theme/colors';
 import { Spacer } from '~/modules/design-system/spacer';
 import { typography, TypographyName } from '~/modules/design-system/theme/typography';
 import { Text } from '~/modules/design-system/text';
+import { Input } from '~/modules/design-system/input';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
   width: 150,
@@ -50,12 +51,25 @@ export default function Dev() {
         <Text variant="mediumTitle">Colors</Text>
         <Spacer height={12} />
         <HorizontalBox>{Colors}</HorizontalBox>
-
-        <Spacer height={32} />
       </HorizontalBox>
+
+      <Spacer height={32} />
+
       <VerticalBox>
         <Text variant="mediumTitle">Typography</Text>
         <VerticalBox>{Typography}</VerticalBox>
+      </VerticalBox>
+
+      <Spacer height={32} />
+
+      <VerticalBox>
+        <Text variant="mediumTitle">Inputs</Text>
+        <Spacer height={12} />
+
+        <Input placeholder="Placeholder..." />
+
+        <Spacer height={6} />
+        <Input placeholder="Disabled :(" disabled />
       </VerticalBox>
     </VerticalBox>
   );

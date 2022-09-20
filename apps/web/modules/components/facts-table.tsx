@@ -8,12 +8,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
-import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
-import useMeasure from 'react-use-measure';
 import { Text } from '../design-system/text';
-import { Fact } from '../state';
+import { IFact } from '../types';
 
-const columnHelper = createColumnHelper<Fact>();
+const columnHelper = createColumnHelper<IFact>();
 
 const columns = [
   columnHelper.accessor(row => row.entityId, {
@@ -48,7 +46,7 @@ const Table = styled.table(props => ({
 
 const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: '10px',
+  padding: props.theme.space * 2.5,
   textAlign: 'left',
   width: props.width,
 }));
@@ -56,15 +54,20 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 const TableCell = styled.td(props => ({
   ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: '10px',
+  padding: props.theme.space * 2.5,
 }));
 
-const TBody = styled.tbody({
-  position: 'relative',
-});
+// Using a container to wrap the table to make styling borders around
+// the table easier. Otherwise we need to do some pseudoselector shenanigans
+// or use box-shadow instead of border.
+const Container = styled.div(props => ({
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderRadius: props.theme.radius,
+  overflow: 'hidden',
+}));
 
 interface Props {
-  facts: Fact[];
+  facts: IFact[];
   globalFilter: string;
 }
 
@@ -84,7 +87,7 @@ export function FactsTable({ globalFilter, facts }: Props) {
   });
 
   return (
-    <ResizablePanel>
+    <Container>
       <Table>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
@@ -97,7 +100,7 @@ export function FactsTable({ globalFilter, facts }: Props) {
             </tr>
           ))}
         </thead>
-        <TBody>
+        <tbody>
           {table.getRowModel().rows.map(row => (
             <tr key={row.id}>
               {row.getVisibleCells().map(cell => (
@@ -107,30 +110,13 @@ export function FactsTable({ globalFilter, facts }: Props) {
               ))}
             </tr>
           ))}
-        </TBody>
+        </tbody>
       </Table>
-    </ResizablePanel>
+    </Container>
   );
 }
 
-const Container = styled.div(props => ({
-  // Adding borders to a table is complex, so we can use box-shadow instead
-  boxShadow: `0 0 0 1px ${props.theme.colors['grey-02']}`,
-  borderRadius: '6px',
-  // overflow: 'hidden',
-}));
 
-const MotionContainer = motion(Container);
-
-function ResizablePanel({ children }: { children: React.ReactNode }) {
-  const [ref, { height }] = useMeasure();
-
-  return (
-    <MotionContainer layout animate={{ height }} transition={{ duration: 0.1 }}>
-      <div ref={ref}>{children}</div>
-    </MotionContainer>
-  );
-}
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   // Rank the item

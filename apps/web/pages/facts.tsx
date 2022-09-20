@@ -5,18 +5,12 @@ import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
-import { useFacts } from '~/modules/state';
+import { FactsStore } from '~/modules/state/facts';
+import { MockNetwork } from '~/modules/services/network';
+import { IFact } from '~/modules/types';
+import { useFacts } from '~/modules/state/hook';
+import { Input } from '~/modules/design-system/input';
 
-const Input = styled.input(props => ({
-  ...props.theme.typography.input,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: '6px',
-  padding: '9px 12px',
-
-  '::placeholder': {
-    color: props.theme.colors['grey-03'],
-  },
-}));
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -28,11 +22,31 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
+const data: IFact[] = Array.from({ length: 3 }, (_, index) => {
+  return {
+    id: index.toString(),
+    entityId: index.toString(),
+    attribute: 'name',
+    value: 'John Doe' + ' ' + index,
+  };
+});
+
+const factsStore = new FactsStore({ api: new MockNetwork(), initialFacts: [] });
+
 export default function Facts() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { facts, addFact } = useFacts();
+  const { facts, createFact } = useFacts(factsStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
+
+  const onAddFact = () => {
+    createFact({
+      id: Math.random().toString(),
+      entityId: Math.random().toString(),
+      attribute: 'Died in',
+      value: '2021',
+    });
+  };
 
   return (
     <PageContainer>
@@ -40,7 +54,7 @@ export default function Facts() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={addFact}>
+        <Button icon="create" onClick={onAddFact}>
           Add
         </Button>
       </PageHeader>
