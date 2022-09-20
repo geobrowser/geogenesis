@@ -71,9 +71,8 @@ import { Value } from './Value'
 export class NumberValue extends Value {
   value: f64
 
-  constructor(type: string, value: f64) {
-    super(type)
-    this.type = type
+  constructor(value: f64) {
+    super('number')
     this.value = value
   }
 
@@ -113,7 +112,7 @@ export class NumberValue extends Value {
     }
     const value = __value.valueOf()
 
-    return new NumberValue(type, value)
+    return new NumberValue(value)
   }
 }
 "

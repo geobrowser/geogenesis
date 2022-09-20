@@ -5,21 +5,21 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: StatementHistory
+    name: Log
     network: mainnet
     source:
       address: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
-      abi: StatementHistory
+      abi: Log
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
       entities:
-        - Statement
+        - LogEntry
       abis:
-        - name: StatementHistory
-          file: ../contracts/build/abis/StatementHistory.json
+        - name: Log
+          file: ../contracts/build/abis/Log.json
       eventHandlers:
-        - event: StatementAdded(uint256,string,address)
-          handler: handleStatementAdded
+        - event: EntryAdded(uint256,string,address)
+          handler: handleEntryAdded
       file: ./src/mapping.ts

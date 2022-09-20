@@ -23,31 +23,24 @@ const loadAssembly = async (): Promise<typeof AssemblyExports> =>
 
 const root: Root = {
   type: 'root',
-  commands: [
+  version: '0.0.1',
+  actions: [
     {
-      type: 'create',
+      type: 'createTriple',
+      entityId: 'e',
+      attributeId: 'a',
       value: {
-        type: 'fact',
-        id: 'i',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'string',
-          value: 'hi',
-        },
+        type: 'string',
+        value: 'hi',
       },
     },
     {
-      type: 'create',
+      type: 'createTriple',
+      entityId: 'e',
+      attributeId: 'a',
       value: {
-        type: 'fact',
-        id: 'i',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'number',
-          value: 42,
-        },
+        type: 'number',
+        value: '42',
       },
     },
   ],

@@ -1,7 +1,39 @@
-type Statement @entity {
+"""
+An entry in the Log contract
+"""
+type LogEntry @entity {
   id: ID!
   uri: String!
   author: Bytes!
   mimeType: String
   decoded: Bytes
+}
+
+"""
+A node within the knowledge graph.
+"""
+type GeoEntity @entity {
+  id: ID!
+}
+
+"""
+An edge within the knowledge graph.
+
+Triples are 3-tuples of (entity, attribute, value).
+"""
+type Triple @entity {
+  id: ID!
+  entity: GeoEntity!
+  attribute: GeoEntity!
+  valueType: ValueType!
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+}
+
+enum ValueType {
+  NULL
+  NUMBER
+  STRING
+  ENTITY
 }

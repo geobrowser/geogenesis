@@ -96,6 +96,11 @@ export function generateObjectType(
     ...unions,
   ])
 
+  // Remove special "type" property
+  const standardProperties = Object.entries(properties).filter(
+    ([property]) => unions.length === 0 || property !== 'type'
+  )
+
   return `
   import { log } from '@graphprotocol/graph-ts'
   import { JSON } from 'assemblyscript-json/assembly'
@@ -109,21 +114,26 @@ export function generateObjectType(
   export class ${name} ${
     unions.length > 0 ? `extends ${unions.join(', ')}` : ''
   } {
-    ${Object.entries(properties)
-      .filter(([property]) => unions.length === 0 || property !== 'type')
+    ${standardProperties
       .map(
         ([property, value]) =>
           `${property}: ${convertTypeName(schema, value as JSONSchema7)}`
       )
       .join('\n')}
       
-    constructor(${Object.entries(properties).map(
-      ([property, value]) =>
-        `${property}: ${convertTypeName(schema, value as JSONSchema7)}`
-    )}) {
-      ${unions.length > 0 ? 'super(type)' : ''}
-      ${Object.keys(properties)
-        .map((property) => `this.${property} = ${property}`)
+    constructor(${standardProperties
+      .map(
+        ([property, value]) =>
+          `${property}: ${convertTypeName(schema, value as JSONSchema7)}`
+      )
+      .join(', ')}) {
+      ${
+        unions.length > 0
+          ? `super(${JSON.stringify(getDiscriminator(definition))})`
+          : ''
+      }
+      ${standardProperties
+        .map(([property]) => `this.${property} = ${property}`)
         .join('\n')}
     }
 
@@ -214,7 +224,7 @@ export function generateObjectType(
         .join('\n')}
 
       return new ${name}(
-        ${Object.keys(properties)}
+        ${standardProperties.map(([property]) => property).join(', ')}
       )
     }
   }

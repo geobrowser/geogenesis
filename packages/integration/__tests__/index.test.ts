@@ -21,7 +21,7 @@ async function checkRunning() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: 'query { statements { id } }',
+        query: 'query { geoEntities { id } }',
       }),
     })
 
@@ -43,7 +43,7 @@ async function checkRunning() {
 
 it('subgraph runs', async () => {
   const retries = 20
-  const data = await pRetry(checkRunning, {
+  const result = await pRetry(checkRunning, {
     retries,
     factor: 1,
     minTimeout: 5 * 1000,
@@ -53,9 +53,5 @@ it('subgraph runs', async () => {
     },
   })
 
-  expect(data).toEqual({
-    data: {
-      statements: [{ id: '0x0' }, { id: '0x1' }],
-    },
-  })
+  expect(result.data.geoEntities.length > 1).toEqual(true)
 }, 120000)
