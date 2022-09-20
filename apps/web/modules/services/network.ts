@@ -1,8 +1,12 @@
 import { Observable } from 'rxjs';
+import { Log__factory } from '~/../../packages/contracts';
 import { IFact } from '../types';
 import { createSyncService } from './sync';
 
+type LogContract = typeof Log__factory;
+
 export interface INetwork {
+  contract: LogContract;
   syncer$: Observable<IFact[]>;
   // insertFact: (fact: IFact) => IFact[];
   getRemoteFacts: () => Promise<IFact[]>;
@@ -12,21 +16,23 @@ export interface INetwork {
 // from the subgraph
 export class MockNetwork implements INetwork {
   syncer$: Observable<IFact[]>;
+  contract: LogContract;
 
-  constructor(syncInterval = 5000) {
+  constructor(contract: LogContract, syncInterval = 5000) {
     // This could be composed in a functional way rather than initialized like this :thinking:
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
+    this.contract = contract;
   }
 
   // insertFact = (fact: IFact) => {
-    // const ids = new Set(this.REMOTE_FACTS.map(fact => fact.id));
-    // if (ids.has(fact.id)) return this.REMOTE_FACTS;
-    // this.REMOTE_FACTS.push(fact);
-    // return this.REMOTE_FACTS.concat(fact);
+  // const ids = new Set(this.REMOTE_FACTS.map(fact => fact.id));
+  // if (ids.has(fact.id)) return this.REMOTE_FACTS;
+  // this.REMOTE_FACTS.push(fact);
+  // return this.REMOTE_FACTS.concat(fact);
   // };
 
   getRemoteFacts = async () => {
-    const url = 'http://localhost:8000/subgraphs/name/example'
+    const url = 'http://localhost:8000/subgraphs/name/example';
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -51,7 +57,7 @@ export class MockNetwork implements INetwork {
           } 
         }`,
       }),
-    })
+    });
 
     const json = await response.json();
     return json.data.triples;

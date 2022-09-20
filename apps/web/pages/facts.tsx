@@ -23,7 +23,7 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const factsStore = new FactsStore({ api: new MockNetwork(), initialFacts: [] });
+const factsStore = new FactsStore({ api: new MockNetwork(Log__factory), initialFacts: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 
@@ -35,7 +35,7 @@ export default function Facts() {
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
   const onAddFact = async () => {
-    const contract = Log__factory.connect('0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9', data!);
+    const contract = Log__factory.connect('0x5fbdb2315678afecb367f032d93f642f64180aa3', data!);
 
     const root: Root = {
       type: 'root',
