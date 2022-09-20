@@ -10,7 +10,9 @@ import { MockNetwork } from '~/modules/services/network';
 import { IFact } from '~/modules/types';
 import { useFacts } from '~/modules/state/hook';
 import { Input } from '~/modules/design-system/input';
-
+import { Log__factory } from '@geogenesis/contracts';
+import { Root } from '@geogenesis/action-schema';
+import { useSigner } from 'wagmi';
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -33,19 +35,44 @@ const data: IFact[] = Array.from({ length: 3 }, (_, index) => {
 
 const factsStore = new FactsStore({ api: new MockNetwork(), initialFacts: [] });
 
+// 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
+
 export default function Facts() {
+  const { data } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const { facts, createFact } = useFacts(factsStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
-  const onAddFact = () => {
-    createFact({
-      id: Math.random().toString(),
-      entityId: Math.random().toString(),
-      attribute: 'Died in',
-      value: '2021',
-    });
+  const onAddFact = async () => {
+    const contract = Log__factory.connect('0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9', data!);
+
+    const root: Root = {
+      type: 'root',
+      version: '0.0.1',
+      actions: [
+        {
+          type: 'createTriple',
+          entityId: 'byron',
+          attributeId: 'name',
+          value: {
+            type: 'string',
+            value: 'Byron',
+          },
+        },
+      ],
+    };
+
+    const tx = await contract.addEntry(
+      `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString('base64')}`
+    );
+
+    // createFact({
+    //   id: Math.random().toString(),
+    //   entityId: Math.random().toString(),
+    //   attribute: 'Died in',
+    //   value: '2021',
+    // });
   };
 
   return (

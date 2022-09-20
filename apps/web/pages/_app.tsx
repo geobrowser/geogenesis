@@ -57,7 +57,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           <Link href="/facts">
             <a>Facts database</a>
           </Link>
-          <ConnectButton accountStatus="avatar" showBalance={false} />
+          <ConnectButton accountStatus="avatar" />
           <Layout>
             <Component {...pageProps} />
           </Layout>

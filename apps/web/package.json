@@ -13,6 +13,7 @@
   "dependencies": {
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
+    "@geogenesis/action-schema": "workspace:^0.0.1",
     "@geogenesis/contracts": "workspace:*",
     "@rainbow-me/rainbowkit": "^0.6.0",
     "@tanstack/match-sorter-utils": "^8.1.1",
