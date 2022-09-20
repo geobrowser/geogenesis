@@ -1,6 +1,14 @@
 export type IFact = {
   id: string;
-  entityId: string;
-  attribute: string;
-  value: string | number;
+  entity: {
+    id: string;
+  };
+  attribute: {
+    id: string
+  };
+  entityValue?: {
+    id: string;
+  };
+  stringValue?: string;
+  numberValue?: string;
 };

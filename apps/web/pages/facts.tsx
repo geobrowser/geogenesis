@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import { FactsTable } from '~/modules/components/facts-table';
@@ -7,7 +7,6 @@ import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
 import { FactsStore } from '~/modules/state/facts';
 import { MockNetwork } from '~/modules/services/network';
-import { IFact } from '~/modules/types';
 import { useFacts } from '~/modules/state/hook';
 import { Input } from '~/modules/design-system/input';
 import { Log__factory } from '@geogenesis/contracts';
@@ -22,15 +21,6 @@ const PageHeader = styled.div({
 const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
-});
-
-const data: IFact[] = Array.from({ length: 3 }, (_, index) => {
-  return {
-    id: index.toString(),
-    entityId: index.toString(),
-    attribute: 'name',
-    value: 'John Doe' + ' ' + index,
-  };
 });
 
 const factsStore = new FactsStore({ api: new MockNetwork(), initialFacts: [] });

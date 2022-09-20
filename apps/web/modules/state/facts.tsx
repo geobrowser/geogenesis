@@ -4,8 +4,6 @@ import { BehaviorSubject } from 'rxjs';
 import { IFact } from '../types';
 
 
-
-
 interface IFactsStoreConfig {
   api: INetwork;
   initialFacts?: IFact[];
@@ -31,16 +29,15 @@ export class FactsStore {
   }
 
   createFact = async (fact: IFact) => {
-
     this.facts$.next([fact, ...this.facts$.getValue()]);
-    return await this._uploadFact(fact);
+    // return await this._uploadFact(fact);
   };
 
   get facts() {
     return this.facts$.getValue();
   }
 
-  private _uploadFact = async (fact: IFact) => {
-    return this.api.insertFact(fact);
-  };
+  // private _uploadFact = async (fact: IFact) => {
+  //   return this.api.insertFact(fact);
+  // };
 }

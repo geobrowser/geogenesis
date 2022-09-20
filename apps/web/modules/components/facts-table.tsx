@@ -14,7 +14,7 @@ import { IFact } from '../types';
 const columnHelper = createColumnHelper<IFact>();
 
 const columns = [
-  columnHelper.accessor(row => row.entityId, {
+  columnHelper.accessor(row => row.entity.id, {
     id: 'entityId',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => (
@@ -27,10 +27,10 @@ const columns = [
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
     size: 450,
   }),
-  columnHelper.accessor('value', {
+  columnHelper.accessor('stringValue', {
     header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,

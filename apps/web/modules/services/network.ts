@@ -4,21 +4,13 @@ import { createSyncService } from './sync';
 
 export interface INetwork {
   syncer$: Observable<IFact[]>;
-  insertFact: (fact: IFact) => IFact[];
+  // insertFact: (fact: IFact) => IFact[];
+  getRemoteFacts: () => Promise<IFact[]>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class MockNetwork implements INetwork {
-  private REMOTE_FACTS: IFact[] = [
-    {
-      id: '293487',
-      entityId: '234897',
-      attribute: 'name',
-      value: 'Van Horn',
-    },
-  ];
-
   syncer$: Observable<IFact[]>;
 
   constructor(syncInterval = 5000) {
@@ -26,14 +18,42 @@ export class MockNetwork implements INetwork {
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
   }
 
-  insertFact = (fact: IFact) => {
-    const ids = new Set(this.REMOTE_FACTS.map(fact => fact.id));
-    if (ids.has(fact.id)) return this.REMOTE_FACTS;
-    this.REMOTE_FACTS.push(fact);
-    return this.REMOTE_FACTS.concat(fact);
-  };
+  // insertFact = (fact: IFact) => {
+    // const ids = new Set(this.REMOTE_FACTS.map(fact => fact.id));
+    // if (ids.has(fact.id)) return this.REMOTE_FACTS;
+    // this.REMOTE_FACTS.push(fact);
+    // return this.REMOTE_FACTS.concat(fact);
+  // };
 
-  private getRemoteFacts = async () => {
-    return this.REMOTE_FACTS;
+  getRemoteFacts = async () => {
+    const url = 'http://localhost:8000/subgraphs/name/example'
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: `query { 
+          triples {
+            id
+            attribute {
+              id
+            }
+            entity {
+              id
+            }
+            entityValue {
+              id
+            }
+            numberValue
+            stringValue
+            valueType
+          } 
+        }`,
+      }),
+    })
+
+    const json = await response.json();
+    return json.data.triples;
   };
 }
