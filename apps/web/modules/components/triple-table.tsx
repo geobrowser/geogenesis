@@ -9,12 +9,12 @@ import {
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { IFact } from '../types';
+import { ITriple } from '../types';
 
-const columnHelper = createColumnHelper<IFact>();
+const columnHelper = createColumnHelper<ITriple>();
 
 const columns = [
-  columnHelper.accessor(row => row.entityId, {
+  columnHelper.accessor(row => row.entity.id, {
     id: 'entityId',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => (
@@ -27,10 +27,11 @@ const columns = [
   columnHelper.accessor(row => row.attribute, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
     size: 450,
   }),
-  columnHelper.accessor('value', {
+  columnHelper.accessor(row => row.stringValue, {
+    id: 'stringValue',
     header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
@@ -67,13 +68,13 @@ const Container = styled.div(props => ({
 }));
 
 interface Props {
-  facts: IFact[];
+  triples: ITriple[];
   globalFilter: string;
 }
 
-export function FactsTable({ globalFilter, facts }: Props) {
+export function TripleTable({ globalFilter, triples }: Props) {
   const table = useReactTable({
-    data: facts,
+    data: triples,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -115,8 +116,6 @@ export function FactsTable({ globalFilter, facts }: Props) {
     </Container>
   );
 }
-
-
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   // Rank the item

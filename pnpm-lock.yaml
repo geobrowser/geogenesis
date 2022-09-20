@@ -19,6 +19,7 @@ importers:
       '@babel/core': ^7.19.0
       '@emotion/react': ^11.10.4
       '@emotion/styled': ^11.10.4
+      '@geogenesis/action-schema': workspace:^0.0.1
       '@geogenesis/contracts': workspace:*
       '@next/bundle-analyzer': ^12.3.0
       '@rainbow-me/rainbowkit': ^0.6.0
@@ -48,6 +49,7 @@ importers:
     dependencies:
       '@emotion/react': 11.10.4_hbgfqniqg2qt6ignwsnxswzwmy
       '@emotion/styled': 11.10.4_n3dplpki2ocpzwhdizf3uky43y
+      '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
       '@rainbow-me/rainbowkit': 0.6.0_fcrllrzdqlcgkaw5zqm63jp5yq
       '@tanstack/match-sorter-utils': 8.1.1
@@ -3369,7 +3371,7 @@ packages:
   /axios/0.21.4:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
     dependencies:
-      follow-redirects: 1.15.1_debug@4.3.4
+      follow-redirects: 1.15.1
     transitivePeerDependencies:
       - debug
     dev: false
@@ -7497,6 +7499,16 @@ packages:
     resolution: {integrity: sha512-rDjbZUKpN8OYhB0IE/vY/I8UWO/602IIJEU/76Tv4LvYnwHCk0BCsvz4eRr9n+FQcri7L5cyaXOo0+/Kh4HisA==}
     dev: true
 
+  /follow-redirects/1.15.1:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dev: false
+
   /follow-redirects/1.15.1_debug@4.3.1:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
@@ -7519,6 +7531,7 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.4
+    dev: true
 
   /for-each/0.3.3:
     resolution: {integrity: sha512-jqYfLp7mo9vIyQf8ykW2v7A+2N4QjeCeI5+Dz9XraiO1ign81wjiH7Fb9vSOWvQfNtmSa4H2RoQTrrXivdUZmw==}

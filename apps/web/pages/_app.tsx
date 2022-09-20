@@ -54,10 +54,10 @@ function MyApp({ Component, pageProps }: AppProps) {
 
           <Spacer width={4} />
 
-          <Link href="/facts">
+          <Link href="/triples">
             <a>Facts database</a>
           </Link>
-          <ConnectButton accountStatus="avatar" showBalance={false} />
+          <ConnectButton accountStatus="avatar" />
           <Layout>
             <Component {...pageProps} />
           </Layout>

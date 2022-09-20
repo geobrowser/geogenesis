@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { render, renderHook } from '@testing-library/react';
-import { FactsStore } from './facts';
+import { Signer } from 'ethers';
+import { TripleStore } from './triple-store';
 import { useSharedObservable } from './hook';
-import { MockNetwork } from '../services/network';
+import { ITriple } from '../types';
+import { MockNetwork } from '../services/mocks/mock-network';
 
 describe('useSharedObservable', () => {
   it('Initializes empty', () => {
-    const store = new FactsStore({ api: new MockNetwork() });
-    const { result } = renderHook(() => useSharedObservable(store.facts$));
+    const store = new TripleStore({ api: new MockNetwork() });
+    const { result } = renderHook(() => useSharedObservable(store.triples$));
 
     expect(result.current).toStrictEqual([]);
   });
@@ -15,40 +17,51 @@ describe('useSharedObservable', () => {
   // The next two tests are really just to make sure that our integration with useSyncInternalStore works.
   // We have to pass a specific object that wraps our rxjs BehaviorSubject, so want to make sure that
   // doesn't break at some point.
-  it('Adds a new fact', () => {
-    const store = new FactsStore({ api: new MockNetwork() });
-    const { result, rerender } = renderHook(() => useSharedObservable(store.facts$));
+  it('Adds a new triple', () => {
+    const store = new TripleStore({ api: new MockNetwork() });
+    const { result, rerender } = renderHook(() => useSharedObservable(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newFact = {
+    const newTriple: ITriple = {
       id: '1',
-      entityId: '1',
-      attribute: 'name',
-      value: 'Jesus Christ',
+      entity: {
+        id: '1',
+      },
+      attribute: {
+        id: 'name',
+      },
+      stringValue: 'Bob',
     };
 
-    store.createFact(newFact);
+    store.createTriple(newTriple, {} as Signer);
     rerender();
-    expect(result.current).toContain(newFact);
+    expect(result.current).toContain(newTriple);
   });
 
   it('Rerenders component when changing state', () => {
-    const store = new FactsStore({ api: new MockNetwork() });
+    const store = new TripleStore({ api: new MockNetwork() });
 
     const Component = () => {
-      const facts = useSharedObservable(store.facts$);
-      return <p>{facts.length}</p>;
+      const triples = useSharedObservable(store.triples$);
+      return <p>{triples.length}</p>;
     };
 
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    store.createFact({
-      id: '1',
-      entityId: '1',
-      attribute: 'name',
-      value: 'Jesus Christ',
-    });
+    store.createTriple(
+      {
+        id: '1',
+        entity: {
+          id: '1',
+        },
+        attribute: {
+          id: 'name',
+        },
+        stringValue: 'Bob',
+      },
+      {} as Signer
+    );
 
     rerender(<Component />);
     expect(getByText('1')).toBeTruthy();
