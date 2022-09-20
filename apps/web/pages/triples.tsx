@@ -23,7 +23,7 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({ api: new Network(Log__factory), initialFacts: [] });
+const tripleStore = new TripleStore({ api: new Network(Log__factory), initialtriples: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 export default function Triples() {
