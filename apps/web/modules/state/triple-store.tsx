@@ -1,5 +1,5 @@
-import { useSharedObservable } from '~/modules/state/hook';
 import { INetwork } from '~/modules/services/network';
+import { Signer } from 'ethers';
 import { BehaviorSubject } from 'rxjs';
 import { ITriple } from '../types';
 import { dedupe } from '../services/sync';
@@ -27,23 +27,19 @@ export class TripleStore {
     });
 
     // When triples are updated we can precalculate the ids for deduping.
-    // Is this faster than adding to this.tripleIds in the sync subscriber
-    // and any mutations to the triples array (i.e., createTriple)
+    // Is this faster than calling this.tripleIds.add(triple.id) in the
+    // sync subscriber and any mutations to the triples array (i.e., createTriple)?
     this.triples$.subscribe(value => {
       this.tripleIds = new Set(value.map(triple => triple.id));
     });
   }
 
-  createTriple = async (triple: ITriple) => {
+  createTriple = async (triple: ITriple, signer: Signer) => {
     this.triples$.next([triple, ...this.triples$.getValue()]);
-    // return await this._uploadtriple(triple);
+    return await this.api.createTriple(triple, signer);
   };
 
   get triples() {
     return this.triples$.getValue();
   }
-
-  // private _uploadtriple = async (triple: ITriple) => {
-  //   return this.api.inserttriple(triple);
-  // };
 }

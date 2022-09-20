@@ -1,13 +1,16 @@
 import { Observable } from 'rxjs';
-import { Log__factory } from '~/../../packages/contracts';
+import { Signer } from 'ethers';
+import { Log__factory } from '@geogenesis/contracts';
 import { ITriple } from '../types';
 import { createSyncService } from './sync';
+import { Root } from '@geogenesis/action-schema';
 
 type LogContract = typeof Log__factory;
 
 export interface INetwork {
   syncer$: Observable<ITriple[]>;
   getRemoteFacts: () => Promise<ITriple[]>;
+  createTriple: (triple: ITriple, signer: Signer) => Promise<ITriple>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -21,6 +24,37 @@ export class Network implements INetwork {
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
     this.contract = contract;
   }
+
+  createTriple = async (triple: ITriple, signer: Signer) => {
+    // TODO: Error handling
+    const contract = this.contract.connect('0x5fbdb2315678afecb367f032d93f642f64180aa3', signer);
+
+    const root: Root = {
+      type: 'root',
+      version: '0.0.1',
+      actions: [
+        {
+          type: 'createTriple',
+          entityId: triple.entity.id,
+          attributeId: triple.attribute.id,
+          // TODO: Pass value based on type
+          value: {
+            type: 'string',
+            value: 'Byron',
+          },
+        },
+      ],
+    };
+
+    const tx = await contract.addEntry(
+      `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString('base64')}`
+    );
+
+    const receipt = await tx.wait();
+    // TODO: What to do with receipt???
+
+    return triple;
+  };
 
   getRemoteFacts = async () => {
     const url = 'http://localhost:8000/subgraphs/name/example';

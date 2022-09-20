@@ -29,39 +29,24 @@ const tripleStore = new TripleStore({ api: new Network(Log__factory), initialtri
 export default function Triples() {
   const { data } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples } = useTriples(tripleStore);
+  const { triples, createTriple } = useTriples(tripleStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
   const onAddFact = async () => {
-    const contract = Log__factory.connect('0x5fbdb2315678afecb367f032d93f642f64180aa3', data!);
-
-    const root: Root = {
-      type: 'root',
-      version: '0.0.1',
-      actions: [
-        {
-          type: 'createTriple',
-          entityId: 'byron',
-          attributeId: 'name',
-          value: {
-            type: 'string',
-            value: 'Byron',
-          },
+    createTriple(
+      {
+        id: Math.random().toString(),
+        entity: {
+          id: Math.random().toString(),
         },
-      ],
-    };
-
-    const tx = await contract.addEntry(
-      `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString('base64')}`
+        attribute: {
+          id: 'Died in',
+        },
+        stringValue: '0',
+      },
+      data!
     );
-
-    // createTriple({
-    //   id: Math.random().toString(),
-    //   entityId: Math.random().toString(),
-    //   attribute: 'Died in',
-    //   value: '2021',
-    // });
   };
 
   return (

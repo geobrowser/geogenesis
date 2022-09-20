@@ -1,4 +1,5 @@
 import { BehaviorSubject } from 'rxjs';
+import { Signer } from 'ethers';
 import { useMemo, useSyncExternalStore } from 'react';
 import { TripleStore } from './triple-store';
 import { ITriple } from '../types';
@@ -24,6 +25,6 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
 // TODO: Inject TripleStore via context
 export const useTriples = (tripleStore: TripleStore) => {
   const triples = useSharedObservable(tripleStore.triples$);
-  const createTriple = (triple: ITriple) => tripleStore.createTriple(triple);
+  const createTriple = (triple: ITriple, signer: Signer) => tripleStore.createTriple(triple, signer);
   return { triples, createTriple };
 };

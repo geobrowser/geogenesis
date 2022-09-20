@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, renderHook } from '@testing-library/react';
+import { Signer } from 'ethers';
 import { TripleStore } from './triple-store';
 import { useSharedObservable } from './hook';
 import { ITriple } from '../types';
@@ -32,7 +33,7 @@ describe('useSharedObservable', () => {
       stringValue: 'Bob',
     };
 
-    store.createTriple(newTriple);
+    store.createTriple(newTriple, {} as Signer);
     rerender();
     expect(result.current).toContain(newTriple);
   });
@@ -48,16 +49,19 @@ describe('useSharedObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    store.createTriple({
-      id: '1',
-      entity: {
+    store.createTriple(
+      {
         id: '1',
+        entity: {
+          id: '1',
+        },
+        attribute: {
+          id: 'name',
+        },
+        stringValue: 'Bob',
       },
-      attribute: {
-        id: 'name',
-      },
-      stringValue: 'Bob',
-    });
+      {} as Signer
+    );
 
     rerender(<Component />);
     expect(getByText('1')).toBeTruthy();

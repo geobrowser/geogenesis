@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MockNetwork } from '../services/mocks/mock-network';
+import { Signer } from 'ethers';
 import { ITriple } from '../types';
 import { TripleStore } from './triple-store';
 
@@ -23,7 +24,7 @@ describe('TripleStore', () => {
       stringValue: 'Bob',
     };
 
-    store.createTriple(newFact);
+    store.createTriple(newFact, {} as Signer);
     expect(store.triples).toStrictEqual([newFact]);
   });
 });
