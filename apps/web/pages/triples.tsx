@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
-import { FactsTable } from '~/modules/components/facts-table';
+import { TripleTable } from '~/modules/components/triple-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
@@ -33,7 +33,7 @@ export default function Triples() {
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
-  const onAddFact = async () => {
+  const onAddTriple = async () => {
     createTriple(
       {
         id: Math.random().toString(),
@@ -55,7 +55,7 @@ export default function Triples() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={onAddFact}>
+        <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>
       </PageHeader>
@@ -66,7 +66,7 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <FactsTable triples={triples} globalFilter={globalFilter} />
+      <TripleTable triples={triples} globalFilter={globalFilter} />
     </PageContainer>
   );
 }

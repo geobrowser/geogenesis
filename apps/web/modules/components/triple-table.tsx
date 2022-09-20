@@ -30,7 +30,8 @@ const columns = [
     cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
     size: 450,
   }),
-  columnHelper.accessor('stringValue', {
+  columnHelper.accessor(row => row.stringValue, {
+    id: 'stringValue',
     header: () => <Text variant="smallTitle">Value</Text>,
     cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
@@ -71,7 +72,7 @@ interface Props {
   globalFilter: string;
 }
 
-export function FactsTable({ globalFilter, triples }: Props) {
+export function TripleTable({ globalFilter, triples }: Props) {
   const table = useReactTable({
     data: triples,
     columns,
