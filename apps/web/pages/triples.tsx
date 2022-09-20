@@ -10,8 +10,8 @@ import { Network } from '~/modules/services/network';
 import { useTriples } from '~/modules/state/hook';
 import { Input } from '~/modules/design-system/input';
 import { Log__factory } from '@geogenesis/contracts';
-import { Root } from '@geogenesis/action-schema';
 import { useSigner } from 'wagmi';
+import { Ipfs } from '~/modules/services/ipfs';
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -23,7 +23,7 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({ api: new Network(Log__factory), initialtriples: [] });
+const tripleStore = new TripleStore({ api: new Network(Log__factory, new Ipfs()), initialtriples: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 export default function Triples() {
