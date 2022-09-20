@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { MockNetwork } from '../services/network';
 import { FactsStore } from './facts';
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 describe('FactsStore', () => {
   it('Initializes to empty', () => {
