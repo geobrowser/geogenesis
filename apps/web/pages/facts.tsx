@@ -6,7 +6,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
 import { FactsStore } from '~/modules/state/facts';
-import { MockNetwork } from '~/modules/services/network';
+import { Network } from '~/modules/services/network';
 import { useFacts } from '~/modules/state/hook';
 import { Input } from '~/modules/design-system/input';
 import { Log__factory } from '@geogenesis/contracts';
@@ -23,7 +23,7 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const factsStore = new FactsStore({ api: new MockNetwork(Log__factory), initialFacts: [] });
+const factsStore = new FactsStore({ api: new Network(Log__factory), initialFacts: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 

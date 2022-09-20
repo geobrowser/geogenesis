@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MockNetwork } from '../services/network';
+import { MockNetwork } from '../services/mock-network';
+import { IFact } from '../types';
 import { FactsStore } from './facts';
-
 
 describe('FactsStore', () => {
   it('Initializes to empty', () => {
@@ -12,20 +12,18 @@ describe('FactsStore', () => {
   it('Adds new fact', () => {
     const store = new FactsStore({ api: new MockNetwork() });
 
-    store.createFact({
+    const newFact: IFact = {
       id: '1',
-      entityId: '1',
-      attribute: 'name',
-      value: 'John Doe',
-    });
-
-    expect(store.facts).toStrictEqual([
-      {
+      entity: {
         id: '1',
-        entityId: '1',
-        attribute: 'name',
-        value: 'John Doe',
       },
-    ]);
+      attribute: {
+        id: 'name',
+      },
+      stringValue: 'Bob',
+    };
+
+    store.createFact(newFact);
+    expect(store.facts).toStrictEqual([newFact]);
   });
 });

@@ -27,4 +27,3 @@ export const useFacts = (factsStore: FactsStore) => {
   const createFact = (fact: IFact) => factsStore.createFact(fact);
   return { facts: snapshot, createFact };
 };
-

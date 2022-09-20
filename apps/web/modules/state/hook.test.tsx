@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { render, renderHook } from '@testing-library/react';
 import { FactsStore } from './facts';
 import { useSharedObservable } from './hook';
-import { MockNetwork } from '../services/network';
+import { BehaviorSubject } from 'rxjs';
+import { IFact } from '../types';
+
+class MockNetwork {
+  syncer$ = new BehaviorSubject([]);
+  getRemoteFacts = async () => [];
+}
 
 describe('useSharedObservable', () => {
   it('Initializes empty', () => {
@@ -20,11 +26,15 @@ describe('useSharedObservable', () => {
     const { result, rerender } = renderHook(() => useSharedObservable(store.facts$));
     expect(result.current).toStrictEqual([]);
 
-    const newFact = {
+    const newFact: IFact = {
       id: '1',
-      entityId: '1',
-      attribute: 'name',
-      value: 'Jesus Christ',
+      entity: {
+        id: '1',
+      },
+      attribute: {
+        id: 'name',
+      },
+      stringValue: 'Bob',
     };
 
     store.createFact(newFact);
@@ -45,9 +55,13 @@ describe('useSharedObservable', () => {
 
     store.createFact({
       id: '1',
-      entityId: '1',
-      attribute: 'name',
-      value: 'Jesus Christ',
+      entity: {
+        id: '1',
+      },
+      attribute: {
+        id: 'name',
+      },
+      stringValue: 'Bob',
     });
 
     rerender(<Component />);

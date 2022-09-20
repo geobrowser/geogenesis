@@ -6,7 +6,6 @@ import { createSyncService } from './sync';
 type LogContract = typeof Log__factory;
 
 export interface INetwork {
-  contract: LogContract;
   syncer$: Observable<IFact[]>;
   // insertFact: (fact: IFact) => IFact[];
   getRemoteFacts: () => Promise<IFact[]>;
@@ -14,9 +13,9 @@ export interface INetwork {
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
-export class MockNetwork implements INetwork {
+export class Network implements INetwork {
+  private contract: LogContract;
   syncer$: Observable<IFact[]>;
-  contract: LogContract;
 
   constructor(contract: LogContract, syncInterval = 5000) {
     // This could be composed in a functional way rather than initialized like this :thinking:
@@ -59,7 +58,11 @@ export class MockNetwork implements INetwork {
       }),
     });
 
-    const json = await response.json();
+    const json: {
+      data: {
+        triples: IFact[];
+      };
+    } = await response.json();
     return json.data.triples;
   };
 }

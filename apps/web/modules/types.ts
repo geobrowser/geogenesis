@@ -4,11 +4,15 @@ export type IFact = {
     id: string;
   };
   attribute: {
-    id: string
+    id: string;
   };
   entityValue?: {
     id: string;
   };
   stringValue?: string;
   numberValue?: string;
+};
+
+export type Identifable = {
+  id: string;
 };
