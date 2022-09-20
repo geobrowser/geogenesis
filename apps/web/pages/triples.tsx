@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import { FactsTable } from '~/modules/components/facts-table';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Button } from '~/modules/design-system/button';
-import { FactsStore } from '~/modules/state/facts';
+import { TripleStore } from '~/modules/state/triple-store';
 import { Network } from '~/modules/services/network';
-import { useFacts } from '~/modules/state/hook';
+import { useTriples } from '~/modules/state/hook';
 import { Input } from '~/modules/design-system/input';
 import { Log__factory } from '@geogenesis/contracts';
 import { Root } from '@geogenesis/action-schema';
@@ -23,14 +23,13 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const factsStore = new FactsStore({ api: new Network(Log__factory), initialFacts: [] });
+const tripleStore = new TripleStore({ api: new Network(Log__factory), initialFacts: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
-
-export default function Facts() {
+export default function Triples() {
   const { data } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { facts, createFact } = useFacts(factsStore);
+  const { triples } = useTriples(tripleStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -57,7 +56,7 @@ export default function Facts() {
       `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString('base64')}`
     );
 
-    // createFact({
+    // createTriple({
     //   id: Math.random().toString(),
     //   entityId: Math.random().toString(),
     //   attribute: 'Died in',
@@ -82,7 +81,7 @@ export default function Facts() {
 
       <Spacer height={12} />
 
-      <FactsTable facts={facts} globalFilter={globalFilter} />
+      <FactsTable triples={triples} globalFilter={globalFilter} />
     </PageContainer>
   );
 }

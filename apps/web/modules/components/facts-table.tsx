@@ -9,9 +9,9 @@ import {
 } from '@tanstack/react-table';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { IFact } from '../types';
+import { ITriple } from '../types';
 
-const columnHelper = createColumnHelper<IFact>();
+const columnHelper = createColumnHelper<ITriple>();
 
 const columns = [
   columnHelper.accessor(row => row.entity.id, {
@@ -67,13 +67,13 @@ const Container = styled.div(props => ({
 }));
 
 interface Props {
-  facts: IFact[];
+  triples: ITriple[];
   globalFilter: string;
 }
 
-export function FactsTable({ globalFilter, facts }: Props) {
+export function FactsTable({ globalFilter, triples }: Props) {
   const table = useReactTable({
-    data: facts,
+    data: triples,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -115,8 +115,6 @@ export function FactsTable({ globalFilter, facts }: Props) {
     </Container>
   );
 }
-
-
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   // Rank the item

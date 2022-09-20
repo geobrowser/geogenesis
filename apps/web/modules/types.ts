@@ -1,4 +1,4 @@
-export type IFact = {
+export type ITriple = {
   id: string;
   entity: {
     id: string;
