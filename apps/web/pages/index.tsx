@@ -10,7 +10,7 @@ const Column = styled.div({
 export default function Home() {
   return (
     <Column>
-      <Link href="/facts">
+      <Link href="/triples">
         <a>Facts database</a>
       </Link>
       <Link href="/databases/sync">
