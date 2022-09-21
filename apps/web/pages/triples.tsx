@@ -1,17 +1,18 @@
-import { useState } from 'react';
 import styled from '@emotion/styled';
+import { Log__factory } from '@geogenesis/contracts';
 import debounce from 'lodash.debounce';
+import { useState } from 'react';
+import { useSigner } from 'wagmi';
 import { TripleTable } from '~/modules/components/triple-table';
+import { Button } from '~/modules/design-system/button';
+import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { Button } from '~/modules/design-system/button';
-import { TripleStore } from '~/modules/state/triple-store';
+import { AddressLoader } from '~/modules/services/address-loader';
+import { Ipfs } from '~/modules/services/ipfs';
 import { Network } from '~/modules/services/network';
 import { useTriples } from '~/modules/state/hook';
-import { Input } from '~/modules/design-system/input';
-import { Log__factory } from '@geogenesis/contracts';
-import { useSigner } from 'wagmi';
-import { Ipfs } from '~/modules/services/ipfs';
+import { TripleStore } from '~/modules/state/triple-store';
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -23,7 +24,7 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({ api: new Network(Log__factory, new Ipfs()), initialtriples: [] });
+const tripleStore = new TripleStore({ api: new Network(Log__factory, new Ipfs(), AddressLoader), initialtriples: [] });
 
 // 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 export default function Triples() {

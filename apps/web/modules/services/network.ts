@@ -1,10 +1,11 @@
-import { Observable } from 'rxjs';
-import { Signer } from 'ethers';
-import { Log__factory } from '@geogenesis/contracts';
-import { ITriple } from '../types';
-import { createSyncService } from './sync';
 import { Root } from '@geogenesis/action-schema';
+import { Log__factory } from '@geogenesis/contracts';
+import { Signer } from 'ethers';
+import { Observable } from 'rxjs';
+import { ITriple } from '../types';
+import { IAddressLoader } from './address-loader';
 import { IIpfs } from './ipfs';
+import { createSyncService } from './sync';
 
 type LogContract = typeof Log__factory;
 
@@ -17,20 +18,24 @@ export interface INetwork {
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  private ipfs: IIpfs;
-  private contract: LogContract;
   syncer$: Observable<ITriple[]>;
 
-  constructor(contract: LogContract, ipfs: IIpfs, syncInterval = 5000) {
+  constructor(
+    public contract: LogContract,
+    public ipfs: IIpfs,
+    public addressLoader: IAddressLoader,
+    syncInterval = 5000
+  ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
-    this.contract = contract;
-    this.ipfs = ipfs;
   }
 
   createTriple = async (triple: ITriple, signer: Signer) => {
+    const chain = await signer.getChainId();
+    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
+
     // TODO: Error handling
-    const contract = this.contract.connect('0x5fbdb2315678afecb367f032d93f642f64180aa3', signer);
+    const contract = this.contract.connect(contractAddress, signer);
 
     // TODO: Some ipfs stuff probably
     // this.ipfs.???
