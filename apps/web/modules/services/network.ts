@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { ITriple } from '../types';
 import { IAddressLoader } from './address-loader';
 import { IIpfs } from './ipfs';
+import { IStorageClient } from './storage';
 import { createSyncService } from './sync';
 
 type LogContract = typeof Log__factory;
@@ -24,6 +25,7 @@ export class Network implements INetwork {
     public contract: LogContract,
     public ipfs: IIpfs,
     public addressLoader: IAddressLoader,
+    public storageClient: IStorageClient,
     syncInterval = 5000
   ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
@@ -36,9 +38,6 @@ export class Network implements INetwork {
 
     // TODO: Error handling
     const contract = this.contract.connect(contractAddress, signer);
-
-    // TODO: Some ipfs stuff probably
-    // this.ipfs.???
 
     const root: Root = {
       type: 'root',
@@ -57,9 +56,9 @@ export class Network implements INetwork {
       ],
     };
 
-    const tx = await contract.addEntry(
-      `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString('base64')}`
-    );
+    const cidString = await this.storageClient.uploadObject(root);
+
+    const tx = await contract.addEntry(`ipfs://${cidString}`);
 
     const receipt = await tx.wait();
     // TODO: What to do with receipt???

@@ -1,6 +1,6 @@
 import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
-import { Bytes, log } from '@graphprotocol/graph-ts'
+import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { EntryAdded } from '../generated/Log/Log'
 import { LogEntry } from '../generated/schema'
@@ -8,6 +8,8 @@ import { handleAction } from './actions'
 import { bootstrap } from './bootstrap'
 
 bootstrap()
+
+const IPFS_URI_SCHEME = 'ipfs://'
 
 export function handleEntryAdded(event: EntryAdded): void {
   let entry = new LogEntry(event.params.index.toHex())
@@ -28,14 +30,15 @@ export function handleEntryAdded(event: EntryAdded): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const json = JSON.parse(bytes)
-
-        const root = Root.fromJSON(json)
-
-        if (root) {
-          handleRoot(root)
-        }
+        handleActionData(bytes)
       }
+    }
+  } else if (uri.startsWith(IPFS_URI_SCHEME)) {
+    const cidString = uri.slice(IPFS_URI_SCHEME.length)
+    const bytes = ipfs.cat(cidString)
+
+    if (bytes) {
+      handleActionData(bytes)
     }
   }
 
@@ -44,7 +47,17 @@ export function handleEntryAdded(event: EntryAdded): void {
   log.debug(`Indexed: ${entry.uri}`, [])
 }
 
-function handleRoot(root: Root) {
+function handleActionData(bytes: Bytes): void {
+  const json = JSON.parse(bytes)
+
+  const root = Root.fromJSON(json)
+
+  if (root) {
+    handleRoot(root)
+  }
+}
+
+function handleRoot(root: Root): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
 
