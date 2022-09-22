@@ -9,8 +9,8 @@ import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { AddressLoader } from '~/modules/services/address-loader';
-import { Ipfs } from '~/modules/services/ipfs';
 import { Network } from '~/modules/services/network';
+import { StorageClient } from '~/modules/services/storage';
 import { useTriples } from '~/modules/state/hook';
 import { TripleStore } from '~/modules/state/triple-store';
 
@@ -24,9 +24,11 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({ api: new Network(Log__factory, new Ipfs(), AddressLoader), initialtriples: [] });
+const tripleStore = new TripleStore({
+  api: new Network(Log__factory, AddressLoader, StorageClient),
+  initialtriples: [],
+});
 
-// 0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
 export default function Triples() {
   const { data } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');

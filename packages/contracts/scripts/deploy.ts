@@ -52,6 +52,11 @@ async function main() {
     )}`
   )
 
+  await addEntry(
+    logContract,
+    `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
+  )
+
   saveAddress({
     chainId,
     contractName: 'Log',
