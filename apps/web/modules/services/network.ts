@@ -4,7 +4,6 @@ import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
 import { ITriple } from '../types';
 import { IAddressLoader } from './address-loader';
-import { IIpfs } from './ipfs';
 import { IStorageClient } from './storage';
 import { createSyncService } from './sync';
 
@@ -23,7 +22,6 @@ export class Network implements INetwork {
 
   constructor(
     public contract: LogContract,
-    public ipfs: IIpfs,
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
     syncInterval = 5000

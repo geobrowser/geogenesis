@@ -19,7 +19,6 @@
     "@tanstack/match-sorter-utils": "^8.1.1",
     "@tanstack/query-core": "^4.3.8",
     "@tanstack/react-table": "^8.5.13",
-    "@types/raw-body": "^2.3.0",
     "ethers": "^5.6.6",
     "lodash.debounce": "^4.0.8",
     "modern-normalize": "^1.1.0",
