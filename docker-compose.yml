@@ -15,7 +15,7 @@ services:
       timeout: 5s
       retries: 5
   ipfs:
-    image: ipfs/go-ipfs:v0.4.23
+    image: ipfs/kubo:latest
     ports:
       - '5001:5001'
     volumes:
@@ -78,6 +78,9 @@ services:
     depends_on:
       devnet:
         condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: 'no'
   dev-server:
     build:
       context: .
@@ -110,5 +113,8 @@ services:
         condition: service_completed_successfully
       graph-node:
         condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: 'no'
 volumes:
   shared-volume:
