@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { rankItem } from '@tanstack/match-sorter-utils';
 import {
   createColumnHelper,
   FilterFn,
@@ -7,15 +8,14 @@ import {
   getFilteredRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { ITriple } from '../types';
+import { ITriple, TripleValue } from '../types';
 
 const columnHelper = createColumnHelper<ITriple>();
 
 const columns = [
   columnHelper.accessor(row => row.entity.id, {
-    id: 'entityId',
+    id: 'entity',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => (
       <Text color="ctaPrimary" variant="tableCell">
@@ -30,12 +30,34 @@ const columns = [
     cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
     size: 450,
   }),
-  columnHelper.accessor(row => row.stringValue, {
-    id: 'stringValue',
-    header: () => <Text variant="smallTitle">Value</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
-    size: 450,
-  }),
+  columnHelper.accessor(
+    (row): TripleValue => {
+      switch (row.valueType) {
+        case 'STRING':
+          return { stringValue: row.stringValue, valueType: row.valueType };
+        case 'NUMBER':
+          return { numberValue: row.numberValue, valueType: row.valueType };
+        case 'ENTITY':
+          return { entityValue: row.entityValue, valueType: row.valueType };
+      }
+    },
+    {
+      id: 'value',
+      header: () => <Text variant="smallTitle">Value</Text>,
+      cell: info => {
+        const value = info.getValue();
+        const string =
+          value.valueType === 'ENTITY'
+            ? value.entityValue.id
+            : value.valueType === 'STRING'
+            ? value.stringValue
+            : value.numberValue;
+
+        return <Text variant="tableCell">{string}</Text>;
+      },
+      size: 450,
+    }
+  ),
 ];
 
 const Table = styled.table(props => ({

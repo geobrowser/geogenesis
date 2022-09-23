@@ -47,6 +47,7 @@ export default function Triples() {
           id: 'Died in',
         },
         stringValue: '0',
+        valueType: 'STRING',
       },
       data!
     );
