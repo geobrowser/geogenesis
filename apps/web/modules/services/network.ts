@@ -2,23 +2,51 @@ import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
-import { ITriple } from '../types';
+import { Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
 import { createSyncService } from './sync';
 
 type LogContract = typeof Log__factory;
 
+type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
+
+type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
+
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string } };
+
+type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
+
+/**
+ * Triple type returned by GraphQL
+ */
+type NetworkTriple = NetworkValue & {
+  id: string;
+  entity: { id: string };
+  attribute: { id: string };
+};
+
+function extractValue(networkTriple: NetworkTriple): Value {
+  switch (networkTriple.valueType) {
+    case 'STRING':
+      return { type: 'string', value: networkTriple.stringValue };
+    case 'NUMBER':
+      return { type: 'number', value: networkTriple.numberValue };
+    case 'ENTITY':
+      return { type: 'entity', value: networkTriple.entityValue.id };
+  }
+}
+
 export interface INetwork {
-  syncer$: Observable<ITriple[]>;
-  getRemoteFacts: () => Promise<ITriple[]>;
-  createTriple: (triple: ITriple, signer: Signer) => Promise<ITriple>;
+  syncer$: Observable<Triple[]>;
+  getNetworkTriples: () => Promise<Triple[]>;
+  createTriple: (triple: Triple, signer: Signer) => Promise<Triple>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  syncer$: Observable<ITriple[]>;
+  syncer$: Observable<Triple[]>;
 
   constructor(
     public contract: LogContract,
@@ -27,10 +55,10 @@ export class Network implements INetwork {
     syncInterval = 5000
   ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
-    this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getRemoteFacts });
+    this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
   }
 
-  createTriple = async (triple: ITriple, signer: Signer) => {
+  createTriple = async (triple: Triple, signer: Signer) => {
     const chain = await signer.getChainId();
     const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
 
@@ -43,13 +71,9 @@ export class Network implements INetwork {
       actions: [
         {
           type: 'createTriple',
-          entityId: triple.entity.id,
-          attributeId: triple.attribute.id,
-          // TODO: Pass value based on type
-          value: {
-            type: 'string',
-            value: 'Byron',
-          },
+          entityId: triple.entityId,
+          attributeId: triple.attributeId,
+          value: triple.value,
         },
       ],
     };
@@ -58,13 +82,13 @@ export class Network implements INetwork {
 
     const tx = await contract.addEntry(`ipfs://${cidString}`);
 
-    const receipt = await tx.wait();
     // TODO: What to do with receipt???
+    const receipt = await tx.wait();
 
     return triple;
   };
 
-  getRemoteFacts = async () => {
+  getNetworkTriples = async () => {
     const url = 'http://localhost:8000/subgraphs/name/example';
     const response = await fetch(url, {
       method: 'POST',
@@ -94,9 +118,19 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        triples: ITriple[];
+        triples: NetworkTriple[];
       };
     } = await response.json();
-    return json.data.triples;
+
+    const triples = json.data.triples.map((networkTriple): Triple => {
+      return {
+        id: networkTriple.id,
+        entityId: networkTriple.entity.id,
+        attributeId: networkTriple.attribute.id,
+        value: extractValue(networkTriple),
+      };
+    });
+
+    return triples;
   };
 }

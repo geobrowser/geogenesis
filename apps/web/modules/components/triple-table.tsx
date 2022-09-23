@@ -9,55 +9,33 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { Text } from '../design-system/text';
-import { ITriple, TripleValue } from '../types';
+import { Triple } from '../types';
 
-const columnHelper = createColumnHelper<ITriple>();
+const columnHelper = createColumnHelper<Triple>();
 
 const columns = [
-  columnHelper.accessor(row => row.entity.id, {
+  columnHelper.accessor(row => row.entityId, {
     id: 'entity',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => (
-      <Text color="ctaPrimary" variant="tableCell">
+      <Text color="ctaPrimary" variant="tableCell" ellipsize>
         {info.getValue()}
       </Text>
     ),
     size: 160,
   }),
-  columnHelper.accessor(row => row.attribute, {
+  columnHelper.accessor(row => row.attributeId, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
   }),
-  columnHelper.accessor(
-    (row): TripleValue => {
-      switch (row.valueType) {
-        case 'STRING':
-          return { stringValue: row.stringValue, valueType: row.valueType };
-        case 'NUMBER':
-          return { numberValue: row.numberValue, valueType: row.valueType };
-        case 'ENTITY':
-          return { entityValue: row.entityValue, valueType: row.valueType };
-      }
-    },
-    {
-      id: 'value',
-      header: () => <Text variant="smallTitle">Value</Text>,
-      cell: info => {
-        const value = info.getValue();
-        const string =
-          value.valueType === 'ENTITY'
-            ? value.entityValue.id
-            : value.valueType === 'STRING'
-            ? value.stringValue
-            : value.numberValue;
-
-        return <Text variant="tableCell">{string}</Text>;
-      },
-      size: 450,
-    }
-  ),
+  columnHelper.accessor(row => row.value, {
+    id: 'value',
+    header: () => <Text variant="smallTitle">Value</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
+    size: 450,
+  }),
 ];
 
 const Table = styled.table(props => ({
@@ -78,6 +56,7 @@ const TableCell = styled.td(props => ({
   ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
+  maxWidth: `${props.width}px`,
 }));
 
 // Using a container to wrap the table to make styling borders around
@@ -90,7 +69,7 @@ const Container = styled.div(props => ({
 }));
 
 interface Props {
-  triples: ITriple[];
+  triples: Triple[];
   globalFilter: string;
 }
 

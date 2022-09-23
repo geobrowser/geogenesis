@@ -1,28 +1,25 @@
-export type TripleNumberValue = {
-  numberValue: string;
-  valueType: 'NUMBER';
+export type NumberValue = {
+  value: string;
+  type: 'number';
 };
 
-export type TripleStringValue = {
-  stringValue: string;
-  valueType: 'STRING';
+export type StringValue = {
+  value: string;
+  type: 'string';
 };
 
-export type TripleEntityValue = {
-  entityValue: { id: string };
-  valueType: 'ENTITY';
+export type EntityValue = {
+  value: string;
+  type: 'entity';
 };
 
-export type TripleValue = TripleNumberValue | TripleStringValue | TripleEntityValue;
+export type Value = NumberValue | StringValue | EntityValue;
 
-export type ITriple = TripleValue & {
+export type Triple = {
   id: string;
-  entity: {
-    id: string;
-  };
-  attribute: {
-    id: string;
-  };
+  entityId: string;
+  attributeId: string;
+  value: Value;
 };
 
 export type Identifable = {

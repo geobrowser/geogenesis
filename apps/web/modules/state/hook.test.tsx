@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { render, renderHook } from '@testing-library/react';
 import { Signer } from 'ethers';
-import { TripleStore } from './triple-store';
-import { useSharedObservable } from './hook';
-import { ITriple } from '../types';
+import { describe, expect, it } from 'vitest';
 import { MockNetwork } from '../services/mocks/mock-network';
+import { Triple } from '../types';
+import { useSharedObservable } from './hook';
+import { TripleStore } from './triple-store';
 
 describe('useSharedObservable', () => {
   it('Initializes empty', () => {
@@ -22,7 +22,7 @@ describe('useSharedObservable', () => {
     const { result, rerender } = renderHook(() => useSharedObservable(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newTriple: ITriple = {
+    const newTriple: Triple = {
       id: '1',
       entity: {
         id: '1',

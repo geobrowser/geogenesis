@@ -1,5 +1,5 @@
 import { interval as interval$, Observable, switchMap } from 'rxjs';
-import { Identifable, ITriple } from '../types';
+import { Identifable } from '../types';
 
 interface ISyncServiceConfig<T> {
   interval: number;
