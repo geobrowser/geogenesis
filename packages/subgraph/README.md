@@ -41,17 +41,23 @@ Cons of entity/triple:
 
 To be extra safe about collisions, we could combine the author's public key with a random id.
 
-- The public key prevents collisions between (potentially malicious) users
-- The random id prevents collisions between a user who may have multiple devices
+- The random id prevents collisions between a user who may have multiple devices (compared with e.g. a simple counter)
+- The random id prevents collisions between different users, assuming good randomness
+- The public key prevents collisions between (potentially malicious) users, if good randomness isn't available
 
 For example:
 
 ```
-{publicKey}_{nanoid}
-0x0cBccE4664bA7F0cF3B8DbA8f2Ae42180A4913b2_51WrpGSJWKtLuFrEdrt4d
+{publicKey}:{uuid}
+0x0cBccE4664bA7F0cF3B8DbA8f2Ae42180A4913b2:4733e01c-3d34-4f60-b1a6-e1dbc1e7cdcb
 ```
 
 We should only use url-safe characters in ids.
+
+**UUID vs [nanoid](https://github.com/ai/nanoid)**
+
+- UUID v4 is easy for devs to use since it's a built-in for most platforms/languages
+- nanoid is configurable and can produce nicer looking ids
 
 **Open Question: Is the public key really necessary?**
 
@@ -59,7 +65,7 @@ If we use enough random bits, it's practically impossible for IDs to collide.
 
 It's valid for a user to modify/delete an existing entity that somebody else created, so malicious users can just as easily attack the system using ids they didn't create.
 
-The main thing the public key helps guard against is poorly implemented clients that might have badly implemented randomness.
+The main thing the public key helps guard against is poorly implemented clients that might have badly implemented randomness. This comes at the cost of longer/uglier ids, especially in scenarios where we concatenate ids (e.g. triples).
 
 ### Uniqueness
 

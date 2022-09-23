@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { rankItem } from '@tanstack/match-sorter-utils';
 import {
   createColumnHelper,
   FilterFn,
@@ -7,33 +8,32 @@ import {
   getFilteredRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { rankItem } from '@tanstack/match-sorter-utils';
 import { Text } from '../design-system/text';
-import { ITriple } from '../types';
+import { Triple } from '../types';
 
-const columnHelper = createColumnHelper<ITriple>();
+const columnHelper = createColumnHelper<Triple>();
 
 const columns = [
-  columnHelper.accessor(row => row.entity.id, {
-    id: 'entityId',
+  columnHelper.accessor(row => row.entityId, {
+    id: 'entity',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     cell: info => (
-      <Text color="ctaPrimary" variant="tableCell">
+      <Text color="ctaPrimary" variant="tableCell" ellipsize>
         {info.getValue()}
       </Text>
     ),
     size: 160,
   }),
-  columnHelper.accessor(row => row.attribute, {
+  columnHelper.accessor(row => row.attributeId, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue().id}</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
   }),
-  columnHelper.accessor(row => row.stringValue, {
-    id: 'stringValue',
+  columnHelper.accessor(row => row.value, {
+    id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
     size: 450,
   }),
 ];
@@ -56,6 +56,7 @@ const TableCell = styled.td(props => ({
   ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
+  maxWidth: `${props.width}px`,
 }));
 
 // Using a container to wrap the table to make styling borders around
@@ -68,7 +69,7 @@ const Container = styled.div(props => ({
 }));
 
 interface Props {
-  triples: ITriple[];
+  triples: Triple[];
   globalFilter: string;
 }
 

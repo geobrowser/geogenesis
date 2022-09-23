@@ -9,6 +9,7 @@ import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { AddressLoader } from '~/modules/services/address-loader';
+import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useTriples } from '~/modules/state/hook';
@@ -30,25 +31,27 @@ const tripleStore = new TripleStore({
 });
 
 export default function Triples() {
-  const { data } = useSigner();
+  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const { triples, createTriple } = useTriples(tripleStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
   const onAddTriple = async () => {
+    if (!signer) return;
+
+    const entityId = createEntityId();
+    const attributeId = 'Died in';
+    const value = { type: 'string' as const, value: '0' };
+
     createTriple(
       {
-        id: Math.random().toString(),
-        entity: {
-          id: Math.random().toString(),
-        },
-        attribute: {
-          id: 'Died in',
-        },
-        stringValue: '0',
+        id: createTripleId(entityId, attributeId, value),
+        entityId,
+        attributeId,
+        value,
       },
-      data!
+      signer
     );
   };
 

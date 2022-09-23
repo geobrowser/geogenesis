@@ -1,17 +1,17 @@
-import { INetwork } from '~/modules/services/network';
 import { Signer } from 'ethers';
 import { BehaviorSubject } from 'rxjs';
-import { ITriple } from '../types';
+import { INetwork } from '~/modules/services/network';
 import { dedupe } from '../services/sync';
+import { Triple } from '../types';
 
 interface ITripleStoreConfig {
   api: INetwork;
-  initialtriples?: ITriple[];
+  initialtriples?: Triple[];
 }
 
 export class TripleStore {
   api: INetwork;
-  triples$: BehaviorSubject<ITriple[]>;
+  triples$: BehaviorSubject<Triple[]>;
   private tripleIds = new Set<string>();
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
@@ -34,7 +34,7 @@ export class TripleStore {
     });
   }
 
-  createTriple = async (triple: ITriple, signer: Signer) => {
+  createTriple = async (triple: Triple, signer: Signer) => {
     this.triples$.next([triple, ...this.triples$.getValue()]);
     return await this.api.createTriple(triple, signer);
   };
