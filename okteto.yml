@@ -1,0 +1,56 @@
+name: geogenesis
+
+# The build section defines how to build the images of your development environment
+# More info: https://www.okteto.com/docs/reference/manifest/#build
+build:
+  # You can use the following env vars to refer to this image in your deploy commands:
+  #  - OKTETO_BUILD_BUILD_SUBGRAPH_REGISTRY: image registry
+  #  - OKTETO_BUILD_BUILD_SUBGRAPH_REPOSITORY: image repo
+  #  - OKTETO_BUILD_BUILD_SUBGRAPH_IMAGE: image name
+  #  - OKTETO_BUILD_BUILD_SUBGRAPH_TAG: image tag
+  build-subgraph:
+    context: .
+    dockerfile: docker/Build.dockerfile
+
+  # You can use the following env vars to refer to this image in your deploy commands:
+  #  - OKTETO_BUILD_DEPLOY_CONTRACTS_REGISTRY: image registry
+  #  - OKTETO_BUILD_DEPLOY_CONTRACTS_REPOSITORY: image repo
+  #  - OKTETO_BUILD_DEPLOY_CONTRACTS_IMAGE: image name
+  #  - OKTETO_BUILD_DEPLOY_CONTRACTS_TAG: image tag
+  deploy-contracts:
+    context: .
+    dockerfile: docker/Build.dockerfile
+
+  # You can use the following env vars to refer to this image in your deploy commands:
+  #  - OKTETO_BUILD_DEV_SERVER_REGISTRY: image registry
+  #  - OKTETO_BUILD_DEV_SERVER_REPOSITORY: image repo
+  #  - OKTETO_BUILD_DEV_SERVER_IMAGE: image name
+  #  - OKTETO_BUILD_DEV_SERVER_TAG: image tag
+  dev-server:
+    context: .
+    dockerfile: docker/Build.dockerfile
+
+  # You can use the following env vars to refer to this image in your deploy commands:
+  #  - OKTETO_BUILD_DEVNET_REGISTRY: image registry
+  #  - OKTETO_BUILD_DEVNET_REPOSITORY: image repo
+  #  - OKTETO_BUILD_DEVNET_IMAGE: image name
+  #  - OKTETO_BUILD_DEVNET_TAG: image tag
+  devnet:
+    context: .
+    dockerfile: docker/Build.dockerfile
+
+  # You can use the following env vars to refer to this image in your deploy commands:
+  #  - OKTETO_BUILD_GRAPH_NODE_REGISTRY: image registry
+  #  - OKTETO_BUILD_GRAPH_NODE_REPOSITORY: image repo
+  #  - OKTETO_BUILD_GRAPH_NODE_IMAGE: image name
+  #  - OKTETO_BUILD_GRAPH_NODE_TAG: image tag
+  graph-node:
+    context: .
+    dockerfile: docker/Graph.dockerfile
+
+# The deploy section defines how to deploy your development environment
+# More info: https://www.okteto.com/docs/reference/manifest/#deploy
+deploy:
+  compose:
+    - docker-compose.yml
+    - docker-compose.prod.yml

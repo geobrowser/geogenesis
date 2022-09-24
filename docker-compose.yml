@@ -114,5 +114,3 @@ services:
         condition: 'no'
 volumes:
   shared-volume:
-    driver_opts:
-      size: 3Gi
