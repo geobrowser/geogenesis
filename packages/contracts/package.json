@@ -17,7 +17,7 @@
     "clean": "npx hardhat clean && rimraf build dist",
     "compile": "pnpm run clean && npx hardhat compile",
     "build": "pnpm run compile && npx tsc",
-    "devnet": "npx hardhat node",
+    "devnet": "npx hardhat node --hostname 0.0.0.0",
     "deploy": "hardhat migrate",
     "deploy:local": "npx hardhat run --network localhost scripts/deploy.ts",
     "deploy:polygon:mainnet": "npx hardhat run --network polygon_mainnet scripts/deploy.ts",

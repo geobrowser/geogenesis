@@ -1,0 +1,6 @@
+volumes:
+  shared-volume:
+    driver_opts:
+      # okteto has a 1Gi default set for volumes, but docker for mac and github
+      # both fail with "quota size requested but no quota support"
+      size: 3Gi

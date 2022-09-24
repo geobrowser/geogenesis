@@ -15,11 +15,9 @@ services:
       timeout: 5s
       retries: 5
   ipfs:
-    image: ipfs/go-ipfs:v0.4.23
+    image: ipfs/kubo:latest
     ports:
       - '5001:5001'
-    volumes:
-      - ./build/ipfs:/data/ipfs
   postgres:
     image: postgres
     ports:
@@ -29,8 +27,6 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
-    volumes:
-      - ./build/postgres:/var/lib/postgresql/data
   graph-node:
     build:
       context: .
@@ -78,6 +74,9 @@ services:
     depends_on:
       devnet:
         condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: 'no'
   dev-server:
     build:
       context: .
@@ -110,5 +109,8 @@ services:
         condition: service_completed_successfully
       graph-node:
         condition: service_healthy
+    deploy:
+      restart_policy:
+        condition: 'no'
 volumes:
   shared-volume:
