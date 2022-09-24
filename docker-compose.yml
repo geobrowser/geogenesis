@@ -18,8 +18,6 @@ services:
     image: ipfs/kubo:latest
     ports:
       - '5001:5001'
-    volumes:
-      - ./build/ipfs:/data/ipfs
   postgres:
     image: postgres
     ports:
@@ -29,8 +27,6 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
-    volumes:
-      - ./build/postgres:/var/lib/postgresql/data
   graph-node:
     build:
       context: .
@@ -118,3 +114,5 @@ services:
         condition: 'no'
 volumes:
   shared-volume:
+    driver_opts:
+      size: 3Gi

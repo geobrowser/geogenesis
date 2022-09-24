@@ -53,7 +53,7 @@ const config: HardhatUserConfig = {
       chainId: 80001,
       url:
         process.env.POLYGON_MUMBAI_RPC_URL ||
-        'https://rpc-mumbai.maticvigil.com	',
+        'https://rpc-mumbai.maticvigil.com',
       accounts,
     },
   },
