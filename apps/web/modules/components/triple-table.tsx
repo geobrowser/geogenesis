@@ -81,6 +81,11 @@ const TableCellInput = styled.input<{ isEntity?: boolean }>(props => ({
   '::placeholder': {
     color: props.theme.colors['grey-03'],
   },
+  ...(props.isEntity && {
+    whiteSpace: 'pre',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+  }),
 }));
 
 const TableRow = styled.tr(props => ({
