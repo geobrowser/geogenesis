@@ -2,6 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
+import { config } from '../config';
 import { Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
@@ -89,7 +90,7 @@ export class Network implements INetwork {
   };
 
   getNetworkTriples = async () => {
-    const url = 'http://localhost:8000/subgraphs/name/example';
+    const url = config.subgraph;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
