@@ -9,6 +9,7 @@ import 'modern-normalize';
 import '../styles/styles.css';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useIsMounted } from '~/modules/use-is-mounted';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -43,6 +44,9 @@ const theme: Theme = {
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
+  // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
+  const isMounted = useIsMounted();
+
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>
@@ -58,9 +62,11 @@ function MyApp({ Component, pageProps }: AppProps) {
             <a>Facts database</a>
           </Link>
           <ConnectButton accountStatus="avatar" />
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
+          {isMounted && (
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          )}
         </Body>
       </WalletProvider>
     </ThemeProvider>

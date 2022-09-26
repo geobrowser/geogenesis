@@ -13,9 +13,6 @@ export default function Home() {
       <Link href="/triples">
         <a>Facts database</a>
       </Link>
-      <Link href="/databases/sync">
-        <a>Sync database example</a>
-      </Link>
     </Column>
   );
 }
