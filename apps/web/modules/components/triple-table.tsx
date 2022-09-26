@@ -27,23 +27,16 @@ const columns = [
   columnHelper.accessor(row => row.entityId, {
     id: 'entity',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
-    // cell: info => (
-    //   <Text color="ctaPrimary" variant="tableCell" ellipsize>
-    //     {info.getValue()}
-    //   </Text>
-    // ),
     size: 160,
   }),
   columnHelper.accessor(row => row.attributeId, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    // cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
   }),
   columnHelper.accessor(row => row.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
-    // cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
     size: 450,
   }),
 ];
@@ -191,7 +184,6 @@ export function TripleTable({ globalFilter, triples }: Props) {
         setTriples(newTriples);
       },
     },
-    debugTable: true,
   });
 
   return (
