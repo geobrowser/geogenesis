@@ -44,13 +44,9 @@ const theme: Theme = {
   radius: 6,
 };
 
-let times = 0;
-
 function MyApp({ Component, pageProps }: AppProps) {
   // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
   const isMounted = useIsMounted();
-
-  console.log(`Mounted without runtime check = ${times++}`);
 
   return (
     <ThemeProvider theme={theme}>
