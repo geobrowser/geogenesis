@@ -1,9 +1,9 @@
 import styled from '@emotion/styled';
 import { Log__factory } from '@geogenesis/contracts';
 import debounce from 'lodash.debounce';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
-import { TripleTable } from '~/modules/components/triple-table';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -14,6 +14,13 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useTriples } from '~/modules/state/hook';
 import { TripleStore } from '~/modules/state/triple-store';
+
+// We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
+// mismatches in dev (maybe prod?) that happen when reloading a page where the table has optimistic data
+// but the server does not have the data yet, e.g., we're waiting for blocks to sync or something else.
+const TripleTable = dynamic(() => import('~/modules/components/triple-table').then(result => result.TripleTable), {
+  ssr: false,
+});
 
 const PageHeader = styled.div({
   display: 'flex',
