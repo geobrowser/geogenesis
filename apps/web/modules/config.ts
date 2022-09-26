@@ -17,7 +17,7 @@ const configOptions: Record<AppEnv, AppConfig> = {
     devServer: 'http://localhost:3111',
   },
   staging: {
-    chainId: '31337',
+    chainId: '1337',
     rpc: 'https://devnet-dabbott.cloud.okteto.net',
     ipfs: 'https://ipfs-dabbott.cloud.okteto.net',
     subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',

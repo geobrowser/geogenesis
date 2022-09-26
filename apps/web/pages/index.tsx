@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import { config } from '~/modules/config';
 
 const Column = styled.div({
   display: 'flex',
@@ -9,8 +8,6 @@ const Column = styled.div({
 });
 
 export default function Home() {
-  console.log(config);
-
   return (
     <Column>
       <Link href="/triples">

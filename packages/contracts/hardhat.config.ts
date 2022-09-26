@@ -26,6 +26,8 @@ task('accounts', 'Prints the list of accounts', async (taskArgs, hre) => {
 const accounts =
   process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : []
 
+const localChainId = Number(process.env.DEVNET_CHAIN_ID || '31337')
+
 const config: HardhatUserConfig = {
   solidity: '0.8.14',
   paths: {
@@ -35,13 +37,16 @@ const config: HardhatUserConfig = {
     cache: './build/cache',
   },
   networks: {
+    hardhat: {
+      chainId: localChainId,
+    },
     ropsten: {
       chainId: 3,
       url: process.env.ROPSTEN_URL || '',
       accounts,
     },
     localhost: {
-      chainId: 31337,
+      chainId: localChainId,
       url: process.env.DEVNET_URL || 'http://127.0.0.1:8545',
     },
     polygon_mainnet: {

@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "NEXT_PUBLIC_APP_ENV=development next dev",
     "staging": "NEXT_PUBLIC_APP_ENV=staging next dev",
-    "build": "next build",
-    "start": "NEXT_PUBLIC_APP_ENV=staging next start",
+    "build": "NEXT_PUBLIC_APP_ENV=staging next build",
+    "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest"

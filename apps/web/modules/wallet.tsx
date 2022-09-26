@@ -20,8 +20,6 @@ const LOCAL_CHAIN: Chain = {
   },
 };
 
-console.log(LOCAL_CHAIN);
-
 const { chains, provider, webSocketProvider } = configureChains(
   [LOCAL_CHAIN, chain.polygonMumbai, chain.polygon],
   [publicProvider()]

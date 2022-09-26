@@ -16,6 +16,8 @@ async function main() {
   const networkConfig = config.networks![networkId]!
   const chainId = networkConfig.chainId!.toString()
 
+  console.log('Deploying on network', networkId, networkConfig)
+
   const logContract = await deployLog({ debug: true })
 
   await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
@@ -62,6 +64,14 @@ async function main() {
     contractName: 'Log',
     address: logContract.address,
   })
+
+  if (networkId === 'localhost') {
+    saveAddress({
+      chainId: 'localhost',
+      contractName: 'Log',
+      address: logContract.address,
+    })
+  }
 }
 
 function saveAddress({
@@ -85,7 +95,11 @@ function saveAddress({
   set(json, [contractName, 'address'], address)
 
   mkdirSync('addresses', { recursive: true })
-  writeFileSync(file, JSON.stringify(json, null, 2))
+
+  const contents = JSON.stringify(json, null, 2)
+  writeFileSync(file, contents)
+
+  console.log(`Wrote '${file}'`, contents)
 }
 
 main().catch((error) => {
