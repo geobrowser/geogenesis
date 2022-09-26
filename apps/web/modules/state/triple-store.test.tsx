@@ -15,13 +15,12 @@ describe('TripleStore', () => {
 
     const newFact: Triple = {
       id: '1',
-      entity: {
-        id: '1',
+      entityId: '1',
+      attributeId: '1',
+      value: {
+        type: 'string',
+        value: 'Bob',
       },
-      attribute: {
-        id: 'name',
-      },
-      stringValue: 'Bob',
     };
 
     store.createTriple(newFact, {} as Signer);

@@ -24,13 +24,12 @@ describe('useSharedObservable', () => {
 
     const newTriple: Triple = {
       id: '1',
-      entity: {
-        id: '1',
+      entityId: '1',
+      attributeId: '1',
+      value: {
+        type: 'string',
+        value: 'Bob',
       },
-      attribute: {
-        id: 'name',
-      },
-      stringValue: 'Bob',
     };
 
     store.createTriple(newTriple, {} as Signer);
@@ -52,13 +51,12 @@ describe('useSharedObservable', () => {
     store.createTriple(
       {
         id: '1',
-        entity: {
-          id: '1',
+        entityId: '1',
+        attributeId: '1',
+        value: {
+          type: 'string',
+          value: 'Alice',
         },
-        attribute: {
-          id: 'name',
-        },
-        stringValue: 'Bob',
       },
       {} as Signer
     );
