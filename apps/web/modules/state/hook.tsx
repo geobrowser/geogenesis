@@ -1,5 +1,5 @@
 import { Signer } from 'ethers';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { BehaviorSubject } from 'rxjs';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
@@ -22,8 +22,22 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
   return useSyncExternalStore(subscription.subscribe, subscription.getCurrentValue, subscription.getCurrentValue);
 }
 
-// TODO: Inject TripleStore via context
-export const useTriples = (tripleStore: TripleStore) => {
+export const tripleStoreContext = createContext<TripleStore | null>(null);
+
+export const TripleStoreProvider = tripleStoreContext.Provider;
+
+export const useTripleStoreContext = () => {
+  const context = useContext(tripleStoreContext);
+
+  if (!context) {
+    throw new Error('TripleStoreContext must be used within a TripleStoreProvider');
+  }
+
+  return context;
+};
+
+export const useTriples = () => {
+  const tripleStore = useTripleStoreContext();
   const triples = useSharedObservable(tripleStore.triples$);
 
   useEffect(() => {

@@ -1,3 +1,5 @@
+import 'modern-normalize';
+import '../styles/styles.css';
 import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
@@ -5,11 +7,15 @@ import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
 import { Spacer } from '~/modules/design-system/spacer';
-import 'modern-normalize';
-import '../styles/styles.css';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useIsMounted } from '~/modules/use-is-mounted';
+import { TripleStoreProvider } from '~/modules/state/hook';
+import { TripleStore } from '~/modules/state/triple-store';
+import { Network } from '~/modules/services/network';
+import { Log__factory } from '@geogenesis/contracts';
+import { AddressLoader } from '~/modules/services/address-loader';
+import { StorageClient } from '~/modules/services/storage';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -43,6 +49,11 @@ const theme: Theme = {
   radius: 6,
 };
 
+const tripleStore = new TripleStore({
+  api: new Network(Log__factory, AddressLoader, StorageClient),
+  initialtriples: [],
+});
+
 function MyApp({ Component, pageProps }: AppProps) {
   // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
   const isMounted = useIsMounted();
@@ -50,24 +61,26 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>
-        <Body>
-          <Global styles={globalStyles} />
-          <Link href="/dev">
-            <a>Design system</a>
-          </Link>
+        <TripleStoreProvider value={tripleStore}>
+          <Body>
+            <Global styles={globalStyles} />
+            <Link href="/dev">
+              <a>Design system</a>
+            </Link>
 
-          <Spacer width={4} />
+            <Spacer width={4} />
 
-          <Link href="/triples">
-            <a>Facts database</a>
-          </Link>
-          <ConnectButton accountStatus="avatar" />
-          {isMounted && (
-            <Layout>
-              <Component {...pageProps} />
-            </Layout>
-          )}
-        </Body>
+            <Link href="/triples">
+              <a>Facts database</a>
+            </Link>
+            <ConnectButton accountStatus="avatar" />
+            {isMounted && (
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            )}
+          </Body>
+        </TripleStoreProvider>
       </WalletProvider>
     </ThemeProvider>
   );
