@@ -45,6 +45,10 @@ export class TripleStore {
     this.triples$.next(networkTriples);
   };
 
+  setTriples = (triples: Triple[]) => {
+    this.triples$.next(triples);
+  };
+
   get triples() {
     return this.triples$.getValue();
   }

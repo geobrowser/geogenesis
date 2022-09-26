@@ -48,6 +48,9 @@ export const useTriples = () => {
     tripleStore.loadNetworkTriples();
   }, [tripleStore]);
 
-  const createTriple = (triple: Triple, signer: Signer) => tripleStore.createTriple(triple, signer);
-  return { triples, createTriple };
+  return {
+    triples,
+    createTriple: tripleStore.createTriple,
+    setTriples: tripleStore.setTriples,
+  };
 };

@@ -1,19 +1,21 @@
 import styled from '@emotion/styled';
-import { Log__factory } from '@geogenesis/contracts';
 import debounce from 'lodash.debounce';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
-import { TripleTable } from '~/modules/components/triple-table';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { AddressLoader } from '~/modules/services/address-loader';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
-import { Network } from '~/modules/services/network';
-import { StorageClient } from '~/modules/services/storage';
 import { useTriples } from '~/modules/state/hook';
-import { TripleStore } from '~/modules/state/triple-store';
+
+// We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
+// mismatches in dev (maybe prod?) that happen when reloading a page where the table has optimistic data
+// but the server does not have the data yet, e.g., we're waiting for blocks to sync or something else.
+const TripleTable = dynamic(() => import('~/modules/components/triple-table').then(result => result.TripleTable), {
+  ssr: false,
+});
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -25,15 +27,16 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({
-  api: new Network(Log__factory, AddressLoader, StorageClient),
-  initialtriples: [],
+const InputContainer = styled.div({
+  display: 'flex',
 });
 
 export default function Triples() {
   const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples, createTriple } = useTriples(tripleStore);
+  const [attribute, setAttribute] = useState<string>('');
+  const [value, setValue] = useState<string>('');
+  const { triples, createTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -41,15 +44,15 @@ export default function Triples() {
     if (!signer) return;
 
     const entityId = createEntityId();
-    const attributeId = 'Died in';
-    const value = { type: 'string' as const, value: '0' };
+    const attributeId = attribute;
+    const newValue = { type: 'string' as const, value: value };
 
     createTriple(
       {
-        id: createTripleId(entityId, attributeId, value),
+        id: createTripleId(entityId, attributeId, newValue),
         entityId,
         attributeId,
-        value,
+        value: newValue,
       },
       signer
     );
@@ -70,6 +73,13 @@ export default function Triples() {
 
       <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
 
+      <Spacer height={12} />
+
+      <InputContainer>
+        <Input placeholder="Attribute" onChange={e => setAttribute(e.target.value)} />
+        <Spacer width={12} />
+        <Input placeholder="Value" onChange={e => setValue(e.target.value)} />
+      </InputContainer>
       <Spacer height={12} />
 
       <TripleTable triples={triples} globalFilter={globalFilter} />

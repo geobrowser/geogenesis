@@ -1,15 +1,25 @@
 import styled from '@emotion/styled';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import {
+  ColumnDef,
   createColumnHelper,
   FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  RowData,
   useReactTable,
 } from '@tanstack/react-table';
+import { useEffect, useState } from 'react';
 import { Text } from '../design-system/text';
-import { Triple } from '../types';
+import { useTriples } from '../state/hook';
+import { Triple, Value } from '../types';
+
+declare module '@tanstack/react-table' {
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  }
+}
 
 const columnHelper = createColumnHelper<Triple>();
 
@@ -17,23 +27,23 @@ const columns = [
   columnHelper.accessor(row => row.entityId, {
     id: 'entity',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
-    cell: info => (
-      <Text color="ctaPrimary" variant="tableCell" ellipsize>
-        {info.getValue()}
-      </Text>
-    ),
+    // cell: info => (
+    //   <Text color="ctaPrimary" variant="tableCell" ellipsize>
+    //     {info.getValue()}
+    //   </Text>
+    // ),
     size: 160,
   }),
   columnHelper.accessor(row => row.attributeId, {
     id: 'attribute',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
+    // cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
   }),
   columnHelper.accessor(row => row.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
+    // cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
     size: 450,
   }),
 ];
@@ -52,11 +62,12 @@ const TableHeader = styled.th<{ width: number }>(props => ({
   width: props.width,
 }));
 
-const TableCell = styled.td(props => ({
+const TableCell = styled.input(props => ({
   ...props.theme.typography.tableCell,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
-  maxWidth: `${props.width}px`,
+  // maxWidth: `${props.width}px`,
+  width: '100%',
 }));
 
 // Using a container to wrap the table to make styling borders around
@@ -68,15 +79,59 @@ const Container = styled.div(props => ({
   overflow: 'hidden',
 }));
 
+// Give our default column cell renderer editing superpowers!
+const defaultColumn: Partial<ColumnDef<Triple>> = {
+  cell: ({ getValue, row: { index }, column: { id }, table }) => {
+    const initialValue = getValue();
+    // We need to keep and update the state of the cell normally
+    const [value, setValue] = useState(initialValue);
+
+    // When the input is blurred, we'll call our table meta's updateData function
+    const onBlur = () => {
+      table.options.meta?.updateData(index, id, value);
+    };
+
+    // If the initialValue is changed external, sync it up with our state
+    useEffect(() => {
+      setValue(initialValue);
+    }, [initialValue]);
+
+    switch (id) {
+      case 'entity':
+        return (
+          <Text color="ctaPrimary" variant="tableCell">
+            <TableCell value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+          </Text>
+        );
+      case 'attribute':
+        return (
+          <Text variant="tableCell">
+            <TableCell value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+          </Text>
+        );
+      case 'value':
+        return (
+          <Text variant="tableCell">
+            <TableCell value={value.value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+          </Text>
+        );
+    }
+  },
+};
+
 interface Props {
   triples: Triple[];
   globalFilter: string;
 }
 
 export function TripleTable({ globalFilter, triples }: Props) {
+  // TODO: Should this live in /triples or here?
+  const { setTriples } = useTriples();
+
   const table = useReactTable({
     data: triples,
     columns,
+    defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     state: {
@@ -86,6 +141,25 @@ export function TripleTable({ globalFilter, triples }: Props) {
     filterFns: {
       fuzzy: fuzzyFilter,
     },
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        // Skip age index reset until after next rerender
+        console.log(value);
+        const newTriples: Triple[] = triples.map((row: Triple, index: number, oldTriples: Triple[]) => {
+          if (index === rowIndex) {
+            return {
+              ...oldTriples[rowIndex],
+              // TODO: Map to correct object based on column type
+              [columnId]: value,
+            };
+          }
+          return row;
+        });
+
+        setTriples(newTriples);
+      },
+    },
+    debugTable: true,
   });
 
   return (
@@ -106,9 +180,10 @@ export function TripleTable({ globalFilter, triples }: Props) {
           {table.getRowModel().rows.map(row => (
             <tr key={row.id}>
               {row.getVisibleCells().map(cell => (
-                <TableCell width={cell.column.getSize()} key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
+                // <TableCell width={cell.column.getSize()} key={cell.id}>
+                //   {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                // </TableCell>
+                <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
               ))}
             </tr>
           ))}
