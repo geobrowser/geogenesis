@@ -1,6 +1,6 @@
 specVersion: 0.0.4
 description: Statement history
-repository: https://github.com/baiirun/geogenesis
+repository: https://github.com/graphprotocol/example-subgraph
 features:
   - fullTextSearch
   - ipfsOnEthereumContracts
