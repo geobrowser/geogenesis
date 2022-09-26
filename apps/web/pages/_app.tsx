@@ -9,7 +9,6 @@ import 'modern-normalize';
 import '../styles/styles.css';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useEffect, useRef, useState } from 'react';
 import { useIsMounted } from '~/modules/use-is-mounted';
 
 const Body = styled.div(props => ({
