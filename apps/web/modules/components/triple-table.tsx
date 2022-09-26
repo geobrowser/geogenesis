@@ -73,7 +73,7 @@ interface Props {
   globalFilter: string;
 }
 
-export function TripleTable({ globalFilter, triples }: Props) {
+export default function TripleTable({ globalFilter, triples }: Props) {
   const table = useReactTable({
     data: triples,
     columns,

@@ -16,9 +16,13 @@ import { useTriples } from '~/modules/state/hook';
 import { TripleStore } from '~/modules/state/triple-store';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
-// mismatches in dev (maybe prod?) that happen when reloading a page where the table has optimistic data
-// but the server does not have the data yet, e.g., we're waiting for blocks to sync or something else.
-const TripleTable = dynamic(() => import('~/modules/components/triple-table').then(result => result.TripleTable), {
+// mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
+// but the server does not have the data yet, e.g., we're waiting for blocks to sync or the transaction
+// did not go through.
+//
+// I _think_ this only happens in dev as Next might be doing SSR/HMR under the hood for static pages,
+// but could be happening in prod. Doing dynamic import for now until we can investigate more.
+const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
   ssr: false,
 });
 
