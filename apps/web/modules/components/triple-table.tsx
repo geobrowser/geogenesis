@@ -76,6 +76,9 @@ interface Props {
 // Using a default export here instead of named import to play better with Next's
 // dynamic import syntax. We're dynamically importing TripleTable in the /triples
 // route. Check the comment there for more context.
+//
+// When using a named export Next might fail on the TypeScript type checking during
+// build. Using default export works.
 export default function TripleTable({ globalFilter, triples }: Props) {
   const table = useReactTable({
     data: triples,
