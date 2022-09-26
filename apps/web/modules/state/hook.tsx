@@ -27,7 +27,7 @@ export const useTriples = (tripleStore: TripleStore) => {
   const triples = useSharedObservable(tripleStore.triples$);
 
   useEffect(() => {
-    tripleStore.getNetworkTriples();
+    tripleStore.loadNetworkTriples();
   }, [tripleStore]);
 
   const createTriple = (triple: Triple, signer: Signer) => tripleStore.createTriple(triple, signer);
