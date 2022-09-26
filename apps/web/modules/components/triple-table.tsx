@@ -62,9 +62,14 @@ const TableHeader = styled.th<{ width: number }>(props => ({
   width: props.width,
 }));
 
-const TableCell = styled.input(props => ({
-  ...props.theme.typography.tableCell,
+const TableCell = styled.td(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  maxWidth: `${props.width}px`,
+}));
+
+const TableCellInput = styled.input(props => ({
+  ...props.theme.typography.tableCell,
+  // border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
   // maxWidth: `${props.width}px`,
   width: '100%',
@@ -100,19 +105,19 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'entity':
         return (
           <Text color="ctaPrimary" variant="tableCell">
-            <TableCell value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+            <TableCellInput value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
           </Text>
         );
       case 'attribute':
         return (
           <Text variant="tableCell">
-            <TableCell value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+            <TableCellInput value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
           </Text>
         );
       case 'value':
         return (
           <Text variant="tableCell">
-            <TableCell value={value.value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
+            <TableCellInput value={value.value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
           </Text>
         );
     }
@@ -180,10 +185,9 @@ export function TripleTable({ globalFilter, triples }: Props) {
           {table.getRowModel().rows.map(row => (
             <tr key={row.id}>
               {row.getVisibleCells().map(cell => (
-                // <TableCell width={cell.column.getSize()} key={cell.id}>
-                //   {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                // </TableCell>
-                <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                <TableCell width={cell.column.getSize()} key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
               ))}
             </tr>
           ))}
