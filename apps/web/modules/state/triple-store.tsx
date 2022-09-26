@@ -39,6 +39,11 @@ export class TripleStore {
     return await this.api.createTriple(triple, signer);
   };
 
+  // TODO: Should this live in the store or should the triples be passed in?
+  getNetworkTriples = async () => {
+    this.triples$.next(await this.api.getNetworkTriples());
+  };
+
   get triples() {
     return this.triples$.getValue();
   }
