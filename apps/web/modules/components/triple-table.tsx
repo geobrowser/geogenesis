@@ -13,7 +13,7 @@ import {
 import { useEffect, useState } from 'react';
 import { Text } from '../design-system/text';
 import { useTriples } from '../state/hook';
-import { Triple, Value } from '../types';
+import { EntityValue, Triple, Value } from '../types';
 
 declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
@@ -49,7 +49,6 @@ const columns = [
 ];
 
 const Table = styled.table(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
   width: '100%',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
@@ -63,16 +62,31 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 }));
 
 const TableCell = styled.td(props => ({
+  backgroundColor: 'transparent', // To allow the row to be styled on hover
   border: `1px solid ${props.theme.colors['grey-02']}`,
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input(props => ({
+const TableCellInput = styled.input<{ isEntity?: boolean }>(props => ({
   ...props.theme.typography.tableCell,
-  // border: `1px solid ${props.theme.colors['grey-02']}`,
+  backgroundColor: 'transparent', // To allow the row to be styled on hover
+  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
   padding: props.theme.space * 2.5,
-  // maxWidth: `${props.width}px`,
   width: '100%',
+
+  ':focus': {
+    outline: `1px solid ${props.theme.colors.text}`,
+  },
+
+  '::placeholder': {
+    color: props.theme.colors['grey-03'],
+  },
+}));
+
+const TableRow = styled.tr(props => ({
+  ':hover': {
+    backgroundColor: props.theme.colors.bg,
+  },
 }));
 
 // Using a container to wrap the table to make styling borders around
@@ -87,38 +101,46 @@ const Container = styled.div(props => ({
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
-    const initialValue = getValue();
+    const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
-    const [value, setValue] = useState(initialValue);
+    const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
 
     // When the input is blurred, we'll call our table meta's updateData function
-    const onBlur = () => {
-      table.options.meta?.updateData(index, id, value);
-    };
+    const onBlur = () => table.options.meta?.updateData(index, id, cellData);
 
     // If the initialValue is changed external, sync it up with our state
     useEffect(() => {
-      setValue(initialValue);
-    }, [initialValue]);
+      setCellData(initialCellData);
+    }, [initialCellData]);
 
     switch (id) {
       case 'entity':
-        return (
-          <Text color="ctaPrimary" variant="tableCell">
-            <TableCellInput value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
-          </Text>
-        );
+        const entityId = cellData as string;
+        return <TableCellInput isEntity value={entityId} onChange={e => setCellData(e.target.value)} onBlur={onBlur} />;
       case 'attribute':
+        const attributeId = cellData as string;
         return (
-          <Text variant="tableCell">
-            <TableCellInput value={value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
-          </Text>
+          <TableCellInput
+            placeholder="Add an attribute..."
+            value={attributeId}
+            onChange={e => setCellData(e.target.value)}
+            onBlur={onBlur}
+          />
         );
       case 'value':
+        const { value } = cellData as EntityValue;
         return (
-          <Text variant="tableCell">
-            <TableCellInput value={value.value} onChange={e => setValue(e.target.value)} onBlur={onBlur} />
-          </Text>
+          <TableCellInput
+            placeholder="Add text..."
+            value={value}
+            onChange={e =>
+              setCellData({
+                type: 'string',
+                value: e.target.value,
+              })
+            }
+            onBlur={onBlur}
+          />
         );
     }
   },
@@ -183,13 +205,13 @@ export function TripleTable({ globalFilter, triples }: Props) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map(row => (
-            <tr key={row.id}>
+            <TableRow key={row.id}>
               {row.getVisibleCells().map(cell => (
                 <TableCell width={cell.column.getSize()} key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
         </tbody>
       </Table>
