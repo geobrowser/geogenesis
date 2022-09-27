@@ -16,13 +16,17 @@ type AddResponse = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const body = await raw(req);
 
+  const { baseUrl } = req.query;
+
+  if (typeof baseUrl !== 'string') {
+    res.status(400).send('Missing baseUrl parameter');
+    return;
+  }
+
   const formData = new FormData();
   formData.append('file', new Blob([body]));
 
-  const url = `http://localhost:5001/api/v0/add`;
-  // const url = `https://api.thegraph.com/ipfs/api/v0/add`;
-
-  const response = await fetch(url, {
+  const response = await fetch(`${baseUrl}/api/v0/add`, {
     method: 'POST',
     body: formData,
   });
