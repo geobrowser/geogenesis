@@ -1,14 +1,16 @@
 type AppEnv = 'development' | 'staging' | 'production';
 
+export type SupportedChainId = '137' | '1337' | '31337';
+
 type AppConfig = {
-  chainId: string;
+  chainId: SupportedChainId;
   rpc: string;
   ipfs: string;
   subgraph: string;
   devServer: string;
 };
 
-const configOptions: Record<AppEnv, AppConfig> = {
+export const configOptions: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
     rpc: 'http://localhost:8545',
@@ -32,6 +34,14 @@ const configOptions: Record<AppEnv, AppConfig> = {
   },
 };
 
-export const appEnv = (process.env as Record<string, string>).NEXT_PUBLIC_APP_ENV as AppEnv;
+export function getConfig(chainId: string) {
+  const config = Object.values(configOptions).find(options => options.chainId === chainId);
 
-export const config = configOptions[appEnv];
+  if (!config) {
+    throw new Error(`No config for chain ${chainId}`);
+  }
+
+  return config;
+}
+
+export const appEnv = (process.env as Record<string, string>).NEXT_PUBLIC_APP_ENV as AppEnv;

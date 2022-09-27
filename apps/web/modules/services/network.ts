@@ -2,7 +2,6 @@ import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
-import { config } from '../config';
 import { Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
@@ -53,6 +52,7 @@ export class Network implements INetwork {
     public contract: LogContract,
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
+    public subgraphUrl: string,
     syncInterval = 5000
   ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
@@ -90,8 +90,7 @@ export class Network implements INetwork {
   };
 
   getNetworkTriples = async () => {
-    const url = config.subgraph;
-    const response = await fetch(url, {
+    const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
