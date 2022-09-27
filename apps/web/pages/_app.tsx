@@ -1,14 +1,15 @@
-import { ThemeProvider, css, Global, Theme } from '@emotion/react';
+import { css, Global, Theme, ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
+import { Spacer } from '~/modules/design-system/spacer';
 import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
-import { Spacer } from '~/modules/design-system/spacer';
-import 'modern-normalize';
-import '../styles/styles.css';
+import { ServicesProvider } from '~/modules/services';
 import { WalletProvider } from '~/modules/wallet';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import '../styles/styles.css';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -48,22 +49,24 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>
-        <Body>
-          <Global styles={globalStyles} />
-          <Link href="/dev">
-            <a>Design system</a>
-          </Link>
+        <ServicesProvider>
+          <Body>
+            <Global styles={globalStyles} />
+            <Link href="/dev">
+              <a>Design system</a>
+            </Link>
 
-          <Spacer width={4} />
+            <Spacer width={4} />
 
-          <Link href="/triples">
-            <a>Facts database</a>
-          </Link>
-          <ConnectButton accountStatus="avatar" />
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
-        </Body>
+            <Link href="/triples">
+              <a>Facts database</a>
+            </Link>
+            <ConnectButton accountStatus="avatar" />
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          </Body>
+        </ServicesProvider>
       </WalletProvider>
     </ThemeProvider>
   );

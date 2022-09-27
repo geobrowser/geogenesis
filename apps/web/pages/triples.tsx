@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { Log__factory } from '@geogenesis/contracts';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
@@ -8,12 +7,9 @@ import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { AddressLoader } from '~/modules/services/address-loader';
+import { useTripleStore } from '~/modules/services';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
-import { Network } from '~/modules/services/network';
-import { StorageClient } from '~/modules/services/storage';
 import { useTriples } from '~/modules/state/hook';
-import { TripleStore } from '~/modules/state/triple-store';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -36,14 +32,10 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const tripleStore = new TripleStore({
-  api: new Network(Log__factory, AddressLoader, StorageClient),
-  initialtriples: [],
-});
-
 export default function Triples() {
   const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
+  const tripleStore = useTripleStore();
   const { triples, createTriple } = useTriples(tripleStore);
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
