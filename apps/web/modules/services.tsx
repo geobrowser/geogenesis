@@ -34,10 +34,11 @@ export function ServicesProvider({ children }: Props) {
 
     const config = getConfig(chainId);
     const addressLoader = new AddressLoader(config.devServer);
+    const storageClient = new StorageClient(config.ipfs);
 
     return {
       tripleStore: new TripleStore({
-        api: new Network(Log__factory, addressLoader, StorageClient, config.subgraph),
+        api: new Network(Log__factory, addressLoader, storageClient, config.subgraph),
       }),
     };
   }, [chainId]);

@@ -3,11 +3,15 @@ export interface IStorageClient {
   uploadObject(object: unknown): Promise<string>;
 }
 
-export const StorageClient: IStorageClient = {
-  async uploadObject(object) {
+export class StorageClient implements IStorageClient {
+  constructor(public ipfsUrl: string) {}
+
+  async uploadObject(object: unknown): Promise<string> {
     const blob = new Blob([JSON.stringify(object)], { type: 'application/json' });
 
-    const response = await fetch(`/api/ipfs/upload`, {
+    const params = new URLSearchParams({ baseUrl: this.ipfsUrl });
+
+    const response = await fetch(`/api/ipfs/upload?${params.toString()}`, {
       method: 'POST',
       body: blob,
     });
@@ -17,5 +21,5 @@ export const StorageClient: IStorageClient = {
     console.log(cidString);
 
     return cidString;
-  },
-};
+  }
+}
