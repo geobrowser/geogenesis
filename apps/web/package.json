@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "NEXT_PUBLIC_APP_ENV=development next dev",
+    "staging": "NEXT_PUBLIC_APP_ENV=staging next dev",
+    "build": "NEXT_PUBLIC_APP_ENV=staging next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",

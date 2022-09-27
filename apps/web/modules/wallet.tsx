@@ -2,17 +2,18 @@ import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
+import { appEnv, config } from './config';
 
 const LOCAL_CHAIN: Chain = {
   /** ID in number form */
-  id: 31337,
+  id: Number(config.chainId),
   /** Human-readable name */
-  name: 'localhost',
+  name: appEnv,
   /** Internal network name */
   network: 'ethereum',
   /** Collection of RPC endpoints */
   rpcUrls: {
-    default: 'http://localhost:8545',
+    default: config.rpc,
     // public: 'http://localhost:8545',
     // alchemy: 'http://localhost:8545',
     // infura: 'http://localhost:8545',

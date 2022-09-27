@@ -11,15 +11,24 @@ graph LR
   B[Subgraph] --> |Triples| W
 ```
 
-### Monorepo dependencies
+## Setup
 
-- pnpm (version 7+)
+### Install dependencies
+
 - node version (18+)
+- pnpm (version 7+)
+- Docker
 
-### Setup
+  - mac: https://docs.docker.com/desktop/install/mac-install/
+
+### Frontend
 
 - pnpm install
-- pnpm build? Can this happen as part of install?
+- pnpm build
+
+### Backend
+
+- pnpm docker
 
 ### Structure
 
@@ -39,10 +48,23 @@ graph LR
 - Running commands in specific directories using pnpm --filter
 - Using nx/turbo/whatever
 
-### Vercel
+## Deployment
+
+### Web app
 
 The Geogenesis web app is hosted on Vercel. Check out the [live site here](https://geogenesis.vercel.app).
 
-### CI/CD on Github Actions
+### Staging backend
 
-[We run our CI/CD through Github actions](https://github.com/baiirun/geogenesis/actions).
+We deploy a custom staging backend using our `docker-compose.yml` and `docker-compose.prod.yml`. These are deployed on [Okteto](https://www.okteto.com/).
+
+To deploy:
+
+```bash
+okteto build
+oktetu up
+```
+
+## CI/CD
+
+We run our CI/CD through Github actions: https://github.com/baiirun/geogenesis/actions

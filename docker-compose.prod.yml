@@ -1,6 +1,16 @@
+services:
+  devnet:
+    environment:
+      DEVNET_CHAIN_ID: '1337'
+  deploy-contracts:
+    environment:
+      DEVNET_URL: http://devnet:8545
+      DEVNET_CHAIN_ID: '1337'
 volumes:
   shared-volume:
     driver_opts:
-      # okteto has a 1Gi default set for volumes, but docker for mac and github
-      # both fail with "quota size requested but no quota support"
+      # okteto has a 1Gi default set for volumes, but our node modules
+      # end up taking ~1.5Gi so we need to increase the size.
+      # docker for mac and github both fail with "quota size requested
+      # but no quota support", which is why we do it in a separate file
       size: 3Gi
