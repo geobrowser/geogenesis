@@ -37,7 +37,7 @@ const InputContainer = styled.div({
 
 export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples, createLocalTriple } = useTriples();
+  const { triples, upsertLocalTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -46,7 +46,7 @@ export default function Triples() {
     const attributeId = '';
     const newValue = { type: 'string' as const, value: '' };
 
-    createLocalTriple({
+    upsertLocalTriple({
       id: createTripleId(entityId, attributeId, newValue),
       entityId,
       attributeId,

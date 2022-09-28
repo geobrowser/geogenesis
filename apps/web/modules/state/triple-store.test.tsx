@@ -23,7 +23,7 @@ describe('TripleStore', () => {
       },
     };
 
-    store.createLocalTriple(newFact);
+    store.upsertLocalTriple(newFact);
     expect(store.triples).toStrictEqual([newFact]);
   });
 });

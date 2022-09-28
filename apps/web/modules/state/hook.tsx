@@ -34,7 +34,6 @@ export const useTriples = () => {
 
   return {
     triples,
-    createLocalTriple: tripleStore.createLocalTriple,
     upsertLocalTriple: tripleStore.upsertLocalTriple,
     createNetworkTriple: tripleStore.createNetworkTriple,
     setTriples: tripleStore.setTriples,

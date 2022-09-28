@@ -34,8 +34,6 @@ export class TripleStore {
     });
   }
 
-  createLocalTriple = (triple: Triple) => this.triples$.next([triple, ...this.triples$.getValue()]);
-
   createNetworkTriple = async (triple: Triple, signer: Signer) => {
     return await this.api.createTriple(triple, signer);
   };
@@ -51,7 +49,6 @@ export class TripleStore {
     }
   };
 
-  // TODO: Should this live in the store or should the triples be passed in?
   loadNetworkTriples = async () => {
     const networkTriples = await this.api.getNetworkTriples();
     this.triples$.next(networkTriples);
