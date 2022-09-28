@@ -1,5 +1,5 @@
 import { Log__factory } from '@geogenesis/contracts';
-import { createContext, ReactNode, useContext, useMemo } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 import { getConfig } from './config';
 import { AddressLoader } from './services/address-loader';
@@ -57,5 +57,15 @@ function useServices() {
 }
 
 export function useTripleStore() {
-  return useServices().tripleStore;
+  const { tripleStore } = useServices();
+
+  useEffect(() => {
+    // This is how we're loading the initial triples data rather than waiting the 5
+    // seconds for it to populate. Ideally we can fetch them externally and pass them
+    // to the store, but this is a good workaround for now since we can't really
+    // inject data into the Next app outside of their server/static APIs
+    tripleStore.loadNetworkTriples();
+  }, [tripleStore]);
+
+  return tripleStore;
 }
