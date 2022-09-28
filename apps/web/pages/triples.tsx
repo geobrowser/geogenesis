@@ -9,7 +9,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useTripleStore } from '~/modules/services';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
-import { useTriples } from '~/modules/state/hook';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -39,7 +38,7 @@ const InputContainer = styled.div({
 export default function Triples() {
   const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples, createTriple } = useTriples();
+  const { triples, createTriple } = useTripleStore();
   const [attribute, setAttribute] = useState<string>('');
   const [value, setValue] = useState<string>('');
 
