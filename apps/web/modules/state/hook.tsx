@@ -36,6 +36,6 @@ export const useTriples = () => {
     triples,
     upsertLocalTriple: tripleStore.upsertLocalTriple,
     createNetworkTriple: tripleStore.createNetworkTriple,
-    setTriples: tripleStore.setTriples,
+    updateNetworkTriple: tripleStore.updateNetworkTriple,
   };
 };

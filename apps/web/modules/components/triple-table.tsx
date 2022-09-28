@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Text } from '../design-system/text';
+import { createTripleId } from '../services/create-id';
 import { useTriples } from '../state/hook';
 import { Triple, Value } from '../types';
 
@@ -165,7 +166,7 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 export default function TripleTable({ globalFilter, triples }: Props) {
-  const { upsertLocalTriple, createNetworkTriple } = useTriples();
+  const { upsertLocalTriple, createNetworkTriple, updateNetworkTriple } = useTriples();
   const { data: signer } = useSigner();
 
   const table = useReactTable({
@@ -184,31 +185,45 @@ export default function TripleTable({ globalFilter, triples }: Props) {
     },
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        // console.log(oldTriples[rowIndex].attributeId);
-        // console.log(oldTriples[rowIndex].value);
-
         const tripleId = triples[rowIndex].id;
         const oldEntityId = triples[rowIndex].entityId;
         const oldAttributeId = triples[rowIndex].attributeId;
         const oldValue = triples[rowIndex].value;
 
+        const isAttributeColumn = columnId === 'attribute';
+        const isValueColumn = columnId === 'value';
+        const attributeId = isAttributeColumn ? (value as Triple['attributeId']) : oldAttributeId;
+        const newValue = isValueColumn ? (value as Triple['value']) : oldValue;
+
         const newTriple: Triple = {
           id: tripleId,
           entityId: oldEntityId,
-          attributeId: columnId === 'attribute' ? (value as Triple['attributeId']) : oldAttributeId,
-          value: columnId === 'value' ? (value as Triple['value']) : oldValue,
+          attributeId,
+          value: newValue,
         };
 
-        console.log(`columnId = ${columnId}`);
-        console.log(`Triple = ${JSON.stringify(triples[rowIndex])}`);
-        console.log(`value = ${newTriple.value.value}`);
-        console.log(`attributeId = ${newTriple.attributeId}`);
+        // console.log(`tripleId = ${tripleId}`);
+        // console.log(`columnId = ${columnId}`);
+        // console.log(`Triple = ${JSON.stringify(triples[rowIndex])}`);
+        // console.log(`value = ${newValue.value}`);
+        // console.log(`attributeId = ${attributeId}`);
 
         upsertLocalTriple(newTriple);
 
-        if (newTriple.attributeId !== '' && newTriple.value.value !== '') {
+        // TODO: How do we know if we should call create or create and delete Triple?
+        if (attributeId !== '' && newValue.value !== '') {
+          // We only want to trigger the transaction if the cell contents are different
+          if (isValueColumn && oldValue.value === newTriple.value.value) return;
+          if (isAttributeColumn && oldAttributeId === newTriple.attributeId) return;
+
           if (signer) {
-            createNetworkTriple(newTriple, signer);
+            // We check the id of the triple to see if it's a new triple or not
+            if (tripleId === '') {
+              createNetworkTriple(newTriple, signer);
+            } else {
+              console.log('Updating network triple');
+              updateNetworkTriple(newTriple, triples[rowIndex], signer);
+            }
           }
         }
       },

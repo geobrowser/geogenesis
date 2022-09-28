@@ -9,6 +9,8 @@ interface ITripleStoreConfig {
   initialtriples?: Triple[];
 }
 
+// TODO: Create store interface
+
 export class TripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>;
@@ -38,7 +40,22 @@ export class TripleStore {
   }
 
   createNetworkTriple = async (triple: Triple, signer: Signer) => {
-    return await this.api.createTriple(triple, signer);
+    const filteredTriples = this.triples.filter(t => t.id !== '');
+    const newTriple = await this.api.createTriple(triple, signer);
+    this.triples$.next([newTriple, ...filteredTriples]);
+    return newTriple;
+  };
+
+  // Find old triple position
+  // Replace old triple with new triple
+  // Update state
+  updateNetworkTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
+    // How do we filter the old triple?
+    const newTriple = await this.api.updateTriple(triple, oldTriple, signer);
+    const index = this.triples.findIndex(t => t.id === oldTriple.id);
+    const triples = this.triples$.getValue();
+    triples[index] = newTriple;
+    this.triples$.next(triples);
   };
 
   upsertLocalTriple = (triple: Triple) => {
@@ -55,10 +72,6 @@ export class TripleStore {
   loadNetworkTriples = async () => {
     const networkTriples = await this.api.getNetworkTriples();
     this.triples$.next(networkTriples);
-  };
-
-  setTriples = (triples: Triple[]) => {
-    this.triples$.next(triples);
   };
 
   get triples() {

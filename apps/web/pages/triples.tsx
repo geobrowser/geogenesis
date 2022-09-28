@@ -47,7 +47,7 @@ export default function Triples() {
     const newValue = { type: 'string' as const, value: '' };
 
     upsertLocalTriple({
-      id: createTripleId(entityId, attributeId, newValue),
+      id: '',
       entityId,
       attributeId,
       value: newValue,

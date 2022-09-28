@@ -6,4 +6,5 @@ export class StubNetwork implements INetwork {
   syncer$ = new BehaviorSubject([]);
   getNetworkTriples = async () => [];
   createTriple = async (triple: Triple) => triple;
+  updateTriple = async (triple: Triple, oldTriple: Triple) => triple;
 }
