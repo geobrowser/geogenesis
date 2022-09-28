@@ -101,12 +101,14 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
 
     // When the input is blurred, we'll call our table meta's updateData function
     const onBlur = () => table.options.meta?.updateData(index, id, cellData);
 
     // If the initialValue is changed external, sync it up with our state
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       setCellData(initialCellData);
     }, [initialCellData]);
