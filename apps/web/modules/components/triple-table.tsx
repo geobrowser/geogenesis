@@ -63,10 +63,9 @@ const TableCell = styled.td(props => ({
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input<{ isEntity?: boolean }>(props => ({
+const TableCellInput = styled.input(props => ({
   ...props.theme.typography.tableCell,
   backgroundColor: 'transparent', // To allow the row to be styled on hover
-  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
   padding: props.theme.space * 2.5,
   width: '100%',
 
@@ -77,11 +76,10 @@ const TableCellInput = styled.input<{ isEntity?: boolean }>(props => ({
   '::placeholder': {
     color: props.theme.colors['grey-03'],
   },
-  ...(props.isEntity && {
-    whiteSpace: 'pre',
-    textOverflow: 'ellipsis',
-    overflow: 'hidden',
-  }),
+}));
+
+const TableEntityCell = styled.div(props => ({
+  padding: props.theme.space * 2.5,
 }));
 
 const TableRow = styled.tr(props => ({
@@ -119,7 +117,13 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     switch (id) {
       case 'entity':
         const entityId = cellData as string;
-        return <TableCellInput isEntity value={entityId} onChange={e => setCellData(e.target.value)} onBlur={onBlur} />;
+        return (
+          <TableEntityCell>
+            <Text color="ctaPrimary" variant="tableCell" ellipsize>
+              {entityId}
+            </Text>
+          </TableEntityCell>
+        );
       case 'attribute':
         const attributeId = cellData as string;
         return (
@@ -208,21 +212,6 @@ export default function TripleTable({ globalFilter, triples }: Props) {
           }
         }
       },
-
-      // TODO: We should only update the single triple that was changed instead of all of them
-      //   const newTriples: Triple[] = triples.map((row: Triple, index: number, oldTriples: Triple[]) => {
-      //     if (index === rowIndex) {
-      //       oldTriples[rowIndex];
-      //       return {
-      //         ...oldTriples[rowIndex],
-      //         [columnId]: value,
-      //       };
-      //     }
-      //     return row;
-      //   });
-
-      //   setTriples(newTriples);
-      // },
     },
   });
 
