@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    environment:
+      DEVNET_CHAIN_ID: '31337'
   ipfs:
     image: ipfs/kubo:latest
     ports:
@@ -68,6 +70,7 @@ services:
       dockerfile: ./docker/Build.dockerfile
     environment:
       DEVNET_URL: http://devnet:8545
+      DEVNET_CHAIN_ID: '31337'
     command: pnpm --filter contracts run deploy:local
     volumes:
       - shared-volume:/app
@@ -98,6 +101,7 @@ services:
       IPFS_URL: http://ipfs:5001
     command: >
       sh -c "pnpm --filter subgraph run update-contract-address &&
+      pnpm --filter subgraph run cat &&
       pnpm --filter subgraph run codegen &&
       pnpm --filter subgraph run build &&
       pnpm --filter subgraph run create &&

@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import { Text } from '../design-system/text';
-import { useTriples } from '../state/hook';
+import { useTripleStore } from '../services';
 import { EntityValue, Triple, Value } from '../types';
 
 declare module '@tanstack/react-table' {
@@ -149,10 +149,14 @@ interface Props {
   globalFilter: string;
 }
 
-export function TripleTable({ globalFilter, triples }: Props) {
-  // TODO: Should this live in /triples or here?
-  const { setTriples } = useTriples();
-
+// Using a default export here instead of named import to play better with Next's
+// dynamic import syntax. We're dynamically importing TripleTable in the /triples
+// route. Check the comment there for more context.
+//
+// When using a named export Next might fail on the TypeScript type checking during
+// build. Using default export works.
+export default function TripleTable({ globalFilter, triples }: Props) {
+  const { setTriples } = useTripleStore();
   const table = useReactTable({
     data: triples,
     columns,

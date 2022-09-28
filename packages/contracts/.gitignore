@@ -13,4 +13,4 @@ artifacts
 dist
 
 # Local chain
-addresses/31337.json
+addresses

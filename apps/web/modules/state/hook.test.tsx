@@ -1,14 +1,14 @@
 import { render, renderHook } from '@testing-library/react';
 import { Signer } from 'ethers';
 import { describe, expect, it } from 'vitest';
-import { MockNetwork } from '../services/mocks/mock-network';
+import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
 import { useSharedObservable } from './hook';
 import { TripleStore } from './triple-store';
 
 describe('useSharedObservable', () => {
   it('Initializes empty', () => {
-    const store = new TripleStore({ api: new MockNetwork() });
+    const store = new TripleStore({ api: new StubNetwork() });
     const { result } = renderHook(() => useSharedObservable(store.triples$));
 
     expect(result.current).toStrictEqual([]);
@@ -18,14 +18,14 @@ describe('useSharedObservable', () => {
   // We have to pass a specific object that wraps our rxjs BehaviorSubject, so want to make sure that
   // doesn't break at some point.
   it('Adds a new triple', () => {
-    const store = new TripleStore({ api: new MockNetwork() });
+    const store = new TripleStore({ api: new StubNetwork() });
     const { result, rerender } = renderHook(() => useSharedObservable(store.triples$));
     expect(result.current).toStrictEqual([]);
 
     const newTriple: Triple = {
       id: '1',
-      entityId: '1',
-      attributeId: '1',
+      entityId: 'bob',
+      attributeId: 'name',
       value: {
         type: 'string',
         value: 'Bob',
@@ -38,7 +38,7 @@ describe('useSharedObservable', () => {
   });
 
   it('Rerenders component when changing state', () => {
-    const store = new TripleStore({ api: new MockNetwork() });
+    const store = new TripleStore({ api: new StubNetwork() });
 
     const Component = () => {
       const triples = useSharedObservable(store.triples$);
@@ -51,11 +51,11 @@ describe('useSharedObservable', () => {
     store.createTriple(
       {
         id: '1',
-        entityId: '1',
-        attributeId: '1',
+        entityId: 'bob',
+        attributeId: 'name',
         value: {
           type: 'string',
-          value: 'Alice',
+          value: 'Bob',
         },
       },
       {} as Signer

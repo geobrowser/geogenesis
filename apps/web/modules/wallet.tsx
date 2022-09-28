@@ -1,28 +1,28 @@
 import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
-import { Chain, chain, configureChains, createClient, WagmiConfig } from 'wagmi';
+import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
+import { configOptions } from './config';
 
 const LOCAL_CHAIN: Chain = {
-  /** ID in number form */
-  id: 31337,
-  /** Human-readable name */
-  name: 'localhost',
-  /** Internal network name */
-  network: 'ethereum',
-  /** Collection of RPC endpoints */
+  id: Number(configOptions.development.chainId),
+  name: 'GeoGenesis Dev', // Human-readable name
+  network: 'ethereum', // Internal network name
   rpcUrls: {
-    default: 'http://localhost:8545',
-    // public: 'http://localhost:8545',
-    // alchemy: 'http://localhost:8545',
-    // infura: 'http://localhost:8545',
+    default: configOptions.development.rpc,
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains(
-  [LOCAL_CHAIN, chain.polygonMumbai, chain.polygon],
-  [publicProvider()]
-);
+const STAGING_CHAIN: Chain = {
+  id: Number(configOptions.staging.chainId),
+  name: 'GeoGenesis Staging', // Human-readable name
+  network: 'ethereum', // Internal network name
+  rpcUrls: {
+    default: configOptions.staging.rpc,
+  },
+};
+
+const { chains, provider, webSocketProvider } = configureChains([STAGING_CHAIN, LOCAL_CHAIN], [publicProvider()]);
 
 const { connectors } = getDefaultWallets({
   appName: 'Geo Genesis',

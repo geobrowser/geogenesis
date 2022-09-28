@@ -2,6 +2,7 @@ import 'modern-normalize';
 import '../styles/styles.css';
 import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
+import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
@@ -9,13 +10,8 @@ import { typography } from '~/modules/design-system/theme/typography';
 import { Spacer } from '~/modules/design-system/spacer';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useIsMounted } from '~/modules/use-is-mounted';
-import { TripleStoreProvider } from '~/modules/state/hook';
-import { TripleStore } from '~/modules/state/triple-store';
-import { Network } from '~/modules/services/network';
-import { Log__factory } from '@geogenesis/contracts';
-import { AddressLoader } from '~/modules/services/address-loader';
-import { StorageClient } from '~/modules/services/storage';
+import { ServicesProvider } from '~/modules/services';
+import '../styles/styles.css';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
@@ -49,19 +45,13 @@ const theme: Theme = {
   radius: 6,
 };
 
-const tripleStore = new TripleStore({
-  api: new Network(Log__factory, AddressLoader, StorageClient),
-  initialtriples: [],
-});
-
 function MyApp({ Component, pageProps }: AppProps) {
   // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
-  const isMounted = useIsMounted();
 
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>
-        <TripleStoreProvider value={tripleStore}>
+        <ServicesProvider>
           <Body>
             <Global styles={globalStyles} />
             <Link href="/dev">
@@ -73,14 +63,14 @@ function MyApp({ Component, pageProps }: AppProps) {
             <Link href="/triples">
               <a>Facts database</a>
             </Link>
+
             <ConnectButton accountStatus="avatar" />
-            {isMounted && (
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-            )}
+
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
           </Body>
-        </TripleStoreProvider>
+        </ServicesProvider>
       </WalletProvider>
     </ThemeProvider>
   );

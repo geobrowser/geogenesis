@@ -52,6 +52,7 @@ export class Network implements INetwork {
     public contract: LogContract,
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
+    public subgraphUrl: string,
     syncInterval = 5000
   ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
@@ -89,8 +90,7 @@ export class Network implements INetwork {
   };
 
   getNetworkTriples = async () => {
-    const url = 'http://localhost:8000/subgraphs/name/example';
-    const response = await fetch(url, {
+    const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -7,13 +7,18 @@ import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { useTripleStore } from '~/modules/services';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { useTriples } from '~/modules/state/hook';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
-// mismatches in dev (maybe prod?) that happen when reloading a page where the table has optimistic data
-// but the server does not have the data yet, e.g., we're waiting for blocks to sync or something else.
-const TripleTable = dynamic(() => import('~/modules/components/triple-table').then(result => result.TripleTable), {
+// mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
+// but the server does not have the data yet, e.g., we're waiting for blocks to sync or the transaction
+// did not go through.
+//
+// I _think_ this only happens in dev as Next might be doing SSR/HMR under the hood for static pages,
+// but could be happening in prod. Doing dynamic import for now until we can investigate more.
+const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
   ssr: false,
 });
 
@@ -34,9 +39,9 @@ const InputContainer = styled.div({
 export default function Triples() {
   const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
+  const { triples, createTriple } = useTriples();
   const [attribute, setAttribute] = useState<string>('');
   const [value, setValue] = useState<string>('');
-  const { triples, createTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
