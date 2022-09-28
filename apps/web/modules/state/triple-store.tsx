@@ -34,8 +34,11 @@ export class TripleStore {
     });
   }
 
-  createTriple = async (triple: Triple, signer: Signer) => {
-    this.triples$.next([triple, ...this.triples$.getValue()]);
+  createLocalTriple = (triple: Triple) => this.triples$.next([triple, ...this.triples$.getValue()]);
+
+  createNetworkTriple = async (tripleId: string, signer: Signer) => {
+    const triple = this.triples.find(triple => triple.id === tripleId);
+    if (!triple) throw new Error(`Triple with id ${tripleId} not found`);
     return await this.api.createTriple(triple, signer);
   };
 

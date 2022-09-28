@@ -7,8 +7,8 @@ import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { useTripleStore } from '~/modules/services';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
+import { useTriples } from '~/modules/state/hook';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -38,9 +38,7 @@ const InputContainer = styled.div({
 export default function Triples() {
   const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples, createTriple } = useTripleStore();
-  const [attribute, setAttribute] = useState<string>('');
-  const [value, setValue] = useState<string>('');
+  const { triples, createLocalTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -48,18 +46,15 @@ export default function Triples() {
     if (!signer) return;
 
     const entityId = createEntityId();
-    const attributeId = attribute;
-    const newValue = { type: 'string' as const, value: value };
+    const attributeId = '';
+    const newValue = { type: 'string' as const, value: '' };
 
-    createTriple(
-      {
-        id: createTripleId(entityId, attributeId, newValue),
-        entityId,
-        attributeId,
-        value: newValue,
-      },
-      signer
-    );
+    createLocalTriple({
+      id: createTripleId(entityId, attributeId, newValue),
+      entityId,
+      attributeId,
+      value: newValue,
+    });
   };
 
   return (
@@ -77,13 +72,6 @@ export default function Triples() {
 
       <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
 
-      <Spacer height={12} />
-
-      <InputContainer>
-        <Input placeholder="Attribute" onChange={e => setAttribute(e.target.value)} />
-        <Spacer width={12} />
-        <Input placeholder="Value" onChange={e => setValue(e.target.value)} />
-      </InputContainer>
       <Spacer height={12} />
 
       <TripleTable triples={triples} globalFilter={globalFilter} />

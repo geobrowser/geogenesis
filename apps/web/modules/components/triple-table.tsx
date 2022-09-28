@@ -12,9 +12,11 @@ import {
 } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import { Text } from '../design-system/text';
-import { useTripleStore } from '../services';
+import { useTriples } from '../state/hook';
 import { EntityValue, Triple, Value } from '../types';
 
+// We declare a new function that we will define and pass into the useTable hook.
+// See: https://tanstack.com/table/v8/docs/examples/react/editable-data
 declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
@@ -34,7 +36,7 @@ const columns = [
     header: () => <Text variant="smallTitle">Attribute</Text>,
     size: 450,
   }),
-  columnHelper.accessor(row => row.value, {
+  columnHelper.accessor(row => row.value.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
     size: 450,
@@ -105,7 +107,11 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
 
     // When the input is blurred, we'll call our table meta's updateData function
-    const onBlur = () => table.options.meta?.updateData(index, id, cellData);
+    const onBlur = () => {
+      table.options.meta?.updateData(index, id, cellData);
+      console.log(table.getRow(index.toString()).original.attributeId);
+      console.log(table.getRow(index.toString()).original.value);
+    };
 
     // If the initialValue is changed external, sync it up with our state
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -128,7 +134,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           />
         );
       case 'value':
-        const { value } = cellData as EntityValue;
+        const value = cellData as string;
         return (
           <TableCellInput
             placeholder="Add text..."
@@ -158,13 +164,15 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 export default function TripleTable({ globalFilter, triples }: Props) {
-  const { setTriples } = useTripleStore();
+  const { setTriples } = useTriples();
+
   const table = useReactTable({
     data: triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    enableColumnFilters: false,
     state: {
       globalFilter,
     },
@@ -175,12 +183,10 @@ export default function TripleTable({ globalFilter, triples }: Props) {
     meta: {
       updateData: (rowIndex, columnId, value) => {
         // Skip age index reset until after next rerender
-        console.log(value);
         const newTriples: Triple[] = triples.map((row: Triple, index: number, oldTriples: Triple[]) => {
           if (index === rowIndex) {
             return {
               ...oldTriples[rowIndex],
-              // TODO: Map to correct object based on column type
               [columnId]: value,
             };
           }
@@ -223,6 +229,7 @@ export default function TripleTable({ globalFilter, triples }: Props) {
 }
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+  console.log(row);
   // Rank the item
   const itemRank = rankItem(row.getValue(columnId), value);
 
