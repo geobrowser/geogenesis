@@ -37,10 +37,6 @@ export class TripleStore {
     this.subscriptions.push(syncerSubscription, tripleIdSubscription);
   }
 
-  destructor() {
-    this.subscriptions.forEach(sub => sub.unsubscribe());
-  }
-
   createNetworkTriple = async (triple: Triple, signer: Signer) => {
     return await this.api.createTriple(triple, signer);
   };
