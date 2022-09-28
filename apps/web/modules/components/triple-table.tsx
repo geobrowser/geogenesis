@@ -11,9 +11,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
+import { useSigner } from 'wagmi';
 import { Text } from '../design-system/text';
 import { useTriples } from '../state/hook';
-import { EntityValue, Triple, Value } from '../types';
+import { Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -36,7 +37,7 @@ const columns = [
     header: () => <Text variant="smallTitle">Attribute</Text>,
     size: 450,
   }),
-  columnHelper.accessor(row => row.value.value, {
+  columnHelper.accessor(row => row.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
     size: 450,
@@ -107,11 +108,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
 
     // When the input is blurred, we'll call our table meta's updateData function
-    const onBlur = () => {
-      table.options.meta?.updateData(index, id, cellData);
-      console.log(table.getRow(index.toString()).original.attributeId);
-      console.log(table.getRow(index.toString()).original.value);
-    };
+    const onBlur = () => table.options.meta?.updateData(index, id, cellData);
 
     // If the initialValue is changed external, sync it up with our state
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -134,11 +131,11 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           />
         );
       case 'value':
-        const value = cellData as string;
+        const value = cellData as Value;
         return (
           <TableCellInput
             placeholder="Add text..."
-            value={value}
+            value={value.value}
             onChange={e =>
               setCellData({
                 type: 'string',
@@ -164,7 +161,8 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 export default function TripleTable({ globalFilter, triples }: Props) {
-  const { setTriples } = useTriples();
+  const { upsertLocalTriple, createNetworkTriple } = useTriples();
+  const { data: signer } = useSigner();
 
   const table = useReactTable({
     data: triples,
@@ -182,19 +180,49 @@ export default function TripleTable({ globalFilter, triples }: Props) {
     },
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        // Skip age index reset until after next rerender
-        const newTriples: Triple[] = triples.map((row: Triple, index: number, oldTriples: Triple[]) => {
-          if (index === rowIndex) {
-            return {
-              ...oldTriples[rowIndex],
-              [columnId]: value,
-            };
-          }
-          return row;
-        });
+        // console.log(oldTriples[rowIndex].attributeId);
+        // console.log(oldTriples[rowIndex].value);
 
-        setTriples(newTriples);
+        const tripleId = triples[rowIndex].id;
+        const oldEntityId = triples[rowIndex].entityId;
+        const oldAttributeId = triples[rowIndex].attributeId;
+        const oldValue = triples[rowIndex].value;
+
+        const newTriple: Triple = {
+          id: tripleId,
+          entityId: oldEntityId,
+          attributeId: columnId === 'attribute' ? (value as Triple['attributeId']) : oldAttributeId,
+          value: columnId === 'value' ? (value as Triple['value']) : oldValue,
+        };
+
+        console.log(`columnId = ${columnId}`);
+        console.log(`Triple = ${JSON.stringify(triples[rowIndex])}`);
+        console.log(`value = ${newTriple.value.value}`);
+        console.log(`attributeId = ${newTriple.attributeId}`);
+
+        upsertLocalTriple(newTriple);
+
+        if (newTriple.attributeId !== '' && newTriple.value.value !== '') {
+          if (signer) {
+            createNetworkTriple(newTriple, signer);
+          }
+        }
       },
+
+      // TODO: We should only update the single triple that was changed instead of all of them
+      //   const newTriples: Triple[] = triples.map((row: Triple, index: number, oldTriples: Triple[]) => {
+      //     if (index === rowIndex) {
+      //       oldTriples[rowIndex];
+      //       return {
+      //         ...oldTriples[rowIndex],
+      //         [columnId]: value,
+      //       };
+      //     }
+      //     return row;
+      //   });
+
+      //   setTriples(newTriples);
+      // },
     },
   });
 
@@ -229,7 +257,6 @@ export default function TripleTable({ globalFilter, triples }: Props) {
 }
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  console.log(row);
   // Rank the item
   const itemRank = rankItem(row.getValue(columnId), value);
 

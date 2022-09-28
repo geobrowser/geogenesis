@@ -46,8 +46,6 @@ const theme: Theme = {
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
-  // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
-
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>

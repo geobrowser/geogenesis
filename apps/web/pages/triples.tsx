@@ -36,15 +36,12 @@ const InputContainer = styled.div({
 });
 
 export default function Triples() {
-  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const { triples, createLocalTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
   const onAddTriple = async () => {
-    if (!signer) return;
-
     const entityId = createEntityId();
     const attributeId = '';
     const newValue = { type: 'string' as const, value: '' };

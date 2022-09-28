@@ -36,10 +36,19 @@ export class TripleStore {
 
   createLocalTriple = (triple: Triple) => this.triples$.next([triple, ...this.triples$.getValue()]);
 
-  createNetworkTriple = async (tripleId: string, signer: Signer) => {
-    const triple = this.triples.find(triple => triple.id === tripleId);
-    if (!triple) throw new Error(`Triple with id ${tripleId} not found`);
+  createNetworkTriple = async (triple: Triple, signer: Signer) => {
     return await this.api.createTriple(triple, signer);
+  };
+
+  upsertLocalTriple = (triple: Triple) => {
+    const index = this.triples.findIndex(t => t.id === triple.id);
+    if (index === -1) {
+      this.triples$.next([triple, ...this.triples$.getValue()]);
+    } else {
+      const triples = this.triples$.getValue();
+      triples[index] = triple;
+      this.triples$.next(triples);
+    }
   };
 
   // TODO: Should this live in the store or should the triples be passed in?

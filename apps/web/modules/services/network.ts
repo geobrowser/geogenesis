@@ -85,6 +85,7 @@ export class Network implements INetwork {
 
     // TODO: What to do with receipt???
     const receipt = await tx.wait();
+    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
     return triple;
   };
