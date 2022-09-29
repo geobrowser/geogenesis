@@ -46,11 +46,7 @@ export class TripleStore {
     return newTriple;
   };
 
-  // Find old triple position
-  // Replace old triple with new triple
-  // Update state
   updateNetworkTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
-    // How do we filter the old triple?
     const newTriple = await this.api.updateTriple(triple, oldTriple, signer);
     const index = this.triples.findIndex(t => t.id === oldTriple.id);
     const triples = this.triples$.getValue();
