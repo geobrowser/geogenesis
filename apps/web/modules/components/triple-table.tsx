@@ -204,8 +204,8 @@ export default function TripleTable({ globalFilter, triples }: Props) {
 
         if (attributeId !== '' && value.value !== '') {
           // We only want to trigger the transaction if the cell contents are different
-          // if (isValueColumn && oldValue.value === value.value) return;
-          // if (isAttributeColumn && oldAttributeId === attributeId) return;
+          if (isValueColumn && oldValue.value === value.value) return;
+          if (isAttributeColumn && oldAttributeId === attributeId) return;
 
           if (signer) {
             // We know it's a new triple if it has an empty id
