@@ -43,6 +43,9 @@ export default function Triples() {
     const value = { type: 'string' as const, value: '' };
 
     upsertLocalTriple({
+      // We set the local triple id to an empty string to know that it's a
+      // new triple and not an existing one. This will change once we have
+      // bulk publishing set up.
       id: '',
       entityId,
       attributeId,
