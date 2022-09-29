@@ -4,13 +4,28 @@ import {
   EntityValue,
   StringValue,
 } from '@geogenesis/action-schema/assembly'
-import { handleAction } from './actions'
+import { log } from '@graphprotocol/graph-ts'
+import { GeoEntity } from '../generated/schema'
+import { handleAction, handleCreateTripleAction } from './actions'
 
 export function bootstrap(): void {
+  // Check if a bootstrapped type already exists
+  if (GeoEntity.load('type')) return
+
+  log.debug(`Bootstrapping!`, [])
+
   handleAction(new CreateEntityAction('type'))
   handleAction(new CreateEntityAction('name'))
+  handleCreateTripleAction(
+    new CreateTripleAction('type', 'name', new StringValue('Is a')),
+    true
+  )
+  handleCreateTripleAction(
+    new CreateTripleAction('name', 'name', new StringValue('Name')),
+    true
+  )
 
-  handleAction(new CreateTripleAction('type', 'name', new StringValue('Is a')))
+  // Temporary entities, for simpler testing!
   handleAction(
     new CreateTripleAction('person', 'type', new EntityValue('type'))
   )
@@ -23,8 +38,4 @@ export function bootstrap(): void {
   handleAction(
     new CreateTripleAction('devin', 'name', new StringValue('Devin'))
   )
-
-  // handleAction(
-  //   new DeleteTripleAction('devin', 'name', new StringValue('Devin'))
-  // )
 }
