@@ -210,10 +210,8 @@ export default function TripleTable({ globalFilter, triples }: Props) {
           if (signer) {
             // We know it's a new triple if it has an empty id
             if (tripleId === '') {
-              console.log('Creating network triple');
               createNetworkTriple(newTriple, signer);
             } else {
-              console.log('Updating network triple');
               updateNetworkTriple(newTriple, triples[rowIndex], signer);
             }
           }
