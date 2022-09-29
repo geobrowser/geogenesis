@@ -7,7 +7,6 @@ import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { useTripleStore } from '~/modules/services';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { useTriples } from '~/modules/state/hook';
 
@@ -33,29 +32,25 @@ const PageContainer = styled.div({
 });
 
 export default function Triples() {
-  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const tripleStore = useTripleStore();
-  const { triples, createTriple } = useTriples(tripleStore);
+  const { upsertLocalTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
   const onAddTriple = async () => {
-    if (!signer) return;
-
     const entityId = createEntityId();
-    const attributeId = 'Died in';
-    const value = { type: 'string' as const, value: '0' };
+    const attributeId = '';
+    const value = { type: 'string' as const, value: '' };
 
-    createTriple(
-      {
-        id: createTripleId(entityId, attributeId, value),
-        entityId,
-        attributeId,
-        value,
-      },
-      signer
-    );
+    upsertLocalTriple({
+      // We set the local triple id to an empty string to know that it's a
+      // new triple and not an existing one. This will change once we have
+      // bulk publishing set up.
+      id: '',
+      entityId,
+      attributeId,
+      value,
+    });
   };
 
   return (
@@ -75,7 +70,7 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable triples={triples} globalFilter={globalFilter} />
+      <TripleTable globalFilter={globalFilter} />
     </PageContainer>
   );
 }

@@ -1,45 +1,51 @@
 import styled from '@emotion/styled';
 import { rankItem } from '@tanstack/match-sorter-utils';
 import {
+  ColumnDef,
   createColumnHelper,
   FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  RowData,
   useReactTable,
 } from '@tanstack/react-table';
+import { useEffect, useState } from 'react';
+import { useSigner } from 'wagmi';
 import { Text } from '../design-system/text';
-import { Triple } from '../types';
+import { createTripleId } from '../services/create-id';
+import { useTriples } from '../state/hook';
+import { Triple, Value } from '../types';
+
+// We declare a new function that we will define and pass into the useTable hook.
+// See: https://tanstack.com/table/v8/docs/examples/react/editable-data
+declare module '@tanstack/react-table' {
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  }
+}
 
 const columnHelper = createColumnHelper<Triple>();
 
 const columns = [
   columnHelper.accessor(row => row.entityId, {
-    id: 'entity',
+    id: 'entityId',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
-    cell: info => (
-      <Text color="ctaPrimary" variant="tableCell" ellipsize>
-        {info.getValue()}
-      </Text>
-    ),
     size: 160,
   }),
   columnHelper.accessor(row => row.attributeId, {
-    id: 'attribute',
+    id: 'attributeId',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue()}</Text>,
     size: 450,
   }),
   columnHelper.accessor(row => row.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
-    cell: info => <Text variant="tableCell">{info.getValue().value}</Text>,
     size: 450,
   }),
 ];
 
 const Table = styled.table(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
   width: '100%',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
@@ -53,10 +59,34 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 }));
 
 const TableCell = styled.td(props => ({
-  ...props.theme.typography.tableCell,
+  backgroundColor: 'transparent', // To allow the row to be styled on hover
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: props.theme.space * 2.5,
   maxWidth: `${props.width}px`,
+}));
+
+const TableCellInput = styled.input(props => ({
+  ...props.theme.typography.tableCell,
+  backgroundColor: 'transparent', // To allow the row to be styled on hover
+  padding: props.theme.space * 2.5,
+  width: '100%',
+
+  ':focus': {
+    outline: `1px solid ${props.theme.colors.text}`,
+  },
+
+  '::placeholder': {
+    color: props.theme.colors['grey-03'],
+  },
+}));
+
+const TableEntityCell = styled.div(props => ({
+  padding: props.theme.space * 2.5,
+}));
+
+const TableRow = styled.tr(props => ({
+  ':hover': {
+    backgroundColor: props.theme.colors.bg,
+  },
 }));
 
 // Using a container to wrap the table to make styling borders around
@@ -68,8 +98,63 @@ const Container = styled.div(props => ({
   overflow: 'hidden',
 }));
 
+// Give our default column cell renderer editing superpowers!
+const defaultColumn: Partial<ColumnDef<Triple>> = {
+  cell: ({ getValue, row: { index }, column: { id }, table }) => {
+    const initialCellData = getValue();
+    // We need to keep and update the state of the cell normally
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
+
+    // When the input is blurred, we'll call our table meta's updateData function
+    const onBlur = () => table.options.meta?.updateData(index, id, cellData);
+
+    // If the initialValue is changed external, sync it up with our state
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      setCellData(initialCellData);
+    }, [initialCellData]);
+
+    switch (id) {
+      case 'entityId':
+        const entityId = cellData as string;
+        return (
+          <TableEntityCell>
+            <Text color="ctaPrimary" variant="tableCell" ellipsize>
+              {entityId}
+            </Text>
+          </TableEntityCell>
+        );
+      case 'attributeId':
+        const attributeId = cellData as string;
+        return (
+          <TableCellInput
+            placeholder="Add an attribute..."
+            value={attributeId}
+            onChange={e => setCellData(e.target.value)}
+            onBlur={onBlur}
+          />
+        );
+      case 'value':
+        const value = cellData as Value;
+        return (
+          <TableCellInput
+            placeholder="Add text..."
+            value={value.value}
+            onChange={e =>
+              setCellData({
+                type: 'string',
+                value: e.target.value,
+              })
+            }
+            onBlur={onBlur}
+          />
+        );
+    }
+  },
+};
+
 interface Props {
-  triples: Triple[];
   globalFilter: string;
 }
 
@@ -79,18 +164,60 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, triples }: Props) {
+export default function TripleTable({ globalFilter }: Props) {
+  const { triples, upsertLocalTriple, createNetworkTriple, updateNetworkTriple } = useTriples();
+  const { data: signer } = useSigner();
+
   const table = useReactTable({
     data: triples,
     columns,
+    defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    enableColumnFilters: false,
     state: {
       globalFilter,
     },
     globalFilterFn: fuzzyFilter,
     filterFns: {
       fuzzy: fuzzyFilter,
+    },
+    meta: {
+      updateData: (rowIndex, columnId, cellValue) => {
+        const tripleId = triples[rowIndex].id;
+        const oldEntityId = triples[rowIndex].entityId;
+        const oldAttributeId = triples[rowIndex].attributeId;
+        const oldValue = triples[rowIndex].value;
+
+        const isAttributeColumn = columnId === 'attributeId';
+        const isValueColumn = columnId === 'value';
+        const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
+        const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
+
+        const newTriple: Triple = {
+          id: tripleId, // We need to keep the ID stable so we can replace the old triple with the new one in state
+          entityId: oldEntityId,
+          attributeId,
+          value,
+        };
+
+        if (attributeId !== '' && value.value !== '') {
+          // We only want to trigger the transaction if the cell contents are different
+          if (isValueColumn && oldValue.value === value.value) return;
+          if (isAttributeColumn && oldAttributeId === attributeId) return;
+
+          if (signer) {
+            // We know it's a new triple if it has an empty id
+            if (tripleId === '') {
+              createNetworkTriple(newTriple, signer);
+            } else {
+              updateNetworkTriple(newTriple, triples[rowIndex], signer);
+            }
+          }
+        }
+
+        upsertLocalTriple(newTriple);
+      },
     },
   });
 
@@ -110,13 +237,13 @@ export default function TripleTable({ globalFilter, triples }: Props) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map(row => (
-            <tr key={row.id}>
+            <TableRow key={row.id}>
               {row.getVisibleCells().map(cell => (
                 <TableCell width={cell.column.getSize()} key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
         </tbody>
       </Table>

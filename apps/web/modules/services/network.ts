@@ -4,6 +4,7 @@ import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
 import { Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
+import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
 import { createSyncService } from './sync';
 
@@ -41,6 +42,9 @@ export interface INetwork {
   syncer$: Observable<Triple[]>;
   getNetworkTriples: () => Promise<Triple[]>;
   createTriple: (triple: Triple, signer: Signer) => Promise<Triple>;
+
+  // Currently an update to a triple is a delete followed by a create
+  updateTriple: (triple: Triple, oldTriple: Triple, signer: Signer) => Promise<Triple>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -85,8 +89,46 @@ export class Network implements INetwork {
 
     // TODO: What to do with receipt???
     const receipt = await tx.wait();
+    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
-    return triple;
+    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
+  };
+
+  updateTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
+    const chain = await signer.getChainId();
+    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
+
+    // TODO: Error handling
+    const contract = this.contract.connect(contractAddress, signer);
+
+    const root: Root = {
+      type: 'root',
+      version: '0.0.1',
+      actions: [
+        {
+          type: 'createTriple',
+          entityId: triple.entityId,
+          attributeId: triple.attributeId,
+          value: triple.value,
+        },
+        {
+          type: 'deleteTriple',
+          entityId: oldTriple.entityId,
+          attributeId: oldTriple.attributeId,
+          value: oldTriple.value,
+        },
+      ],
+    };
+
+    const cidString = await this.storageClient.uploadObject(root);
+
+    const tx = await contract.addEntry(`ipfs://${cidString}`);
+
+    // TODO: What to do with receipt???
+    const receipt = await tx.wait();
+    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
+
+    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
   };
 
   getNetworkTriples = async () => {

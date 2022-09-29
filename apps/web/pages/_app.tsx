@@ -1,14 +1,16 @@
-import { css, Global, Theme, ThemeProvider } from '@emotion/react';
+import 'modern-normalize';
+import '../styles/styles.css';
+import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
-import { Spacer } from '~/modules/design-system/spacer';
 import { colors } from '~/modules/design-system/theme/colors';
 import { typography } from '~/modules/design-system/theme/typography';
-import { ServicesProvider } from '~/modules/services';
+import { Spacer } from '~/modules/design-system/spacer';
 import { WalletProvider } from '~/modules/wallet';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ServicesProvider } from '~/modules/services';
 import '../styles/styles.css';
 
 const Body = styled.div(props => ({
@@ -44,8 +46,6 @@ const theme: Theme = {
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
-  // HACK: Doing this to avoid hydration errors with our optimistic UI updates in dev
-
   return (
     <ThemeProvider theme={theme}>
       <WalletProvider>
@@ -61,7 +61,9 @@ function MyApp({ Component, pageProps }: AppProps) {
             <Link href="/triples">
               <a>Facts database</a>
             </Link>
+
             <ConnectButton accountStatus="avatar" />
+
             <Layout>
               <Component {...pageProps} />
             </Layout>

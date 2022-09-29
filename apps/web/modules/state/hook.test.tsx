@@ -32,7 +32,7 @@ describe('useSharedObservable', () => {
       },
     };
 
-    store.createTriple(newTriple, {} as Signer);
+    store.upsertLocalTriple(newTriple);
     rerender();
     expect(result.current).toContain(newTriple);
   });
@@ -48,18 +48,15 @@ describe('useSharedObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    store.createTriple(
-      {
-        id: '1',
-        entityId: 'bob',
-        attributeId: 'name',
-        value: {
-          type: 'string',
-          value: 'Bob',
-        },
+    store.upsertLocalTriple({
+      id: '1',
+      entityId: 'bob',
+      attributeId: 'name',
+      value: {
+        type: 'string',
+        value: 'Bob',
       },
-      {} as Signer
-    );
+    });
 
     rerender(<Component />);
     expect(getByText('1')).toBeTruthy();

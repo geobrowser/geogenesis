@@ -1,5 +1,5 @@
 import { v4 } from 'uuid';
-import { Value } from '../types';
+import { Triple, Value } from '../types';
 
 export function createEntityId() {
   return v4();
@@ -25,4 +25,13 @@ function createValueId(value: Value): string {
  */
 export function createTripleId(entityId: string, attributeId: string, value: Value): string {
   return `${entityId}:${attributeId}:${createValueId(value)}`;
+}
+
+export function createTripleWithId(entityId: string, attributeId: string, value: Value): Triple {
+  return {
+    id: createTripleId(entityId, attributeId, value),
+    entityId,
+    attributeId,
+    value,
+  };
 }
