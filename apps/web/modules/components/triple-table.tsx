@@ -29,12 +29,12 @@ const columnHelper = createColumnHelper<Triple>();
 
 const columns = [
   columnHelper.accessor(row => row.entityId, {
-    id: 'entity',
+    id: 'entityId',
     header: () => <Text variant="smallTitle">Entity ID</Text>,
     size: 160,
   }),
   columnHelper.accessor(row => row.attributeId, {
-    id: 'attribute',
+    id: 'attributeId',
     header: () => <Text variant="smallTitle">Attribute</Text>,
     size: 450,
   }),
@@ -116,7 +116,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     }, [initialCellData]);
 
     switch (id) {
-      case 'entity':
+      case 'entityId':
         const entityId = cellData as string;
         return (
           <TableEntityCell>
@@ -125,7 +125,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             </Text>
           </TableEntityCell>
         );
-      case 'attribute':
+      case 'attributeId':
         const attributeId = cellData as string;
         return (
           <TableCellInput
@@ -190,28 +190,30 @@ export default function TripleTable({ globalFilter, triples }: Props) {
         const oldAttributeId = triples[rowIndex].attributeId;
         const oldValue = triples[rowIndex].value;
 
-        const isAttributeColumn = columnId === 'attribute';
+        const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
         const newTriple: Triple = {
-          id: tripleId,
+          id: tripleId, // We need to keep the ID stable so we can replace the old triple with the new one in state
           entityId: oldEntityId,
           attributeId,
-          value: value,
+          value,
         };
 
         if (attributeId !== '' && value.value !== '') {
           // We only want to trigger the transaction if the cell contents are different
-          if (isValueColumn && oldValue.value === newTriple.value.value) return;
-          if (isAttributeColumn && oldAttributeId === newTriple.attributeId) return;
+          // if (isValueColumn && oldValue.value === value.value) return;
+          // if (isAttributeColumn && oldAttributeId === attributeId) return;
 
           if (signer) {
             // We know it's a new triple if it has an empty id
             if (tripleId === '') {
+              console.log('Creating network triple');
               createNetworkTriple(newTriple, signer);
             } else {
+              console.log('Updating network triple');
               updateNetworkTriple(newTriple, triples[rowIndex], signer);
             }
           }
