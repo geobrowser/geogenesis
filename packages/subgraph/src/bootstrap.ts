@@ -18,11 +18,11 @@ export function bootstrap(): void {
   handleAction(new CreateEntityAction('name'))
   handleCreateTripleAction(
     new CreateTripleAction('type', 'name', new StringValue('Is a')),
-    false
+    true
   )
   handleCreateTripleAction(
     new CreateTripleAction('name', 'name', new StringValue('Name')),
-    false
+    true
   )
 
   // Temporary entities, for simpler testing!

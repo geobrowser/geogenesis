@@ -10,7 +10,7 @@ import { createTripleId } from './id'
 
 export function handleCreateTripleAction(
   fact: CreateTripleAction,
-  isEditable: boolean
+  isProtected: boolean
 ): void {
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
@@ -25,20 +25,20 @@ export function handleCreateTripleAction(
   const existing = Triple.load(tripleId)
 
   // Normally we silently allow creating an identical triple that already exists.
-  // However, we don't want to accidentally change the editable status of a triple.
+  // However, we don't want to accidentally change the protected status of a triple.
   // There are other ways we could do this, but considering it an error and failing
   // here seems simplest, and will also prevent accidental updates if we have
   // updatable fields in the future.
-  if (existing && !existing.isEditable) {
+  if (existing && existing.isProtected) {
     log.debug(
-      `Couldn't create or update triple '${tripleId}' since it already exists and isn't editable!`,
+      `Couldn't create or update triple '${tripleId}' since it already exists and is protected!`,
       []
     )
     return
   }
 
   const triple = (existing || new Triple(tripleId))!
-  triple.isEditable = isEditable
+  triple.isProtected = isProtected
   triple.entity = entity.id
   triple.attribute = attribute.id
   triple.valueType = fact.value.type
@@ -71,11 +71,8 @@ function handleDeleteTripleAction(fact: DeleteTripleAction): void {
 
   const triple = Triple.load(tripleId)
 
-  if (triple && !triple.isEditable) {
-    log.debug(
-      `Couldn't delete triple '${tripleId}' since it isn't editable!`,
-      []
-    )
+  if (triple && triple.isProtected) {
+    log.debug(`Couldn't delete triple '${tripleId}' since it's protected'!`, [])
     return
   }
 
@@ -96,7 +93,7 @@ function handleCreateEntityAction(action: CreateEntityAction): void {
 export function handleAction(action: Action): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
-    handleCreateTripleAction(createTripleAction, true)
+    handleCreateTripleAction(createTripleAction, false)
     return
   }
 

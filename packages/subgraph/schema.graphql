@@ -38,7 +38,7 @@ type Triple @entity {
   numberValue: BigDecimal
   stringValue: String
   entityValue: GeoEntity
-  isEditable: Boolean!
+  isProtected: Boolean!
 }
 
 enum ValueType {
