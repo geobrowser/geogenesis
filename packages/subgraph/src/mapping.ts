@@ -30,7 +30,11 @@ export function handleEntryAdded(event: EntryAdded): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        handleActionData(bytes)
+        const root = handleActionData(bytes)
+
+        if (root) {
+          entry.json = root.toJSON().toString()
+        }
       }
     }
   } else if (uri.startsWith(IPFS_URI_SCHEME)) {
@@ -38,7 +42,13 @@ export function handleEntryAdded(event: EntryAdded): void {
     const bytes = ipfs.cat(cidString)
 
     if (bytes) {
-      handleActionData(bytes)
+      entry.decoded = bytes
+
+      const root = handleActionData(bytes)
+
+      if (root) {
+        entry.json = root.toJSON().toString()
+      }
     }
   }
 
@@ -47,14 +57,17 @@ export function handleEntryAdded(event: EntryAdded): void {
   log.debug(`Indexed: ${entry.uri}`, [])
 }
 
-function handleActionData(bytes: Bytes): void {
+function handleActionData(bytes: Bytes): Root | null {
   const json = JSON.parse(bytes)
 
   const root = Root.fromJSON(json)
 
-  if (root) {
-    handleRoot(root)
-  }
+  if (!root) return null
+
+  handleRoot(root)
+
+  // Return decoded root for debugging purposes
+  return root
 }
 
 function handleRoot(root: Root): void {

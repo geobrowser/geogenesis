@@ -8,7 +8,10 @@ import { BigDecimal, log, store } from '@graphprotocol/graph-ts'
 import { GeoEntity, Triple } from '../generated/schema'
 import { createTripleId } from './id'
 
-function handleCreateTripleAction(fact: CreateTripleAction): void {
+export function handleCreateTripleAction(
+  fact: CreateTripleAction,
+  isEditable: boolean
+): void {
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
   entity.save()
@@ -19,7 +22,23 @@ function handleCreateTripleAction(fact: CreateTripleAction): void {
 
   const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
 
-  const triple = (Triple.load(tripleId) || new Triple(tripleId))!
+  const existing = Triple.load(tripleId)
+
+  // Normally we silently allow creating an identical triple that already exists.
+  // However, we don't want to accidentally change the editable status of a triple.
+  // There are other ways we could do this, but considering it an error and failing
+  // here seems simplest, and will also prevent accidental updates if we have
+  // updatable fields in the future.
+  if (existing && !existing.isEditable) {
+    log.debug(
+      `Couldn't create or update triple '${tripleId}' since it already exists and isn't editable!`,
+      []
+    )
+    return
+  }
+
+  const triple = (existing || new Triple(tripleId))!
+  triple.isEditable = isEditable
   triple.entity = entity.id
   triple.attribute = attribute.id
   triple.valueType = fact.value.type
@@ -43,24 +62,41 @@ function handleCreateTripleAction(fact: CreateTripleAction): void {
   }
 
   triple.save()
+
+  log.debug(`ACTION: Created triple: ${triple.id}`, [])
 }
 
 function handleDeleteTripleAction(fact: DeleteTripleAction): void {
   const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
 
+  const triple = Triple.load(tripleId)
+
+  if (triple && !triple.isEditable) {
+    log.debug(
+      `Couldn't delete triple '${tripleId}' since it isn't editable!`,
+      []
+    )
+    return
+  }
+
   store.remove('Triple', tripleId)
+
+  log.debug(`ACTION: Deleted triple: ${tripleId}`, [])
 }
 
 function handleCreateEntityAction(action: CreateEntityAction): void {
   const entity = (GeoEntity.load(action.entityId) ||
     new GeoEntity(action.entityId))!
+
   entity.save()
+
+  log.debug(`ACTION: Created entity: ${entity.id}`, [])
 }
 
 export function handleAction(action: Action): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
-    handleCreateTripleAction(createTripleAction)
+    handleCreateTripleAction(createTripleAction, true)
     return
   }
 

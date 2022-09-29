@@ -1,12 +1,21 @@
 """
-An entry in the Log contract
+An entry in the Log contract.
 """
 type LogEntry @entity {
   id: ID!
   uri: String!
   author: Bytes!
   mimeType: String
+
+  """
+  The binary data located at the uri.
+  """
   decoded: Bytes
+
+  """
+  The decoded actions located at the uri.
+  """
+  json: String
 }
 
 """
@@ -29,6 +38,7 @@ type Triple @entity {
   numberValue: BigDecimal
   stringValue: String
   entityValue: GeoEntity
+  isEditable: Boolean!
 }
 
 enum ValueType {
