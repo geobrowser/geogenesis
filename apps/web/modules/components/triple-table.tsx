@@ -208,8 +208,6 @@ export default function TripleTable({ globalFilter, triples }: Props) {
         // console.log(`value = ${newValue.value}`);
         // console.log(`attributeId = ${attributeId}`);
 
-        upsertLocalTriple(newTriple);
-
         // TODO: How do we know if we should call create or create and delete Triple?
         if (attributeId !== '' && newValue.value !== '') {
           // We only want to trigger the transaction if the cell contents are different
@@ -226,6 +224,8 @@ export default function TripleTable({ globalFilter, triples }: Props) {
             }
           }
         }
+
+        upsertLocalTriple(newTriple);
       },
     },
   });
