@@ -184,7 +184,7 @@ export default function TripleTable({ globalFilter, triples }: Props) {
       fuzzy: fuzzyFilter,
     },
     meta: {
-      updateData: (rowIndex, columnId, value) => {
+      updateData: (rowIndex, columnId, cellValue) => {
         const tripleId = triples[rowIndex].id;
         const oldEntityId = triples[rowIndex].entityId;
         const oldAttributeId = triples[rowIndex].attributeId;
@@ -192,34 +192,26 @@ export default function TripleTable({ globalFilter, triples }: Props) {
 
         const isAttributeColumn = columnId === 'attribute';
         const isValueColumn = columnId === 'value';
-        const attributeId = isAttributeColumn ? (value as Triple['attributeId']) : oldAttributeId;
-        const newValue = isValueColumn ? (value as Triple['value']) : oldValue;
+        const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
+        const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
         const newTriple: Triple = {
           id: tripleId,
           entityId: oldEntityId,
           attributeId,
-          value: newValue,
+          value: value,
         };
 
-        // console.log(`tripleId = ${tripleId}`);
-        // console.log(`columnId = ${columnId}`);
-        // console.log(`Triple = ${JSON.stringify(triples[rowIndex])}`);
-        // console.log(`value = ${newValue.value}`);
-        // console.log(`attributeId = ${attributeId}`);
-
-        // TODO: How do we know if we should call create or create and delete Triple?
-        if (attributeId !== '' && newValue.value !== '') {
+        if (attributeId !== '' && value.value !== '') {
           // We only want to trigger the transaction if the cell contents are different
           if (isValueColumn && oldValue.value === newTriple.value.value) return;
           if (isAttributeColumn && oldAttributeId === newTriple.attributeId) return;
 
           if (signer) {
-            // We check the id of the triple to see if it's a new triple or not
+            // We know it's a new triple if it has an empty id
             if (tripleId === '') {
               createNetworkTriple(newTriple, signer);
             } else {
-              console.log('Updating network triple');
               updateNetworkTriple(newTriple, triples[rowIndex], signer);
             }
           }
