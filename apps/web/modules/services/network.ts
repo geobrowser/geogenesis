@@ -4,7 +4,7 @@ import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
 import { Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
-import { createTripleId } from './create-id';
+import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
 import { createSyncService } from './sync';
 
@@ -87,11 +87,9 @@ export class Network implements INetwork {
 
     // TODO: What to do with receipt???
     const receipt = await tx.wait();
+    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
-    return {
-      ...triple,
-      id: createTripleId(triple.entityId, triple.attributeId, triple.value),
-    };
+    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
   };
 
   updateTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
@@ -128,10 +126,7 @@ export class Network implements INetwork {
     const receipt = await tx.wait();
     console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
-    return {
-      ...triple,
-      id: createTripleId(triple.entityId, triple.attributeId, triple.value),
-    };
+    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
   };
 
   getNetworkTriples = async () => {

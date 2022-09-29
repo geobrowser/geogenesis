@@ -40,9 +40,11 @@ export class TripleStore {
   }
 
   createNetworkTriple = async (triple: Triple, signer: Signer) => {
-    const filteredTriples = this.triples.filter(t => t.id !== '');
     const newTriple = await this.api.createTriple(triple, signer);
-    this.triples$.next([newTriple, ...filteredTriples]);
+    const triples = this.triples$.getValue();
+    const index = triples.findIndex(t => t.id === triple.id); // triple.id should be '' for new triples
+    triples[index] = newTriple;
+    this.triples$.next(triples);
     return newTriple;
   };
 
