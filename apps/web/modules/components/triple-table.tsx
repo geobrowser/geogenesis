@@ -155,7 +155,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 };
 
 interface Props {
-  triples: Triple[];
   globalFilter: string;
 }
 
@@ -165,8 +164,8 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, triples }: Props) {
-  const { upsertLocalTriple, createNetworkTriple, updateNetworkTriple } = useTriples();
+export default function TripleTable({ globalFilter }: Props) {
+  const { triples, upsertLocalTriple, createNetworkTriple, updateNetworkTriple } = useTriples();
   const { data: signer } = useSigner();
 
   const table = useReactTable({

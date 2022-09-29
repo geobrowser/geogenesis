@@ -33,7 +33,7 @@ const PageContainer = styled.div({
 
 export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { triples, upsertLocalTriple } = useTriples();
+  const { upsertLocalTriple } = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -67,7 +67,7 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable triples={triples} globalFilter={globalFilter} />
+      <TripleTable globalFilter={globalFilter} />
     </PageContainer>
   );
 }
