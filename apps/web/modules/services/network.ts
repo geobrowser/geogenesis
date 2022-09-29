@@ -42,6 +42,8 @@ export interface INetwork {
   syncer$: Observable<Triple[]>;
   getNetworkTriples: () => Promise<Triple[]>;
   createTriple: (triple: Triple, signer: Signer) => Promise<Triple>;
+
+  // Currently an update to a triple is a delete followed by a create
   updateTriple: (triple: Triple, oldTriple: Triple, signer: Signer) => Promise<Triple>;
 }
 
