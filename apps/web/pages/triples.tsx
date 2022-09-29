@@ -40,13 +40,13 @@ export default function Triples() {
   const onAddTriple = async () => {
     const entityId = createEntityId();
     const attributeId = '';
-    const newValue = { type: 'string' as const, value: '' };
+    const value = { type: 'string' as const, value: '' };
 
     upsertLocalTriple({
       id: '',
       entityId,
       attributeId,
-      value: newValue,
+      value,
     });
   };
 
