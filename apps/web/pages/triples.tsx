@@ -31,10 +31,6 @@ const PageContainer = styled.div({
   flexDirection: 'column',
 });
 
-const InputContainer = styled.div({
-  display: 'flex',
-});
-
 export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const { triples, upsertLocalTriple } = useTriples();
