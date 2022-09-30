@@ -2,12 +2,12 @@ import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { useSigner } from 'wagmi';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { createEntityId, createTripleId } from '~/modules/services/create-id';
+import { createEntityId } from '~/modules/services/create-id';
+import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/hook';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
@@ -29,6 +29,14 @@ const PageHeader = styled.div({
 const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
+});
+
+const FileImport = styled.input({
+  margin: '0',
+  padding: '0',
+  opacity: '0',
+  position: 'absolute',
+  inset: '0',
 });
 
 export default function Triples() {
@@ -53,12 +61,34 @@ export default function Triples() {
     });
   };
 
+  const onImport = async (file: File) => {
+    const triples = await importCSVFile(file);
+
+    triples.forEach(triple => {
+      upsertLocalTriple(triple);
+    });
+  };
+
   return (
     <PageContainer>
       <PageHeader>
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
+        <div style={{ flex: 1 }} />
+        <Button variant="secondary" icon="create" onClick={() => {}}>
+          Import
+          <FileImport
+            type="file"
+            accept=".csv"
+            onChange={event => {
+              for (let file of event.target.files ?? []) {
+                onImport(file);
+              }
+            }}
+          />
+        </Button>
+        <Spacer width={12} />
         <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>

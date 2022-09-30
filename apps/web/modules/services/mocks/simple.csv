@@ -1,0 +1,7 @@
+Entity,Attribute,Value
+1,name,Devin
+1,type,person
+2,name,Sam
+2,type,person
+person,type,type
+person,name,Person

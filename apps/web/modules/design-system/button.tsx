@@ -1,9 +1,9 @@
+import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { Create } from './icons/create';
 import { Spacer } from './spacer';
-import { ColorValue } from './theme/colors';
 import { Theme } from './theme';
-import { useTheme } from '@emotion/react';
+import { ColorValue } from './theme/colors';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -53,6 +53,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
     borderRadius: props.theme.radius,
     cursor: 'pointer',
     outline: 'none',
+    position: 'relative',
 
     display: 'flex',
     alignItems: 'center',

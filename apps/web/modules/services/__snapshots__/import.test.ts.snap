@@ -1,0 +1,60 @@
+// Vitest Snapshot v1
+
+exports[`CSV Import > imports csv 1`] = `
+[
+  {
+    "attributeId": "name",
+    "entityId": "31303030-3030-4030-b030-303030303030",
+    "id": "31303030-3030-4030-b030-303030303030:name:s~Devin",
+    "value": {
+      "type": "string",
+      "value": "Devin",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "31303030-3030-4030-b030-303030303030",
+    "id": "31303030-3030-4030-b030-303030303030:type:e~70657273-6f6e-4030-b030-303030303030",
+    "value": {
+      "type": "entity",
+      "value": "70657273-6f6e-4030-b030-303030303030",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "32303030-3030-4030-b030-303030303030",
+    "id": "32303030-3030-4030-b030-303030303030:name:s~Sam",
+    "value": {
+      "type": "string",
+      "value": "Sam",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "32303030-3030-4030-b030-303030303030",
+    "id": "32303030-3030-4030-b030-303030303030:type:e~70657273-6f6e-4030-b030-303030303030",
+    "value": {
+      "type": "entity",
+      "value": "70657273-6f6e-4030-b030-303030303030",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "70657273-6f6e-4030-b030-303030303030",
+    "id": "70657273-6f6e-4030-b030-303030303030:type:e~type",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "70657273-6f6e-4030-b030-303030303030",
+    "id": "70657273-6f6e-4030-b030-303030303030:name:s~Person",
+    "value": {
+      "type": "string",
+      "value": "Person",
+    },
+  },
+]
+`;
