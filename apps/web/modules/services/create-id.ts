@@ -1,4 +1,4 @@
-import { v4 } from 'uuid';
+import { v4, validate, version } from 'uuid';
 import { Triple, Value } from '../types';
 
 export function createEntityId() {
@@ -43,4 +43,14 @@ export function createTripleWithId(entityId: string, attributeId: string, value:
     attributeId,
     value,
   };
+}
+
+export const BUILTIN_ENTITY_IDS = ['name', 'type'];
+
+function isValidUuid(uuid: string) {
+  return validate(uuid) && version(uuid) === 4;
+}
+
+export function isValidEntityId(id: string) {
+  return isValidUuid(id) || BUILTIN_ENTITY_IDS.includes(id);
 }
