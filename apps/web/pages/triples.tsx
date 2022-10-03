@@ -33,7 +33,7 @@ const PageContainer = styled.div({
 
 export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { upsertLocalTriple } = useTriples();
+  const tripleStore = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -42,7 +42,7 @@ export default function Triples() {
     const attributeId = '';
     const value = { type: 'string' as const, value: '' };
 
-    upsertLocalTriple({
+    tripleStore.create({
       // We set the local triple id to an empty string to know that it's a
       // new triple and not an existing one. This will change once we have
       // bulk publishing set up.

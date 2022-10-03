@@ -23,7 +23,37 @@ describe('TripleStore', () => {
       },
     };
 
-    store.upsertLocalTriple(newFact);
+    store.create(newFact);
+    expect(store.triples).toStrictEqual([newFact]);
+  });
+
+  it('Updates existing triple', () => {
+    const store = new TripleStore({
+      api: new StubNetwork(),
+      initialtriples: [
+        {
+          id: '1',
+          entityId: 'alice',
+          attributeId: 'name',
+          value: {
+            type: 'string',
+            value: 'Alice',
+          },
+        },
+      ],
+    });
+
+    const newFact: Triple = {
+      id: '1',
+      entityId: 'bob',
+      attributeId: 'name',
+      value: {
+        type: 'string',
+        value: 'Bob',
+      },
+    };
+
+    store.update(newFact);
     expect(store.triples).toStrictEqual([newFact]);
   });
 });

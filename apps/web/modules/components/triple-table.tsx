@@ -165,11 +165,11 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 export default function TripleTable({ globalFilter }: Props) {
-  const { triples, upsertLocalTriple, createNetworkTriple, updateNetworkTriple } = useTriples();
+  const tripleStore = useTriples();
   const { data: signer } = useSigner();
 
   const table = useReactTable({
-    data: triples,
+    data: tripleStore.triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
@@ -184,10 +184,10 @@ export default function TripleTable({ globalFilter }: Props) {
     },
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
-        const tripleId = triples[rowIndex].id;
-        const oldEntityId = triples[rowIndex].entityId;
-        const oldAttributeId = triples[rowIndex].attributeId;
-        const oldValue = triples[rowIndex].value;
+        const tripleId = tripleStore.triples[rowIndex].id;
+        const oldEntityId = tripleStore.triples[rowIndex].entityId;
+        const oldAttributeId = tripleStore.triples[rowIndex].attributeId;
+        const oldValue = tripleStore.triples[rowIndex].value;
 
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
@@ -201,22 +201,7 @@ export default function TripleTable({ globalFilter }: Props) {
           value,
         };
 
-        if (attributeId !== '' && value.value !== '') {
-          // We only want to trigger the transaction if the cell contents are different
-          if (isValueColumn && oldValue.value === value.value) return;
-          if (isAttributeColumn && oldAttributeId === attributeId) return;
-
-          if (signer) {
-            // We know it's a new triple if it has an empty id
-            if (tripleId === '') {
-              createNetworkTriple(newTriple, signer);
-            } else {
-              updateNetworkTriple(newTriple, triples[rowIndex], signer);
-            }
-          }
-        }
-
-        upsertLocalTriple(newTriple);
+        tripleStore.update(newTriple);
       },
     },
   });

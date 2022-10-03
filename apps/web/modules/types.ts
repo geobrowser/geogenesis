@@ -25,3 +25,12 @@ export type Triple = {
 export type Identifable = {
   id: string;
 };
+
+export type ChangeType = 'created' | 'edited';
+
+// Do we put all of the triples data in here? It would be faster when it's time to
+// actually publish the changes.
+export type TripleChange = {
+  id: string;
+  type: ChangeType;
+};

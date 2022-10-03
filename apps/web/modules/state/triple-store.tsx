@@ -40,31 +40,20 @@ export class TripleStore {
   }
 
   createNetworkTriple = async (triple: Triple, signer: Signer) => {
-    const newTriple = await this.api.createTriple(triple, signer);
-    const triples = this.triples$.getValue();
-    const index = triples.findIndex(t => t.id === triple.id); // triple.id should be '' for new triples
-    triples[index] = newTriple;
-    this.triples$.next(triples);
-    return newTriple;
+    // const newTriple = await this.api.createTriple(triple, signer);
+    // const triples = this.triples$.getValue();
+    // const index = triples.findIndex(t => t.id === triple.id); // triple.id should be '' for new triples
+    // triples[index] = newTriple;
+    // this.triples$.next(triples);
+    // return newTriple;
   };
 
-  updateNetworkTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
-    const newTriple = await this.api.updateTriple(triple, oldTriple, signer);
-    const index = this.triples.findIndex(t => t.id === oldTriple.id);
-    const triples = this.triples$.getValue();
-    triples[index] = newTriple;
-    this.triples$.next(triples);
-  };
-
-  upsertLocalTriple = (triple: Triple) => {
+  create = (triple: Triple) => this.triples$.next([triple, ...this.triples]);
+  update = (triple: Triple) => {
     const index = this.triples.findIndex(t => t.id === triple.id);
-    if (index === -1) {
-      this.triples$.next([triple, ...this.triples$.getValue()]);
-    } else {
-      const triples = this.triples$.getValue();
-      triples[index] = triple;
-      this.triples$.next(triples);
-    }
+    const triples = this.triples$.getValue();
+    triples[index] = triple;
+    this.triples$.next(triples);
   };
 
   loadNetworkTriples = async () => {
