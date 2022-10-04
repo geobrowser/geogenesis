@@ -39,19 +39,16 @@ export class TripleStore {
     this.subscriptions.push(syncerSubscription, tripleIdSubscription);
   }
 
-  createNetworkTriple = async (triple: Triple, signer: Signer) => {
-    // const newTriple = await this.api.createTriple(triple, signer);
-    // const triples = this.triples$.getValue();
-    // const index = triples.findIndex(t => t.id === triple.id); // triple.id should be '' for new triples
-    // triples[index] = newTriple;
-    // this.triples$.next(triples);
-    // return newTriple;
+  create = (triple: Triple) => {
+    triple.changed = 'created';
+    this.triples$.next([triple, ...this.triples]);
   };
 
-  create = (triple: Triple) => this.triples$.next([triple, ...this.triples]);
   update = (triple: Triple) => {
     const index = this.triples.findIndex(t => t.id === triple.id);
     const triples = this.triples$.getValue();
+
+    triple.changed = 'edited';
     triples[index] = triple;
     this.triples$.next(triples);
   };

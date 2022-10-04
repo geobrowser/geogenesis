@@ -20,6 +20,7 @@ export type Triple = {
   entityId: string;
   attributeId: string;
   value: Value;
+  changed?: ChangeType;
 };
 
 export type Identifable = {
@@ -27,10 +28,3 @@ export type Identifable = {
 };
 
 export type ChangeType = 'created' | 'edited';
-
-// Do we put all of the triples data in here? It would be faster when it's time to
-// actually publish the changes.
-export type TripleChange = {
-  id: string;
-  type: ChangeType;
-};
