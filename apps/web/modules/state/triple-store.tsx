@@ -63,10 +63,17 @@ export class TripleStore implements ITripleStore {
       this.changedTriples[indexOfChangedTriple] = triple;
     } else {
       triple.status = 'edited';
-      this.changedTriples.push({
-        ...oldTriple,
-        status: 'deleted',
-      });
+      const lastVersionIndex = this.changedTriples.findIndex(t => t.id === oldTriple.id);
+
+      if (lastVersionIndex === -1) {
+        this.changedTriples.push({
+          ...oldTriple,
+          status: 'deleted',
+        });
+      } else {
+        // Remove the last version of the triple from the changedTriples array
+        this.changedTriples.splice(lastVersionIndex, 1);
+      }
 
       triple.id = createTripleId(triple.entityId, triple.attributeId, triple.value);
 
@@ -74,20 +81,25 @@ export class TripleStore implements ITripleStore {
         ...triple,
         status: 'created',
       });
-      // TODO: Do something with old triple
-    }
 
-    triple.id = createTripleId(triple.entityId, triple.attributeId, triple.value);
-    triples[index] = triple;
-    this.triples$.next(triples);
+      triples[index] = triple;
+      this.triples$.next(triples);
+    }
   };
 
-  publish = (signer: Signer) => {
-    console.log('Changed triples', this.changedTriples);
-    console.log('State triples', this.triples);
-    this.api.publish(this.changedTriples, signer);
+  publish = async (signer: Signer) => {
+    // await this.api.publish(this.changedTriples, signer);
+
     this.changedTriples = [];
-    // TODO: Need to clear status from all triples
+    const triples = this.triples.map(triple => ({
+      ...triple,
+      status: undefined,
+    }));
+
+    console.log('State triples', this.triples);
+    console.log('Changed triples', this.changedTriples);
+
+    this.triples$.next(triples);
   };
 
   loadNetworkTriples = async () => {

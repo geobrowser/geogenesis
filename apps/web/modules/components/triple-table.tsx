@@ -200,6 +200,7 @@ export default function TripleTable({ globalFilter }: Props) {
           value,
         };
 
+        // TODO: Only update if there's actually a change
         tripleStore.update(newTriple, tripleStore.triples[rowIndex]);
       },
     },

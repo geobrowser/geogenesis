@@ -21,11 +21,6 @@ export type Triple = {
   attributeId: string;
   value: Value;
   status?: ChangeType;
-  // denotes if the local triple has already been changed.
-  // We don't want to track every change to every triple,
-  // just that it has changed at some point so we can do
-  // "deleteTriple" when we publish.
-  hasChanged?: boolean;
 };
 
 export type TripleChange = Triple & {
@@ -40,3 +35,17 @@ export type Identifable = {
 // Right now an edit is a delete and create, so we have to track the new triple
 // and the old one.
 export type ChangeType = 'created' | 'edited' | 'deleted';
+
+/**
+ * Local triple versions
+ *
+ * Triple 1
+ *    -> changed to Triple 2 (added to TripleVersions array)
+ *       create new entry in TriplePosition with the new id and all of the accumulated triples
+ *
+ */
+
+type TripleVersions = {
+  ids: string[];
+  versions: Record<string, Triple[]>;
+};
