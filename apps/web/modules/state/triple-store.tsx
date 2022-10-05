@@ -10,7 +10,6 @@ interface ITripleStoreConfig {
   initialtriples?: Triple[];
 }
 
-// TODO: Create store interface
 interface ITripleStore {
   triples$: BehaviorSubject<Triple[]>;
   create(triple: Triple): void;
@@ -21,16 +20,15 @@ interface ITripleStore {
 export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
-  changedTriples: Triple[] = []; // state of the triples that have changed
+  changedTriples: Triple[] = []; // history of the triples that have changed mapped to 'created' | 'deleted' status
   private tripleIds = new Set<string>();
-  private subscriptions: Subscription[] = [];
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
     this.api = api;
     this.triples$ = new BehaviorSubject(initialtriples);
 
     // If you want to keep the local triples in sync with the remote triples, you can do this:
-    const syncerSubscription = this.api.syncer$.subscribe(serverTriples => {
+    this.api.syncer$.subscribe(serverTriples => {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
       const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
@@ -40,11 +38,9 @@ export class TripleStore implements ITripleStore {
     // When triples are updated we can precalculate the ids for deduping.
     // Is this faster than calling this.tripleIds.add(triple.id) in the
     // sync subscriber and any mutations to the triples array (i.e., createTriple)?
-    const tripleIdSubscription = this.triples$.subscribe(value => {
+    this.triples$.subscribe(value => {
       this.tripleIds = new Set(value.map(triple => triple.id));
     });
-
-    this.subscriptions.push(syncerSubscription, tripleIdSubscription);
   }
 
   create = (triple: Triple) => {
@@ -57,6 +53,16 @@ export class TripleStore implements ITripleStore {
     const index = this.triples.findIndex(t => t.id === oldTriple.id);
     const triples = this.triples$.getValue();
 
+    // We need to ensure we are tracking the state of the original triple and the state of
+    // the most recent triple. This is because our backend expects a create + delete when a
+    // triple is edited.
+    //
+    // If a triple is just created then we need to track all subsequent updates to it _without_
+    // a delete pair.
+    //
+    // If a triple already exists on the backend and has been updated locally, we need to track
+    // the original state of the triple as well as the most recent state of the triple, but make
+    // sure we don't track intermediate states since they aren't important.
     if (oldTriple.status === 'created') {
       const indexOfChangedTriple = this.changedTriples.findIndex(t => t.id === oldTriple.id);
       triple.status = 'created';
