@@ -38,13 +38,38 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
+function getActionFromChangeStatus(triple: Triple) {
+  switch (triple.status) {
+    case 'created':
+      return {
+        type: 'createTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      };
+
+    case 'edited':
+      return {
+        type: 'createTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      };
+
+    case 'deleted':
+      return {
+        type: 'deleteTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      };
+  }
+}
+
 export interface INetwork {
   syncer$: Observable<Triple[]>;
   getNetworkTriples: () => Promise<Triple[]>;
-  createTriple: (triple: Triple, signer: Signer) => Promise<Triple>;
-
-  // Currently an update to a triple is a delete followed by a create
-  updateTriple: (triple: Triple, oldTriple: Triple, signer: Signer) => Promise<Triple>;
+  publish: (triples: Triple[], signer: Signer) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -62,6 +87,25 @@ export class Network implements INetwork {
     // This could be composed in a functional way rather than initialized like this :thinking:
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
   }
+
+  publish = async (triples: Triple[], signer: Signer): Promise<void> => {
+    const chain = await signer.getChainId();
+    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
+    const contract = this.contract.connect(contractAddress, signer);
+
+    const root: Root = {
+      type: 'root',
+      version: '0.0.1',
+      actions: triples.map(getActionFromChangeStatus), // TODO: Map to correct shit
+    };
+
+    const cidString = await this.storageClient.uploadObject(root);
+    const tx = await contract.addEntry(`ipfs://${cidString}`);
+
+    // TODO: What to do with receipt???
+    const receipt = await tx.wait();
+    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
+  };
 
   createTriple = async (triple: Triple, signer: Signer) => {
     const chain = await signer.getChainId();

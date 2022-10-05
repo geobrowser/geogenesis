@@ -1,5 +1,6 @@
 import { Signer } from 'ethers';
 import { describe, expect, it } from 'vitest';
+import { createTripleId } from '../services/create-id';
 import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
@@ -32,7 +33,10 @@ describe('TripleStore', () => {
       api: new StubNetwork(),
       initialtriples: [
         {
-          id: '1',
+          id: createTripleId('alice', 'name', {
+            type: 'string',
+            value: 'Alice',
+          }),
           entityId: 'alice',
           attributeId: 'name',
           value: {
@@ -44,7 +48,10 @@ describe('TripleStore', () => {
     });
 
     const newFact: Triple = {
-      id: '1',
+      id: createTripleId('bob', 'name', {
+        type: 'string',
+        value: 'Bob',
+      }),
       entityId: 'bob',
       attributeId: 'name',
       value: {
@@ -53,7 +60,16 @@ describe('TripleStore', () => {
       },
     };
 
-    store.update(newFact);
+    store.update(newFact, {
+      id: '1',
+      entityId: 'alice',
+      attributeId: 'name',
+      value: {
+        type: 'string',
+        value: 'Alice',
+      },
+    });
+
     expect(store.triples).toStrictEqual([newFact]);
   });
 });

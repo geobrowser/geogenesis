@@ -21,7 +21,7 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
 }
 
 export const useTriples = () => {
-  const { loadNetworkTriples, create, update, triples$ } = useTripleStore();
+  const { loadNetworkTriples, create, update, publish, triples$ } = useTripleStore();
   const triples = useSharedObservable(triples$);
 
   useEffect(() => {
@@ -36,5 +36,6 @@ export const useTriples = () => {
     triples,
     create,
     update,
+    publish,
   };
 };

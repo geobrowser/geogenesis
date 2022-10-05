@@ -166,7 +166,6 @@ interface Props {
 // build. Using default export works.
 export default function TripleTable({ globalFilter }: Props) {
   const tripleStore = useTriples();
-  const { data: signer } = useSigner();
 
   const table = useReactTable({
     data: tripleStore.triples,
@@ -201,7 +200,7 @@ export default function TripleTable({ globalFilter }: Props) {
           value,
         };
 
-        tripleStore.update(newTriple);
+        tripleStore.update(newTriple, tripleStore.triples[rowIndex]);
       },
     },
   });
