@@ -38,7 +38,7 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
-function getActionFromChangeStatus(triple: Triple) {
+function getActionFromChangeStatus(triple: Required<Triple>) {
   switch (triple.status) {
     case 'created':
       return {
@@ -46,7 +46,7 @@ function getActionFromChangeStatus(triple: Triple) {
         entityId: triple.entityId,
         attributeId: triple.attributeId,
         value: triple.value,
-      };
+      } as const;
 
     case 'edited':
       return {
@@ -54,7 +54,7 @@ function getActionFromChangeStatus(triple: Triple) {
         entityId: triple.entityId,
         attributeId: triple.attributeId,
         value: triple.value,
-      };
+      } as const;
 
     case 'deleted':
       return {
@@ -62,7 +62,7 @@ function getActionFromChangeStatus(triple: Triple) {
         entityId: triple.entityId,
         attributeId: triple.attributeId,
         value: triple.value,
-      };
+      } as const;
   }
 }
 
@@ -96,7 +96,8 @@ export class Network implements INetwork {
     const root: Root = {
       type: 'root',
       version: '0.0.1',
-      actions: triples.map(getActionFromChangeStatus), // TODO: Map to correct shit
+      // @ts-expect-error TODO(byron): Fix these types
+      actions: triples.map(getActionFromChangeStatus),
     };
 
     const cidString = await this.storageClient.uploadObject(root);
