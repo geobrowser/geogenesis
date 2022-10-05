@@ -21,7 +21,7 @@ interface ITripleStore {
 export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
-  private changedTriples: Triple[] = []; // state of the triples that have changed
+  changedTriples: Triple[] = []; // state of the triples that have changed
   private tripleIds = new Set<string>();
   private subscriptions: Subscription[] = [];
 
@@ -30,12 +30,12 @@ export class TripleStore implements ITripleStore {
     this.triples$ = new BehaviorSubject(initialtriples);
 
     // If you want to keep the local triples in sync with the remote triples, you can do this:
-    // const syncerSubscription = this.api.syncer$.subscribe(serverTriples => {
-    //   // Only update state with the union of the local and remote stores
-    //   // state = (local - remote) + remote
-    //   const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
-    //   this.triples$.next(mergedTriples);
-    // });
+    const syncerSubscription = this.api.syncer$.subscribe(serverTriples => {
+      // Only update state with the union of the local and remote stores
+      // state = (local - remote) + remote
+      const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
+      this.triples$.next(mergedTriples);
+    });
 
     // When triples are updated we can precalculate the ids for deduping.
     // Is this faster than calling this.tripleIds.add(triple.id) in the
@@ -44,7 +44,7 @@ export class TripleStore implements ITripleStore {
       this.tripleIds = new Set(value.map(triple => triple.id));
     });
 
-    // this.subscriptions.push(syncerSubscription, tripleIdSubscription);
+    this.subscriptions.push(syncerSubscription, tripleIdSubscription);
   }
 
   create = (triple: Triple) => {
@@ -71,7 +71,10 @@ export class TripleStore implements ITripleStore {
           status: 'deleted',
         });
       } else {
-        // Remove the last version of the triple from the changedTriples array
+        // Remove the last version of the changed triple from the changedTriples array. We only
+        // want to publish the deletion of the first version of the triple and the creation of
+        // the latest version.
+        // Using splice is going to be faster than filtering potentially large triples array
         this.changedTriples.splice(lastVersionIndex, 1);
       }
 
@@ -89,15 +92,14 @@ export class TripleStore implements ITripleStore {
 
   publish = async (signer: Signer) => {
     // await this.api.publish(this.changedTriples, signer);
+    // console.log('Changed triples', this.changedTriples);
+    // console.log('State triples', this.triples);
 
     this.changedTriples = [];
     const triples = this.triples.map(triple => ({
       ...triple,
       status: undefined,
     }));
-
-    console.log('State triples', this.triples);
-    console.log('Changed triples', this.changedTriples);
 
     this.triples$.next(triples);
   };
