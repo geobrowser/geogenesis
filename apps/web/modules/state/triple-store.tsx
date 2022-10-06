@@ -33,6 +33,7 @@ export class TripleStore implements ITripleStore {
       // state = (local - remote) + remote
       const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
 
+      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple
       const newTriples = mergedTriples.filter(triple => {
         const mergedTripleId = createTripleId(triple);
 

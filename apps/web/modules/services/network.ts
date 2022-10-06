@@ -38,7 +38,7 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
-function getActionFromChangeStatus(triple: Required<Triple>) {
+function getActionFromChangeStatus(triple: Triple) {
   switch (triple.status) {
     case 'created':
       return {
@@ -63,6 +63,9 @@ function getActionFromChangeStatus(triple: Required<Triple>) {
         attributeId: triple.attributeId,
         value: triple.value,
       } as const;
+
+    default:
+      throw new Error(`Triple does not have a status ${triple.status}`);
   }
 }
 
@@ -96,7 +99,6 @@ export class Network implements INetwork {
     const root: Root = {
       type: 'root',
       version: '0.0.1',
-      // @ts-expect-error TODO(byron): Fix these types
       actions: triples.map(getActionFromChangeStatus),
     };
 
