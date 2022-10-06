@@ -32,7 +32,16 @@ export class TripleStore implements ITripleStore {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
       const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
-      this.triples$.next(mergedTriples);
+
+      const newTriples = mergedTriples.filter(triple => {
+        const mergedTripleId = createTripleId(triple);
+
+        return !this.changedTriples.some(
+          changedTriple => mergedTripleId === createTripleId(changedTriple) && changedTriple.status === 'deleted'
+        );
+      });
+
+      this.triples$.next(newTriples);
     });
 
     // When triples are updated we can precalculate the ids for deduping.
@@ -102,7 +111,7 @@ export class TripleStore implements ITripleStore {
   };
 
   publish = async (signer: Signer) => {
-    // await this.api.publish(this.changedTriples, signer);
+    await this.api.publish(this.changedTriples, signer);
     console.log('Changed triples', this.changedTriples);
     console.log('State triples', this.triples);
 

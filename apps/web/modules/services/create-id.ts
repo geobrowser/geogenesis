@@ -23,8 +23,17 @@ function createValueId(value: Value): string {
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
-export function createTripleId(entityId: string, attributeId: string, value: Value): string {
-  return `${entityId}:${attributeId}:${createValueId(value)}`;
+export function createTripleId(entityId: string, attributeId: string, value: Value): string;
+export function createTripleId(triple: Triple): string;
+export function createTripleId(
+  ...args: [entityId: string, attributeId: string, value: Value] | [triple: Triple]
+): string {
+  if (args.length === 1) {
+    const triple = args[0];
+    return createTripleId(triple.entityId, triple.attributeId, triple.value);
+  }
+
+  return `${args[0]}:${args[1]}:${createValueId(args[2])}`;
 }
 
 export function createTripleWithId(entityId: string, attributeId: string, value: Value): Triple {
