@@ -32,8 +32,9 @@ const PageContainer = styled.div({
 });
 
 export default function Triples() {
+  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
-  const { upsertLocalTriple } = useTriples();
+  const tripleStore = useTriples();
 
   const debouncedFilter = debounce(setGlobalFilter, 150);
 
@@ -42,11 +43,8 @@ export default function Triples() {
     const attributeId = '';
     const value = { type: 'string' as const, value: '' };
 
-    upsertLocalTriple({
-      // We set the local triple id to an empty string to know that it's a
-      // new triple and not an existing one. This will change once we have
-      // bulk publishing set up.
-      id: '',
+    tripleStore.create({
+      id: createTripleId(entityId, attributeId, value),
       entityId,
       attributeId,
       value,
@@ -59,6 +57,9 @@ export default function Triples() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
+        <Button icon="create" onClick={() => tripleStore.publish(signer!)}>
+          Publish
+        </Button>
         <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>

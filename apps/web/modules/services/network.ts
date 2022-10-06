@@ -38,13 +38,41 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
+function getActionFromChangeStatus(triple: Triple) {
+  switch (triple.status) {
+    case 'created':
+      return {
+        type: 'createTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      } as const;
+
+    case 'edited':
+      return {
+        type: 'createTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      } as const;
+
+    case 'deleted':
+      return {
+        type: 'deleteTriple',
+        entityId: triple.entityId,
+        attributeId: triple.attributeId,
+        value: triple.value,
+      } as const;
+
+    default:
+      throw new Error(`Triple does not have a status ${triple.status}`);
+  }
+}
+
 export interface INetwork {
   syncer$: Observable<Triple[]>;
   getNetworkTriples: () => Promise<Triple[]>;
-  createTriple: (triple: Triple, signer: Signer) => Promise<Triple>;
-
-  // Currently an update to a triple is a delete followed by a create
-  updateTriple: (triple: Triple, oldTriple: Triple, signer: Signer) => Promise<Triple>;
+  publish: (triples: Triple[], signer: Signer) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -63,72 +91,23 @@ export class Network implements INetwork {
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
   }
 
-  createTriple = async (triple: Triple, signer: Signer) => {
+  publish = async (triples: Triple[], signer: Signer): Promise<void> => {
     const chain = await signer.getChainId();
     const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
-
-    // TODO: Error handling
     const contract = this.contract.connect(contractAddress, signer);
 
     const root: Root = {
       type: 'root',
       version: '0.0.1',
-      actions: [
-        {
-          type: 'createTriple',
-          entityId: triple.entityId,
-          attributeId: triple.attributeId,
-          value: triple.value,
-        },
-      ],
+      actions: triples.map(getActionFromChangeStatus),
     };
 
     const cidString = await this.storageClient.uploadObject(root);
-
     const tx = await contract.addEntry(`ipfs://${cidString}`);
 
     // TODO: What to do with receipt???
     const receipt = await tx.wait();
     console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
-
-    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
-  };
-
-  updateTriple = async (triple: Triple, oldTriple: Triple, signer: Signer) => {
-    const chain = await signer.getChainId();
-    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
-
-    // TODO: Error handling
-    const contract = this.contract.connect(contractAddress, signer);
-
-    const root: Root = {
-      type: 'root',
-      version: '0.0.1',
-      actions: [
-        {
-          type: 'createTriple',
-          entityId: triple.entityId,
-          attributeId: triple.attributeId,
-          value: triple.value,
-        },
-        {
-          type: 'deleteTriple',
-          entityId: oldTriple.entityId,
-          attributeId: oldTriple.attributeId,
-          value: oldTriple.value,
-        },
-      ],
-    };
-
-    const cidString = await this.storageClient.uploadObject(root);
-
-    const tx = await contract.addEntry(`ipfs://${cidString}`);
-
-    // TODO: What to do with receipt???
-    const receipt = await tx.wait();
-    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
-
-    return createTripleWithId(triple.entityId, triple.attributeId, triple.value);
   };
 
   getNetworkTriples = async () => {
