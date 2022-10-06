@@ -35,17 +35,3 @@ export type Identifable = {
 // Right now an edit is a delete and create, so we have to track the new triple
 // and the old one.
 export type ChangeType = 'created' | 'edited' | 'deleted';
-
-/**
- * Local triple versions
- *
- * Triple 1
- *    -> changed to Triple 2 (added to TripleVersions array)
- *       create new entry in TriplePosition with the new id and all of the accumulated triples
- *
- */
-
-type TripleVersions = {
-  ids: string[];
-  versions: Record<string, Triple[]>;
-};
