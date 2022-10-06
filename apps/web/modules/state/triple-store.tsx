@@ -54,7 +54,9 @@ export class TripleStore implements ITripleStore {
     const triples = this.triples$.getValue();
 
     // If there haven't been actual changes to the data we can skip updates
-    if (triple.value.value === oldTriple.value.value && triple.attributeId === oldTriple.attributeId) return;
+    if (triple.value.value === oldTriple.value.value && triple.attributeId === oldTriple.attributeId) {
+      return;
+    }
 
     // We need to ensure we are tracking the state of the original triple and the state of
     // the most recent triple. This is because our backend expects a create + delete when a
@@ -93,24 +95,24 @@ export class TripleStore implements ITripleStore {
         ...triple,
         status: 'created',
       });
-
-      triples[index] = triple;
-      this.triples$.next(triples);
     }
+
+    triples[index] = triple;
+    this.triples$.next(triples);
   };
 
   publish = async (signer: Signer) => {
     // await this.api.publish(this.changedTriples, signer);
-    // console.log('Changed triples', this.changedTriples);
-    // console.log('State triples', this.triples);
+    console.log('Changed triples', this.changedTriples);
+    console.log('State triples', this.triples);
 
-    this.changedTriples = [];
-    const triples = this.triples.map(triple => ({
-      ...triple,
-      status: undefined,
-    }));
+    // this.changedTriples = [];
+    // const triples = this.triples.map(triple => ({
+    //   ...triple,
+    //   status: undefined,
+    // }));
 
-    this.triples$.next(triples);
+    // this.triples$.next(triples);
   };
 
   loadNetworkTriples = async () => {
