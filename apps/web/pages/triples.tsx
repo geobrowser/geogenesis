@@ -3,6 +3,7 @@ import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
+import { ActionBar } from '~/modules/components/action-bar';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -72,6 +73,8 @@ export default function Triples() {
       <Spacer height={12} />
 
       <TripleTable globalFilter={globalFilter} />
+
+      <ActionBar />
     </PageContainer>
   );
 }
