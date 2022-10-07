@@ -2,7 +2,7 @@ import { parse as parseCSV } from 'papaparse';
 import { Triple, Value } from '../types';
 import { BUILTIN_ENTITY_IDS, createEntityId, createTripleWithId, isValidEntityId } from './create-id';
 
-function readFileAsText(file: File) {
+export function readFileAsText(file: File) {
   return new Promise<string>(resolve => {
     const reader = new FileReader();
     reader.addEventListener('load', event => {
@@ -15,7 +15,9 @@ function readFileAsText(file: File) {
 
 type CreateUuid = (value: string) => string;
 
-function readCSV(csv: string, createId: CreateUuid = createEntityId): Triple[] {
+export type EavRow = [string, string, string];
+
+function readCSV(csv: string): EavRow[] {
   const results = parseCSV<string[]>(csv);
 
   const rows = results.data.slice(1);
@@ -24,6 +26,14 @@ function readCSV(csv: string, createId: CreateUuid = createEntityId): Triple[] {
     throw new Error('Each row must have 3 cells');
   }
 
+  return rows as EavRow[];
+}
+
+function unique(triples: Triple[]): Triple[] {
+  return Object.values(Object.fromEntries(triples.map(triple => [triple.id, triple])));
+}
+
+export function eavRowsToTriples(rows: EavRow[], createId: CreateUuid = createEntityId): Triple[] {
   // Create a collection of all known entity ids
   const entityIds = new Set([
     ...BUILTIN_ENTITY_IDS,
@@ -45,10 +55,11 @@ function readCSV(csv: string, createId: CreateUuid = createEntityId): Triple[] {
     return createTripleWithId(mappedEntityId, mappedAttributeId, mappedValue);
   });
 
-  return triples;
+  return unique(triples);
 }
 
 export async function importCSVFile(file: File, createId: CreateUuid = createEntityId): Promise<Triple[]> {
   const csv = await readFileAsText(file);
-  return readCSV(csv, createId);
+  const rows = readCSV(csv);
+  return eavRowsToTriples(rows, createId);
 }
