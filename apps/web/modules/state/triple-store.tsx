@@ -112,15 +112,19 @@ export class TripleStore implements ITripleStore {
   };
 
   publish = async (signer: Signer) => {
-    await this.api.publish(this.changedTriples, signer);
+    try {
+      await this.api.publish(this.changedTriples, signer);
 
-    const triples = this.triples.map(triple => ({
-      ...triple,
-      status: undefined,
-    }));
-    this.changedTriples = [];
+      const triples = this.triples.map(triple => ({
+        ...triple,
+        status: undefined,
+      }));
+      this.changedTriples = [];
 
-    this.triples$.next(triples);
+      this.triples$.next(triples);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   loadNetworkTriples = async () => {
