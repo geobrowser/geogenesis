@@ -111,13 +111,14 @@ export class Network implements INetwork {
   };
 
   getNetworkTriples = async () => {
-    const response = await fetch(this.subgraphUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `query { 
+    try {
+      const response = await fetch(this.subgraphUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `query { 
           triples {
             id
             attribute {
@@ -134,24 +135,28 @@ export class Network implements INetwork {
             valueType
           } 
         }`,
-      }),
-    });
+        }),
+      });
 
-    const json: {
-      data: {
-        triples: NetworkTriple[];
-      };
-    } = await response.json();
+      const json: {
+        data: {
+          triples: NetworkTriple[];
+        };
+      } = await response.json();
 
-    const triples = json.data.triples.map((networkTriple): Triple => {
-      return {
-        id: networkTriple.id,
-        entityId: networkTriple.entity.id,
-        attributeId: networkTriple.attribute.id,
-        value: extractValue(networkTriple),
-      };
-    });
+      const triples = json.data.triples.map((networkTriple): Triple => {
+        return {
+          id: networkTriple.id,
+          entityId: networkTriple.entity.id,
+          attributeId: networkTriple.attribute.id,
+          value: extractValue(networkTriple),
+        };
+      });
 
-    return triples;
+      return triples;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   };
 }
