@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSigner } from 'wagmi';
 import { Button } from '../design-system/button';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
@@ -22,7 +23,8 @@ const Container = styled.div(props => ({
 const MotionContainer = motion(Container);
 
 export function ActionBar() {
-  const { changedTriples } = useTriples();
+  const { data: signer } = useSigner();
+  const { changedTriples, publish } = useTriples();
 
   const changeCount = changedTriples.length;
 
@@ -43,7 +45,7 @@ export function ActionBar() {
             {changeCount} changes
           </Text>
           <Spacer width={16} />
-          <Button variant="primary" onClick={() => {}}>
+          <Button variant="primary" onClick={() => publish(signer!)}>
             Review changes
           </Button>
         </MotionContainer>

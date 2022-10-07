@@ -35,7 +35,6 @@ const PageContainer = styled.div({
 });
 
 export default function Triples() {
-  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const tripleStore = useTriples();
 
@@ -60,9 +59,6 @@ export default function Triples() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={() => tripleStore.publish(signer!)}>
-          Publish
-        </Button>
         <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>
