@@ -25,11 +25,13 @@ const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
 const PageHeader = styled.div({
   display: 'flex',
   justifyContent: 'space-between',
+  width: '100%',
 });
 
 const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
+  alignItems: 'center',
 });
 
 export default function Triples() {
