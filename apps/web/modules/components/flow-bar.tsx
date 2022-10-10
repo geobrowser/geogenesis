@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
+import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
 import { Divider } from '../design-system/divider';
 import { LeftArrowLong } from '../design-system/icons/left-arrow-long';
@@ -33,7 +34,7 @@ export function FlowBar() {
   const { changedTriples, publish } = useTriples();
   const [reviewState, setReviewState] = useState<'idle' | 'reviewing' | 'publishing'>('idle');
 
-  const changeCount = changedTriples.length;
+  const changeCount = changedTriples.filter(change => change.status === 'created').length;
 
   // TODO: Reset the review state to idle on publish
 
@@ -73,7 +74,7 @@ function Idle({ changeCount, onNext }: IdleProps) {
       <Trash color={theme.colors['grey-04']} />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
-        {changeCount} changes
+        {changeCount} {pluralize('change', changeCount)}
       </Text>
 
       <Spacer width={16} />
@@ -130,7 +131,7 @@ function Review({ changeCount, onNext, onBack }: ReviewProps) {
       <Trash color={theme.colors['grey-04']} />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
-        {changeCount} changes
+        {changeCount} {pluralize('change', changeCount)}
       </Text>
 
       <Spacer width={16} />

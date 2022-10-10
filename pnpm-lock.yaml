@@ -29,6 +29,7 @@ importers:
       '@testing-library/react': ^13.4.0
       '@types/lodash.debounce': ^4.0.7
       '@types/node': ^17.0.35
+      '@types/pluralize': ^0.0.29
       '@types/react': ^18.0.9
       '@types/react-dom': ^18.0.6
       '@types/uuid': ^8.3.4
@@ -41,6 +42,7 @@ importers:
       lodash.debounce: ^4.0.8
       modern-normalize: ^1.1.0
       next: ^12.1.6
+      pluralize: ^8.0.0
       raw-body: ^2.5.1
       react: ^18.1.0
       react-dom: ^18.1.0
@@ -65,6 +67,7 @@ importers:
       lodash.debounce: 4.0.8
       modern-normalize: 1.1.0
       next: 12.2.3_vyk55zyolcaieh7zfm7nf7uva4
+      pluralize: 8.0.0
       raw-body: 2.5.1
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -77,6 +80,7 @@ importers:
       '@testing-library/react': 13.4.0_biqbaboplfbrettd7655fr4n2y
       '@types/lodash.debounce': 4.0.7
       '@types/node': 17.0.45
+      '@types/pluralize': 0.0.29
       '@types/react': 18.0.15
       '@types/react-dom': 18.0.6
       '@types/uuid': 8.3.4
@@ -2345,6 +2349,10 @@ packages:
     resolution: {integrity: sha512-Cf63Rv7jCQ0LaL8tNXmEyqTHuIJxRdlS5vMh1mj5voN4+QFhVZnlZruezqpWYDiJ8UTzhP0VmeLXCmBk66YrMQ==}
     dependencies:
       '@types/node': 18.7.18
+
+  /@types/pluralize/0.0.29:
+    resolution: {integrity: sha512-BYOID+l2Aco2nBik+iYS4SZX0Lf20KPILP5RGmM1IgzdwNdTs0eebiFriOPcej1sX9mLnSoiNte5zcFxssgpGA==}
+    dev: true
 
   /@types/prettier/2.6.4:
     resolution: {integrity: sha512-fOwvpvQYStpb/zHMx0Cauwywu9yLDmzWiiQBC7gJyq5tYLUXFZvDG7VK1B7WBxxjBJNKFOZ0zLoOQn8vmATbhw==}
@@ -11498,7 +11506,6 @@ packages:
   /pluralize/8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
-    dev: true
 
   /pngjs/3.4.0:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
