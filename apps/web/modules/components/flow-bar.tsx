@@ -1,6 +1,6 @@
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Button } from '../design-system/button';
@@ -28,7 +28,7 @@ const Container = styled.div(props => ({
 
 const MotionContainer = motion(Container);
 
-export function ActionBar() {
+export function FlowBar() {
   const { data: signer } = useSigner();
   const { changedTriples, publish } = useTriples();
   const [reviewState, setReviewState] = useState<'idle' | 'reviewing' | 'publishing'>('idle');

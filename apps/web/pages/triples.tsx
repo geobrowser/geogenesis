@@ -2,8 +2,7 @@ import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { useSigner } from 'wagmi';
-import { ActionBar } from '~/modules/components/action-bar';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -72,7 +71,7 @@ export default function Triples() {
 
       <TripleTable globalFilter={globalFilter} />
 
-      <ActionBar />
+      <FlowBar />
     </PageContainer>
   );
 }
