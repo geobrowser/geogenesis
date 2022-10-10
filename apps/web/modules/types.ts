@@ -35,3 +35,5 @@ export type Identifable = {
 // Right now an edit is a delete and create, so we have to track the new triple
 // and the old one.
 export type ChangeType = 'created' | 'edited' | 'deleted';
+
+export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';

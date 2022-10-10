@@ -3,7 +3,7 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { INetwork } from '~/modules/services/network';
 import { createTripleId } from '../services/create-id';
 import { dedupe } from '../services/sync';
-import { Triple } from '../types';
+import { ReviewState, Triple } from '../types';
 
 interface ITripleStoreConfig {
   api: INetwork;
@@ -15,7 +15,7 @@ interface ITripleStore {
   changedTriples$: BehaviorSubject<Triple[]>;
   create(triple: Triple): void;
   update(triple: Triple, oldTriple: Triple): void;
-  publish(signer: Signer): void;
+  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
 export class TripleStore implements ITripleStore {
@@ -120,9 +120,9 @@ export class TripleStore implements ITripleStore {
     this.triples$.next(triples);
   };
 
-  publish = async (signer: Signer) => {
+  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     try {
-      await this.api.publish(this.changedTriples$.value, signer);
+      await this.api.publish(this.changedTriples$.value, signer, onChangePublishState);
 
       const triples = this.triples.map(triple => ({
         ...triple,

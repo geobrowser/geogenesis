@@ -1,7 +1,7 @@
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSigner } from 'wagmi';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
@@ -11,6 +11,9 @@ import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { useTriples } from '../state/hook';
+import { Toast } from '../design-system/toast';
+import { ReviewState } from '../types';
+import { Spinner } from '../design-system/spinner';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -19,7 +22,6 @@ const Container = styled.div(props => ({
   position: 'fixed',
   bottom: props.theme.space * 10,
 
-  margin: '0 auto',
   backgroundColor: props.theme.colors.white,
   boxShadow: `0px 1px 2px #F0F0F0`,
   padding: props.theme.space * 2,
@@ -32,29 +34,56 @@ const MotionContainer = motion(Container);
 export function FlowBar() {
   const { data: signer } = useSigner();
   const { changedTriples, publish } = useTriples();
-  const [reviewState, setReviewState] = useState<'idle' | 'reviewing' | 'publishing'>('idle');
+  const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
+  // An "edit" is really a delete + create behind the scenes. We don't need to count the
+  // deletes since that would double the change count.
   const changeCount = changedTriples.filter(change => change.status === 'created').length;
+  const showFlowBar = reviewState === 'idle' || reviewState === 'reviewing';
+  const showToast =
+    reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
-  // TODO: Reset the review state to idle on publish
+  const onPublish = async () => {
+    await publish(signer!, setReviewState);
+    setReviewState('publish-complete');
+    await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
+  };
 
   return (
     <AnimatePresence>
-      {changeCount > 0 ? (
-        <MotionContainer
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={{
-            duration: 0.3,
-          }}
-          key="action-bar"
-        >
-          {reviewState === 'idle' && <Idle changeCount={changeCount} onNext={() => setReviewState('reviewing')} />}
-          {reviewState === 'reviewing' && (
-            <Review changeCount={changeCount} onBack={() => setReviewState('idle')} onNext={() => publish(signer!)} />
+      {/* We let the toast persist during the publish-complete state before it switches to idle state */}
+      {changeCount > 0 || reviewState === 'publish-complete' ? (
+        <>
+          {showFlowBar && (
+            <MotionContainer
+              initial={{ y: 90 }}
+              animate={{ y: 0 }}
+              exit={{ y: 90 }}
+              transition={{ duration: 0.1, ease: 'easeInOut' }}
+              key="action-bar"
+            >
+              {reviewState === 'idle' && <Idle changeCount={changeCount} onNext={() => setReviewState('reviewing')} />}
+              {reviewState === 'reviewing' && (
+                <Review changeCount={changeCount} onBack={() => setReviewState('idle')} onNext={onPublish} />
+              )}
+            </MotionContainer>
           )}
-        </MotionContainer>
+          {showToast && (
+            <Toast key="publish-toast">
+              {reviewState !== 'publish-complete' ? (
+                <Spinner />
+              ) : (
+                <motion.span initial={{ scale: 0.2 }} animate={{ scale: 1 }} transition={{ bounce: 2 }}>
+                  🎉
+                </motion.span>
+              )}
+              <Spacer width={12} />
+              {reviewState === 'publishing-ipfs' && 'Uploading changes to IPFS'}
+              {reviewState === 'publishing-contract' && 'Uploading changes to IPFS'}
+              {reviewState === 'publish-complete' && 'Changes published!'}
+            </Toast>
+          )}
+        </>
       ) : null}
     </AnimatePresence>
   );
