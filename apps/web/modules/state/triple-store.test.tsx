@@ -89,7 +89,7 @@ describe('TripleStore', () => {
     };
 
     store.create(newTriple);
-    expect(store.changedTriples).toStrictEqual([
+    expect(store.changedTriples$.value).toStrictEqual([
       {
         ...newTriple,
         status: 'created',
@@ -125,7 +125,7 @@ describe('TripleStore', () => {
 
     store.update(newTriple, originalTriple);
 
-    expect(store.changedTriples).toStrictEqual([
+    expect(store.changedTriples$.value).toStrictEqual([
       {
         ...originalTriple,
         status: 'deleted',
@@ -175,7 +175,7 @@ describe('TripleStore', () => {
 
     store.update(secondTriple, firstTriple);
 
-    expect(store.changedTriples).toStrictEqual([
+    expect(store.changedTriples$.value).toStrictEqual([
       {
         ...originalTriple,
         status: 'deleted',

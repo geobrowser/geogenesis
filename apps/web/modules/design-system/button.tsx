@@ -4,6 +4,9 @@ import { Create } from './icons/create';
 import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorValue } from './theme/colors';
+import React from 'react';
+import { Publish } from './icons/publish';
+import { Eye } from './icons/eye';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -82,10 +85,18 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   };
 });
 
+type Icon = 'create' | 'publish' | 'eye';
+
+const icons: Record<Icon, (color: ColorValue) => JSX.Element> = {
+  create: (color: ColorValue) => <Create color={color} />,
+  publish: (color: ColorValue) => <Publish color={color} />,
+  eye: (color: ColorValue) => <Eye color={color} />,
+};
+
 interface Props {
   children: React.ReactNode;
   onClick: () => void;
-  icon?: 'create';
+  icon?: Icon;
   variant?: ButtonVariant;
   disabled?: boolean;
 }
@@ -103,7 +114,7 @@ export function Button({ children, onClick, icon, variant = 'primary', disabled 
     <StyledButton disabled={disabled} variant={variant} onClick={onClick}>
       {icon ? (
         <>
-          <Create color={iconColor} />
+          {icons[icon](iconColor)}
           <Spacer width={8} />
         </>
       ) : null}

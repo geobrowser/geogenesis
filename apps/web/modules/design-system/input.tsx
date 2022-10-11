@@ -4,6 +4,7 @@ export const Input = styled.input(props => ({
   ...props.theme.typography.input,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
+  width: '100%',
   padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
 
   transition: '100ms all ease-in-out',

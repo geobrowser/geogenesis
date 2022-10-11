@@ -188,8 +188,6 @@ export default function TripleTable({ globalFilter }: Props) {
         const oldAttributeId = tripleStore.triples[rowIndex].attributeId;
         const oldValue = tripleStore.triples[rowIndex].value;
 
-        console.log('Old triple', { tripleId, oldEntityId, oldAttributeId, oldValue });
-
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
