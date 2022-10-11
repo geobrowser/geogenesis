@@ -14,14 +14,7 @@ export function Spinner() {
     >
       <circle cx="8" cy="8.5" r="7.5" stroke="url(#paint0_angular_1066_25328)" />
       <defs>
-        <radialGradient
-          id="paint0_angular_1066_25328"
-          cx="0"
-          cy="0"
-          r="1"
-          // gradientUnits="userSpaceOnUse"
-          // gradientTransform="translate(8 8.5) rotate(90) scale(8)"
-        >
+        <radialGradient id="paint0_angular_1066_25328" cx="0" cy="0" r="1">
           <stop stopColor="#3963FE" />
           <stop offset="1" stopColor="#FE31C5" />
         </radialGradient>
