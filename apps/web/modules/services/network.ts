@@ -85,7 +85,7 @@ export class Network implements INetwork {
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
     public subgraphUrl: string,
-    syncInterval = 5000
+    syncInterval = 30000
   ) {
     // This could be composed in a functional way rather than initialized like this :thinking:
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
