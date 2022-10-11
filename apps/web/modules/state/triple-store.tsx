@@ -13,7 +13,7 @@ interface ITripleStoreConfig {
 interface ITripleStore {
   triples$: BehaviorSubject<Triple[]>;
   changedTriples$: BehaviorSubject<Triple[]>;
-  create(triple: Triple): void;
+  create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
@@ -29,22 +29,22 @@ export class TripleStore implements ITripleStore {
     this.triples$ = new BehaviorSubject(initialtriples);
 
     // If you want to keep the local triples in sync with the remote triples, you can do this:
-    this.api.syncer$.subscribe(serverTriples => {
-      // Only update state with the union of the local and remote stores
-      // state = (local - remote) + remote
-      const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
+    // this.api.syncer$.subscribe(serverTriples => {
+    //   // Only update state with the union of the local and remote stores
+    //   // state = (local - remote) + remote
+    //   const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
 
-      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple
-      const newTriples = mergedTriples.filter(triple => {
-        const mergedTripleId = createTripleId(triple);
+    //   // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple
+    //   const newTriples = mergedTriples.filter(triple => {
+    //     const mergedTripleId = createTripleId(triple);
 
-        return !this.changedTriples$.value.some(
-          changedTriple => mergedTripleId === createTripleId(changedTriple) && changedTriple.status === 'deleted'
-        );
-      });
+    //     return !this.changedTriples$.value.some(
+    //       changedTriple => mergedTripleId === createTripleId(changedTriple) && changedTriple.status === 'deleted'
+    //     );
+    //   });
 
-      this.triples$.next(newTriples);
-    });
+    //   this.triples$.next(newTriples);
+    // });
 
     // When triples are updated we can precalculate the ids for deduping.
     // Is this faster than calling this.tripleIds.add(triple.id) in the
@@ -54,11 +54,17 @@ export class TripleStore implements ITripleStore {
     });
   }
 
-  create = (triple: Triple) => {
-    triple.status = 'created';
-    this.triples$.next([triple, ...this.triples]);
-    this.changedTriples$.next([...this.changedTriples$.value, triple]);
+  create = (triples: Triple[]) => {
+    triples.forEach(triple => (triple.status = 'created'));
+    this.triples$.next([...triples, ...this.triples]);
+    this.changedTriples$.next([...this.changedTriples$.value, ...triples]);
   };
+
+  // create = (triple: Triple) => {
+  //   triple.status = 'created';
+  //   this.triples$.next([triple, ...this.triples]);
+  //   this.changedTriples$.next([...this.changedTriples$.value, triple]);
+  // };
 
   update = (triple: Triple, oldTriple: Triple) => {
     const index = this.triples.findIndex(t => t.id === oldTriple.id);
@@ -138,6 +144,7 @@ export class TripleStore implements ITripleStore {
 
   loadNetworkTriples = async () => {
     const networkTriples = await this.api.getNetworkTriples();
+    console.log(`loadingNetworkTriples`);
     this.triples$.next(networkTriples);
   };
 

@@ -46,28 +46,27 @@ export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const tripleStore = useTriples();
 
-  const debouncedFilter = debounce(setGlobalFilter, 150);
+  const debouncedFilter = debounce(setGlobalFilter, 500);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
     const attributeId = '';
     const value = { type: 'string' as const, value: '' };
 
-    tripleStore.create({
-      id: createTripleId(entityId, attributeId, value),
-      entityId,
-      attributeId,
-      value,
-    });
+    tripleStore.create([
+      {
+        id: createTripleId(entityId, attributeId, value),
+        entityId,
+        attributeId,
+        value,
+      },
+    ]);
   };
 
   const onImport = async (file: File) => {
     const triples = await importCSVFile(file);
 
-    // TODO: Improve perf for large imports
-    triples.slice(0, 100).forEach(triple => {
-      tripleStore.create(triple);
-    });
+    tripleStore.create(triples);
   };
 
   return (
@@ -102,9 +101,9 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable globalFilter={globalFilter} />
+      <TripleTable triples={tripleStore.triples} update={tripleStore.update} globalFilter={globalFilter} />
 
-      <FlowBar />
+      <FlowBar changedTriples={tripleStore.changedTriples} onPublish={tripleStore.publish} />
     </PageContainer>
   );
 }

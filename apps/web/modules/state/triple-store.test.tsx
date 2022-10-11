@@ -24,7 +24,7 @@ describe('TripleStore', () => {
       },
     };
 
-    store.create(newTriple);
+    store.create([newTriple]);
     expect(store.triples).toStrictEqual([
       {
         ...newTriple,
@@ -88,7 +88,7 @@ describe('TripleStore', () => {
       },
     };
 
-    store.create(newTriple);
+    store.create([newTriple]);
     expect(store.changedTriples$.value).toStrictEqual([
       {
         ...newTriple,
