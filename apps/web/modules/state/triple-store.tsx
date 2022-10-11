@@ -31,7 +31,6 @@ export class TripleStore implements ITripleStore {
     this.api.syncer$.subscribe(serverTriples => {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
-      console.time('sync');
       const tripleIds = new Set(this.triples.map(triple => triple.id));
       const mergedTriples = dedupe(this.triples, serverTriples, tripleIds);
 
@@ -47,8 +46,6 @@ export class TripleStore implements ITripleStore {
         const mergedTripleId = createTripleId(triple);
         return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
       });
-
-      console.timeEnd('sync');
 
       this.triples$.next(newTriples);
     });
