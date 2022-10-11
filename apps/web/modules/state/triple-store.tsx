@@ -3,7 +3,7 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { INetwork } from '~/modules/services/network';
 import { createTripleId } from '../services/create-id';
 import { dedupe } from '../services/sync';
-import { Triple } from '../types';
+import { ReviewState, Triple } from '../types';
 
 interface ITripleStoreConfig {
   api: INetwork;
@@ -12,15 +12,16 @@ interface ITripleStoreConfig {
 
 interface ITripleStore {
   triples$: BehaviorSubject<Triple[]>;
+  changedTriples$: BehaviorSubject<Triple[]>;
   create(triple: Triple): void;
   update(triple: Triple, oldTriple: Triple): void;
-  publish(signer: Signer): void;
+  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
 export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
-  changedTriples: Triple[] = []; // history of the triples that have changed mapped to 'created' | 'deleted' status
+  changedTriples$ = new BehaviorSubject<Triple[]>([]); // history of the triples that have changed mapped to 'created' | 'deleted' status
   private tripleIds = new Set<string>();
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
@@ -37,7 +38,7 @@ export class TripleStore implements ITripleStore {
       const newTriples = mergedTriples.filter(triple => {
         const mergedTripleId = createTripleId(triple);
 
-        return !this.changedTriples.some(
+        return !this.changedTriples$.value.some(
           changedTriple => mergedTripleId === createTripleId(changedTriple) && changedTriple.status === 'deleted'
         );
       });
@@ -56,12 +57,12 @@ export class TripleStore implements ITripleStore {
   create = (triple: Triple) => {
     triple.status = 'created';
     this.triples$.next([triple, ...this.triples]);
-    this.changedTriples.push(triple);
+    this.changedTriples$.next([...this.changedTriples$.value, triple]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
     const index = this.triples.findIndex(t => t.id === oldTriple.id);
-    const triples = this.triples$.getValue();
+    const triples = this.triples$.value;
 
     // If there haven't been actual changes to the data we can skip updates
     if (triple.value.value === oldTriple.value.value && triple.attributeId === oldTriple.attributeId) {
@@ -79,50 +80,60 @@ export class TripleStore implements ITripleStore {
     // the original state of the triple as well as the most recent state of the triple, but make
     // sure we don't track intermediate states since they aren't important.
     if (oldTriple.status === 'created') {
-      const indexOfChangedTriple = this.changedTriples.findIndex(t => t.id === oldTriple.id);
+      const indexOfChangedTriple = this.changedTriples$.value.findIndex(t => t.id === oldTriple.id);
       triple.status = 'created';
-      this.changedTriples[indexOfChangedTriple] = triple;
+      const changedTriples = this.changedTriples$.value;
+      changedTriples[indexOfChangedTriple] = triple;
+      this.changedTriples$.next(changedTriples);
     } else {
       triple.status = 'edited';
-      const lastVersionIndex = this.changedTriples.findIndex(t => t.id === oldTriple.id);
+      const lastVersionIndex = this.changedTriples$.value.findIndex(t => t.id === oldTriple.id);
 
       if (lastVersionIndex === -1) {
-        this.changedTriples.push({
-          ...oldTriple,
-          status: 'deleted',
-        });
+        this.changedTriples$.next([
+          ...this.changedTriples$.value,
+          {
+            ...oldTriple,
+            status: 'deleted',
+          },
+        ]);
       } else {
-        // Remove the last version of the changed triple from the changedTriples array. We only
+        // Remove the last version of the changed triple from the changedTriples$.value array. We only
         // want to publish the deletion of the first version of the triple and the creation of
         // the latest version.
         // Using splice is going to be faster than filtering potentially large triples array
-        this.changedTriples.splice(lastVersionIndex, 1);
+        this.changedTriples$.value.splice(lastVersionIndex, 1);
       }
 
       triple.id = createTripleId(triple.entityId, triple.attributeId, triple.value);
 
-      this.changedTriples.push({
-        ...triple,
-        status: 'created',
-      });
+      this.changedTriples$.next([
+        ...this.changedTriples$.value,
+        {
+          ...triple,
+          status: 'created',
+        },
+      ]);
     }
 
     triples[index] = triple;
     this.triples$.next(triples);
   };
 
-  publish = async (signer: Signer) => {
-    await this.api.publish(this.changedTriples, signer);
-    console.log('Changed triples', this.changedTriples);
-    console.log('State triples', this.triples);
+  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
+    try {
+      await this.api.publish(this.changedTriples$.value, signer, onChangePublishState);
 
-    // this.changedTriples = [];
-    // const triples = this.triples.map(triple => ({
-    //   ...triple,
-    //   status: undefined,
-    // }));
+      const triples = this.triples.map(triple => ({
+        ...triple,
+        status: undefined,
+      }));
 
-    // this.triples$.next(triples);
+      this.changedTriples$.next([]);
+      this.triples$.next(triples);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   loadNetworkTriples = async () => {
@@ -131,6 +142,6 @@ export class TripleStore implements ITripleStore {
   };
 
   get triples() {
-    return this.triples$.getValue();
+    return this.triples$.value;
   }
 }

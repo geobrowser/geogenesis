@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { useSigner } from 'wagmi';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -24,15 +24,16 @@ const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
 const PageHeader = styled.div({
   display: 'flex',
   justifyContent: 'space-between',
+  width: '100%',
 });
 
 const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
+  alignItems: 'center',
 });
 
 export default function Triples() {
-  const { data: signer } = useSigner();
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const tripleStore = useTriples();
 
@@ -57,9 +58,6 @@ export default function Triples() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-        <Button icon="create" onClick={() => tripleStore.publish(signer!)}>
-          Publish
-        </Button>
         <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>
@@ -72,6 +70,8 @@ export default function Triples() {
       <Spacer height={12} />
 
       <TripleTable globalFilter={globalFilter} />
+
+      <FlowBar />
     </PageContainer>
   );
 }

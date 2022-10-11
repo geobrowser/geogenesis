@@ -18,6 +18,7 @@ const Body = styled.div(props => ({
   maxWidth: '100vw',
   overflow: 'hidden',
   backgroundColor: `${props.theme.colors.white}`,
+  position: 'relative',
 }));
 
 const globalStyles = css`

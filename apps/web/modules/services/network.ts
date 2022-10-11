@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
-import { Triple, Value } from '../types';
+import { ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
@@ -72,7 +72,7 @@ function getActionFromChangeStatus(triple: Triple) {
 export interface INetwork {
   syncer$: Observable<Triple[]>;
   getNetworkTriples: () => Promise<Triple[]>;
-  publish: (triples: Triple[], signer: Signer) => Promise<void>;
+  publish: (triples: Triple[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -91,7 +91,11 @@ export class Network implements INetwork {
     this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
   }
 
-  publish = async (triples: Triple[], signer: Signer): Promise<void> => {
+  publish = async (
+    triples: Triple[],
+    signer: Signer,
+    onChangePublishState: (newState: ReviewState) => void
+  ): Promise<void> => {
     const chain = await signer.getChainId();
     const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
     const contract = this.contract.connect(contractAddress, signer);
@@ -102,7 +106,10 @@ export class Network implements INetwork {
       actions: triples.map(getActionFromChangeStatus),
     };
 
+    onChangePublishState('publishing-ipfs');
     const cidString = await this.storageClient.uploadObject(root);
+
+    onChangePublishState('publishing-contract');
     const tx = await contract.addEntry(`ipfs://${cidString}`);
 
     // TODO: What to do with receipt???

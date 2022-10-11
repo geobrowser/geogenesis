@@ -6,7 +6,7 @@ import { useTripleStore } from '../services';
 export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
   const subscription = useMemo(
     () => ({
-      getCurrentValue: () => stateContainer.getValue(),
+      getCurrentValue: () => stateContainer.value,
       subscribe: (callback: () => void) => {
         const subscription = stateContainer.subscribe(callback);
         return () => subscription.unsubscribe();
@@ -21,8 +21,9 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
 }
 
 export const useTriples = () => {
-  const { loadNetworkTriples, create, update, publish, triples$ } = useTripleStore();
+  const { loadNetworkTriples, create, update, publish, triples$, changedTriples$ } = useTripleStore();
   const triples = useSharedObservable(triples$);
+  const changedTriples = useSharedObservable(changedTriples$);
 
   useEffect(() => {
     // This is how we're loading the initial triples data rather than waiting the 5
@@ -34,6 +35,7 @@ export const useTriples = () => {
 
   return {
     triples,
+    changedTriples,
     create,
     update,
     publish,
