@@ -179,7 +179,7 @@ export default function TripleTable({ globalFilter, update, triples }: Props) {
       globalFilter,
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: 100,
       },
     },
     globalFilterFn: fuzzyFilter,
