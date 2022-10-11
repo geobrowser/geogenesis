@@ -7,10 +7,11 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Text } from '../design-system/text';
 import { createTripleId } from '../services/create-id';
@@ -156,6 +157,8 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
 interface Props {
   globalFilter: string;
+  update: (triple: Triple, oldTriple: Triple) => void;
+  triples: Triple[];
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -164,18 +167,20 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter }: Props) {
-  const tripleStore = useTriples();
-
+export default function TripleTable({ globalFilter, update, triples }: Props) {
   const table = useReactTable({
-    data: tripleStore.triples,
+    data: triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    enableColumnFilters: false,
+    getPaginationRowModel: getPaginationRowModel(),
     state: {
       globalFilter,
+      pagination: {
+        pageIndex: 0,
+        pageSize: 100,
+      },
     },
     globalFilterFn: fuzzyFilter,
     filterFns: {
@@ -183,10 +188,10 @@ export default function TripleTable({ globalFilter }: Props) {
     },
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
-        const tripleId = tripleStore.triples[rowIndex].id;
-        const oldEntityId = tripleStore.triples[rowIndex].entityId;
-        const oldAttributeId = tripleStore.triples[rowIndex].attributeId;
-        const oldValue = tripleStore.triples[rowIndex].value;
+        const tripleId = triples[rowIndex].id;
+        const oldEntityId = triples[rowIndex].entityId;
+        const oldAttributeId = triples[rowIndex].attributeId;
+        const oldValue = triples[rowIndex].value;
 
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
@@ -200,7 +205,7 @@ export default function TripleTable({ globalFilter }: Props) {
           value,
         };
 
-        tripleStore.update(newTriple, tripleStore.triples[rowIndex]);
+        update(newTriple, triples[rowIndex]);
       },
     },
   });

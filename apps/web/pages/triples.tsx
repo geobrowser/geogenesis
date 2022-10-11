@@ -8,6 +8,7 @@ import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
+import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/hook';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
@@ -33,23 +34,39 @@ const PageContainer = styled.div({
   alignItems: 'center',
 });
 
+const FileImport = styled.input({
+  margin: '0',
+  padding: '0',
+  opacity: '0',
+  position: 'absolute',
+  inset: '0',
+});
+
 export default function Triples() {
   const [globalFilter, setGlobalFilter] = useState<string>('');
   const tripleStore = useTriples();
 
-  const debouncedFilter = debounce(setGlobalFilter, 150);
+  const debouncedFilter = debounce(setGlobalFilter, 500);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
     const attributeId = '';
     const value = { type: 'string' as const, value: '' };
 
-    tripleStore.create({
-      id: createTripleId(entityId, attributeId, value),
-      entityId,
-      attributeId,
-      value,
-    });
+    tripleStore.create([
+      {
+        id: createTripleId(entityId, attributeId, value),
+        entityId,
+        attributeId,
+        value,
+      },
+    ]);
+  };
+
+  const onImport = async (file: File) => {
+    const triples = await importCSVFile(file);
+
+    tripleStore.create(triples);
   };
 
   return (
@@ -58,6 +75,21 @@ export default function Triples() {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
+
+        <div style={{ flex: 1 }} />
+        <Button variant="secondary" icon="create" onClick={() => {}}>
+          Import
+          <FileImport
+            type="file"
+            accept=".csv"
+            onChange={event => {
+              for (let file of event.target.files ?? []) {
+                onImport(file);
+              }
+            }}
+          />
+        </Button>
+        <Spacer width={12} />
         <Button icon="create" onClick={onAddTriple}>
           Add
         </Button>
@@ -69,9 +101,9 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable globalFilter={globalFilter} />
+      <TripleTable triples={tripleStore.triples} update={tripleStore.update} globalFilter={globalFilter} />
 
-      <FlowBar />
+      <FlowBar changedTriples={tripleStore.changedTriples} onPublish={tripleStore.publish} />
     </PageContainer>
   );
 }

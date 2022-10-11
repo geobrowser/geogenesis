@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { BehaviorSubject } from 'rxjs';
 import { useTripleStore } from '../services';
 
@@ -25,13 +25,15 @@ export const useTriples = () => {
   const triples = useSharedObservable(triples$);
   const changedTriples = useSharedObservable(changedTriples$);
 
+  const loadTriples = useCallback(() => loadNetworkTriples(), [loadNetworkTriples]);
+
   useEffect(() => {
     // This is how we're loading the initial triples data rather than waiting the 5
     // seconds for it to populate. Ideally we can fetch them externally and pass them
     // to the store, but this is a good workaround for now since we can't really
     // inject data into the Next app outside of their server/static APIs
-    loadNetworkTriples();
-  }, [loadNetworkTriples]);
+    loadTriples();
+  }, [loadTriples]);
 
   return {
     triples,

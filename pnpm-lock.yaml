@@ -29,6 +29,7 @@ importers:
       '@testing-library/react': ^13.4.0
       '@types/lodash.debounce': ^4.0.7
       '@types/node': ^17.0.35
+      '@types/papaparse': ^5.3.5
       '@types/pluralize': ^0.0.29
       '@types/react': ^18.0.9
       '@types/react-dom': ^18.0.6
@@ -42,6 +43,7 @@ importers:
       lodash.debounce: ^4.0.8
       modern-normalize: ^1.1.0
       next: ^12.1.6
+      papaparse: ^5.3.2
       pluralize: ^8.0.0
       raw-body: ^2.5.1
       react: ^18.1.0
@@ -67,6 +69,7 @@ importers:
       lodash.debounce: 4.0.8
       modern-normalize: 1.1.0
       next: 12.2.3_vyk55zyolcaieh7zfm7nf7uva4
+      papaparse: 5.3.2
       pluralize: 8.0.0
       raw-body: 2.5.1
       react: 18.2.0
@@ -80,6 +83,7 @@ importers:
       '@testing-library/react': 13.4.0_biqbaboplfbrettd7655fr4n2y
       '@types/lodash.debounce': 4.0.7
       '@types/node': 17.0.45
+      '@types/papaparse': 5.3.5
       '@types/pluralize': 0.0.29
       '@types/react': 18.0.15
       '@types/react-dom': 18.0.6
@@ -2340,6 +2344,12 @@ packages:
 
   /@types/node/8.10.66:
     resolution: {integrity: sha512-tktOkFUA4kXx2hhhrB8bIFb5TbwzS4uOhKEmwiD+NoiL0qtP2OQ9mFldbgD4dV1djrlBYP6eBuQZiWjuHUpqFw==}
+    dev: true
+
+  /@types/papaparse/5.3.5:
+    resolution: {integrity: sha512-R1icl/hrJPFRpuYj9PVG03WBAlghJj4JW9Py5QdR8FFSxaLmZRyu7xYDCCBZIJNfUv3MYaeBbhBoX958mUTAaw==}
+    dependencies:
+      '@types/node': 18.7.18
     dev: true
 
   /@types/parse-json/4.0.0:
@@ -7599,7 +7609,6 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
-    dev: false
 
   /follow-redirects/1.15.1_debug@4.3.1:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
@@ -7611,18 +7620,6 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.1
-    dev: true
-
-  /follow-redirects/1.15.1_debug@4.3.4:
-    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
-    dependencies:
-      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:
@@ -11242,6 +11239,10 @@ packages:
     resolution: {integrity: sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==}
     engines: {node: '>=6'}
 
+  /papaparse/5.3.2:
+    resolution: {integrity: sha512-6dNZu0Ki+gyV0eBsFKJhYr+MdQYAzFUGlBMNj3GNrmHxmz1lfRa24CjFObPXtjcetlOv5Ad299MhIK0znp3afw==}
+    dev: false
+
   /parent-module/1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
@@ -12855,7 +12856,7 @@ packages:
     dependencies:
       command-exists: 1.2.9
       commander: 3.0.2
-      follow-redirects: 1.15.1_debug@4.3.4
+      follow-redirects: 1.15.1
       fs-extra: 0.30.0
       js-sha3: 0.8.0
       memorystream: 0.3.1

@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
+import { Signer } from 'ethers';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
 import { Divider } from '../design-system/divider';
@@ -10,9 +11,8 @@ import { LeftArrowLong } from '../design-system/icons/left-arrow-long';
 import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
-import { useTriples } from '../state/hook';
 import { Toast } from '../design-system/toast';
-import { ReviewState } from '../types';
+import { ReviewState, Triple } from '../types';
 import { Spinner } from '../design-system/spinner';
 
 const Container = styled.div(props => ({
@@ -31,9 +31,13 @@ const Container = styled.div(props => ({
 
 const MotionContainer = motion(Container);
 
-export function FlowBar() {
+interface Props {
+  changedTriples: Triple[];
+  onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
+}
+
+export function FlowBar({ changedTriples, onPublish }: Props) {
   const { data: signer } = useSigner();
-  const { changedTriples, publish } = useTriples();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
@@ -43,8 +47,8 @@ export function FlowBar() {
   const showToast =
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
-  const onPublish = async () => {
-    await publish(signer!, setReviewState);
+  const publish = async () => {
+    await onPublish(signer!, setReviewState);
     setReviewState('publish-complete');
     await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
   };
@@ -64,7 +68,7 @@ export function FlowBar() {
             >
               {reviewState === 'idle' && <Idle changeCount={changeCount} onNext={() => setReviewState('reviewing')} />}
               {reviewState === 'reviewing' && (
-                <Review changeCount={changeCount} onBack={() => setReviewState('idle')} onNext={onPublish} />
+                <Review changeCount={changeCount} onBack={() => setReviewState('idle')} onNext={publish} />
               )}
             </MotionContainer>
           )}

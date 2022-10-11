@@ -13,7 +13,7 @@ interface ITripleStoreConfig {
 interface ITripleStore {
   triples$: BehaviorSubject<Triple[]>;
   changedTriples$: BehaviorSubject<Triple[]>;
-  create(triple: Triple): void;
+  create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
@@ -22,7 +22,6 @@ export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
   changedTriples$ = new BehaviorSubject<Triple[]>([]); // history of the triples that have changed mapped to 'created' | 'deleted' status
-  private tripleIds = new Set<string>();
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
     this.api = api;
@@ -32,32 +31,30 @@ export class TripleStore implements ITripleStore {
     this.api.syncer$.subscribe(serverTriples => {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
-      const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
+      const tripleIds = new Set(this.triples.map(triple => triple.id));
+      const mergedTriples = dedupe(this.triples, serverTriples, tripleIds);
 
-      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple
+      const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
+        record[changedTriple.id] = changedTriple;
+        return record;
+      }, {} as Record<string, Triple>);
+
+      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple.
+      // If the triple exists in the changed array locally and it has been deleted we don't want to load in the
+      // remote triple.
       const newTriples = mergedTriples.filter(triple => {
         const mergedTripleId = createTripleId(triple);
-
-        return !this.changedTriples$.value.some(
-          changedTriple => mergedTripleId === createTripleId(changedTriple) && changedTriple.status === 'deleted'
-        );
+        return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
       });
 
       this.triples$.next(newTriples);
     });
-
-    // When triples are updated we can precalculate the ids for deduping.
-    // Is this faster than calling this.tripleIds.add(triple.id) in the
-    // sync subscriber and any mutations to the triples array (i.e., createTriple)?
-    this.triples$.subscribe(value => {
-      this.tripleIds = new Set(value.map(triple => triple.id));
-    });
   }
 
-  create = (triple: Triple) => {
-    triple.status = 'created';
-    this.triples$.next([triple, ...this.triples]);
-    this.changedTriples$.next([...this.changedTriples$.value, triple]);
+  create = (triples: Triple[]) => {
+    triples.forEach(triple => (triple.status = 'created'));
+    this.triples$.next([...triples, ...this.triples]);
+    this.changedTriples$.next([...this.changedTriples$.value, ...triples]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
