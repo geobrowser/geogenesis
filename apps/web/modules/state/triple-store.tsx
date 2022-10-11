@@ -22,7 +22,6 @@ export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
   changedTriples$ = new BehaviorSubject<Triple[]>([]); // history of the triples that have changed mapped to 'created' | 'deleted' status
-  private tripleIds = new Set<string>();
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
     this.api = api;
@@ -33,7 +32,8 @@ export class TripleStore implements ITripleStore {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
       console.time('sync');
-      const mergedTriples = dedupe(this.triples, serverTriples, this.tripleIds);
+      const tripleIds = new Set(this.triples.map(triple => triple.id));
+      const mergedTriples = dedupe(this.triples, serverTriples, tripleIds);
 
       const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
         record[changedTriple.id] = changedTriple;
@@ -45,19 +45,12 @@ export class TripleStore implements ITripleStore {
       // remote triple.
       const newTriples = mergedTriples.filter(triple => {
         const mergedTripleId = createTripleId(triple);
-        return !changedTriples[mergedTripleId];
+        return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
       });
 
       console.timeEnd('sync');
 
       this.triples$.next(newTriples);
-    });
-
-    // When triples are updated we can precalculate the ids for deduping.
-    // Is this faster than calling this.tripleIds.add(triple.id) in the
-    // sync subscriber and any mutations to the triples array (i.e., createTriple)?
-    this.triples$.subscribe(value => {
-      this.tripleIds = new Set(value.map(triple => triple.id));
     });
   }
 
