@@ -175,15 +175,17 @@ export default function TripleTable({ globalFilter, update, triples }: Props) {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    enableColumnFilters: false,
     state: {
       globalFilter,
+      pagination: {
+        pageIndex: 0,
+        pageSize: 50,
+      },
     },
     globalFilterFn: fuzzyFilter,
     filterFns: {
       fuzzy: fuzzyFilter,
     },
-    debugTable: true,
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
         const tripleId = triples[rowIndex].id;
