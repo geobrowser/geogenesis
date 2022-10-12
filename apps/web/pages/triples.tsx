@@ -100,7 +100,12 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable triples={tripleStore.triples} update={tripleStore.update} globalFilter={globalFilter} />
+      <TripleTable
+        entityNames={tripleStore.entityNames}
+        triples={tripleStore.triples}
+        update={tripleStore.update}
+        globalFilter={globalFilter}
+      />
 
       <FlowBar changedTriples={tripleStore.changedTriples} onPublish={tripleStore.publish} />
     </PageContainer>

@@ -11,12 +11,11 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useEffect, useState } from 'react';
-import { useSigner } from 'wagmi';
+import { useEffect, useMemo, useState } from 'react';
 import { Text } from '../design-system/text';
-import { createTripleId } from '../services/create-id';
-import { useTriples } from '../state/hook';
-import { Triple, Value } from '../types';
+import { createTripleWithId } from '../services/create-id';
+import { useEntityNames } from '../state/use-entity-names';
+import { EntityNames, Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -65,8 +64,9 @@ const TableCell = styled.td(props => ({
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input(props => ({
+const TableCellInput = styled.input<{ isEntity?: boolean; ellipsize?: boolean }>(props => ({
   ...props.theme.typography.tableCell,
+  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
   backgroundColor: 'transparent', // To allow the row to be styled on hover
   padding: props.theme.space * 2.5,
   width: '100%',
@@ -78,6 +78,12 @@ const TableCellInput = styled.input(props => ({
   '::placeholder': {
     color: props.theme.colors['grey-03'],
   },
+
+  ...(props.ellipsize && {
+    whiteSpace: 'pre',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+  }),
 }));
 
 const TableEntityCell = styled.div(props => ({
@@ -102,6 +108,9 @@ const Container = styled.div(props => ({
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const entityNames = useEntityNames();
+
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -119,12 +128,18 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     switch (id) {
       case 'entityId':
         const entityId = cellData as string;
+
+        // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
+
         return (
-          <TableEntityCell>
-            <Text color="ctaPrimary" variant="tableCell" ellipsize>
-              {entityId}
-            </Text>
-          </TableEntityCell>
+          <TableCellInput
+            disabled
+            isEntity
+            ellipsize
+            value={entityId}
+            onChange={e => setCellData(e.target.value)}
+            onBlur={onBlur}
+          />
         );
       case 'attributeId':
         const attributeId = cellData as string;
@@ -159,6 +174,7 @@ interface Props {
   globalFilter: string;
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
+  entityNames: EntityNames;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -167,9 +183,16 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, update, triples }: Props) {
+export default function TripleTable({ globalFilter, update, triples, entityNames }: Props) {
+  const tableTriples = useMemo(() => {
+    return triples.map(triple => ({
+      ...triple,
+      entityId: entityNames[triple.entityId] || triple.entityId, // If it's an empty string we want to default to the id
+    }));
+  }, [triples, entityNames]);
+
   const table = useReactTable({
-    data: triples,
+    data: tableTriples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
@@ -188,23 +211,22 @@ export default function TripleTable({ globalFilter, update, triples }: Props) {
     },
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
-        const tripleId = triples[rowIndex].id;
         const oldEntityId = triples[rowIndex].entityId;
         const oldAttributeId = triples[rowIndex].attributeId;
         const oldValue = triples[rowIndex].value;
 
+        const isEntityIdColumn = columnId === 'entityId';
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
+
+        // TODO: Is this a bug? entityId might be the name instead of the entityId
+        const entityId = isEntityIdColumn ? (cellValue as Triple['entityId']) : oldEntityId;
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
-        const newTriple: Triple = {
-          id: tripleId, // We need to keep the ID stable so we can replace the old triple with the new one in state
-          entityId: oldEntityId,
-          attributeId,
-          value,
-        };
+        console.log(entityId);
 
+        const newTriple = createTripleWithId(entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
       },
     },

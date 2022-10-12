@@ -21,23 +21,15 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
 }
 
 export const useTriples = () => {
-  const { loadNetworkTriples, create, update, publish, triples$, changedTriples$ } = useTripleStore();
+  const { create, update, publish, triples$, changedTriples$, entityNames$ } = useTripleStore();
   const triples = useSharedObservable(triples$);
   const changedTriples = useSharedObservable(changedTriples$);
-
-  const loadTriples = useCallback(() => loadNetworkTriples(), [loadNetworkTriples]);
-
-  useEffect(() => {
-    // This is how we're loading the initial triples data rather than waiting the 5
-    // seconds for it to populate. Ideally we can fetch them externally and pass them
-    // to the store, but this is a good workaround for now since we can't really
-    // inject data into the Next app outside of their server/static APIs
-    loadTriples();
-  }, [loadTriples]);
+  const entityNames = useSharedObservable(entityNames$);
 
   return {
     triples,
     changedTriples,
+    entityNames,
     create,
     update,
     publish,
