@@ -12,6 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
+import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useEntityNames } from '../state/use-entity-names';
@@ -153,6 +154,15 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         );
       case 'value':
         const value = cellData as Value;
+
+        if (value.type === 'entity') {
+          return (
+            <TableEntityCell>
+              <Chip>{entityNames[value.value] || value.value}</Chip>
+            </TableEntityCell>
+          );
+        }
+
         return (
           <TableCellInput
             placeholder="Add text..."
