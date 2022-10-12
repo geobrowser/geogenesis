@@ -167,6 +167,10 @@ describe('TripleStore', () => {
 
     const secondTriple: Triple = {
       ...firstTriple,
+      id: createTripleId('alice', 'name', {
+        type: 'string',
+        value: 'Connor',
+      }),
       value: {
         type: 'string',
         value: 'Connor',
@@ -204,6 +208,10 @@ describe('TripleStore', () => {
     store.update(
       {
         ...originalTriple,
+        id: createTripleId('bob', 'name', {
+          type: 'string',
+          value: 'Connor',
+        }),
         value: {
           type: 'string',
           value: 'Connor',

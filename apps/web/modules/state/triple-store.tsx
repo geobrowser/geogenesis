@@ -65,9 +65,9 @@ export class TripleStore implements ITripleStore {
     const triples = this.triples$.value;
 
     // If there haven't been actual changes to the data we can skip updates
-    // if (triple.id === oldTriple.id) {
-    //   return;
-    // }
+    if (triple.id === oldTriple.id) {
+      return;
+    }
 
     // We need to ensure we are tracking the state of the original triple and the state of
     // the most recent triple. This is because our backend expects a create + delete when a
