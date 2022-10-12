@@ -1,11 +1,9 @@
 /* eslint-disable node/no-missing-import */
-import { Root } from '@geogenesis/action-schema'
 import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
 import { deployLog } from '../src/deploy'
-import { addEntry } from '../src/entry'
 
 dotenv.config()
 
@@ -19,45 +17,6 @@ async function main() {
   console.log('Deploying on network', networkId, networkConfig)
 
   const logContract = await deployLog({ debug: true })
-
-  await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
-
-  const root: Root = {
-    type: 'root',
-    version: '0.0.1',
-    actions: [
-      {
-        type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'string',
-          value: 'hi',
-        },
-      },
-      {
-        type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'number',
-          value: '42',
-        },
-      },
-    ],
-  }
-
-  await addEntry(
-    logContract,
-    `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
-      'base64'
-    )}`
-  )
-
-  await addEntry(
-    logContract,
-    `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
-  )
 
   saveAddress({
     chainId,

@@ -24,18 +24,4 @@ export function bootstrap(): void {
     new CreateTripleAction('name', 'name', new StringValue('Name')),
     true
   )
-
-  // Temporary entities, for simpler testing!
-  handleAction(
-    new CreateTripleAction('person', 'type', new EntityValue('type'))
-  )
-  handleAction(
-    new CreateTripleAction('person', 'name', new StringValue('Person'))
-  )
-  handleAction(
-    new CreateTripleAction('devin', 'type', new EntityValue('person'))
-  )
-  handleAction(
-    new CreateTripleAction('devin', 'name', new StringValue('Devin'))
-  )
 }
