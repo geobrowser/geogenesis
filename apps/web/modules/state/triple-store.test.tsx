@@ -186,4 +186,34 @@ describe('TripleStore', () => {
       },
     ]);
   });
+
+  it('Updates the tracked entity names when creating triple with name attribute', () => {
+    const store = new TripleStore({ api: new StubNetwork() });
+
+    const originalTriple: Triple = {
+      id: createTripleId('bob', 'name', { type: 'string', value: 'Bob' }),
+      entityId: 'bob',
+      attributeId: 'name',
+      value: {
+        type: 'string',
+        value: 'Bob',
+      },
+    };
+
+    store.create([originalTriple]);
+    store.update(
+      {
+        ...originalTriple,
+        value: {
+          type: 'string',
+          value: 'Connor',
+        },
+      },
+      originalTriple
+    );
+
+    expect(store.entityNames$.value).toStrictEqual({
+      bob: 'Connor',
+    });
+  });
 });
