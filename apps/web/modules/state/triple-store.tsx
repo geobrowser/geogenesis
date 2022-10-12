@@ -65,7 +65,7 @@ export class TripleStore implements ITripleStore {
     const triples = this.triples$.value;
 
     // If there haven't been actual changes to the data we can skip updates
-    if (triple.value.value === oldTriple.value.value && triple.attributeId === oldTriple.attributeId) {
+    if (triple.id === oldTriple.id) {
       return;
     }
 

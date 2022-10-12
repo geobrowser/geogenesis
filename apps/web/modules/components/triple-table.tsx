@@ -13,6 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { Text } from '../design-system/text';
+import { createTripleId, createTripleWithId } from '../services/create-id';
 import { EntityNames, Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
@@ -62,8 +63,9 @@ const TableCell = styled.td(props => ({
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input(props => ({
+const TableCellInput = styled.input<{ isEntity?: boolean; ellipsize?: boolean }>(props => ({
   ...props.theme.typography.tableCell,
+  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
   backgroundColor: 'transparent', // To allow the row to be styled on hover
   padding: props.theme.space * 2.5,
   width: '100%',
@@ -75,6 +77,12 @@ const TableCellInput = styled.input(props => ({
   '::placeholder': {
     color: props.theme.colors['grey-03'],
   },
+
+  ...(props.ellipsize && {
+    whiteSpace: 'pre',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+  }),
 }));
 
 const TableEntityCell = styled.div(props => ({
@@ -117,11 +125,13 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'entityId':
         const entityId = cellData as string;
         return (
-          <TableEntityCell>
-            <Text color="ctaPrimary" variant="tableCell" ellipsize>
-              {entityId}
-            </Text>
-          </TableEntityCell>
+          <TableCellInput
+            isEntity
+            ellipsize
+            value={entityId}
+            onChange={e => setCellData(e.target.value)}
+            onBlur={onBlur}
+          />
         );
       case 'attributeId':
         const attributeId = cellData as string;
@@ -193,23 +203,18 @@ export default function TripleTable({ globalFilter, update, triples, entityNames
     },
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
-        const tripleId = triples[rowIndex].id;
         const oldEntityId = triples[rowIndex].entityId;
         const oldAttributeId = triples[rowIndex].attributeId;
         const oldValue = triples[rowIndex].value;
 
+        const isEntityIdColumn = columnId === 'entityId';
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
+        const entityId = isEntityIdColumn ? (cellValue as Triple['entityId']) : oldEntityId;
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
-        const newTriple: Triple = {
-          id: tripleId, // We need to keep the ID stable so we can replace the old triple with the new one in state
-          entityId: oldEntityId,
-          attributeId,
-          value,
-        };
-
+        const newTriple = createTripleWithId(entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
       },
     },
