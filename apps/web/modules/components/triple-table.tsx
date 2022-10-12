@@ -13,7 +13,8 @@ import {
 } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { Text } from '../design-system/text';
-import { createTripleId, createTripleWithId } from '../services/create-id';
+import { createTripleWithId } from '../services/create-id';
+import { useEntityNames } from '../state/use-entity-names';
 import { EntityNames, Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
@@ -107,6 +108,9 @@ const Container = styled.div(props => ({
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const entityNames = useEntityNames();
+
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -124,8 +128,12 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     switch (id) {
       case 'entityId':
         const entityId = cellData as string;
+
+        // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
+
         return (
           <TableCellInput
+            disabled
             isEntity
             ellipsize
             value={entityId}
@@ -210,9 +218,13 @@ export default function TripleTable({ globalFilter, update, triples, entityNames
         const isEntityIdColumn = columnId === 'entityId';
         const isAttributeColumn = columnId === 'attributeId';
         const isValueColumn = columnId === 'value';
+
+        // TODO: Is this a bug? entityId might be the name instead of the entityId
         const entityId = isEntityIdColumn ? (cellValue as Triple['entityId']) : oldEntityId;
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
+
+        console.log(entityId);
 
         const newTriple = createTripleWithId(entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
