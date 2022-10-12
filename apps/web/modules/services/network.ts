@@ -100,19 +100,24 @@ export class Network implements INetwork {
     const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
     const contract = this.contract.connect(contractAddress, signer);
 
-    const root: Root = {
-      type: 'root',
-      version: '0.0.1',
-      actions: triples.map(getActionFromChangeStatus),
-    };
-
     onChangePublishState('publishing-ipfs');
-    const cidString = await this.storageClient.uploadObject(root);
+    const cids: string[] = [];
+
+    for (let i = 0; i < triples.length; i += 2000) {
+      const chunk = triples.slice(i, i + 2000);
+
+      const root: Root = {
+        type: 'root',
+        version: '0.0.1',
+        actions: chunk.map(getActionFromChangeStatus),
+      };
+
+      const cidString = await this.storageClient.uploadObject(root);
+      cids.push(`ipfs://${cidString}`);
+    }
 
     onChangePublishState('publishing-contract');
-    const tx = await contract.addEntry(`ipfs://${cidString}`);
-
-    // TODO: What to do with receipt???
+    const tx = await contract.addEntries(cids);
     const receipt = await tx.wait();
     console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
   };

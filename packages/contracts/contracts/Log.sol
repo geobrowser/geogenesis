@@ -20,6 +20,7 @@ contract Log is ReentrancyGuard, Ownable {
 
     Entry[] _entries;
 
+
     function addEntry(string calldata uri) public {
         Entry memory entry = Entry({uri: uri, author: msg.sender});
 
@@ -30,8 +31,13 @@ contract Log is ReentrancyGuard, Ownable {
         emit EntryAdded(index, uri, msg.sender);
     }
 
-    // Enumeration
+    function addEntries(string[] calldata uris) public {
+        for (uint256 i = 0; i < uris.length; i++) {
+            addEntry(uris[i]);
+        }
+    }
 
+    // Enumeration
     function entryCount() public view returns (uint256) {
         return _entries.length;
     }
