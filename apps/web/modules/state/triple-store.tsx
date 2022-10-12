@@ -116,11 +116,18 @@ export class TripleStore implements ITripleStore {
       ]);
     }
 
+    // Creating a name attribute triple
     if (triple.attributeId === 'name') {
       this.entityNames$.next({
         ...this.entityNames$.value,
         [triple.entityId]: triple.value.value,
       });
+    }
+    // Deleting a name attribute triple
+    else if (oldTriple.attributeId === 'name') {
+      const newNames = this.entityNames$.value;
+      delete newNames[oldTriple.entityId];
+      this.entityNames$.next(newNames);
     }
 
     triples[index] = triple;
