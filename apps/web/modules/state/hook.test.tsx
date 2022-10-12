@@ -32,7 +32,7 @@ describe('useSharedObservable', () => {
       },
     };
 
-    store.create(newTriple);
+    store.create([newTriple]);
     rerender();
     expect(result.current).toContain(newTriple);
   });
@@ -48,15 +48,17 @@ describe('useSharedObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    store.create({
-      id: '1',
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
+    store.create([
+      {
+        id: '1',
+        entityId: 'bob',
+        attributeId: 'name',
+        value: {
+          type: 'string',
+          value: 'Bob',
+        },
       },
-    });
+    ]);
 
     rerender(<Component />);
     expect(getByText('1')).toBeTruthy();
