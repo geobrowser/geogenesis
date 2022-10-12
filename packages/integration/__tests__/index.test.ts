@@ -53,5 +53,5 @@ it('subgraph runs', async () => {
     },
   })
 
-  expect(result.data.geoEntities.length > 1).toEqual(true)
+  expect(result.data.geoEntities.length === 0).toEqual(true)
 }, 120000)
