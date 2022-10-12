@@ -1,6 +1,6 @@
 import { Signer } from 'ethers';
 import { describe, expect, it } from 'vitest';
-import { createTripleId } from '../services/create-id';
+import { createTripleId, createTripleWithId } from '../services/create-id';
 import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
@@ -14,15 +14,10 @@ describe('TripleStore', () => {
   it('Adds new triple', () => {
     const store = new TripleStore({ api: new StubNetwork() });
 
-    const newTriple: Triple = {
-      id: '1',
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId('bob', 'name', {
+      type: 'string',
+      value: 'Bob',
+    });
 
     store.create([newTriple]);
     expect(store.triples).toStrictEqual([
@@ -34,36 +29,17 @@ describe('TripleStore', () => {
   });
 
   it('Updates existing triple', () => {
-    const originalTriple: Triple = {
-      id: createTripleId('alice', 'name', {
-        type: 'string',
-        value: 'Alice',
-      }),
-      entityId: 'alice',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Alice',
-      },
-    };
+    const originalTriple: Triple = createTripleWithId('alice', 'name', { type: 'string', value: 'Alice' });
 
     const store = new TripleStore({
       api: new StubNetwork(),
       initialtriples: [originalTriple],
     });
 
-    const newTriple: Triple = {
-      id: createTripleId('bob', 'name', {
-        type: 'string',
-        value: 'Bob',
-      }),
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId(originalTriple.entityId, originalTriple.attributeId, {
+      type: 'string',
+      value: 'Bob',
+    });
 
     store.update(newTriple, originalTriple);
 
@@ -78,15 +54,10 @@ describe('TripleStore', () => {
   it('Tracks the created triple', () => {
     const store = new TripleStore({ api: new StubNetwork() });
 
-    const newTriple: Triple = {
-      id: createTripleId('bob', 'name', { type: 'string', value: 'Bob' }),
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId('bob', 'name', {
+      type: 'string',
+      value: 'Bob',
+    });
 
     store.create([newTriple]);
     expect(store.changedTriples$.value).toStrictEqual([
@@ -98,30 +69,17 @@ describe('TripleStore', () => {
   });
 
   it('Tracks an updated triple', () => {
-    const originalTriple: Triple = {
-      id: createTripleId('alice', 'name', {
-        type: 'string',
-        value: 'Alice',
-      }),
-      entityId: 'alice',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Alice',
-      },
-    };
+    const originalTriple: Triple = createTripleWithId('alice', 'name', {
+      type: 'string',
+      value: 'Alice',
+    });
 
     const store = new TripleStore({ api: new StubNetwork(), initialtriples: [originalTriple] });
 
-    const newTriple: Triple = {
-      id: '1',
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId('bob', 'name', {
+      type: 'string',
+      value: 'Bob',
+    });
 
     store.update(newTriple, originalTriple);
 
@@ -138,44 +96,21 @@ describe('TripleStore', () => {
   });
 
   it('Tracks a triple that was updated multiple times', () => {
-    const originalTriple: Triple = {
-      id: createTripleId('alice', 'name', {
-        type: 'string',
-        value: 'Alice',
-      }),
-      entityId: 'alice',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Alice',
-      },
-    };
+    const originalTriple: Triple = createTripleWithId('alice', 'name', {
+      type: 'string',
+      value: 'Alice',
+    });
 
     const store = new TripleStore({ api: new StubNetwork(), initialtriples: [originalTriple] });
 
-    const firstTriple: Triple = {
-      id: createTripleId('alice', 'name', { type: 'string', value: 'Bob' }),
-      entityId: 'alice',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const firstTriple: Triple = createTripleWithId('alice', 'name', { type: 'string', value: 'Bob' });
 
     store.update(firstTriple, originalTriple);
 
-    const secondTriple: Triple = {
-      ...firstTriple,
-      id: createTripleId('alice', 'name', {
-        type: 'string',
-        value: 'Connor',
-      }),
-      value: {
-        type: 'string',
-        value: 'Connor',
-      },
-    };
+    const secondTriple: Triple = createTripleWithId(firstTriple.entityId, firstTriple.attributeId, {
+      type: 'string',
+      value: 'Connor',
+    });
 
     store.update(secondTriple, firstTriple);
 
@@ -194,31 +129,16 @@ describe('TripleStore', () => {
   it('Updates the tracked entity names when creating triple with name attribute', () => {
     const store = new TripleStore({ api: new StubNetwork() });
 
-    const originalTriple: Triple = {
-      id: createTripleId('bob', 'name', { type: 'string', value: 'Bob' }),
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const originalTriple: Triple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
 
     store.create([originalTriple]);
-    store.update(
-      {
-        ...originalTriple,
-        id: createTripleId('bob', 'name', {
-          type: 'string',
-          value: 'Connor',
-        }),
-        value: {
-          type: 'string',
-          value: 'Connor',
-        },
-      },
-      originalTriple
-    );
+
+    const secondTriple = createTripleWithId(originalTriple.entityId, originalTriple.attributeId, {
+      type: 'string',
+      value: 'Connor',
+    });
+
+    store.update(secondTriple, originalTriple);
 
     expect(store.entityNames$.value).toStrictEqual({
       bob: 'Connor',

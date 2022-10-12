@@ -1,6 +1,7 @@
 import { render, renderHook } from '@testing-library/react';
 import { Signer } from 'ethers';
 import { describe, expect, it } from 'vitest';
+import { createTripleWithId } from '../services/create-id';
 import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
 import { useSharedObservable } from './hook';
@@ -48,17 +49,8 @@ describe('useSharedObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    store.create([
-      {
-        id: '1',
-        entityId: 'bob',
-        attributeId: 'name',
-        value: {
-          type: 'string',
-          value: 'Bob',
-        },
-      },
-    ]);
+    const newTriple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
+    store.create([newTriple]);
 
     rerender(<Component />);
     expect(getByText('1')).toBeTruthy();
