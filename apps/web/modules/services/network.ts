@@ -25,6 +25,7 @@ type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string };
+  isProtected: boolean;
 };
 
 function extractValue(networkTriple: NetworkTriple): Value {
@@ -146,6 +147,7 @@ export class Network implements INetwork {
             numberValue
             stringValue
             valueType
+            isProtected
           }
         }`,
       }),
@@ -157,14 +159,16 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const triples = json.data.triples.map((networkTriple): Triple => {
-      return {
-        id: networkTriple.id,
-        entityId: networkTriple.entity.id,
-        attributeId: networkTriple.attribute.id,
-        value: extractValue(networkTriple),
-      };
-    });
+    const triples = json.data.triples
+      .filter(triple => !triple.isProtected)
+      .map((networkTriple): Triple => {
+        return {
+          id: networkTriple.id,
+          entityId: networkTriple.entity.id,
+          attributeId: networkTriple.attribute.id,
+          value: extractValue(networkTriple),
+        };
+      });
 
     const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
       if (triple.entity.name !== null) {
