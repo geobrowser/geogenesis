@@ -47,6 +47,11 @@ export function handleCreateTripleAction(
   if (stringValue) {
     triple.stringValue = stringValue.value
     triple.valueType = 'STRING'
+
+    if (attribute.id == 'name') {
+      entity.name = stringValue.value
+      entity.save()
+    }
   }
 
   const numberValue = fact.value.asNumberValue()
@@ -74,6 +79,16 @@ function handleDeleteTripleAction(fact: DeleteTripleAction): void {
   if (triple && triple.isProtected) {
     log.debug(`Couldn't delete triple '${tripleId}' since it's protected'!`, [])
     return
+  }
+
+  if (fact.attributeId == 'name') {
+    const entity = GeoEntity.load(fact.entityId)
+
+    // Doesn't handle the situation where there's multiple name triples for a single entity
+    if (entity) {
+      entity.name = null
+      entity.save()
+    }
   }
 
   store.remove('Triple', tripleId)

@@ -10,7 +10,8 @@ export function createSyncService<T>({ interval, callback }: ISyncServiceConfig<
   return interval$(interval).pipe(switchMap(callback));
 }
 
-export function dedupe<T extends Identifable>(local: T[], server: T[], localIds: Set<string>) {
+export function dedupe<T extends Identifable>(local: T[], server: T[]) {
+  const localIds = new Set(local.map(triple => triple.id));
   const filteredServer = server.filter(triple => !localIds.has(triple.id));
   return [...local, ...filteredServer];
 }

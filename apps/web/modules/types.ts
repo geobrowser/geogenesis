@@ -15,6 +15,9 @@ export type EntityValue = {
 
 export type Value = NumberValue | StringValue | EntityValue;
 
+// id -> name
+export type EntityNames = Record<string, string | null>;
+
 export type Triple = {
   id: string;
   entityId: string;

@@ -23,6 +23,7 @@ A node within the knowledge graph.
 """
 type GeoEntity @entity {
   id: ID!
+  name: String
 }
 
 """

@@ -3,7 +3,7 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { INetwork } from '~/modules/services/network';
 import { createTripleId } from '../services/create-id';
 import { dedupe } from '../services/sync';
-import { ReviewState, Triple } from '../types';
+import { EntityNames, ReviewState, Triple } from '../types';
 
 interface ITripleStoreConfig {
   api: INetwork;
@@ -13,6 +13,7 @@ interface ITripleStoreConfig {
 interface ITripleStore {
   triples$: BehaviorSubject<Triple[]>;
   changedTriples$: BehaviorSubject<Triple[]>;
+  entityNames$: BehaviorSubject<EntityNames>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
@@ -22,17 +23,17 @@ export class TripleStore implements ITripleStore {
   api: INetwork;
   triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
   changedTriples$ = new BehaviorSubject<Triple[]>([]); // history of the triples that have changed mapped to 'created' | 'deleted' status
+  entityNames$ = new BehaviorSubject<EntityNames>({});
 
   constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
     this.api = api;
     this.triples$ = new BehaviorSubject(initialtriples);
 
     // If you want to keep the local triples in sync with the remote triples, you can do this:
-    this.api.syncer$.subscribe(serverTriples => {
+    this.api.syncer$.subscribe(({ triples: triplesFromNetwork, entityNames }) => {
       // Only update state with the union of the local and remote stores
       // state = (local - remote) + remote
-      const tripleIds = new Set(this.triples.map(triple => triple.id));
-      const mergedTriples = dedupe(this.triples, serverTriples, tripleIds);
+      const mergedTriples = dedupe(this.triples, triplesFromNetwork);
 
       const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
         record[changedTriple.id] = changedTriple;
@@ -47,6 +48,8 @@ export class TripleStore implements ITripleStore {
         return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
       });
 
+      // TODO: Entity names stuff
+      this.entityNames$.next(entityNames);
       this.triples$.next(newTriples);
     });
   }
@@ -113,6 +116,13 @@ export class TripleStore implements ITripleStore {
       ]);
     }
 
+    if (triple.attributeId === 'name') {
+      this.entityNames$.next({
+        ...this.entityNames$.value,
+        [triple.entityId]: triple.value.value,
+      });
+    }
+
     triples[index] = triple;
     this.triples$.next(triples);
   };
@@ -134,8 +144,9 @@ export class TripleStore implements ITripleStore {
   };
 
   loadNetworkTriples = async () => {
-    const networkTriples = await this.api.getNetworkTriples();
-    this.triples$.next(networkTriples);
+    const { triples, entityNames } = await this.api.getNetworkTriples();
+    this.entityNames$.next(entityNames);
+    this.triples$.next(triples);
   };
 
   get triples() {

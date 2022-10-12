@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
 import { Observable } from 'rxjs';
-import { ReviewState, Triple, Value } from '../types';
+import { EntityNames, ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
@@ -14,7 +14,7 @@ type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
 type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
 
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string } };
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
 
@@ -23,7 +23,7 @@ type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue
  */
 type NetworkTriple = NetworkValue & {
   id: string;
-  entity: { id: string };
+  entity: { id: string; name: string | null };
   attribute: { id: string };
 };
 
@@ -70,15 +70,15 @@ function getActionFromChangeStatus(triple: Triple) {
 }
 
 export interface INetwork {
-  syncer$: Observable<Triple[]>;
-  getNetworkTriples: () => Promise<Triple[]>;
+  syncer$: Observable<{ triples: Triple[]; entityNames: EntityNames }>;
+  getNetworkTriples: () => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (triples: Triple[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  syncer$: Observable<Triple[]>;
+  syncer$;
 
   constructor(
     public contract: LogContract,
@@ -137,14 +137,16 @@ export class Network implements INetwork {
             }
             entity {
               id
+              name
             }
             entityValue {
               id
+              name
             }
             numberValue
             stringValue
             valueType
-          } 
+          }
         }`,
       }),
     });
@@ -164,6 +166,17 @@ export class Network implements INetwork {
       };
     });
 
-    return triples;
+    const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
+      if (triple.entity.name !== null) {
+        acc[triple.entity.id] = triple.entity.name;
+      }
+
+      if (triple.valueType === 'ENTITY') {
+        acc[triple.entityValue.id] = triple.entityValue.name;
+      }
+      return acc;
+    }, {} as EntityNames);
+
+    return { triples, entityNames };
   };
 }

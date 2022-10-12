@@ -11,12 +11,9 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useEffect, useState } from 'react';
-import { useSigner } from 'wagmi';
+import { useEffect, useMemo, useState } from 'react';
 import { Text } from '../design-system/text';
-import { createTripleId } from '../services/create-id';
-import { useTriples } from '../state/hook';
-import { Triple, Value } from '../types';
+import { EntityNames, Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -159,6 +156,7 @@ interface Props {
   globalFilter: string;
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
+  entityNames: EntityNames;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -167,9 +165,16 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, update, triples }: Props) {
+export default function TripleTable({ globalFilter, update, triples, entityNames }: Props) {
+  const tableTriples = useMemo(() => {
+    return triples.map(triple => ({
+      ...triple,
+      entityId: entityNames[triple.entityId] || triple.entityId, // If it's an empty string we want to default to the id
+    }));
+  }, [triples, entityNames]);
+
   const table = useReactTable({
-    data: triples,
+    data: tableTriples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
