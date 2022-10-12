@@ -65,7 +65,6 @@ export default function Triples() {
 
   const onImport = async (file: File) => {
     const triples = await importCSVFile(file);
-
     tripleStore.create(triples);
   };
 
