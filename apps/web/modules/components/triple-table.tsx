@@ -109,7 +109,7 @@ const Container = styled.div(props => ({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const entityNames = useEntityNames();
+    // const entityNames = useEntityNames();
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -171,7 +171,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 };
 
 interface Props {
-  globalFilter: string;
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
   entityNames: EntityNames;
@@ -183,7 +182,7 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, update, triples, entityNames }: Props) {
+export default function TripleTable({ update, triples, entityNames }: Props) {
   const tableTriples = useMemo(() => {
     return triples.map(triple => ({
       ...triple,
@@ -199,16 +198,12 @@ export default function TripleTable({ globalFilter, update, triples, entityNames
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     state: {
-      globalFilter,
       pagination: {
         pageIndex: 0,
         pageSize: 100,
       },
     },
-    globalFilterFn: fuzzyFilter,
-    filterFns: {
-      fuzzy: fuzzyFilter,
-    },
+
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
         const oldEntityId = triples[rowIndex].entityId;

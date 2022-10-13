@@ -21,7 +21,7 @@ export function useSharedObservable<T>(stateContainer: BehaviorSubject<T>) {
 }
 
 export const useTriples = () => {
-  const { create, update, publish, triples$, changedTriples$, entityNames$ } = useTripleStore();
+  const { create, update, publish, triples$, changedTriples$, entityNames$, setQuery } = useTripleStore();
   const triples = useSharedObservable(triples$);
   const changedTriples = useSharedObservable(changedTriples$);
   const entityNames = useSharedObservable(entityNames$);
@@ -33,5 +33,6 @@ export const useTriples = () => {
     create,
     update,
     publish,
+    setQuery,
   };
 };

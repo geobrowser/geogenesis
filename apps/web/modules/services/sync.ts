@@ -6,7 +6,7 @@ interface ISyncServiceConfig<T> {
   callback: () => Promise<T>;
 }
 
-export function createSyncService<T>({ interval, callback }: ISyncServiceConfig<T>): Observable<T> {
+export function createSyncService<T>({ interval = 5000, callback }: ISyncServiceConfig<T>): Observable<T> {
   return interval$(interval).pipe(switchMap(callback));
 }
 

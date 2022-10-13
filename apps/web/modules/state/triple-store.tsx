@@ -29,28 +29,9 @@ export class TripleStore implements ITripleStore {
     this.api = api;
     this.triples$ = new BehaviorSubject(initialtriples);
 
-    // If you want to keep the local triples in sync with the remote triples, you can do this:
-    this.api.syncer$.subscribe(({ triples: triplesFromNetwork, entityNames }) => {
-      // Only update state with the union of the local and remote stores
-      // state = (local - remote) + remote
-      const mergedTriples = dedupe(this.triples, triplesFromNetwork);
-
-      const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
-        record[changedTriple.id] = changedTriple;
-        return record;
-      }, {} as Record<string, Triple>);
-
-      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple.
-      // If the triple exists in the changed array locally and it has been deleted we don't want to load in the
-      // remote triple.
-      const newTriples = mergedTriples.filter(triple => {
-        const mergedTripleId = createTripleId(triple);
-        return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
-      });
-
-      // TODO: Entity names stuff
-      this.entityNames$.next(entityNames);
-      this.triples$.next(newTriples);
+    this.api.query$.subscribe(value => {
+      console.log(value);
+      this.loadNetworkTriples(value);
     });
   }
 
@@ -150,10 +131,46 @@ export class TripleStore implements ITripleStore {
     }
   };
 
-  loadNetworkTriples = async () => {
-    const { triples, entityNames } = await this.api.getNetworkTriples();
-    this.entityNames$.next(entityNames);
-    this.triples$.next(triples);
+  loadNetworkTriples = async (query: string = '') => {
+    const { triples: triplesFromNetwork, entityNames } = await this.api.getNetworkTriples(query);
+
+    // Only update state with the union of the local and remote stores
+    // state = (local - remote) + remote
+    // const mergedTriples = dedupe(this.triples, triplesFromNetwork);
+
+    const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
+      record[changedTriple.id] = changedTriple;
+      return record;
+    }, {} as Record<string, Triple>);
+
+    // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple.
+    // If the triple exists in the changed array locally and it has been deleted we don't want to load in the
+    // remote triple.
+    const newTriples = triplesFromNetwork.filter(triple => {
+      const mergedTripleId = createTripleId(triple);
+      return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
+    });
+
+    const createdTriples = query
+      ? this.changedTriples$.value.filter(
+          triple => triple.status === 'created' && triple.value.type === 'string' && triple.value.value.includes(query)
+        )
+      : this.changedTriples$.value.filter(triple => triple.status === 'created');
+
+    const createdTriplesNames = createdTriples.reduce((record, changedTriple) => {
+      if (changedTriple.attributeId === 'name') {
+        record[changedTriple.entityId] = changedTriple.value.value;
+      }
+
+      return record;
+    }, {} as Record<string, string>);
+
+    this.entityNames$.next({ ...entityNames, ...createdTriplesNames });
+    this.triples$.next([...newTriples, ...createdTriples]);
+  };
+
+  setQuery = (query: string) => {
+    this.api.query$.next(query);
   };
 
   get triples() {

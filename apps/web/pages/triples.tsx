@@ -43,10 +43,9 @@ const FileImport = styled.input({
 });
 
 export default function Triples() {
-  const [globalFilter, setGlobalFilter] = useState<string>('');
   const tripleStore = useTriples();
 
-  const debouncedFilter = debounce(setGlobalFilter, 500);
+  const debouncedFilter = debounce(tripleStore.setQuery, 500);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
@@ -100,12 +99,7 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable
-        entityNames={tripleStore.entityNames}
-        triples={tripleStore.triples}
-        update={tripleStore.update}
-        globalFilter={globalFilter}
-      />
+      <TripleTable entityNames={tripleStore.entityNames} triples={tripleStore.triples} update={tripleStore.update} />
 
       <FlowBar changedTriples={tripleStore.changedTriples} onPublish={tripleStore.publish} />
     </PageContainer>

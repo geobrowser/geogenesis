@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { EntityNames, ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
 import { createTripleId, createTripleWithId } from './create-id';
@@ -71,15 +71,15 @@ function getActionFromChangeStatus(triple: Triple) {
 }
 
 export interface INetwork {
-  syncer$: Observable<{ triples: Triple[]; entityNames: EntityNames }>;
-  getNetworkTriples: () => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  query$: BehaviorSubject<string>;
+  getNetworkTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (triples: Triple[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  syncer$;
+  query$: BehaviorSubject<string>;
 
   constructor(
     public contract: LogContract,
@@ -88,8 +88,7 @@ export class Network implements INetwork {
     public subgraphUrl: string,
     syncInterval = 30000
   ) {
-    // This could be composed in a functional way rather than initialized like this :thinking:
-    this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
+    this.query$ = new BehaviorSubject('');
   }
 
   publish = async (
@@ -123,7 +122,8 @@ export class Network implements INetwork {
     console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
   };
 
-  getNetworkTriples = async () => {
+  getNetworkTriples = async (query: string = '') => {
+    console.log(`Querying network with ${query}`);
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -131,7 +131,7 @@ export class Network implements INetwork {
       },
       body: JSON.stringify({
         query: `query { 
-          triples {
+          triples(where: {stringValue_contains_nocase: ${JSON.stringify(query)}}) {
             id
             attribute {
               id
