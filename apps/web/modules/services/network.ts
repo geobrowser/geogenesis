@@ -24,7 +24,7 @@ type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue
 type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
-  attribute: { id: string };
+  attribute: { id: string; name: string | null };
   isProtected: boolean;
 };
 
@@ -135,6 +135,7 @@ export class Network implements INetwork {
             id
             attribute {
               id
+              name
             }
             entity {
               id
@@ -177,6 +178,10 @@ export class Network implements INetwork {
 
       if (triple.valueType === 'ENTITY') {
         acc[triple.entityValue.id] = triple.entityValue.name;
+      }
+
+      if (triple.attribute.name !== null) {
+        acc[triple.attribute.id] = triple.attribute.name;
       }
       return acc;
     }, {} as EntityNames);

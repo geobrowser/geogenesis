@@ -39,6 +39,16 @@ export class TripleStore implements ITripleStore {
     triples.forEach(triple => (triple.status = 'created'));
     this.triples$.next([...triples, ...this.triples]);
     this.changedTriples$.next([...this.changedTriples$.value, ...triples]);
+
+    const createdTriplesNames = triples.reduce((record, changedTriple) => {
+      if (changedTriple.attributeId === 'name') {
+        record[changedTriple.entityId] = changedTriple.value.value;
+      }
+
+      return record;
+    }, {} as Record<string, string>);
+
+    this.entityNames$.next({ ...this.entityNames$.value, ...createdTriplesNames });
   };
 
   update = (triple: Triple, oldTriple: Triple) => {

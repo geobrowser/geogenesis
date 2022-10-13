@@ -187,6 +187,7 @@ export default function TripleTable({ update, triples, entityNames }: Props) {
     return triples.map(triple => ({
       ...triple,
       entityId: entityNames[triple.entityId] || triple.entityId, // If it's an empty string we want to default to the id
+      attributeId: entityNames[triple.attributeId] || triple.attributeId,
     }));
   }, [triples, entityNames]);
 
