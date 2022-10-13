@@ -161,19 +161,22 @@ export class TripleStore implements ITripleStore {
       return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
     });
 
-    const createdTriples = query
-      ? this.changedTriples$.value.filter(
-          triple => triple.status === 'created' && triple.value.type === 'string' && triple.value.value.includes(query)
-        )
-      : this.changedTriples$.value.filter(triple => triple.status === 'created');
-
-    const createdTriplesNames = createdTriples.reduce((record, changedTriple) => {
-      if (changedTriple.attributeId === 'name') {
+    const createdTriplesNames = this.changedTriples$.value.reduce((record, changedTriple) => {
+      if (changedTriple.attributeId === 'name' && changedTriple.status === 'created') {
         record[changedTriple.entityId] = changedTriple.value.value;
       }
 
       return record;
     }, {} as Record<string, string>);
+
+    const createdTriples = query
+      ? this.changedTriples$.value.filter(
+          triple =>
+            triple.status === 'created' &&
+            ((triple.value.type === 'string' && triple.value.value.includes(query)) ||
+              createdTriplesNames[triple.entityId]?.includes(query))
+        )
+      : this.changedTriples$.value.filter(triple => triple.status === 'created');
 
     this.entityNames$.next({ ...entityNames, ...createdTriplesNames });
     this.triples$.next([...newTriples, ...createdTriples]);
