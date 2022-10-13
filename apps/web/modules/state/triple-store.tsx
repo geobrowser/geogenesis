@@ -54,7 +54,7 @@ export class TripleStore implements ITripleStore {
       actions.forEach(action => {
         switch (action.type) {
           case 'createTriple':
-            triples.push(createTripleWithId(action));
+            triples.unshift(createTripleWithId(action));
             break;
           case 'deleteTriple': {
             const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
@@ -130,7 +130,7 @@ export class TripleStore implements ITripleStore {
       },
     };
 
-    this.actions$.next([...this.actions$.value, action]);
+    this.actions$.next([action, ...this.actions$.value]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {

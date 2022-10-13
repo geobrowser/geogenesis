@@ -201,7 +201,7 @@ export default function TripleTable({ update, triples, entityNames }: Props) {
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 10,
+        pageSize: 100,
       },
     },
 

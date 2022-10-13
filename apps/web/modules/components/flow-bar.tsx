@@ -33,17 +33,16 @@ const Container = styled.div(props => ({
 const MotionContainer = motion(Container);
 
 interface Props {
-  changedTriples: Action[];
+  actionsCount: number;
   onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
 }
 
-export function FlowBar({ changedTriples, onPublish }: Props) {
+export function FlowBar({ actionsCount, onPublish }: Props) {
   const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
   // deletes since that would double the change count.
-  const changeCount = changedTriples.length;
   const showFlowBar = reviewState === 'idle' || reviewState === 'reviewing';
   const showToast =
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
@@ -57,7 +56,7 @@ export function FlowBar({ changedTriples, onPublish }: Props) {
   return (
     <AnimatePresence>
       {/* We let the toast persist during the publish-complete state before it switches to idle state */}
-      {changeCount > 0 || reviewState === 'publish-complete' ? (
+      {actionsCount > 0 || reviewState === 'publish-complete' ? (
         <>
           {showFlowBar && (
             <MotionContainer
@@ -67,9 +66,11 @@ export function FlowBar({ changedTriples, onPublish }: Props) {
               transition={{ duration: 0.1, ease: 'easeInOut' }}
               key="action-bar"
             >
-              {reviewState === 'idle' && <Idle changeCount={changeCount} onNext={() => setReviewState('reviewing')} />}
+              {reviewState === 'idle' && (
+                <Idle actionsCount={actionsCount} onNext={() => setReviewState('reviewing')} />
+              )}
               {reviewState === 'reviewing' && (
-                <Review changeCount={changeCount} onBack={() => setReviewState('idle')} onNext={publish} />
+                <Review actionsCount={actionsCount} onBack={() => setReviewState('idle')} onNext={publish} />
               )}
             </MotionContainer>
           )}
@@ -95,11 +96,11 @@ export function FlowBar({ changedTriples, onPublish }: Props) {
 }
 
 interface IdleProps {
-  changeCount: number;
+  actionsCount: number;
   onNext: () => void;
 }
 
-function Idle({ changeCount, onNext }: IdleProps) {
+function Idle({ actionsCount, onNext }: IdleProps) {
   const theme = useTheme();
 
   return (
@@ -108,7 +109,7 @@ function Idle({ changeCount, onNext }: IdleProps) {
       <Trash color={theme.colors['grey-04']} />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
-        {changeCount} {pluralize('change', changeCount)}
+        {actionsCount} {pluralize('change', actionsCount)}
       </Text>
 
       <Spacer width={16} />
@@ -144,7 +145,7 @@ interface ReviewProps extends IdleProps {
   onBack: () => void;
 }
 
-function Review({ changeCount, onNext, onBack }: ReviewProps) {
+function Review({ actionsCount, onNext, onBack }: ReviewProps) {
   const theme = useTheme();
 
   return (
@@ -165,7 +166,7 @@ function Review({ changeCount, onNext, onBack }: ReviewProps) {
       <Trash color={theme.colors['grey-04']} />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
-        {changeCount} {pluralize('change', changeCount)}
+        {actionsCount} {pluralize('change', actionsCount)}
       </Text>
 
       <Spacer width={16} />

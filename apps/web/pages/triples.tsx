@@ -67,6 +67,8 @@ export default function Triples() {
     tripleStore.create(triples);
   };
 
+  console.log('triples', tripleStore.triples);
+
   return (
     <PageContainer>
       <PageHeader>
@@ -101,7 +103,7 @@ export default function Triples() {
 
       <TripleTable entityNames={tripleStore.entityNames} triples={tripleStore.triples} update={tripleStore.update} />
 
-      <FlowBar changedTriples={tripleStore.actions} onPublish={tripleStore.publish} />
+      <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>
   );
 }
