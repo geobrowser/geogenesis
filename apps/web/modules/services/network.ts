@@ -51,7 +51,7 @@ function getActionFromChangeStatus(action: Action) {
 
 export interface INetwork {
   query$: BehaviorSubject<string>;
-  getNetworkTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
@@ -101,7 +101,7 @@ export class Network implements INetwork {
     console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
   };
 
-  getNetworkTriples = async (query: string = '') => {
+  fetchTriples = async (query: string = '') => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {

@@ -29,15 +29,9 @@ export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
 export class TripleStore implements ITripleStore {
   private api: INetwork;
-  // observables
-  // A: ~~actions (created and deleted) (will need to squash intermediate states or a different DS)~~
-  // B: network triples (whatever we fetch from the network via querying)
-  // C: network entity names
-  // D: entity names (derived from A and B, C)
   actions$: BehaviorSubject<Action[]> = new BehaviorSubject<Action[]>([]);
   entityNames$: BehaviorSubject<EntityNames> = new BehaviorSubject<EntityNames>({});
   triples$ = new BehaviorSubject<Triple[]>([]);
-
   networkTriples$ = new BehaviorSubject<Triple[]>([]);
   networkEntityNames$ = new BehaviorSubject<EntityNames>({});
 
@@ -73,7 +67,7 @@ export class TripleStore implements ITripleStore {
     });
 
     this.api.query$.subscribe(async value => {
-      const { triples, entityNames } = await this.api.getNetworkTriples(value);
+      const { triples, entityNames } = await this.api.fetchTriples(value);
       this.networkEntityNames$.next(entityNames);
       this.networkTriples$.next(triples);
     });
@@ -114,7 +108,7 @@ export class TripleStore implements ITripleStore {
       type: 'createTriple',
     }));
 
-    this.actions$.next([...actions, ...this.actions$.value]);
+    this.actions$.next([...this.actions$.value, ...actions]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
@@ -130,7 +124,7 @@ export class TripleStore implements ITripleStore {
       },
     };
 
-    this.actions$.next([action, ...this.actions$.value]);
+    this.actions$.next([...this.actions$.value, action]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
