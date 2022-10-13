@@ -14,6 +14,7 @@ import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { ReviewState, Triple } from '../types';
 import { Spinner } from '../design-system/spinner';
+import { Action } from '../state/triple-store';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -32,7 +33,7 @@ const Container = styled.div(props => ({
 const MotionContainer = motion(Container);
 
 interface Props {
-  changedTriples: Triple[];
+  changedTriples: Action[];
   onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
 }
 
@@ -42,7 +43,7 @@ export function FlowBar({ changedTriples, onPublish }: Props) {
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
   // deletes since that would double the change count.
-  const changeCount = changedTriples.filter(change => change.status === 'created').length;
+  const changeCount = changedTriples.length;
   const showFlowBar = reviewState === 'idle' || reviewState === 'reviewing';
   const showToast =
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';

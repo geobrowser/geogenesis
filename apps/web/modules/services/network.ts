@@ -1,12 +1,11 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
 import { Signer } from 'ethers';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
+import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
-import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
-import { createSyncService } from './sync';
 
 type LogContract = typeof Log__factory;
 
@@ -39,41 +38,21 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
-function getActionFromChangeStatus(triple: Triple) {
-  switch (triple.status) {
-    case 'created':
-      return {
-        type: 'createTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
+function getActionFromChangeStatus(action: Action) {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return [action];
 
-    case 'edited':
-      return {
-        type: 'createTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
-
-    case 'deleted':
-      return {
-        type: 'deleteTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
-
-    default:
-      throw new Error(`Triple does not have a status ${triple.status}`);
+    case 'editTriple':
+      return [action.before, action.after];
   }
 }
 
 export interface INetwork {
   query$: BehaviorSubject<string>;
   getNetworkTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
-  publish: (triples: Triple[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
+  publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -92,7 +71,7 @@ export class Network implements INetwork {
   }
 
   publish = async (
-    triples: Triple[],
+    actions: Action[],
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void
   ): Promise<void> => {
@@ -103,13 +82,13 @@ export class Network implements INetwork {
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];
 
-    for (let i = 0; i < triples.length; i += 2000) {
-      const chunk = triples.slice(i, i + 2000);
+    for (let i = 0; i < actions.length; i += 2000) {
+      const chunk = actions.slice(i, i + 2000);
 
       const root: Root = {
         type: 'root',
         version: '0.0.1',
-        actions: chunk.map(getActionFromChangeStatus),
+        actions: chunk.flatMap(getActionFromChangeStatus),
       };
 
       const cidString = await this.storageClient.uploadObject(root);

@@ -101,7 +101,7 @@ export default function Triples() {
 
       <TripleTable entityNames={tripleStore.entityNames} triples={tripleStore.triples} update={tripleStore.update} />
 
-      <FlowBar changedTriples={tripleStore.changedTriples} onPublish={tripleStore.publish} />
+      <FlowBar changedTriples={tripleStore.actions} onPublish={tripleStore.publish} />
     </PageContainer>
   );
 }

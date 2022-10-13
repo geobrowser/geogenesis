@@ -23,19 +23,11 @@ describe('useSharedObservable', () => {
     const { result, rerender } = renderHook(() => useSharedObservable(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newTriple: Triple = {
-      id: '1',
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
 
     store.create([newTriple]);
     rerender();
-    expect(result.current).toContain(newTriple);
+    expect(result.current).toStrictEqual([newTriple]);
   });
 
   it('Rerenders component when changing state', () => {

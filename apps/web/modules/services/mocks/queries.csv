@@ -1,0 +1,6 @@
+Entity,Attribute,Value
+1,name,Bob
+1,age,99
+1,occupation,architect
+age,name,Age
+occupation,name,Occupation

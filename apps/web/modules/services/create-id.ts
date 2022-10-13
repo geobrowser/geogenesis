@@ -1,5 +1,5 @@
 import { v4, validate, version } from 'uuid';
-import { Triple, Value } from '../types';
+import { OmitStrict, Triple, Value } from '../types';
 
 export function createEntityId() {
   return v4();
@@ -36,12 +36,26 @@ export function createTripleId(
   return `${args[0]}:${args[1]}:${createValueId(args[2])}`;
 }
 
-export function createTripleWithId(entityId: string, attributeId: string, value: Value): Triple {
+export function createTripleWithId(entityId: string, attributeId: string, value: Value): Triple;
+export function createTripleWithId(triple: OmitStrict<Triple, 'id'>): Triple;
+export function createTripleWithId(
+  ...args: [entityId: string, attributeId: string, value: Value] | [triple: OmitStrict<Triple, 'id'>]
+): Triple {
+  if (args.length === 1) {
+    const triple = args[0];
+    return {
+      id: createTripleId(triple.entityId, triple.attributeId, triple.value),
+      entityId: triple.entityId,
+      attributeId: triple.attributeId,
+      value: triple.value,
+    };
+  }
+
   return {
-    id: createTripleId(entityId, attributeId, value),
-    entityId,
-    attributeId,
-    value,
+    id: createTripleId(args[0], args[1], args[2]),
+    entityId: args[0],
+    attributeId: args[1],
+    value: args[2],
   };
 }
 

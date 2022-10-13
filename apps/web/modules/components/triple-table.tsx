@@ -201,7 +201,7 @@ export default function TripleTable({ update, triples, entityNames }: Props) {
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 10,
       },
     },
 
@@ -219,8 +219,6 @@ export default function TripleTable({ update, triples, entityNames }: Props) {
         const entityId = isEntityIdColumn ? (cellValue as Triple['entityId']) : oldEntityId;
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
-
-        console.log(entityId);
 
         const newTriple = createTripleWithId(entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
