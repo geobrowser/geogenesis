@@ -129,8 +129,8 @@ export class Network implements INetwork {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: `query { 
-          triples(where: {stringValue_contains_nocase: ${JSON.stringify(query)}}) {
+        query: `query {
+          triples(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}) {
             id
             attribute {
               id
@@ -149,7 +149,7 @@ export class Network implements INetwork {
             valueType
             isProtected
           }
-        }`,
+        } `,
       }),
     });
 
