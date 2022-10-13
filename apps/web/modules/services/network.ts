@@ -123,7 +123,6 @@ export class Network implements INetwork {
   };
 
   getNetworkTriples = async (query: string = '') => {
-    console.log(`Querying network with ${query}`);
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
