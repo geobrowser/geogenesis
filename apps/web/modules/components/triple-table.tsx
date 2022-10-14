@@ -1,9 +1,7 @@
 import styled from '@emotion/styled';
-import { rankItem } from '@tanstack/match-sorter-utils';
 import {
   ColumnDef,
   createColumnHelper,
-  FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -11,10 +9,10 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
-import { useEntityNames } from '../state/use-entity-names';
+import { useTriples } from '../state/hook';
 import { EntityNames, Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
@@ -109,8 +107,7 @@ const Container = styled.div(props => ({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const entityNames = useEntityNames();
-    console.log(entityNames);
+    const { entityNames } = useTriples();
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -248,16 +245,3 @@ export default function TripleTable({ update, triples, entityNames }: Props) {
     </Container>
   );
 }
-
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  // Rank the item
-  const itemRank = rankItem(row.getValue(columnId), value);
-
-  // Store the itemRank info
-  addMeta({
-    itemRank,
-  });
-
-  // Return if the item should be filtered in/out
-  return itemRank.passed;
-};

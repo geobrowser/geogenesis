@@ -13,6 +13,10 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ServicesProvider } from '~/modules/services';
 import '../styles/styles.css';
 
+import { enableLegendStateReact } from '@legendapp/state/react';
+
+enableLegendStateReact();
+
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',

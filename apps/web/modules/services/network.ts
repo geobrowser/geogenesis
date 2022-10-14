@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory } from '@geogenesis/contracts';
+import { observable, Observable } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { BehaviorSubject } from 'rxjs';
 import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
@@ -50,7 +50,7 @@ function getActionFromChangeStatus(action: Action) {
 }
 
 export interface INetwork {
-  query$: BehaviorSubject<string>;
+  query$: Observable<string>;
   fetchTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
@@ -58,7 +58,7 @@ export interface INetwork {
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  query$: BehaviorSubject<string>;
+  query$: Observable<string>;
 
   constructor(
     public contract: LogContract,
@@ -67,7 +67,7 @@ export class Network implements INetwork {
     public subgraphUrl: string,
     syncInterval = 30000
   ) {
-    this.query$ = new BehaviorSubject('');
+    this.query$ = observable('');
   }
 
   publish = async (

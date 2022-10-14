@@ -1,12 +1,12 @@
 import { Signer } from 'ethers';
-import { BehaviorSubject, combineLatest, map, Observable, switchMap, tap } from 'rxjs';
+import { observable, Observable, computed, ObservableComputed } from '@legendapp/state';
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
 import { createTripleWithId } from '../services/create-id';
 
 interface ITripleStore {
-  actions$: BehaviorSubject<Action[]>;
+  actions$: Observable<Action[]>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
@@ -24,77 +24,83 @@ type EditTripleAction = {
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
+function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
+  return computed(() => {
+    const data = observable.get() as T;
+    if (data === undefined) return initialValue;
+    return data;
+  });
+}
+
 export class TripleStore implements ITripleStore {
   private api: INetwork;
-  actions$: BehaviorSubject<Action[]> = new BehaviorSubject<Action[]>([]);
-  entityNames$ = new BehaviorSubject<EntityNames>({});
-  triples$: Observable<Triple[]>;
+  actions$: Observable<Action[]> = observable<Action[]>([]);
+  entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
+  triples$: ObservableComputed<Triple[]> = observable([]);
 
   constructor({ api }: ITripleStoreConfig) {
     this.api = api;
 
-    const networkData$ = this.api.query$.pipe(switchMap(value => this.api.fetchTriples(value)));
-
-    this.triples$ = combineLatest([this.actions$, networkData$]).pipe(
-      map(([actions, { triples: networkTriples }]) => {
-        const triples: Triple[] = [...networkTriples];
-
-        // If our actions have modified one of the network triples, we don't want to add that
-        // network triple to the triples array
-        actions.forEach(action => {
-          switch (action.type) {
-            case 'createTriple':
-              triples.unshift(createTripleWithId(action));
-              break;
-            case 'deleteTriple': {
-              const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
-              triples.splice(index, 1);
-              break;
-            }
-            case 'editTriple': {
-              const index = triples.findIndex(t => t.id === createTripleWithId(action.before).id);
-              triples.splice(index, 1, createTripleWithId(action.after));
-              break;
-            }
-          }
-        });
-
-        return triples;
-      })
+    const networkData$ = makeOptionalComputed(
+      { triples: [], entityNames: {} },
+      computed(() => this.api.fetchTriples(this.api.query$.get()))
     );
 
-    // Name-related stuff
-    combineLatest([this.actions$, networkData$])
-      .pipe(
-        map(([actions, { entityNames: networkEntityNames }]) => {
-          const entityNames = actions.reduce(
-            (acc, action) => {
-              switch (action.type) {
-                case 'createTriple':
-                  if (action.attributeId === 'name') {
-                    acc[action.entityId] = action.value.value;
-                  }
+    this.triples$ = computed(() => {
+      const { triples: networkTriples } = networkData$.get();
+      const triples: Triple[] = [...networkTriples];
 
-                  break;
-                case 'deleteTriple':
-                  break;
-                case 'editTriple':
-                  if (action.after.attributeId === 'name') {
-                    acc[action.after.entityId] = action.after.value.value;
-                  }
+      // If our actions have modified one of the network triples, we don't want to add that
+      // network triple to the triples array
+      this.actions$.get().forEach(action => {
+        switch (action.type) {
+          case 'createTriple':
+            triples.unshift(createTripleWithId(action));
+            break;
+          case 'deleteTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
+            triples.splice(index, 1);
+            break;
+          }
+          case 'editTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId(action.before).id);
+            triples.splice(index, 1, createTripleWithId(action.after));
+            break;
+          }
+        }
+      });
 
-                  break;
+      return triples;
+    });
+
+    this.entityNames$ = computed(() => {
+      const { entityNames: networkEntityNames } = networkData$.get();
+      const entityNames = this.actions$.get().reduce(
+        (acc, action) => {
+          switch (action.type) {
+            case 'createTriple':
+              if (action.attributeId === 'name') {
+                acc[action.entityId] = action.value.value;
               }
 
-              return acc;
-            },
-            { ...networkEntityNames } as EntityNames
-          );
+              break;
+            case 'deleteTriple':
+              break;
+            case 'editTriple':
+              if (action.after.attributeId === 'name') {
+                acc[action.after.entityId] = action.after.value.value;
+              }
 
-          return entityNames;
-        })
-      )
-      .subscribe(this.entityNames$);
+              break;
+          }
+
+          return acc;
+        },
+        { ...networkEntityNames } as EntityNames
+      );
+
+      return entityNames;
+    });
   }
 
   create = (triples: Triple[]) => {
@@ -103,7 +109,7 @@ export class TripleStore implements ITripleStore {
       type: 'createTriple',
     }));
 
-    this.actions$.next([...this.actions$.value, ...actions]);
+    this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
@@ -124,19 +130,16 @@ export class TripleStore implements ITripleStore {
       },
     };
 
-    this.actions$.next([...this.actions$.value, action]);
+    this.actions$.set([...this.actions$.get(), action]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish(this.actions$.value, signer, onChangePublishState);
-    this.actions$.next([]);
+    await this.api.publish(this.actions$.get(), signer, onChangePublishState);
+    this.actions$.set([]);
   };
 
   setQuery = (query: string) => {
-    this.api.query$.next(query);
+    console.log('setQuery', query);
+    this.api.query$.set(query);
   };
-
-  get actions() {
-    return this.actions$.value;
-  }
 }

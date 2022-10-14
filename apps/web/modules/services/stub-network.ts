@@ -1,8 +1,8 @@
-import { BehaviorSubject } from 'rxjs';
+import { observable } from '@legendapp/state';
 import { INetwork } from './network';
 
 export class StubNetwork implements INetwork {
-  query$ = new BehaviorSubject('');
+  query$ = observable('');
   fetchTriples = async () => ({ triples: [], entityNames: {} });
   publish = async () => {};
 }
