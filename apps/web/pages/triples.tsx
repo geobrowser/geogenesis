@@ -67,8 +67,6 @@ export default function Triples() {
     tripleStore.create(triples);
   };
 
-  console.log('triples', tripleStore.triples);
-
   return (
     <PageContainer>
       <PageHeader>
