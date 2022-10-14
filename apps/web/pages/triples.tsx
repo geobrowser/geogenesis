@@ -99,7 +99,7 @@ export default function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable entityNames={tripleStore.entityNames} triples={tripleStore.triples} update={tripleStore.update} />
+      <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>

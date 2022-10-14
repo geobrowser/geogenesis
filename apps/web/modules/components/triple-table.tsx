@@ -10,6 +10,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
+import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useTriples } from '../state/hook';
@@ -180,7 +181,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 interface Props {
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
-  entityNames: EntityNames;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -189,9 +189,9 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ update, triples, entityNames }: Props) {
+export default function TripleTable({ update, triples }: Props) {
   const table = useReactTable({
-    data: tableTriples,
+    data: triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
