@@ -2,7 +2,6 @@ import 'modern-normalize';
 import '../styles/styles.css';
 import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
-import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';
@@ -11,7 +10,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ServicesProvider } from '~/modules/services';
-import '../styles/styles.css';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',

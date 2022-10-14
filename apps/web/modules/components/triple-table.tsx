@@ -1,9 +1,7 @@
 import styled from '@emotion/styled';
-import { rankItem } from '@tanstack/match-sorter-utils';
 import {
   ColumnDef,
   createColumnHelper,
-  FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -11,12 +9,12 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
-import { useEntityNames } from '../state/use-entity-names';
-import { EntityNames, Triple, Value } from '../types';
+import { useTriples } from '../state/hook';
+import { Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -110,7 +108,7 @@ const Container = styled.div(props => ({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const entityNames = useEntityNames();
+    const { entityNames } = useTriples();
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -137,7 +135,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             disabled
             isEntity
             ellipsize
-            value={entityId}
+            value={entityNames[entityId] || entityId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
@@ -147,7 +145,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <TableCellInput
             placeholder="Add an attribute..."
-            value={attributeId}
+            value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
@@ -166,7 +164,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <TableCellInput
             placeholder="Add text..."
-            value={value.value}
+            value={entityNames[value.value] || value.value}
             onChange={e =>
               setCellData({
                 type: 'string',
@@ -181,10 +179,8 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 };
 
 interface Props {
-  globalFilter: string;
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
-  entityNames: EntityNames;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -193,32 +189,21 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ globalFilter, update, triples, entityNames }: Props) {
-  const tableTriples = useMemo(() => {
-    return triples.map(triple => ({
-      ...triple,
-      entityId: entityNames[triple.entityId] || triple.entityId, // If it's an empty string we want to default to the id
-    }));
-  }, [triples, entityNames]);
-
+export default function TripleTable({ update, triples }: Props) {
   const table = useReactTable({
-    data: tableTriples,
+    data: triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     state: {
-      globalFilter,
       pagination: {
         pageIndex: 0,
         pageSize: 100,
       },
     },
-    globalFilterFn: fuzzyFilter,
-    filterFns: {
-      fuzzy: fuzzyFilter,
-    },
+
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
         const oldEntityId = triples[rowIndex].entityId;
@@ -233,8 +218,6 @@ export default function TripleTable({ globalFilter, update, triples, entityNames
         const entityId = isEntityIdColumn ? (cellValue as Triple['entityId']) : oldEntityId;
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
-
-        console.log(entityId);
 
         const newTriple = createTripleWithId(entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
@@ -271,16 +254,3 @@ export default function TripleTable({ globalFilter, update, triples, entityNames
     </Container>
   );
 }
-
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  // Rank the item
-  const itemRank = rankItem(row.getValue(columnId), value);
-
-  // Store the itemRank info
-  addMeta({
-    itemRank,
-  });
-
-  // Return if the item should be filtered in/out
-  return itemRank.passed;
-};

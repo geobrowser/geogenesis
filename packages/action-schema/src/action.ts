@@ -11,14 +11,14 @@ interface CreateEntityAction {
   entityId: string
 }
 
-interface CreateTripleAction {
+export interface CreateTripleAction {
   type: 'createTriple'
   entityId: string
   attributeId: string
   value: Value
 }
 
-interface DeleteTripleAction {
+export interface DeleteTripleAction {
   type: 'deleteTriple'
   entityId: string
   attributeId: string

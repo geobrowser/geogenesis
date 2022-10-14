@@ -1,16 +1,15 @@
+import { useSelector } from '@legendapp/state/react';
 import { render, renderHook } from '@testing-library/react';
-import { Signer } from 'ethers';
 import { describe, expect, it } from 'vitest';
 import { createTripleWithId } from '../services/create-id';
 import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
-import { useSharedObservable } from './hook';
 import { TripleStore } from './triple-store';
 
-describe('useSharedObservable', () => {
+describe('useObservable', () => {
   it('Initializes empty', () => {
     const store = new TripleStore({ api: new StubNetwork() });
-    const { result } = renderHook(() => useSharedObservable(store.triples$));
+    const { result } = renderHook(() => useSelector(store.triples$));
 
     expect(result.current).toStrictEqual([]);
   });
@@ -20,29 +19,21 @@ describe('useSharedObservable', () => {
   // doesn't break at some point.
   it('Adds a new triple', () => {
     const store = new TripleStore({ api: new StubNetwork() });
-    const { result, rerender } = renderHook(() => useSharedObservable(store.triples$));
+    const { result, rerender } = renderHook(() => useSelector(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newTriple: Triple = {
-      id: '1',
-      entityId: 'bob',
-      attributeId: 'name',
-      value: {
-        type: 'string',
-        value: 'Bob',
-      },
-    };
+    const newTriple: Triple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
 
     store.create([newTriple]);
     rerender();
-    expect(result.current).toContain(newTriple);
+    expect(result.current).toStrictEqual([newTriple]);
   });
 
   it('Rerenders component when changing state', () => {
     const store = new TripleStore({ api: new StubNetwork() });
 
     const Component = () => {
-      const triples = useSharedObservable(store.triples$);
+      const triples = useSelector(store.triples$);
       return <p>{triples.length}</p>;
     };
 

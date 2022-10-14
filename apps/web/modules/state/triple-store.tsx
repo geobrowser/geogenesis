@@ -1,162 +1,146 @@
 import { Signer } from 'ethers';
-import { BehaviorSubject, Subscription } from 'rxjs';
-import { INetwork } from '~/modules/services/network';
-import { createTripleId } from '../services/create-id';
-import { dedupe } from '../services/sync';
+import { observable, Observable, computed, ObservableComputed } from '@legendapp/state';
+import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
+import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
-
-interface ITripleStoreConfig {
-  api: INetwork;
-  initialtriples?: Triple[];
-}
+import { createTripleWithId } from '../services/create-id';
 
 interface ITripleStore {
-  triples$: BehaviorSubject<Triple[]>;
-  changedTriples$: BehaviorSubject<Triple[]>;
-  entityNames$: BehaviorSubject<EntityNames>;
+  actions$: Observable<Action[]>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
-export class TripleStore implements ITripleStore {
+interface ITripleStoreConfig {
   api: INetwork;
-  triples$: BehaviorSubject<Triple[]>; // state of the triples as they exist right now
-  changedTriples$ = new BehaviorSubject<Triple[]>([]); // history of the triples that have changed mapped to 'created' | 'deleted' status
-  entityNames$ = new BehaviorSubject<EntityNames>({});
+}
 
-  constructor({ api, initialtriples = [] }: ITripleStoreConfig) {
+type EditTripleAction = {
+  type: 'editTriple';
+  before: DeleteTripleAction;
+  after: CreateTripleAction;
+};
+
+export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
+
+function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
+  return computed(() => {
+    const data = observable.get() as T;
+    if (data === undefined) return initialValue;
+    return data;
+  });
+}
+
+export class TripleStore implements ITripleStore {
+  private api: INetwork;
+  actions$: Observable<Action[]> = observable<Action[]>([]);
+  entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
+  triples$: ObservableComputed<Triple[]> = observable([]);
+
+  constructor({ api }: ITripleStoreConfig) {
     this.api = api;
-    this.triples$ = new BehaviorSubject(initialtriples);
 
-    // If you want to keep the local triples in sync with the remote triples, you can do this:
-    this.api.syncer$.subscribe(({ triples: triplesFromNetwork, entityNames }) => {
-      // Only update state with the union of the local and remote stores
-      // state = (local - remote) + remote
-      const mergedTriples = dedupe(this.triples, triplesFromNetwork);
+    const networkData$ = makeOptionalComputed(
+      { triples: [], entityNames: {} },
+      computed(() => this.api.fetchTriples(this.api.query$.get()))
+    );
 
-      const changedTriples = this.changedTriples$.value.reduce((record, changedTriple) => {
-        record[changedTriple.id] = changedTriple;
-        return record;
-      }, {} as Record<string, Triple>);
+    this.triples$ = computed(() => {
+      const { triples: networkTriples } = networkData$.get();
+      const triples: Triple[] = [...networkTriples];
 
-      // If a triple that exists on the backend has been changed locally we don't want to load the now stale triple.
-      // If the triple exists in the changed array locally and it has been deleted we don't want to load in the
-      // remote triple.
-      const newTriples = mergedTriples.filter(triple => {
-        const mergedTripleId = createTripleId(triple);
-        return !(changedTriples[mergedTripleId] && changedTriples[mergedTripleId].status === 'deleted');
+      // If our actions have modified one of the network triples, we don't want to add that
+      // network triple to the triples array
+      this.actions$.get().forEach(action => {
+        switch (action.type) {
+          case 'createTriple':
+            triples.unshift(createTripleWithId(action));
+            break;
+          case 'deleteTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
+            triples.splice(index, 1);
+            break;
+          }
+          case 'editTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId(action.before).id);
+            triples.splice(index, 1, createTripleWithId(action.after));
+            break;
+          }
+        }
       });
 
-      // TODO: Entity names stuff
-      this.entityNames$.next(entityNames);
-      this.triples$.next(newTriples);
+      return triples;
+    });
+
+    this.entityNames$ = computed(() => {
+      const { entityNames: networkEntityNames } = networkData$.get();
+      const entityNames = this.actions$.get().reduce(
+        (acc, action) => {
+          switch (action.type) {
+            case 'createTriple':
+              if (action.attributeId === 'name') {
+                acc[action.entityId] = action.value.value;
+              }
+
+              break;
+            case 'deleteTriple':
+              break;
+            case 'editTriple':
+              if (action.after.attributeId === 'name') {
+                acc[action.after.entityId] = action.after.value.value;
+              }
+
+              break;
+          }
+
+          return acc;
+        },
+        { ...networkEntityNames } as EntityNames
+      );
+
+      return entityNames;
     });
   }
 
   create = (triples: Triple[]) => {
-    triples.forEach(triple => (triple.status = 'created'));
-    this.triples$.next([...triples, ...this.triples]);
-    this.changedTriples$.next([...this.changedTriples$.value, ...triples]);
+    const actions: CreateTripleAction[] = triples.map(triple => ({
+      ...triple,
+      type: 'createTriple',
+    }));
+
+    this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
-    const index = this.triples.findIndex(t => t.id === oldTriple.id);
-    const triples = this.triples$.value;
+    // TODO: This currently doesn't work for triples whose entity, attribute, or value has
+    // been replaced with the "name" value. Will be fixed once we do
+    // https://linear.app/geobrowser/issue/GEO-58/we-are-overwriting-the-triple-properties-in-local-store-with-entity
+    if (triple.id === oldTriple.id) return;
 
-    // If there haven't been actual changes to the data we can skip updates
-    if (triple.id === oldTriple.id) {
-      return;
-    }
+    const action: EditTripleAction = {
+      type: 'editTriple',
+      before: {
+        ...oldTriple,
+        type: 'deleteTriple',
+      },
+      after: {
+        ...triple,
+        type: 'createTriple',
+      },
+    };
 
-    // We need to ensure we are tracking the state of the original triple and the state of
-    // the most recent triple. This is because our backend expects a create + delete when a
-    // triple is edited.
-    //
-    // If a triple is just created then we need to track all subsequent updates to it _without_
-    // a delete pair.
-    //
-    // If a triple already exists on the backend and has been updated locally, we need to track
-    // the original state of the triple as well as the most recent state of the triple, but make
-    // sure we don't track intermediate states since they aren't important.
-    if (oldTriple.status === 'created') {
-      const indexOfChangedTriple = this.changedTriples$.value.findIndex(t => t.id === oldTriple.id);
-      triple.status = 'created';
-      const changedTriples = this.changedTriples$.value;
-      changedTriples[indexOfChangedTriple] = triple;
-      this.changedTriples$.next(changedTriples);
-    } else {
-      triple.status = 'edited';
-      const lastVersionIndex = this.changedTriples$.value.findIndex(t => t.id === oldTriple.id);
-
-      if (lastVersionIndex === -1) {
-        this.changedTriples$.next([
-          ...this.changedTriples$.value,
-          {
-            ...oldTriple,
-            status: 'deleted',
-          },
-        ]);
-      } else {
-        // Remove the last version of the changed triple from the changedTriples$.value array. We only
-        // want to publish the deletion of the first version of the triple and the creation of
-        // the latest version.
-        // Using splice is going to be faster than filtering potentially large triples array
-        this.changedTriples$.value.splice(lastVersionIndex, 1);
-      }
-
-      triple.id = createTripleId(triple.entityId, triple.attributeId, triple.value);
-
-      this.changedTriples$.next([
-        ...this.changedTriples$.value,
-        {
-          ...triple,
-          status: 'created',
-        },
-      ]);
-    }
-
-    // Creating a name attribute triple
-    if (triple.attributeId === 'name') {
-      this.entityNames$.next({
-        ...this.entityNames$.value,
-        [triple.entityId]: triple.value.value,
-      });
-    }
-    // Deleting a name attribute triple
-    else if (oldTriple.attributeId === 'name') {
-      const newNames = this.entityNames$.value;
-      delete newNames[oldTriple.entityId];
-      this.entityNames$.next(newNames);
-    }
-
-    triples[index] = triple;
-    this.triples$.next(triples);
+    this.actions$.set([...this.actions$.get(), action]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    try {
-      await this.api.publish(this.changedTriples$.value, signer, onChangePublishState);
-
-      const triples = this.triples.map(triple => ({
-        ...triple,
-        status: undefined,
-      }));
-
-      this.changedTriples$.next([]);
-      this.triples$.next(triples);
-    } catch (e) {
-      console.error(e);
-    }
+    await this.api.publish(this.actions$.get(), signer, onChangePublishState);
+    await this.setQuery('');
+    this.actions$.set([]);
   };
 
-  loadNetworkTriples = async () => {
-    const { triples, entityNames } = await this.api.getNetworkTriples();
-    this.entityNames$.next(entityNames);
-    this.triples$.next(triples);
+  setQuery = (query: string) => {
+    console.log('setQuery', query);
+    this.api.query$.set(query);
   };
-
-  get triples() {
-    return this.triples$.value;
-  }
 }

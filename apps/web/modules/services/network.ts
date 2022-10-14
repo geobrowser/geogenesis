@@ -1,12 +1,11 @@
 import { Root } from '@geogenesis/action-schema';
-import { Log__factory } from '@geogenesis/contracts';
-import { Signer } from 'ethers';
-import { Observable } from 'rxjs';
+import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts';
+import { observable, Observable } from '@legendapp/state';
+import { Signer, ContractTransaction, Event } from 'ethers';
+import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Triple, Value } from '../types';
 import { IAddressLoader } from './address-loader';
-import { createTripleId, createTripleWithId } from './create-id';
 import { IStorageClient } from './storage';
-import { createSyncService } from './sync';
 
 type LogContract = typeof Log__factory;
 
@@ -24,7 +23,7 @@ type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue
 type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
-  attribute: { id: string };
+  attribute: { id: string; name: string | null };
   isProtected: boolean;
 };
 
@@ -39,47 +38,27 @@ function extractValue(networkTriple: NetworkTriple): Value {
   }
 }
 
-function getActionFromChangeStatus(triple: Triple) {
-  switch (triple.status) {
-    case 'created':
-      return {
-        type: 'createTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
+function getActionFromChangeStatus(action: Action) {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return [action];
 
-    case 'edited':
-      return {
-        type: 'createTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
-
-    case 'deleted':
-      return {
-        type: 'deleteTriple',
-        entityId: triple.entityId,
-        attributeId: triple.attributeId,
-        value: triple.value,
-      } as const;
-
-    default:
-      throw new Error(`Triple does not have a status ${triple.status}`);
+    case 'editTriple':
+      return [action.before, action.after];
   }
 }
 
 export interface INetwork {
-  syncer$: Observable<{ triples: Triple[]; entityNames: EntityNames }>;
-  getNetworkTriples: () => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
-  publish: (triples: Triple[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
+  query$: Observable<string>;
+  fetchTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  syncer$;
+  query$: Observable<string>;
 
   constructor(
     public contract: LogContract,
@@ -88,12 +67,11 @@ export class Network implements INetwork {
     public subgraphUrl: string,
     syncInterval = 30000
   ) {
-    // This could be composed in a functional way rather than initialized like this :thinking:
-    this.syncer$ = createSyncService({ interval: syncInterval, callback: this.getNetworkTriples });
+    this.query$ = observable('');
   }
 
   publish = async (
-    triples: Triple[],
+    actions: Action[],
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void
   ): Promise<void> => {
@@ -104,13 +82,13 @@ export class Network implements INetwork {
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];
 
-    for (let i = 0; i < triples.length; i += 2000) {
-      const chunk = triples.slice(i, i + 2000);
+    for (let i = 0; i < actions.length; i += 2000) {
+      const chunk = actions.slice(i, i + 2000);
 
       const root: Root = {
         type: 'root',
         version: '0.0.1',
-        actions: chunk.map(getActionFromChangeStatus),
+        actions: chunk.flatMap(getActionFromChangeStatus),
       };
 
       const cidString = await this.storageClient.uploadObject(root);
@@ -118,23 +96,27 @@ export class Network implements INetwork {
     }
 
     onChangePublishState('publishing-contract');
-    const tx = await contract.addEntries(cids);
-    const receipt = await tx.wait();
-    console.log(`Transaction receipt: ${JSON.stringify(receipt)}`);
+    const tx = await addEntries(contract, cids);
+
+    await waitForLog(tx.index.toHexString(), this.subgraphUrl);
+    console.log('Subgraph finished logging.', tx.index);
   };
 
-  getNetworkTriples = async () => {
+  fetchTriples = async (query: string = '') => {
+    const jankyQuery = query ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}})` : '';
+
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: `query { 
-          triples {
+        query: `query {
+          triples${jankyQuery} {
             id
             attribute {
               id
+              name
             }
             entity {
               id
@@ -149,7 +131,7 @@ export class Network implements INetwork {
             valueType
             isProtected
           }
-        }`,
+        } `,
       }),
     });
 
@@ -178,9 +160,70 @@ export class Network implements INetwork {
       if (triple.valueType === 'ENTITY') {
         acc[triple.entityValue.id] = triple.entityValue.name;
       }
+
+      if (triple.attribute.name !== null) {
+        acc[triple.attribute.id] = triple.attribute.name;
+      }
       return acc;
     }, {} as EntityNames);
 
     return { triples, entityNames };
   };
+}
+
+async function findEvents(tx: ContractTransaction, name: string): Promise<Event[]> {
+  const receipt = await tx.wait();
+  return (receipt.events || []).filter(event => event.event === name);
+}
+
+async function addEntries(logContract: Log, uris: string[]) {
+  const mintTx = await logContract.addEntries(uris);
+  console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
+  const transferEvent = await findEvents(mintTx, 'EntryAdded');
+  const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
+  return eventObject;
+}
+
+function waitForLog(id: string, subgraphUrl: string) {
+  const transformedId = id.replace('0x0', '0x');
+
+  let retryCount = 0;
+  let maxRetries = 30;
+
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(async () => {
+      retryCount++;
+
+      if (retryCount > maxRetries) {
+        reject();
+        clearInterval(interval);
+        return;
+      }
+
+      const response = await fetch(subgraphUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `query {
+            logEntry(id: ${JSON.stringify(transformedId)}) {
+              id
+            }
+          } `,
+        }),
+      });
+
+      const json: {
+        data: {
+          logEntry: { id: string };
+        };
+      } = await response.json();
+
+      if (json.data.logEntry) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 1000);
+  });
 }
