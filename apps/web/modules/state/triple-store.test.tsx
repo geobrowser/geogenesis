@@ -55,6 +55,8 @@ describe('TripleStore', () => {
         type: 'createTriple',
       },
     ]);
+
+    expect(store.entityNames$.get()).toStrictEqual({ [newTriple.entityId]: 'Bob' });
   });
 
   // it('Tracks an updated triple', () => {

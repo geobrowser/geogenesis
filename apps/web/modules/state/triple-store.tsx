@@ -135,6 +135,7 @@ export class TripleStore implements ITripleStore {
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     await this.api.publish(this.actions$.get(), signer, onChangePublishState);
+    await this.setQuery('');
     this.actions$.set([]);
   };
 
