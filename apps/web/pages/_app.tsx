@@ -2,7 +2,6 @@ import 'modern-normalize';
 import '../styles/styles.css';
 import { ThemeProvider, css, Global, Theme } from '@emotion/react';
 import styled from '@emotion/styled';
-import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
 import { colors } from '~/modules/design-system/theme/colors';

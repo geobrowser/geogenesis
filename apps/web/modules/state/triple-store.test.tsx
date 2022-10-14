@@ -1,7 +1,5 @@
-import { Signer } from 'ethers';
-import { firstValueFrom, lastValueFrom, skip, take } from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { createTripleId, createTripleWithId } from '../services/create-id';
+import { createTripleWithId } from '../services/create-id';
 import { StubNetwork } from '../services/stub-network';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
@@ -9,7 +7,7 @@ import { TripleStore } from './triple-store';
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
     const store = new TripleStore({ api: new StubNetwork() });
-    expect(await firstValueFrom(store.triples$)).toStrictEqual([]);
+    expect(store.triples$.get()).toStrictEqual([]);
   });
 
   it('Adds new triple', async () => {
@@ -21,7 +19,7 @@ describe('TripleStore', () => {
     });
 
     store.create([newTriple]);
-    expect(await firstValueFrom(store.triples$)).toStrictEqual([newTriple]);
+    expect(store.triples$.get()).toStrictEqual([newTriple]);
   });
 
   it('Updates existing triple', async () => {
@@ -38,7 +36,7 @@ describe('TripleStore', () => {
     });
 
     store.update(newTriple, originalTriple);
-    expect(await firstValueFrom(store.triples$)).toStrictEqual([newTriple]);
+    expect(store.triples$.get()).toStrictEqual([newTriple]);
   });
 
   it('Tracks the created triple', async () => {
@@ -50,8 +48,8 @@ describe('TripleStore', () => {
     });
 
     store.create([newTriple]);
-    // expect(await firstValueFrom(store.actions$)).toStrictEqual([]);
-    expect(await firstValueFrom(store.actions$)).toStrictEqual([
+    // expect(store.actions$)).toStrictEqual([]);
+    expect(store.actions$.get()).toStrictEqual([
       {
         ...newTriple,
         type: 'createTriple',
