@@ -14,7 +14,7 @@ import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useTriples } from '../state/hook';
-import { EntityNames, Triple, Value } from '../types';
+import { Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
