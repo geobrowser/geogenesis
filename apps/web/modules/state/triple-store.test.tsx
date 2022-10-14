@@ -37,6 +37,7 @@ describe('TripleStore', () => {
 
     store.update(newTriple, originalTriple);
     expect(store.triples$.get()).toStrictEqual([newTriple]);
+    expect(store.entityNames$.get()).toStrictEqual({ [newTriple.entityId]: 'Bob' });
   });
 
   it('Tracks the created triple', async () => {

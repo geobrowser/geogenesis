@@ -151,6 +151,15 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         );
       case 'value':
         const value = cellData as Value;
+
+        if (value.type === 'entity') {
+          return (
+            <TableEntityCell>
+              <Chip>{entityNames[value.value] || value.value}</Chip>
+            </TableEntityCell>
+          );
+        }
+
         return (
           <TableCellInput
             placeholder="Add text..."
@@ -182,7 +191,7 @@ interface Props {
 // build. Using default export works.
 export default function TripleTable({ update, triples, entityNames }: Props) {
   const table = useReactTable({
-    data: triples,
+    data: tableTriples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
