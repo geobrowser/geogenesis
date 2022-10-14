@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { useTripleStore } from '../services';
-import { Triple } from '../types';
+import { EntityNames, Triple } from '../types';
 
 // TODO: Track data access so we only re-render components when the data they're accessing has changed
 export function useBehaviorSubject<T>(stateContainer: BehaviorSubject<T>) {
@@ -33,13 +33,17 @@ export function useObservable<T>(stateContainer: Observable<T>, initialValue: T)
   return useBehaviorSubject(state);
 }
 
-const emptyArray: Triple[] = [];
+const initialTriples: Triple[] = [];
+const initialNames: EntityNames = {};
 
 export const useTriples = () => {
   const { create, update, publish, triples$, actions$, entityNames$, setQuery } = useTripleStore();
-  const triples = useObservable(triples$, emptyArray);
+  const triples = useObservable(triples$, initialTriples);
   const actions = useBehaviorSubject(actions$);
   const entityNames = useBehaviorSubject(entityNames$);
+
+  console.log('triples', triples);
+  console.log('entityNames', entityNames);
 
   return {
     triples,

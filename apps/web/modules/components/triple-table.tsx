@@ -109,7 +109,8 @@ const Container = styled.div(props => ({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    // const entityNames = useEntityNames();
+    const entityNames = useEntityNames();
+    console.log(entityNames);
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -136,7 +137,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             disabled
             isEntity
             ellipsize
-            value={entityId}
+            value={entityNames[entityId] || entityId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
@@ -146,7 +147,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <TableCellInput
             placeholder="Add an attribute..."
-            value={attributeId}
+            value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
@@ -156,7 +157,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <TableCellInput
             placeholder="Add text..."
-            value={value.value}
+            value={entityNames[value.value] || value.value}
             onChange={e =>
               setCellData({
                 type: 'string',
@@ -183,16 +184,8 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 export default function TripleTable({ update, triples, entityNames }: Props) {
-  const tableTriples = useMemo(() => {
-    return triples.map(triple => ({
-      ...triple,
-      entityId: entityNames[triple.entityId] || triple.entityId, // If it's an empty string we want to default to the id
-      attributeId: entityNames[triple.attributeId] || triple.attributeId,
-    }));
-  }, [triples, entityNames]);
-
   const table = useReactTable({
-    data: tableTriples,
+    data: triples,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
