@@ -50,8 +50,13 @@ function getActionFromChangeStatus(action: Action) {
 }
 
 export interface INetwork {
+  pageNumber$: Observable<number>;
   query$: Observable<string>;
-  fetchTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchTriples: (
+    query: string,
+    skip: number,
+    first: number
+  ) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
@@ -59,6 +64,7 @@ export interface INetwork {
 // from the subgraph
 export class Network implements INetwork {
   query$: Observable<string>;
+  pageNumber$: Observable<number>;
 
   constructor(
     public contract: LogContract,
@@ -68,6 +74,7 @@ export class Network implements INetwork {
     syncInterval = 30000
   ) {
     this.query$ = observable('');
+    this.pageNumber$ = observable(1);
   }
 
   publish = async (

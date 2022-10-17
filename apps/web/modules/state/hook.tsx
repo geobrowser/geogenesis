@@ -2,7 +2,7 @@ import { useSelector } from '@legendapp/state/react';
 import { useTripleStore } from '../services';
 
 export const useTriples = () => {
-  const { create, update, publish, triples$, actions$, entityNames$, setQuery } = useTripleStore();
+  const { create, update, publish, triples$, actions$, entityNames$, setQuery, setPageNumber } = useTripleStore();
   const triples = useSelector(triples$);
   const actions = useSelector(actions$);
   const entityNames = useSelector(entityNames$);
@@ -15,5 +15,6 @@ export const useTriples = () => {
     update,
     publish,
     setQuery,
+    setPageNumber,
   };
 };

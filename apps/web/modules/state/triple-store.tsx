@@ -7,9 +7,13 @@ import { createTripleWithId } from '../services/create-id';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
+  entityNames$: ObservableComputed<EntityNames>;
+  triples$: ObservableComputed<Triple[]>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  setQuery(query: string): void;
+  setPageNumber(page: number): void;
 }
 
 interface ITripleStoreConfig {
@@ -32,6 +36,8 @@ function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed
   });
 }
 
+const PAGE_SIZE = 1;
+
 export class TripleStore implements ITripleStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
@@ -43,8 +49,12 @@ export class TripleStore implements ITripleStore {
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {} },
-      computed(() => this.api.fetchTriples(this.api.query$.get()))
+      computed(() =>
+        this.api.fetchTriples(this.api.query$.get(), (this.api.pageNumber$.get() - 1) * PAGE_SIZE, PAGE_SIZE)
+      )
     );
+
+    // this.api.pageNumber$.onChange(pageNumber => console.log('Page number', pageNumber));
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();
@@ -140,7 +150,10 @@ export class TripleStore implements ITripleStore {
   };
 
   setQuery = (query: string) => {
-    console.log('setQuery', query);
     this.api.query$.set(query);
+  };
+
+  setPageNumber = (pageNumber: number) => {
+    this.api.pageNumber$.set(pageNumber);
   };
 }

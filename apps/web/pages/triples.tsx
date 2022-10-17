@@ -100,8 +100,26 @@ export default function Triples() {
       <Spacer height={12} />
 
       <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
+      <PageNumberContainer>
+        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(1)} />
+        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(2)} />
+      </PageNumberContainer>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>
+  );
+}
+
+const PageNumberContainer = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+});
+
+function PageNumber({ number, onClick }: { number: number; onClick: () => void }) {
+  return (
+    <Button onClick={onClick}>
+      <Text>{number}</Text>
+    </Button>
   );
 }
