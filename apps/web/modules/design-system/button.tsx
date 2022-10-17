@@ -44,11 +44,13 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
   }
 }
 
-const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>>(props => {
+const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled' | 'square'>>>(props => {
   const buttonColors = getButtonColors(props.variant, props.disabled, props.theme);
+  console.log(props.square);
 
   return {
     ...props.theme.typography.button,
+
     boxSizing: 'border-box',
     backgroundColor: buttonColors.backgroundColor,
     color: buttonColors.color,
@@ -60,10 +62,16 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
 
     // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes. There's
     // other things we can do like toggling padding but this seems simplest.
     boxShadow: `inset 0 0 0 1px ${buttonColors.borderColor}`,
+
+    ...(props.square && {
+      width: `${props.theme.space * 5}px`,
+      height: `${props.theme.space * 5}px`,
+    }),
 
     // TODO: Placeholder until we do motion design
     transition: '200ms all ease-in-out',
@@ -98,6 +106,7 @@ interface Props {
   onClick: () => void;
   icon?: Icon;
   variant?: ButtonVariant;
+  square?: boolean;
   disabled?: boolean;
 }
 
@@ -106,12 +115,12 @@ function getIconColor(variant: ButtonVariant, disabled: boolean, theme: Theme): 
   return variant === 'primary' ? theme.colors.white : theme.colors.ctaPrimary;
 }
 
-export function Button({ children, onClick, icon, variant = 'primary', disabled = false }: Props) {
+export function Button({ children, onClick, icon, variant = 'primary', disabled = false, square = false }: Props) {
   const theme = useTheme();
   const iconColor = getIconColor(variant, disabled, theme);
 
   return (
-    <StyledButton disabled={disabled} variant={variant} onClick={onClick}>
+    <StyledButton disabled={disabled} variant={variant} onClick={onClick} square={square}>
       {icon ? (
         <>
           {icons[icon](iconColor)}

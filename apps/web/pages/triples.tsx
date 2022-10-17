@@ -100,8 +100,12 @@ export default function Triples() {
       <Spacer height={12} />
 
       <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
+
+      <Spacer height={12} />
+
       <PageNumberContainer>
         <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+        <Spacer width={6} />
         <PageNumber number={2} onClick={() => tripleStore.setPageNumber(1)} />
       </PageNumberContainer>
 
@@ -114,12 +118,13 @@ const PageNumberContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',
+  alignSelf: 'flex-end',
 });
 
 function PageNumber({ number, onClick }: { number: number; onClick: () => void }) {
   return (
-    <Button onClick={onClick}>
-      <Text>{number}</Text>
+    <Button variant="secondary" square onClick={onClick}>
+      <Text variant="smallButton">{number}</Text>
     </Button>
   );
 }
