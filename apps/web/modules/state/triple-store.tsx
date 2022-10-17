@@ -7,13 +7,20 @@ import { createTripleWithId } from '../services/create-id';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
+  entityNames$: ObservableComputed<EntityNames>;
+  triples$: ObservableComputed<Triple[]>;
+  hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  setQuery(query: string): void;
+  setPageNumber(page: number): void;
 }
 
 interface ITripleStoreConfig {
   api: INetwork;
+  pageSize?: number;
 }
 
 type EditTripleAction = {
@@ -32,19 +39,45 @@ function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed
   });
 }
 
+const DEFAULT_PAGE_SIZE = 100;
+
 export class TripleStore implements ITripleStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
+  hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
 
-  constructor({ api }: ITripleStoreConfig) {
+  constructor({ api, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
 
     const networkData$ = makeOptionalComputed(
-      { triples: [], entityNames: {} },
-      computed(() => this.api.fetchTriples(this.api.query$.get()))
+      { triples: [], entityNames: {}, hasNextPage: false },
+      computed(async () => {
+        try {
+          const { triples, entityNames } = await this.api.fetchTriples(
+            this.api.query$.get(),
+            this.api.pageNumber$.get() * pageSize,
+            pageSize + 1
+          );
+
+          return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') {
+            console.log(e);
+            return new Promise(() => {});
+          }
+
+          // TODO: Real error handling
+
+          return { triples: [], entityNames: {}, hasNextPage: false };
+        }
+      })
     );
+
+    this.hasPreviousPage$ = computed(() => this.api.pageNumber$.get() > 0);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();
@@ -140,7 +173,26 @@ export class TripleStore implements ITripleStore {
   };
 
   setQuery = (query: string) => {
-    console.log('setQuery', query);
+    this.setPageNumber(0);
     this.api.query$.set(query);
   };
+
+  setPageNumber = (pageNumber: number) => {
+    this.api.pageNumber$.set(pageNumber);
+  };
+
+  setNextPage = () => {
+    // TODO: Bounds to the last page number
+    this.api.pageNumber$.set(this.api.pageNumber$.get() + 1);
+  };
+
+  setPreviousPage = () => {
+    const previousPageNumber = this.api.pageNumber$.get() - 1;
+    if (previousPageNumber < 0) return;
+    this.api.pageNumber$.set(previousPageNumber);
+  };
+
+  get pageNumber$() {
+    return this.api.pageNumber$;
+  }
 }

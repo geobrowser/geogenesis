@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
-import { useTriples } from '../state/hook';
+import { useTriples } from '../state/use-triples';
 import { Triple, Value } from '../types';
 
 // We declare a new function that we will define and pass into the useTable hook.

@@ -72,6 +72,12 @@ const baseTypography = {
       letterSpacing: '-0.17px',
       fontWeight: 500,
     },
+    smallButton: {
+      color: colors.light.text,
+      fontSize: '0.75rem',
+      lineHeight: '0.75rem',
+      fontWeight: 500,
+    },
     input: {
       color: colors.light.text,
       fontSize: '1.0625rem',

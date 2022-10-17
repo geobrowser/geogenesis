@@ -49,9 +49,16 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
+let abortController = new AbortController();
+
 export interface INetwork {
+  pageNumber$: Observable<number>;
   query$: Observable<string>;
-  fetchTriples: (query: string) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchTriples: (
+    query: string,
+    skip: number,
+    first: number
+  ) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
@@ -59,6 +66,7 @@ export interface INetwork {
 // from the subgraph
 export class Network implements INetwork {
   query$: Observable<string>;
+  pageNumber$: Observable<number>;
 
   constructor(
     public contract: LogContract,
@@ -68,6 +76,7 @@ export class Network implements INetwork {
     syncInterval = 30000
   ) {
     this.query$ = observable('');
+    this.pageNumber$ = observable(0);
   }
 
   publish = async (
@@ -102,14 +111,20 @@ export class Network implements INetwork {
     console.log('Subgraph finished logging.', tx.index);
   };
 
-  fetchTriples = async (query: string = '') => {
-    const jankyQuery = query ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}})` : '';
+  fetchTriples = async (query: string = '', skip: number = 0, first: number = 100) => {
+    abortController.abort();
+    abortController = new AbortController();
+
+    const jankyQuery = query
+      ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}, skip: ${skip}, first: ${first})`
+      : `(skip: ${skip}, first: ${first})`;
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
           triples${jankyQuery} {
@@ -131,7 +146,7 @@ export class Network implements INetwork {
             valueType
             isProtected
           }
-        } `,
+        }`,
       }),
     });
 
