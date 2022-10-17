@@ -25,7 +25,7 @@ const globalStyles = css`
     overflow: auto;
   }
   body {
-    font-family: 'Calibre';
+    font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
   }
 `;
