@@ -102,8 +102,10 @@ export class Network implements INetwork {
     console.log('Subgraph finished logging.', tx.index);
   };
 
-  fetchTriples = async (query: string = '') => {
-    const jankyQuery = query ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}})` : '';
+  fetchTriples = async (query: string = '', skip: number = 0, first: number = 100) => {
+    const jankyQuery = query
+      ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}, skip: ${skip}, first: ${first})`
+      : `(skip: ${skip}, first: ${first})`;
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
