@@ -20,7 +20,7 @@ interface ITripleStore {
 
 interface ITripleStoreConfig {
   api: INetwork;
-  PAGE_SIZE?: number;
+  pageSize?: number;
 }
 
 type EditTripleAction = {
@@ -49,7 +49,7 @@ export class TripleStore implements ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
 
-  constructor({ api, PAGE_SIZE = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+  constructor({ api, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
 
     const networkData$ = makeOptionalComputed(
@@ -58,11 +58,11 @@ export class TripleStore implements ITripleStore {
         try {
           const { triples, entityNames } = await this.api.fetchTriples(
             this.api.query$.get(),
-            this.api.pageNumber$.get() * PAGE_SIZE,
-            PAGE_SIZE + 1
+            this.api.pageNumber$.get() * pageSize,
+            pageSize + 1
           );
 
-          return { triples: triples.slice(0, PAGE_SIZE), entityNames, hasNextPage: triples.length > PAGE_SIZE };
+          return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             console.log(e);

@@ -26,8 +26,6 @@ export class MockNetwork implements INetwork {
   fetchTriples = async (query: string, skip: number, first: number) => {
     const triples = this.triples.slice(skip, skip + first);
 
-    // console.log('MockNetwork fetchTriples', triples);
-
     return {
       triples,
       entityNames: triples.reduce((acc, triple) => {
