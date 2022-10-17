@@ -1,9 +1,8 @@
-import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { Create } from './icons/create';
 import { Spacer } from './spacer';
 import { Theme } from './theme';
-import { ColorValue } from './theme/colors';
+import { ColorName } from './theme/colors';
 import React from 'react';
 import { Publish } from './icons/publish';
 import { Eye } from './icons/eye';
@@ -100,10 +99,10 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled' |
 
 type Icon = 'create' | 'publish' | 'eye';
 
-const icons: Record<Icon, (color: ColorValue) => JSX.Element> = {
-  create: (color: ColorValue) => <Create color={color} />,
-  publish: (color: ColorValue) => <Publish color={color} />,
-  eye: (color: ColorValue) => <Eye color={color} />,
+const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
+  create: (color: ColorName) => <Create color={color} />,
+  publish: (color: ColorName) => <Publish color={color} />,
+  eye: (color: ColorName) => <Eye color={color} />,
 };
 
 interface Props {
@@ -116,9 +115,9 @@ interface Props {
   disabled?: boolean;
 }
 
-function getIconColor(variant: ButtonVariant, disabled: boolean, theme: Theme): ColorValue {
-  if (disabled) return theme.colors['grey-03'];
-  return variant === 'primary' ? theme.colors.white : theme.colors.ctaPrimary;
+function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
+  if (disabled) return 'grey-03';
+  return variant === 'primary' ? 'white' : 'ctaPrimary';
 }
 
 export function Button({
@@ -130,8 +129,7 @@ export function Button({
   square = false,
   isActive = false,
 }: Props) {
-  const theme = useTheme();
-  const iconColor = getIconColor(variant, disabled, theme);
+  const iconColor = getIconColor(variant, disabled);
 
   return (
     <StyledButton disabled={disabled} variant={variant} onClick={onClick} square={square} isActive={isActive}>
