@@ -80,7 +80,7 @@ export class TripleStore implements ITripleStore {
       })
     );
 
-    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+    this.hasPreviousPage$ = computed(() => this.api.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {
