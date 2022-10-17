@@ -15,6 +15,7 @@ interface ITripleStore {
   setQuery(query: string): void;
   setPageNumber(page: number): void;
   hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
 }
 
 interface ITripleStoreConfig {
@@ -45,27 +46,40 @@ export class TripleStore implements ITripleStore {
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
   hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
 
   constructor({ api }: ITripleStoreConfig) {
     this.api = api;
 
     const networkData$ = makeOptionalComputed(
-      { triples: [], entityNames: {} },
+      { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
-          return await this.api.fetchTriples(this.api.query$.get(), this.api.pageNumber$.get() * PAGE_SIZE, PAGE_SIZE);
+          const { triples, entityNames } = await this.api.fetchTriples(
+            this.api.query$.get(),
+            this.api.pageNumber$.get() * PAGE_SIZE,
+            PAGE_SIZE
+          );
+          const next = await this.api.fetchTriples(
+            this.api.query$.get(),
+            (this.api.pageNumber$.get() + 1) * PAGE_SIZE,
+            PAGE_SIZE
+          );
+
+          return { triples, entityNames, hasNextPage: next.triples.length > 0 };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             console.log(e);
             return new Promise(() => {});
           }
 
-          return { triples: [], entityNames: {} };
+          return { triples: [], entityNames: {}, hasNextPage: false };
         }
       })
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();

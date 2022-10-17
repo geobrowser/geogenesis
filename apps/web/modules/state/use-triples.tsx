@@ -15,12 +15,14 @@ export const useTriples = () => {
     setPreviousPage,
     pageNumber$,
     hasPreviousPage$,
+    hasNextPage$,
   } = useTripleStore();
   const triples = useSelector(triples$);
   const actions = useSelector(actions$);
   const entityNames = useSelector(entityNames$);
   const pageNumber = useSelector(pageNumber$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
+  const hasNextPage = useSelector(hasNextPage$);
 
   return {
     triples,
@@ -35,5 +37,6 @@ export const useTriples = () => {
     setPreviousPage,
     pageNumber,
     hasPreviousPage,
+    hasNextPage,
   };
 };

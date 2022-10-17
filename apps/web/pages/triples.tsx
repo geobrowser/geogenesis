@@ -110,7 +110,7 @@ export default function Triples() {
         <Spacer width={32} />
         <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
         <Spacer width={12} />
-        <NextButton onClick={() => tripleStore.setNextPage()} />
+        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={() => tripleStore.setNextPage()} />
       </PageNumberContainer>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
@@ -145,11 +145,16 @@ function PageNumber({ number }: { number: number }) {
   );
 }
 
-function PreviousButton({ onClick, isDisabled }: { onClick: () => void; isDisabled: boolean }) {
+interface PageButtonProps {
+  onClick: () => void;
+  isDisabled: boolean;
+}
+
+function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
 
   return (
-    <TextButton onClick={onClick}>
+    <TextButton disabled={isDisabled} onClick={onClick}>
       <LeftArrowLong color={color} />
       <Spacer width={8} />
       <Text color={color} variant="smallButton">
@@ -159,10 +164,12 @@ function PreviousButton({ onClick, isDisabled }: { onClick: () => void; isDisabl
   );
 }
 
-function NextButton({ onClick }: { onClick: () => void }) {
+function NextButton({ onClick, isDisabled }: PageButtonProps) {
+  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
+
   return (
-    <TextButton onClick={onClick}>
-      <Text color="ctaPrimary" variant="smallButton">
+    <TextButton disabled={isDisabled} onClick={onClick}>
+      <Text color={color} variant="smallButton">
         Next
       </Text>
       <Spacer width={8} />
@@ -171,7 +178,7 @@ function NextButton({ onClick }: { onClick: () => void }) {
           transform: 'rotate(180deg)',
         }}
       >
-        <LeftArrowLong color="ctaPrimary" />
+        <LeftArrowLong color={color} />
       </span>
     </TextButton>
   );
