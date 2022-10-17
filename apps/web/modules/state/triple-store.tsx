@@ -9,13 +9,13 @@ interface ITripleStore {
   actions$: Observable<Action[]>;
   entityNames$: ObservableComputed<EntityNames>;
   triples$: ObservableComputed<Triple[]>;
+  hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
-  hasPreviousPage$: ObservableComputed<boolean>;
-  hasNextPage$: ObservableComputed<boolean>;
 }
 
 interface ITripleStoreConfig {
@@ -55,16 +55,16 @@ export class TripleStore implements ITripleStore {
       { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
-          const { triples, entityNames } = await this.api.fetchTriples(
-            this.api.query$.get(),
-            this.api.pageNumber$.get() * PAGE_SIZE,
-            PAGE_SIZE
-          );
-          const next = await this.api.fetchTriples(
-            this.api.query$.get(),
-            (this.api.pageNumber$.get() + 1) * PAGE_SIZE,
-            PAGE_SIZE
-          );
+          const [{ triples, entityNames }, next] = await Promise.all([
+            await this.api.fetchTriples(this.api.query$.get(), this.api.pageNumber$.get() * PAGE_SIZE, PAGE_SIZE),
+
+            // Fetching the next set of triples after the current query to see if there is a next page
+            await this.api.fetchTriples(
+              this.api.query$.get(),
+              (this.api.pageNumber$.get() + 1) * PAGE_SIZE,
+              1 // Only need one triple to check for a next page
+            ),
+          ]);
 
           return { triples, entityNames, hasNextPage: next.triples.length > 0 };
         } catch (e) {
@@ -72,6 +72,8 @@ export class TripleStore implements ITripleStore {
             console.log(e);
             return new Promise(() => {});
           }
+
+          // TODO: Real error handling
 
           return { triples: [], entityNames: {}, hasNextPage: false };
         }
