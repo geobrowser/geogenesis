@@ -64,7 +64,7 @@ export default function Triples() {
 
   const onImport = async (file: File) => {
     const triples = await importCSVFile(file);
-    tripleStore.create(triples);
+    tripleStore.create(triples.slice(0, 2000));
   };
 
   return (
@@ -101,8 +101,8 @@ export default function Triples() {
 
       <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
       <PageNumberContainer>
-        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(1)} />
-        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(2)} />
+        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(1)} />
       </PageNumberContainer>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />

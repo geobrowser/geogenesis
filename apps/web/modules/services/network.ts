@@ -49,6 +49,8 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
+let abortController = new AbortController();
+
 export interface INetwork {
   pageNumber$: Observable<number>;
   query$: Observable<string>;
@@ -74,7 +76,7 @@ export class Network implements INetwork {
     syncInterval = 30000
   ) {
     this.query$ = observable('');
-    this.pageNumber$ = observable(1);
+    this.pageNumber$ = observable(0);
   }
 
   publish = async (
@@ -110,6 +112,9 @@ export class Network implements INetwork {
   };
 
   fetchTriples = async (query: string = '', skip: number = 0, first: number = 100) => {
+    abortController.abort();
+    abortController = new AbortController();
+
     const jankyQuery = query
       ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}, skip: ${skip}, first: ${first})`
       : `(skip: ${skip}, first: ${first})`;
@@ -119,6 +124,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
           triples${jankyQuery} {
@@ -140,7 +146,7 @@ export class Network implements INetwork {
             valueType
             isProtected
           }
-        } `,
+        }`,
       }),
     });
 

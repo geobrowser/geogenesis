@@ -36,7 +36,7 @@ function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed
   });
 }
 
-const PAGE_SIZE = 1;
+const PAGE_SIZE = 100;
 
 export class TripleStore implements ITripleStore {
   private api: INetwork;
@@ -49,12 +49,19 @@ export class TripleStore implements ITripleStore {
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {} },
-      computed(() =>
-        this.api.fetchTriples(this.api.query$.get(), (this.api.pageNumber$.get() - 1) * PAGE_SIZE, PAGE_SIZE)
-      )
-    );
+      computed(async () => {
+        try {
+          return await this.api.fetchTriples(this.api.query$.get(), this.api.pageNumber$.get() * PAGE_SIZE, PAGE_SIZE);
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') {
+            console.log(e);
+            return new Promise(() => {});
+          }
 
-    // this.api.pageNumber$.onChange(pageNumber => console.log('Page number', pageNumber));
+          return { triples: [], entityNames: {} };
+        }
+      })
+    );
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();
@@ -150,6 +157,7 @@ export class TripleStore implements ITripleStore {
   };
 
   setQuery = (query: string) => {
+    this.setPageNumber(0);
     this.api.query$.set(query);
   };
 
