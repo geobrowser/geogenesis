@@ -1,17 +1,18 @@
+import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 import { createTripleWithId } from '../services/create-id';
-import { StubNetwork } from '../services/stub-network';
+import { MockNetwork, makeStubTriple } from '../services/mock-network';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new MockNetwork() });
     expect(store.triples$.get()).toStrictEqual([]);
   });
 
   it('Adds new triple', async () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new MockNetwork() });
 
     const newTriple: Triple = createTripleWithId('bob', 'name', {
       type: 'string',
@@ -24,7 +25,7 @@ describe('TripleStore', () => {
 
   it('Updates existing triple', async () => {
     const store = new TripleStore({
-      api: new StubNetwork(),
+      api: new MockNetwork(),
     });
 
     const originalTriple: Triple = createTripleWithId('alice', 'name', { type: 'string', value: 'Alice' });
@@ -41,7 +42,7 @@ describe('TripleStore', () => {
   });
 
   it('Tracks the created triple', async () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new MockNetwork() });
 
     const newTriple: Triple = createTripleWithId('bob', 'name', {
       type: 'string',
@@ -60,86 +61,15 @@ describe('TripleStore', () => {
     expect(store.entityNames$.get()).toStrictEqual({ [newTriple.entityId]: 'Bob' });
   });
 
-  // it('Tracks an updated triple', () => {
-  //   const store = new TripleStore({ api: new StubNetwork() });
+  it('Computes triples from page size', async () => {
+    const initialTriples = [makeStubTriple('Alice')];
 
-  //   const originalTriple: Triple = createTripleWithId('alice', 'name', {
-  //     type: 'string',
-  //     value: 'Alice',
-  //   });
-  //   store.create([originalTriple]);
+    const store = new TripleStore({ api: new MockNetwork({ triples: initialTriples }), PAGE_SIZE: 1 });
 
-  //   const newTriple: Triple = createTripleWithId('bob', 'name', {
-  //     type: 'string',
-  //     value: 'Bob',
-  //   });
+    await when(() => store.triples$.get().length > 0);
+    await when(() => Object.keys(store.entityNames$.get()).length > 0);
 
-  //   store.update(newTriple, originalTriple);
-
-  //   expect(store.actions$.value).toStrictEqual([
-  //     {
-  //       type: 'editTriple',
-  //       before: {
-  //         ...originalTriple,
-  //         type: 'deleteTriple',
-  //       },
-  //       after: {
-  //         ...newTriple,
-  //         type: 'createTriple',
-  //       },
-  //     },
-  //   ]);
-  // });
-
-  // it('Tracks a triple that was updated multiple times', () => {
-  //   const store = new TripleStore({ api: new StubNetwork() });
-
-  //   const originalTriple: Triple = createTripleWithId('alice', 'name', {
-  //     type: 'string',
-  //     value: 'Alice',
-  //   });
-  //   store.create([originalTriple]);
-
-  //   const firstTriple: Triple = createTripleWithId('alice', 'name', { type: 'string', value: 'Bob' });
-  //   store.update(firstTriple, originalTriple);
-
-  //   const secondTriple: Triple = createTripleWithId(firstTriple.entityId, firstTriple.attributeId, {
-  //     type: 'string',
-  //     value: 'Connor',
-  //   });
-
-  //   store.update(secondTriple, firstTriple);
-
-  //   expect(store.actions$.value).toStrictEqual([
-  //     {
-  //       type: 'editTriple',
-  //       before: {
-  //         ...originalTriple,
-  //         type: 'deleteTriple',
-  //       },
-  //       after: {
-  //         ...secondTriple,
-  //         type: 'createTriple',
-  //       },
-  //     },
-  //   ]);
-  // });
-
-  // it('Updates the tracked entity names when creating triple with name attribute', () => {
-  //   const store = new TripleStore({ api: new StubNetwork() });
-
-  //   const originalTriple: Triple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
-  //   store.create([originalTriple]);
-
-  //   const secondTriple = createTripleWithId(originalTriple.entityId, originalTriple.attributeId, {
-  //     type: 'string',
-  //     value: 'Connor',
-  //   });
-
-  //   store.update(secondTriple, originalTriple);
-
-  //   expect(store.entityNames$.value).toStrictEqual({
-  //     bob: 'Connor',
-  //   });
-  // });
+    expect(store.triples$.get()).toStrictEqual([makeStubTriple('Alice')]);
+    expect(store.entityNames$.get()).toEqual(expect.objectContaining({ Alice: 'Alice' }));
+  });
 });

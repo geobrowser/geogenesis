@@ -20,6 +20,7 @@ interface ITripleStore {
 
 interface ITripleStoreConfig {
   api: INetwork;
+  PAGE_SIZE?: number;
 }
 
 type EditTripleAction = {
@@ -38,7 +39,7 @@ function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed
   });
 }
 
-const PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 100;
 
 export class TripleStore implements ITripleStore {
   private api: INetwork;
@@ -48,25 +49,20 @@ export class TripleStore implements ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
 
-  constructor({ api }: ITripleStoreConfig) {
+  constructor({ api, PAGE_SIZE = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
-          const [{ triples, entityNames }, next] = await Promise.all([
-            await this.api.fetchTriples(this.api.query$.get(), this.api.pageNumber$.get() * PAGE_SIZE, PAGE_SIZE),
+          const { triples, entityNames } = await this.api.fetchTriples(
+            this.api.query$.get(),
+            this.api.pageNumber$.get() * PAGE_SIZE,
+            PAGE_SIZE + 1
+          );
 
-            // Fetching the next set of triples after the current query to see if there is a next page
-            await this.api.fetchTriples(
-              this.api.query$.get(),
-              (this.api.pageNumber$.get() + 1) * PAGE_SIZE,
-              1 // Only need one triple to check for a next page
-            ),
-          ]);
-
-          return { triples, entityNames, hasNextPage: next.triples.length > 0 };
+          return { triples: triples.slice(0, PAGE_SIZE), entityNames, hasNextPage: triples.length > PAGE_SIZE };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             console.log(e);
