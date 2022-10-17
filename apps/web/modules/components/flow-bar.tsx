@@ -1,4 +1,3 @@
-import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
@@ -12,9 +11,8 @@ import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
-import { ReviewState, Triple } from '../types';
+import { ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
-import { Action } from '../state/triple-store';
 import { TextButton } from '../design-system/text-button';
 
 const Container = styled.div(props => ({
@@ -102,12 +100,10 @@ interface IdleProps {
 }
 
 function Idle({ actionsCount, onNext }: IdleProps) {
-  const theme = useTheme();
-
   return (
     <>
       <Spacer width={8} />
-      <Trash color={theme.colors['grey-04']} />
+      <Trash color="grey-04" />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
         {actionsCount} {pluralize('change', actionsCount)}
@@ -129,13 +125,11 @@ interface ReviewProps extends IdleProps {
 }
 
 function Review({ actionsCount, onNext, onBack }: ReviewProps) {
-  const theme = useTheme();
-
   return (
     <>
       <Spacer width={8} />
       <TextButton onClick={onBack}>
-        <LeftArrowLong color={theme.colors['grey-04']} />
+        <LeftArrowLong color="grey-04" />
         <Spacer width={8} />
         <Text color="grey-04" variant="button">
           Back
@@ -146,7 +140,7 @@ function Review({ actionsCount, onNext, onBack }: ReviewProps) {
       <Divider type="vertical" />
       <Spacer width={16} />
 
-      <Trash color={theme.colors['grey-04']} />
+      <Trash color="grey-04" />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
         {actionsCount} {pluralize('change', actionsCount)}

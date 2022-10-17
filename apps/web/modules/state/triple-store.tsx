@@ -14,6 +14,7 @@ interface ITripleStore {
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
+  hasPreviousPage$: ObservableComputed<boolean>;
 }
 
 interface ITripleStoreConfig {
@@ -43,6 +44,7 @@ export class TripleStore implements ITripleStore {
   actions$: Observable<Action[]> = observable<Action[]>([]);
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
+  hasPreviousPage$: ObservableComputed<boolean>;
 
   constructor({ api }: ITripleStoreConfig) {
     this.api = api;
@@ -62,6 +64,8 @@ export class TripleStore implements ITripleStore {
         }
       })
     );
+
+    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();

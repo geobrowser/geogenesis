@@ -1,8 +1,6 @@
-import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
@@ -10,9 +8,10 @@ import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
+import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
-import { useTriples } from '~/modules/state/hook';
+import { useTriples } from '~/modules/state/use-triples';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -113,7 +112,7 @@ export default function Triples() {
 
         <Spacer width={40} />
 
-        <PreviousButton onClick={() => tripleStore.setPreviousPage()} />
+        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
         <Spacer width={20} />
         <NextButton onClick={() => tripleStore.setNextPage()} />
       </PageNumberContainer>
@@ -138,14 +137,14 @@ function PageNumber({ number, onClick, isActive }: { number: number; onClick: ()
   );
 }
 
-function PreviousButton({ onClick }: { onClick: () => void }) {
-  const theme = useTheme();
+function PreviousButton({ onClick, isDisabled }: { onClick: () => void; isDisabled: boolean }) {
+  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
 
   return (
     <TextButton onClick={onClick}>
-      <LeftArrowLong color={theme.colors.ctaPrimary} />
+      <LeftArrowLong color={color} />
       <Spacer width={8} />
-      <Text color="ctaPrimary" variant="smallButton">
+      <Text color={color} variant="smallButton">
         Previous
       </Text>
     </TextButton>
@@ -153,8 +152,6 @@ function PreviousButton({ onClick }: { onClick: () => void }) {
 }
 
 function NextButton({ onClick }: { onClick: () => void }) {
-  const theme = useTheme();
-
   return (
     <TextButton onClick={onClick}>
       <Text color="ctaPrimary" variant="smallButton">
@@ -166,7 +163,7 @@ function NextButton({ onClick }: { onClick: () => void }) {
           transform: 'rotate(180deg)',
         }}
       >
-        <LeftArrowLong color={theme.colors.ctaPrimary} />
+        <LeftArrowLong color="ctaPrimary" />
       </span>
     </TextButton>
   );
