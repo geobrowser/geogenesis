@@ -43,9 +43,8 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
   }
 }
 
-const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled' | 'square' | 'isActive'>>>(props => {
+const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>>(props => {
   const buttonColors = getButtonColors(props.variant, props.disabled, props.theme);
-  console.log(props.square);
 
   return {
     ...props.theme.typography.button,
@@ -66,16 +65,6 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled' |
     // Using box-shadow instead of border to prevent layout shift going between 1px and 2px border sizes. There's
     // other things we can do like toggling padding but this seems simplest.
     boxShadow: `inset 0 0 0 1px ${buttonColors.borderColor}`,
-
-    ...(props.isActive && {
-      boxShadow: `inset 0 0 0 2px ${buttonColors.borderColorFocus}`,
-      outline: 'none',
-    }),
-
-    ...(props.square && {
-      width: `${props.theme.space * 5}px`,
-      height: `${props.theme.space * 5}px`,
-    }),
 
     // TODO: Placeholder until we do motion design
     transition: '200ms all ease-in-out',
@@ -110,8 +99,6 @@ interface Props {
   onClick: () => void;
   icon?: Icon;
   variant?: ButtonVariant;
-  square?: boolean;
-  isActive?: boolean;
   disabled?: boolean;
 }
 
@@ -120,19 +107,11 @@ function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
   return variant === 'primary' ? 'white' : 'ctaPrimary';
 }
 
-export function Button({
-  children,
-  onClick,
-  icon,
-  variant = 'primary',
-  disabled = false,
-  square = false,
-  isActive = false,
-}: Props) {
+export function Button({ children, onClick, icon, variant = 'primary', disabled = false }: Props) {
   const iconColor = getIconColor(variant, disabled);
 
   return (
-    <StyledButton disabled={disabled} variant={variant} onClick={onClick} square={square} isActive={isActive}>
+    <StyledButton disabled={disabled} variant={variant} onClick={onClick}>
       {icon ? (
         <>
           {icons[icon](iconColor)}

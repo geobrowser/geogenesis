@@ -106,14 +106,10 @@ export default function Triples() {
       <Spacer height={12} />
 
       <PageNumberContainer>
-        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} isActive={tripleStore.pageNumber === 0} />
-        <Spacer width={6} />
-        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(1)} isActive={tripleStore.pageNumber === 1} />
-
-        <Spacer width={40} />
-
+        <PageNumber number={tripleStore.pageNumber + 1} />
+        <Spacer width={32} />
         <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
-        <Spacer width={20} />
+        <Spacer width={12} />
         <NextButton onClick={() => tripleStore.setNextPage()} />
       </PageNumberContainer>
 
@@ -129,11 +125,23 @@ const PageNumberContainer = styled.div({
   alignSelf: 'flex-end',
 });
 
-function PageNumber({ number, onClick, isActive }: { number: number; onClick: () => void; isActive: boolean }) {
+const PageNumberValue = styled.div(props => ({
+  height: props.theme.space * 5,
+  width: props.theme.space * 5,
+  borderRadius: props.theme.radius,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  fontFeatureSettings: '"tnum" 1',
+
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}));
+
+function PageNumber({ number }: { number: number }) {
   return (
-    <Button variant="secondary" square isActive={isActive} onClick={onClick}>
+    <PageNumberValue>
       <Text variant="smallButton">{number}</Text>
-    </Button>
+    </PageNumberValue>
   );
 }
 
