@@ -15,6 +15,7 @@ import { Toast } from '../design-system/toast';
 import { ReviewState, Triple } from '../types';
 import { Spinner } from '../design-system/spinner';
 import { Action } from '../state/triple-store';
+import { TextButton } from '../design-system/text-button';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -122,24 +123,6 @@ function Idle({ actionsCount, onNext }: IdleProps) {
     </>
   );
 }
-
-const TextButton = styled.button(props => ({
-  display: 'flex',
-  alignItems: 'center',
-
-  border: 'none',
-  backgroundColor: props.theme.colors.white,
-  cursor: 'pointer',
-
-  ':hover': {
-    border: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
-  },
-
-  ':focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.ctaPrimary}`,
-    outline: 'none',
-  },
-}));
 
 interface ReviewProps extends IdleProps {
   onBack: () => void;

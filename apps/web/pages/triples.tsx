@@ -1,12 +1,15 @@
+import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
+import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { TextButton } from '~/modules/design-system/text-button';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/hook';
@@ -104,9 +107,15 @@ export default function Triples() {
       <Spacer height={12} />
 
       <PageNumberContainer>
-        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+        <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} isActive={tripleStore.pageNumber === 0} />
         <Spacer width={6} />
-        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(1)} />
+        <PageNumber number={2} onClick={() => tripleStore.setPageNumber(1)} isActive={tripleStore.pageNumber === 1} />
+
+        <Spacer width={40} />
+
+        <PreviousButton onClick={() => tripleStore.setPreviousPage()} />
+        <Spacer width={20} />
+        <NextButton onClick={() => tripleStore.setNextPage()} />
       </PageNumberContainer>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
@@ -121,10 +130,44 @@ const PageNumberContainer = styled.div({
   alignSelf: 'flex-end',
 });
 
-function PageNumber({ number, onClick }: { number: number; onClick: () => void }) {
+function PageNumber({ number, onClick, isActive }: { number: number; onClick: () => void; isActive: boolean }) {
   return (
-    <Button variant="secondary" square onClick={onClick}>
+    <Button variant="secondary" square isActive={isActive} onClick={onClick}>
       <Text variant="smallButton">{number}</Text>
     </Button>
+  );
+}
+
+function PreviousButton({ onClick }: { onClick: () => void }) {
+  const theme = useTheme();
+
+  return (
+    <TextButton onClick={onClick}>
+      <LeftArrowLong color={theme.colors.ctaPrimary} />
+      <Spacer width={8} />
+      <Text color="ctaPrimary" variant="smallButton">
+        Previous
+      </Text>
+    </TextButton>
+  );
+}
+
+function NextButton({ onClick }: { onClick: () => void }) {
+  const theme = useTheme();
+
+  return (
+    <TextButton onClick={onClick}>
+      <Text color="ctaPrimary" variant="smallButton">
+        Next
+      </Text>
+      <Spacer width={8} />
+      <span
+        style={{
+          transform: 'rotate(180deg)',
+        }}
+      >
+        <LeftArrowLong color={theme.colors.ctaPrimary} />
+      </span>
+    </TextButton>
   );
 }

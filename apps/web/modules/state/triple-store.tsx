@@ -164,4 +164,19 @@ export class TripleStore implements ITripleStore {
   setPageNumber = (pageNumber: number) => {
     this.api.pageNumber$.set(pageNumber);
   };
+
+  setNextPage = () => {
+    // TODO: Bounds to the last page number
+    this.api.pageNumber$.set(this.api.pageNumber$.get() + 1);
+  };
+
+  setPreviousPage = () => {
+    const previousPageNumber = this.api.pageNumber$.get() - 1;
+    if (previousPageNumber < 0) return;
+    this.api.pageNumber$.set(previousPageNumber);
+  };
+
+  get pageNumber$() {
+    return this.api.pageNumber$;
+  }
 }
