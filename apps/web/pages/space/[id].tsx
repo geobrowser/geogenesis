@@ -12,6 +12,7 @@ import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
+import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useTriples } from '~/modules/state/use-triples';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
@@ -45,10 +46,84 @@ const FileImport = styled.input({
   inset: '0',
 });
 
-export default function Triples() {
+export default function TriplesPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id } = router.query as { id: string };
 
+  return (
+    <TripleStoreProvider space={id}>
+      <Triples />
+    </TripleStoreProvider>
+  );
+}
+
+const PageNumberContainer = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  alignSelf: 'flex-end',
+});
+
+const PageNumberValue = styled.div(props => ({
+  height: props.theme.space * 5,
+  width: props.theme.space * 5,
+  borderRadius: props.theme.radius,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  fontFeatureSettings: '"tnum" 1',
+
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}));
+
+function PageNumber({ number }: { number: number }) {
+  return (
+    <PageNumberValue>
+      <Text variant="smallButton">{number}</Text>
+    </PageNumberValue>
+  );
+}
+
+interface PageButtonProps {
+  onClick: () => void;
+  isDisabled: boolean;
+}
+
+function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
+  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
+
+  return (
+    <TextButton disabled={isDisabled} onClick={onClick}>
+      <LeftArrowLong color={color} />
+      <Spacer width={8} />
+      <Text color={color} variant="smallButton">
+        Previous
+      </Text>
+    </TextButton>
+  );
+}
+
+function NextButton({ onClick, isDisabled }: PageButtonProps) {
+  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
+
+  return (
+    <TextButton disabled={isDisabled} onClick={onClick}>
+      <Text color={color} variant="smallButton">
+        Next
+      </Text>
+      <Spacer width={8} />
+      <span
+        style={{
+          transform: 'rotate(180deg)',
+        }}
+      >
+        <LeftArrowLong color={color} />
+      </span>
+    </TextButton>
+  );
+}
+
+function Triples() {
   const tripleStore = useTriples();
 
   const debouncedFilter = debounce(tripleStore.setQuery, 500);
@@ -120,71 +195,5 @@ export default function Triples() {
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>
-  );
-}
-
-const PageNumberContainer = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  alignSelf: 'flex-end',
-});
-
-const PageNumberValue = styled.div(props => ({
-  height: props.theme.space * 5,
-  width: props.theme.space * 5,
-  borderRadius: props.theme.radius,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  fontFeatureSettings: '"tnum" 1',
-
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}));
-
-function PageNumber({ number }: { number: number }) {
-  return (
-    <PageNumberValue>
-      <Text variant="smallButton">{number}</Text>
-    </PageNumberValue>
-  );
-}
-
-interface PageButtonProps {
-  onClick: () => void;
-  isDisabled: boolean;
-}
-
-function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
-  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
-
-  return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
-      <LeftArrowLong color={color} />
-      <Spacer width={8} />
-      <Text color={color} variant="smallButton">
-        Previous
-      </Text>
-    </TextButton>
-  );
-}
-
-function NextButton({ onClick, isDisabled }: PageButtonProps) {
-  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
-
-  return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
-      <Text color={color} variant="smallButton">
-        Next
-      </Text>
-      <Spacer width={8} />
-      <span
-        style={{
-          transform: 'rotate(180deg)',
-        }}
-      >
-        <LeftArrowLong color={color} />
-      </span>
-    </TextButton>
   );
 }

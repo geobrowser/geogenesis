@@ -8,7 +8,7 @@ import { TripleStore } from './triple-store';
 
 describe('useObservable', () => {
   it('Initializes empty', () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new StubNetwork(), space: '' });
     const { result } = renderHook(() => useSelector(store.triples$));
 
     expect(result.current).toStrictEqual([]);
@@ -18,7 +18,7 @@ describe('useObservable', () => {
   // We have to pass a specific object that wraps our rxjs BehaviorSubject, so want to make sure that
   // doesn't break at some point.
   it('Adds a new triple', () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new StubNetwork(), space: '' });
     const { result, rerender } = renderHook(() => useSelector(store.triples$));
     expect(result.current).toStrictEqual([]);
 
@@ -30,7 +30,7 @@ describe('useObservable', () => {
   });
 
   it('Rerenders component when changing state', () => {
-    const store = new TripleStore({ api: new StubNetwork() });
+    const store = new TripleStore({ api: new StubNetwork(), space: '' });
 
     const Component = () => {
       const triples = useSelector(store.triples$);

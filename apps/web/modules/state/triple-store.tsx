@@ -23,6 +23,7 @@ interface ITripleStore {
 
 interface ITripleStoreConfig {
   api: INetwork;
+  space: string;
   pageSize?: number;
 }
 
@@ -45,21 +46,24 @@ export class TripleStore implements ITripleStore {
   query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
+  space: string;
 
-  constructor({ api, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+  constructor({ api, space, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
     this.query$ = observable('');
     this.pageNumber$ = observable(0);
+    this.space = space;
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
-          const { triples, entityNames } = await this.api.fetchTriples(
-            this.query$.get(),
-            this.pageNumber$.get() * pageSize,
-            pageSize + 1
-          );
+          const { triples, entityNames } = await this.api.fetchTriples({
+            query: this.query$.get(),
+            space: this.space,
+            skip: this.pageNumber$.get() * pageSize,
+            first: pageSize + 1,
+          });
 
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
@@ -166,7 +170,7 @@ export class TripleStore implements ITripleStore {
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish(this.actions$.get(), signer, onChangePublishState);
+    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.space });
     await this.setQuery('');
     this.actions$.set([]);
   };

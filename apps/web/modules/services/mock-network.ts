@@ -1,7 +1,7 @@
 import { computed, observable } from '@legendapp/state';
 import { EntityNames, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
-import { INetwork } from './network';
+import { FetchTriplesOptions, INetwork } from './network';
 
 export const makeStubTriple = (name: string): Triple => {
   return {
@@ -26,7 +26,7 @@ export class MockNetwork implements INetwork {
     this.triples = triples;
   }
 
-  fetchTriples = async (query: string, skip: number, first: number) => {
+  fetchTriples = async ({ query, skip, first }: FetchTriplesOptions) => {
     const triples = this.triples.slice(skip, skip + first);
 
     return {

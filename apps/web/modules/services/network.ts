@@ -51,14 +51,24 @@ function getActionFromChangeStatus(action: Action) {
 
 let abortController = new AbortController();
 
+export type FetchTriplesOptions = {
+  query: string;
+  space: string;
+  skip: number;
+  first: number;
+};
+
+export type PublishOptions = {
+  signer: Signer;
+  actions: Action[];
+  space: string;
+  onChangePublishState: (newState: ReviewState) => void;
+};
+
 export interface INetwork {
-  fetchTriples: (
-    query: string,
-    skip: number,
-    first: number
-  ) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchTriples: (options: FetchTriplesOptions) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
   fetchSpaces: () => Promise<Space[]>;
-  publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
+  publish: (options: PublishOptions) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
@@ -71,11 +81,7 @@ export class Network implements INetwork {
     public subgraphUrl: string
   ) {}
 
-  publish = async (
-    actions: Action[],
-    signer: Signer,
-    onChangePublishState: (newState: ReviewState) => void
-  ): Promise<void> => {
+  publish = async ({ actions, signer, onChangePublishState }: PublishOptions): Promise<void> => {
     const chain = await signer.getChainId();
     const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
     const contract = this.contract.connect(contractAddress, signer);
@@ -103,13 +109,14 @@ export class Network implements INetwork {
     console.log('Subgraph finished logging.', tx.index);
   };
 
-  fetchTriples = async (query: string = '', skip: number = 0, first: number = 100) => {
+  fetchTriples = async ({ space, query, skip, first }: FetchTriplesOptions) => {
     abortController.abort();
     abortController = new AbortController();
 
-    const jankyQuery = query
-      ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}, skip: ${skip}, first: ${first})`
-      : `(skip: ${skip}, first: ${first})`;
+    const stringifyQuery = JSON.stringify(query);
+    const stringifySpace = JSON.stringify(space);
+
+    const nameQuery = query ? `entity_: {name_contains_nocase: ${stringifyQuery}}` : ``;
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -119,7 +126,7 @@ export class Network implements INetwork {
       signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
-          triples${jankyQuery} {
+          triples(where: {space: ${stringifySpace} ${nameQuery}}, skip: ${skip}, first: ${first}) {
             id
             attribute {
               id

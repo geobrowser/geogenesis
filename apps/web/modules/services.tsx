@@ -3,14 +3,13 @@ import { createContext, ReactNode, useContext, useEffect, useMemo } from 'react'
 import { useNetwork } from 'wagmi';
 import { getConfig } from './config';
 import { AddressLoader } from './services/address-loader';
-import { Network } from './services/network';
+import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';
 import { StubNetwork } from './services/stub-network';
 import { SpaceStore } from './state/space-store';
-import { TripleStore } from './state/triple-store';
 
 type Services = {
-  tripleStore: TripleStore;
+  network: INetwork;
   spaceStore: SpaceStore;
 };
 
@@ -30,9 +29,7 @@ export function ServicesProvider({ children }: Props) {
       const network = new StubNetwork();
 
       return {
-        tripleStore: new TripleStore({
-          api: network,
-        }),
+        network,
         spaceStore: new SpaceStore({
           api: network,
         }),
@@ -45,9 +42,7 @@ export function ServicesProvider({ children }: Props) {
     const network = new Network(Log__factory, addressLoader, storageClient, config.subgraph);
 
     return {
-      tripleStore: new TripleStore({
-        api: network,
-      }),
+      network,
       spaceStore: new SpaceStore({
         api: network,
       }),
@@ -57,7 +52,7 @@ export function ServicesProvider({ children }: Props) {
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }
 
-function useServices() {
+export function useServices() {
   const value = useContext(ServicesContext);
 
   if (!value) {
@@ -65,10 +60,6 @@ function useServices() {
   }
 
   return value;
-}
-
-export function useTripleStore() {
-  return useServices().tripleStore;
 }
 
 export function useSpaceStore() {

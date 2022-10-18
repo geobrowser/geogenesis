@@ -1,5 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
-import { useSpaceStore, useTripleStore } from '../services';
+import { useSpaceStore } from '../services';
 
 export const useSpaces = () => {
   const { spaces$ } = useSpaceStore();
