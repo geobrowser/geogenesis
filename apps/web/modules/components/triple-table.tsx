@@ -9,12 +9,15 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useTriples } from '../state/use-triples';
 import { Triple, Value } from '../types';
+import { CellEditableInput } from './table/cell-editable-input';
+import { CellInput } from './table/cell-input';
+import { CellTruncate } from './table/cell-truncate';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -63,32 +66,6 @@ const TableCell = styled.td(props => ({
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input<{ isEntity?: boolean; ellipsize?: boolean }>(props => ({
-  ...props.theme.typography.tableCell,
-  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
-  backgroundColor: 'transparent', // To allow the row to be styled on hover
-  padding: props.theme.space * 2.5,
-  width: '100%',
-
-  ':focus': {
-    outline: `1px solid ${props.theme.colors.text}`,
-  },
-
-  '::placeholder': {
-    color: props.theme.colors['grey-03'],
-  },
-
-  ...(props.ellipsize && {
-    whiteSpace: 'pre',
-    textOverflow: 'ellipsis',
-    overflow: 'hidden',
-  }),
-}));
-
-const TableEntityCell = styled.div(props => ({
-  padding: props.theme.space * 2.5,
-}));
-
 const TableRow = styled.tr(props => ({
   ':hover': {
     backgroundColor: props.theme.colors.bg,
@@ -131,7 +108,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <TableCellInput
+          <CellInput
             disabled
             isEntity
             ellipsize
@@ -143,7 +120,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'attributeId':
         const attributeId = cellData as string;
         return (
-          <TableCellInput
+          <CellInput
             placeholder="Add an attribute..."
             value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
@@ -155,15 +132,15 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'entity') {
           return (
-            <TableEntityCell>
+            <CellTruncate>
               <Chip>{entityNames[value.value] || value.value}</Chip>
-            </TableEntityCell>
+            </CellTruncate>
           );
         }
 
         return (
-          <TableCellInput
-            placeholder="Add text..."
+          <CellEditableInput
+            isEditable={false}
             value={entityNames[value.value] || value.value}
             onChange={e =>
               setCellData({
@@ -228,7 +205,7 @@ export default function TripleTable({ update, triples, space }: Props) {
 
   return (
     <Container>
-      <Table>
+      <Table cellSpacing={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
