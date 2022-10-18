@@ -8,25 +8,6 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: Log
-    network: mainnet
-    source:
-      address: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
-      abi: Log
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.6
-      language: wasm/assemblyscript
-      entities:
-        - LogEntry
-      abis:
-        - name: Log
-          file: ../contracts/build/abis/Log.json
-      eventHandlers:
-        - event: EntryAdded(uint256,string,address)
-          handler: handleEntryAdded
-      file: ./src/mapping.ts
-  - kind: ethereum/contract
     name: SpaceRegistry
     network: mainnet
     source:
@@ -44,4 +25,23 @@ dataSources:
       eventHandlers:
         - event: SpaceAdded(address)
           handler: handleSpaceAdded
+      file: ./src/mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Log
+    network: mainnet
+    source:
+      abi: Log
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - LogEntry
+      abis:
+        - name: Log
+          file: ../contracts/build/abis/Log.json
+      eventHandlers:
+        - event: EntryAdded(uint256,string,address)
+          handler: handleEntryAdded
       file: ./src/mapping.ts
