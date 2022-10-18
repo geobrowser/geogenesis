@@ -12,7 +12,7 @@ export const makeStubTriple = (name: string): Triple => {
       type: 'string',
       value: name,
     },
-    space: '',
+    space: 's',
   };
 };
 

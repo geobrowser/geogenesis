@@ -7,14 +7,14 @@ import { TripleStore } from './triple-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: '' });
+    const store = new TripleStore({ api: new MockNetwork(), space: 's' });
     expect(store.triples$.get()).toStrictEqual([]);
   });
 
   it('Adds new triple', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: '' });
+    const store = new TripleStore({ api: new MockNetwork(), space: 's' });
 
-    const newTriple: Triple = createTripleWithId('', 'bob', 'name', {
+    const newTriple: Triple = createTripleWithId('s', 'bob', 'name', {
       type: 'string',
       value: 'Bob',
     });
@@ -26,13 +26,13 @@ describe('TripleStore', () => {
   it('Updates existing triple', async () => {
     const store = new TripleStore({
       api: new MockNetwork(),
-      space: '',
+      space: 's',
     });
 
-    const originalTriple: Triple = createTripleWithId('', 'alice', 'name', { type: 'string', value: 'Alice' });
+    const originalTriple: Triple = createTripleWithId('s', 'alice', 'name', { type: 'string', value: 'Alice' });
     store.create([originalTriple]);
 
-    const newTriple: Triple = createTripleWithId('', originalTriple.entityId, originalTriple.attributeId, {
+    const newTriple: Triple = createTripleWithId('s', originalTriple.entityId, originalTriple.attributeId, {
       type: 'string',
       value: 'Bob',
     });
@@ -43,9 +43,9 @@ describe('TripleStore', () => {
   });
 
   it('Tracks the created triple', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: '' });
+    const store = new TripleStore({ api: new MockNetwork(), space: 's' });
 
-    const newTriple: Triple = createTripleWithId('', 'bob', 'name', {
+    const newTriple: Triple = createTripleWithId('s', 'bob', 'name', {
       type: 'string',
       value: 'Bob',
     });
@@ -65,7 +65,7 @@ describe('TripleStore', () => {
   it('Computes triples from page size', async () => {
     const initialTriples = [makeStubTriple('Alice')];
 
-    const store = new TripleStore({ api: new MockNetwork({ triples: initialTriples }), pageSize: 1, space: '' });
+    const store = new TripleStore({ api: new MockNetwork({ triples: initialTriples }), pageSize: 1, space: 's' });
 
     await when(() => store.triples$.get().length > 0);
     await when(() => Object.keys(store.entityNames$.get()).length > 0);

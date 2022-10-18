@@ -22,7 +22,7 @@ function deterministicUuid(value: string) {
 describe('CSV Import', () => {
   it('imports csv', async () => {
     const file = readMockFile('simple.csv');
-    const triples = await importCSVFile(file, deterministicUuid);
+    const triples = await importCSVFile(file, 's', deterministicUuid);
 
     expect(triples).toMatchSnapshot();
   });
@@ -35,7 +35,7 @@ describe('CSV Import', () => {
     // So we can see what matches in snapshot tests
     const mockId = (value: string) => value;
 
-    const triples = eavRowsToTriples(rows, mockId);
+    const triples = eavRowsToTriples(rows, 's', mockId);
 
     expect(triples.slice(0, 15)).toMatchSnapshot();
   });

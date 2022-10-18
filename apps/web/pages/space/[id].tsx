@@ -52,7 +52,7 @@ export default function TriplesPage() {
 
   return (
     <TripleStoreProvider space={id}>
-      <Triples />
+      <Triples space={id} />
     </TripleStoreProvider>
   );
 }
@@ -123,7 +123,7 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
   );
 }
 
-function Triples() {
+function Triples({ space }: { space: string }) {
   const tripleStore = useTriples();
 
   const debouncedFilter = debounce(tripleStore.setQuery, 500);
@@ -135,17 +135,17 @@ function Triples() {
 
     tripleStore.create([
       {
-        id: createTripleId('', entityId, attributeId, value),
+        id: createTripleId(space, entityId, attributeId, value),
         entityId,
         attributeId,
         value,
-        space: '',
+        space,
       },
     ]);
   };
 
   const onImport = async (file: File) => {
-    const triples = await importCSVFile(file);
+    const triples = await importCSVFile(file, space);
     tripleStore.create(triples);
   };
 
@@ -181,7 +181,7 @@ function Triples() {
 
       <Spacer height={12} />
 
-      <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
+      <TripleTable space={space} triples={tripleStore.triples} update={tripleStore.update} />
 
       <Spacer height={12} />
 

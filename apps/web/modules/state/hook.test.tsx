@@ -8,7 +8,7 @@ import { TripleStore } from './triple-store';
 
 describe('useObservable', () => {
   it('Initializes empty', () => {
-    const store = new TripleStore({ api: new StubNetwork(), space: '' });
+    const store = new TripleStore({ api: new StubNetwork(), space: 's' });
     const { result } = renderHook(() => useSelector(store.triples$));
 
     expect(result.current).toStrictEqual([]);
@@ -18,11 +18,11 @@ describe('useObservable', () => {
   // We have to pass a specific object that wraps our rxjs BehaviorSubject, so want to make sure that
   // doesn't break at some point.
   it('Adds a new triple', () => {
-    const store = new TripleStore({ api: new StubNetwork(), space: '' });
+    const store = new TripleStore({ api: new StubNetwork(), space: 's' });
     const { result, rerender } = renderHook(() => useSelector(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newTriple: Triple = createTripleWithId('', 'bob', 'name', { type: 'string', value: 'Bob' });
+    const newTriple: Triple = createTripleWithId('s', 'bob', 'name', { type: 'string', value: 'Bob' });
 
     store.create([newTriple]);
     rerender();
@@ -30,7 +30,7 @@ describe('useObservable', () => {
   });
 
   it('Rerenders component when changing state', () => {
-    const store = new TripleStore({ api: new StubNetwork(), space: '' });
+    const store = new TripleStore({ api: new StubNetwork(), space: 's' });
 
     const Component = () => {
       const triples = useSelector(store.triples$);
@@ -40,7 +40,7 @@ describe('useObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    const newTriple = createTripleWithId('', 'bob', 'name', { type: 'string', value: 'Bob' });
+    const newTriple = createTripleWithId('s', 'bob', 'name', { type: 'string', value: 'Bob' });
     store.create([newTriple]);
 
     rerender(<Component />);
