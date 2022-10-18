@@ -14,7 +14,7 @@ describe('TripleStore', () => {
   it('Adds new triple', async () => {
     const store = new TripleStore({ api: new MockNetwork() });
 
-    const newTriple: Triple = createTripleWithId('bob', 'name', {
+    const newTriple: Triple = createTripleWithId('', 'bob', 'name', {
       type: 'string',
       value: 'Bob',
     });
@@ -28,10 +28,10 @@ describe('TripleStore', () => {
       api: new MockNetwork(),
     });
 
-    const originalTriple: Triple = createTripleWithId('alice', 'name', { type: 'string', value: 'Alice' });
+    const originalTriple: Triple = createTripleWithId('', 'alice', 'name', { type: 'string', value: 'Alice' });
     store.create([originalTriple]);
 
-    const newTriple: Triple = createTripleWithId(originalTriple.entityId, originalTriple.attributeId, {
+    const newTriple: Triple = createTripleWithId('', originalTriple.entityId, originalTriple.attributeId, {
       type: 'string',
       value: 'Bob',
     });
@@ -44,7 +44,7 @@ describe('TripleStore', () => {
   it('Tracks the created triple', async () => {
     const store = new TripleStore({ api: new MockNetwork() });
 
-    const newTriple: Triple = createTripleWithId('bob', 'name', {
+    const newTriple: Triple = createTripleWithId('', 'bob', 'name', {
       type: 'string',
       value: 'Bob',
     });

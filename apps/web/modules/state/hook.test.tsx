@@ -22,7 +22,7 @@ describe('useObservable', () => {
     const { result, rerender } = renderHook(() => useSelector(store.triples$));
     expect(result.current).toStrictEqual([]);
 
-    const newTriple: Triple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
+    const newTriple: Triple = createTripleWithId('', 'bob', 'name', { type: 'string', value: 'Bob' });
 
     store.create([newTriple]);
     rerender();
@@ -40,7 +40,7 @@ describe('useObservable', () => {
     const { getByText, rerender } = render(<Component />);
     expect(getByText('0')).toBeTruthy();
 
-    const newTriple = createTripleWithId('bob', 'name', { type: 'string', value: 'Bob' });
+    const newTriple = createTripleWithId('', 'bob', 'name', { type: 'string', value: 'Bob' });
     store.create([newTriple]);
 
     rerender(<Component />);
