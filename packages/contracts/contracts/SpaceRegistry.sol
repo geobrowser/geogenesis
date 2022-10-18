@@ -39,6 +39,11 @@ contract SpaceRegistry is AccessControl {
         emit SpaceRemoved(space);
     }
 
+    function hasSpace(ISpace space) public view returns (bool) {
+        return _spaces.contains(address(space));
+    }
+    
+
     // Enumeration
 
     function spaceCount() public view returns (uint256) {
