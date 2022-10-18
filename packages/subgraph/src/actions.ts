@@ -10,6 +10,7 @@ import { createTripleId } from './id'
 
 export function handleCreateTripleAction(
   fact: CreateTripleAction,
+  space: string,
   isProtected: boolean
 ): void {
   const entity = (GeoEntity.load(fact.entityId) ||
@@ -42,6 +43,7 @@ export function handleCreateTripleAction(
   triple.entity = entity.id
   triple.attribute = attribute.id
   triple.valueType = fact.value.type
+  triple.space = space
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
@@ -105,10 +107,10 @@ function handleCreateEntityAction(action: CreateEntityAction): void {
   log.debug(`ACTION: Created entity: ${entity.id}`, [])
 }
 
-export function handleAction(action: Action): void {
+export function handleAction(action: Action, space: string): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
-    handleCreateTripleAction(createTripleAction, false)
+    handleCreateTripleAction(createTripleAction, space, false)
     return
   }
 

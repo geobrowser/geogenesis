@@ -9,8 +9,6 @@ import { LogEntry, Space } from '../generated/schema'
 import { handleAction } from './actions'
 import { bootstrap } from './bootstrap'
 
-bootstrap()
-
 const IPFS_URI_SCHEME = 'ipfs://'
 
 export function handleSpaceAdded(event: SpaceAdded): void {
@@ -18,6 +16,7 @@ export function handleSpaceAdded(event: SpaceAdded): void {
   space.save()
 
   Log.create(event.params.space)
+  bootstrap(space.id)
 }
 
 export function handleEntryAdded(event: EntryAdded): void {
@@ -25,10 +24,11 @@ export function handleEntryAdded(event: EntryAdded): void {
 
   const author = event.params.author
   const uri = event.params.uri
+  const space = event.address.toHexString()
 
   entry.author = author
   entry.uri = uri
-  entry.space = event.address.toHexString()
+  entry.space = space
 
   if (uri.startsWith('data:')) {
     const dataURI = DataURI.parse(uri)
@@ -40,7 +40,7 @@ export function handleEntryAdded(event: EntryAdded): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes)
+        const root = handleActionData(bytes, space)
 
         if (root) {
           entry.json = root.toJSON().toString()
@@ -54,7 +54,7 @@ export function handleEntryAdded(event: EntryAdded): void {
     if (bytes) {
       entry.decoded = bytes
 
-      const root = handleActionData(bytes)
+      const root = handleActionData(bytes, space)
 
       if (root) {
         entry.json = root.toJSON().toString()
@@ -67,23 +67,23 @@ export function handleEntryAdded(event: EntryAdded): void {
   log.debug(`Indexed: ${entry.uri}`, [])
 }
 
-function handleActionData(bytes: Bytes): Root | null {
+function handleActionData(bytes: Bytes, space: string): Root | null {
   const json = JSON.parse(bytes)
 
   const root = Root.fromJSON(json)
 
   if (!root) return null
 
-  handleRoot(root)
+  handleRoot(root, space)
 
   // Return decoded root for debugging purposes
   return root
 }
 
-function handleRoot(root: Root): void {
+function handleRoot(root: Root, space: string): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
 
-    handleAction(action)
+    handleAction(action, space)
   }
 }
