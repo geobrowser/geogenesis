@@ -2,24 +2,18 @@
 
 pragma solidity ^0.8.9;
 
-import '@openzeppelin/contracts/access/Ownable.sol';
-import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
-import '@openzeppelin/contracts/utils/Counters.sol';
-import '@openzeppelin/contracts/utils/Strings.sol';
+import {ISpace} from './SpaceRegistry.sol';
 
 /**
  * An immutable log of uri strings.
  */
-contract Log is ReentrancyGuard, Ownable {
-    event EntryAdded(uint256 index, string uri, address author);
-
+contract Log is ISpace {
     struct Entry {
         string uri;
         address author;
     }
 
     Entry[] _entries;
-
 
     function addEntry(string calldata uri) public {
         Entry memory entry = Entry({uri: uri, author: msg.sender});
@@ -38,6 +32,7 @@ contract Log is ReentrancyGuard, Ownable {
     }
 
     // Enumeration
+
     function entryCount() public view returns (uint256) {
         return _entries.length;
     }
