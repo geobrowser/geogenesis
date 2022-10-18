@@ -1,9 +1,10 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts';
-import { observable, Observable } from '@legendapp/state';
+import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
-import { EntityNames, ReviewState, Triple, Value } from '../types';
+import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
+import { makeOptionalComputed } from '../utils';
 import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
 
@@ -55,6 +56,7 @@ let abortController = new AbortController();
 export interface INetwork {
   pageNumber$: Observable<number>;
   query$: Observable<string>;
+  spaces$: ObservableComputed<Space[]>;
   fetchTriples: (
     query: string,
     skip: number,
@@ -68,16 +70,20 @@ export interface INetwork {
 export class Network implements INetwork {
   query$: Observable<string>;
   pageNumber$: Observable<number>;
+  spaces$: ObservableComputed<Space[]>;
 
   constructor(
     public contract: LogContract,
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
-    public subgraphUrl: string,
-    syncInterval = 30000
+    public subgraphUrl: string
   ) {
     this.query$ = observable('');
     this.pageNumber$ = observable(0);
+    this.spaces$ = makeOptionalComputed(
+      [],
+      computed(() => this.fetchSpaces())
+    );
   }
 
   publish = async (
@@ -185,6 +191,31 @@ export class Network implements INetwork {
     }, {} as EntityNames);
 
     return { triples, entityNames };
+  };
+
+  fetchSpaces = async () => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        query: `query {
+          spaces {
+            id
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        spaces: { id: string }[];
+      };
+    } = await response.json();
+
+    return json.data.spaces;
   };
 }
 

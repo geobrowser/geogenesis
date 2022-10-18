@@ -4,6 +4,7 @@ import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schem
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
 import { createTripleWithId } from '../services/create-id';
+import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
@@ -30,14 +31,6 @@ type EditTripleAction = {
 };
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
-
-function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
-  return computed(() => {
-    const data = observable.get() as T;
-    if (data === undefined) return initialValue;
-    return data;
-  });
-}
 
 const DEFAULT_PAGE_SIZE = 100;
 

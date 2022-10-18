@@ -6,10 +6,12 @@ import { AddressLoader } from './services/address-loader';
 import { Network } from './services/network';
 import { StorageClient } from './services/storage';
 import { StubNetwork } from './services/stub-network';
+import { SpaceStore } from './state/space-store';
 import { TripleStore } from './state/triple-store';
 
 type Services = {
   tripleStore: TripleStore;
+  spaceStore: SpaceStore;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -25,9 +27,14 @@ export function ServicesProvider({ children }: Props) {
 
   const services = useMemo((): Services => {
     if (!chainId) {
+      const network = new StubNetwork();
+
       return {
         tripleStore: new TripleStore({
-          api: new StubNetwork(),
+          api: network,
+        }),
+        spaceStore: new SpaceStore({
+          api: network,
         }),
       };
     }
@@ -35,10 +42,14 @@ export function ServicesProvider({ children }: Props) {
     const config = getConfig(chainId);
     const addressLoader = new AddressLoader(config.devServer);
     const storageClient = new StorageClient(config.ipfs);
+    const network = new Network(Log__factory, addressLoader, storageClient, config.subgraph);
 
     return {
       tripleStore: new TripleStore({
-        api: new Network(Log__factory, addressLoader, storageClient, config.subgraph),
+        api: network,
+      }),
+      spaceStore: new SpaceStore({
+        api: network,
       }),
     };
   }, [chainId]);
@@ -58,4 +69,8 @@ function useServices() {
 
 export function useTripleStore() {
   return useServices().tripleStore;
+}
+
+export function useSpaceStore() {
+  return useServices().spaceStore;
 }

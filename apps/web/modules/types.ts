@@ -28,4 +28,8 @@ export type Triple = {
   space: string;
 };
 
+export type Space = {
+  id: string;
+};
+
 export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';

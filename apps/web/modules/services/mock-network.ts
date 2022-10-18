@@ -1,5 +1,6 @@
-import { observable } from '@legendapp/state';
+import { computed, observable } from '@legendapp/state';
 import { EntityNames, Triple } from '../types';
+import { makeOptionalComputed } from '../utils';
 import { INetwork } from './network';
 
 export const makeStubTriple = (name: string): Triple => {
@@ -18,6 +19,7 @@ export const makeStubTriple = (name: string): Triple => {
 export class MockNetwork implements INetwork {
   pageNumber$ = observable(0);
   query$ = observable('');
+  spaces$ = observable([]);
   triples: Triple[] = [];
 
   constructor({ triples = [] }: { triples: Triple[] } = { triples: [] }) {
