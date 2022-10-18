@@ -7,14 +7,20 @@ interface Props {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onBlur: () => void;
+  disabled?: boolean;
+  placeholder?: string;
+  isEntity?: boolean;
+  ellipsize?: boolean;
 }
 
-export function CellEditableInput({ isEditable, value, onChange, onBlur }: Props) {
+export function CellEditableInput({ isEditable, value, isEntity, ...rest }: Props) {
   return isEditable ? (
-    <CellInput placeholder="Add text..." value={value} onChange={onChange} onBlur={onBlur} />
+    <CellInput placeholder="Add text..." value={value} {...rest} />
   ) : (
     <CellTruncate>
-      <Text variant="tableCell">{value}</Text>
+      <Text color={isEntity ? 'ctaPrimary' : 'text'} variant="tableCell">
+        {value}
+      </Text>
     </CellTruncate>
   );
 }

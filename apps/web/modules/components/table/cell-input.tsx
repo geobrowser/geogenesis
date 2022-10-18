@@ -34,6 +34,8 @@ interface Props {
   onBlur: () => void;
   disabled?: boolean;
   placeholder?: string;
+  isEntity?: boolean;
+  ellipsize?: boolean;
 }
 
 export function CellInput(props: Props) {

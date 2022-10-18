@@ -108,7 +108,8 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <CellInput
+          <CellEditableInput
+            isEditable={false}
             disabled
             isEntity
             ellipsize
@@ -120,7 +121,8 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'attributeId':
         const attributeId = cellData as string;
         return (
-          <CellInput
+          <CellEditableInput
+            isEditable={false}
             placeholder="Add an attribute..."
             value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
