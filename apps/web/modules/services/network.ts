@@ -1,10 +1,8 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts';
-import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
-import { makeOptionalComputed } from '../utils';
 import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
 
@@ -54,37 +52,24 @@ function getActionFromChangeStatus(action: Action) {
 let abortController = new AbortController();
 
 export interface INetwork {
-  pageNumber$: Observable<number>;
-  query$: Observable<string>;
-  spaces$: ObservableComputed<Space[]>;
   fetchTriples: (
     query: string,
     skip: number,
     first: number
   ) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchSpaces: () => Promise<Space[]>;
   publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  query$: Observable<string>;
-  pageNumber$: Observable<number>;
-  spaces$: ObservableComputed<Space[]>;
-
   constructor(
     public contract: LogContract,
     public addressLoader: IAddressLoader,
     public storageClient: IStorageClient,
     public subgraphUrl: string
-  ) {
-    this.query$ = observable('');
-    this.pageNumber$ = observable(0);
-    this.spaces$ = makeOptionalComputed(
-      [],
-      computed(() => this.fetchSpaces())
-    );
-  }
+  ) {}
 
   publish = async (
     actions: Action[],

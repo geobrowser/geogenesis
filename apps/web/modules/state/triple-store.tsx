@@ -10,6 +10,8 @@ interface ITripleStore {
   actions$: Observable<Action[]>;
   entityNames$: ObservableComputed<EntityNames>;
   triples$: ObservableComputed<Triple[]>;
+  pageNumber$: Observable<number>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
@@ -39,19 +41,23 @@ export class TripleStore implements ITripleStore {
   actions$: Observable<Action[]> = observable<Action[]>([]);
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
+  pageNumber$: Observable<number>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
 
   constructor({ api, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
+    this.query$ = observable('');
+    this.pageNumber$ = observable(0);
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
           const { triples, entityNames } = await this.api.fetchTriples(
-            this.api.query$.get(),
-            this.api.pageNumber$.get() * pageSize,
+            this.query$.get(),
+            this.pageNumber$.get() * pageSize,
             pageSize + 1
           );
 
@@ -69,7 +75,7 @@ export class TripleStore implements ITripleStore {
       })
     );
 
-    this.hasPreviousPage$ = computed(() => this.api.pageNumber$.get() > 0);
+    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {
@@ -167,25 +173,21 @@ export class TripleStore implements ITripleStore {
 
   setQuery = (query: string) => {
     this.setPageNumber(0);
-    this.api.query$.set(query);
+    this.query$.set(query);
   };
 
   setPageNumber = (pageNumber: number) => {
-    this.api.pageNumber$.set(pageNumber);
+    this.pageNumber$.set(pageNumber);
   };
 
   setNextPage = () => {
     // TODO: Bounds to the last page number
-    this.api.pageNumber$.set(this.api.pageNumber$.get() + 1);
+    this.pageNumber$.set(this.pageNumber$.get() + 1);
   };
 
   setPreviousPage = () => {
-    const previousPageNumber = this.api.pageNumber$.get() - 1;
+    const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
-    this.api.pageNumber$.set(previousPageNumber);
+    this.pageNumber$.set(previousPageNumber);
   };
-
-  get pageNumber$() {
-    return this.api.pageNumber$;
-  }
 }

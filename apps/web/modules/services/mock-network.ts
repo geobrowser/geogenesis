@@ -38,5 +38,9 @@ export class MockNetwork implements INetwork {
     };
   };
 
+  fetchSpaces = async () => {
+    return [];
+  };
+
   publish = async () => {};
 }
