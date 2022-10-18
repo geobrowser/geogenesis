@@ -3,13 +3,19 @@ import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { EntryAdded } from '../generated/Log/Log'
-import { LogEntry } from '../generated/schema'
+import { SpaceAdded } from '../generated/SpaceRegistry/SpaceRegistry'
+import { LogEntry, Space } from '../generated/schema'
 import { handleAction } from './actions'
 import { bootstrap } from './bootstrap'
 
 bootstrap()
 
 const IPFS_URI_SCHEME = 'ipfs://'
+
+export function handleSpaceAdded(event: SpaceAdded): void {
+  let space = new Space(event.params.space.toHexString())
+  space.save()
+}
 
 export function handleEntryAdded(event: EntryAdded): void {
   let entry = new LogEntry(event.params.index.toHex())

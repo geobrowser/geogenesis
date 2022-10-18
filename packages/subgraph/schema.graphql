@@ -1,3 +1,7 @@
+type Space @entity {
+  id: ID!
+}
+
 """
 An entry in the Log contract.
 """
