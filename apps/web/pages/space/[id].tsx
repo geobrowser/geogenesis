@@ -146,7 +146,8 @@ function Triples({ space }: { space: string }) {
 
   const onImport = async (file: File) => {
     const triples = await importCSVFile(file, space);
-    tripleStore.create(triples.slice(0, 300));
+    tripleStore.create(triples);
+    console.log('triples', triples.length);
   };
 
   return (

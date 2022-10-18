@@ -123,6 +123,8 @@ export function convertHealthData(csv: string, rowCount: number = Infinity) {
     ['sourceType', 'name', 'Source Type'],
     ['tag', 'type', 'type'],
     ['tag', 'name', 'Tag'],
+    ['guest', 'type', 'type'],
+    ['guest', 'name', 'Guest'],
   ];
 
   function toEavRow(row: HealthDataRow): EavRow[] {
@@ -140,6 +142,12 @@ export function convertHealthData(csv: string, rowCount: number = Infinity) {
       { id: row.ID_Tag11, name: row.Tag11 },
     ].filter(({ id }) => id !== '');
 
+    const guestTuple = [
+      { id: row['Entity ID \n(Guest1)'], name: row['Source\n(Guest1)'] },
+      { id: row['Entity ID \n(Guest2)'], name: row['Source\n(Guest2)'] },
+      { id: row['Entity ID \n(Guest3)'], name: row['Source\n(Guest3)'] },
+    ].filter(({ id }) => id !== '');
+
     return [
       [row.ID_content, 'content', row.Content],
       [row.ID_content, 'source', row['Entity ID \n(Source)']],
@@ -152,6 +160,8 @@ export function convertHealthData(csv: string, rowCount: number = Infinity) {
       [row['Entity ID \n(Platform)'], 'name', row['Platform/Site']],
       ...tagTuple.map(({ id }): EavRow => [row.ID_content, 'tag', id]),
       ...tagTuple.map(({ id, name }): EavRow => [id, 'name', name]),
+      ...guestTuple.map(({ id }): EavRow => [row.ID_content, 'guest', id]),
+      ...guestTuple.map(({ id, name }): EavRow => [id, 'name', name]),
     ];
   }
 

@@ -188,6 +188,26 @@ exports[`CSV Import > imports health data format 1`] = `
     },
   },
   {
+    "attributeId": "type",
+    "entityId": "guest",
+    "id": "s:guest:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "guest",
+    "id": "s:guest:name:s~Guest",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Guest",
+    },
+  },
+  {
     "attributeId": "content",
     "entityId": "10000000",
     "id": "s:10000000:content:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
