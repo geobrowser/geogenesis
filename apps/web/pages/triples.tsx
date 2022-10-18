@@ -56,10 +56,11 @@ export default function Triples() {
 
     tripleStore.create([
       {
-        id: createTripleId(entityId, attributeId, value),
+        id: createTripleId('', entityId, attributeId, value),
         entityId,
         attributeId,
         value,
+        space: '',
       },
     ]);
   };

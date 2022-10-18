@@ -88,16 +88,16 @@ export class TripleStore implements ITripleStore {
       this.actions$.get().forEach(action => {
         switch (action.type) {
           case 'createTriple':
-            triples.unshift(createTripleWithId(action));
+            triples.unshift(createTripleWithId({ ...action, space: '' }));
             break;
           case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: '' }).id);
             triples.splice(index, 1);
             break;
           }
           case 'editTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId(action.before).id);
-            triples.splice(index, 1, createTripleWithId(action.after));
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: '' }).id);
+            triples.splice(index, 1, createTripleWithId({ ...action.after, space: '' }));
             break;
           }
         }

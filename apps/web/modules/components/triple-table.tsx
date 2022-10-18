@@ -219,7 +219,7 @@ export default function TripleTable({ update, triples }: Props) {
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
-        const newTriple = createTripleWithId(entityId, attributeId, value);
+        const newTriple = createTripleWithId('', entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
       },
     },

@@ -52,7 +52,7 @@ export function eavRowsToTriples(rows: EavRow[], createId: CreateUuid = createEn
     const mappedValue: Value =
       value in entityIdMap ? { type: 'entity', value: entityIdMap[value] } : { type: 'string', value };
 
-    return createTripleWithId(mappedEntityId, mappedAttributeId, mappedValue);
+    return createTripleWithId('', mappedEntityId, mappedAttributeId, mappedValue);
   });
 
   return unique(triples);

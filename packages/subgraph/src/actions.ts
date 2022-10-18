@@ -21,7 +21,12 @@ export function handleCreateTripleAction(
     new GeoEntity(fact.attributeId))!
   attribute.save()
 
-  const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
+  const tripleId = createTripleId(
+    space,
+    fact.entityId,
+    fact.attributeId,
+    fact.value
+  )
 
   const existing = Triple.load(tripleId)
 
@@ -73,8 +78,16 @@ export function handleCreateTripleAction(
   log.debug(`ACTION: Created triple: ${triple.id}`, [])
 }
 
-function handleDeleteTripleAction(fact: DeleteTripleAction): void {
-  const tripleId = createTripleId(fact.entityId, fact.attributeId, fact.value)
+function handleDeleteTripleAction(
+  fact: DeleteTripleAction,
+  space: string
+): void {
+  const tripleId = createTripleId(
+    space,
+    fact.entityId,
+    fact.attributeId,
+    fact.value
+  )
 
   const triple = Triple.load(tripleId)
 
@@ -116,7 +129,7 @@ export function handleAction(action: Action, space: string): void {
 
   const deleteTripleAction = action.asDeleteTripleAction()
   if (deleteTripleAction) {
-    handleDeleteTripleAction(deleteTripleAction)
+    handleDeleteTripleAction(deleteTripleAction, space)
     return
   }
 
