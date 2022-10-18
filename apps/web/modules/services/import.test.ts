@@ -30,13 +30,13 @@ describe('CSV Import', () => {
   it('imports health data format', async () => {
     const file = readMockFile('healthdata.csv');
     const csv = await readFileAsText(file);
-    const rows = convertHealthData(csv);
+    const rows = convertHealthData(csv, 1);
 
     // So we can see what matches in snapshot tests
     const mockId = (value: string) => value;
 
     const triples = eavRowsToTriples(rows, 's', mockId);
 
-    expect(triples.slice(0, 15)).toMatchSnapshot();
+    expect(triples).toMatchSnapshot();
   });
 });

@@ -58,7 +58,7 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   return unique(triples);
 }
 
-export function convertHealthData(csv: string) {
+export function convertHealthData(csv: string, rowCount: number = Infinity) {
   type HealthDataRow = {
     ID_content: string;
     'Title/Fact': string;
@@ -121,9 +121,25 @@ export function convertHealthData(csv: string) {
     ['category', 'name', 'Category'],
     ['sourceType', 'type', 'type'],
     ['sourceType', 'name', 'Source Type'],
+    ['tag', 'type', 'type'],
+    ['tag', 'name', 'Tag'],
   ];
 
   function toEavRow(row: HealthDataRow): EavRow[] {
+    const tagTuple = [
+      { id: row.ID_Tag1, name: row.Tag1 },
+      { id: row.ID_Tag2, name: row.Tag2 },
+      { id: row.ID_Tag3, name: row.Tag3 },
+      { id: row.ID_Tag4, name: row.Tag4 },
+      { id: row.ID_Tag5, name: row.Tag5 },
+      { id: row.ID_Tag6, name: row.Tag6 },
+      { id: row.ID_Tag7, name: row.Tag7 },
+      { id: row.ID_Tag8, name: row.Tag8 },
+      { id: row.ID_Tag9, name: row.Tag9 },
+      { id: row.ID_Tag10, name: row.Tag10 },
+      { id: row.ID_Tag11, name: row.Tag11 },
+    ].filter(({ id }) => id !== '');
+
     return [
       [row.ID_content, 'content', row.Content],
       [row.ID_content, 'source', row['Entity ID \n(Source)']],
@@ -134,10 +150,12 @@ export function convertHealthData(csv: string) {
       [row['Entity ID \n(Location)'], 'name', row.SourceLoc],
       [row['Entity ID \n(Category)'], 'name', row.Category],
       [row['Entity ID \n(Platform)'], 'name', row['Platform/Site']],
+      ...tagTuple.map(({ id }): EavRow => [row.ID_content, 'tag', id]),
+      ...tagTuple.map(({ id, name }): EavRow => [id, 'name', name]),
     ];
   }
 
-  const eavRows = results.data.flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }

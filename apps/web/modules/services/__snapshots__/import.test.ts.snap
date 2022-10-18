@@ -168,6 +168,26 @@ exports[`CSV Import > imports health data format 1`] = `
     },
   },
   {
+    "attributeId": "type",
+    "entityId": "tag",
+    "id": "s:tag:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "tag",
+    "id": "s:tag:name:s~Tag",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Tag",
+    },
+  },
+  {
     "attributeId": "content",
     "entityId": "10000000",
     "id": "s:10000000:content:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
@@ -215,6 +235,46 @@ exports[`CSV Import > imports health data format 1`] = `
     "value": {
       "type": "entity",
       "value": "4000006",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "1000001",
+    "id": "s:1000001:name:s~Dr. Andrew Huberman",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Dr. Andrew Huberman",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "2000133",
+    "id": "s:2000133:name:s~Episode 01: How Your Brain Works & Changes | Huberman Lab",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Episode 01: How Your Brain Works & Changes | Huberman Lab",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "3000000",
+    "id": "s:3000000:name:s~Health",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Health",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "4000006",
+    "id": "s:4000006:name:s~PodcastNotes",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "PodcastNotes",
     },
   },
 ]
