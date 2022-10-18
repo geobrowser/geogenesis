@@ -3,10 +3,7 @@ import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts'
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
-import { IAddressLoader } from './address-loader';
 import { IStorageClient } from './storage';
-
-type LogContract = typeof Log__factory;
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -74,17 +71,10 @@ export interface INetwork {
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  constructor(
-    public contract: LogContract,
-    public addressLoader: IAddressLoader,
-    public storageClient: IStorageClient,
-    public subgraphUrl: string
-  ) {}
+  constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
-  publish = async ({ actions, signer, onChangePublishState }: PublishOptions): Promise<void> => {
-    const chain = await signer.getChainId();
-    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
-    const contract = this.contract.connect(contractAddress, signer);
+  publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
+    const contract = Log__factory.connect(space, signer);
 
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];

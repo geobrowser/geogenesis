@@ -1,8 +1,6 @@
-import { Log__factory } from '@geogenesis/contracts';
 import { createContext, ReactNode, useContext, useEffect, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 import { getConfig } from './config';
-import { AddressLoader } from './services/address-loader';
 import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';
 import { StubNetwork } from './services/stub-network';
@@ -37,9 +35,8 @@ export function ServicesProvider({ children }: Props) {
     }
 
     const config = getConfig(chainId);
-    const addressLoader = new AddressLoader(config.devServer);
     const storageClient = new StorageClient(config.ipfs);
-    const network = new Network(Log__factory, addressLoader, storageClient, config.subgraph);
+    const network = new Network(storageClient, config.subgraph);
 
     return {
       network,
