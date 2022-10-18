@@ -119,6 +119,8 @@ export function convertHealthData(csv: string) {
     ['source location', 'name', 'Source Location'],
     ['category', 'type', 'type'],
     ['category', 'name', 'Category'],
+    ['sourceType', 'type', 'type'],
+    ['sourceType', 'name', 'Source Type'],
   ];
 
   function toEavRow(row: HealthDataRow): EavRow[] {
@@ -127,9 +129,11 @@ export function convertHealthData(csv: string) {
       [row.ID_content, 'source', row['Entity ID \n(Source)']],
       [row.ID_content, 'source location', row['Entity ID \n(Location)']],
       [row.ID_content, 'category', row['Entity ID \n(Category)']],
+      [row.ID_content, 'sourceType', row['Entity ID \n(Platform)']],
       [row['Entity ID \n(Source)'], 'name', row.Source],
       [row['Entity ID \n(Location)'], 'name', row.SourceLoc],
       [row['Entity ID \n(Category)'], 'name', row.Category],
+      [row['Entity ID \n(Platform)'], 'name', row['Platform/Site']],
     ];
   }
 
