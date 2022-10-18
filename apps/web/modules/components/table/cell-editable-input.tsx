@@ -15,7 +15,7 @@ interface Props {
 
 export function CellEditableInput({ isEditable, value, isEntity, ...rest }: Props) {
   return isEditable ? (
-    <CellInput placeholder="Add text..." value={value} {...rest} />
+    <CellInput value={value} {...rest} />
   ) : (
     <CellTruncate>
       <Text color={isEntity ? 'ctaPrimary' : 'text'} variant="tableCell">

@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 const StyledCellInput = styled.textarea<{ isEntity?: boolean; ellipsize?: boolean }>(props => ({
   ...props.theme.typography.tableCell,
@@ -11,7 +11,7 @@ const StyledCellInput = styled.textarea<{ isEntity?: boolean; ellipsize?: boolea
   margin: 0,
 
   overflow: 'hidden',
-  resize: 'none' /*remove the resize handle on the bottom right*/,
+  resize: 'none',
 
   ':focus': {
     outline: `1px solid ${props.theme.colors.text}`,

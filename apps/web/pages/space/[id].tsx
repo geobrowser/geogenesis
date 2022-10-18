@@ -13,6 +13,7 @@ import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
+import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
@@ -125,6 +126,7 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
 
 function Triples({ space }: { space: string }) {
   const tripleStore = useTriples();
+  const { toggleEditable, editable } = useEditable();
 
   const debouncedFilter = debounce(tripleStore.setQuery, 500);
 
@@ -146,7 +148,7 @@ function Triples({ space }: { space: string }) {
 
   const onImport = async (file: File) => {
     const triples = await importCSVFile(file, space);
-    tripleStore.create(triples);
+    tripleStore.create(triples.slice(0, 100));
   };
 
   return (
@@ -157,6 +159,10 @@ function Triples({ space }: { space: string }) {
         </Text>
 
         <div style={{ flex: 1 }} />
+        <Button variant="secondary" onClick={toggleEditable}>
+          Turn {editable ? 'off' : 'on'} editing
+        </Button>
+        <Spacer width={12} />
         <Button variant="secondary" icon="create" onClick={() => {}}>
           Import
           <FileImport

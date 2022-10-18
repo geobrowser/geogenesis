@@ -9,14 +9,14 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
+import { useEditable } from '../state/use-editable';
 import { useTriples } from '../state/use-triples';
 import { Triple, Value } from '../types';
 import { CellEditableInput } from './table/cell-editable-input';
-import { CellInput } from './table/cell-input';
 import { CellTruncate } from './table/cell-truncate';
 
 // We declare a new function that we will define and pass into the useTable hook.
@@ -76,6 +76,7 @@ const TableRow = styled.tr(props => ({
 // the table easier. Otherwise we need to do some pseudoselector shenanigans
 // or use box-shadow instead of border.
 const Container = styled.div(props => ({
+  padding: 0,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
   overflow: 'hidden',
@@ -86,6 +87,9 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { entityNames } = useTriples();
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { editable } = useEditable();
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -108,22 +112,19 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <CellEditableInput
-            isEditable={false}
-            disabled
-            isEntity
-            ellipsize
-            value={entityNames[entityId] || entityId}
-            onChange={e => setCellData(e.target.value)}
-            onBlur={onBlur}
-          />
+          <CellTruncate>
+            <Text color="ctaPrimary" variant="tableCell" ellipsize>
+              {entityNames[entityId] || entityId}
+            </Text>
+          </CellTruncate>
         );
       case 'attributeId':
         const attributeId = cellData as string;
+
         return (
           <CellEditableInput
-            isEditable={false}
             placeholder="Add an attribute..."
+            isEditable={editable}
             value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
@@ -142,7 +143,8 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         return (
           <CellEditableInput
-            isEditable={false}
+            placeholder="Add text..."
+            isEditable={editable}
             value={entityNames[value.value] || value.value}
             onChange={e =>
               setCellData({
