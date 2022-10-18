@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
@@ -11,6 +12,7 @@ import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
+import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useTriples } from '~/modules/state/use-triples';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
@@ -44,77 +46,14 @@ const FileImport = styled.input({
   inset: '0',
 });
 
-export default function Triples() {
-  const tripleStore = useTriples();
-
-  const debouncedFilter = debounce(tripleStore.setQuery, 500);
-
-  const onAddTriple = async () => {
-    const entityId = createEntityId();
-    const attributeId = '';
-    const value = { type: 'string' as const, value: '' };
-
-    tripleStore.create([
-      {
-        id: createTripleId(entityId, attributeId, value),
-        entityId,
-        attributeId,
-        value,
-      },
-    ]);
-  };
-
-  const onImport = async (file: File) => {
-    const triples = await importCSVFile(file);
-    tripleStore.create(triples);
-  };
+export default function TriplesPage() {
+  const router = useRouter();
+  const { id } = router.query as { id: string };
 
   return (
-    <PageContainer>
-      <PageHeader>
-        <Text variant="largeTitle" as="h1">
-          Facts
-        </Text>
-
-        <div style={{ flex: 1 }} />
-        <Button variant="secondary" icon="create" onClick={() => {}}>
-          Import
-          <FileImport
-            type="file"
-            accept=".csv"
-            onChange={event => {
-              for (let file of event.target.files ?? []) {
-                onImport(file);
-              }
-            }}
-          />
-        </Button>
-        <Spacer width={12} />
-        <Button icon="create" onClick={onAddTriple}>
-          Add
-        </Button>
-      </PageHeader>
-
-      <Spacer height={12} />
-
-      <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
-
-      <Spacer height={12} />
-
-      <TripleTable triples={tripleStore.triples} update={tripleStore.update} />
-
-      <Spacer height={12} />
-
-      <PageNumberContainer>
-        <PageNumber number={tripleStore.pageNumber + 1} />
-        <Spacer width={32} />
-        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
-        <Spacer width={12} />
-        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={() => tripleStore.setNextPage()} />
-      </PageNumberContainer>
-
-      <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
-    </PageContainer>
+    <TripleStoreProvider space={id}>
+      <Triples space={id} />
+    </TripleStoreProvider>
   );
 }
 
@@ -181,5 +120,80 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
         <LeftArrowLong color={color} />
       </span>
     </TextButton>
+  );
+}
+
+function Triples({ space }: { space: string }) {
+  const tripleStore = useTriples();
+
+  const debouncedFilter = debounce(tripleStore.setQuery, 500);
+
+  const onAddTriple = async () => {
+    const entityId = createEntityId();
+    const attributeId = '';
+    const value = { type: 'string' as const, value: '' };
+
+    tripleStore.create([
+      {
+        id: createTripleId(space, entityId, attributeId, value),
+        entityId,
+        attributeId,
+        value,
+        space,
+      },
+    ]);
+  };
+
+  const onImport = async (file: File) => {
+    const triples = await importCSVFile(file, space);
+    tripleStore.create(triples);
+  };
+
+  return (
+    <PageContainer>
+      <PageHeader>
+        <Text variant="largeTitle" as="h1">
+          Facts
+        </Text>
+
+        <div style={{ flex: 1 }} />
+        <Button variant="secondary" icon="create" onClick={() => {}}>
+          Import
+          <FileImport
+            type="file"
+            accept=".csv"
+            onChange={event => {
+              for (let file of event.target.files ?? []) {
+                onImport(file);
+              }
+            }}
+          />
+        </Button>
+        <Spacer width={12} />
+        <Button icon="create" onClick={onAddTriple}>
+          Add
+        </Button>
+      </PageHeader>
+
+      <Spacer height={12} />
+
+      <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
+
+      <Spacer height={12} />
+
+      <TripleTable space={space} triples={tripleStore.triples} update={tripleStore.update} />
+
+      <Spacer height={12} />
+
+      <PageNumberContainer>
+        <PageNumber number={tripleStore.pageNumber + 1} />
+        <Spacer width={32} />
+        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
+        <Spacer width={12} />
+        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={() => tripleStore.setNextPage()} />
+      </PageNumberContainer>
+
+      <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
+    </PageContainer>
   );
 }

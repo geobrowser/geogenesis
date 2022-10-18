@@ -1,3 +1,7 @@
+type Space @entity {
+  id: ID!
+}
+
 """
 An entry in the Log contract.
 """
@@ -6,6 +10,8 @@ type LogEntry @entity {
   uri: String!
   author: Bytes!
   mimeType: String
+
+  space: Space!
 
   """
   The binary data located at the uri.
@@ -32,7 +38,7 @@ An edge within the knowledge graph.
 Triples are 3-tuples of (entity, attribute, value).
 """
 type Triple @entity {
-  id: ID!
+  id: ID! # TODO: namespace ids with space id
   entity: GeoEntity!
   attribute: GeoEntity!
   valueType: ValueType!
@@ -40,6 +46,7 @@ type Triple @entity {
   stringValue: String
   entityValue: GeoEntity
   isProtected: Boolean!
+  space: Space!
 }
 
 enum ValueType {

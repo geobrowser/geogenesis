@@ -14,9 +14,10 @@ function createValueId(value: Value): string {
 }
 
 export function createTripleId(
+  spaceId: string,
   entityId: string,
   attributeId: string,
   value: Value
 ): string {
-  return `${entityId}:${attributeId}:${createValueId(value)}`
+  return `${spaceId}:${entityId}:${attributeId}:${createValueId(value)}`
 }

@@ -33,7 +33,7 @@ function unique(triples: Triple[]): Triple[] {
   return Object.values(Object.fromEntries(triples.map(triple => [triple.id, triple])));
 }
 
-export function eavRowsToTriples(rows: EavRow[], createId: CreateUuid = createEntityId): Triple[] {
+export function eavRowsToTriples(rows: EavRow[], space: string, createId: CreateUuid = createEntityId): Triple[] {
   // Create a collection of all known entity ids
   const entityIds = new Set([
     ...BUILTIN_ENTITY_IDS,
@@ -52,7 +52,7 @@ export function eavRowsToTriples(rows: EavRow[], createId: CreateUuid = createEn
     const mappedValue: Value =
       value in entityIdMap ? { type: 'entity', value: entityIdMap[value] } : { type: 'string', value };
 
-    return createTripleWithId(mappedEntityId, mappedAttributeId, mappedValue);
+    return createTripleWithId(space, mappedEntityId, mappedAttributeId, mappedValue);
   });
 
   return unique(triples);
@@ -138,8 +138,12 @@ export function convertHealthData(csv: string) {
   return [...attributeRows, ...eavRows];
 }
 
-export async function importCSVFile(file: File, createId: CreateUuid = createEntityId): Promise<Triple[]> {
+export async function importCSVFile(
+  file: File,
+  space: string,
+  createId: CreateUuid = createEntityId
+): Promise<Triple[]> {
   const csv = await readFileAsText(file);
   const rows = file.name === 'healthdata.csv' ? convertHealthData(csv) : readCSV(csv);
-  return eavRowsToTriples(rows, createId);
+  return eavRowsToTriples(rows, space, createId);
 }

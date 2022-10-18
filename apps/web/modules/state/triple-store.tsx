@@ -4,11 +4,14 @@ import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schem
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
 import { createTripleWithId } from '../services/create-id';
+import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
   entityNames$: ObservableComputed<EntityNames>;
   triples$: ObservableComputed<Triple[]>;
+  pageNumber$: Observable<number>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
@@ -20,6 +23,7 @@ interface ITripleStore {
 
 interface ITripleStoreConfig {
   api: INetwork;
+  space: string;
   pageSize?: number;
 }
 
@@ -31,14 +35,6 @@ type EditTripleAction = {
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
-function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
-  return computed(() => {
-    const data = observable.get() as T;
-    if (data === undefined) return initialValue;
-    return data;
-  });
-}
-
 const DEFAULT_PAGE_SIZE = 100;
 
 export class TripleStore implements ITripleStore {
@@ -46,21 +42,28 @@ export class TripleStore implements ITripleStore {
   actions$: Observable<Action[]> = observable<Action[]>([]);
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
+  pageNumber$: Observable<number>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
+  space: string;
 
-  constructor({ api, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+  constructor({ api, space, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
     this.api = api;
+    this.query$ = observable('');
+    this.pageNumber$ = observable(0);
+    this.space = space;
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
       computed(async () => {
         try {
-          const { triples, entityNames } = await this.api.fetchTriples(
-            this.api.query$.get(),
-            this.api.pageNumber$.get() * pageSize,
-            pageSize + 1
-          );
+          const { triples, entityNames } = await this.api.fetchTriples({
+            query: this.query$.get(),
+            space: this.space,
+            skip: this.pageNumber$.get() * pageSize,
+            first: pageSize + 1,
+          });
 
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
@@ -76,7 +79,7 @@ export class TripleStore implements ITripleStore {
       })
     );
 
-    this.hasPreviousPage$ = computed(() => this.api.pageNumber$.get() > 0);
+    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {
@@ -88,16 +91,16 @@ export class TripleStore implements ITripleStore {
       this.actions$.get().forEach(action => {
         switch (action.type) {
           case 'createTriple':
-            triples.unshift(createTripleWithId(action));
+            triples.unshift(createTripleWithId({ ...action, space: 's' }));
             break;
           case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId(action).id);
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: 's' }).id);
             triples.splice(index, 1);
             break;
           }
           case 'editTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId(action.before).id);
-            triples.splice(index, 1, createTripleWithId(action.after));
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: 's' }).id);
+            triples.splice(index, 1, createTripleWithId({ ...action.after, space: 's' }));
             break;
           }
         }
@@ -167,32 +170,28 @@ export class TripleStore implements ITripleStore {
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish(this.actions$.get(), signer, onChangePublishState);
+    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.space });
     await this.setQuery('');
     this.actions$.set([]);
   };
 
   setQuery = (query: string) => {
     this.setPageNumber(0);
-    this.api.query$.set(query);
+    this.query$.set(query);
   };
 
   setPageNumber = (pageNumber: number) => {
-    this.api.pageNumber$.set(pageNumber);
+    this.pageNumber$.set(pageNumber);
   };
 
   setNextPage = () => {
     // TODO: Bounds to the last page number
-    this.api.pageNumber$.set(this.api.pageNumber$.get() + 1);
+    this.pageNumber$.set(this.pageNumber$.get() + 1);
   };
 
   setPreviousPage = () => {
-    const previousPageNumber = this.api.pageNumber$.get() - 1;
+    const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
-    this.api.pageNumber$.set(previousPageNumber);
+    this.pageNumber$.set(previousPageNumber);
   };
-
-  get pageNumber$() {
-    return this.api.pageNumber$;
-  }
 }

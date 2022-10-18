@@ -23,39 +23,41 @@ function createValueId(value: Value): string {
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
-export function createTripleId(entityId: string, attributeId: string, value: Value): string;
+export function createTripleId(space: string, entityId: string, attributeId: string, value: Value): string;
 export function createTripleId(triple: Triple): string;
 export function createTripleId(
-  ...args: [entityId: string, attributeId: string, value: Value] | [triple: Triple]
+  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: Triple]
 ): string {
   if (args.length === 1) {
     const triple = args[0];
-    return createTripleId(triple.entityId, triple.attributeId, triple.value);
+    return createTripleId(triple.space, triple.entityId, triple.attributeId, triple.value);
   }
 
-  return `${args[0]}:${args[1]}:${createValueId(args[2])}`;
+  return `${args[0]}:${args[1]}:${args[2]}:${createValueId(args[3])}`;
 }
 
-export function createTripleWithId(entityId: string, attributeId: string, value: Value): Triple;
+export function createTripleWithId(space: string, entityId: string, attributeId: string, value: Value): Triple;
 export function createTripleWithId(triple: OmitStrict<Triple, 'id'>): Triple;
 export function createTripleWithId(
-  ...args: [entityId: string, attributeId: string, value: Value] | [triple: OmitStrict<Triple, 'id'>]
+  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: OmitStrict<Triple, 'id'>]
 ): Triple {
   if (args.length === 1) {
     const triple = args[0];
     return {
-      id: createTripleId(triple.entityId, triple.attributeId, triple.value),
+      id: createTripleId(triple.space, triple.entityId, triple.attributeId, triple.value),
       entityId: triple.entityId,
       attributeId: triple.attributeId,
       value: triple.value,
+      space: triple.space,
     };
   }
 
   return {
-    id: createTripleId(args[0], args[1], args[2]),
-    entityId: args[0],
-    attributeId: args[1],
-    value: args[2],
+    id: createTripleId(args[0], args[1], args[2], args[3]),
+    space: args[0],
+    entityId: args[1],
+    attributeId: args[2],
+    value: args[3],
   };
 }
 

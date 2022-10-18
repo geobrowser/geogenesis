@@ -1,5 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
-import { useTripleStore } from '../services';
+import { useTripleStore } from './triple-store-provider';
 
 export const useTriples = () => {
   const {

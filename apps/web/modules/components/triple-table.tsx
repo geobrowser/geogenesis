@@ -181,6 +181,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 interface Props {
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
+  space: string;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -189,7 +190,7 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ update, triples }: Props) {
+export default function TripleTable({ update, triples, space }: Props) {
   const table = useReactTable({
     data: triples,
     columns,
@@ -219,7 +220,7 @@ export default function TripleTable({ update, triples }: Props) {
         const attributeId = isAttributeColumn ? (cellValue as Triple['attributeId']) : oldAttributeId;
         const value = isValueColumn ? (cellValue as Triple['value']) : oldValue;
 
-        const newTriple = createTripleWithId(entityId, attributeId, value);
+        const newTriple = createTripleWithId(space, entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
       },
     },

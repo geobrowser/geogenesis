@@ -1,6 +1,7 @@
-import { observable } from '@legendapp/state';
+import { computed, observable } from '@legendapp/state';
 import { EntityNames, Triple } from '../types';
-import { INetwork } from './network';
+import { makeOptionalComputed } from '../utils';
+import { FetchTriplesOptions, INetwork } from './network';
 
 export const makeStubTriple = (name: string): Triple => {
   return {
@@ -11,19 +12,21 @@ export const makeStubTriple = (name: string): Triple => {
       type: 'string',
       value: name,
     },
+    space: 's',
   };
 };
 
 export class MockNetwork implements INetwork {
   pageNumber$ = observable(0);
   query$ = observable('');
+  spaces$ = observable([]);
   triples: Triple[] = [];
 
   constructor({ triples = [] }: { triples: Triple[] } = { triples: [] }) {
     this.triples = triples;
   }
 
-  fetchTriples = async (query: string, skip: number, first: number) => {
+  fetchTriples = async ({ query, skip, first }: FetchTriplesOptions) => {
     const triples = this.triples.slice(skip, skip + first);
 
     return {
@@ -33,6 +36,10 @@ export class MockNetwork implements INetwork {
         return acc;
       }, {} as EntityNames),
     };
+  };
+
+  fetchSpaces = async () => {
+    return [];
   };
 
   publish = async () => {};

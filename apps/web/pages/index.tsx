@@ -1,18 +1,16 @@
-import styled from '@emotion/styled';
 import Link from 'next/link';
+import { useSpaces } from '~/modules/state/use-spaces';
 
-const Column = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-});
+export default function Spaces() {
+  const { spaces } = useSpaces();
 
-export default function Home() {
   return (
-    <Column>
-      <Link href="/triples">
-        <a>Facts database</a>
-      </Link>
-    </Column>
+    <div>
+      {spaces.map(space => (
+        <Link key={space.id} href={`/space/${space.id}`}>
+          <h1 style={{ textDecoration: 'underline', cursor: 'pointer' }}>{space.id}</h1>
+        </Link>
+      ))}
+    </div>
   );
 }

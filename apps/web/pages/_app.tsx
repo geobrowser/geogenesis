@@ -57,8 +57,8 @@ function MyApp({ Component, pageProps }: AppProps) {
 
             <Spacer width={4} />
 
-            <Link href="/triples">
-              <a>Facts database</a>
+            <Link href="/">
+              <a>Spaces</a>
             </Link>
 
             <ConnectButton accountStatus="avatar" />

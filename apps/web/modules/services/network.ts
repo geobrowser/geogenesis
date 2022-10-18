@@ -1,13 +1,9 @@
 import { Root } from '@geogenesis/action-schema';
 import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts';
-import { observable, Observable } from '@legendapp/state';
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
-import { EntityNames, ReviewState, Triple, Value } from '../types';
-import { IAddressLoader } from './address-loader';
+import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
-
-type LogContract = typeof Log__factory;
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -25,6 +21,7 @@ type NetworkTriple = NetworkValue & {
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
   isProtected: boolean;
+  space: string;
 };
 
 function extractValue(networkTriple: NetworkTriple): Value {
@@ -51,42 +48,33 @@ function getActionFromChangeStatus(action: Action) {
 
 let abortController = new AbortController();
 
+export type FetchTriplesOptions = {
+  query: string;
+  space: string;
+  skip: number;
+  first: number;
+};
+
+export type PublishOptions = {
+  signer: Signer;
+  actions: Action[];
+  space: string;
+  onChangePublishState: (newState: ReviewState) => void;
+};
+
 export interface INetwork {
-  pageNumber$: Observable<number>;
-  query$: Observable<string>;
-  fetchTriples: (
-    query: string,
-    skip: number,
-    first: number
-  ) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
-  publish: (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => Promise<void>;
+  fetchTriples: (options: FetchTriplesOptions) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchSpaces: () => Promise<Space[]>;
+  publish: (options: PublishOptions) => Promise<void>;
 }
 
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
-  query$: Observable<string>;
-  pageNumber$: Observable<number>;
+  constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
-  constructor(
-    public contract: LogContract,
-    public addressLoader: IAddressLoader,
-    public storageClient: IStorageClient,
-    public subgraphUrl: string,
-    syncInterval = 30000
-  ) {
-    this.query$ = observable('');
-    this.pageNumber$ = observable(0);
-  }
-
-  publish = async (
-    actions: Action[],
-    signer: Signer,
-    onChangePublishState: (newState: ReviewState) => void
-  ): Promise<void> => {
-    const chain = await signer.getChainId();
-    const contractAddress = await this.addressLoader.getContractAddress(chain, 'Log');
-    const contract = this.contract.connect(contractAddress, signer);
+  publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
+    const contract = Log__factory.connect(space, signer);
 
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];
@@ -111,13 +99,14 @@ export class Network implements INetwork {
     console.log('Subgraph finished logging.', tx.index);
   };
 
-  fetchTriples = async (query: string = '', skip: number = 0, first: number = 100) => {
+  fetchTriples = async ({ space, query, skip, first }: FetchTriplesOptions) => {
     abortController.abort();
     abortController = new AbortController();
 
-    const jankyQuery = query
-      ? `(where: {entity_: {name_contains_nocase: ${JSON.stringify(query)}}}, skip: ${skip}, first: ${first})`
-      : `(skip: ${skip}, first: ${first})`;
+    const stringifyQuery = JSON.stringify(query);
+    const stringifySpace = JSON.stringify(space);
+
+    const nameQuery = query ? `entity_: {name_contains_nocase: ${stringifyQuery}}` : ``;
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -127,7 +116,7 @@ export class Network implements INetwork {
       signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
-          triples${jankyQuery} {
+          triples(where: {space: ${stringifySpace} ${nameQuery}}, skip: ${skip}, first: ${first}) {
             id
             attribute {
               id
@@ -164,6 +153,7 @@ export class Network implements INetwork {
           entityId: networkTriple.entity.id,
           attributeId: networkTriple.attribute.id,
           value: extractValue(networkTriple),
+          space: networkTriple.space,
         };
       });
 
@@ -183,6 +173,31 @@ export class Network implements INetwork {
     }, {} as EntityNames);
 
     return { triples, entityNames };
+  };
+
+  fetchSpaces = async () => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        query: `query {
+          spaces {
+            id
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        spaces: { id: string }[];
+      };
+    } = await response.json();
+
+    return json.data.spaces;
   };
 }
 

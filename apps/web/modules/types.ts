@@ -25,6 +25,11 @@ export type Triple = {
   entityId: string;
   attributeId: string;
   value: Value;
+  space: string;
+};
+
+export type Space = {
+  id: string;
 };
 
 export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';

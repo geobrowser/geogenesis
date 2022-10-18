@@ -2,7 +2,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { ethers } from 'hardhat'
 
-import { Log } from '../build/types'
+import { Log, SpaceRegistry } from '../build/types'
 
 type DeployOptions = {
   debug?: true
@@ -22,6 +22,26 @@ export async function deployLog(options: DeployOptions = {}): Promise<Log> {
 
   if (debug) {
     console.log(`Deployed 'Log' at ${contract.address}`)
+  }
+
+  return signer ? deployed.connect(signer) : deployed
+}
+
+export async function deploySpaceRegistry(
+  options: DeployOptions = {}
+): Promise<SpaceRegistry> {
+  const { signer, debug } = options
+  const SpaceRegistry = await ethers.getContractFactory('SpaceRegistry')
+  const contract = await SpaceRegistry.deploy()
+
+  if (debug) {
+    console.log(`Deploying 'SpaceRegistry' at ${contract.address}...`)
+  }
+
+  const deployed = await contract.deployed()
+
+  if (debug) {
+    console.log(`Deployed 'SpaceRegistry' at ${contract.address}`)
   }
 
   return signer ? deployed.connect(signer) : deployed

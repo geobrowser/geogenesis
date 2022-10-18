@@ -1,15 +1,14 @@
-import { Log__factory } from '@geogenesis/contracts';
 import { createContext, ReactNode, useContext, useEffect, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 import { getConfig } from './config';
-import { AddressLoader } from './services/address-loader';
-import { Network } from './services/network';
+import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';
 import { StubNetwork } from './services/stub-network';
-import { TripleStore } from './state/triple-store';
+import { SpaceStore } from './state/space-store';
 
 type Services = {
-  tripleStore: TripleStore;
+  network: INetwork;
+  spaceStore: SpaceStore;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -25,20 +24,24 @@ export function ServicesProvider({ children }: Props) {
 
   const services = useMemo((): Services => {
     if (!chainId) {
+      const network = new StubNetwork();
+
       return {
-        tripleStore: new TripleStore({
-          api: new StubNetwork(),
+        network,
+        spaceStore: new SpaceStore({
+          api: network,
         }),
       };
     }
 
     const config = getConfig(chainId);
-    const addressLoader = new AddressLoader(config.devServer);
     const storageClient = new StorageClient(config.ipfs);
+    const network = new Network(storageClient, config.subgraph);
 
     return {
-      tripleStore: new TripleStore({
-        api: new Network(Log__factory, addressLoader, storageClient, config.subgraph),
+      network,
+      spaceStore: new SpaceStore({
+        api: network,
       }),
     };
   }, [chainId]);
@@ -46,7 +49,7 @@ export function ServicesProvider({ children }: Props) {
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }
 
-function useServices() {
+export function useServices() {
   const value = useContext(ServicesContext);
 
   if (!value) {
@@ -56,6 +59,6 @@ function useServices() {
   return value;
 }
 
-export function useTripleStore() {
-  return useServices().tripleStore;
+export function useSpaceStore() {
+  return useServices().spaceStore;
 }

@@ -7,20 +7,20 @@ describe('create-id', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
     const value = { type: 'string', value: 'Jesus Christ' } as StringValue;
-    expect(createTripleId(entityId, attributeId, value)).toBe('entityId:attributeId:s~Jesus Christ');
+    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:s~Jesus Christ');
   });
 
   it('createTripleId returns correct id derived from triple with number value', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
     const value = { type: 'number', value: '1920' } as NumberValue;
-    expect(createTripleId(entityId, attributeId, value)).toBe('entityId:attributeId:n~1920');
+    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:n~1920');
   });
 
   it('createTripleId returns correct id derived from triple with entity value', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
     const value = { type: 'entity', value: '12387' } as EntityValue;
-    expect(createTripleId(entityId, attributeId, value)).toBe('entityId:attributeId:e~12387');
+    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:e~12387');
   });
 });
