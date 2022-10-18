@@ -28,6 +28,7 @@ export function handleEntryAdded(event: EntryAdded): void {
 
   entry.author = author
   entry.uri = uri
+  entry.space = event.address.toHexString()
 
   if (uri.startsWith('data:')) {
     const dataURI = DataURI.parse(uri)
