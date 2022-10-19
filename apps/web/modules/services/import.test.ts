@@ -30,7 +30,7 @@ describe('CSV Import', () => {
   it('imports health data format', async () => {
     const file = readMockFile('healthdata.csv');
     const csv = await readFileAsText(file);
-    const rows = convertHealthData(csv, 1);
+    const rows = convertHealthData(csv, { rowCount: 1, shouldIncludeSections: false });
 
     // So we can see what matches in snapshot tests
     const mockId = (value: string) => value;
