@@ -58,7 +58,13 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   return unique(triples);
 }
 
-export function convertHealthData(csv: string) {
+export function convertHealthData(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: { rowCount?: number; shouldIncludeSections?: boolean } = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+): EavRow[] {
   type HealthDataRow = {
     ID_content: string;
     'Title/Fact': string;
@@ -111,6 +117,8 @@ export function convertHealthData(csv: string) {
   const results = parseCSV<HealthDataRow>(csv, { header: true });
 
   const attributeRows: EavRow[] = [
+    ['fact', 'type', 'type'],
+    ['fact', 'name', 'Fact'],
     ['content', 'type', 'type'],
     ['content', 'name', 'Content'],
     ['source', 'type', 'type'],
@@ -119,23 +127,76 @@ export function convertHealthData(csv: string) {
     ['source location', 'name', 'Source Location'],
     ['category', 'type', 'type'],
     ['category', 'name', 'Category'],
+    ['sourceType', 'type', 'type'],
+    ['sourceType', 'name', 'Source Type'],
+    ['tag', 'type', 'type'],
+    ['tag', 'name', 'Tag'],
+    ['guest', 'type', 'type'],
+    ['guest', 'name', 'Guest'],
+    ['section', 'type', 'type'],
+    ['section', 'name', 'Is from Section'],
   ];
 
   function toEavRow(row: HealthDataRow): EavRow[] {
+    const tagTuple = [
+      { id: row.ID_Tag1, name: row.Tag1 },
+      { id: row.ID_Tag2, name: row.Tag2 },
+      { id: row.ID_Tag3, name: row.Tag3 },
+      { id: row.ID_Tag4, name: row.Tag4 },
+      { id: row.ID_Tag5, name: row.Tag5 },
+      { id: row.ID_Tag6, name: row.Tag6 },
+      { id: row.ID_Tag7, name: row.Tag7 },
+      { id: row.ID_Tag8, name: row.Tag8 },
+      { id: row.ID_Tag9, name: row.Tag9 },
+      { id: row.ID_Tag10, name: row.Tag10 },
+      { id: row.ID_Tag11, name: row.Tag11 },
+    ].filter(({ id }) => id !== '');
+
+    const guestTuple = [
+      { id: row['Entity ID \n(Guest1)'], name: row['Source\n(Guest1)'] },
+      { id: row['Entity ID \n(Guest2)'], name: row['Source\n(Guest2)'] },
+      { id: row['Entity ID \n(Guest3)'], name: row['Source\n(Guest3)'] },
+    ].filter(({ id }) => id !== '');
+
     return [
-      [row.ID_content, 'content', row.Content],
+      [row.ID_content, 'type', 'fact'],
+      [row.ID_content, 'name', row.Content],
       [row.ID_content, 'source', row['Entity ID \n(Source)']],
       [row.ID_content, 'source location', row['Entity ID \n(Location)']],
       [row.ID_content, 'category', row['Entity ID \n(Category)']],
+      [row.ID_content, 'sourceType', row['Entity ID \n(Platform)']],
       [row['Entity ID \n(Source)'], 'name', row.Source],
       [row['Entity ID \n(Location)'], 'name', row.SourceLoc],
       [row['Entity ID \n(Category)'], 'name', row.Category],
+      [row['Entity ID \n(Platform)'], 'name', row['Platform/Site']],
+      ...tagTuple.map(({ id }): EavRow => [row.ID_content, 'tag', id]),
+      ...tagTuple.map(({ id, name }): EavRow => [id, 'name', name]),
+      ...guestTuple.map(({ id }): EavRow => [row.ID_content, 'guest', id]),
+      ...guestTuple.map(({ id, name }): EavRow => [id, 'name', name]),
     ];
   }
 
-  const eavRows = results.data.flatMap(toEavRow);
+  const chunks = chunkBy(results.data, (rowA, rowB) => {
+    if (rowA['Title/Fact'] === 'Title' && rowB['Title/Fact'] === 'Title') return false;
+    if (rowA['Title/Fact'] === 'Fact' && rowB['Title/Fact'] === 'Title') return false;
+    return true;
+  }).filter(chunk => chunk.length > 1); // filter chunks that only contain a title
 
-  return [...attributeRows, ...eavRows];
+  const sectionEavs = chunks.flatMap((chunk): EavRow[] => {
+    const titleRow = chunk[0];
+    const factRows = chunk.slice(1);
+
+    // Add reference to section
+    return [
+      ...factRows.map((factRow): EavRow => [factRow.ID_content, 'section', titleRow.ID_content]),
+      [titleRow.ID_content, 'type', 'section'],
+      [titleRow.ID_content, 'name', titleRow.Content],
+    ];
+  });
+
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...(shouldIncludeSections ? sectionEavs : []), ...eavRows];
 }
 
 export async function importCSVFile(
@@ -146,4 +207,27 @@ export async function importCSVFile(
   const csv = await readFileAsText(file);
   const rows = file.name === 'healthdata.csv' ? convertHealthData(csv) : readCSV(csv);
   return eavRowsToTriples(rows, space, createId);
+}
+
+export function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[][] {
+  if (values.length === 0) return [];
+
+  const result: T[][] = [];
+
+  let start = 0;
+  const end = values.length;
+
+  for (let i = start + 1; i < end; i++) {
+    const prev = values[i - 1];
+    const next = values[i];
+
+    if (!belongInSameGroup(prev, next)) {
+      result.push(values.slice(start, i));
+      start = i;
+    }
+  }
+
+  result.push(values.slice(start, end));
+
+  return result;
 }

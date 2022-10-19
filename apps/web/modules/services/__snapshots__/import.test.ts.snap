@@ -69,6 +69,26 @@ exports[`CSV Import > imports health data format 1`] = `
 [
   {
     "attributeId": "type",
+    "entityId": "fact",
+    "id": "s:fact:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "fact",
+    "id": "s:fact:name:s~Fact",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Fact",
+    },
+  },
+  {
+    "attributeId": "type",
     "entityId": "content",
     "id": "s:content:type:e~type",
     "space": "s",
@@ -148,9 +168,99 @@ exports[`CSV Import > imports health data format 1`] = `
     },
   },
   {
-    "attributeId": "content",
+    "attributeId": "type",
+    "entityId": "sourceType",
+    "id": "s:sourceType:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "sourceType",
+    "id": "s:sourceType:name:s~Source Type",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Source Type",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "tag",
+    "id": "s:tag:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "tag",
+    "id": "s:tag:name:s~Tag",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Tag",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "guest",
+    "id": "s:guest:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "guest",
+    "id": "s:guest:name:s~Guest",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Guest",
+    },
+  },
+  {
+    "attributeId": "type",
+    "entityId": "section",
+    "id": "s:section:type:e~type",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "type",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "section",
+    "id": "s:section:name:s~Is from Section",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "Is from Section",
+    },
+  },
+  {
+    "attributeId": "type",
     "entityId": "10000000",
-    "id": "s:10000000:content:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
+    "id": "s:10000000:type:e~fact",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "fact",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "10000000",
+    "id": "s:10000000:name:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
     "space": "s",
     "value": {
       "type": "string",
@@ -188,6 +298,16 @@ exports[`CSV Import > imports health data format 1`] = `
     },
   },
   {
+    "attributeId": "sourceType",
+    "entityId": "10000000",
+    "id": "s:10000000:sourceType:e~4000006",
+    "space": "s",
+    "value": {
+      "type": "entity",
+      "value": "4000006",
+    },
+  },
+  {
     "attributeId": "name",
     "entityId": "1000001",
     "id": "s:1000001:name:s~Dr. Andrew Huberman",
@@ -215,6 +335,16 @@ exports[`CSV Import > imports health data format 1`] = `
     "value": {
       "type": "string",
       "value": "Health",
+    },
+  },
+  {
+    "attributeId": "name",
+    "entityId": "4000006",
+    "id": "s:4000006:name:s~PodcastNotes",
+    "space": "s",
+    "value": {
+      "type": "string",
+      "value": "PodcastNotes",
     },
   },
 ]
