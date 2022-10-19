@@ -258,9 +258,9 @@ exports[`CSV Import > imports health data format 1`] = `
     },
   },
   {
-    "attributeId": "content",
+    "attributeId": "name",
     "entityId": "10000000",
-    "id": "s:10000000:content:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
+    "id": "s:10000000:name:s~Episode 1: How Your Brain Works & Changes | Huberman Lab",
     "space": "s",
     "value": {
       "type": "string",

@@ -160,7 +160,7 @@ export function convertHealthData(
 
     return [
       [row.ID_content, 'type', 'fact'],
-      [row.ID_content, 'content', row.Content],
+      [row.ID_content, 'name', row.Content],
       [row.ID_content, 'source', row['Entity ID \n(Source)']],
       [row.ID_content, 'source location', row['Entity ID \n(Location)']],
       [row.ID_content, 'category', row['Entity ID \n(Category)']],
