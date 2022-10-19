@@ -128,3 +128,37 @@ export function handleRoleGranted(event: RoleGranted): void {
 
   space.save()
 }
+
+export function handleRoleRevoked(event: RoleRevoked): void {
+  const accountAddress = event.params.account.toHexString()
+  const account = (Account.load(accountAddress) || new Account(accountAddress))!
+  account.save()
+
+  const space = Space.load(event.address.toHexString())!
+
+  if (event.params.role == ADMIN_ROLE) {
+    space.admins = exclude(space.admins, accountAddress)
+    log.debug(`Revoked admin role from ${accountAddress}`, [])
+  } else if (event.params.role == EDITOR_ROLE) {
+    space.editors = exclude(space.editors, accountAddress)
+    log.debug(`Revoked editor role from ${accountAddress}`, [])
+  } else {
+    log.debug(
+      `Received unexpected role value: ${event.params.role.toHexString()}`,
+      []
+    )
+  }
+
+  space.save()
+}
+
+function exclude<T>(array: T[], exclude: T): T[] {
+  const index = array.indexOf(exclude)
+  const newArray = array.slice(0)
+
+  if (index > -1) {
+    newArray.splice(index, 1)
+  }
+
+  return newArray
+}
