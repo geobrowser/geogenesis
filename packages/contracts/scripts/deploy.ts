@@ -24,6 +24,21 @@ async function main() {
   await spaceRegistryContract.addSpace(logContract.address)
   console.log('Added new space at address: ', logContract.address)
 
+  await logContract.grantRole(
+    await logContract.EDITOR_ROLE(),
+    '0x690B9A9E9aa1C9dB991C7721a92d351Db4FaC990'
+  )
+
+  await logContract.grantRole(
+    await logContract.EDITOR_ROLE(),
+    '0x690B9A9E9aa1C9dB991C7721a92d351Db4FaC990'
+  )
+
+  await logContract.grantRole(
+    await logContract.EDITOR_ROLE(),
+    '0xE887312c0595a10aC88e32ebb8e9F660Ad9aB7F7'
+  )
+
   await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
   const root: Root = {

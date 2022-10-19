@@ -1,18 +1,30 @@
+import { crypto, ByteArray } from '@graphprotocol/graph-ts'
 import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { EntryAdded } from '../generated/templates/Log/Log'
 import { Log } from '../generated/templates'
-import { SpaceAdded } from '../generated/SpaceRegistry/SpaceRegistry'
-import { LogEntry, Space } from '../generated/schema'
+import {
+  RoleGranted,
+  RoleRevoked,
+  SpaceAdded,
+} from '../generated/SpaceRegistry/SpaceRegistry'
+import { LogEntry, Space, Account } from '../generated/schema'
 import { handleAction } from './actions'
 import { bootstrap } from './bootstrap'
 
 const IPFS_URI_SCHEME = 'ipfs://'
 
+const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
+const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
+
 export function handleSpaceAdded(event: SpaceAdded): void {
   let space = new Space(event.params.space.toHexString())
+
+  space.admins = []
+  space.editors = []
+
   space.save()
 
   Log.create(event.params.space)
@@ -86,4 +98,33 @@ function handleRoot(root: Root, space: string): void {
 
     handleAction(action, space)
   }
+}
+
+export function handleRoleGranted(event: RoleGranted): void {
+  const accountAddress = event.params.account.toHexString()
+  const account = (Account.load(accountAddress) || new Account(accountAddress))!
+  account.save()
+
+  const space = Space.load(event.address.toHexString())!
+
+  if (
+    event.params.role == ADMIN_ROLE &&
+    !space.admins.includes(accountAddress)
+  ) {
+    space.admins = space.admins.concat([accountAddress])
+    log.debug(`Granted admin role to ${accountAddress}`, [])
+  } else if (
+    event.params.role == EDITOR_ROLE &&
+    !space.editors.includes(accountAddress)
+  ) {
+    space.editors = space.editors.concat([accountAddress])
+    log.debug(`Granted editor role to ${accountAddress}`, [])
+  } else {
+    log.debug(
+      `Received unexpected role value: ${event.params.role.toHexString()}`,
+      []
+    )
+  }
+
+  space.save()
 }
