@@ -1,19 +1,29 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
-
+import '@openzeppelin/contracts/access/AccessControl.sol';
 import {ISpace} from './SpaceRegistry.sol';
 
 /**
  * An immutable log of uri strings.
  */
-contract Log is ISpace {
+contract Log is ISpace, AccessControl {
     struct Entry {
         string uri;
         address author;
     }
 
     Entry[] _entries;
+
+    bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+    bytes32 public constant EDITOR_ROLE = keccak256('EDITOR_ROLE');
+
+    constructor() {
+        _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
+        _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
+        _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(EDITOR_ROLE, msg.sender);
+    }
 
     function addEntry(string calldata uri) public {
         Entry memory entry = Entry({uri: uri, author: msg.sender});

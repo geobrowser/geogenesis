@@ -51,4 +51,25 @@ describe('Log', () => {
       ['def', deployer.address],
     ])
   })
+
+  it('Grants and revokes role', async () => {
+    const [deployer, address1] = await ethers.getSigners()
+    const contract = await deployLog({ signer: deployer })
+
+    expect(
+      await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)
+    ).to.be.eq(false)
+
+    await contract.grantRole(await contract.EDITOR_ROLE(), address1.address)
+
+    expect(
+      await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)
+    ).to.be.eq(true)
+
+    await contract.revokeRole(await contract.EDITOR_ROLE(), address1.address)
+
+    expect(
+      await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)
+    ).to.be.eq(false)
+  })
 })
