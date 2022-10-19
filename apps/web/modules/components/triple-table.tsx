@@ -13,8 +13,11 @@ import { useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
+import { useEditable } from '../state/use-editable';
 import { useTriples } from '../state/use-triples';
 import { Triple, Value } from '../types';
+import { CellEditableInput } from './table/cell-editable-input';
+import { CellTruncate } from './table/cell-truncate';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -63,32 +66,6 @@ const TableCell = styled.td(props => ({
   maxWidth: `${props.width}px`,
 }));
 
-const TableCellInput = styled.input<{ isEntity?: boolean; ellipsize?: boolean }>(props => ({
-  ...props.theme.typography.tableCell,
-  color: props.isEntity ? props.theme.colors.ctaPrimary : props.theme.colors.text,
-  backgroundColor: 'transparent', // To allow the row to be styled on hover
-  padding: props.theme.space * 2.5,
-  width: '100%',
-
-  ':focus': {
-    outline: `1px solid ${props.theme.colors.text}`,
-  },
-
-  '::placeholder': {
-    color: props.theme.colors['grey-03'],
-  },
-
-  ...(props.ellipsize && {
-    whiteSpace: 'pre',
-    textOverflow: 'ellipsis',
-    overflow: 'hidden',
-  }),
-}));
-
-const TableEntityCell = styled.div(props => ({
-  padding: props.theme.space * 2.5,
-}));
-
 const TableRow = styled.tr(props => ({
   ':hover': {
     backgroundColor: props.theme.colors.bg,
@@ -99,6 +76,7 @@ const TableRow = styled.tr(props => ({
 // the table easier. Otherwise we need to do some pseudoselector shenanigans
 // or use box-shadow instead of border.
 const Container = styled.div(props => ({
+  padding: 0,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
   overflow: 'hidden',
@@ -109,6 +87,9 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { entityNames } = useTriples();
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { editable } = useEditable();
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -131,20 +112,19 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <TableCellInput
-            disabled
-            isEntity
-            ellipsize
-            value={entityNames[entityId] || entityId}
-            onChange={e => setCellData(e.target.value)}
-            onBlur={onBlur}
-          />
+          <CellTruncate>
+            <Text color="ctaPrimary" variant="tableCell" ellipsize>
+              {entityNames[entityId] || entityId}
+            </Text>
+          </CellTruncate>
         );
       case 'attributeId':
         const attributeId = cellData as string;
+
         return (
-          <TableCellInput
+          <CellEditableInput
             placeholder="Add an attribute..."
+            isEditable={editable}
             value={entityNames[attributeId] || attributeId}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
@@ -155,15 +135,16 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'entity') {
           return (
-            <TableEntityCell>
+            <CellTruncate>
               <Chip>{entityNames[value.value] || value.value}</Chip>
-            </TableEntityCell>
+            </CellTruncate>
           );
         }
 
         return (
-          <TableCellInput
+          <CellEditableInput
             placeholder="Add text..."
+            isEditable={editable}
             value={entityNames[value.value] || value.value}
             onChange={e =>
               setCellData({
@@ -228,7 +209,7 @@ export default function TripleTable({ update, triples, space }: Props) {
 
   return (
     <Container>
-      <Table>
+      <Table cellSpacing={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
