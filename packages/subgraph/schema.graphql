@@ -1,5 +1,13 @@
 type Space @entity {
   id: ID!
+  admins: [Account!]!
+  editors: [Account!]!
+}
+
+type Account @entity {
+  id: ID!
+  editorOf: [Space!]! @derivedFrom(field: "editors")
+  adminOf: [Space!]! @derivedFrom(field: "admins")
 }
 
 """
