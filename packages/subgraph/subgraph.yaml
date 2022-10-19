@@ -8,10 +8,10 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: SpaceRegistry
+    name: Stub
     network: mainnet
     source:
-      address: '0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44'
+      address: '0x809d550fca64d94Bd9F66E60752A544199cfAC3D'
       abi: SpaceRegistry
     mapping:
       kind: ethereum/events
@@ -23,8 +23,10 @@ dataSources:
         - name: SpaceRegistry
           file: ../contracts/build/abis/SpaceRegistry.json
       eventHandlers:
-        - event: SpaceAdded(address)
-          handler: handleSpaceAdded
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        # - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+        #   handler: handleRoleRevoked
       file: ./src/mapping.ts
 templates:
   - kind: ethereum/contract
@@ -44,8 +46,8 @@ templates:
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleEntryAdded
-        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
-          handler: handleRoleGranted
-        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
-          handler: handleRoleRevoked
+        # - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+        #   handler: handleRoleGranted
+        # - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+        #   handler: handleRoleRevoked
       file: ./src/mapping.ts

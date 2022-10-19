@@ -4,9 +4,22 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
-import { BigDecimal, log, store } from '@graphprotocol/graph-ts'
-import { GeoEntity, Triple } from '../generated/schema'
+import { Address, BigDecimal, log, store } from '@graphprotocol/graph-ts'
+import { GeoEntity, Space, Triple } from '../generated/schema'
+import { Log } from '../generated/templates'
+import { bootstrap } from './bootstrap'
 import { createTripleId } from './id'
+
+export function handleSpaceAdded(spaceAddress: string): void {
+  let space = new Space(spaceAddress)
+
+  space.admins = []
+  space.editors = []
+  space.save()
+
+  // Log.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
+  // bootstrap(space.id)
+}
 
 export function handleCreateTripleAction(
   fact: CreateTripleAction,
@@ -58,6 +71,10 @@ export function handleCreateTripleAction(
     if (attribute.id == 'name') {
       entity.name = stringValue.value
       entity.save()
+    }
+
+    if (attribute.id == 'space') {
+      handleSpaceAdded(stringValue.value)
     }
   }
 

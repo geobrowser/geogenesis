@@ -18,12 +18,60 @@ async function main() {
 
   console.log('Deploying on network', networkId, networkConfig)
 
-  const spaceRegistryContract = await deploySpaceRegistry({ debug: true })
+  const uselessSpaceRegistry = await deploySpaceRegistry({ debug: true })
+  const spaceRegistry = await deployLog({ debug: true })
   const logContract = await deployLog({ debug: true })
-
-  await spaceRegistryContract.addSpace(logContract.address)
   console.log('Added new space at address: ', logContract.address)
 
+  const spaceRoot: Root = {
+    type: 'root',
+    version: '0.0.1',
+    actions: [
+      {
+        type: 'createTriple',
+        entityId: 'space',
+        attributeId: 'type',
+        value: {
+          type: 'entity',
+          value: 'type',
+        },
+      },
+      {
+        type: 'createTriple',
+        entityId: 'space',
+        attributeId: 'name',
+        value: {
+          type: 'string',
+          value: 'Space',
+        },
+      },
+      {
+        type: 'createTriple',
+        entityId: 'space-1',
+        attributeId: 'name',
+        value: {
+          type: 'string',
+          value: 'Space 1',
+        },
+      },
+      {
+        type: 'createTriple',
+        entityId: 'space-1',
+        attributeId: 'space',
+        value: {
+          type: 'string',
+          value: logContract.address,
+        },
+      },
+    ],
+  }
+
+  await addEntry(
+    spaceRegistry,
+    `data:application/json;base64,${Buffer.from(
+      JSON.stringify(spaceRoot)
+    ).toString('base64')}`
+  )
   await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
   const root: Root = {
@@ -66,7 +114,13 @@ async function main() {
   saveAddress({
     chainId,
     contractName: 'SpaceRegistry',
-    address: spaceRegistryContract.address,
+    address: spaceRegistry.address,
+  })
+
+  saveAddress({
+    chainId,
+    contractName: 'UselessSpaceRegistry',
+    address: uselessSpaceRegistry.address,
   })
 
   saveAddress({
@@ -78,8 +132,14 @@ async function main() {
   if (networkId === 'localhost') {
     saveAddress({
       chainId: 'localhost',
+      contractName: 'UselessSpaceRegistry',
+      address: uselessSpaceRegistry.address,
+    })
+
+    saveAddress({
+      chainId: 'localhost',
       contractName: 'SpaceRegistry',
-      address: spaceRegistryContract.address,
+      address: spaceRegistry.address,
     })
 
     saveAddress({
