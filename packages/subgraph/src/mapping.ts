@@ -18,7 +18,7 @@ export function handleRootEntryAdded(event: EntryAdded): void {
 
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
-    handleSpaceAdded(address)
+    handleSpaceAdded(address, true)
   }
 
   handleEntryAdded(event)

@@ -2,6 +2,7 @@ type Space @entity {
   id: ID!
   admins: [Account!]!
   editors: [Account!]!
+  isRootSpace: Boolean!
 }
 
 type Account @entity {

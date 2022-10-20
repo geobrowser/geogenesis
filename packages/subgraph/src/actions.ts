@@ -10,11 +10,16 @@ import { Space as SpaceDataSource } from '../generated/templates'
 import { bootstrap } from './bootstrap'
 import { createTripleId } from './id'
 
-export function handleSpaceAdded(spaceAddress: string): void {
+export function handleSpaceAdded(
+  spaceAddress: string,
+  isRootSpace: boolean
+): void {
   let space = new Space(spaceAddress)
 
   space.admins = []
   space.editors = []
+  space.isRootSpace = isRootSpace
+
   space.save()
 
   SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
@@ -74,7 +79,7 @@ export function handleCreateTripleAction(
     }
 
     if (attribute.id == 'space') {
-      handleSpaceAdded(stringValue.value)
+      handleSpaceAdded(stringValue.value, false)
     }
   }
 

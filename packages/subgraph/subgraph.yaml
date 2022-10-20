@@ -11,7 +11,7 @@ dataSources:
     name: SpaceRegistry
     network: mainnet
     source:
-      address: '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82'
+      address: '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d'
       abi: Space
     mapping:
       kind: ethereum/events
