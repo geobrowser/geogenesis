@@ -1,13 +1,12 @@
-import { ByteArray, crypto } from '@graphprotocol/graph-ts'
+import { Address, ByteArray, crypto } from '@graphprotocol/graph-ts'
 
-export function getChecksumAddress(address: string): string {
-  // if (!isHexString(address, 20)) {
-  //   logger.throwArgumentError('invalid address', 'address', address)
-  // }
-
-  address = address.toLowerCase()
-
-  const chars = address.substring(2).split('')
+/**
+ * From: https://github.com/ethers-io/ethers.js/blob/c80fcddf50a9023486e9f9acb1848aba4c19f7b6/packages/address/src.ts/index.ts
+ * MIT Licensed
+ */
+export function getChecksumAddress(address: Address): string {
+  const addressString = address.toHexString()
+  const chars = addressString.substring(2).split('')
 
   const expanded = new Uint8Array(40)
   for (let i = 0; i < 40; i++) {

@@ -11,7 +11,7 @@ import { addRole, removeRole } from './access-control'
 import { getChecksumAddress } from './get-checksum-address'
 
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
-  const address = getChecksumAddress(event.address.toHexString())
+  const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
   bootstrapRootSpace(address, createdAtBlock)
@@ -26,7 +26,7 @@ export function handleRootEntryAdded(event: RegistryEntryAdded): void {
 }
 
 export function handleRoleGranted(event: RoleGranted): void {
-  const address = getChecksumAddress(event.address.toHexString())
+  const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
   bootstrapRootSpace(address, createdAtBlock)
@@ -34,20 +34,20 @@ export function handleRoleGranted(event: RoleGranted): void {
   addRole({
     space: address,
     role: event.params.role,
-    account: getChecksumAddress(event.params.account.toHexString()),
+    account: getChecksumAddress(event.params.account),
   })
 }
 
 export function handleRoleRevoked(event: RoleRevoked): void {
-  const address = getChecksumAddress(event.address.toHexString())
+  const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
   bootstrapRootSpace(address, createdAtBlock)
 
   removeRole({
-    space: getChecksumAddress(event.address.toHexString()),
+    space: getChecksumAddress(event.address),
     role: event.params.role,
-    account: getChecksumAddress(event.params.account.toHexString()),
+    account: getChecksumAddress(event.params.account),
   })
 }
 

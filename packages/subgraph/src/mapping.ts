@@ -6,7 +6,7 @@ import { getChecksumAddress } from './get-checksum-address'
 import { RoleRevoked } from '../generated/SpaceRegistry/SpaceRegistry'
 
 export function handleEntryAdded(event: EntryAdded): void {
-  const address = getChecksumAddress(event.address.toHexString())
+  const address = getChecksumAddress(event.address)
 
   const rootSpace = Space.load(address)
 
@@ -25,16 +25,16 @@ export function handleEntryAdded(event: EntryAdded): void {
 
 export function handleRoleGranted(event: RoleGranted): void {
   addRole({
-    space: getChecksumAddress(event.address.toHexString()),
+    space: getChecksumAddress(event.address),
     role: event.params.role,
-    account: getChecksumAddress(event.params.account.toHexString()),
+    account: getChecksumAddress(event.params.account),
   })
 }
 
 export function handleRoleRevoked(event: RoleRevoked): void {
   removeRole({
-    space: getChecksumAddress(event.address.toHexString()),
+    space: getChecksumAddress(event.address),
     role: event.params.role,
-    account: getChecksumAddress(event.params.account.toHexString()),
+    account: getChecksumAddress(event.params.account),
   })
 }
