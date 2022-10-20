@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
-import { deployLog, deploySpaceRegistry } from '../src/deploy'
+import { deployLog } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 dotenv.config()
@@ -18,7 +18,6 @@ async function main() {
 
   console.log('Deploying on network', networkId, networkConfig)
 
-  const uselessSpaceRegistry = await deploySpaceRegistry({ debug: true })
   const spaceRegistry = await deployLog({ debug: true })
   const logContract = await deployLog({ debug: true })
   console.log('Added new space at address: ', logContract.address)
@@ -119,23 +118,11 @@ async function main() {
 
   saveAddress({
     chainId,
-    contractName: 'UselessSpaceRegistry',
-    address: uselessSpaceRegistry.address,
-  })
-
-  saveAddress({
-    chainId,
     contractName: 'Log',
     address: logContract.address,
   })
 
   if (networkId === 'localhost') {
-    saveAddress({
-      chainId: 'localhost',
-      contractName: 'UselessSpaceRegistry',
-      address: uselessSpaceRegistry.address,
-    })
-
     saveAddress({
       chainId: 'localhost',
       contractName: 'SpaceRegistry',

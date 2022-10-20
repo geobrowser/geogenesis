@@ -3,18 +3,26 @@ import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
-import { EntryAdded, RoleGranted } from '../generated/SpaceRegistry/Log'
+import { EntryAdded, RoleGranted } from '../generated/templates/Log/Log'
 
-import { LogEntry } from '../generated/schema'
-import { handleAction } from './actions'
-import { bootstrapSpaceRegistry } from './bootstrap-space-registry'
-
-bootstrapSpaceRegistry()
+import { LogEntry, Space } from '../generated/schema'
+import { handleAction, handleSpaceAdded } from './actions'
 
 const IPFS_URI_SCHEME = 'ipfs://'
 
 const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
 const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
+
+export function handleRootEntryAdded(event: EntryAdded): void {
+  const address = event.address.toHexString()
+
+  if (!Space.load(address)) {
+    log.debug(`Bootstrapping space registry!`, [])
+    handleSpaceAdded(address)
+  }
+
+  handleEntryAdded(event)
+}
 
 export function handleEntryAdded(event: EntryAdded): void {
   let entry = new LogEntry(event.params.index.toHex())

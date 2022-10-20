@@ -13,7 +13,7 @@
     "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=http://127.0.0.1:5001 npm run",
     "local:create": "npm run local create",
     "local:deploy": "npm run local deploy",
-    "update-contract-address": "echo \"export const spaceRegistryAddress = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" > generated/addresses.ts",
+    "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" subgraph.yaml",
     "copy-subgraph-config": "docker cp $(docker ps -q --filter=\"name=devnet\"):/app/packages/subgraph/subgraph.yaml ."
   },
   "devDependencies": {

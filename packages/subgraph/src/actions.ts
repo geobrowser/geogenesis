@@ -17,8 +17,8 @@ export function handleSpaceAdded(spaceAddress: string): void {
   space.editors = []
   space.save()
 
-  // Log.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
-  // bootstrap(space.id)
+  Log.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
+  bootstrap(space.id)
 }
 
 export function handleCreateTripleAction(

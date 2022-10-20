@@ -8,23 +8,25 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: Stub
+    name: SpaceRegistry
     network: mainnet
     source:
-      address: '0x809d550fca64d94Bd9F66E60752A544199cfAC3D'
-      abi: SpaceRegistry
+      address: '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853'
+      abi: Log
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
       entities:
-        - Space
+        - LogEntry
       abis:
-        - name: SpaceRegistry
-          file: ../contracts/build/abis/SpaceRegistry.json
+        - name: Log
+          file: ../contracts/build/abis/Log.json
       eventHandlers:
-        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
-          handler: handleRoleGranted
+        - event: EntryAdded(uint256,string,address)
+          handler: handleRootEntryAdded
+        # - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+        #   handler: handleRoleGranted
         # - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
         #   handler: handleRoleRevoked
       file: ./src/mapping.ts
