@@ -11,7 +11,7 @@ dataSources:
     name: SpaceRegistry
     network: mainnet
     source:
-      address: '0x68B1D87F95878fE05B998F19b66F4baba5De1aed'
+      address: '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E'
       abi: SpaceRegistry
     mapping:
       kind: ethereum/events
@@ -25,10 +25,10 @@ dataSources:
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleRootEntryAdded
-        # - event: RoleGranted(indexed bytes32,indexed address,indexed address)
-        #   handler: handleRoleGranted
-        # - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
-        #   handler: handleRoleRevoked
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleRevoked
       file: ./src/root-mapping.ts
 templates:
   - kind: ethereum/contract
@@ -48,8 +48,8 @@ templates:
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleEntryAdded
-        # - event: RoleGranted(indexed bytes32,indexed address,indexed address)
-        #   handler: handleRoleGranted
-        # - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
-        #   handler: handleRoleRevoked
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleRevoked
       file: ./src/mapping.ts

@@ -1,22 +1,11 @@
 import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
-import {
-  Address,
-  BigInt,
-  ByteArray,
-  Bytes,
-  crypto,
-  ipfs,
-  log,
-} from '@graphprotocol/graph-ts'
+import { Address, BigInt, Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { LogEntry } from '../generated/schema'
 import { handleAction } from './actions'
 
 const IPFS_URI_SCHEME = 'ipfs://'
-
-const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
-const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 class EntryParams {
   index: BigInt
