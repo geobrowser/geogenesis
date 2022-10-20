@@ -145,8 +145,10 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
+    console.log('json', json.data.triples);
+
     const triples = json.data.triples
-      .filter(triple => !triple.isProtected)
+      // .filter(triple => !triple.isProtected)
       .map((networkTriple): Triple => {
         return {
           id: networkTriple.id,
@@ -156,6 +158,8 @@ export class Network implements INetwork {
           space: networkTriple.space,
         };
       });
+
+    console.log('triples', triples);
 
     const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
       if (triple.entity.name !== null) {

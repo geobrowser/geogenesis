@@ -7,21 +7,57 @@ import {
 import { log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
 
-export function bootstrap(space: string): void {
+export function bootstrap(space: string, isRootSpace: boolean): void {
   log.debug(`Bootstrapping space ${space}!`, [])
 
-  handleAction(new CreateEntityAction('type'), space, false)
-  handleAction(new CreateEntityAction('name'), space, false)
-  handleCreateTripleAction({
-    fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
-    space,
-    isProtected: true,
-    isRootSpace: false,
-  })
-  handleCreateTripleAction({
-    fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
-    space,
-    isProtected: true,
-    isRootSpace: false,
-  })
+  handleAction(new CreateEntityAction('type'), space, isRootSpace)
+  handleAction(new CreateEntityAction('name'), space, isRootSpace)
+  handleAction(new CreateEntityAction('attribute'), space, isRootSpace)
+  handleAction(new CreateEntityAction('space'), space, isRootSpace)
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction(
+  //     'attribute',
+  //     'name',
+  //     new StringValue('Attribute')
+  //   ),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction('space', 'name', new StringValue('Space')),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction('name', 'type', new EntityValue('attribute')),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
+
+  // handleCreateTripleAction({
+  //   fact: new CreateTripleAction('type', 'type', new EntityValue('attribute')),
+  //   space,
+  //   isProtected: true,
+  //   isRootSpace,
+  // })
 }

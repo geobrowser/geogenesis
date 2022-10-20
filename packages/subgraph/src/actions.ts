@@ -29,7 +29,7 @@ export function handleSpaceAdded(
   space.save()
 
   SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
-  bootstrap(space.id)
+  bootstrap(space.id, isRootSpace)
 }
 
 class HandleCreateTripleActionOptions {
@@ -93,6 +93,11 @@ export function handleCreateTripleAction(
       entity.name = stringValue.value
       entity.save()
     }
+
+    log.debug(
+      `isRootSpace: ${isRootSpace}, space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${stringValue.value}`,
+      []
+    )
 
     if (isRootSpace && attribute.id == 'space') {
       handleSpaceAdded(stringValue.value, false)

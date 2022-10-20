@@ -28,24 +28,6 @@ async function main() {
     actions: [
       {
         type: 'createTriple',
-        entityId: 'space',
-        attributeId: 'type',
-        value: {
-          type: 'entity',
-          value: 'type',
-        },
-      },
-      {
-        type: 'createTriple',
-        entityId: 'space',
-        attributeId: 'name',
-        value: {
-          type: 'string',
-          value: 'Space',
-        },
-      },
-      {
-        type: 'createTriple',
         entityId: 'space-1',
         attributeId: 'name',
         value: {
@@ -71,44 +53,44 @@ async function main() {
       JSON.stringify(spaceRoot)
     ).toString('base64')}`
   )
-  await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
+  // await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
-  const root: Root = {
-    type: 'root',
-    version: '0.0.1',
-    actions: [
-      {
-        type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'string',
-          value: 'hi',
-        },
-      },
-      {
-        type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
-        value: {
-          type: 'number',
-          value: '42',
-        },
-      },
-    ],
-  }
+  // const root: Root = {
+  //   type: 'root',
+  //   version: '0.0.1',
+  //   actions: [
+  //     {
+  //       type: 'createTriple',
+  //       entityId: 'e',
+  //       attributeId: 'a',
+  //       value: {
+  //         type: 'string',
+  //         value: 'hi',
+  //       },
+  //     },
+  //     {
+  //       type: 'createTriple',
+  //       entityId: 'e',
+  //       attributeId: 'a',
+  //       value: {
+  //         type: 'number',
+  //         value: '42',
+  //       },
+  //     },
+  //   ],
+  // }
 
-  await addEntry(
-    spaceContract,
-    `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
-      'base64'
-    )}`
-  )
+  // await addEntry(
+  //   spaceContract,
+  //   `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
+  //     'base64'
+  //   )}`
+  // )
 
-  await addEntry(
-    spaceContract,
-    `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
-  )
+  // await addEntry(
+  //   spaceContract,
+  //   `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
+  // )
 
   saveAddress({
     chainId,

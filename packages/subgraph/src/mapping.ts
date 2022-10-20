@@ -1,104 +1,34 @@
 import { crypto, ByteArray } from '@graphprotocol/graph-ts'
-import { Root } from '@geogenesis/action-schema/assembly'
-import { DataURI } from '@geogenesis/data-uri/assembly'
-import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
-import { JSON } from 'assemblyscript-json/assembly'
-import { EntryAdded, RoleGranted } from '../generated/templates/Log/Log'
+import { Space } from '../generated/schema'
+// import { Root } from '@geogenesis/action-schema/assembly'
+// import { DataURI } from '@geogenesis/data-uri/assembly'
+// import { Bytes, ipfs, log } from '@graphprotocol/graph-ts'
+// import { JSON } from 'assemblyscript-json/assembly'
+import { EntryAdded, RoleGranted } from '../generated/templates/Space/Space'
 
-import { LogEntry, Space } from '../generated/schema'
-import { handleAction, handleSpaceAdded } from './actions'
+// import { LogEntry, Space } from '../generated/schema'
+// import { handleAction, handleSpaceAdded } from './actions'
+import { addEntry } from './add-entry'
 
-const IPFS_URI_SCHEME = 'ipfs://'
+// const IPFS_URI_SCHEME = 'ipfs://'
 
-const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
-const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
-
-export function handleRootEntryAdded(event: EntryAdded): void {
-  const address = event.address.toHexString()
-
-  if (!Space.load(address)) {
-    log.debug(`Bootstrapping space registry!`, [])
-    handleSpaceAdded(address, true)
-  }
-
-  addEntry(event, true)
-}
-
-function addEntry(event: EntryAdded, isRootSpace: boolean): void {
-  let entry = new LogEntry(event.params.index.toHex())
-
-  const author = event.params.author
-  const uri = event.params.uri
-  const space = event.address.toHexString()
-
-  entry.author = author
-  entry.uri = uri
-  entry.space = space
-
-  if (uri.startsWith('data:')) {
-    const dataURI = DataURI.parse(uri)
-
-    if (dataURI) {
-      const bytes = Bytes.fromUint8Array(dataURI.data)
-
-      entry.mimeType = dataURI.mimeType
-      entry.decoded = bytes
-
-      if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes, space, isRootSpace)
-
-        if (root) {
-          entry.json = root.toJSON().toString()
-        }
-      }
-    }
-  } else if (uri.startsWith(IPFS_URI_SCHEME)) {
-    const cidString = uri.slice(IPFS_URI_SCHEME.length)
-    const bytes = ipfs.cat(cidString)
-
-    if (bytes) {
-      entry.decoded = bytes
-
-      const root = handleActionData(bytes, space, isRootSpace)
-
-      if (root) {
-        entry.json = root.toJSON().toString()
-      }
-    }
-  }
-
-  entry.save()
-
-  log.debug(`Indexed: ${entry.uri}`, [])
-}
+// const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
+// const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 export function handleEntryAdded(event: EntryAdded): void {
-  addEntry(event, false)
-}
+  const address = event.address.toHexString()
+  const space = address
+  const index = event.params.index
+  const uri = event.params.uri
+  const author = event.params.author
 
-function handleActionData(
-  bytes: Bytes,
-  space: string,
-  isRootSpace: boolean
-): Root | null {
-  const json = JSON.parse(bytes)
+  const rootSpace = Space.load(address)
 
-  const root = Root.fromJSON(json)
-
-  if (!root) return null
-
-  handleRoot(root, space, isRootSpace)
-
-  // Return decoded root for debugging purposes
-  return root
-}
-
-function handleRoot(root: Root, space: string, isRootSpace: boolean): void {
-  for (let i = 0; i < root.actions.length; i++) {
-    const action = root.actions[i]
-
-    handleAction(action, space, isRootSpace)
+  if (rootSpace && rootSpace.isRootSpace) {
+    return
   }
+
+  addEntry({ space, index, uri, author }, false)
 }
 
 export function handleRoleGranted(event: RoleGranted): void {

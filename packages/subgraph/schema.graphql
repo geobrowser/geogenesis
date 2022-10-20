@@ -20,7 +20,7 @@ type LogEntry @entity {
   author: Bytes!
   mimeType: String
 
-  space: Space!
+  space: Space
 
   """
   The binary data located at the uri.
@@ -55,7 +55,7 @@ type Triple @entity {
   stringValue: String
   entityValue: GeoEntity
   isProtected: Boolean!
-  space: Space!
+  space: Space
 }
 
 enum ValueType {
