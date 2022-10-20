@@ -184,7 +184,7 @@ export class Network implements INetwork {
       signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
-          spaces(where:{isRootSpace:false}) {
+          spaces {
             id
           }
         }`,

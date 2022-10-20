@@ -10,34 +10,18 @@ import { handleAction, handleCreateTripleAction } from './actions'
 export function bootstrap(space: string): void {
   log.debug(`Bootstrapping space ${space}!`, [])
 
-  handleAction(new CreateEntityAction('type'), space)
-  handleAction(new CreateEntityAction('name'), space)
-  handleCreateTripleAction(
-    new CreateTripleAction('type', 'name', new StringValue('Is a')),
+  handleAction(new CreateEntityAction('type'), space, false)
+  handleAction(new CreateEntityAction('name'), space, false)
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
     space,
-    true
-  )
-  handleCreateTripleAction(
-    new CreateTripleAction('name', 'name', new StringValue('Name')),
+    isProtected: true,
+    isRootSpace: false,
+  })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
     space,
-    true
-  )
-
-  // Temporary entities, for simpler testing!
-  handleAction(
-    new CreateTripleAction('person', 'type', new EntityValue('type')),
-    space
-  )
-  handleAction(
-    new CreateTripleAction('person', 'name', new StringValue('Person')),
-    space
-  )
-  handleAction(
-    new CreateTripleAction('devin', 'type', new EntityValue('person')),
-    space
-  )
-  handleAction(
-    new CreateTripleAction('devin', 'name', new StringValue('Devin')),
-    space
-  )
+    isProtected: true,
+    isRootSpace: false,
+  })
 }

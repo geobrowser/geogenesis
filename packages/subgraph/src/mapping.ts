@@ -21,10 +21,10 @@ export function handleRootEntryAdded(event: EntryAdded): void {
     handleSpaceAdded(address, true)
   }
 
-  handleEntryAdded(event)
+  addEntry(event, true)
 }
 
-export function handleEntryAdded(event: EntryAdded): void {
+function addEntry(event: EntryAdded, isRootSpace: boolean): void {
   let entry = new LogEntry(event.params.index.toHex())
 
   const author = event.params.author
@@ -45,7 +45,7 @@ export function handleEntryAdded(event: EntryAdded): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes, space)
+        const root = handleActionData(bytes, space, isRootSpace)
 
         if (root) {
           entry.json = root.toJSON().toString()
@@ -59,7 +59,7 @@ export function handleEntryAdded(event: EntryAdded): void {
     if (bytes) {
       entry.decoded = bytes
 
-      const root = handleActionData(bytes, space)
+      const root = handleActionData(bytes, space, isRootSpace)
 
       if (root) {
         entry.json = root.toJSON().toString()
@@ -72,24 +72,32 @@ export function handleEntryAdded(event: EntryAdded): void {
   log.debug(`Indexed: ${entry.uri}`, [])
 }
 
-function handleActionData(bytes: Bytes, space: string): Root | null {
+export function handleEntryAdded(event: EntryAdded): void {
+  addEntry(event, false)
+}
+
+function handleActionData(
+  bytes: Bytes,
+  space: string,
+  isRootSpace: boolean
+): Root | null {
   const json = JSON.parse(bytes)
 
   const root = Root.fromJSON(json)
 
   if (!root) return null
 
-  handleRoot(root, space)
+  handleRoot(root, space, isRootSpace)
 
   // Return decoded root for debugging purposes
   return root
 }
 
-function handleRoot(root: Root, space: string): void {
+function handleRoot(root: Root, space: string, isRootSpace: boolean): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
 
-    handleAction(action, space)
+    handleAction(action, space, isRootSpace)
   }
 }
 

@@ -14,6 +14,12 @@ export function handleSpaceAdded(
   spaceAddress: string,
   isRootSpace: boolean
 ): void {
+  if (spaceAddress.length != 42) {
+    log.debug(`Invalid space address: ${spaceAddress}`, [])
+    return
+  }
+
+  log.debug(`Adding space: ${spaceAddress}`, [])
   let space = new Space(spaceAddress)
 
   space.admins = []
@@ -26,11 +32,21 @@ export function handleSpaceAdded(
   bootstrap(space.id)
 }
 
-export function handleCreateTripleAction(
-  fact: CreateTripleAction,
-  space: string,
+class HandleCreateTripleActionOptions {
+  fact: CreateTripleAction
+  space: string
   isProtected: boolean
+  isRootSpace: boolean
+}
+
+export function handleCreateTripleAction(
+  options: HandleCreateTripleActionOptions
 ): void {
+  const fact = options.fact
+  const space = options.space
+  const isProtected = options.isProtected
+  const isRootSpace = options.isRootSpace
+
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
   entity.save()
@@ -78,7 +94,7 @@ export function handleCreateTripleAction(
       entity.save()
     }
 
-    if (attribute.id == 'space') {
+    if (isRootSpace && attribute.id == 'space') {
       handleSpaceAdded(stringValue.value, false)
     }
   }
@@ -142,10 +158,19 @@ function handleCreateEntityAction(action: CreateEntityAction): void {
   log.debug(`ACTION: Created entity: ${entity.id}`, [])
 }
 
-export function handleAction(action: Action, space: string): void {
+export function handleAction(
+  action: Action,
+  space: string,
+  isRootSpace: boolean
+): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
-    handleCreateTripleAction(createTripleAction, space, false)
+    handleCreateTripleAction({
+      fact: createTripleAction,
+      space,
+      isProtected: false,
+      isRootSpace,
+    })
     return
   }
 
