@@ -1,5 +1,5 @@
 import { Root } from '@geogenesis/action-schema';
-import { Log__factory, EntryAddedEventObject, Log } from '@geogenesis/contracts';
+import { Space__factory, EntryAddedEventObject, Space as SpaceContract } from '@geogenesis/contracts';
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
@@ -74,7 +74,7 @@ export class Network implements INetwork {
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
   publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
-    const contract = Log__factory.connect(space, signer);
+    const contract = Space__factory.connect(space, signer);
 
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];
@@ -206,8 +206,8 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
   return (receipt.events || []).filter(event => event.event === name);
 }
 
-async function addEntries(logContract: Log, uris: string[]) {
-  const mintTx = await logContract.addEntries(uris);
+async function addEntries(spaceContract: SpaceContract, uris: string[]) {
+  const mintTx = await spaceContract.addEntries(uris);
   console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;

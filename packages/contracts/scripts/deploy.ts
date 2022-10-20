@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
-import { deployLog } from '../src/deploy'
+import { deploySpace } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 dotenv.config()
@@ -18,9 +18,9 @@ async function main() {
 
   console.log('Deploying on network', networkId, networkConfig)
 
-  const spaceRegistry = await deployLog({ debug: true })
-  const logContract = await deployLog({ debug: true })
-  console.log('Added new space at address: ', logContract.address)
+  const spaceRegistry = await deploySpace({ debug: true })
+  const spaceContract = await deploySpace({ debug: true })
+  console.log('Added new space at address: ', spaceContract.address)
 
   const spaceRoot: Root = {
     type: 'root',
@@ -59,7 +59,7 @@ async function main() {
         attributeId: 'space',
         value: {
           type: 'string',
-          value: logContract.address,
+          value: spaceContract.address,
         },
       },
     ],
@@ -71,7 +71,7 @@ async function main() {
       JSON.stringify(spaceRoot)
     ).toString('base64')}`
   )
-  await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
+  await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
   const root: Root = {
     type: 'root',
@@ -99,14 +99,14 @@ async function main() {
   }
 
   await addEntry(
-    logContract,
+    spaceContract,
     `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
       'base64'
     )}`
   )
 
   await addEntry(
-    logContract,
+    spaceContract,
     `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
   )
 
@@ -118,8 +118,8 @@ async function main() {
 
   saveAddress({
     chainId,
-    contractName: 'Log',
-    address: logContract.address,
+    contractName: 'Space',
+    address: spaceContract.address,
   })
 
   if (networkId === 'localhost') {
@@ -131,8 +131,8 @@ async function main() {
 
     saveAddress({
       chainId: 'localhost',
-      contractName: 'Log',
-      address: logContract.address,
+      contractName: 'Space',
+      address: spaceContract.address,
     })
   }
 }

@@ -11,8 +11,8 @@ dataSources:
     name: SpaceRegistry
     network: mainnet
     source:
-      address: '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853'
-      abi: Log
+      address: '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82'
+      abi: Space
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -20,8 +20,8 @@ dataSources:
       entities:
         - LogEntry
       abis:
-        - name: Log
-          file: ../contracts/build/abis/Log.json
+        - name: Space
+          file: ../contracts/build/abis/Space.json
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleRootEntryAdded
@@ -32,10 +32,10 @@ dataSources:
       file: ./src/mapping.ts
 templates:
   - kind: ethereum/contract
-    name: Log
+    name: Space
     network: mainnet
     source:
-      abi: Log
+      abi: Space
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -43,8 +43,8 @@ templates:
       entities:
         - LogEntry
       abis:
-        - name: Log
-          file: ../contracts/build/abis/Log.json
+        - name: Space
+          file: ../contracts/build/abis/Space.json
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleEntryAdded

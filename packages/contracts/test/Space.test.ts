@@ -2,13 +2,13 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
 
-import { deployLog } from '../src/deploy'
+import { deploySpace } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
-describe('Log', () => {
+describe('Space', () => {
   it('add entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deployLog({ signer: deployer })
+    const contract = await deploySpace({ signer: deployer })
 
     const uri1 = 'abc'
     const entry1 = await addEntry(contract, uri1)
@@ -27,7 +27,7 @@ describe('Log', () => {
 
   it('read entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deployLog({ signer: deployer })
+    const contract = await deploySpace({ signer: deployer })
 
     const uri1 = 'abc'
     await addEntry(contract, uri1)
@@ -54,7 +54,7 @@ describe('Log', () => {
 
   it('Grants and revokes role', async () => {
     const [deployer, address1] = await ethers.getSigners()
-    const contract = await deployLog({ signer: deployer })
+    const contract = await deploySpace({ signer: deployer })
 
     expect(
       await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)

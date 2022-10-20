@@ -6,7 +6,7 @@ import {
 } from '@geogenesis/action-schema/assembly'
 import { Address, BigDecimal, log, store } from '@graphprotocol/graph-ts'
 import { GeoEntity, Space, Triple } from '../generated/schema'
-import { Log } from '../generated/templates'
+import { Space as SpaceDataSource } from '../generated/templates'
 import { bootstrap } from './bootstrap'
 import { createTripleId } from './id'
 
@@ -17,7 +17,7 @@ export function handleSpaceAdded(spaceAddress: string): void {
   space.editors = []
   space.save()
 
-  Log.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
+  SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
   bootstrap(space.id)
 }
 
