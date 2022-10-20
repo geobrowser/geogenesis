@@ -4,7 +4,13 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
-import { Address, BigDecimal, log, store } from '@graphprotocol/graph-ts'
+import {
+  Address,
+  BigDecimal,
+  BigInt,
+  log,
+  store,
+} from '@graphprotocol/graph-ts'
 import { GeoEntity, Space, Triple } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { bootstrap } from './bootstrap'
@@ -12,7 +18,8 @@ import { createTripleId } from './id'
 
 export function handleSpaceAdded(
   spaceAddress: string,
-  isRootSpace: boolean
+  isRootSpace: boolean,
+  blocknumber: BigInt
 ): void {
   if (spaceAddress.length != 42) {
     log.debug(`Invalid space address: ${spaceAddress}`, [])
@@ -25,18 +32,19 @@ export function handleSpaceAdded(
   space.admins = []
   space.editors = []
   space.isRootSpace = isRootSpace
+  space.blockNumber = blocknumber
 
   space.save()
 
   SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
-  bootstrap(space.id, isRootSpace)
+  bootstrap(space.id, blocknumber)
 }
 
 class HandleCreateTripleActionOptions {
   fact: CreateTripleAction
   space: string
   isProtected: boolean
-  isRootSpace: boolean
+  blocknumber: BigInt
 }
 
 export function handleCreateTripleAction(
@@ -45,7 +53,7 @@ export function handleCreateTripleAction(
   const fact = options.fact
   const space = options.space
   const isProtected = options.isProtected
-  const isRootSpace = options.isRootSpace
+  const blocknumber = options.blocknumber
 
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
@@ -95,12 +103,12 @@ export function handleCreateTripleAction(
     }
 
     log.debug(
-      `isRootSpace: ${isRootSpace}, space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${stringValue.value}`,
+      `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${stringValue.value}`,
       []
     )
 
-    if (isRootSpace && attribute.id == 'space') {
-      handleSpaceAdded(stringValue.value, false)
+    if (attribute.id == 'space') {
+      handleSpaceAdded(stringValue.value, false, blocknumber)
     }
   }
 
@@ -166,7 +174,7 @@ function handleCreateEntityAction(action: CreateEntityAction): void {
 export function handleAction(
   action: Action,
   space: string,
-  isRootSpace: boolean
+  blocknumber: BigInt
 ): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
@@ -174,7 +182,7 @@ export function handleAction(
       fact: createTripleAction,
       space,
       isProtected: false,
-      isRootSpace,
+      blocknumber,
     })
     return
   }

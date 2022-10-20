@@ -9,6 +9,7 @@ import { EntryAdded, RoleGranted } from '../generated/templates/Space/Space'
 // import { LogEntry, Space } from '../generated/schema'
 // import { handleAction, handleSpaceAdded } from './actions'
 import { addEntry } from './add-entry'
+import { getChecksumAddress } from './get-checksum-address'
 
 // const IPFS_URI_SCHEME = 'ipfs://'
 
@@ -16,11 +17,12 @@ import { addEntry } from './add-entry'
 // const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 export function handleEntryAdded(event: EntryAdded): void {
-  const address = event.address.toHexString()
+  const address = getChecksumAddress(event.address.toHexString())
   const space = address
   const index = event.params.index
   const uri = event.params.uri
   const author = event.params.author
+  const blocknumber = event.block.number
 
   const rootSpace = Space.load(address)
 
@@ -28,7 +30,7 @@ export function handleEntryAdded(event: EntryAdded): void {
     return
   }
 
-  addEntry({ space, index, uri, author }, false)
+  addEntry({ space, index, uri, author, blocknumber })
 }
 
 export function handleRoleGranted(event: RoleGranted): void {

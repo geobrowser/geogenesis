@@ -23,13 +23,15 @@ class EntryParams {
   space: string
   uri: string
   author: Address
+  blocknumber: BigInt
 }
 
-export function addEntry(params: EntryParams, isRootSpace: boolean): void {
+export function addEntry(params: EntryParams): void {
   const space = params.space
   const id = `${space}:${params.index.toHex()}`
   const uri = params.uri
   const author = params.author
+  const blocknumber = params.blocknumber
 
   let entry = new LogEntry(id)
 
@@ -40,6 +42,7 @@ export function addEntry(params: EntryParams, isRootSpace: boolean): void {
   entry.author = author
   entry.uri = uri
   entry.space = space
+  entry.blockNumber = blocknumber
 
   log.debug(`Adding entry to space: ${space}`, [])
 
@@ -53,7 +56,7 @@ export function addEntry(params: EntryParams, isRootSpace: boolean): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes, space, isRootSpace)
+        const root = handleActionData(bytes, space, blocknumber)
 
         if (root) {
           entry.json = root.toJSON().toString()
@@ -67,7 +70,7 @@ export function addEntry(params: EntryParams, isRootSpace: boolean): void {
     if (bytes) {
       entry.decoded = bytes
 
-      const root = handleActionData(bytes, space, isRootSpace)
+      const root = handleActionData(bytes, space, blocknumber)
 
       if (root) {
         entry.json = root.toJSON().toString()
@@ -83,7 +86,7 @@ export function addEntry(params: EntryParams, isRootSpace: boolean): void {
 function handleActionData(
   bytes: Bytes,
   space: string,
-  isRootSpace: boolean
+  blocknumber: BigInt
 ): Root | null {
   const json = JSON.parse(bytes)
 
@@ -91,16 +94,16 @@ function handleActionData(
 
   if (!root) return null
 
-  handleRoot(root, space, isRootSpace)
+  handleRoot(root, space, blocknumber)
 
   // Return decoded root for debugging purposes
   return root
 }
 
-function handleRoot(root: Root, space: string, isRootSpace: boolean): void {
+function handleRoot(root: Root, space: string, blocknumber: BigInt): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
 
-    handleAction(action, space, isRootSpace)
+    handleAction(action, space, blocknumber)
   }
 }

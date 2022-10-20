@@ -3,6 +3,7 @@ type Space @entity {
   admins: [Account!]!
   editors: [Account!]!
   isRootSpace: Boolean!
+  blockNumber: BigInt!
 }
 
 type Account @entity {
@@ -16,11 +17,12 @@ An entry in the Log contract.
 """
 type LogEntry @entity {
   id: ID!
+  blockNumber: BigInt!
   uri: String!
   author: Bytes!
   mimeType: String
 
-  space: Space
+  space: Space!
 
   """
   The binary data located at the uri.
@@ -55,7 +57,7 @@ type Triple @entity {
   stringValue: String
   entityValue: GeoEntity
   isProtected: Boolean!
-  space: Space
+  space: Space!
 }
 
 enum ValueType {
