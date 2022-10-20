@@ -22,7 +22,7 @@ export function handleEntryAdded(event: EntryAdded): void {
   const index = event.params.index
   const uri = event.params.uri
   const author = event.params.author
-  const blocknumber = event.block.number
+  const createdAtBlock = event.block.number
 
   const rootSpace = Space.load(address)
 
@@ -30,7 +30,7 @@ export function handleEntryAdded(event: EntryAdded): void {
     return
   }
 
-  addEntry({ space, index, uri, author, blocknumber })
+  addEntry({ space, index, uri, author, createdAtBlock })
 }
 
 export function handleRoleGranted(event: RoleGranted): void {

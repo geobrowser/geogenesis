@@ -8,11 +8,11 @@ import { getChecksumAddress } from './get-checksum-address'
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
   const address = getChecksumAddress(event.address.toHexString())
   const isRootSpace = true
-  const blocknumber = event.block.number
+  const createdAtBlock = event.block.number
 
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
-    handleSpaceAdded(address, isRootSpace, blocknumber)
+    handleSpaceAdded(address, isRootSpace, createdAtBlock)
   }
 
   const space = address
@@ -20,5 +20,5 @@ export function handleRootEntryAdded(event: RegistryEntryAdded): void {
   const uri = event.params.uri
   const author = event.params.author
 
-  addEntry({ space, index, uri, author, blocknumber })
+  addEntry({ space, index, uri, author, createdAtBlock })
 }

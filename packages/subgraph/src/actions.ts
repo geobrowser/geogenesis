@@ -19,7 +19,7 @@ import { createTripleId } from './id'
 export function handleSpaceAdded(
   spaceAddress: string,
   isRootSpace: boolean,
-  blocknumber: BigInt
+  createdAtBlock: BigInt
 ): void {
   if (spaceAddress.length != 42) {
     log.debug(`Invalid space address: ${spaceAddress}`, [])
@@ -32,19 +32,19 @@ export function handleSpaceAdded(
   space.admins = []
   space.editors = []
   space.isRootSpace = isRootSpace
-  space.blockNumber = blocknumber
+  space.createdAtBlock = createdAtBlock
 
   space.save()
 
   SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
-  bootstrap(space.id, blocknumber)
+  bootstrap(space.id, createdAtBlock)
 }
 
 class HandleCreateTripleActionOptions {
   fact: CreateTripleAction
   space: string
   isProtected: boolean
-  blocknumber: BigInt
+  createdAtBlock: BigInt
 }
 
 export function handleCreateTripleAction(
@@ -53,7 +53,7 @@ export function handleCreateTripleAction(
   const fact = options.fact
   const space = options.space
   const isProtected = options.isProtected
-  const blocknumber = options.blocknumber
+  const createdAtBlock = options.createdAtBlock
 
   const entity = (GeoEntity.load(fact.entityId) ||
     new GeoEntity(fact.entityId))!
@@ -108,7 +108,7 @@ export function handleCreateTripleAction(
     )
 
     if (attribute.id == 'space') {
-      handleSpaceAdded(stringValue.value, false, blocknumber)
+      handleSpaceAdded(stringValue.value, false, createdAtBlock)
     }
   }
 
@@ -174,7 +174,7 @@ function handleCreateEntityAction(action: CreateEntityAction): void {
 export function handleAction(
   action: Action,
   space: string,
-  blocknumber: BigInt
+  createdAtBlock: BigInt
 ): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
@@ -182,7 +182,7 @@ export function handleAction(
       fact: createTripleAction,
       space,
       isProtected: false,
-      blocknumber,
+      createdAtBlock,
     })
     return
   }

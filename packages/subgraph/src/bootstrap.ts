@@ -7,13 +7,13 @@ import {
 import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
 
-export function bootstrap(space: string, blocknumber: BigInt): void {
+export function bootstrap(space: string, createdAtBlock: BigInt): void {
   log.debug(`Bootstrapping space ${space}!`, [])
 
-  handleAction(new CreateEntityAction('type'), space, blocknumber)
-  handleAction(new CreateEntityAction('name'), space, blocknumber)
-  handleAction(new CreateEntityAction('attribute'), space, blocknumber)
-  handleAction(new CreateEntityAction('space'), space, blocknumber)
+  handleAction(new CreateEntityAction('type'), space, createdAtBlock)
+  handleAction(new CreateEntityAction('name'), space, createdAtBlock)
+  handleAction(new CreateEntityAction('attribute'), space, createdAtBlock)
+  handleAction(new CreateEntityAction('space'), space, createdAtBlock)
 
   // handleCreateTripleAction({
   //   fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
