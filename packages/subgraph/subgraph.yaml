@@ -11,27 +11,8 @@ dataSources:
     name: SpaceRegistry
     network: mainnet
     source:
-      address: '0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44'
+      address: '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E'
       abi: SpaceRegistry
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.6
-      language: wasm/assemblyscript
-      entities:
-        - Space
-      abis:
-        - name: SpaceRegistry
-          file: ../contracts/build/abis/SpaceRegistry.json
-      eventHandlers:
-        - event: SpaceAdded(address)
-          handler: handleSpaceAdded
-      file: ./src/mapping.ts
-templates:
-  - kind: ethereum/contract
-    name: Log
-    network: mainnet
-    source:
-      abi: Log
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -39,8 +20,31 @@ templates:
       entities:
         - LogEntry
       abis:
-        - name: Log
-          file: ../contracts/build/abis/Log.json
+        - name: SpaceRegistry
+          file: ../contracts/build/abis/Space.json
+      eventHandlers:
+        - event: EntryAdded(uint256,string,address)
+          handler: handleRootEntryAdded
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleRevoked
+      file: ./src/root-mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Space
+    network: mainnet
+    source:
+      abi: Space
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - LogEntry
+      abis:
+        - name: Space
+          file: ../contracts/build/abis/Space.json
       eventHandlers:
         - event: EntryAdded(uint256,string,address)
           handler: handleEntryAdded

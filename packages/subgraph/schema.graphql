@@ -2,6 +2,8 @@ type Space @entity {
   id: ID!
   admins: [Account!]!
   editors: [Account!]!
+  isRootSpace: Boolean!
+  createdAtBlock: BigInt!
 }
 
 type Account @entity {
@@ -15,6 +17,7 @@ An entry in the Log contract.
 """
 type LogEntry @entity {
   id: ID!
+  createdAtBlock: BigInt!
   uri: String!
   author: Bytes!
   mimeType: String

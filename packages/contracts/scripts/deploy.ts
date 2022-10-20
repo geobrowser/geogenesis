@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
-import { deployLog, deploySpaceRegistry } from '../src/deploy'
+import { deploySpace } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 dotenv.config()
@@ -18,74 +18,109 @@ async function main() {
 
   console.log('Deploying on network', networkId, networkConfig)
 
-  const spaceRegistryContract = await deploySpaceRegistry({ debug: true })
-  const logContract = await deployLog({ debug: true })
+  const spaceRegistry = await deploySpace({ debug: true })
+  const spaceContract = await deploySpace({ debug: true })
+  console.log('Added new space at address: ', spaceContract.address)
 
-  await spaceRegistryContract.addSpace(logContract.address)
-  console.log('Added new space at address: ', logContract.address)
-
-  await addEntry(logContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
-
-  const root: Root = {
+  const spaceRoot: Root = {
     type: 'root',
     version: '0.0.1',
     actions: [
       {
         type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
+        entityId: 'space-1',
+        attributeId: 'name',
         value: {
           type: 'string',
-          value: 'hi',
+          value: 'Space 1',
         },
       },
       {
         type: 'createTriple',
-        entityId: 'e',
-        attributeId: 'a',
+        entityId: 'space-1',
+        attributeId: 'space',
         value: {
-          type: 'number',
-          value: '42',
+          type: 'string',
+          value: spaceContract.address,
         },
       },
     ],
   }
 
   await addEntry(
-    logContract,
-    `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
-      'base64'
-    )}`
+    spaceRegistry,
+    `data:application/json;base64,${Buffer.from(
+      JSON.stringify(spaceRoot)
+    ).toString('base64')}`
   )
 
-  await addEntry(
-    logContract,
-    `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
+  await spaceRegistry.revokeRole(
+    await spaceRegistry.EDITOR_ROLE(),
+    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
   )
+
+  // await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
+
+  // const root: Root = {
+  //   type: 'root',
+  //   version: '0.0.1',
+  //   actions: [
+  //     {
+  //       type: 'createTriple',
+  //       entityId: 'e',
+  //       attributeId: 'a',
+  //       value: {
+  //         type: 'string',
+  //         value: 'hi',
+  //       },
+  //     },
+  //     {
+  //       type: 'createTriple',
+  //       entityId: 'e',
+  //       attributeId: 'a',
+  //       value: {
+  //         type: 'number',
+  //         value: '42',
+  //       },
+  //     },
+  //   ],
+  // }
+
+  // await addEntry(
+  //   spaceContract,
+  //   `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
+  //     'base64'
+  //   )}`
+  // )
+
+  // await addEntry(
+  //   spaceContract,
+  //   `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
+  // )
 
   saveAddress({
     chainId,
     contractName: 'SpaceRegistry',
-    address: spaceRegistryContract.address,
+    address: spaceRegistry.address,
   })
 
   saveAddress({
     chainId,
-    contractName: 'Log',
-    address: logContract.address,
+    contractName: 'Space',
+    address: spaceContract.address,
   })
 
   if (networkId === 'localhost') {
     saveAddress({
       chainId: 'localhost',
       contractName: 'SpaceRegistry',
-      address: spaceRegistryContract.address,
+      address: spaceRegistry.address,
     })
 
     saveAddress({
       chainId: 'localhost',
-      contractName: 'Log',
-      address: logContract.address,
+      contractName: 'Space',
+      address: spaceContract.address,
     })
   }
 }

@@ -2,12 +2,12 @@
 
 pragma solidity ^0.8.9;
 import '@openzeppelin/contracts/access/AccessControl.sol';
-import {ISpace} from './SpaceRegistry.sol';
+import {ISpace} from './ISpace.sol';
 
 /**
  * An immutable log of uri strings.
  */
-contract Log is ISpace, AccessControl {
+contract Space is ISpace, AccessControl {
     struct Entry {
         string uri;
         address author;
