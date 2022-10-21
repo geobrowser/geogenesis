@@ -7,7 +7,7 @@ export const useEditable = () => {
   const editable = useSelector(editable$);
 
   return {
-    editable: editable && signer,
+    editable,
     toggleEditable: () => editable$.set(!editable),
   };
 };
