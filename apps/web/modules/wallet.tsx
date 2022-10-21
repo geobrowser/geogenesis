@@ -6,7 +6,7 @@ import { configOptions } from './config';
 
 const LOCAL_CHAIN: Chain = {
   id: Number(configOptions.development.chainId),
-  name: 'GeoGenesis Dev', // Human-readable name
+  name: 'Geo Genesis Dev', // Human-readable name
   network: 'ethereum', // Internal network name
   rpcUrls: {
     default: configOptions.development.rpc,
@@ -15,14 +15,26 @@ const LOCAL_CHAIN: Chain = {
 
 const STAGING_CHAIN: Chain = {
   id: Number(configOptions.staging.chainId),
-  name: 'GeoGenesis Staging', // Human-readable name
+  name: 'Geo Genesis Staging', // Human-readable name
   network: 'ethereum', // Internal network name
   rpcUrls: {
     default: configOptions.staging.rpc,
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains([STAGING_CHAIN, LOCAL_CHAIN], [publicProvider()]);
+const DEFAULT_CHAIN: Chain = {
+  id: Number(configOptions.production.chainId),
+  name: 'Geo Genesis', // Human-readable name
+  network: 'ethereum', // Internal network name
+  rpcUrls: {
+    default: configOptions.production.rpc,
+  },
+};
+
+const { chains, provider, webSocketProvider } = configureChains(
+  [DEFAULT_CHAIN, STAGING_CHAIN, LOCAL_CHAIN],
+  [publicProvider()]
+);
 
 const { connectors } = getDefaultWallets({
   appName: 'Geo Genesis',

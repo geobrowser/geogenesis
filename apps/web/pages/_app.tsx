@@ -57,7 +57,7 @@ function MyApp({ Component, pageProps }: AppProps) {
 
             <Spacer width={4} />
 
-            <Link href="/">
+            <Link href="/spaces">
               <a>Spaces</a>
             </Link>
 

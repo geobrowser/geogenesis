@@ -26,11 +26,12 @@ export const configOptions: Record<AppEnv, AppConfig> = {
     devServer: 'https://dev-server-dabbott.cloud.okteto.net',
   },
   production: {
-    chainId: '137',
-    rpc: '',
+    chainId: '1337',
+    rpc: 'https://devnet-dabbott.cloud.okteto.net',
     ipfs: 'https://api.thegraph.com/ipfs',
-    subgraph: '',
-    devServer: '',
+    // ipfs: 'https://api.thegraph.com/ipfs',
+    subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
+    devServer: 'https://dev-server-dabbott.cloud.okteto.net',
   },
 };
 
