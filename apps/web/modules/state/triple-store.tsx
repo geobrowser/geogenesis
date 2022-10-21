@@ -1,9 +1,9 @@
-import { Signer } from 'ethers';
-import { observable, Observable, computed, ObservableComputed } from '@legendapp/state';
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
+import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { Signer } from 'ethers';
+import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
-import { createTripleWithId } from '../services/create-id';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
@@ -84,14 +84,17 @@ export class TripleStore implements ITripleStore {
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();
-      const triples: Triple[] = [...networkTriples];
+
+      // We operate on the triples array in reverse so that we can `push` instead of `unshift`
+      // when creating new triples, which is significantly faster.
+      const triples: Triple[] = [...networkTriples].reverse();
 
       // If our actions have modified one of the network triples, we don't want to add that
       // network triple to the triples array
       this.actions$.get().forEach(action => {
         switch (action.type) {
           case 'createTriple':
-            triples.unshift(createTripleWithId({ ...action, space: 's' }));
+            triples.push(createTripleWithId({ ...action, space: 's' }));
             break;
           case 'deleteTriple': {
             const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: 's' }).id);
@@ -100,13 +103,13 @@ export class TripleStore implements ITripleStore {
           }
           case 'editTriple': {
             const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: 's' }).id);
-            triples.splice(index, 1, createTripleWithId({ ...action.after, space: 's' }));
+            triples[index] = createTripleWithId({ ...action.after, space: 's' });
             break;
           }
         }
       });
 
-      return triples;
+      return triples.reverse();
     });
 
     this.entityNames$ = computed(() => {

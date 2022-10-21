@@ -1,6 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
-import { Space__factory, EntryAddedEventObject, Space as SpaceContract } from '@geogenesis/contracts';
-import { Signer, ContractTransaction, Event } from 'ethers';
+import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
+import { ContractTransaction, Event, Signer } from 'ethers';
 import { Action } from '../state/triple-store';
 import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
@@ -68,6 +68,8 @@ export interface INetwork {
   publish: (options: PublishOptions) => Promise<void>;
 }
 
+const UPLOAD_CHUNK_SIZE = 2000;
+
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
@@ -79,8 +81,10 @@ export class Network implements INetwork {
     onChangePublishState('publishing-ipfs');
     const cids: string[] = [];
 
-    for (let i = 0; i < actions.length; i += 2000) {
-      const chunk = actions.slice(i, i + 2000);
+    for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
+      console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
+
+      const chunk = actions.slice(i, i + UPLOAD_CHUNK_SIZE);
 
       const root: Root = {
         type: 'root',
