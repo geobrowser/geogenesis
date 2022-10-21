@@ -3,12 +3,14 @@ import { useRouter } from 'next/router';
 import { FormEvent } from 'react';
 import { useSigner } from 'wagmi';
 import { useSpaces } from '~/modules/state/use-spaces';
+import { useAccessControl } from '~/modules/state/use-access-control';
 
 export default function AccessControl() {
   const store = useSpaces();
-  const { data: signer } = useSigner();
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string };
+  const { isAdmin } = useAccessControl(spaceId);
+  const { data: signer } = useSigner();
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,7 +24,7 @@ export default function AccessControl() {
     }
   };
 
-  return (
+  return isAdmin ? (
     <div>
       <form onSubmit={onSubmit}>
         <input name="address" placeholder="Address..." />
@@ -47,5 +49,7 @@ export default function AccessControl() {
           ))}
       </ul>
     </div>
+  ) : (
+    <h1>You must be an admin to add people to this Space</h1>
   );
 }

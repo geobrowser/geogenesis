@@ -22,10 +22,14 @@ export function ServicesProvider({ children }: Props) {
   // Default to production chain
   const chainId = chain ? String(chain.id) : configOptions.production.chainId;
 
+  console.log(chainId);
+
   const services = useMemo((): Services => {
     const config = getConfig(chainId);
     const storageClient = new StorageClient(config.ipfs);
     const network = new Network(storageClient, config.subgraph);
+
+    console.log('Subgraph endpoint', config.subgraph);
 
     return {
       network,

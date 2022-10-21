@@ -14,6 +14,7 @@ import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
+import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
 
@@ -126,7 +127,7 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
 }
 
 function Triples({ space }: { space: string }) {
-  const { data: signer } = useSigner();
+  const { isEditor } = useAccessControl(space);
 
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
@@ -161,7 +162,7 @@ function Triples({ space }: { space: string }) {
           Facts
         </Text>
 
-        {signer && (
+        {isEditor && (
           <>
             <PageHeader>
               <div style={{ flex: 1 }} />

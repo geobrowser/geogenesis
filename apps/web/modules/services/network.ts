@@ -159,8 +159,6 @@ export class Network implements INetwork {
         };
       });
 
-    console.log('triples', triples);
-
     const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
       if (triple.entity.name !== null) {
         acc[triple.entity.id] = triple.entity.name;
@@ -206,8 +204,6 @@ export class Network implements INetwork {
         spaces: { id: string; admins: Account[]; editors: Account[] }[];
       };
     } = await response.json();
-
-    console.log('spaces', json.data.spaces);
 
     return json.data.spaces;
   };
