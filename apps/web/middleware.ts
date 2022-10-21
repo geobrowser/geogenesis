@@ -6,5 +6,5 @@ export const config = {
 };
 
 export function middleware() {
-  return NextResponse.rewrite('https://statuses-remaining-039723.framer.app/');
+  return NextResponse.rewrite('https://geo.framer.website/');
 }
