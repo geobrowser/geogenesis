@@ -2,6 +2,7 @@ import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
+import { useSigner } from 'wagmi';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
@@ -125,6 +126,8 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
 }
 
 function Triples({ space }: { space: string }) {
+  const { data: signer } = useSigner();
+
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
 
@@ -158,27 +161,33 @@ function Triples({ space }: { space: string }) {
           Facts
         </Text>
 
-        <div style={{ flex: 1 }} />
-        <Button variant="secondary" onClick={toggleEditable}>
-          Turn {editable ? 'off' : 'on'} editing
-        </Button>
-        <Spacer width={12} />
-        <Button variant="secondary" icon="create" onClick={() => {}}>
-          Import
-          <FileImport
-            type="file"
-            accept=".csv"
-            onChange={event => {
-              for (let file of event.target.files ?? []) {
-                onImport(file);
-              }
-            }}
-          />
-        </Button>
-        <Spacer width={12} />
-        <Button icon="create" onClick={onAddTriple}>
-          Add
-        </Button>
+        {signer && (
+          <>
+            <PageHeader>
+              <div style={{ flex: 1 }} />
+              <Button variant="secondary" onClick={toggleEditable}>
+                Turn {editable ? 'off' : 'on'} editing
+              </Button>
+              <Spacer width={12} />
+              <Button variant="secondary" icon="create" onClick={() => {}}>
+                Import
+                <FileImport
+                  type="file"
+                  accept=".csv"
+                  onChange={event => {
+                    for (let file of event.target.files ?? []) {
+                      onImport(file);
+                    }
+                  }}
+                />
+              </Button>
+              <Spacer width={12} />
+              <Button icon="create" onClick={onAddTriple}>
+                Add
+              </Button>
+            </PageHeader>
+          </>
+        )}
       </PageHeader>
 
       <Spacer height={12} />

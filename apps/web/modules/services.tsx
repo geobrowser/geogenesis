@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
-import { getConfig } from './config';
+import { configOptions, getConfig } from './config';
 import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';
 import { StubNetwork } from './services/stub-network';
@@ -20,19 +20,20 @@ interface Props {
 export function ServicesProvider({ children }: Props) {
   const { chain } = useNetwork();
 
-  const chainId = chain ? String(chain.id) : undefined;
+  // Default to production chain
+  const chainId = chain ? String(chain.id) : configOptions.production.chainId;
 
   const services = useMemo((): Services => {
-    if (!chainId) {
-      const network = new StubNetwork();
+    // if (!chainId) {
+    //   const network = new Network(new StorageClient(''), '');
 
-      return {
-        network,
-        spaceStore: new SpaceStore({
-          api: network,
-        }),
-      };
-    }
+    //   return {
+    //     network,
+    //     spaceStore: new SpaceStore({
+    //       api: network,
+    //     }),
+    //   };
+    // }
 
     const config = getConfig(chainId);
     const storageClient = new StorageClient(config.ipfs);
