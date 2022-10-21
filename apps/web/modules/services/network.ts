@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { Space__factory, EntryAddedEventObject, Space as SpaceContract } from '@geogenesis/contracts';
 import { Signer, ContractTransaction, Event } from 'ethers';
 import { Action } from '../state/triple-store';
-import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
+import { Account, EntityNames, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -190,6 +190,12 @@ export class Network implements INetwork {
         query: `query {
           spaces {
             id
+            admins {
+              id
+            }
+            editors {
+              id
+            }
           }
         }`,
       }),
@@ -197,9 +203,11 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        spaces: { id: string }[];
+        spaces: { id: string; admins: Account[]; editors: Account[] }[];
       };
     } = await response.json();
+
+    console.log('spaces', json.data.spaces);
 
     return json.data.spaces;
   };

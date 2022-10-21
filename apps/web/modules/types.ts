@@ -30,6 +30,12 @@ export type Triple = {
 
 export type Space = {
   id: string;
+  editors: Account[];
+  admins: Account[];
+};
+
+export type Account = {
+  id: string;
 };
 
 export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';
