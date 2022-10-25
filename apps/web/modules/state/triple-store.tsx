@@ -79,18 +79,15 @@ export class TripleStore implements ITripleStore {
       })
     );
 
+    // Update the url with query search params whenever query or page number changes
     observe(() => {
-      // Store the url parameters based on user input
-      // We observe the query
-      // We observe the page number
-      // We write to the url
       const query = this.query$.get();
       const pageNumber = this.pageNumber$.get();
 
       if (typeof window !== 'undefined' && (query !== '' || pageNumber !== 0)) {
         const newUrl = new URLSearchParams({
           query,
-          page: pageNumber.toString(),
+          page: (pageNumber + 1).toString(),
         });
 
         const baseUrl = (window.history.state.as as string).split('?')[0];
