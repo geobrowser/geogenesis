@@ -68,7 +68,6 @@ export class TripleStore implements ITripleStore {
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
-            console.log(e);
             return new Promise(() => {});
           }
 

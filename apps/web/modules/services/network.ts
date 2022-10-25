@@ -145,8 +145,6 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    console.log('json', json.data.triples);
-
     const triples = json.data.triples
       // .filter(triple => !triple.isProtected)
       .map((networkTriple): Triple => {
