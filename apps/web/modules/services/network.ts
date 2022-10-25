@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer } from 'ethers';
 import { Action } from '../state/triple-store';
-import { EntityNames, ReviewState, Space, Triple, Value } from '../types';
+import { Account, EntityNames, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -46,7 +46,7 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
-let abortController = new AbortController();
+let triplesAbortController = new AbortController();
 
 export type FetchTriplesOptions = {
   query: string;
@@ -104,8 +104,8 @@ export class Network implements INetwork {
   };
 
   fetchTriples = async ({ space, query, skip, first }: FetchTriplesOptions) => {
-    abortController.abort();
-    abortController = new AbortController();
+    triplesAbortController.abort();
+    triplesAbortController = new AbortController();
 
     const stringifyQuery = JSON.stringify(query);
     const stringifySpace = JSON.stringify(space);
@@ -117,7 +117,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: abortController.signal,
+      signal: triplesAbortController.signal,
       body: JSON.stringify({
         query: `query {
           triples(where: {space: ${stringifySpace} ${nameQuery}}, skip: ${skip}, first: ${first}) {
@@ -149,8 +149,6 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    console.log('json', json.data.triples);
-
     const triples = json.data.triples
       // .filter(triple => !triple.isProtected)
       .map((networkTriple): Triple => {
@@ -162,8 +160,6 @@ export class Network implements INetwork {
           space: networkTriple.space,
         };
       });
-
-    console.log('triples', triples);
 
     const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
       if (triple.entity.name !== null) {
@@ -189,11 +185,16 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
           spaces {
             id
+            admins {
+              id
+            }
+            editors {
+              id
+            }
           }
         }`,
       }),
@@ -201,7 +202,7 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        spaces: { id: string }[];
+        spaces: { id: string; admins: Account[]; editors: Account[] }[];
       };
     } = await response.json();
 

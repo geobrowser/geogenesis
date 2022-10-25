@@ -1,8 +1,7 @@
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
+import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/router';
-import { useSigner } from 'wagmi';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
@@ -14,6 +13,7 @@ import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
+import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
 
@@ -48,13 +48,10 @@ const FileImport = styled.input({
   inset: '0',
 });
 
-export default function TriplesPage() {
-  const router = useRouter();
-  const { id } = router.query as { id: string };
-
+export default function TriplesPage({ spaceId }: { spaceId: string }) {
   return (
-    <TripleStoreProvider space={id}>
-      <Triples space={id} />
+    <TripleStoreProvider space={spaceId}>
+      <Triples space={spaceId} />
     </TripleStoreProvider>
   );
 }
@@ -66,11 +63,12 @@ const PageNumberContainer = styled.div({
   alignSelf: 'flex-end',
 });
 
-const PageNumberValue = styled.div(props => ({
+const PageNumberValue = styled.button<{ isActive?: boolean }>(props => ({
+  backgroundColor: props.isActive ? props.theme.colors['grey-01'] : 'transparent',
   height: props.theme.space * 5,
   width: props.theme.space * 5,
   borderRadius: props.theme.radius,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
+  border: props.isActive ? `1px solid  ${props.theme.colors.text}` : `1px solid ${props.theme.colors['grey-02']}`,
   fontFeatureSettings: '"tnum" 1',
 
   display: 'flex',
@@ -78,9 +76,9 @@ const PageNumberValue = styled.div(props => ({
   justifyContent: 'center',
 }));
 
-function PageNumber({ number }: { number: number }) {
+function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (
-    <PageNumberValue>
+    <PageNumberValue isActive={isActive} onClick={onClick}>
       <Text variant="smallButton">{number}</Text>
     </PageNumberValue>
   );
@@ -126,7 +124,7 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
 }
 
 function Triples({ space }: { space: string }) {
-  const { data: signer } = useSigner();
+  const { isEditor } = useAccessControl(space);
 
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
@@ -161,7 +159,7 @@ function Triples({ space }: { space: string }) {
           Facts
         </Text>
 
-        {signer && (
+        {isEditor && (
           <>
             <PageHeader>
               <div style={{ flex: 1 }} />
@@ -201,14 +199,52 @@ function Triples({ space }: { space: string }) {
       <Spacer height={12} />
 
       <PageNumberContainer>
-        <PageNumber number={tripleStore.pageNumber + 1} />
+        {tripleStore.pageNumber > 1 && (
+          <>
+            <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+            {tripleStore.pageNumber > 2 ? (
+              <>
+                <Spacer width={16} />
+                <Text color="grey-03" variant="metadataMedium">
+                  ...
+                </Text>
+                <Spacer width={16} />
+              </>
+            ) : (
+              <Spacer width={4} />
+            )}
+          </>
+        )}
+        {tripleStore.hasPreviousPage && (
+          <>
+            <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+            <Spacer width={4} />
+          </>
+        )}
+        <PageNumber isActive number={tripleStore.pageNumber + 1} />
+        {tripleStore.hasNextPage && (
+          <>
+            <Spacer width={4} />
+            <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+          </>
+        )}
         <Spacer width={32} />
-        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={() => tripleStore.setPreviousPage()} />
+        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
         <Spacer width={12} />
-        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={() => tripleStore.setNextPage()} />
+        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
       </PageNumberContainer>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>
   );
 }
+
+export const getServerSideProps: GetServerSideProps = async context => {
+  const spaceId = context.params?.id as string;
+
+  return {
+    props: {
+      spaceId,
+    },
+  };
+};

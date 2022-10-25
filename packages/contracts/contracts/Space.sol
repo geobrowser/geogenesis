@@ -25,7 +25,7 @@ contract Space is ISpace, AccessControl {
         _grantRole(EDITOR_ROLE, msg.sender);
     }
 
-    function addEntry(string calldata uri) public {
+    function addEntry(string calldata uri) public onlyRole(EDITOR_ROLE) {
         Entry memory entry = Entry({uri: uri, author: msg.sender});
 
         uint256 index = _entries.length;
@@ -35,7 +35,7 @@ contract Space is ISpace, AccessControl {
         emit EntryAdded(index, uri, msg.sender);
     }
 
-    function addEntries(string[] calldata uris) public {
+    function addEntries(string[] calldata uris) public onlyRole(EDITOR_ROLE) {
         for (uint256 i = 0; i < uris.length; i++) {
             addEntry(uris[i]);
         }

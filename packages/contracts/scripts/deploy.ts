@@ -54,11 +54,6 @@ async function main() {
     ).toString('base64')}`
   )
 
-  await spaceRegistry.revokeRole(
-    await spaceRegistry.EDITOR_ROLE(),
-    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
-  )
-
   // await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
 
   // const root: Root = {
