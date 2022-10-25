@@ -72,4 +72,13 @@ describe('Space', () => {
       await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)
     ).to.be.eq(false)
   })
+
+  it("Fails when adding entry without editor's role", async () => {
+    const [deployer, account1] = await ethers.getSigners()
+    const contract = await deploySpace({ signer: deployer })
+
+    expect(contract.connect(account1).addEntry('abc')).to.be.revertedWith(
+      `AccessControl: account ${account1.address.toLowerCase()} is missing role ${await contract.EDITOR_ROLE()}`
+    )
+  })
 })
