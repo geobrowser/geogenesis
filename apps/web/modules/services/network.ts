@@ -46,7 +46,7 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
-let abortController = new AbortController();
+let triplesAbortController = new AbortController();
 
 export type FetchTriplesOptions = {
   query: string;
@@ -100,8 +100,8 @@ export class Network implements INetwork {
   };
 
   fetchTriples = async ({ space, query, skip, first }: FetchTriplesOptions) => {
-    abortController.abort();
-    abortController = new AbortController();
+    triplesAbortController.abort();
+    triplesAbortController = new AbortController();
 
     const stringifyQuery = JSON.stringify(query);
     const stringifySpace = JSON.stringify(space);
@@ -113,7 +113,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: abortController.signal,
+      signal: triplesAbortController.signal,
       body: JSON.stringify({
         query: `query {
           triples(where: {space: ${stringifySpace} ${nameQuery}}, skip: ${skip}, first: ${first}) {
@@ -181,7 +181,6 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: abortController.signal,
       body: JSON.stringify({
         query: `query {
           spaces {

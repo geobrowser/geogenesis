@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import debounce from 'lodash.debounce';
+import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useSigner } from 'wagmi';
@@ -49,13 +50,15 @@ const FileImport = styled.input({
   inset: '0',
 });
 
-export default function TriplesPage() {
-  const router = useRouter();
-  const { id } = router.query as { id: string };
+export default function TriplesPage({ spaceId }: { spaceId: string }) {
+  // const router = useRouter();
+  // const { id } = router.query as { id: string };
+
+  console.log('spaceId', spaceId);
 
   return (
-    <TripleStoreProvider space={id}>
-      <Triples space={id} />
+    <TripleStoreProvider space={spaceId}>
+      <Triples space={spaceId} />
     </TripleStoreProvider>
   );
 }
@@ -213,3 +216,13 @@ function Triples({ space }: { space: string }) {
     </PageContainer>
   );
 }
+
+export const getServerSideProps: GetServerSideProps = async context => {
+  const spaceId = context.params?.id as string;
+
+  return {
+    props: {
+      spaceId,
+    },
+  };
+};
