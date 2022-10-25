@@ -24,6 +24,14 @@ export default function AccessControl() {
     }
   };
 
+  const onRevoke = async (address: string) => {
+    if (signer) {
+      const contract = Space__factory.connect(spaceId, signer);
+      const tx = await contract.revokeRole(await contract.EDITOR_ROLE(), address);
+      await tx.wait();
+    }
+  };
+
   return isAdmin ? (
     <div>
       <form onSubmit={onSubmit}>
@@ -45,7 +53,10 @@ export default function AccessControl() {
         {store.spaces
           .find(space => space.id == spaceId)
           ?.editors.map(editor => (
-            <li key={editor.id}>{editor.id}</li>
+            <li key={editor.id}>
+              <span>{editor.id}</span>
+              <button onClick={() => onRevoke(editor.id)}>Revoke</button>
+            </li>
           ))}
       </ul>
     </div>
