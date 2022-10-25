@@ -14,7 +14,7 @@ export const colors = {
     purple: '#6833FF',
     pink: '#FE31C5',
     bg: '#FBFBFB',
-    'grey-01': '#E6E6E6',
+    'grey-01': '#F6F6F6',
     'grey-02': '#DBDBDB',
     'grey-03': '#B6B6B6',
     'grey-04': '#606060',
