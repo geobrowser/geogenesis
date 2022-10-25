@@ -1,6 +1,7 @@
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
-import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { computed, observable, Observable, ObservableComputed, observe } from '@legendapp/state';
 import { Signer } from 'ethers';
+import { NextRouter } from 'next/router';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
@@ -77,6 +78,34 @@ export class TripleStore implements ITripleStore {
         }
       })
     );
+
+    observe(() => {
+      // Store the url parameters based on user input
+      // We observe the query
+      // We observe the page number
+      // We write to the url
+      const query = this.query$.get();
+      const pageNumber = this.pageNumber$.get();
+
+      if (typeof window !== 'undefined' && (query !== '' || pageNumber !== 0)) {
+        const newUrl = new URLSearchParams({
+          query,
+          page: pageNumber.toString(),
+        });
+
+        const baseUrl = (window.history.state.as as string).split('?')[0];
+
+        window.history.replaceState(
+          { ...window.history.state, url: newUrl.toString() },
+          '',
+          `${baseUrl}?${newUrl.toString()}`
+        );
+      }
+    });
+
+    // on store creation
+    // we read the url parameters
+    // and store them wherever
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
