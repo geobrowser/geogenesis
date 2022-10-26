@@ -28,12 +28,19 @@ export function TripleStoreProvider({ space, children }: { space: string; childr
 
   useEffect(() => {
     // Update the url with query search params whenever query or page number changes
-    const newUrl = new URLSearchParams({
+    const params = new URLSearchParams({
       ...(query !== '' && { query }),
       ...(pageNumber !== 0 && { page: pageNumber.toString() }),
     });
 
-    replace.current(`${basePath}?${newUrl}`, undefined, { shallow: true, scroll: false });
+    replace.current(
+      {
+        pathname: basePath,
+        query: params.toString(),
+      },
+      undefined,
+      { shallow: true, scroll: false }
+    );
   }, [basePath, query, pageNumber]);
 
   return <TripleStoreContext.Provider value={store}>{children}</TripleStoreContext.Provider>;
