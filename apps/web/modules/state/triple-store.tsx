@@ -21,13 +21,15 @@ interface ITripleStore {
   setPageNumber(page: number): void;
 }
 
+export type InitialTripleStoreParams = {
+  query: string;
+  pageNumber: number;
+};
+
 interface ITripleStoreConfig {
   api: INetwork;
   space: string;
-  initialParams: {
-    query: string;
-    pageNumber: number;
-  };
+  initialParams?: InitialTripleStoreParams;
   pageSize?: number;
 }
 
@@ -40,6 +42,10 @@ type EditTripleAction = {
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
 const DEFAULT_PAGE_SIZE = 100;
+const DEFAULT_INITIAL_PARAMS = {
+  query: '',
+  pageNumber: 0,
+};
 
 export class TripleStore implements ITripleStore {
   private api: INetwork;
@@ -52,7 +58,12 @@ export class TripleStore implements ITripleStore {
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
 
-  constructor({ api, space, initialParams, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+  constructor({
+    api,
+    space,
+    initialParams = DEFAULT_INITIAL_PARAMS,
+    pageSize = DEFAULT_PAGE_SIZE,
+  }: ITripleStoreConfig) {
     this.api = api;
     this.query$ = observable(initialParams.query);
     this.pageNumber$ = observable(initialParams.pageNumber);
@@ -200,9 +211,5 @@ export class TripleStore implements ITripleStore {
     const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
     this.pageNumber$.set(previousPageNumber);
-  };
-
-  setRouter = (routeConfig: RouterConfig) => {
-    this.router = routeConfig;
   };
 }
