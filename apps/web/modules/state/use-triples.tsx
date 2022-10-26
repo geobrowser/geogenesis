@@ -7,6 +7,7 @@ export const useTriples = () => {
     update,
     publish,
     triples$,
+    query$,
     actions$,
     entityNames$,
     setQuery,
@@ -23,6 +24,7 @@ export const useTriples = () => {
   const pageNumber = useSelector(pageNumber$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const hasNextPage = useSelector(hasNextPage$);
+  const query = useSelector(query$);
 
   return {
     triples,
@@ -31,6 +33,7 @@ export const useTriples = () => {
     create,
     update,
     publish,
+    query,
     setQuery,
     setPageNumber,
     setNextPage,

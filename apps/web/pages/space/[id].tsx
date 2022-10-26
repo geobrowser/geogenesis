@@ -129,7 +129,7 @@ function Triples({ space }: { space: string }) {
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
 
-  const debouncedFilter = debounce(tripleStore.setQuery, 500);
+  // const debouncedFilter = debounce(tripleStore.setQuery, 500);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
@@ -190,7 +190,11 @@ function Triples({ space }: { space: string }) {
 
       <Spacer height={12} />
 
-      <Input placeholder="Search facts..." onChange={e => debouncedFilter(e.target.value)} />
+      <Input
+        placeholder="Search facts..."
+        onChange={e => tripleStore.setQuery(e.target.value)}
+        value={tripleStore.query}
+      />
 
       <Spacer height={12} />
 

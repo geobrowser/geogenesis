@@ -1,7 +1,8 @@
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed, observe } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { NextRouter } from 'next/router';
+import { NextRouter, Router } from 'next/router';
+import { MutableRefObject } from 'react';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { EntityNames, ReviewState, Triple } from '../types';
@@ -13,6 +14,7 @@ interface ITripleStore {
   triples$: ObservableComputed<Triple[]>;
   pageNumber$: Observable<number>;
   query$: Observable<string>;
+  router: RouterConfig;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
@@ -20,11 +22,19 @@ interface ITripleStore {
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
+  setRouter: (router: RouterConfig) => void;
 }
+
+type RouterConfig = {
+  basePath: string;
+  url: string;
+  replace?: NextRouter['replace'];
+};
 
 interface ITripleStoreConfig {
   api: INetwork;
   space: string;
+  initialRouter: RouterConfig;
   pageSize?: number;
 }
 
@@ -33,6 +43,12 @@ type EditTripleAction = {
   before: DeleteTripleAction;
   after: CreateTripleAction;
 };
+
+// url as the state
+// pageNumber
+// query
+// actions
+// server-side state
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
@@ -48,12 +64,18 @@ export class TripleStore implements ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
+  router: RouterConfig;
 
-  constructor({ api, space, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+  constructor({ api, space, initialRouter, pageSize = DEFAULT_PAGE_SIZE }: ITripleStoreConfig) {
+    const params = new URLSearchParams(initialRouter.url.split('?')[1]);
+    const query = params.get('query') || '';
+    const page = Number(params.get('page') || 0);
+
     this.api = api;
-    this.query$ = observable('');
-    this.pageNumber$ = observable(0);
+    this.query$ = observable(query);
+    this.pageNumber$ = observable(page);
     this.space = space;
+    this.router = initialRouter;
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
@@ -84,20 +106,12 @@ export class TripleStore implements ITripleStore {
       const query = this.query$.get();
       const pageNumber = this.pageNumber$.get();
 
-      if (typeof window !== 'undefined' && (query !== '' || pageNumber !== 0)) {
-        const newUrl = new URLSearchParams({
-          query,
-          page: (pageNumber + 1).toString(),
-        });
+      const newUrl = new URLSearchParams({
+        ...(query !== '' && { query }),
+        ...(pageNumber !== 0 && { page: pageNumber.toString() }),
+      });
 
-        const baseUrl = (window.history.state.as as string).split('?')[0];
-
-        window.history.replaceState(
-          { ...window.history.state, url: newUrl.toString() },
-          '',
-          `${baseUrl}?${newUrl.toString()}`
-        );
-      }
+      this.router.replace?.(`${this.router.basePath}?${newUrl}`, undefined, { shallow: true, scroll: false });
     });
 
     // on store creation
@@ -204,6 +218,7 @@ export class TripleStore implements ITripleStore {
   };
 
   setQuery = (query: string) => {
+    console.log('New query', query);
     this.setPageNumber(0);
     this.query$.set(query);
   };
@@ -221,5 +236,9 @@ export class TripleStore implements ITripleStore {
     const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
     this.pageNumber$.set(previousPageNumber);
+  };
+
+  setRouter = (routeConfig: RouterConfig) => {
+    this.router = routeConfig;
   };
 }
