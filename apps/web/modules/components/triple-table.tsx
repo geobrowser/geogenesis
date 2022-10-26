@@ -212,7 +212,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
 
   return (
     <Container>
-      <Table cellSpacing={0}>
+      <Table cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
