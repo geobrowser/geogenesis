@@ -9,6 +9,7 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
+import { useRouter } from 'next/router';
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
@@ -86,7 +87,6 @@ const Container = styled.div(props => ({
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const entityNames = table.options?.meta?.entityNames || {};
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { editable } = useEditable();

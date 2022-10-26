@@ -16,7 +16,7 @@ type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue
 /**
  * Triple type returned by GraphQL
  */
-type NetworkTriple = NetworkValue & {
+export type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
@@ -24,7 +24,7 @@ type NetworkTriple = NetworkValue & {
   space: string;
 };
 
-function extractValue(networkTriple: NetworkTriple): Value {
+export function extractValue(networkTriple: NetworkTriple): Value {
   switch (networkTriple.valueType) {
     case 'STRING':
       return { type: 'string', value: networkTriple.stringValue };
