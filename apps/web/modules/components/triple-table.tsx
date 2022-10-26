@@ -9,13 +9,13 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useEditable } from '../state/use-editable';
 import { useTriples } from '../state/use-triples';
-import { Triple, Value } from '../types';
+import { EntityNames, Triple, Value } from '../types';
 import { CellEditableInput } from './table/cell-editable-input';
 import { CellTruncate } from './table/cell-truncate';
 
@@ -24,6 +24,7 @@ import { CellTruncate } from './table/cell-truncate';
 declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+    entityNames: EntityNames;
   }
 }
 
@@ -86,8 +87,7 @@ const Container = styled.div(props => ({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { entityNames } = useTriples();
-
+    const entityNames = table.options?.meta?.entityNames || {};
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { editable } = useEditable();
 
@@ -171,7 +171,9 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-export default function TripleTable({ update, triples, space }: Props) {
+const TripleTable = memo(function TripleTable({ update, triples, space }: Props) {
+  const { entityNames } = useTriples();
+
   const table = useReactTable({
     data: triples,
     columns,
@@ -182,10 +184,9 @@ export default function TripleTable({ update, triples, space }: Props) {
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 50,
       },
     },
-
     meta: {
       updateData: (rowIndex, columnId, cellValue) => {
         const oldEntityId = triples[rowIndex].entityId;
@@ -204,6 +205,7 @@ export default function TripleTable({ update, triples, space }: Props) {
         const newTriple = createTripleWithId(space, entityId, attributeId, value);
         update(newTriple, triples[rowIndex]);
       },
+      entityNames,
     },
   });
 
@@ -235,4 +237,6 @@ export default function TripleTable({ update, triples, space }: Props) {
       </Table>
     </Container>
   );
-}
+});
+
+export default TripleTable;
