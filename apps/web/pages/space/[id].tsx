@@ -3,7 +3,7 @@ import debounce from 'lodash.debounce';
 import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { Button } from '~/modules/design-system/button';
+import { Button, SmallButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -78,9 +78,9 @@ const PageNumberValue = styled.button<{ isActive?: boolean }>(props => ({
 
 function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (
-    <PageNumberValue isActive={isActive} onClick={onClick}>
+    <SmallButton isActive={isActive} onClick={onClick}>
       <Text variant="smallButton">{number}</Text>
-    </PageNumberValue>
+    </SmallButton>
   );
 }
 
