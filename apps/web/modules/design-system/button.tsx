@@ -6,6 +6,9 @@ import { ColorName } from './theme/colors';
 import React from 'react';
 import { Publish } from './icons/publish';
 import { Eye } from './icons/eye';
+import { Expand } from './icons/expand';
+import { ExpandSmall } from './icons/expand-small';
+import { ContractSmall } from './icons/contract-small';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -35,7 +38,7 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
       return {
         color: theme.colors.text,
         backgroundColor: theme.colors.white,
-        backgroundColorHover: theme.colors.white,
+        backgroundColorHover: theme.colors.bg,
         borderColor: theme.colors['grey-02'],
         borderColorHover: theme.colors.text,
         borderColorFocus: theme.colors.text,
@@ -86,17 +89,20 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   };
 });
 
-type Icon = 'create' | 'publish' | 'eye';
+type Icon = 'create' | 'publish' | 'eye' | 'expand' | 'expandSmall' | 'contractSmall';
 
 const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
   create: (color: ColorName) => <Create color={color} />,
   publish: (color: ColorName) => <Publish color={color} />,
   eye: (color: ColorName) => <Eye color={color} />,
+  expand: (color: ColorName) => <Expand color={color} />,
+  expandSmall: (color: ColorName) => <ExpandSmall color={color} />,
+  contractSmall: (color: ColorName) => <ContractSmall color={color} />,
 };
 
 interface Props {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
   icon?: Icon;
   variant?: ButtonVariant;
   disabled?: boolean;
@@ -120,5 +126,42 @@ export function Button({ children, onClick, icon, variant = 'primary', disabled 
       ) : null}
       {children}
     </StyledButton>
+  );
+}
+
+const StyledSmallButton = styled(StyledButton)<Props & { isActive?: boolean }>(props => {
+  const colors = getButtonColors(props.variant, props.disabled, props.theme);
+
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: `${props.theme.space}px`,
+    height: props.theme.space * 5,
+    width: props.theme.space * 5,
+
+    backgroundColor: props.isActive ? colors.backgroundColorHover : colors.backgroundColor,
+    fontFeatureSettings: '"tnum" 1',
+
+    boxShadow: props.isActive ? `inset 0 0 0 1px ${colors.borderColorHover}` : `inset 0 0 0 1px ${colors.borderColor}`,
+  };
+});
+
+type SmallButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
+
+export function SmallButton({
+  onClick,
+  icon,
+  children,
+  isActive = false,
+  variant = 'secondary',
+  disabled = false,
+}: SmallButtonProps) {
+  return (
+    <StyledSmallButton isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
+      {icon ? <>{icons[icon]('grey-04')}</> : null}
+      {icon && children && <Spacer width={8} />}
+      {children ? <>{children}</> : null}
+    </StyledSmallButton>
   );
 }

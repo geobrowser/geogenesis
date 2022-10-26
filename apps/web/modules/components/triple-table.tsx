@@ -17,6 +17,7 @@ import { createTripleWithId } from '../services/create-id';
 import { useEditable } from '../state/use-editable';
 import { useTriples } from '../state/use-triples';
 import { EntityNames, Triple, Value } from '../types';
+import { TableCell } from './table/cell';
 import { CellEditableInput } from './table/cell-editable-input';
 import { CellTruncate } from './table/cell-truncate';
 
@@ -26,6 +27,7 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     entityNames: EntityNames;
+    expandedCells: Record<string, boolean>;
   }
 }
 
@@ -62,13 +64,6 @@ const TableHeader = styled.th<{ width: number }>(props => ({
   width: props.width,
 }));
 
-const TableCell = styled.td(props => ({
-  verticalAlign: 'top',
-  backgroundColor: 'transparent', // To allow the row to be styled on hover
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  maxWidth: `${props.width}px`,
-}));
-
 const TableRow = styled.tr(props => ({
   ':hover': {
     backgroundColor: props.theme.colors.bg,
@@ -87,7 +82,7 @@ const Container = styled.div(props => ({
 
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
-  cell: ({ getValue, row: { index }, column: { id }, table }) => {
+  cell: ({ getValue, row, column: { id }, table, cell }) => {
     const entityNames = table.options?.meta?.entityNames || {};
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { editable } = useEditable();
@@ -98,13 +93,15 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
 
     // When the input is blurred, we'll call our table meta's updateData function
-    const onBlur = () => table.options.meta?.updateData(index, id, cellData);
+    const onBlur = () => table.options.meta?.updateData(row.index, id, cellData);
 
     // If the initialValue is changed external, sync it up with our state
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       setCellData(initialCellData);
     }, [initialCellData]);
+
+    const cellId = `${row.original.id}-${cell.column.id}`;
 
     switch (id) {
       case 'entityId':
@@ -113,7 +110,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <CellTruncate>
+          <CellTruncate shouldTruncate={true}>
             <Text color="ctaPrimary" variant="tableCell" ellipsize>
               {entityNames[entityId] || entityId}
             </Text>
@@ -136,7 +133,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'entity') {
           return (
-            <CellTruncate>
+            <CellTruncate shouldTruncate={!table.options?.meta?.expandedCells[cellId]}>
               <Chip>{entityNames[value.value] || value.value}</Chip>
             </CellTruncate>
           );
@@ -144,6 +141,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         return (
           <CellEditableInput
+            isExpanded={table.options?.meta?.expandedCells[cellId]}
             placeholder="Add text..."
             isEditable={editable}
             value={entityNames[value.value] || value.value}
@@ -166,6 +164,9 @@ interface Props {
   space: string;
 }
 
+// 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512:0013a0c5-ee49-46fa-bee7-fdf6f91155da:name:s~Creatine is allowed by the International Olympic Committee and National Collegiate Athletic Association (NCAA)-value
+// 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512:0013a0c5-ee49-46fa-bee7-fdf6f91155da:name:s~Creatine is allowed by the International Olympic Committee and National Collegiate Athletic Association (NCAA)-value
+
 // Using a default export here instead of named import to play better with Next's
 // dynamic import syntax. We're dynamically importing TripleTable in the /triples
 // route. Check the comment there for more context.
@@ -173,6 +174,7 @@ interface Props {
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
 const TripleTable = memo(function TripleTable({ update, triples, space }: Props) {
+  const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { entityNames } = useTriples();
 
   const table = useReactTable({
@@ -185,7 +187,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: 100,
       },
     },
     meta: {
@@ -207,6 +209,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
         update(newTriple, triples[rowIndex]);
       },
       entityNames,
+      expandedCells,
     },
   });
 
@@ -227,11 +230,26 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
         <tbody>
           {table.getRowModel().rows.map(row => (
             <TableRow key={row.id}>
-              {row.getVisibleCells().map(cell => (
-                <TableCell width={cell.column.getSize()} key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
+              {row.getVisibleCells().map(cell => {
+                const cellId = `${row.original.id}-${cell.column.id}`;
+
+                return (
+                  <TableCell
+                    isExpandable={cell.column.id === 'value'}
+                    isExpanded={expandedCells[cellId]}
+                    width={cell.column.getSize()}
+                    key={cell.id}
+                    toggleExpanded={() =>
+                      setExpandedCells(prev => ({
+                        ...prev,
+                        [cellId]: !prev[cellId],
+                      }))
+                    }
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </tbody>
