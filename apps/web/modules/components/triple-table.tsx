@@ -63,6 +63,7 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 }));
 
 const TableCell = styled.td(props => ({
+  verticalAlign: 'top',
   backgroundColor: 'transparent', // To allow the row to be styled on hover
   border: `1px solid ${props.theme.colors['grey-02']}`,
   maxWidth: `${props.width}px`,
