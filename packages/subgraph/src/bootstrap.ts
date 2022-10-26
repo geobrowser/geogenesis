@@ -15,49 +15,56 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
   handleAction(new CreateEntityAction('attribute'), space, createdAtBlock)
   handleAction(new CreateEntityAction('space'), space, createdAtBlock)
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction(
-  //     'attribute',
-  //     'name',
-  //     new StringValue('Attribute')
-  //   ),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      'attribute',
+      'name',
+      new StringValue('Attribute')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction('space', 'name', new StringValue('Space')),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('space', 'name', new StringValue('Space')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction('name', 'type', new EntityValue('attribute')),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('name', 'type', new EntityValue('attribute')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 
-  // handleCreateTripleAction({
-  //   fact: new CreateTripleAction('type', 'type', new EntityValue('attribute')),
-  //   space,
-  //   isProtected: true,
-  //   isRootSpace,
-  // })
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('type', 'type', new EntityValue('attribute')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction('space', 'type', new EntityValue('attribute')),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
 }
