@@ -4,17 +4,13 @@ interface Props {
   shouldTruncate: boolean;
 }
 
-export const CellTruncate = styled.div<Props>(props => {
-  // if (props.shouldTruncate) console.log('shouldTruncate', props.shouldTruncate);
+export const CellTruncate = styled.div<Props>(props => ({
+  margin: props.theme.space * 2.5,
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
 
-  return {
-    margin: props.theme.space * 2.5,
-    display: '-webkit-box',
-    WebkitBoxOrient: 'vertical',
-
-    ...(props.shouldTruncate && {
-      overflow: 'hidden',
-      WebkitLineClamp: '3',
-    }),
-  };
-});
+  ...(props.shouldTruncate && {
+    overflow: 'hidden',
+    WebkitLineClamp: '3',
+  }),
+}));
