@@ -128,7 +128,14 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
 const InputContainer = styled.div({
   width: '100%',
   display: 'flex',
+  position: 'relative',
 });
+
+const InputIcon = styled.div(props => ({
+  position: 'absolute',
+  right: props.theme.space * 2.5,
+  top: props.theme.space * 2.5,
+}));
 
 function Triples({ space }: { space: string }) {
   const { isEditor } = useAccessControl(space);
@@ -203,7 +210,9 @@ function Triples({ space }: { space: string }) {
           onChange={e => tripleStore.setQuery(e.target.value)}
           value={tripleStore.query}
         />
-        <FilterDialog inputContainerWidth={inputRect?.width || 0} />
+        <InputIcon>
+          <FilterDialog inputContainerWidth={inputRect?.width || 0} />
+        </InputIcon>
       </InputContainer>
 
       <Spacer height={12} />

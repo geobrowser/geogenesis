@@ -9,6 +9,9 @@ import { Eye } from './icons/eye';
 import { Expand } from './icons/expand';
 import { ExpandSmall } from './icons/expand-small';
 import { ContractSmall } from './icons/contract-small';
+import { Filter } from './icons/filter';
+import { Trash } from './icons/trash';
+import { Tick } from './icons/tick';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -89,7 +92,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   };
 });
 
-type Icon = 'create' | 'publish' | 'eye' | 'expand' | 'expandSmall' | 'contractSmall';
+type Icon = 'create' | 'publish' | 'eye' | 'expand' | 'expandSmall' | 'contractSmall' | 'filter' | 'trash' | 'tick';
 
 const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
   create: (color: ColorName) => <Create color={color} />,
@@ -98,6 +101,9 @@ const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
   expand: (color: ColorName) => <Expand color={color} />,
   expandSmall: (color: ColorName) => <ExpandSmall color={color} />,
   contractSmall: (color: ColorName) => <ContractSmall color={color} />,
+  filter: (color: ColorName) => <Filter color={color} />,
+  trash: (color: ColorName) => <Trash color={color} />,
+  tick: (color: ColorName) => <Tick color={color} />,
 };
 
 interface Props {
@@ -162,5 +168,31 @@ export const SmallButton = React.forwardRef(function SmallButton(
       {icon && children && <Spacer width={8} />}
       {children ? <>{children}</> : null}
     </StyledSmallButton>
+  );
+});
+
+interface IconButtonProps {
+  icon: Icon;
+  color?: ColorName;
+  onClick?: () => void;
+}
+
+const UnstyledButton = styled.button({
+  border: 'none',
+  backgroundColor: 'transparent',
+
+  '&:hover': {
+    cursor: 'pointer',
+  },
+});
+
+export const IconButton = React.forwardRef(function IconButton(
+  { onClick, icon, color = 'text' }: IconButtonProps,
+  ref: ForwardedRef<HTMLButtonElement>
+) {
+  return (
+    <UnstyledButton ref={ref} onClick={onClick}>
+      {icons[icon](color)}
+    </UnstyledButton>
   );
 });
