@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import debounce from 'lodash.debounce';
 import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
 import { FlowBar } from '~/modules/components/flow-bar';
@@ -7,6 +6,7 @@ import { Button, SmallButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
+import { FilterDialog } from '~/modules/components/filter/dialog';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
@@ -16,6 +16,8 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
+import React from 'react';
+import { useRect } from '@radix-ui/react-use-rect';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -62,19 +64,6 @@ const PageNumberContainer = styled.div({
   justifyContent: 'flex-end',
   alignSelf: 'flex-end',
 });
-
-const PageNumberValue = styled.button<{ isActive?: boolean }>(props => ({
-  backgroundColor: props.isActive ? props.theme.colors['grey-01'] : 'transparent',
-  height: props.theme.space * 5,
-  width: props.theme.space * 5,
-  borderRadius: props.theme.radius,
-  border: props.isActive ? `1px solid  ${props.theme.colors.text}` : `1px solid ${props.theme.colors['grey-02']}`,
-  fontFeatureSettings: '"tnum" 1',
-
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}));
 
 function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (
@@ -123,13 +112,25 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
   );
 }
 
+const InputContainer = styled.div({
+  width: '100%',
+  display: 'flex',
+  position: 'relative',
+});
+
+const InputIcon = styled.div(props => ({
+  position: 'absolute',
+  right: props.theme.space * 2.5,
+  top: props.theme.space * 2.5,
+}));
+
 function Triples({ space }: { space: string }) {
   const { isEditor } = useAccessControl(space);
 
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
-
-  // const debouncedFilter = debounce(tripleStore.setQuery, 500);
+  const inputContainerRef = React.useRef<HTMLDivElement>(null);
+  const inputRect = useRect(inputContainerRef.current);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
@@ -190,11 +191,16 @@ function Triples({ space }: { space: string }) {
 
       <Spacer height={12} />
 
-      <Input
-        placeholder="Search facts..."
-        onChange={e => tripleStore.setQuery(e.target.value)}
-        value={tripleStore.query}
-      />
+      <InputContainer ref={inputContainerRef}>
+        <Input
+          placeholder="Search facts..."
+          onChange={e => tripleStore.setQuery(e.target.value)}
+          value={tripleStore.query}
+        />
+        <InputIcon>
+          <FilterDialog inputContainerWidth={inputRect?.width || 0} />
+        </InputIcon>
+      </InputContainer>
 
       <Spacer height={12} />
 

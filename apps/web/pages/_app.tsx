@@ -10,11 +10,11 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { WalletProvider } from '~/modules/wallet';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ServicesProvider } from '~/modules/services';
+import { shadows } from '~/modules/design-system/theme/shadows';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
-  overflow: 'hidden',
   backgroundColor: `${props.theme.colors.white}`,
   position: 'relative',
 }));
@@ -24,9 +24,12 @@ const globalStyles = css`
     scrollbar-gutter: stable;
     overflow: auto;
   }
+
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
+    width: 100%;
+    height: 100%;
   }
 `;
 
@@ -42,6 +45,7 @@ const theme: Theme = {
   typography: typography.light,
   space: 4,
   radius: 6,
+  shadows,
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
