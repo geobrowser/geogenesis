@@ -40,7 +40,6 @@ const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  overflow: 'hidden',
 });
 
 const FileImport = styled.input({
@@ -65,19 +64,6 @@ const PageNumberContainer = styled.div({
   justifyContent: 'flex-end',
   alignSelf: 'flex-end',
 });
-
-const PageNumberValue = styled.button<{ isActive?: boolean }>(props => ({
-  backgroundColor: props.isActive ? props.theme.colors['grey-01'] : 'transparent',
-  height: props.theme.space * 5,
-  width: props.theme.space * 5,
-  borderRadius: props.theme.radius,
-  border: props.isActive ? `1px solid  ${props.theme.colors.text}` : `1px solid ${props.theme.colors['grey-02']}`,
-  fontFeatureSettings: '"tnum" 1',
-
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}));
 
 function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (

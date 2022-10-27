@@ -14,11 +14,22 @@ const SelectWrapper = styled.div({
   flexBasis: '33%',
 });
 
+const options = [
+  {
+    label: 'Is a',
+    value: 'is-a',
+  },
+  {
+    label: 'Is not a',
+    value: 'is-not-a',
+  },
+];
+
 export function FilterInputGroup() {
   return (
     <Flex>
       <SelectWrapper>
-        <Select />
+        <Select options={options} value={options[0].value} onChange={() => {}} />
       </SelectWrapper>
       <Spacer width={12} />
       <Input />

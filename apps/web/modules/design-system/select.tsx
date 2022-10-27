@@ -57,10 +57,16 @@ const StyledItemText = styled(SelectPrimitive.SelectItemText)(props => ({
   color: props.theme.colors.ctaHover,
 }));
 
-export const Select = () => (
-  <SelectPrimitive.Root>
+interface Props {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}
+
+export const Select = ({ value, onChange, options }: Props) => (
+  <SelectPrimitive.Root value={value} onValueChange={onChange}>
     <StyledTrigger aria-label="Food">
-      <SelectPrimitive.SelectValue placeholder="Select an option..." />
+      <SelectPrimitive.SelectValue />
       <Spacer width={8} />
       <ChevronDownSmall color="ctaPrimary" />
     </StyledTrigger>
@@ -68,12 +74,11 @@ export const Select = () => (
       <StyledContent>
         <StyledViewport>
           <SelectPrimitive.Group>
-            <StyledItem value="apple">
-              <StyledItemText>Apple</StyledItemText>
-            </StyledItem>
-            <StyledItem value="banana">
-              <StyledItemText>Banana</StyledItemText>
-            </StyledItem>
+            {options.map(option => (
+              <StyledItem key={option.value} value={option.value}>
+                <StyledItemText>{option.label}</StyledItemText>
+              </StyledItem>
+            ))}
           </SelectPrimitive.Group>
         </StyledViewport>
       </StyledContent>

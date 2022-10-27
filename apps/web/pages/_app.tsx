@@ -15,7 +15,6 @@ import { shadows } from '~/modules/design-system/theme/shadows';
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
-  overflow: 'hidden',
   backgroundColor: `${props.theme.colors.white}`,
   position: 'relative',
 }));
