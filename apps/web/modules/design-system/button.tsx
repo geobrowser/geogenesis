@@ -3,7 +3,7 @@ import { Create } from './icons/create';
 import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
-import React from 'react';
+import React, { ForwardedRef } from 'react';
 import { Publish } from './icons/publish';
 import { Eye } from './icons/eye';
 import { Expand } from './icons/expand';
@@ -113,11 +113,14 @@ function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
   return variant === 'primary' ? 'white' : 'ctaPrimary';
 }
 
-export function Button({ children, onClick, icon, variant = 'primary', disabled = false }: Props) {
+export const Button = React.forwardRef(function Button(
+  { children, onClick, icon, variant = 'primary', disabled = false }: Props,
+  ref: ForwardedRef<HTMLButtonElement>
+) {
   const iconColor = getIconColor(variant, disabled);
 
   return (
-    <StyledButton disabled={disabled} variant={variant} onClick={onClick}>
+    <StyledButton ref={ref} disabled={disabled} variant={variant} onClick={onClick}>
       {icon ? (
         <>
           {icons[icon](iconColor)}
@@ -127,7 +130,7 @@ export function Button({ children, onClick, icon, variant = 'primary', disabled 
       {children}
     </StyledButton>
   );
-}
+});
 
 const StyledSmallButton = styled(StyledButton)<Props & { isActive?: boolean }>(props => {
   const colors = getButtonColors(props.variant, props.disabled, props.theme);
@@ -149,19 +152,15 @@ const StyledSmallButton = styled(StyledButton)<Props & { isActive?: boolean }>(p
 
 type SmallButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
 
-export function SmallButton({
-  onClick,
-  icon,
-  children,
-  isActive = false,
-  variant = 'secondary',
-  disabled = false,
-}: SmallButtonProps) {
+export const SmallButton = React.forwardRef(function SmallButton(
+  { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false }: SmallButtonProps,
+  ref: ForwardedRef<HTMLButtonElement>
+) {
   return (
-    <StyledSmallButton isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
+    <StyledSmallButton ref={ref} isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
       {icon ? <>{icons[icon]('grey-04')}</> : null}
       {icon && children && <Spacer width={8} />}
       {children ? <>{children}</> : null}
     </StyledSmallButton>
   );
-}
+});
