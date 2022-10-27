@@ -6,7 +6,7 @@ import { Button, SmallButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
-import { FilterDialog } from '~/modules/design-system/dialog';
+import { FilterDialog } from '~/modules/components/filter/dialog';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
@@ -40,6 +40,7 @@ const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
+  overflow: 'hidden',
 });
 
 const FileImport = styled.input({

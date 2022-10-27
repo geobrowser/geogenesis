@@ -25,9 +25,12 @@ const globalStyles = css`
     scrollbar-gutter: stable;
     overflow: auto;
   }
+
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
+    width: 100%;
+    height: 100%;
   }
 `;
 

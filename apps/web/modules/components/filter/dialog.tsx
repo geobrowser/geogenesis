@@ -1,10 +1,11 @@
 import React from 'react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Button, IconButton } from './button';
-import { Text } from './text';
+import { Button, IconButton } from '../../design-system/button';
+import { Text } from '../../design-system/text';
 import { useTheme } from '@emotion/react';
-import { Spacer } from './spacer';
+import { Spacer } from '../../design-system/spacer';
+import { FilterInputGroup } from './input-group';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -50,6 +51,8 @@ export function FilterDialog({ inputContainerWidth }: Props) {
           onOpenAutoFocus={event => event.preventDefault()}
         >
           <Text variant="button">Show item(s) that:</Text>
+          <Spacer height={12} />
+          <FilterInputGroup />
           <Spacer height={12} />
           <ButtonGroup>
             <Button icon="create" variant="secondary">

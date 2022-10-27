@@ -19,6 +19,7 @@
     "@legendapp/state": "^0.20.0",
     "@radix-ui/react-dialog": "^1.0.2",
     "@radix-ui/react-popover": "^1.0.2",
+    "@radix-ui/react-select": "^1.1.1",
     "@radix-ui/react-use-rect": "^1.0.0",
     "@rainbow-me/rainbowkit": "^0.6.0",
     "@tanstack/query-core": "4.3.8",
