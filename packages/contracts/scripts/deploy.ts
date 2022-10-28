@@ -19,8 +19,12 @@ async function main() {
   console.log('Deploying on network', networkId, networkConfig)
 
   const spaceRegistry = await deploySpace({ debug: true })
+
   const spaceContract = await deploySpace({ debug: true })
   console.log('Added new space at address: ', spaceContract.address)
+
+  const spaceContract2 = await deploySpace({ debug: true })
+  console.log('Added new space 2 at address: ', spaceContract2.address)
 
   const spaceRoot: Root = {
     type: 'root',
@@ -44,6 +48,24 @@ async function main() {
           value: spaceContract.address,
         },
       },
+      {
+        type: 'createTriple',
+        entityId: 'space-2',
+        attributeId: 'name',
+        value: {
+          type: 'string',
+          value: 'Space 2',
+        },
+      },
+      {
+        type: 'createTriple',
+        entityId: 'space-2',
+        attributeId: 'space',
+        value: {
+          type: 'string',
+          value: spaceContract2.address,
+        },
+      },
     ],
   }
 
@@ -53,45 +75,6 @@ async function main() {
       JSON.stringify(spaceRoot)
     ).toString('base64')}`
   )
-
-  // await addEntry(spaceContract, 'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==')
-
-  // const root: Root = {
-  //   type: 'root',
-  //   version: '0.0.1',
-  //   actions: [
-  //     {
-  //       type: 'createTriple',
-  //       entityId: 'e',
-  //       attributeId: 'a',
-  //       value: {
-  //         type: 'string',
-  //         value: 'hi',
-  //       },
-  //     },
-  //     {
-  //       type: 'createTriple',
-  //       entityId: 'e',
-  //       attributeId: 'a',
-  //       value: {
-  //         type: 'number',
-  //         value: '42',
-  //       },
-  //     },
-  //   ],
-  // }
-
-  // await addEntry(
-  //   spaceContract,
-  //   `data:application/json;base64,${Buffer.from(JSON.stringify(root)).toString(
-  //     'base64'
-  //   )}`
-  // )
-
-  // await addEntry(
-  //   spaceContract,
-  //   `ipfs://bafkreif4cmtuykxzbmkr3fg57n746hecjnf4nmlrn76e73jrr7jrfn4yti`
-  // )
 
   saveAddress({
     chainId,
