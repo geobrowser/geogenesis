@@ -9,6 +9,7 @@ const StyledTableCell = styled.td<StyledProps>(props => ({
   backgroundColor: 'transparent', // To allow the row to be styled on hover
   border: `1px solid ${props.theme.colors['grey-02']}`,
   maxWidth: `${props.width}px`,
+  padding: 10,
 }));
 
 const Relative = styled.div({
@@ -17,7 +18,7 @@ const Relative = styled.div({
 
 const Absolute = styled.div({
   top: 0,
-  right: 10,
+  right: 0,
   position: 'absolute',
   zIndex: 10,
 });

@@ -9,7 +9,6 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { useRouter } from 'next/router';
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
@@ -19,7 +18,6 @@ import { useTriples } from '../state/use-triples';
 import { EntityNames, Triple, Value } from '../types';
 import { TableCell } from './table/cell';
 import { CellEditableInput } from './table/cell-editable-input';
-import { CellTruncate } from './table/cell-truncate';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -33,21 +31,24 @@ declare module '@tanstack/react-table' {
 
 const columnHelper = createColumnHelper<Triple>();
 
+// Table width, minus cell borders
+const COLUMN_SIZE = (1060 - 4) / 3;
+
 const columns = [
   columnHelper.accessor(row => row.entityId, {
     id: 'entityId',
-    header: () => <Text variant="smallTitle">Entity ID</Text>,
-    size: 160,
+    header: () => <Text variant="smallTitle">Entity</Text>,
+    size: COLUMN_SIZE,
   }),
   columnHelper.accessor(row => row.attributeId, {
     id: 'attributeId',
     header: () => <Text variant="smallTitle">Attribute</Text>,
-    size: 450,
+    size: COLUMN_SIZE,
   }),
   columnHelper.accessor(row => row.value, {
     id: 'value',
     header: () => <Text variant="smallTitle">Value</Text>,
-    size: 450,
+    size: COLUMN_SIZE,
   }),
 ];
 
@@ -80,6 +81,11 @@ const Container = styled.div(props => ({
   overflow: 'hidden',
 }));
 
+// Negative margin so table row height matches a single line of text
+const ChipCellContainer = styled.div({
+  margin: '-1px 0',
+});
+
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
@@ -110,12 +116,24 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
         return (
-          <CellTruncate shouldTruncate={true}>
-            <Text color="ctaPrimary" variant="tableCell" ellipsize>
-              {entityNames[entityId] || entityId}
-            </Text>
-          </CellTruncate>
+          <CellEditableInput
+            isEntity
+            isExpanded={table.options?.meta?.expandedCells[cellId]}
+            placeholder="Add text..."
+            isEditable={editable}
+            value={entityNames[entityId] || entityId}
+            onChange={() => {}}
+            onBlur={onBlur}
+          />
         );
+
+      // return (
+      //   <CellTruncate shouldTruncate={true}>
+      //     <Text color="ctaPrimary" variant="tableCell" ellipsize>
+      //       {entityNames[entityId] || entityId}
+      //     </Text>
+      //   </CellTruncate>
+      // );
       case 'attributeId':
         const attributeId = cellData as string;
 
@@ -133,9 +151,9 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'entity') {
           return (
-            <CellTruncate shouldTruncate={!table.options?.meta?.expandedCells[cellId]}>
+            <ChipCellContainer>
               <Chip>{entityNames[value.value] || value.value}</Chip>
-            </CellTruncate>
+            </ChipCellContainer>
           );
         }
 

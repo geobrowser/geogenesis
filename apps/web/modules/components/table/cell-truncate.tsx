@@ -1,16 +1,16 @@
 import styled from '@emotion/styled';
 
 interface Props {
-  shouldTruncate: boolean;
+  shouldTruncate?: boolean;
+  maxLines?: number;
 }
 
 export const CellTruncate = styled.div<Props>(props => ({
-  margin: props.theme.space * 2.5,
   display: '-webkit-box',
   WebkitBoxOrient: 'vertical',
 
   ...(props.shouldTruncate && {
     overflow: 'hidden',
-    WebkitLineClamp: '3',
+    WebkitLineClamp: String(props.maxLines ?? 1),
   }),
 }));

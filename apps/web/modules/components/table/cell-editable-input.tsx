@@ -19,10 +19,8 @@ export function CellEditableInput({ isEditable, isExpanded, value, isEntity, ...
   return isEditable ? (
     <CellInput value={value} {...rest} />
   ) : (
-    <CellTruncate shouldTruncate={!isExpanded}>
-      <Text color={isEntity ? 'ctaPrimary' : 'text'} variant="tableCell">
-        {value}
-      </Text>
+    <CellTruncate maxLines={isEntity ? 1 : 3} shouldTruncate={!isExpanded}>
+      <Text variant="tableCell">{value}</Text>
     </CellTruncate>
   );
 }

@@ -1,22 +1,23 @@
-import 'modern-normalize';
-import '../styles/styles.css';
-import { ThemeProvider, css, Global, Theme } from '@emotion/react';
+import { css, Global, Theme, ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
-import { colors } from '~/modules/design-system/theme/colors';
-import { typography } from '~/modules/design-system/theme/typography';
 import { Spacer } from '~/modules/design-system/spacer';
-import { WalletProvider } from '~/modules/wallet';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { ServicesProvider } from '~/modules/services';
+import { colors } from '~/modules/design-system/theme/colors';
 import { shadows } from '~/modules/design-system/theme/shadows';
+import { typography } from '~/modules/design-system/theme/typography';
+import { ServicesProvider } from '~/modules/services';
+import { WalletProvider } from '~/modules/wallet';
+import '../styles/styles.css';
 
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
   backgroundColor: `${props.theme.colors.white}`,
   position: 'relative',
+  padding: '0 2ch',
 }));
 
 const globalStyles = css`
@@ -34,10 +35,9 @@ const globalStyles = css`
 `;
 
 const Layout = styled.main({
-  padding: '2ch',
-  paddingTop: '6ch',
-  margin: '0 auto',
+  padding: '6ch 0 4ch 0',
   maxWidth: '1060px',
+  margin: '0 auto',
 });
 
 const theme: Theme = {
