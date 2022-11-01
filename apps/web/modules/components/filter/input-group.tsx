@@ -22,6 +22,7 @@ interface Props {
   onDelete: () => void;
   options: FilterOption[];
   label: string;
+  isDeletable: boolean;
 }
 
 export type FilterOption = {
@@ -29,7 +30,7 @@ export type FilterOption = {
   label: string;
 };
 
-export function FilterInputGroup({ filterClause, onChange, options, label, onDelete }: Props) {
+export function FilterInputGroup({ filterClause, onChange, options, label, onDelete, isDeletable }: Props) {
   return (
     <Flex>
       <StyledLabel disabled variant="secondary">
@@ -54,8 +55,12 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
           onChange(newFilterClause);
         }}
       />
-      <Spacer width={12} />
-      <Button icon="trash" variant="secondary" onClick={onDelete} />
+      {isDeletable && (
+        <>
+          <Spacer width={12} />
+          <Button icon="trash" variant="secondary" onClick={onDelete} />
+        </>
+      )}
     </Flex>
   );
 }

@@ -48,6 +48,15 @@ const DEFAULT_INITIAL_PARAMS = {
   pageNumber: 0,
 };
 
+export function initialFilterState(): FilterState {
+  return [
+    {
+      field: 'entity-name',
+      value: '',
+    },
+  ];
+}
+
 export class TripleStore implements ITripleStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
@@ -68,7 +77,7 @@ export class TripleStore implements ITripleStore {
   }: ITripleStoreConfig) {
     this.api = api;
     this.pageNumber$ = observable(initialParams.pageNumber);
-    this.filterState$ = observable<FilterState>([]);
+    this.filterState$ = observable<FilterState>(initialFilterState());
     this.space = space;
     this.query$ = computed(() => {
       const filterState = this.filterState$.get();
