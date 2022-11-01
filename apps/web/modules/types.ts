@@ -39,3 +39,12 @@ export type Account = {
 };
 
 export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';
+
+export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value';
+
+export type FilterClause = {
+  field: FilterField;
+  value: string;
+};
+
+export type FilterState = FilterClause[];

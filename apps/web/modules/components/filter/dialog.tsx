@@ -1,10 +1,12 @@
-import React from 'react';
+import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
+import produce from 'immer';
+import React from 'react';
+import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { Button, IconButton } from '../../design-system/button';
-import { Text } from '../../design-system/text';
-import { useTheme } from '@emotion/react';
 import { Spacer } from '../../design-system/spacer';
+import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
 
 interface ContentProps {
@@ -32,13 +34,35 @@ const ButtonGroup = styled.div({
 
 interface Props {
   inputContainerWidth: number;
+  filterState: FilterState;
+  setFilterState: (filterState: FilterState) => void;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
-export function FilterDialog({ inputContainerWidth }: Props) {
+const FIELD_LABELS: Record<FilterField, string> = {
+  'attribute-id': 'Attribute ID',
+  'attribute-name': 'Attribute name contains',
+  'entity-id': 'Entity ID',
+  'entity-name': 'Entity name contains',
+  value: 'Value contains',
+};
+
+const FIELD_OPTIONS = (Object.entries(FIELD_LABELS) as [FilterField, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+function getFilterOptions(filterState: FilterState, value?: FilterClause) {
+  return FIELD_OPTIONS.filter(
+    option => option.value === value?.field || !filterState.find(item => item.field === option.value)
+  );
+}
+
+export function FilterDialog({ inputContainerWidth, filterState, setFilterState, onOpenChange }: Props) {
   const theme = useTheme();
 
   return (
-    <PopoverPrimitive.Root>
+    <PopoverPrimitive.Root onOpenChange={onOpenChange}>
       <PopoverPrimitive.Trigger asChild>
         <IconButton icon="filter" />
       </PopoverPrimitive.Trigger>
@@ -50,26 +74,71 @@ export function FilterDialog({ inputContainerWidth }: Props) {
           align="end"
           onOpenAutoFocus={event => event.preventDefault()}
         >
-          <Text variant="button">Show item(s) that:</Text>
+          <Text variant="button">Show triples</Text>
           <Spacer height={12} />
-          <FilterInputGroup />
+          {intersperse(
+            filterState.map((filterClause, index) => (
+              <FilterInputGroup
+                label={index === 0 ? 'Where' : 'And'}
+                key={index}
+                options={getFilterOptions(filterState, filterClause)}
+                filterClause={filterClause}
+                onChange={newFilterClause => {
+                  const newFilterState = produce(filterState, draft => {
+                    draft[index] = newFilterClause;
+                  });
+
+                  setFilterState(newFilterState);
+                }}
+                onDelete={() => {
+                  const newFilterState = produce(filterState, draft => {
+                    draft.splice(index, 1);
+                  });
+
+                  setFilterState(newFilterState);
+                }}
+              />
+            )),
+            <Spacer height={12} />
+          )}
           <Spacer height={12} />
           <ButtonGroup>
-            <Button icon="create" variant="secondary">
+            <Button
+              icon="create"
+              variant="secondary"
+              disabled={getFilterOptions(filterState).length === 0}
+              onClick={() => {
+                const defaultOption = getFilterOptions(filterState)[0];
+
+                const newFilterState = produce(filterState, draft => {
+                  draft.push({ field: defaultOption.value, value: '' });
+                });
+
+                setFilterState(newFilterState);
+              }}
+            >
               And
             </Button>
             <ButtonGroup>
-              <Button icon="trash" variant="secondary">
+              <Button
+                icon="trash"
+                variant="secondary"
+                onClick={() => {
+                  setFilterState([]);
+                }}
+              >
                 Clear all
-              </Button>
-              <Spacer width={12} />
-              <Button icon="tick" variant="secondary" disabled>
-                Apply all filters
               </Button>
             </ButtonGroup>
           </ButtonGroup>
         </StyledContent>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
+  );
+}
+
+export default function intersperse<T>(elements: T[], separator: T | (() => T)): T[] {
+  return elements.flatMap((element, i) =>
+    i === 0 ? [element] : [separator instanceof Function ? separator() : separator, element]
   );
 }

@@ -1,12 +1,14 @@
 import styled from '@emotion/styled';
+import { useRect } from '@radix-ui/react-use-rect';
 import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
+import React from 'react';
+import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button, SmallButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
-import { FilterDialog } from '~/modules/components/filter/dialog';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
@@ -16,8 +18,6 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
-import React from 'react';
-import { useRect } from '@radix-ui/react-use-rect';
 
 // We're dynamically importing the TripleTable so we can disable SSR. There are ocassionally hydration
 // mismatches in dev (maybe prod?) that happen when reloading a page when the table has optimistic data
@@ -198,7 +198,11 @@ function Triples({ space }: { space: string }) {
           value={tripleStore.query}
         />
         <InputIcon>
-          <FilterDialog inputContainerWidth={inputRect?.width || 0} />
+          <FilterDialog
+            inputContainerWidth={inputRect?.width || 0}
+            filterState={tripleStore.filterState}
+            setFilterState={tripleStore.setFilterState}
+          />
         </InputIcon>
       </InputContainer>
 

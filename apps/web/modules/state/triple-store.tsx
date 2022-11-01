@@ -1,9 +1,10 @@
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
-import { computed, observable, Observable, ObservableComputed, observe } from '@legendapp/state';
+import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
+import produce from 'immer';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { EntityNames, ReviewState, Triple } from '../types';
+import { EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
@@ -11,7 +12,7 @@ interface ITripleStore {
   entityNames$: ObservableComputed<EntityNames>;
   triples$: ObservableComputed<Triple[]>;
   pageNumber$: Observable<number>;
-  query$: Observable<string>;
+  query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
@@ -53,7 +54,8 @@ export class TripleStore implements ITripleStore {
   entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
   pageNumber$: Observable<number>;
-  query$: Observable<string>;
+  query$: ObservableComputed<string>;
+  filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
@@ -65,9 +67,13 @@ export class TripleStore implements ITripleStore {
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
-    this.query$ = observable(initialParams.query);
     this.pageNumber$ = observable(initialParams.pageNumber);
+    this.filterState$ = observable<FilterState>([]);
     this.space = space;
+    this.query$ = computed(() => {
+      const filterState = this.filterState$.get();
+      return filterState.find(f => f.field === 'entity-name')?.value || '';
+    });
 
     const networkData$ = makeOptionalComputed(
       { triples: [], entityNames: {}, hasNextPage: false },
@@ -78,6 +84,7 @@ export class TripleStore implements ITripleStore {
             space: this.space,
             skip: this.pageNumber$.get() * pageSize,
             first: pageSize + 1,
+            filter: this.filterState$.get(),
           });
 
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
@@ -195,7 +202,16 @@ export class TripleStore implements ITripleStore {
   setQuery = (query: string) => {
     console.log('New query', query);
     this.setPageNumber(0);
-    this.query$.set(query);
+    this.filterState$.set(
+      produce(this.filterState$.get(), draft => {
+        const entityNameFilter = draft.find(f => f.field === 'entity-name');
+        if (entityNameFilter) {
+          entityNameFilter.value = query;
+        } else {
+          draft.unshift({ field: 'entity-name', value: query });
+        }
+      })
+    );
   };
 
   setPageNumber = (pageNumber: number) => {
@@ -211,5 +227,9 @@ export class TripleStore implements ITripleStore {
     const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
     this.pageNumber$.set(previousPageNumber);
+  };
+
+  setFilterState = (filter: FilterState) => {
+    this.filterState$.set(filter);
   };
 }

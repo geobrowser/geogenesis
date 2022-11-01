@@ -1,17 +1,17 @@
 import styled from '@emotion/styled';
+import React, { ForwardedRef } from 'react';
+import { ContractSmall } from './icons/contract-small';
 import { Create } from './icons/create';
+import { Expand } from './icons/expand';
+import { ExpandSmall } from './icons/expand-small';
+import { Eye } from './icons/eye';
+import { Filter } from './icons/filter';
+import { Publish } from './icons/publish';
+import { Tick } from './icons/tick';
+import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
-import React, { ForwardedRef } from 'react';
-import { Publish } from './icons/publish';
-import { Eye } from './icons/eye';
-import { Expand } from './icons/expand';
-import { ExpandSmall } from './icons/expand-small';
-import { ContractSmall } from './icons/contract-small';
-import { Filter } from './icons/filter';
-import { Trash } from './icons/trash';
-import { Tick } from './icons/tick';
 
 type ButtonVariant = 'primary' | 'secondary';
 
@@ -107,7 +107,7 @@ const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
 };
 
 interface Props {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   onClick?: () => void;
   icon?: Icon;
   variant?: ButtonVariant;
@@ -127,13 +127,10 @@ export const Button = React.forwardRef(function Button(
 
   return (
     <StyledButton ref={ref} disabled={disabled} variant={variant} onClick={onClick}>
-      {icon ? (
-        <>
-          {icons[icon](iconColor)}
-          <Spacer width={8} />
-        </>
-      ) : null}
-      {children}
+      {icon && icons[icon](iconColor)}
+      {icon && children && <Spacer width={8} />}
+      {/* Use zero-width space to enforce min line height */}
+      {children ?? '\u200b'}
     </StyledButton>
   );
 });
@@ -196,3 +193,9 @@ export const IconButton = React.forwardRef(function IconButton(
     </UnstyledButton>
   );
 });
+
+export const StyledLabel = styled(StyledButton)(props => ({
+  minWidth: '67px',
+  color: props.theme.colors.text,
+  background: props.theme.colors['grey-01'],
+}));
