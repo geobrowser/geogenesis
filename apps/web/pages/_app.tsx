@@ -4,6 +4,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import 'modern-normalize';
 import { AppProps } from 'next/app';
 import Link from 'next/link';
+import { QueryClient, QueryClientProvider } from 'react-query';
 import { Spacer } from '~/modules/design-system/spacer';
 import { colors } from '~/modules/design-system/theme/colors';
 import { shadows } from '~/modules/design-system/theme/shadows';
@@ -48,32 +49,36 @@ const theme: Theme = {
   shadows,
 };
 
+const queryClient = new QueryClient();
+
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <ThemeProvider theme={theme}>
-      <WalletProvider>
-        <ServicesProvider>
-          <Body>
-            <Global styles={globalStyles} />
-            <Link href="/dev">
-              <a>Design system</a>
-            </Link>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider theme={theme}>
+        <WalletProvider>
+          <ServicesProvider>
+            <Body>
+              <Global styles={globalStyles} />
+              <Link href="/dev">
+                <a>Design system</a>
+              </Link>
 
-            <Spacer width={4} />
+              <Spacer width={4} />
 
-            <Link href="/spaces">
-              <a>Spaces</a>
-            </Link>
+              <Link href="/spaces">
+                <a>Spaces</a>
+              </Link>
 
-            <ConnectButton accountStatus="avatar" />
+              <ConnectButton accountStatus="avatar" />
 
-            <Layout>
-              <Component {...pageProps} />
-            </Layout>
-          </Body>
-        </ServicesProvider>
-      </WalletProvider>
-    </ThemeProvider>
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            </Body>
+          </ServicesProvider>
+        </WalletProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
