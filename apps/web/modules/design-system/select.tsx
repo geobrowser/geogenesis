@@ -1,5 +1,5 @@
-import * as SelectPrimitive from '@radix-ui/react-select';
 import styled from '@emotion/styled';
+import * as SelectPrimitive from '@radix-ui/react-select';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 

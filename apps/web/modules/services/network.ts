@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer } from 'ethers';
 import { Action } from '../state/triple-store';
-import { Account, EntityNames, ReviewState, Space, Triple, Value } from '../types';
+import { Account, EntityNames, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -53,6 +53,7 @@ export type FetchTriplesOptions = {
   space: string;
   skip: number;
   first: number;
+  filter: FilterState;
 };
 
 export type PublishOptions = {
@@ -103,14 +104,26 @@ export class Network implements INetwork {
     console.log('Subgraph finished logging.', tx.index);
   };
 
-  fetchTriples = async ({ space, query, skip, first }: FetchTriplesOptions) => {
+  fetchTriples = async ({ space, query, skip, first, filter }: FetchTriplesOptions) => {
     triplesAbortController.abort();
     triplesAbortController = new AbortController();
 
-    const stringifyQuery = JSON.stringify(query);
-    const stringifySpace = JSON.stringify(space);
+    const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
+      FilterField,
+      string
+    >;
 
-    const nameQuery = query ? `entity_: {name_contains_nocase: ${stringifyQuery}}` : ``;
+    const where = [
+      `space: ${JSON.stringify(space)}`,
+      query && `entity_: {name_contains_nocase: ${JSON.stringify(query)}}`,
+      fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
+      fieldFilters['attribute-name'] &&
+        `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
+      fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+      fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -120,7 +133,7 @@ export class Network implements INetwork {
       signal: triplesAbortController.signal,
       body: JSON.stringify({
         query: `query {
-          triples(where: {space: ${stringifySpace} ${nameQuery}}, skip: ${skip}, first: ${first}) {
+          triples(where: {${where}}, skip: ${skip}, first: ${first}) {
             id
             attribute {
               id

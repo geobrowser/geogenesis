@@ -1,4 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
+import { FilterState } from '../types';
 import { useTripleStore } from './triple-store-provider';
 
 export const useTriples = () => {
@@ -17,6 +18,8 @@ export const useTriples = () => {
     pageNumber$,
     hasPreviousPage$,
     hasNextPage$,
+    filterState$,
+    setFilterState,
   } = useTripleStore();
   const triples = useSelector(triples$);
   const actions = useSelector(actions$);
@@ -25,6 +28,7 @@ export const useTriples = () => {
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const hasNextPage = useSelector(hasNextPage$);
   const query = useSelector(query$);
+  const filterState = useSelector<FilterState>(filterState$);
 
   return {
     triples,
@@ -41,5 +45,7 @@ export const useTriples = () => {
     pageNumber,
     hasPreviousPage,
     hasNextPage,
+    filterState,
+    setFilterState,
   };
 };
