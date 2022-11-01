@@ -2,7 +2,8 @@ import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import produce from 'immer';
-import React from 'react';
+import React, { useState } from 'react';
+import { initialFilterState } from '~/modules/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { Button, IconButton } from '../../design-system/button';
 import { Spacer } from '../../design-system/spacer';
@@ -36,15 +37,14 @@ interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
   setFilterState: (filterState: FilterState) => void;
-  onOpenChange?: (isOpen: boolean) => void;
 }
 
 const FIELD_LABELS: Record<FilterField, string> = {
-  'attribute-id': 'Attribute ID',
-  'attribute-name': 'Attribute name contains',
-  'entity-id': 'Entity ID',
   'entity-name': 'Entity name contains',
+  'attribute-name': 'Attribute name contains',
   value: 'Value contains',
+  'entity-id': 'Entity ID',
+  'attribute-id': 'Attribute ID',
 };
 
 const FIELD_OPTIONS = (Object.entries(FIELD_LABELS) as [FilterField, string][]).map(([value, label]) => ({
@@ -58,11 +58,13 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
   );
 }
 
-export function FilterDialog({ inputContainerWidth, filterState, setFilterState, onOpenChange }: Props) {
+export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
   const theme = useTheme();
 
+  const [open, setOpen] = useState(false);
+
   return (
-    <PopoverPrimitive.Root onOpenChange={onOpenChange}>
+    <PopoverPrimitive.Root onOpenChange={setOpen} open={open}>
       <PopoverPrimitive.Trigger asChild>
         <IconButton icon="filter" />
       </PopoverPrimitive.Trigger>
@@ -90,6 +92,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState,
 
                   setFilterState(newFilterState);
                 }}
+                isDeletable={filterState.length > 1}
                 onDelete={() => {
                   const newFilterState = produce(filterState, draft => {
                     draft.splice(index, 1);
@@ -124,7 +127,8 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState,
                 icon="trash"
                 variant="secondary"
                 onClick={() => {
-                  setFilterState([]);
+                  setFilterState(initialFilterState());
+                  setOpen(false);
                 }}
               >
                 Clear all

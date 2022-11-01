@@ -2,6 +2,7 @@ import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
@@ -125,7 +126,7 @@ const InputIcon = styled.div(props => ({
 }));
 
 function Triples({ space }: { space: string }) {
-  const { isEditor } = useAccessControl(space);
+  const { isEditor, isAdmin } = useAccessControl(space);
 
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
@@ -159,31 +160,40 @@ function Triples({ space }: { space: string }) {
         <Text variant="largeTitle" as="h1">
           Facts
         </Text>
-
-        {isEditor && (
+        {(isEditor || isAdmin) && (
           <>
             <PageHeader>
               <div style={{ flex: 1 }} />
-              <Button variant="secondary" onClick={toggleEditable}>
-                Turn {editable ? 'off' : 'on'} editing
-              </Button>
-              <Spacer width={12} />
-              <Button variant="secondary" icon="create" onClick={() => {}}>
-                Import
-                <FileImport
-                  type="file"
-                  accept=".csv"
-                  onChange={event => {
-                    for (let file of event.target.files ?? []) {
-                      onImport(file);
-                    }
-                  }}
-                />
-              </Button>
-              <Spacer width={12} />
-              <Button icon="create" onClick={onAddTriple}>
-                Add
-              </Button>
+              {isAdmin && (
+                <Link href={`/space/${space}/access-control`}>
+                  <Button variant="secondary">Admin</Button>
+                </Link>
+              )}
+              {isAdmin && isEditor && <Spacer width={12} />}
+              {isEditor && (
+                <>
+                  <Button variant="secondary" onClick={toggleEditable}>
+                    Turn {editable ? 'off' : 'on'} editing
+                  </Button>
+                  <Spacer width={12} />
+                  <Button variant="secondary" icon="create" onClick={() => {}}>
+                    Import
+                    <FileImport
+                      type="file"
+                      accept=".csv"
+                      onChange={event => {
+                        for (let file of event.target.files ?? []) {
+                          onImport(file);
+                        }
+                      }}
+                    />
+                  </Button>
+                  <Spacer width={12} />
+                  <Button icon="create" onClick={onAddTriple}>
+                    Add
+                  </Button>
+                </>
+              )}
             </PageHeader>
           </>
         )}
