@@ -208,6 +208,10 @@ export class Network implements INetwork {
             editors {
               id
             }
+            entity {
+              id
+              name
+            }
           }
         }`,
       }),
@@ -215,7 +219,7 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        spaces: { id: string; admins: Account[]; editors: Account[] }[];
+        spaces: { id: string; admins: Account[]; editors: Account[]; entity?: { id: string; name: string } }[];
       };
     } = await response.json();
 

@@ -210,8 +210,8 @@ export class TripleStore implements ITripleStore {
 
   setQuery = (query: string) => {
     console.log('New query', query);
-    this.setPageNumber(0);
-    this.filterState$.set(
+
+    this.setFilterState(
       produce(this.filterState$.get(), draft => {
         const entityNameFilter = draft.find(f => f.field === 'entity-name');
         if (entityNameFilter) {
@@ -239,6 +239,7 @@ export class TripleStore implements ITripleStore {
   };
 
   setFilterState = (filter: FilterState) => {
+    this.setPageNumber(0);
     this.filterState$.set(filter);
   };
 }

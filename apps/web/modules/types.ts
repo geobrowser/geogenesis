@@ -32,6 +32,7 @@ export type Space = {
   id: string;
   editors: Account[];
   admins: Account[];
+  entity?: { id: string; name: string };
 };
 
 export type Account = {
