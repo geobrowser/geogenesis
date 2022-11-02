@@ -7,7 +7,6 @@ type AppConfig = {
   rpc: string;
   ipfs: string;
   subgraph: string;
-  devServer: string;
 };
 
 export const configOptions: Record<AppEnv, AppConfig> = {
@@ -16,14 +15,12 @@ export const configOptions: Record<AppEnv, AppConfig> = {
     rpc: 'http://localhost:8545',
     ipfs: 'https://api.staging.thegraph.com/ipfs',
     subgraph: 'http://localhost:8000/subgraphs/name/example',
-    devServer: 'http://localhost:3111',
   },
   staging: {
     chainId: '1337',
     rpc: 'https://devnet-dabbott.cloud.okteto.net',
     ipfs: 'https://api.staging.thegraph.com/ipfs',
     subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
-    devServer: 'https://dev-server-dabbott.cloud.okteto.net',
   },
   production: {
     chainId: '1337',
@@ -31,7 +28,6 @@ export const configOptions: Record<AppEnv, AppConfig> = {
     ipfs: 'https://api.staging.thegraph.com/ipfs',
     // ipfs: 'https://api.thegraph.com/ipfs',
     subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
-    devServer: 'https://dev-server-dabbott.cloud.okteto.net',
   },
 };
 

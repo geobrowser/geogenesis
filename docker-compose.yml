@@ -74,18 +74,6 @@ services:
     deploy:
       restart_policy:
         condition: 'no'
-  dev-server:
-    build:
-      context: .
-      dockerfile: ./docker/Build.dockerfile
-    ports:
-      - '3111:3111'
-    command: pnpm --filter dev-server run start
-    volumes:
-      - shared-volume:/app
-    depends_on:
-      deploy-contracts:
-        condition: service_completed_successfully
   build-subgraph:
     build:
       context: .
