@@ -89,32 +89,12 @@ exports[`CSV Import > imports health data format 1`] = `
   },
   {
     "attributeId": "type",
-    "entityId": "content",
-    "id": "s:content:type:e~type",
-    "space": "s",
-    "value": {
-      "type": "entity",
-      "value": "type",
-    },
-  },
-  {
-    "attributeId": "name",
-    "entityId": "content",
-    "id": "s:content:name:s~Content",
+    "entityId": "source",
+    "id": "s:source:type:s~attribute",
     "space": "s",
     "value": {
       "type": "string",
-      "value": "Content",
-    },
-  },
-  {
-    "attributeId": "type",
-    "entityId": "source",
-    "id": "s:source:type:e~type",
-    "space": "s",
-    "value": {
-      "type": "entity",
-      "value": "type",
+      "value": "attribute",
     },
   },
   {
@@ -130,11 +110,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "source location",
-    "id": "s:source location:type:e~type",
+    "id": "s:source location:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
@@ -150,11 +130,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "category",
-    "id": "s:category:type:e~type",
+    "id": "s:category:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
@@ -170,11 +150,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "sourceType",
-    "id": "s:sourceType:type:e~type",
+    "id": "s:sourceType:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
@@ -190,11 +170,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "tag",
-    "id": "s:tag:type:e~type",
+    "id": "s:tag:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
@@ -210,11 +190,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "guest",
-    "id": "s:guest:type:e~type",
+    "id": "s:guest:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
@@ -230,11 +210,11 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "section",
-    "id": "s:section:type:e~type",
+    "id": "s:section:type:s~attribute",
     "space": "s",
     "value": {
-      "type": "entity",
-      "value": "type",
+      "type": "string",
+      "value": "attribute",
     },
   },
   {
