@@ -19,7 +19,7 @@ importers:
       '@babel/core': ^7.19.0
       '@emotion/react': ^11.10.4
       '@emotion/styled': ^11.10.4
-      '@geogenesis/action-schema': workspace:^0.0.1
+      '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:*
       '@legendapp/state': ^0.20.0
       '@next/bundle-analyzer': ^12.3.0
@@ -107,7 +107,7 @@ importers:
 
   packages/action-schema:
     specifiers:
-      '@geogenesis/assemblyscript-json-schema': workspace:^0.0.1
+      '@geogenesis/assemblyscript-json-schema': workspace:*
       '@graphprotocol/graph-ts': ^0.27.0
       '@tsconfig/node16': ^1.0.3
       '@types/node': ^18.7.15
@@ -176,7 +176,7 @@ importers:
       '@ethersproject/abi': ^5.6.4
       '@ethersproject/bytes': ^5.6.1
       '@ethersproject/providers': ^5.6.8
-      '@geogenesis/action-schema': workspace:^0.0.1
+      '@geogenesis/action-schema': workspace:*
       '@nomiclabs/hardhat-ethers': ^2.0.6
       '@nomiclabs/hardhat-etherscan': ^3.0.3
       '@nomiclabs/hardhat-waffle': ^2.0.3
@@ -308,9 +308,9 @@ importers:
 
   packages/subgraph:
     specifiers:
-      '@geogenesis/action-schema': workspace:^0.0.1
+      '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:^0.1.0
-      '@geogenesis/data-uri': workspace:^0.0.1
+      '@geogenesis/data-uri': workspace:*
       '@graphprotocol/graph-cli': ^0.33.1
       '@graphprotocol/graph-ts': ^0.27.0
       as-base64: ^0.2.0
