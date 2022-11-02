@@ -14,7 +14,7 @@
   "dependencies": {
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
-    "@geogenesis/action-schema": "workspace:^0.0.1",
+    "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@legendapp/state": "^0.20.0",
     "@radix-ui/react-dialog": "^1.0.2",
