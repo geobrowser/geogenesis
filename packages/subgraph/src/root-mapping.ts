@@ -1,13 +1,13 @@
-import { Address, BigInt, log } from '@graphprotocol/graph-ts'
+import { BigInt, log } from '@graphprotocol/graph-ts'
 import { Space } from '../generated/schema'
 import {
   EntryAdded as RegistryEntryAdded,
   RoleGranted,
   RoleRevoked,
 } from '../generated/SpaceRegistry/SpaceRegistry'
+import { addRole, removeRole } from './access-control'
 import { handleSpaceAdded } from './actions'
 import { addEntry } from './add-entry'
-import { addRole, removeRole } from './access-control'
 import { getChecksumAddress } from './get-checksum-address'
 
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
@@ -54,6 +54,6 @@ export function handleRoleRevoked(event: RoleRevoked): void {
 function bootstrapRootSpace(address: string, createdAtBlock: BigInt): void {
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
-    handleSpaceAdded(address, true, createdAtBlock)
+    handleSpaceAdded(address, true, createdAtBlock, null)
   }
 }

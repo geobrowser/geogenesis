@@ -18,6 +18,7 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
+import { useSpaces } from '../state/use-spaces';
 
 const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
   ssr: false,
@@ -146,11 +147,14 @@ function Triples({ space }: { space: string }) {
     tripleStore.create(triples);
   };
 
+  const { spaces } = useSpaces();
+  const spaceName = spaces.find(s => s.id === space)?.entity?.name ?? 'Root Space';
+
   return (
     <PageContainer>
       <PageHeader>
-        <Text variant="largeTitle" as="h1">
-          Facts
+        <Text variant="largeTitle" as="h1" flex="0 0 auto">
+          {spaceName}
         </Text>
         {(isEditor || isAdmin) && (
           <>

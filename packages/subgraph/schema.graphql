@@ -4,6 +4,7 @@ type Space @entity {
   editors: [Account!]!
   isRootSpace: Boolean!
   createdAtBlock: BigInt!
+  entity: GeoEntity
 }
 
 type Account @entity {

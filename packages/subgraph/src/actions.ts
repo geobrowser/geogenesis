@@ -19,7 +19,8 @@ import { createTripleId } from './id'
 export function handleSpaceAdded(
   spaceAddress: string,
   isRootSpace: boolean,
-  createdAtBlock: BigInt
+  createdAtBlock: BigInt,
+  entityId: string | null
 ): void {
   if (spaceAddress.length != 42) {
     log.debug(`Invalid space address: ${spaceAddress}`, [])
@@ -33,6 +34,7 @@ export function handleSpaceAdded(
   space.editors = []
   space.isRootSpace = isRootSpace
   space.createdAtBlock = createdAtBlock
+  space.entity = entityId
 
   space.save()
 
@@ -108,7 +110,7 @@ export function handleCreateTripleAction(
     )
 
     if (attribute.id == 'space') {
-      handleSpaceAdded(stringValue.value, false, createdAtBlock)
+      handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
     }
   }
 
