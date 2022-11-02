@@ -100,7 +100,7 @@ export class Network implements INetwork {
     onChangePublishState('publishing-contract');
     const tx = await addEntries(contract, cids);
 
-    await waitForLog(tx.index.toHexString(), this.subgraphUrl);
+    await waitForLog(tx.index.toHexString(), this.subgraphUrl, space);
     console.log('Subgraph finished logging.', tx.index);
   };
 
@@ -236,7 +236,7 @@ async function addEntries(spaceContract: SpaceContract, uris: string[]) {
   return eventObject;
 }
 
-function waitForLog(id: string, subgraphUrl: string) {
+function waitForLog(id: string, subgraphUrl: string, space: string) {
   const transformedId = id.replace('0x0', '0x');
 
   let retryCount = 0;
@@ -259,7 +259,7 @@ function waitForLog(id: string, subgraphUrl: string) {
         },
         body: JSON.stringify({
           query: `query {
-            logEntry(id: ${JSON.stringify(transformedId)}) {
+            logEntry(id: ${JSON.stringify(`${space}:${transformedId}`)}) {
               id
             }
           } `,
