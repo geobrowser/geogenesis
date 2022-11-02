@@ -41,6 +41,7 @@ A node within the knowledge graph.
 type GeoEntity @entity {
   id: ID!
   name: String
+  entityOf: [Triple!]! @derivedFrom(field: "entity")
 }
 
 """

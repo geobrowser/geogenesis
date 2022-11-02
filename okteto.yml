@@ -22,15 +22,6 @@ build:
     dockerfile: docker/Build.dockerfile
 
   # You can use the following env vars to refer to this image in your deploy commands:
-  #  - OKTETO_BUILD_DEV_SERVER_REGISTRY: image registry
-  #  - OKTETO_BUILD_DEV_SERVER_REPOSITORY: image repo
-  #  - OKTETO_BUILD_DEV_SERVER_IMAGE: image name
-  #  - OKTETO_BUILD_DEV_SERVER_TAG: image tag
-  dev-server:
-    context: .
-    dockerfile: docker/Build.dockerfile
-
-  # You can use the following env vars to refer to this image in your deploy commands:
   #  - OKTETO_BUILD_DEVNET_REGISTRY: image registry
   #  - OKTETO_BUILD_DEVNET_REPOSITORY: image repo
   #  - OKTETO_BUILD_DEVNET_IMAGE: image name

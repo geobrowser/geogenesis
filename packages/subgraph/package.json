@@ -10,7 +10,7 @@
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "cat": "cat subgraph.yaml",
-    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=http://127.0.0.1:5001 npm run",
+    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.staging.thegraph.com/ipfs npm run",
     "local:create": "npm run local create",
     "local:deploy": "npm run local deploy",
     "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" subgraph.yaml",
