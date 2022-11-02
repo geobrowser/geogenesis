@@ -19,12 +19,13 @@ async function main() {
   console.log('Deploying on network', networkId, networkConfig)
 
   const spaceRegistry = await deploySpace({ debug: true })
+  await spaceRegistry.initialize()
 
-  const spaceContract = await deploySpace({ debug: true })
-  console.log('Added new space at address: ', spaceContract.address)
+  const healthSpace = await deploySpace({ debug: true })
+  console.log('Added new space at address: ', healthSpace.address)
 
-  const spaceContract2 = await deploySpace({ debug: true })
-  console.log('Added new space 2 at address: ', spaceContract2.address)
+  const valuesSpace = await deploySpace({ debug: true })
+  console.log('Added new space 2 at address: ', valuesSpace.address)
 
   const spaceRoot: Root = {
     type: 'root',
@@ -36,7 +37,7 @@ async function main() {
         attributeId: 'name',
         value: {
           type: 'string',
-          value: 'Space 1',
+          value: 'Health',
         },
       },
       {
@@ -45,7 +46,7 @@ async function main() {
         attributeId: 'space',
         value: {
           type: 'string',
-          value: spaceContract.address,
+          value: healthSpace.address,
         },
       },
       {
@@ -54,7 +55,7 @@ async function main() {
         attributeId: 'name',
         value: {
           type: 'string',
-          value: 'Space 2',
+          value: 'Values',
         },
       },
       {
@@ -63,7 +64,7 @@ async function main() {
         attributeId: 'space',
         value: {
           type: 'string',
-          value: spaceContract2.address,
+          value: valuesSpace.address,
         },
       },
     ],
@@ -76,6 +77,9 @@ async function main() {
     ).toString('base64')}`
   )
 
+  await healthSpace.initialize()
+  await valuesSpace.initialize()
+
   saveAddress({
     chainId,
     contractName: 'SpaceRegistry',
@@ -85,7 +89,7 @@ async function main() {
   saveAddress({
     chainId,
     contractName: 'Space',
-    address: spaceContract.address,
+    address: healthSpace.address,
   })
 
   if (networkId === 'localhost') {
@@ -98,7 +102,7 @@ async function main() {
     saveAddress({
       chainId: 'localhost',
       contractName: 'Space',
-      address: spaceContract.address,
+      address: healthSpace.address,
     })
   }
 }

@@ -18,7 +18,16 @@ contract Space is ISpace, AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
     bytes32 public constant EDITOR_ROLE = keccak256('EDITOR_ROLE');
 
-    constructor() {
+    bool public _initialized = false;
+
+    // Initialize in separate function so graph-node picks up events.
+    // Seems like events on dynamic data sources aren't picked up if
+    // emitted in the constructor.
+    function initialize() public {
+        if (_initialized) return;
+
+        _initialized = true;
+
         _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
         _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
         _grantRole(ADMIN_ROLE, msg.sender);
