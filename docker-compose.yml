@@ -85,7 +85,6 @@ services:
       sh -c "pnpm --filter subgraph run update-contract-address &&
       pnpm --filter subgraph run cat &&
       pnpm --filter subgraph run codegen &&
-      pnpm --filter subgraph run build &&
       pnpm --filter subgraph run create &&
       pnpm --filter subgraph run deploy"
     volumes:
