@@ -1,5 +1,6 @@
 /* eslint-disable node/no-missing-import */
 import { Root } from '@geogenesis/action-schema'
+import { randomUUID } from 'crypto'
 import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
@@ -27,44 +28,51 @@ async function main() {
   const valuesSpace = await deploySpace({ debug: true })
   console.log('Added new space 2 at address: ', valuesSpace.address)
 
+  const space1Id = randomUUID()
+  const space2Id = randomUUID()
+
   const spaceRoot: Root = {
     type: 'root',
     version: '0.0.1',
     actions: [
       {
         type: 'createTriple',
-        entityId: 'space-1',
+        entityId: space1Id,
         attributeId: 'name',
         value: {
           type: 'string',
           value: 'Health',
+          id: randomUUID(),
         },
       },
       {
         type: 'createTriple',
-        entityId: 'space-1',
+        entityId: space1Id,
         attributeId: 'space',
         value: {
           type: 'string',
           value: healthSpace.address,
+          id: randomUUID(),
         },
       },
       {
         type: 'createTriple',
-        entityId: 'space-2',
+        entityId: space2Id,
         attributeId: 'name',
         value: {
           type: 'string',
           value: 'Values',
+          id: randomUUID(),
         },
       },
       {
         type: 'createTriple',
-        entityId: 'space-2',
+        entityId: space2Id,
         attributeId: 'space',
         value: {
           type: 'string',
           value: valuesSpace.address,
+          id: randomUUID(),
         },
       },
     ],

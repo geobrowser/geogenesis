@@ -6,20 +6,6 @@ export function createEntityId() {
 }
 
 /**
- * Values are encoded into ids by adding a type prefix to the beginning
- */
-function createValueId(value: Value): string {
-  switch (value.type) {
-    case 'entity':
-      return `e~${value.value}`;
-    case 'string':
-      return `s~${value.value}`;
-    case 'number':
-      return `n~${value.value}`;
-  }
-}
-
-/**
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
@@ -33,7 +19,7 @@ export function createTripleId(
     return createTripleId(triple.space, triple.entityId, triple.attributeId, triple.value);
   }
 
-  return `${args[0]}:${args[1]}:${args[2]}:${createValueId(args[3])}`;
+  return `${args[0]}:${args[1]}:${args[2]}:${args[3].id}`;
 }
 
 export function createTripleWithId(space: string, entityId: string, attributeId: string, value: Value): Triple;
@@ -61,7 +47,7 @@ export function createTripleWithId(
   };
 }
 
-export const BUILTIN_ENTITY_IDS = ['name', 'type'];
+export const BUILTIN_ENTITY_IDS = ['name', 'type', 'attribute', 'space'];
 
 function isValidUuid(uuid: string) {
   return validate(uuid) && version(uuid) === 4;

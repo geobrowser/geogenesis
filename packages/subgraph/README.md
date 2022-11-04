@@ -80,7 +80,9 @@ Potential solutions:
 
 2. **Tuple id is random**: Uniqueness wouldn't be enforceable.
 
-3. **Hybrid**: We could instead generate some random id for the "value" portion if it's a scalar. So we'd enforce uniqueness of "edges" between nodes, but not of scalar "properties". _Is that useful for anything?_
+3. **Hybrid**: We could instead generate a random id for the "value" portion if it's a scalar. So we'd enforce uniqueness of "edges" between nodes, but not of scalar "properties".
+
+We're using the hybrid approach 3. Approach 3 is, at the IPFS data level, backwards compatible with approach 1, if we ever want to change.
 
 ### Cardinality
 

@@ -161,19 +161,17 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={`/space/${space}/${value.value}`}>{entityNames[value.value] || value.value}</Chip>
+              <Chip href={`/space/${space}/${value.id}`}>{entityNames[value.id] || value.id}</Chip>
             </ChipCellContainer>
           );
         }
-
-        const inputValue = editable ? value.value : entityNames[value.value] || value.value;
 
         return (
           <CellEditableInput
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             placeholder="Add text..."
             isEditable={editable}
-            value={inputValue}
+            value={value.value}
             onChange={e =>
               setCellData({
                 type: 'string',

@@ -1,7 +1,7 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 import { createTripleWithId } from '../services/create-id';
-import { MockNetwork, makeStubTriple } from '../services/mock-network';
+import { makeStubTriple, MockNetwork } from '../services/mock-network';
 import { Triple } from '../types';
 import { TripleStore } from './triple-store';
 
@@ -16,6 +16,7 @@ describe('TripleStore', () => {
 
     const newTriple: Triple = createTripleWithId('s', 'bob', 'name', {
       type: 'string',
+      id: 's~bob',
       value: 'Bob',
     });
 
@@ -29,11 +30,16 @@ describe('TripleStore', () => {
       space: 's',
     });
 
-    const originalTriple: Triple = createTripleWithId('s', 'alice', 'name', { type: 'string', value: 'Alice' });
+    const originalTriple: Triple = createTripleWithId('s', 'alice', 'name', {
+      type: 'string',
+      id: `s~alice`,
+      value: 'Alice',
+    });
     store.create([originalTriple]);
 
     const newTriple: Triple = createTripleWithId('s', originalTriple.entityId, originalTriple.attributeId, {
       type: 'string',
+      id: `s~bob`,
       value: 'Bob',
     });
 
@@ -47,6 +53,7 @@ describe('TripleStore', () => {
 
     const newTriple: Triple = createTripleWithId('s', 'bob', 'name', {
       type: 'string',
+      id: 's~bob',
       value: 'Bob',
     });
 

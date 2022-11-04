@@ -19,6 +19,7 @@ import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
+import { Value } from '../types';
 import TripleTable from './triple-table';
 
 const PageHeader = styled.div({
@@ -126,7 +127,7 @@ function Triples({ space }: { space: string }) {
   const onAddTriple = async () => {
     const entityId = createEntityId();
     const attributeId = '';
-    const value = { type: 'string' as const, value: '' };
+    const value: Value = { type: 'string', id: createEntityId(), value: '' };
 
     tripleStore.create([
       {

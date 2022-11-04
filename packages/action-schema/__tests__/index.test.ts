@@ -10,7 +10,7 @@ it('validates', () => {
         type: 'createTriple',
         entityId: 'e',
         attributeId: 'a',
-        value: { type: 'number', value: '42' },
+        value: { type: 'number', value: '42', id: 'v' },
       },
     ],
   }

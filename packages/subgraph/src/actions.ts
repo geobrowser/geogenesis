@@ -96,8 +96,9 @@ export function handleCreateTripleAction(
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
-    triple.stringValue = stringValue.value
     triple.valueType = 'STRING'
+    triple.valueId = stringValue.id
+    triple.stringValue = stringValue.value
 
     if (attribute.id == 'name') {
       entity.name = stringValue.value
@@ -116,14 +117,16 @@ export function handleCreateTripleAction(
 
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
-    triple.numberValue = BigDecimal.fromString(numberValue.value)
     triple.valueType = 'NUMBER'
+    triple.valueId = numberValue.id
+    triple.numberValue = BigDecimal.fromString(numberValue.value)
   }
 
   const entityValue = fact.value.asEntityValue()
   if (entityValue) {
-    triple.entityValue = entityValue.value
     triple.valueType = 'ENTITY'
+    triple.valueId = entityValue.id
+    triple.entityValue = entityValue.id
   }
 
   triple.save()
