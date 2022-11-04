@@ -202,6 +202,7 @@ export class Network implements INetwork {
         query: `query {
           spaces {
             id
+            isRootSpace
             admins {
               id
             }
@@ -209,8 +210,13 @@ export class Network implements INetwork {
               id
             }
             entity {
-              id
-              name
+              entityOf {
+                id
+                stringValue
+                attribute {
+                  id
+                }
+              }
             }
           }
         }`,
@@ -219,11 +225,37 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        spaces: { id: string; admins: Account[]; editors: Account[]; entity?: { id: string; name: string } }[];
+        spaces: {
+          id: string;
+          isRootSpace: boolean;
+          admins: Account[];
+          editors: Account[];
+          entity?: {
+            entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
+          };
+        }[];
       };
     } = await response.json();
 
-    return json.data.spaces;
+    const spaces = json.data.spaces.map((space): Space => {
+      const attributes = Object.fromEntries(
+        space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
+      );
+
+      if (space.isRootSpace) {
+        attributes.name = 'Root Space';
+      }
+
+      return {
+        id: space.id,
+        isRootSpace: space.isRootSpace,
+        admins: space.admins.map(account => account.id),
+        editors: space.editors.map(account => account.id),
+        attributes,
+      };
+    });
+
+    return spaces;
   };
 }
 

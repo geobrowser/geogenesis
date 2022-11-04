@@ -1,11 +1,9 @@
 import { css, Global, Theme, ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import 'modern-normalize';
 import { AppProps } from 'next/app';
-import Link from 'next/link';
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { Spacer } from '~/modules/design-system/spacer';
+import { Navbar } from '~/modules/components/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { shadows } from '~/modules/design-system/theme/shadows';
 import { typography } from '~/modules/design-system/theme/typography';
@@ -18,7 +16,6 @@ const Body = styled.div(props => ({
   maxWidth: '100vw',
   backgroundColor: `${props.theme.colors.white}`,
   position: 'relative',
-  padding: '0 2ch',
 }));
 
 const globalStyles = css`
@@ -36,7 +33,7 @@ const globalStyles = css`
 `;
 
 const Layout = styled.main({
-  padding: '6ch 0 4ch 0',
+  padding: '12ch 2ch 4ch 2ch',
   maxWidth: '1060px',
   margin: '0 auto',
 });
@@ -59,18 +56,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           <ServicesProvider>
             <Body>
               <Global styles={globalStyles} />
-              <Link href="/dev">
-                <a>Design system</a>
-              </Link>
-
-              <Spacer width={4} />
-
-              <Link href="/spaces">
-                <a>Spaces</a>
-              </Link>
-
-              <ConnectButton accountStatus="avatar" />
-
+              <Navbar />
               <Layout>
                 <Component {...pageProps} />
               </Layout>

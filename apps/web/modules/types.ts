@@ -30,9 +30,10 @@ export type Triple = {
 
 export type Space = {
   id: string;
-  editors: Account[];
-  admins: Account[];
-  entity?: { id: string; name: string };
+  isRootSpace: boolean;
+  editors: string[];
+  admins: string[];
+  attributes: Record<string, string>;
 };
 
 export type Account = {

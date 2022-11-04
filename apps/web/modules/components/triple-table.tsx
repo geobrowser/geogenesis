@@ -23,6 +23,7 @@ import { CellEditableInput } from './table/cell-editable-input';
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
 declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
+    space: string;
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     entityNames: EntityNames;
     expandedCells: Record<string, boolean>;
@@ -89,6 +90,7 @@ const ChipCellContainer = styled.div({
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
+    const space = table.options.meta!.space;
     const entityNames = table.options?.meta?.entityNames || {};
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { editable } = useEditable();
@@ -110,59 +112,68 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     const cellId = `${row.original.id}-${cell.column.id}`;
 
     switch (id) {
-      case 'entityId':
+      case 'entityId': {
         const entityId = cellData as string;
 
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
+        const value = editable ? entityId : entityNames[entityId] || entityId;
+
         return (
           <CellEditableInput
             isEntity
+            href={`/space/${space}/${entityId}`}
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             placeholder="Add text..."
             isEditable={editable}
-            value={entityNames[entityId] || entityId}
-            onChange={() => {}}
+            value={value}
+            onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
         );
 
-      // return (
-      //   <CellTruncate shouldTruncate={true}>
-      //     <Text color="ctaPrimary" variant="tableCell" ellipsize>
-      //       {entityNames[entityId] || entityId}
-      //     </Text>
-      //   </CellTruncate>
-      // );
-      case 'attributeId':
+        // return (
+        //   <CellTruncate shouldTruncate={true}>
+        //     <Text color="ctaPrimary" variant="tableCell" ellipsize>
+        //       {entityNames[entityId] || entityId}
+        //     </Text>
+        //   </CellTruncate>
+        // );
+      }
+      case 'attributeId': {
         const attributeId = cellData as string;
+
+        const value = editable ? attributeId : entityNames[attributeId] || attributeId;
 
         return (
           <CellEditableInput
             placeholder="Add an attribute..."
             isEditable={editable}
-            value={entityNames[attributeId] || attributeId}
+            value={value}
             onChange={e => setCellData(e.target.value)}
             onBlur={onBlur}
           />
         );
+      }
       case 'value':
         const value = cellData as Value;
 
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip>{entityNames[value.value] || value.value}</Chip>
+              <Chip href={`/space/${space}/${value.value}`}>{entityNames[value.value] || value.value}</Chip>
             </ChipCellContainer>
           );
         }
+
+        const inputValue = editable ? value.value : entityNames[value.value] || value.value;
 
         return (
           <CellEditableInput
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             placeholder="Add text..."
             isEditable={editable}
-            value={entityNames[value.value] || value.value}
+            value={inputValue}
             onChange={e =>
               setCellData({
                 type: 'string',
@@ -182,9 +193,6 @@ interface Props {
   space: string;
 }
 
-// 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512:0013a0c5-ee49-46fa-bee7-fdf6f91155da:name:s~Creatine is allowed by the International Olympic Committee and National Collegiate Athletic Association (NCAA)-value
-// 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512:0013a0c5-ee49-46fa-bee7-fdf6f91155da:name:s~Creatine is allowed by the International Olympic Committee and National Collegiate Athletic Association (NCAA)-value
-
 // Using a default export here instead of named import to play better with Next's
 // dynamic import syntax. We're dynamically importing TripleTable in the /triples
 // route. Check the comment there for more context.
@@ -194,6 +202,7 @@ interface Props {
 const TripleTable = memo(function TripleTable({ update, triples, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { entityNames } = useTriples();
+  const { editable } = useEditable();
 
   const table = useReactTable({
     data: triples,
@@ -228,6 +237,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
       },
       entityNames,
       expandedCells,
+      space,
     },
   });
 
@@ -253,6 +263,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
 
                 return (
                   <TableCell
+                    isEditable={editable}
                     isExpandable={cell.column.id === 'value'}
                     isExpanded={expandedCells[cellId]}
                     width={cell.column.getSize()}
