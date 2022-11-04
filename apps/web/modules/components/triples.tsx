@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
@@ -18,11 +17,9 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
+import { ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
-
-const TripleTable = dynamic(() => import('~/modules/components/triple-table'), {
-  ssr: false,
-});
+import TripleTable from './triple-table';
 
 const PageHeader = styled.div({
   display: 'flex',
@@ -148,7 +145,7 @@ function Triples({ space }: { space: string }) {
   };
 
   const { spaces } = useSpaces();
-  const spaceName = spaces.find(s => s.id === space)?.entity?.name ?? 'Root Space';
+  const spaceName = spaces.find(s => s.id === space)?.attributes.name ?? ZERO_WIDTH_SPACE;
 
   return (
     <PageContainer>

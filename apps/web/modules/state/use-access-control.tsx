@@ -13,7 +13,7 @@ export function useAccessControl(space: string) {
   }
 
   return {
-    isAdmin: (admins[space] || []).some(admin => admin.id === address),
-    isEditor: (editors[space] || []).some(editor => editor.id === address),
+    isAdmin: (admins[space] || []).includes(address),
+    isEditor: (editors[space] || []).includes(address),
   };
 }

@@ -1,10 +1,9 @@
-import { observe } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import * as params from '../params';
 import { useServices } from '../services';
 import { TripleStore } from './triple-store';
-import * as params from '../params';
 
 const TripleStoreContext = createContext<TripleStore | undefined>(undefined);
 

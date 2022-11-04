@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
+import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
 import { Create } from './icons/create';
 import { Expand } from './icons/expand';
@@ -130,7 +131,7 @@ export const Button = React.forwardRef(function Button(
       {icon && icons[icon](iconColor)}
       {icon && children && <Spacer width={8} />}
       {/* Use zero-width space to enforce min line height */}
-      {children ?? '\u200b'}
+      {children ?? ZERO_WIDTH_SPACE}
     </StyledButton>
   );
 });
@@ -198,4 +199,5 @@ export const StyledLabel = styled(StyledButton)(props => ({
   minWidth: '67px',
   color: props.theme.colors.text,
   background: props.theme.colors['grey-01'],
+  boxShadow: 'none',
 }));

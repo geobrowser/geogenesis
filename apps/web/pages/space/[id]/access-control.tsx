@@ -1,9 +1,9 @@
-import { Space__factory } from '~/../../packages/contracts';
 import { useRouter } from 'next/router';
 import { FormEvent } from 'react';
 import { useSigner } from 'wagmi';
-import { useSpaces } from '~/modules/state/use-spaces';
+import { Space__factory } from '~/../../packages/contracts';
 import { useAccessControl } from '~/modules/state/use-access-control';
+import { useSpaces } from '~/modules/state/use-spaces';
 
 export default function AccessControl() {
   const store = useSpaces();
@@ -46,9 +46,9 @@ export default function AccessControl() {
         {store.spaces
           .find(space => space.id == spaceId)
           ?.editors.map(editor => (
-            <li key={editor.id}>
-              <span>{editor.id}</span>
-              <button onClick={() => onRevoke(editor.id, 'editor')}>Revoke</button>
+            <li key={editor}>
+              <span>{editor}</span>
+              <button onClick={() => onRevoke(editor, 'editor')}>Revoke</button>
             </li>
           ))}
       </ul>
@@ -68,9 +68,9 @@ export default function AccessControl() {
         {store.spaces
           .find(space => space.id == spaceId)
           ?.admins.map(admin => (
-            <li key={admin.id}>
-              <span>{admin.id}</span>
-              <button onClick={() => onRevoke(admin.id, 'admin')}>Revoke</button>
+            <li key={admin}>
+              <span>{admin}</span>
+              <button onClick={() => onRevoke(admin, 'admin')}>Revoke</button>
             </li>
           ))}
       </ul>

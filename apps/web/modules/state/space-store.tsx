@@ -1,9 +1,9 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 import { INetwork } from '../services/network';
-import { Account, Space } from '../types';
+import { Space } from '../types';
 import { makeOptionalComputed } from '../utils';
 
-type SpacesAccounts = Record<string, Account[]>;
+type SpacesAccounts = Record<string, string[]>;
 
 export class SpaceStore {
   private api: INetwork;

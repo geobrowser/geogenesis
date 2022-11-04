@@ -11,9 +11,9 @@ const Flex = styled.div({
   justifyContent: 'space-between',
 });
 
-const SelectWrapper = styled.div({
+const InputWrapper = styled.div({
   display: 'flex',
-  flexBasis: '33%',
+  flex: '1 1 0%',
 });
 
 interface Props {
@@ -37,7 +37,7 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
         {label}
       </StyledLabel>
       <Spacer width={12} />
-      <SelectWrapper>
+      <InputWrapper>
         <Select
           options={options}
           value={filterClause.field}
@@ -46,15 +46,17 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
             onChange(newFilterClause);
           }}
         />
-      </SelectWrapper>
+      </InputWrapper>
       <Spacer width={12} />
-      <Input
-        value={filterClause.value}
-        onChange={e => {
-          const newFilterClause: FilterClause = { ...filterClause, value: e.target.value };
-          onChange(newFilterClause);
-        }}
-      />
+      <InputWrapper>
+        <Input
+          value={filterClause.value}
+          onChange={e => {
+            const newFilterClause: FilterClause = { ...filterClause, value: e.target.value };
+            onChange(newFilterClause);
+          }}
+        />
+      </InputWrapper>
       {isDeletable && (
         <>
           <Spacer width={12} />

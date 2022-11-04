@@ -5,6 +5,7 @@ import produce from 'immer';
 import React, { useState } from 'react';
 import { initialFilterState } from '~/modules/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
+import { intersperse } from '~/modules/utils';
 import { Button, IconButton } from '../../design-system/button';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
@@ -20,7 +21,7 @@ interface ContentProps {
 const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   borderRadius: props.theme.radius,
   padding: props.theme.space * 3,
-  width: props.width,
+  width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
   boxShadow: props.theme.shadows.dropdown,
 
@@ -40,8 +41,8 @@ interface Props {
 }
 
 const FIELD_LABELS: Record<FilterField, string> = {
-  'entity-name': 'Entity name contains',
-  'attribute-name': 'Attribute name contains',
+  'entity-name': 'Entity contains',
+  'attribute-name': 'Attribute contains',
   value: 'Value contains',
   'entity-id': 'Entity ID',
   'attribute-id': 'Attribute ID',
@@ -138,11 +139,5 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
         </StyledContent>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
-  );
-}
-
-export default function intersperse<T>(elements: T[], separator: T | (() => T)): T[] {
-  return elements.flatMap((element, i) =>
-    i === 0 ? [element] : [separator instanceof Function ? separator() : separator, element]
   );
 }

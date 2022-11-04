@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { forwardRef } from 'react';
 import { ColorName } from './theme/colors';
 import { TypographyName } from './theme/typography';
 
@@ -6,12 +7,13 @@ interface Props {
   children: React.ReactNode;
   color?: ColorName;
   variant?: TypographyName;
-  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div';
+  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div' | 'a';
   ellipsize?: boolean;
   flex?: string;
+  href?: string;
 }
 
-const BaseText = styled.p<Required<Props>>(props => ({
+const BaseText = styled.span<Required<Omit<Props, 'href'>>>(props => ({
   ...props.theme.typography[props.variant],
   color: props.theme.colors[props.color],
   ...(props.flex && { flex: props.flex }),
@@ -22,10 +24,13 @@ const BaseText = styled.p<Required<Props>>(props => ({
   }),
 }));
 
-export function Text({ children, color = 'text', variant = 'body', as = 'p', ellipsize = false, flex = '' }: Props) {
+export const Text = forwardRef(function Text(
+  { children, color = 'text', variant = 'body', as = 'span', ellipsize = false, flex = '', ...rest }: Props,
+  forwardedRef: React.Ref<HTMLSpanElement>
+) {
   return (
-    <BaseText as={as} color={color} variant={variant} ellipsize={ellipsize} flex={flex}>
+    <BaseText ref={forwardedRef} as={as} color={color} variant={variant} ellipsize={ellipsize} flex={flex} {...rest}>
       {children}
     </BaseText>
   );
-}
+});

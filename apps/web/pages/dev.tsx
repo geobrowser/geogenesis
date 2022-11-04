@@ -1,9 +1,11 @@
 import styled from '@emotion/styled';
-import { colors, ColorValue } from '~/modules/design-system/theme/colors';
-import { Spacer } from '~/modules/design-system/spacer';
-import { typography, TypographyName } from '~/modules/design-system/theme/typography';
-import { Text } from '~/modules/design-system/text';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import Link from 'next/link';
 import { Input } from '~/modules/design-system/input';
+import { Spacer } from '~/modules/design-system/spacer';
+import { Text } from '~/modules/design-system/text';
+import { colors, ColorValue } from '~/modules/design-system/theme/colors';
+import { typography, TypographyName } from '~/modules/design-system/theme/typography';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
   width: 150,
@@ -46,31 +48,45 @@ const VerticalBox = styled.div({
 
 export default function Dev() {
   return (
-    <VerticalBox>
-      <HorizontalBox>
-        <Text variant="mediumTitle">Colors</Text>
-        <Spacer height={12} />
-        <HorizontalBox>{Colors}</HorizontalBox>
-      </HorizontalBox>
+    <>
+      <Link href="/dev">
+        <a>Design system</a>
+      </Link>
 
-      <Spacer height={32} />
+      <Spacer width={4} />
 
-      <VerticalBox>
-        <Text variant="mediumTitle">Typography</Text>
-        <VerticalBox>{Typography}</VerticalBox>
-      </VerticalBox>
+      <Link href="/spaces">
+        <a>Spaces</a>
+      </Link>
 
-      <Spacer height={32} />
+      <ConnectButton accountStatus="avatar" />
 
       <VerticalBox>
-        <Text variant="mediumTitle">Inputs</Text>
-        <Spacer height={12} />
+        <HorizontalBox>
+          <Text variant="mediumTitle">Colors</Text>
+          <Spacer height={12} />
+          <HorizontalBox>{Colors}</HorizontalBox>
+        </HorizontalBox>
 
-        <Input placeholder="Placeholder..." />
+        <Spacer height={32} />
 
-        <Spacer height={6} />
-        <Input placeholder="Disabled :(" disabled />
+        <VerticalBox>
+          <Text variant="mediumTitle">Typography</Text>
+          <VerticalBox>{Typography}</VerticalBox>
+        </VerticalBox>
+
+        <Spacer height={32} />
+
+        <VerticalBox>
+          <Text variant="mediumTitle">Inputs</Text>
+          <Spacer height={12} />
+
+          <Input placeholder="Placeholder..." />
+
+          <Spacer height={6} />
+          <Input placeholder="Disabled :(" disabled />
+        </VerticalBox>
       </VerticalBox>
-    </VerticalBox>
+    </>
   );
 }
