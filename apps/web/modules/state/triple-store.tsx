@@ -176,10 +176,6 @@ export class TripleStore implements ITripleStore {
   create = (triples: Triple[]) => {
     const actions: CreateTripleAction[] = triples.map(triple => ({
       ...triple,
-      value: {
-        ...triple.value,
-        id: triple.value.id ?? createValueId(),
-      },
       type: 'createTriple',
     }));
 
