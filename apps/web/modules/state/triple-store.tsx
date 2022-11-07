@@ -178,7 +178,7 @@ export class TripleStore implements ITripleStore {
       ...triple,
       value: {
         ...triple.value,
-        id: createValueId(),
+        id: triple.value.id ?? createValueId(),
       },
       type: 'createTriple',
     }));
