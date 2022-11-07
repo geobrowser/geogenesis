@@ -1,8 +1,9 @@
+import { v4 as uuid } from 'uuid';
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { createTripleWithId } from '../services/create-id';
+import { createTripleWithId, createValueId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
@@ -175,6 +176,10 @@ export class TripleStore implements ITripleStore {
   create = (triples: Triple[]) => {
     const actions: CreateTripleAction[] = triples.map(triple => ({
       ...triple,
+      value: {
+        ...triple.value,
+        id: createValueId(),
+      },
       type: 'createTriple',
     }));
 
@@ -204,13 +209,11 @@ export class TripleStore implements ITripleStore {
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.space });
-    await this.setQuery('');
+    this.setQuery('');
     this.actions$.set([]);
   };
 
   setQuery = (query: string) => {
-    console.log('New query', query);
-
     this.setFilterState(
       produce(this.filterState$.get(), draft => {
         const entityNameFilter = draft.find(f => f.field === 'entity-name');

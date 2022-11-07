@@ -47,6 +47,10 @@ export function createTripleWithId(
   };
 }
 
+export function createValueId() {
+  return v4();
+}
+
 export const BUILTIN_ENTITY_IDS = ['name', 'type', 'attribute', 'space'];
 
 function isValidUuid(uuid: string) {

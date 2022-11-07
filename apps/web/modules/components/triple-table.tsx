@@ -174,6 +174,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             value={value.value}
             onChange={e =>
               setCellData({
+                id: value.id,
                 type: 'string',
                 value: e.target.value,
               })
