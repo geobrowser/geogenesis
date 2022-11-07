@@ -94,7 +94,7 @@ const baseTypography = {
       color: colors.light.text,
       fontSize: '0.875rem',
       lineHeight: '0.9375rem',
-      fontWeight: 400,
+      fontWeight: 500,
     },
     footnote: {
       color: colors.light.text,
