@@ -8,7 +8,7 @@ import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
-import { useNav } from '../state/nav-store';
+import { useNav } from '../state/use-page-name';
 
 const Header = styled.header(({ theme }) => ({
   display: 'flex',

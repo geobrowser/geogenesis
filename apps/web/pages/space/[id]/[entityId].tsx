@@ -6,7 +6,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { getConfigFromUrl } from '~/modules/params';
 import { extractValue, NetworkTriple } from '~/modules/services/network';
-import { useNav } from '~/modules/state/nav-store';
+import { useNav } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 
 const MainAttributes = styled.div(props => ({
@@ -35,6 +35,7 @@ export default function EntityPage({
 
   useEffect(() => {
     if (name !== id) setPageName(name);
+    return () => setPageName('');
   }, [name, id, setPageName]);
 
   return (
