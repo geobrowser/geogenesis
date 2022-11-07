@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 
 const pageName$ = observable('');
 
-export function useNav() {
+export function usePageName() {
   const pageName = useSelector(pageName$);
 
   const setPageName = useCallback((newName: string) => {

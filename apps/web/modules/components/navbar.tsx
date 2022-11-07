@@ -8,7 +8,7 @@ import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
-import { useNav } from '../state/use-page-name';
+import { usePageName } from '../state/use-page-name';
 
 const Header = styled.header(({ theme }) => ({
   display: 'flex',
@@ -54,13 +54,7 @@ export function Navbar() {
   const asPath = router.asPath;
   const components = asPath.split('/');
   const { spaces } = useSpaces();
-  const { pageName } = useNav();
-  // How do we get entityNames?
-  // 1. const { entityNames } = useEntities(); // this isn't available in the navbar. We can lift it somehow.
-  // 2. Use separate store for the navbar to store the entity name
-  // 3. query for it?
-
-  // How do we get the space image?
+  const { pageName } = usePageName();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
