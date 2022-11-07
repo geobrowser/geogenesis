@@ -39,6 +39,8 @@ function getComponentRoute(
           return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
         case 2:
           return { path, title: spaceNames[component], img: spaceImages[component] };
+        case 3:
+          return { path, title: titleCase(component), img: '/facts.svg' };
       }
   }
 
