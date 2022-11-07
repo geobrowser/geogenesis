@@ -90,6 +90,12 @@ const baseTypography = {
       lineHeight: '0.9375rem',
       fontWeight: 400,
     },
+    breadcrumb: {
+      color: colors.light.text,
+      fontSize: '0.875rem',
+      lineHeight: '0.9375rem',
+      fontWeight: 400,
+    },
     footnote: {
       color: colors.light.text,
       fontSize: '0.678rem',
