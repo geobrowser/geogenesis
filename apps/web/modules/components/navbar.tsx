@@ -62,7 +62,7 @@ export function Navbar() {
 
   return (
     <Header>
-      <Link href="/">
+      <Link href="/" passHref>
         <a>
           <GeoLogoLarge />
         </a>

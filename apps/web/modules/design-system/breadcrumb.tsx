@@ -4,17 +4,19 @@ import React from 'react';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
-const BreadcrumbLink = styled.a({
+const BreadcrumbLink = styled.a(props => ({
+  textDecoration: 'none',
   display: 'flex',
   alignItems: 'center',
   cursor: 'pointer',
-});
+  padding: '1px 0', // creates space above the image and text to make focus state look better
+}));
 
 const Image = styled.img(props => ({
-  width: '16px',
-  height: '16px',
+  width: '14px',
+  height: '14px',
   objectFit: 'cover',
-  borderRadius: props.theme.radius,
+  borderRadius: props.theme.radius / 1.5,
 }));
 
 interface Props {
@@ -25,7 +27,7 @@ interface Props {
 
 export function Breadcrumb({ children, href, img }: Props) {
   return (
-    <Link href={href}>
+    <Link href={href} passHref>
       <BreadcrumbLink>
         {img && (
           <>
