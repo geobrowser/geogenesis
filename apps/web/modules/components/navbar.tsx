@@ -24,13 +24,27 @@ const BreadcrumbsContainer = styled.div({
   gap: '8px',
 });
 
-function getComponentRoute(
-  components: string[],
-  index: number,
-  spaceNames: Record<string, string>,
-  spaceImages: Record<string, string>,
-  pageName: string
-): { title: string; path: string; img: string | null } {
+type GetComponentRouteConfig = {
+  components: string[];
+  index: number;
+  spaceNames: Record<string, string>;
+  spaceImages: Record<string, string>;
+  pageName: string;
+};
+
+type ComponentRoute = {
+  title: string;
+  path: string;
+  img: string | null;
+};
+
+function getComponentRoute({
+  components,
+  index,
+  spaceNames,
+  spaceImages,
+  pageName,
+}: GetComponentRouteConfig): ComponentRoute {
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
@@ -71,7 +85,7 @@ export function Navbar() {
         {intersperse(
           components.map((component, index) => {
             if (index === 0) return null; // skip the "Geo" part
-            const { path, title, img } = getComponentRoute(components, index, spaceNames, spaceImages, pageName);
+            const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
             return (
               <Breadcrumb key={index} href={path} img={img}>
