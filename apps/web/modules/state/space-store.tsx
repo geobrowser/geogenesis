@@ -39,8 +39,4 @@ export class SpaceStore {
       })
     );
   }
-
-  get(spaceId: string) {
-    return this.spaces$.get().find(space => space.id === spaceId);
-  }
 }

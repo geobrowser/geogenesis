@@ -20,7 +20,7 @@ const Image = styled.img(props => ({
 interface Props {
   href: string;
   children: React.ReactNode;
-  img: string;
+  img: string | null;
 }
 
 export function Breadcrumb({ children, href, img }: Props) {

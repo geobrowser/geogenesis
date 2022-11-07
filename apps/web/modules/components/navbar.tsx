@@ -1,7 +1,9 @@
 import styled from '@emotion/styled';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useSpaces } from '~/modules/state/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
+import { SYSTEM_IDS } from '../constants';
 import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
@@ -24,10 +26,9 @@ const BreadcrumbsContainer = styled.div({
 function getComponentRoute(
   components: string[],
   index: number,
-  spaceNames: Record<string, string>
-): { title: string; path: string } {
-  if (index === 0) return { path: '/', title: 'Geo' }; // This shouldn't be hit
-
+  spaceNames: Record<string, string>,
+  spaceImages: Record<string, string>
+): { title: string; path: string; img: string | null } {
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
@@ -35,14 +36,13 @@ function getComponentRoute(
     case 'space':
       switch (index) {
         case 1:
-          return { path: '/spaces', title: 'Spaces' };
+          return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
         case 2:
-          return { path, title: spaceNames[component] };
-        // case 3:
+          return { path, title: spaceNames[component], img: spaceImages[component] };
       }
   }
 
-  return { path, title: titleCase(component) };
+  return { path, title: titleCase(component), img: '/spaces.png' };
 }
 
 export function Navbar() {
@@ -55,20 +55,27 @@ export function Navbar() {
   // 2. Use separate store for the navbar to store the entity name
   // 3. query for it?
 
+  // How do we get the space image?
+
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
+  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
   return (
     <Header>
-      <GeoLogoLarge />
+      <Link href="/">
+        <a>
+          <GeoLogoLarge />
+        </a>
+      </Link>
       <Spacer width={32} />
       <BreadcrumbsContainer>
         {intersperse(
           components.map((component, index) => {
             if (index === 0) return null; // skip the "Geo" part
-            const { path, title } = getComponentRoute(components, index, spaceNames);
+            const { path, title, img } = getComponentRoute(components, index, spaceNames, spaceImages);
 
             return (
-              <Breadcrumb key={index} href={path} img="">
+              <Breadcrumb key={index} href={path} img={img}>
                 {title}
               </Breadcrumb>
             );
