@@ -8,6 +8,7 @@ import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
+import { useNav } from '../state/nav-store';
 
 const Header = styled.header(({ theme }) => ({
   display: 'flex',
@@ -27,7 +28,8 @@ function getComponentRoute(
   components: string[],
   index: number,
   spaceNames: Record<string, string>,
-  spaceImages: Record<string, string>
+  spaceImages: Record<string, string>,
+  pageName: string
 ): { title: string; path: string; img: string | null } {
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
@@ -40,7 +42,7 @@ function getComponentRoute(
         case 2:
           return { path, title: spaceNames[component], img: spaceImages[component] };
         case 3:
-          return { path, title: titleCase(component), img: '/facts.svg' };
+          return { path, title: pageName || titleCase(component), img: '/facts.svg' };
       }
   }
 
@@ -52,6 +54,7 @@ export function Navbar() {
   const asPath = router.asPath;
   const components = asPath.split('/');
   const { spaces } = useSpaces();
+  const { pageName } = useNav();
   // How do we get entityNames?
   // 1. const { entityNames } = useEntities(); // this isn't available in the navbar. We can lift it somehow.
   // 2. Use separate store for the navbar to store the entity name
@@ -74,7 +77,7 @@ export function Navbar() {
         {intersperse(
           components.map((component, index) => {
             if (index === 0) return null; // skip the "Geo" part
-            const { path, title, img } = getComponentRoute(components, index, spaceNames, spaceImages);
+            const { path, title, img } = getComponentRoute(components, index, spaceNames, spaceImages, pageName);
 
             return (
               <Breadcrumb key={index} href={path} img={img}>
