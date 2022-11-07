@@ -6,21 +6,21 @@ describe('create-id', () => {
   it('createTripleId returns correct id derived from triple with string value', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
-    const value = { type: 'string', value: 'Jesus Christ' } as StringValue;
-    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:s~Jesus Christ');
+    const value: StringValue = { type: 'string', id: 'valueId', value: 'Jesus Christ' };
+    expect(createTripleId('space', entityId, attributeId, value)).toBe('space:entityId:attributeId:valueId');
   });
 
   it('createTripleId returns correct id derived from triple with number value', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
-    const value = { type: 'number', value: '1920' } as NumberValue;
-    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:n~1920');
+    const value: NumberValue = { type: 'number', id: 'valueId', value: '1920' };
+    expect(createTripleId('space', entityId, attributeId, value)).toBe('space:entityId:attributeId:valueId');
   });
 
   it('createTripleId returns correct id derived from triple with entity value', () => {
     const entityId = 'entityId';
     const attributeId = 'attributeId';
-    const value = { type: 'entity', value: '12387' } as EntityValue;
-    expect(createTripleId('', entityId, attributeId, value)).toBe(':entityId:attributeId:e~12387');
+    const value: EntityValue = { type: 'entity', id: '12387' };
+    expect(createTripleId('space', entityId, attributeId, value)).toBe('space:entityId:attributeId:12387');
   });
 });

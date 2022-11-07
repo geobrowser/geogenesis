@@ -50,7 +50,9 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
     const mappedEntityId = entityIdMap[entityId];
     const mappedAttributeId = entityIdMap[attributeId];
     const mappedValue: Value =
-      value in entityIdMap ? { type: 'entity', value: entityIdMap[value] } : { type: 'string', value };
+      value in entityIdMap
+        ? { type: 'entity', id: entityIdMap[value] }
+        : { type: 'string', id: createId(value), value };
 
     return createTripleWithId(space, mappedEntityId, mappedAttributeId, mappedValue);
   });

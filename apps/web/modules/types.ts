@@ -1,18 +1,20 @@
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type NumberValue = {
-  value: string;
   type: 'number';
+  id: string;
+  value: string;
 };
 
 export type StringValue = {
-  value: string;
   type: 'string';
+  id: string;
+  value: string;
 };
 
 export type EntityValue = {
-  value: string;
   type: 'entity';
+  id: string;
 };
 
 export type Value = NumberValue | StringValue | EntityValue;

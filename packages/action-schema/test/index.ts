@@ -32,6 +32,7 @@ const root: Root = {
       value: {
         type: 'string',
         value: 'hi',
+        id: 'v',
       },
     },
     {
@@ -41,6 +42,7 @@ const root: Root = {
       value: {
         type: 'number',
         value: '42',
+        id: 'v',
       },
     },
   ],

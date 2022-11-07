@@ -55,6 +55,7 @@ type Triple @entity {
   entity: GeoEntity!
   attribute: GeoEntity!
   valueType: ValueType!
+  valueId: String!
   numberValue: BigDecimal
   stringValue: String
   entityValue: GeoEntity

@@ -27,17 +27,19 @@ export interface DeleteTripleAction {
 
 interface NumberValue {
   type: 'number'
+  id: string
   value: string
 }
 
 interface StringValue {
   type: 'string'
+  id: string
   value: string
 }
 
 interface EntityValue {
   type: 'entity'
-  value: string
+  id: string
 }
 
 type Value = NumberValue | StringValue | EntityValue

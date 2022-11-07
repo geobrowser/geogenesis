@@ -20,6 +20,7 @@ export type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
+  valueId: string;
   isProtected: boolean;
   space: string;
 };
@@ -27,11 +28,11 @@ export type NetworkTriple = NetworkValue & {
 export function extractValue(networkTriple: NetworkTriple): Value {
   switch (networkTriple.valueType) {
     case 'STRING':
-      return { type: 'string', value: networkTriple.stringValue };
+      return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
-      return { type: 'number', value: networkTriple.numberValue };
+      return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
     case 'ENTITY':
-      return { type: 'entity', value: networkTriple.entityValue.id };
+      return { type: 'entity', id: networkTriple.entityValue.id };
   }
 }
 
@@ -150,6 +151,7 @@ export class Network implements INetwork {
             numberValue
             stringValue
             valueType
+            valueId
             isProtected
           }
         }`,

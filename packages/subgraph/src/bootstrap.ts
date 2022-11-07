@@ -16,14 +16,22 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
   handleAction(new CreateEntityAction('space'), space, createdAtBlock)
 
   handleCreateTripleAction({
-    fact: new CreateTripleAction('type', 'name', new StringValue('Is a')),
+    fact: new CreateTripleAction(
+      'type',
+      'name',
+      new StringValue('type', 'Type')
+    ),
     space,
     isProtected: true,
     createdAtBlock,
   })
 
   handleCreateTripleAction({
-    fact: new CreateTripleAction('name', 'name', new StringValue('Name')),
+    fact: new CreateTripleAction(
+      'name',
+      'name',
+      new StringValue('name', 'Name')
+    ),
     space,
     isProtected: true,
     createdAtBlock,
@@ -33,7 +41,7 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
     fact: new CreateTripleAction(
       'attribute',
       'name',
-      new StringValue('Attribute')
+      new StringValue('attribute', 'Attribute')
     ),
     space,
     isProtected: true,
@@ -41,7 +49,11 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
   })
 
   handleCreateTripleAction({
-    fact: new CreateTripleAction('space', 'name', new StringValue('Space')),
+    fact: new CreateTripleAction(
+      'space',
+      'name',
+      new StringValue('space', 'Space')
+    ),
     space,
     isProtected: true,
     createdAtBlock,

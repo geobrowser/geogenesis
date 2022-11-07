@@ -44,12 +44,10 @@ export default function EntityPage({
             </Text>
             <Spacer height={8} />
             {triple.value.type === 'entity' ? (
-              <Chip href={`/space/${space}/${triple.value.value}`}>
-                {entityNames[triple.value.value] || triple.value.value}
-              </Chip>
+              <Chip href={`/space/${space}/${triple.value.id}`}>{entityNames[triple.value.id] || triple.value.id}</Chip>
             ) : (
               <Text as="p" variant="metadataMedium">
-                {entityNames[triple.value.value] || triple.value.value}
+                {triple.value.value}
               </Text>
             )}
           </div>
@@ -126,11 +124,14 @@ export const getServerSideProps: GetServerSideProps = async context => {
     return acc;
   }, {} as EntityNames);
 
+  const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
+  const name = nameValue?.type === 'string' ? nameValue.value : entityId;
+
   return {
     props: {
       triples,
       id: entityId,
-      name: triples.find(triple => triple.attributeId === 'name')?.value.value || '',
+      name,
       space: space,
       entityNames,
     },
