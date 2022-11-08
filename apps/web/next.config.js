@@ -7,6 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     runtime: 'experimental-edge',
+    appDir: true,
   },
   images: {
     remotePatterns: [

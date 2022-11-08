@@ -1,3 +1,5 @@
+'use client';
+
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
 import Link from 'next/link';
@@ -24,7 +26,7 @@ const CoverImage = styled.img(({ theme }) => ({
   borderRadius: theme.radius,
 }));
 
-export default function Spaces() {
+export function Spaces() {
   const { spaces } = useSpaces();
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);

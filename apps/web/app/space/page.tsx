@@ -1,5 +1,6 @@
 import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
+import { useSelectedLayoutSegment } from 'next/navigation';
 
 // We're dynamically importing the Triples so we can disable SSR. There are hydration mismatches since
 // the server doesn't know what wallet is connected, and we may render differently based on chain and wallet
@@ -9,6 +10,8 @@ const Triples = dynamic(() => import('~/modules/components/triples'), {
 });
 
 export default function TriplesPage({ spaceId }: { spaceId: string }) {
+  const segment = useSelectedLayoutSegment();
+  console.log(segment);
   return <Triples spaceId={spaceId} />;
 }
 

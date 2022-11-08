@@ -1,7 +1,9 @@
+'use client';
+
 import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
-import { useSigner } from 'wagmi';
+// import { useSigner } from 'wagmi';
 import { Signer } from 'ethers';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
@@ -37,7 +39,7 @@ interface Props {
 }
 
 export function FlowBar({ actionsCount, onPublish }: Props) {
-  const { data: signer } = useSigner();
+  // const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
@@ -47,9 +49,9 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
   const publish = async () => {
-    await onPublish(signer!, setReviewState);
-    setReviewState('publish-complete');
-    await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
+    // await onPublish(signer!, setReviewState);
+    // setReviewState('publish-complete');
+    // await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
   };
 
   return (

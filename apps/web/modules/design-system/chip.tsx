@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
+import Link from 'next/link';
 
-export const Chip = styled.a(props => ({
+export const Chip = styled(Link)(props => ({
   ...props.theme.typography.metadataMedium,
   borderRadius: props.theme.radius,
   boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,

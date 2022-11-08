@@ -1,3 +1,5 @@
+'use client';
+
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import Link from 'next/link';

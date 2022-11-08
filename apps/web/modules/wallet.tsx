@@ -1,3 +1,5 @@
+'use client';
+
 import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';

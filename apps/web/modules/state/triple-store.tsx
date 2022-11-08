@@ -1,3 +1,5 @@
+'use client';
+
 import { v4 as uuid } from 'uuid';
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';

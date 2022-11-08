@@ -1,3 +1,5 @@
+'use client';
+
 import { useSelector } from '@legendapp/state/react';
 import { FilterState } from '../types';
 import { useTripleStore } from './triple-store-provider';

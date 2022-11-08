@@ -1,5 +1,7 @@
+'use client';
+
 import { createContext, ReactNode, useContext, useMemo } from 'react';
-import { useNetwork } from 'wagmi';
+// import { useNetwork } from 'wagmi';
 import { configOptions, getConfig } from './config';
 import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';
@@ -17,7 +19,10 @@ interface Props {
 }
 
 export function ServicesProvider({ children }: Props) {
-  const { chain } = useNetwork();
+  // const { chain } = useNetwork();
+  const chain = {
+    id: '31337',
+  };
 
   // Default to production chain
   const chainId = chain ? String(chain.id) : configOptions.production.chainId;

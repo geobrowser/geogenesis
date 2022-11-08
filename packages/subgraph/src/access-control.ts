@@ -1,4 +1,4 @@
-import { Address, ByteArray, crypto, log } from '@graphprotocol/graph-ts'
+import { ByteArray, crypto, log } from '@graphprotocol/graph-ts'
 import { Account, Space } from '../generated/schema'
 
 class RoleAddedParams {

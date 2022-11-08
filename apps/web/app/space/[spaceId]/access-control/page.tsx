@@ -1,7 +1,9 @@
+'use client';
+
 import { useRouter } from 'next/router';
 import { FormEvent } from 'react';
-import { useSigner } from 'wagmi';
-import { Space__factory } from '~/../../packages/contracts';
+// import { useSigner } from 'wagmi';
+import { Space__factory } from '@geogenesis/contracts';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useSpaces } from '~/modules/state/use-spaces';
 
@@ -10,28 +12,27 @@ export default function AccessControl() {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string };
   const { isAdmin } = useAccessControl(spaceId);
-  const { data: signer } = useSigner();
+  // const { data: signer } = useSigner();
 
   const onSubmit = (type: 'editor' | 'admin') => async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const address = formData.get('address');
-
-    if (signer) {
-      const contract = Space__factory.connect(spaceId, signer);
-      const roleToChange = type === 'editor' ? await contract.EDITOR_ROLE() : await contract.ADMIN_ROLE();
-      const tx = await contract.grantRole(roleToChange, address as string);
-      await tx.wait();
-    }
+    // e.preventDefault();
+    // const formData = new FormData(e.currentTarget);
+    // const address = formData.get('address');
+    // if (signer) {
+    //   const contract = Space__factory.connect(spaceId, signer);
+    //   const roleToChange = type === 'editor' ? await contract.EDITOR_ROLE() : await contract.ADMIN_ROLE();
+    //   const tx = await contract.grantRole(roleToChange, address as string);
+    //   await tx.wait();
+    // }
   };
 
   const onRevoke = async (address: string, type: 'editor' | 'admin') => {
-    if (signer) {
-      const contract = Space__factory.connect(spaceId, signer);
-      const roleToChange = type === 'editor' ? await contract.EDITOR_ROLE() : await contract.ADMIN_ROLE();
-      const tx = await contract.revokeRole(roleToChange, address);
-      await tx.wait();
-    }
+    // if (signer) {
+    //   const contract = Space__factory.connect(spaceId, signer);
+    //   const roleToChange = type === 'editor' ? await contract.EDITOR_ROLE() : await contract.ADMIN_ROLE();
+    //   const tx = await contract.revokeRole(roleToChange, address);
+    //   await tx.wait();
+    // }
   };
 
   return isAdmin ? (

@@ -1,3 +1,5 @@
+'use client';
+
 import { observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { useCallback } from 'react';

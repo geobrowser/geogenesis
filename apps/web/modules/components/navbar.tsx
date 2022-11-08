@@ -1,5 +1,8 @@
+'use client';
+
 import styled from '@emotion/styled';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useRouter } from 'next/router';
 import { useSpaces } from '~/modules/state/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
@@ -65,8 +68,8 @@ function getComponentRoute({
 
 export function Navbar() {
   const router = useRouter();
-  const asPath = router.asPath;
-  const components = asPath.split('/');
+  const asPath = usePathname();
+  const components = asPath?.split('/');
   const { spaces } = useSpaces();
   const { pageName } = usePageName();
 
