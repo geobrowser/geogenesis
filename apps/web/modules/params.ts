@@ -24,6 +24,12 @@ export function stringifyQueryParameters({ query, pageNumber }: InitialTripleSto
 export function getConfigFromUrl(url: string): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
   const env: AppEnv = (params.get('env') as AppEnv) ?? 'production';
+
+  if (!(env in configOptions)) {
+    console.log(`Invalid environment "${env}", defaulting to production`);
+    return configOptions.production;
+  }
+
   const config = configOptions[env];
   return getConfig(config.chainId);
 }
