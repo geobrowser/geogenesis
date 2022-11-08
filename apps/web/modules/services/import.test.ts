@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { describe, expect, it } from 'vitest';
-import { convertHealthData, eavRowsToTriples, importCSVFile, readFileAsText } from './import';
+import { createTripleWithId } from './create-id';
+import { convertHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
 
 function readMockFile(filename: string) {
   const simple = readFileSync(path.join(__dirname, 'mocks', filename), 'utf8');
@@ -38,5 +39,46 @@ describe('CSV Import', () => {
     const triples = eavRowsToTriples(rows, 's', mockId);
 
     expect(triples).toMatchSnapshot();
+  });
+});
+
+describe('Unique', () => {
+  it('returns unique values', () => {
+    expect(
+      unique([
+        createTripleWithId({
+          attributeId: 'name',
+          entityId: 'e1',
+          value: {
+            type: 'string',
+            value: 'John',
+            id: 'v1',
+          },
+          space: 'space-1',
+        }),
+        createTripleWithId({
+          attributeId: 'name',
+          entityId: 'e1',
+          value: {
+            type: 'string',
+            value: 'John',
+            id: 'v2',
+          },
+          space: 'space-1',
+        }),
+      ])
+    ).toEqual([
+      {
+        id: 'space-1:e1:name:v2',
+        attributeId: 'name',
+        entityId: 'e1',
+        value: {
+          type: 'string',
+          value: 'John',
+          id: 'v2',
+        },
+        space: 'space-1',
+      },
+    ]);
   });
 });

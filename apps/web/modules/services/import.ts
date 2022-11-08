@@ -29,8 +29,32 @@ function readCSV(csv: string): EavRow[] {
   return rows as EavRow[];
 }
 
-function unique(triples: Triple[]): Triple[] {
-  return Object.values(Object.fromEntries(triples.map(triple => [triple.id, triple])));
+function createValueId(value: Value): string {
+  switch (value.type) {
+    case 'entity':
+      return `e~${value.id}`;
+    case 'string':
+      return `s~${value.value}`;
+    case 'number':
+      return `n~${value.value}`;
+  }
+}
+
+function createTripleIdUnique(space: string, entityId: string, attributeId: string, value: Value): string;
+function createTripleIdUnique(triple: Triple): string;
+function createTripleIdUnique(
+  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: Triple]
+): string {
+  if (args.length === 1) {
+    const triple = args[0];
+    return createTripleIdUnique(triple.space, triple.entityId, triple.attributeId, triple.value);
+  }
+
+  return `${args[0]}:${args[1]}:${args[2]}:${createValueId(args[3])}`;
+}
+
+export function unique(triples: Triple[]): Triple[] {
+  return Object.values(Object.fromEntries(triples.map(triple => [createTripleIdUnique(triple), triple])));
 }
 
 export function eavRowsToTriples(rows: EavRow[], space: string, createId: CreateUuid = createEntityId): Triple[] {
