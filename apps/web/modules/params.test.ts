@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { configOptions } from './config';
-import { getConfigFromUrl, parseQueryParameters, stringifyQueryParameters } from './params';
+import { parseQueryParameters, stringifyQueryParameters } from './params';
 
 describe('TripleStore params', () => {
   it('Parses triple store params from url', () => {
@@ -33,22 +32,5 @@ describe('TripleStore params', () => {
       pageNumber: 0,
     });
     expect(params).toBe('');
-  });
-});
-
-describe('Config params', () => {
-  it('Parses environment from url', () => {
-    const config = getConfigFromUrl('https://banana.com/?env=development');
-    expect(config).toEqual(configOptions.development);
-  });
-
-  it("Defaults to production if there's no param", () => {
-    const config = getConfigFromUrl('https://banana.com/');
-    expect(config).toEqual(configOptions.production);
-  });
-
-  it('Defaults to production if param not in configOptions', () => {
-    const config = getConfigFromUrl('https://banana.com/?env=banana');
-    expect(config).toEqual(configOptions.production);
   });
 });

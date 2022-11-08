@@ -20,7 +20,7 @@ interface Props {
 export function CellEditableInput({ isEditable, isExpanded, value, isEntity, href, ...rest }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <Text as="a" variant="tableCell" color="ctaPrimary">
+      <Text as="span" variant="tableCell" color="ctaPrimary">
         {value}
       </Text>
     </Link>

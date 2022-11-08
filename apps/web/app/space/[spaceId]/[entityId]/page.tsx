@@ -1,22 +1,14 @@
-import { use } from 'react';
-import { configOptions } from '~/modules/config';
-import { getConfigFromUrl } from '~/modules/params';
+import { AppEnv, getConfigFromSearchParams } from '~/modules/config';
 import { extractValue, NetworkTriple } from '~/modules/services/network';
 import { EntityNames, Triple } from '~/modules/types';
 import { EntityPage } from './entity-page';
 
-interface Props {
-  params: {
-    spaceId: string;
-    entityId: string;
-  };
-}
-
-async function getEntityData({ spaceId, entityId }: Props['params']) {
+async function getEntityData({ params, searchParams }: Props) {
+  const { spaceId, entityId } = params;
   const stringifyEntity = JSON.stringify(entityId);
-  // const config = getConfigFromUrl(context.resolvedUrl);
+  const config = getConfigFromSearchParams(searchParams.env);
 
-  const response = await fetch(configOptions.development.subgraph, {
+  const response = await fetch(config.subgraph, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -90,7 +82,17 @@ async function getEntityData({ spaceId, entityId }: Props['params']) {
   };
 }
 
+interface Props {
+  params: {
+    spaceId: string;
+    entityId: string;
+  };
+  searchParams: {
+    env?: AppEnv;
+  };
+}
+
 export default async function Page(props: Props) {
-  const entityData = await getEntityData(props.params);
+  const entityData = await getEntityData({ ...props });
   return <EntityPage {...entityData} />;
 }

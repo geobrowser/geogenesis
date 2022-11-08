@@ -42,3 +42,15 @@ export function getConfig(chainId: string) {
 }
 
 export const appEnv = (process.env as Record<string, string>).NEXT_PUBLIC_APP_ENV as AppEnv;
+
+export function getConfigFromSearchParams(envParam?: string): AppConfig {
+  const env = envParam ?? 'production';
+
+  if (!(env in configOptions)) {
+    console.log(`Invalid environment "${env}", defaulting to production`);
+    return configOptions.production;
+  }
+
+  const config = configOptions[env as AppEnv];
+  return getConfig(config.chainId);
+}
