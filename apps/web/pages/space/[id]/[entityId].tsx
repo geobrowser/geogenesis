@@ -1,9 +1,12 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
+import { useEffect } from 'react';
 import { Chip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { getConfigFromUrl } from '~/modules/params';
 import { extractValue, NetworkTriple } from '~/modules/services/network';
+import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 
 const MainAttributes = styled.div(props => ({
@@ -28,6 +31,13 @@ export default function EntityPage({
   space: string;
   entityNames: EntityNames;
 }) {
+  const { setPageName } = usePageName();
+
+  useEffect(() => {
+    if (name !== id) setPageName(name);
+    return () => setPageName('');
+  }, [name, id, setPageName]);
+
   return (
     <div>
       <MainAttributes>
@@ -60,10 +70,10 @@ export default function EntityPage({
 export const getServerSideProps: GetServerSideProps = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-
   const stringifyEntity = JSON.stringify(entityId);
+  const config = getConfigFromUrl(context.resolvedUrl);
 
-  const response = await fetch('https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example', {
+  const response = await fetch(config.subgraph, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -84,6 +94,7 @@ export const getServerSideProps: GetServerSideProps = async context => {
             id
             name
           }
+          valueId
           numberValue
           stringValue
           valueType

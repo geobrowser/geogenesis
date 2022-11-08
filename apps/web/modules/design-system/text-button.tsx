@@ -5,7 +5,7 @@ export const TextButton = styled.button(props => ({
   alignItems: 'center',
 
   border: 'none',
-  backgroundColor: props.theme.colors.white,
+  backgroundColor: 'transparent',
   cursor: 'pointer',
 
   ':hover': {

@@ -14,19 +14,20 @@ import '../styles/styles.css';
 const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
-  backgroundColor: `${props.theme.colors.white}`,
+  backgroundColor: props.theme.colors.bg,
   position: 'relative',
 }));
 
 const globalStyles = css`
   html {
-    scrollbar-gutter: stable;
+    /* scrollbar-gutter: stable; */
     overflow: auto;
   }
 
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
+    background-color: ${colors.light.bg};
     width: 100%;
     height: 100%;
   }

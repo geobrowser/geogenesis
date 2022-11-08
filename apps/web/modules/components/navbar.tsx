@@ -1,26 +1,50 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { StyledLabel } from '~/modules/design-system/button';
 import { useSpaces } from '~/modules/state/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
+import { SYSTEM_IDS } from '../constants';
+import { Breadcrumb } from '../design-system/breadcrumb';
+import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
+import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
+import { Spacer } from '../design-system/spacer';
+import { usePageName } from '../state/use-page-name';
 
 const Header = styled.header(({ theme }) => ({
   display: 'flex',
-  gap: '10px',
   alignItems: 'center',
-  padding: `${theme.space * 2}px ${theme.space * 2.5}px`,
-  backgroundColor: theme.colors.bg,
-  height: '46px',
+  padding: `${theme.space * 3}px ${theme.space * 4}px`,
+  backgroundColor: theme.colors.white,
+  boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
 }));
 
-function getComponentRoute(
-  components: string[],
-  index: number,
-  spaceNames: Record<string, string>
-): { title: string; path: string } {
-  if (index === 0) return { path: '/', title: 'Geo' };
+const BreadcrumbsContainer = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+});
 
+type GetComponentRouteConfig = {
+  components: string[];
+  index: number;
+  spaceNames: Record<string, string>;
+  spaceImages: Record<string, string>;
+  pageName: string;
+};
+
+type ComponentRoute = {
+  title: string;
+  path: string;
+  img: string | null;
+};
+
+function getComponentRoute({
+  components,
+  index,
+  spaceNames,
+  spaceImages,
+  pageName,
+}: GetComponentRouteConfig): ComponentRoute {
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
@@ -28,13 +52,15 @@ function getComponentRoute(
     case 'space':
       switch (index) {
         case 1:
-          return { path: '/spaces', title: 'Spaces' };
+          return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
         case 2:
-          return { path, title: spaceNames[component] };
+          return { path, title: spaceNames[component], img: spaceImages[component] };
+        case 3:
+          return { path, title: pageName || titleCase(component), img: '/facts.svg' };
       }
   }
 
-  return { path, title: titleCase(component) };
+  return { path, title: titleCase(component), img: '/spaces.png' };
 }
 
 export function Navbar() {
@@ -42,27 +68,41 @@ export function Navbar() {
   const asPath = router.asPath;
   const components = asPath.split('/');
   const { spaces } = useSpaces();
+  const { pageName } = usePageName();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
+  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
   return (
     <Header>
-      {intersperse(
-        components.map((component, index) => {
-          const { path, title } = getComponentRoute(components, index, spaceNames);
+      <Link href="/" passHref>
+        <a>
+          <GeoLogoLarge />
+        </a>
+      </Link>
+      <Spacer width={32} />
+      <BreadcrumbsContainer>
+        {intersperse(
+          components.map((component, index) => {
+            if (index === 0) return null; // skip the "Geo" part
+            const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
-          return (
-            <Link key={index} href={path}>
-              <StyledLabel variant="secondary" disabled={false}>
+            return (
+              <Breadcrumb key={index} href={path} img={img}>
                 {title}
-              </StyledLabel>
-            </Link>
-          );
-        }),
-        ({ index }) => (
-          <span key={`separator-${index}`}>›</span>
-        )
-      )}
+              </Breadcrumb>
+            );
+          }),
+          ({ index }) => {
+            if (index === 1) return null; // skip the "Geo" part
+            return (
+              <span key={`separator-${index}`} style={{ rotate: '270deg' }}>
+                <ChevronDownSmall color="grey-03" />
+              </span>
+            );
+          }
+        )}
+      </BreadcrumbsContainer>
     </Header>
   );
 }

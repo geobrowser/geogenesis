@@ -1,0 +1,42 @@
+import styled from '@emotion/styled';
+import Link from 'next/link';
+import React from 'react';
+import { Spacer } from './spacer';
+import { Text } from './text';
+
+const BreadcrumbLink = styled.a(props => ({
+  textDecoration: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  cursor: 'pointer',
+  padding: '1px 0', // creates space above the image and text to make focus state look better
+}));
+
+const Image = styled.img(props => ({
+  width: '14px',
+  height: '14px',
+  objectFit: 'cover',
+  borderRadius: props.theme.radius / 1.5,
+}));
+
+interface Props {
+  href: string;
+  children: React.ReactNode;
+  img: string | null;
+}
+
+export function Breadcrumb({ children, href, img }: Props) {
+  return (
+    <Link href={href} passHref>
+      <BreadcrumbLink>
+        {img && (
+          <>
+            <Image src={img} alt="" />
+            <Spacer width={8} />
+          </>
+        )}
+        <Text variant="breadcrumb">{children}</Text>
+      </BreadcrumbLink>
+    </Link>
+  );
+}

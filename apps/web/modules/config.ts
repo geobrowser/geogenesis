@@ -1,8 +1,8 @@
-type AppEnv = 'development' | 'staging' | 'production';
+export type AppEnv = 'development' | 'staging' | 'production';
 
 export type SupportedChainId = '137' | '1337' | '31337';
 
-type AppConfig = {
+export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
   ipfs: string;
