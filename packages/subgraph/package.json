@@ -9,11 +9,16 @@
     "build": "graph build",
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
+    "deploy:testnet": "graph deploy --product hosted-service --network mumbai baiirun/banana",
+    "deploy:production": "graph deploy --product hosted-service --network mumbai baiirun/banana",
     "cat": "cat subgraph.yaml",
     "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.staging.thegraph.com/ipfs npm run",
     "local:create": "npm run local create",
     "local:deploy": "npm run local deploy",
-    "update-contract-address": "yq -i \".dataSources[0].source.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" subgraph.yaml",
+    "update-contract-address:local": "yq -i \".mainnet.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" networks.json",
+    "update-contract-address:mumbai": "yq -i \".mumbai.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/80001.json)\" networks.json",
+    "update-block-number:mumbai": "yq -i \".mumbai.SpaceRegistry.blockNumber = $(jq .SpaceRegistry.blockNumber ../contracts/addresses/80001.json)\" networks.json",
+    "update-config:mumbai": "npm run update-contract-address:mumbai && npm run update-block-number:mumbai",
     "copy-subgraph-config": "docker cp $(docker ps -q --filter=\"name=devnet\"):/app/packages/subgraph/subgraph.yaml ."
   },
   "devDependencies": {
