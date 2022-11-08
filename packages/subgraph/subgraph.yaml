@@ -1,6 +1,6 @@
 specVersion: 0.0.4
 description: Statement history
-repository: https://github.com/graphprotocol/example-subgraph
+repository: https://github.com/geobrowser/geogenesis
 features:
   - fullTextSearch
   - ipfsOnEthereumContracts
@@ -9,10 +9,11 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: SpaceRegistry
-    network: mainnet
+    network: mumbai
     source:
-      address: '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E'
       abi: SpaceRegistry
+      address: "0x5A514fF6FeDB4501E54D83C2BA930F93CA7eAa5f"
+      startBlock: 29050589
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -33,7 +34,7 @@ dataSources:
 templates:
   - kind: ethereum/contract
     name: Space
-    network: mainnet
+    network: mumbai
     source:
       abi: Space
     mapping:

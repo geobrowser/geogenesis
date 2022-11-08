@@ -82,11 +82,11 @@ services:
       GRAPH_NODE_URL: http://graph-node:8020
       IPFS_URL: https://api.staging.thegraph.com/ipfs/
     command: >
-      sh -c "pnpm --filter subgraph run update-contract-address &&
+      sh -c "pnpm --filter subgraph run update-contract-address:local &&
       pnpm --filter subgraph run cat &&
       pnpm --filter subgraph run codegen &&
       pnpm --filter subgraph run create &&
-      pnpm --filter subgraph run deploy"
+      pnpm --filter subgraph run deploy --network mainnet"
     volumes:
       - shared-volume:/app
     depends_on:

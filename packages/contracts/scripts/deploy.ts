@@ -92,12 +92,7 @@ async function main() {
     chainId,
     contractName: 'SpaceRegistry',
     address: spaceRegistry.address,
-  })
-
-  saveAddress({
-    chainId,
-    contractName: 'Space',
-    address: healthSpace.address,
+    blockNumber: spaceRegistry.deployTransaction.blockNumber!,
   })
 
   if (networkId === 'localhost') {
@@ -105,12 +100,7 @@ async function main() {
       chainId: 'localhost',
       contractName: 'SpaceRegistry',
       address: spaceRegistry.address,
-    })
-
-    saveAddress({
-      chainId: 'localhost',
-      contractName: 'Space',
-      address: healthSpace.address,
+      blockNumber: spaceRegistry.deployTransaction.blockNumber!,
     })
   }
 }
@@ -119,10 +109,12 @@ function saveAddress({
   chainId,
   address,
   contractName,
+  blockNumber,
 }: {
   chainId: string
   contractName: string
   address: string
+  blockNumber: number
 }) {
   const file = `addresses/${chainId}.json`
   let json: any
@@ -134,6 +126,7 @@ function saveAddress({
   }
 
   set(json, [contractName, 'address'], address)
+  set(json, [contractName, 'blockNumber'], blockNumber)
 
   mkdirSync('addresses', { recursive: true })
 

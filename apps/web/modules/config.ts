@@ -1,6 +1,6 @@
-export type AppEnv = 'development' | 'staging' | 'production';
+export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';
 
-export type SupportedChainId = '137' | '1337' | '31337';
+export type SupportedChainId = '137' | '1337' | '80001' | '31337';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -21,6 +21,12 @@ export const configOptions: Record<AppEnv, AppConfig> = {
     rpc: 'https://devnet-dabbott.cloud.okteto.net',
     ipfs: 'https://api.staging.thegraph.com/ipfs',
     subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
+  },
+  testnet: {
+    chainId: '80001',
+    rpc: 'https://rpc-mumbai.maticvigil.com',
+    ipfs: 'https://api.thegraph.com/ipfs',
+    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/banana',
   },
   production: {
     chainId: '1337',

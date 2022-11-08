@@ -22,6 +22,15 @@ const STAGING_CHAIN: Chain = {
   },
 };
 
+const TESTNET_CHAIN: Chain = {
+  id: Number(configOptions.testnet.chainId),
+  name: 'Polygon Mumbai', // Human-readable name
+  network: 'mumbai', // Internal network name
+  rpcUrls: {
+    default: configOptions.testnet.rpc,
+  },
+};
+
 const DEFAULT_CHAIN: Chain = {
   id: Number(configOptions.production.chainId),
   name: 'Geo Genesis', // Human-readable name
@@ -32,7 +41,7 @@ const DEFAULT_CHAIN: Chain = {
 };
 
 const { chains, provider, webSocketProvider } = configureChains(
-  [DEFAULT_CHAIN, STAGING_CHAIN, LOCAL_CHAIN],
+  [DEFAULT_CHAIN, TESTNET_CHAIN, STAGING_CHAIN, LOCAL_CHAIN],
   [publicProvider()]
 );
 

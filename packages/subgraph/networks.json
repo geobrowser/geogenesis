@@ -1,0 +1,14 @@
+{
+  "mainnet": {
+    "SpaceRegistry": {
+      "address": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "startBlock": 0
+    }
+  },
+  "mumbai": {
+    "SpaceRegistry": {
+      "address": "0x5A514fF6FeDB4501E54D83C2BA930F93CA7eAa5f",
+      "startBlock": 29050589
+    }
+  }
+}
