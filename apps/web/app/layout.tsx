@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           <Body>
-            {/* <Global styles={globalStyles} /> */}
+            <Global styles={globalStyles} />
             <Navbar />
             <Layout>{children}</Layout>
           </Body>
