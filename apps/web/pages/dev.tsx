@@ -49,15 +49,11 @@ const VerticalBox = styled.div({
 export default function Dev() {
   return (
     <>
-      <Link href="/dev">
-        <a>Design system</a>
-      </Link>
+      <Link href="/dev">Design system</Link>
 
       <Spacer width={4} />
 
-      <Link href="/spaces">
-        <a>Spaces</a>
-      </Link>
+      <Link href="/spaces">Spaces</Link>
 
       <ConnectButton accountStatus="avatar" />
 

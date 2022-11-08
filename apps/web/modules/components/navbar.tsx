@@ -75,10 +75,8 @@ export function Navbar() {
 
   return (
     <Header>
-      <Link href="/" passHref>
-        <a>
-          <GeoLogoLarge />
-        </a>
+      <Link href="/">
+        <GeoLogoLarge />
       </Link>
       <Spacer width={32} />
       <BreadcrumbsContainer>

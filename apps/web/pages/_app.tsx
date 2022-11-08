@@ -2,7 +2,6 @@ import { css, Global, Theme, ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
 import 'modern-normalize';
 import { AppProps } from 'next/app';
-import { QueryClient, QueryClientProvider } from 'react-query';
 import { Navbar } from '~/modules/components/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { shadows } from '~/modules/design-system/theme/shadows';
@@ -47,25 +46,21 @@ const theme: Theme = {
   shadows,
 };
 
-const queryClient = new QueryClient();
-
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <WalletProvider>
-          <ServicesProvider>
-            <Body>
-              <Global styles={globalStyles} />
-              <Navbar />
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-            </Body>
-          </ServicesProvider>
-        </WalletProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ThemeProvider theme={theme}>
+      <WalletProvider>
+        <ServicesProvider>
+          <Body>
+            <Global styles={globalStyles} />
+            <Navbar />
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          </Body>
+        </ServicesProvider>
+      </WalletProvider>
+    </ThemeProvider>
   );
 }
 

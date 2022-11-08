@@ -4,7 +4,7 @@ import React from 'react';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
-const BreadcrumbLink = styled.a(props => ({
+const BreadcrumbLink = styled(Link)(props => ({
   textDecoration: 'none',
   display: 'flex',
   alignItems: 'center',
@@ -27,16 +27,14 @@ interface Props {
 
 export function Breadcrumb({ children, href, img }: Props) {
   return (
-    <Link href={href} passHref>
-      <BreadcrumbLink>
-        {img && (
-          <>
-            <Image src={img} alt="" />
-            <Spacer width={8} />
-          </>
-        )}
-        <Text variant="breadcrumb">{children}</Text>
-      </BreadcrumbLink>
-    </Link>
+    <BreadcrumbLink href={href}>
+      {img && (
+        <>
+          <Image src={img} alt="" />
+          <Spacer width={8} />
+        </>
+      )}
+      <Text variant="breadcrumb">{children}</Text>
+    </BreadcrumbLink>
   );
 }
