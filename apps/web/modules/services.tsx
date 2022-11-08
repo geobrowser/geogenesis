@@ -48,6 +48,6 @@ export function useServices() {
   return value;
 }
 
-export function useSpaceStore(): SpaceStore {
+export function useSpaceStore() {
   return useServices().spaceStore;
 }

@@ -256,9 +256,3 @@ function Triples({ space }: { space: string }) {
     </PageContainer>
   );
 }
-
-export function getServerSideProps() {
-  return {
-    props: {},
-  };
-}

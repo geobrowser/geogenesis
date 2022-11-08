@@ -27,7 +27,7 @@ const globalStyles = css`
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
-    background-color: ${colors.light.bg}; // Need to apply background color to body to style the scrollbar-gutter
+    background-color: ${colors.light.bg};
     width: 100%;
     height: 100%;
   }
