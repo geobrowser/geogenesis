@@ -13,8 +13,8 @@ const BreadcrumbLink = styled.a(props => ({
 }));
 
 const Image = styled.img(props => ({
-  width: '14px',
-  height: '14px',
+  width: '16px',
+  height: '16px',
   objectFit: 'cover',
   borderRadius: props.theme.radius / 1.5,
 }));
@@ -35,7 +35,7 @@ export function Breadcrumb({ children, href, img }: Props) {
             <Spacer width={8} />
           </>
         )}
-        <Text variant="breadcrumb">{children}</Text>
+        <Text variant="metadataMedium">{children}</Text>
       </BreadcrumbLink>
     </Link>
   );

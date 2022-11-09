@@ -13,7 +13,7 @@ import { usePageName } from '../state/use-page-name';
 const Header = styled.header(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
-  padding: `${theme.space * 3}px ${theme.space * 4}px`,
+  padding: theme.space * 4,
   backgroundColor: theme.colors.white,
   boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
 }));
