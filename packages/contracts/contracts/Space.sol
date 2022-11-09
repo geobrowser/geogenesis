@@ -2,12 +2,13 @@
 
 pragma solidity ^0.8.9;
 import '@openzeppelin/contracts/access/AccessControl.sol';
+import '@openzeppelin/contracts/access/Ownable.sol';
 import {ISpace} from './ISpace.sol';
 
 /**
  * An immutable log of uri strings.
  */
-contract Space is ISpace, AccessControl {
+contract Space is ISpace, AccessControl, Ownable {
     struct Entry {
         string uri;
         address author;
@@ -23,7 +24,7 @@ contract Space is ISpace, AccessControl {
     // Initialize in separate function so graph-node picks up events.
     // Seems like events on dynamic data sources aren't picked up if
     // emitted in the constructor.
-    function initialize() public {
+    function initialize() public onlyOwner {
         if (_initialized) return;
 
         _initialized = true;
