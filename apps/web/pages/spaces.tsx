@@ -1,14 +1,16 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
-import Link from 'next/link';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
+import { Spacer } from '~/modules/design-system/spacer';
+import { Text } from '~/modules/design-system/text';
 
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useSpaces } from '~/modules/state/use-spaces';
 
 const Grid = styled.div(({ theme }) => ({
-  display: 'flex',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
   gap: `${theme.space * 5}px`,
 }));
 
@@ -18,15 +20,19 @@ export default function Spaces() {
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
-    <Grid>
-      {spaces
-        .filter(space => isAdmin || isEditor || !space.isRootSpace)
-        .map(space => {
-          const name = space.attributes.name;
-          const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+    <div>
+      <Text variant="mainPage">All spaces</Text>
+      <Spacer height={40} />
+      <Grid>
+        {spaces
+          .filter(space => isAdmin || isEditor || !space.isRootSpace)
+          .map(space => {
+            const name = space.attributes.name;
+            const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-          return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-        })}
-    </Grid>
+            return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+          })}
+      </Grid>
+    </div>
   );
 }

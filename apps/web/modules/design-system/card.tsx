@@ -1,26 +1,28 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
-const GridCell = styled.div({
+const GridCell = styled.div(({ theme }) => ({
   cursor: 'pointer',
-});
+  borderRadius: theme.radius,
+  border: `1px solid ${theme.colors['grey-02']}`,
+  overflow: 'hidden',
+  boxShadow: theme.shadows.button,
+}));
 
 const CoverImage = styled.img(({ theme }) => ({
   width: 340,
   height: 240,
   objectFit: 'cover',
-  borderRadius: `0 0 ${theme.radius}px ${theme.radius}px`,
 }));
 
-const Header = styled.div(props => ({
+const Header = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: props.theme.space * 4,
-  backgroundColor: props.theme.colors.white,
+  padding: theme.space * 4,
+  backgroundColor: theme.colors.white,
 }));
 
 interface Props {
@@ -38,7 +40,6 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
           <RightArrowDiagonal color="text" />
         </Header>
         {image && <CoverImage src={image} alt={`Cover image for ${name}`} />}
-        <Spacer height={12} />
       </GridCell>
     </Link>
   );
