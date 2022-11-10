@@ -1,6 +1,5 @@
 import { css, Global, Theme, ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
-import 'modern-normalize';
 import { AppProps } from 'next/app';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Navbar } from '~/modules/components/navbar';
@@ -9,6 +8,8 @@ import { shadows } from '~/modules/design-system/theme/shadows';
 import { typography } from '~/modules/design-system/theme/typography';
 import { ServicesProvider } from '~/modules/services';
 import { WalletProvider } from '~/modules/wallet';
+
+import 'modern-normalize';
 import '../styles/styles.css';
 
 const Body = styled.div(props => ({
@@ -37,6 +38,10 @@ const Layout = styled.main(props => ({
   paddingTop: props.theme.space * 10,
   maxWidth: '1060px',
   margin: '0 auto',
+
+  '@media (max-width: 1060px)': {
+    padding: `${props.theme.space * 10}px 2ch 4ch 2ch`,
+  },
 }));
 
 const theme: Theme = {
