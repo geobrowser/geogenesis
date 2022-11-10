@@ -44,7 +44,11 @@ const FileImport = styled.input({
   inset: '0',
 });
 
-export default function TriplesPage({ spaceId }: { spaceId: string }) {
+interface Props {
+  spaceId: string;
+}
+
+export default function TriplesPage({ spaceId }: Props) {
   return (
     <TripleStoreProvider space={spaceId}>
       <Triples spaceId={spaceId} />
@@ -125,7 +129,7 @@ const SpaceImage = styled.img({
   borderRadius: 8,
 });
 
-function Triples({ spaceId }: { spaceId: string }) {
+function Triples({ spaceId }: Props) {
   const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
