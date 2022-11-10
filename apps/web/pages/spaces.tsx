@@ -14,6 +14,10 @@ const Grid = styled.div(({ theme }) => ({
   gap: `${theme.space * 5}px`,
 }));
 
+const TextContainer = styled.div({
+  maxWidth: 830,
+});
+
 export default function Spaces() {
   const { spaces } = useSpaces();
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
@@ -22,7 +26,9 @@ export default function Spaces() {
   return (
     <div>
       <Text variant="mainPage">All spaces</Text>
+
       <Spacer height={40} />
+
       <Grid>
         {spaces
           .filter(space => isAdmin || isEditor || !space.isRootSpace)
@@ -33,6 +39,15 @@ export default function Spaces() {
             return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
           })}
       </Grid>
+
+      <Spacer height={100} />
+
+      <TextContainer>
+        <Text variant="largeTitle">
+          Together we can change how society is organized, put power into the hands of those who’ve earned it, and
+          distribute resources and opportunity far and wide.
+        </Text>
+      </TextContainer>
     </div>
   );
 }
