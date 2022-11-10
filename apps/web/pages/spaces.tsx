@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
+import { OboardingCarousel } from '~/modules/components/onboarding-carousel';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -48,6 +49,10 @@ export default function Spaces() {
           distribute resources and opportunity far and wide.
         </Text>
       </TextContainer>
+
+      <Spacer height={40} />
+
+      <OboardingCarousel />
     </div>
   );
 }

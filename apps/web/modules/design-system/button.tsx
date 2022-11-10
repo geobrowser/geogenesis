@@ -2,10 +2,12 @@ import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
+import { Copy } from './icons/copy';
 import { Create } from './icons/create';
 import { Expand } from './icons/expand';
 import { ExpandSmall } from './icons/expand-small';
 import { Eye } from './icons/eye';
+import { Facts } from './icons/facts';
 import { Filter } from './icons/filter';
 import { Publish } from './icons/publish';
 import { Tick } from './icons/tick';
@@ -14,7 +16,7 @@ import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
-type ButtonVariant = 'primary' | 'secondary';
+type ButtonVariant = 'primary' | 'secondary' | 'teriary';
 
 function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme) {
   if (disabled) {
@@ -44,6 +46,15 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
         backgroundColor: theme.colors.white,
         backgroundColorHover: theme.colors.bg,
         borderColor: theme.colors['grey-02'],
+        borderColorHover: theme.colors.text,
+        borderColorFocus: theme.colors.text,
+      };
+    case 'teriary':
+      return {
+        color: theme.colors.white,
+        backgroundColor: theme.colors.text,
+        backgroundColorHover: theme.colors.text,
+        borderColor: theme.colors.text,
         borderColorHover: theme.colors.text,
         borderColorFocus: theme.colors.text,
       };
@@ -93,7 +104,18 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
   };
 });
 
-type Icon = 'create' | 'publish' | 'eye' | 'expand' | 'expandSmall' | 'contractSmall' | 'filter' | 'trash' | 'tick';
+type Icon =
+  | 'create'
+  | 'publish'
+  | 'eye'
+  | 'expand'
+  | 'expandSmall'
+  | 'contractSmall'
+  | 'filter'
+  | 'trash'
+  | 'tick'
+  | 'facts'
+  | 'copy';
 
 const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
   create: (color: ColorName) => <Create color={color} />,
@@ -105,6 +127,8 @@ const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
   filter: (color: ColorName) => <Filter color={color} />,
   trash: (color: ColorName) => <Trash color={color} />,
   tick: (color: ColorName) => <Tick color={color} />,
+  facts: (color: ColorName) => <Facts color={color} />,
+  copy: (color: ColorName) => <Copy color={color} />,
 };
 
 interface Props {
@@ -117,7 +141,14 @@ interface Props {
 
 function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
   if (disabled) return 'grey-03';
-  return variant === 'primary' ? 'white' : 'ctaPrimary';
+  switch (variant) {
+    case 'primary':
+      return 'white';
+    case 'secondary':
+      return 'ctaPrimary';
+    case 'teriary':
+      return 'white';
+  }
 }
 
 export const Button = React.forwardRef(function Button(
