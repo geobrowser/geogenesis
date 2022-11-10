@@ -157,7 +157,8 @@ function Triples({ spaceId }: { spaceId: string }) {
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === spaceId);
   const spaceName = space?.attributes.name ?? ZERO_WIDTH_SPACE;
-  const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+  const spaceImage =
+    space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF';
 
   return (
     <PageContainer>
