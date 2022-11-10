@@ -10,7 +10,7 @@ import { useSpaces } from '~/modules/state/use-spaces';
 
 const Grid = styled.div(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fill, 340px)',
   gap: `${theme.space * 5}px`,
 }));
 

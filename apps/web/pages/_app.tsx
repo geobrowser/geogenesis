@@ -33,11 +33,11 @@ const globalStyles = css`
   }
 `;
 
-const Layout = styled.main({
-  padding: '12ch 2ch 4ch 2ch',
+const Layout = styled.main(props => ({
+  paddingTop: props.theme.space * 10,
   maxWidth: '1060px',
   margin: '0 auto',
-});
+}));
 
 const theme: Theme = {
   colors: colors.light,
