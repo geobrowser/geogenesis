@@ -1,3 +1,4 @@
+export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type NumberValue = {
@@ -35,7 +36,7 @@ export type Space = {
   isRootSpace: boolean;
   editors: string[];
   admins: string[];
-  attributes: Record<string, string>;
+  attributes: Dictionary<string, string>;
 };
 
 export type Account = {
