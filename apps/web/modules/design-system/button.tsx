@@ -59,7 +59,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
     boxSizing: 'border-box',
     backgroundColor: buttonColors.backgroundColor,
     color: buttonColors.color,
-    padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
+    padding: `${props.theme.space * 2 + 0.5}px ${props.theme.space * 3}px`,
     borderRadius: props.theme.radius,
     cursor: 'pointer',
     outline: 'none',

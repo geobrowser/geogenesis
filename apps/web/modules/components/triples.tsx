@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
+import { sign } from 'crypto';
 import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
@@ -17,13 +18,14 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
-import { ZERO_WIDTH_SPACE } from '../constants';
+import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import TripleTable from './triple-table';
 
 const PageHeader = styled.div({
   display: 'flex',
+  alignItems: 'center',
   justifyContent: 'space-between',
   width: '100%',
 });
@@ -45,7 +47,7 @@ const FileImport = styled.input({
 export default function TriplesPage({ spaceId }: { spaceId: string }) {
   return (
     <TripleStoreProvider space={spaceId}>
-      <Triples space={spaceId} />
+      <Triples spaceId={spaceId} />
     </TripleStoreProvider>
   );
 }
@@ -116,8 +118,15 @@ const InputIcon = styled.div(props => ({
   top: props.theme.space * 2.5,
 }));
 
-function Triples({ space }: { space: string }) {
-  const { isEditor, isAdmin } = useAccessControl(space);
+const SpaceImage = styled.img({
+  width: 56,
+  height: 56,
+  objectFit: 'cover',
+  borderRadius: 8,
+});
+
+function Triples({ spaceId }: { spaceId: string }) {
+  const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
   const { toggleEditable, editable } = useEditable();
@@ -131,27 +140,35 @@ function Triples({ space }: { space: string }) {
 
     tripleStore.create([
       {
-        id: createTripleId(space, entityId, attributeId, value),
+        id: createTripleId(spaceId, entityId, attributeId, value),
         entityId,
         attributeId,
         value,
-        space,
+        space: spaceId,
       },
     ]);
   };
 
   const onImport = async (file: File) => {
-    const triples = await importCSVFile(file, space);
+    const triples = await importCSVFile(file, spaceId);
     tripleStore.create(triples);
   };
 
   const { spaces } = useSpaces();
-  const spaceName = spaces.find(s => s.id === space)?.attributes.name ?? ZERO_WIDTH_SPACE;
+
+  const space = spaces.find(s => s.id === spaceId);
+
+  console.log(space);
+
+  const spaceName = space?.attributes.name ?? ZERO_WIDTH_SPACE;
+  const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
 
   return (
     <PageContainer>
       <PageHeader>
-        <Text variant="largeTitle" as="h1" flex="0 0 auto">
+        <SpaceImage src={spaceImage} alt={`Cover image for ${spaceName}`} />
+        <Spacer width={20} />
+        <Text variant="mainPage" as="h1" flex="0 0 auto">
           {spaceName}
         </Text>
         {(isEditor || isAdmin) && (
@@ -159,7 +176,7 @@ function Triples({ space }: { space: string }) {
             <PageHeader>
               <div style={{ flex: 1 }} />
               {isAdmin && (
-                <Link href={`/space/${space}/access-control`}>
+                <Link href={`/space/${spaceId}/access-control`}>
                   <Button variant="secondary">Admin</Button>
                 </Link>
               )}
@@ -184,7 +201,7 @@ function Triples({ space }: { space: string }) {
                   </Button>
                   <Spacer width={12} />
                   <Button icon="create" onClick={onAddTriple}>
-                    Add
+                    New entity
                   </Button>
                 </>
               )}
@@ -193,7 +210,7 @@ function Triples({ space }: { space: string }) {
         )}
       </PageHeader>
 
-      <Spacer height={12} />
+      <Spacer height={40} />
 
       <InputContainer ref={inputContainerRef}>
         <Input
@@ -212,7 +229,7 @@ function Triples({ space }: { space: string }) {
 
       <Spacer height={12} />
 
-      <TripleTable space={space} triples={tripleStore.triples} update={tripleStore.update} />
+      <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
 
       <Spacer height={12} />
 
