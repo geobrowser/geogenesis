@@ -1,14 +1,17 @@
 import styled from '@emotion/styled';
-import { useState } from 'react';
+import { ForwardedRef, forwardRef, useEffect, useState } from 'react';
 import { Button } from '../design-system/button';
+import { Dialog } from '../design-system/dialog';
 import { Copy } from '../design-system/icons/copy';
 import { Entity } from '../design-system/icons/entity';
 import { Facts } from '../design-system/icons/facts';
 import { RightArrowLong } from '../design-system/icons/right-arrow-long';
 import { Target } from '../design-system/icons/target';
 import { Spacer } from '../design-system/spacer';
+import { Text } from '../design-system/text';
 
 const Row = styled.div(({ theme }) => ({
+  position: 'relative',
   display: 'flex',
   alignItems: 'center',
   gap: theme.space * 2,
@@ -20,28 +23,64 @@ interface OnboardButtonProps {
   children: React.ReactNode;
 }
 
-export function OnboardingButton({ isActive, onClick, children }: OnboardButtonProps) {
+const DialogContent = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: theme.space * 5,
+  maxWidth: 1060,
+}));
+
+const OnboardingButton = forwardRef(function OnboardingButton(
+  { isActive, onClick, children }: OnboardButtonProps,
+  ref: ForwardedRef<HTMLButtonElement>
+) {
   return isActive ? (
-    <Button variant="teriary" onClick={onClick}>
+    <Button ref={ref} variant="teriary" onClick={onClick}>
       {children}
     </Button>
   ) : (
-    <Button variant="secondary" onClick={onClick}>
+    <Button ref={ref} variant="secondary" onClick={onClick}>
       {children}
     </Button>
   );
-}
+});
 
 export function OboardingCarousel() {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState<'collect' | 'organize' | 'empower' | 'solve'>('collect');
+
+  useEffect(() => {
+    setTimeout(() => setDialogOpen(true), 1000);
+  }, []);
 
   return (
     <Row>
-      <OnboardingButton onClick={() => setStep('collect')} isActive={step === 'collect'}>
+      <Dialog
+        trigger={
+          <OnboardingButton onClick={() => setStep('collect')} isActive={step === 'collect'}>
+            <Facts color={step === 'collect' ? 'white' : `grey-04`} />
+            <Spacer width={8} />
+            Collect data
+          </OnboardingButton>
+        }
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      >
+        <DialogContent>
+          <Text variant="mediumTitle">We are here</Text>
+          <Spacer height={4} />
+          <Text>
+            Geo is built on the principle that data should be owned and created by its users in a decentralized and
+            verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
+            triples/facts, which can then be used to structure meaningful content.
+          </Text>
+        </DialogContent>
+      </Dialog>
+      {/* <OnboardingButton onClick={() => setStep('collect')} isActive={step === 'collect'}>
         <Facts color={step === 'collect' ? 'white' : `grey-04`} />
         <Spacer width={8} />
         Collect data
-      </OnboardingButton>
+      </OnboardingButton> */}
 
       <RightArrowLong color="grey-04" />
 
