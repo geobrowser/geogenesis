@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Text } from '~/modules/design-system/text';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
-const GridCell = styled.div(({ theme }) => ({
+const GridCell = styled.a(({ theme }) => ({
   cursor: 'pointer',
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -33,7 +33,7 @@ interface Props {
 
 export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder.com/600x600/FF00FF/FFFFFF' }: Props) {
   return (
-    <Link href={`/space/${spaceId}`}>
+    <Link href={`/space/${spaceId}`} passHref>
       <GridCell>
         <Header>
           <Text variant="smallTitle">{name}</Text>

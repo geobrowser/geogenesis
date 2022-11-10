@@ -55,8 +55,8 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
         backgroundColor: theme.colors.text,
         backgroundColorHover: theme.colors.text,
         borderColor: theme.colors.text,
-        borderColorHover: theme.colors.text,
-        borderColorFocus: theme.colors.text,
+        borderColorHover: theme.colors.white,
+        borderColorFocus: theme.colors.white,
       };
   }
 }
