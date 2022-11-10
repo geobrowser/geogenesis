@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { keyframes } from '@emotion/react';
 import { ForwardedRef, forwardRef, useEffect, useState } from 'react';
 import { Button } from '../design-system/button';
 import { Dialog } from '../design-system/dialog';
@@ -26,6 +27,8 @@ interface OnboardButtonProps {
 const DialogContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
+  border: `1px solid ${theme.colors.text}`,
+  borderRadius: theme.radius,
   padding: theme.space * 5,
   maxWidth: 1060,
 }));
@@ -49,6 +52,9 @@ export function OboardingCarousel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState<'collect' | 'organize' | 'empower' | 'solve'>('collect');
 
+  // There's a hydration bug if the dialog defaults to open on first render in SSR when using
+  // a portal. We render the dialog a second after page load to get around it.
+  // https://github.com/radix-ui/primitives/issues/1386
   useEffect(() => {
     setTimeout(() => setDialogOpen(true), 1000);
   }, []);

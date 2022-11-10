@@ -6,13 +6,6 @@ interface ContentProps {
   children: React.ReactNode;
 }
 
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  borderRadius: props.theme.radius,
-  padding: props.theme.space * 3,
-  backgroundColor: props.theme.colors.white,
-  border: `1px solid ${props.theme.colors.text}`,
-}));
-
 interface Props {
   children: React.ReactNode;
   open: boolean;
@@ -28,7 +21,7 @@ export function Dialog({ children, open, onOpenChange, trigger, defaultOpen = fa
     <PopoverPrimitive.Root onOpenChange={onOpenChange} open={open} defaultOpen={defaultOpen}>
       <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <StyledContent
+        <PopoverPrimitive.Content
           align="start"
           sideOffset={space * 3}
           onOpenAutoFocus={event => event.preventDefault()}
@@ -36,7 +29,7 @@ export function Dialog({ children, open, onOpenChange, trigger, defaultOpen = fa
         >
           {children}
           <PopoverPrimitive.Arrow />
-        </StyledContent>
+        </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
   );
