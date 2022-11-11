@@ -5,7 +5,13 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // runtime: 'experiment-edge',
+  swcMinify: true,
+  // experimental: {
+  //   runtime: 'experimental-edge',
+  // },
+  compiler: {
+    emotion: true,
+  },
   images: {
     remotePatterns: [
       {
