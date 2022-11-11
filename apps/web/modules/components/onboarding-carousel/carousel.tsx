@@ -131,7 +131,7 @@ export function OboardingCarousel() {
   // a portal. We render the dialog a second after page load to get around it.
   // https://github.com/radix-ui/primitives/issues/1386
   useEffect(() => {
-    setTimeout(() => setDialogOpen(true), 200);
+    setTimeout(() => setDialogOpen(true), 500);
   }, []);
 
   const onStepChange = (step: DialogStep) => (event: React.MouseEvent<HTMLButtonElement>) => {
