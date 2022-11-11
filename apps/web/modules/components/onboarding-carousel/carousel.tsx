@@ -12,6 +12,7 @@ import { useRect } from '@radix-ui/react-use-rect';
 import { OnboardingDialog } from './dialog';
 import { OnboardingDialogArrow } from './arrow';
 import { motion } from 'framer-motion';
+import { keyframes } from '@emotion/react';
 
 const Row = styled.div(({ theme }) => ({
   position: 'relative',
@@ -25,6 +26,15 @@ interface DialogContentProps {
   top?: number;
 }
 
+const fade = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
 const DialogContent = styled.div<DialogContentProps>(({ theme, left = 0, top = 0 }) => ({
   position: 'absolute',
   top: top + theme.space * 3 + 10,
@@ -35,6 +45,7 @@ const DialogContent = styled.div<DialogContentProps>(({ theme, left = 0, top = 0
   borderRadius: theme.radius,
   padding: theme.space * 5,
   width: 1060,
+  animation: `${fade} 0.2s ease-in`,
 }));
 
 const DialogArrow = styled.span<DialogContentProps>(({ left = 0 }) => ({
@@ -99,6 +110,14 @@ const DIALOG_CONTENT: Record<DialogStep, { title: string; description: string }>
   },
 };
 
+function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: number) {
+  return selectedArrowPosition === 0 ? initialButtonWidth / 2 : selectedArrowPosition;
+}
+
+// We set the initial rowTop position to something closer to the true position so the arrow does not animate
+// weirdly when the carousel first loads
+const COMMON_ROW_TOP_POSITION = 769;
+
 export function OboardingCarousel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState<DialogStep>('collect');
@@ -112,7 +131,7 @@ export function OboardingCarousel() {
   // a portal. We render the dialog a second after page load to get around it.
   // https://github.com/radix-ui/primitives/issues/1386
   useEffect(() => {
-    setTimeout(() => setDialogOpen(true), 100);
+    setTimeout(() => setDialogOpen(true), 200);
   }, []);
 
   const onStepChange = (step: DialogStep) => (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -122,10 +141,10 @@ export function OboardingCarousel() {
   };
 
   const rowLeft = rowRect?.left ?? 0;
-  const rowTop = (rowRect?.top ?? 0) + (rowRect?.height ?? 0);
+  const rowTop = (rowRect?.top ?? COMMON_ROW_TOP_POSITION) + (rowRect?.height ?? 0);
 
   // Set the initial value of the arrow position to the first button in the row
-  const arrowLeft = selectedArrowLeft === 0 ? (initialButtonRect?.width ?? 0) / 2 ?? 0 : selectedArrowLeft;
+  const arrowLeft = getArrowPosition(selectedArrowLeft, initialButtonRect?.width ?? 0);
 
   return (
     <Row ref={rowRef}>
