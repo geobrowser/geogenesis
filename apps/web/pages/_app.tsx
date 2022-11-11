@@ -36,7 +36,7 @@ const globalStyles = css`
 
 const Layout = styled.main(props => ({
   paddingTop: props.theme.space * 10,
-  maxWidth: '1060px',
+  maxWidth: 1200,
   margin: '0 auto',
 
   '@media (max-width: 1060px)': {
