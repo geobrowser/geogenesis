@@ -9,7 +9,7 @@ interface Props {
   alignOffset?: number;
 }
 
-export function Dialog({ children, open, onOpenChange, defaultOpen = false }: Props) {
+export function OnboardingDialog({ children, open, onOpenChange, defaultOpen = false }: Props) {
   const { space } = useTheme();
 
   return (
