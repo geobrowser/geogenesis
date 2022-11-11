@@ -1,6 +1,6 @@
 /* eslint-disable node/no-missing-import */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
-import { ethers } from 'hardhat'
+import { ethers, upgrades } from 'hardhat'
 
 import { Space } from '../build/types'
 
@@ -12,7 +12,8 @@ type DeployOptions = {
 export async function deploySpace(options: DeployOptions = {}): Promise<Space> {
   const { signer, debug } = options
   const Space = await ethers.getContractFactory('Space')
-  const contract = await Space.deploy()
+
+  const contract = (await upgrades.deployProxy(Space)) as Space
 
   if (debug) {
     console.log(`Deploying 'Space' at ${contract.address}...`)
