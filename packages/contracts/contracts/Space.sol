@@ -39,6 +39,11 @@ contract Space is
 
     // *** Initialize upgradeable instance ***
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize() public initializer {
         __Ownable_init();
         __AccessControl_init();

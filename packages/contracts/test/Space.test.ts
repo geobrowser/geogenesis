@@ -1,8 +1,8 @@
 /* eslint-disable node/no-missing-import */
 import { expect } from 'chai'
-import { ethers } from 'hardhat'
+import { ethers, upgrades } from 'hardhat'
 
-import { deploySpace } from '../src/deploy'
+import { deploySpace, upgradeToSpaceV2 } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 describe('Space', () => {
@@ -84,5 +84,12 @@ describe('Space', () => {
     expect(contract.connect(account1).addEntry('abc')).to.be.revertedWith(
       `AccessControl: account ${account1.address.toLowerCase()} is missing role ${await contract.EDITOR_ROLE()}`
     )
+  })
+
+  it('works after upgrading', async function () {
+    const [deployer] = await ethers.getSigners()
+    const spaceV1 = await deploySpace({ signer: deployer })
+    const spaceV2 = await upgradeToSpaceV2(spaceV1, { signer: deployer })
+    expect(await spaceV2._hasBananas()).to.be.eq(true)
   })
 })
