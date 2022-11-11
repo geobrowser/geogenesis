@@ -133,7 +133,7 @@ const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
 
 interface Props {
   children?: React.ReactNode;
-  onClick?: () => void;
+  onClick?: ((event: React.MouseEvent<HTMLButtonElement>) => void) | (() => void);
   icon?: Icon;
   variant?: ButtonVariant;
   disabled?: boolean;

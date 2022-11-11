@@ -51,7 +51,7 @@ const MotionDialogArrow = motion(DialogArrow);
 
 interface OnboardButtonProps {
   isActive: boolean;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }
 
