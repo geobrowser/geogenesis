@@ -1,4 +1,4 @@
-import { Address, ByteArray, crypto, log } from '@graphprotocol/graph-ts'
+import { ByteArray, crypto, log } from '@graphprotocol/graph-ts'
 import { Account, Space } from '../generated/schema'
 
 class RoleAddedParams {
@@ -8,6 +8,9 @@ class RoleAddedParams {
 }
 
 const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
+const EDITOR_CONTROLLER_ROLE = crypto.keccak256(
+  ByteArray.fromUTF8('EDITOR_CONTROLLER_ROLE')
+)
 const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 export function addRole(params: RoleAddedParams): void {
@@ -27,6 +30,12 @@ export function addRole(params: RoleAddedParams): void {
   } else if (role == EDITOR_ROLE && !space.editors.includes(address)) {
     space.editors = space.editors.concat([address])
     log.debug(`Granted editor role to ${address}`, [])
+  } else if (
+    role == EDITOR_CONTROLLER_ROLE &&
+    !space.editorControllers.includes(address)
+  ) {
+    space.editorControllers = space.editorControllers.concat([address])
+    log.debug(`Granted editor controller role to ${address}`, [])
   } else {
     log.debug(`Received unexpected role value: ${role.toHexString()}`, [])
   }
@@ -46,6 +55,9 @@ export function removeRole(params: RoleAddedParams): void {
   } else if (role == EDITOR_ROLE) {
     space.editors = exclude(space.editors, address)
     log.debug(`Revoked editor role from ${address}`, [])
+  } else if (role == EDITOR_CONTROLLER_ROLE) {
+    space.editorControllers = exclude(space.editorControllers, address)
+    log.debug(`Revoked editor controller role from ${address}`, [])
   } else {
     log.debug(`Received unexpected role value: ${role.toHexString()}`, [])
   }

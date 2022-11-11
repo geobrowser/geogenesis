@@ -32,6 +32,7 @@ export function handleSpaceAdded(
 
   space.admins = []
   space.editors = []
+  space.editorControllers = []
   space.isRootSpace = isRootSpace
   space.createdAtBlock = createdAtBlock
   space.entity = entityId

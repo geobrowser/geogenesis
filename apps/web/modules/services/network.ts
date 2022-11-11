@@ -211,6 +211,9 @@ export class Network implements INetwork {
             editors {
               id
             }
+            editorControllers {
+              id
+            }
             entity {
               entityOf {
                 id
@@ -232,6 +235,7 @@ export class Network implements INetwork {
           isRootSpace: boolean;
           admins: Account[];
           editors: Account[];
+          editorControllers: Account[];
           entity?: {
             entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
           };
@@ -252,6 +256,7 @@ export class Network implements INetwork {
         id: space.id,
         isRootSpace: space.isRootSpace,
         admins: space.admins.map(account => account.id),
+        editorControllers: space.editorControllers.map(account => account.id),
         editors: space.editors.map(account => account.id),
         attributes,
       };

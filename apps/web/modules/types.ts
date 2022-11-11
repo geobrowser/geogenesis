@@ -34,6 +34,7 @@ export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
+  editorControllers: string[];
   admins: string[];
   attributes: Record<string, string>;
 };

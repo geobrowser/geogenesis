@@ -5,7 +5,7 @@ import dotenv from 'dotenv'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { config } from 'hardhat'
 import set from 'lodash.set'
-import { deploySpace } from '../src/deploy'
+import { deploySpaceBeacon, deploySpaceInstance } from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 dotenv.config()
@@ -19,13 +19,15 @@ async function main() {
 
   console.log('Deploying on network', networkId, networkConfig)
 
-  const spaceRegistry = await deploySpace({ debug: true })
-  await spaceRegistry.initialize()
+  const beacon = await deploySpaceBeacon({ debug: true })
 
-  const healthSpace = await deploySpace({ debug: true })
+  const spaceRegistry = await deploySpaceInstance(beacon, { debug: true })
+  await spaceRegistry.configureRoles()
+
+  const healthSpace = await deploySpaceInstance(beacon, { debug: true })
   console.log('Added new space at address: ', healthSpace.address)
 
-  const valuesSpace = await deploySpace({ debug: true })
+  const valuesSpace = await deploySpaceInstance(beacon, { debug: true })
   console.log('Added new space 2 at address: ', valuesSpace.address)
 
   const space1Id = randomUUID()
@@ -85,8 +87,8 @@ async function main() {
     ).toString('base64')}`
   )
 
-  await healthSpace.initialize()
-  await valuesSpace.initialize()
+  await healthSpace.configureRoles()
+  await valuesSpace.configureRoles()
 
   saveAddress({
     chainId,

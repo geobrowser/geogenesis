@@ -2,14 +2,19 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
 
-import { deploySpace } from '../src/deploy'
+import {
+  deploySpaceBeacon,
+  deploySpaceInstance,
+  upgradeToSpaceV2,
+} from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 describe('Space', () => {
   it('add entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
-    await contract.initialize()
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
+    await contract.configureRoles()
 
     const uri1 = 'abc'
     const entry1 = await addEntry(contract, uri1)
@@ -28,8 +33,9 @@ describe('Space', () => {
 
   it('read entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
-    await contract.initialize()
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
+    await contract.configureRoles()
 
     const uri1 = 'abc'
     await addEntry(contract, uri1)
@@ -56,8 +62,9 @@ describe('Space', () => {
 
   it('Grants and revokes role', async () => {
     const [deployer, address1] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
-    await contract.initialize()
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
+    await contract.configureRoles()
 
     expect(
       await contract.hasRole(await contract.EDITOR_ROLE(), address1.address)
@@ -78,11 +85,26 @@ describe('Space', () => {
 
   it("Fails when adding entry without editor's role", async () => {
     const [deployer, account1] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
-    await contract.initialize()
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
+    await contract.configureRoles()
 
     expect(contract.connect(account1).addEntry('abc')).to.be.revertedWith(
       `AccessControl: account ${account1.address.toLowerCase()} is missing role ${await contract.EDITOR_ROLE()}`
     )
+  })
+
+  it('works after upgrading', async function () {
+    const [deployer] = await ethers.getSigners()
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const instance = await deploySpaceInstance(beacon, {
+      signer: deployer,
+    })
+
+    const spaceV2 = await upgradeToSpaceV2(beacon, instance, {
+      signer: deployer,
+    })
+
+    expect(await spaceV2._hasBananas()).to.be.eq(true)
   })
 })
