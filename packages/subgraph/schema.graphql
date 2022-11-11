@@ -1,7 +1,18 @@
 type Space @entity {
   id: ID!
+
+  """
+  Permissions
+
+  We should think of our initial governance model as an implementation
+  detail. These array-based lists of roles won't scale well, but should
+  be fine until we build out a proper governance protocol, at which point
+  we can update the mapping.
+  """
   admins: [Account!]!
+  editorControllers: [Account!]!
   editors: [Account!]!
+
   isRootSpace: Boolean!
   createdAtBlock: BigInt!
   entity: GeoEntity
@@ -9,8 +20,9 @@ type Space @entity {
 
 type Account @entity {
   id: ID!
-  editorOf: [Space!]! @derivedFrom(field: "editors")
   adminOf: [Space!]! @derivedFrom(field: "admins")
+  editorControllerOf: [Space!]! @derivedFrom(field: "editorControllers")
+  editorOf: [Space!]! @derivedFrom(field: "editors")
 }
 
 """
@@ -42,6 +54,11 @@ A node within the knowledge graph.
 type GeoEntity @entity {
   id: ID!
   name: String
+
+  """
+  This may not be performant. We can do all the same queries
+  via triples(where: { entity: $id })) if needed.
+  """
   entityOf: [Triple!]! @derivedFrom(field: "entity")
 }
 

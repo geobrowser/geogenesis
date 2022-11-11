@@ -16,22 +16,33 @@ contract Space is ISpace, AccessControl, Ownable {
 
     Entry[] _entries;
 
+    // Roles:
+    // - ADMIN_ROLE can grant/revoke ADMIN_ROLE and EDITOR_CONTROLLER_ROLE
+    // - EDITOR_CONTROLLER_ROLE can grant/revoke EDITOR_ROLE
+    // - EDITOR_ROLE can add new log entries
     bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+    bytes32 public constant EDITOR_CONTROLLER_ROLE =
+        keccak256('EDITOR_CONTROLLER_ROLE');
     bytes32 public constant EDITOR_ROLE = keccak256('EDITOR_ROLE');
 
     bool public _initialized = false;
 
     // Initialize in separate function so graph-node picks up events.
     // Seems like events on dynamic data sources aren't picked up if
-    // emitted in the constructor.
+    // emitted in the constructor. Presumably this is because we add
+    // the dynamic data source after the contract is deployed, and
+    // graph-node doesn't pick up events emitted before the data source
+    // was added.
     function initialize() public onlyOwner {
         if (_initialized) return;
 
         _initialized = true;
 
         _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
-        _setRoleAdmin(EDITOR_ROLE, ADMIN_ROLE);
+        _setRoleAdmin(EDITOR_CONTROLLER_ROLE, ADMIN_ROLE);
+        _setRoleAdmin(EDITOR_ROLE, EDITOR_CONTROLLER_ROLE);
         _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(EDITOR_CONTROLLER_ROLE, msg.sender);
         _grantRole(EDITOR_ROLE, msg.sender);
     }
 
