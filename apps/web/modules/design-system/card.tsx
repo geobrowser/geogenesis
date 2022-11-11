@@ -28,7 +28,7 @@ const GridCell = styled.a(({ theme }) => ({
 
     // @ts-ignore -- This is valid in CSS-in-JS
     [CoverImage]: {
-      transform: 'scale(1.1)',
+      transform: 'scale(1.075)',
     },
   },
 }));
