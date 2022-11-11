@@ -1,14 +1,19 @@
 /* eslint-disable node/no-missing-import */
 import { expect } from 'chai'
-import { ethers, upgrades } from 'hardhat'
+import { ethers } from 'hardhat'
 
-import { deploySpace, upgradeToSpaceV2 } from '../src/deploy'
+import {
+  deploySpaceBeacon,
+  deploySpaceInstance,
+  upgradeToSpaceV2,
+} from '../src/deploy'
 import { addEntry } from '../src/entry'
 
 describe('Space', () => {
   it('add entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
     await contract.configureRoles()
 
     const uri1 = 'abc'
@@ -28,7 +33,8 @@ describe('Space', () => {
 
   it('read entry', async () => {
     const [deployer] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
     await contract.configureRoles()
 
     const uri1 = 'abc'
@@ -56,7 +62,8 @@ describe('Space', () => {
 
   it('Grants and revokes role', async () => {
     const [deployer, address1] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
     await contract.configureRoles()
 
     expect(
@@ -78,7 +85,8 @@ describe('Space', () => {
 
   it("Fails when adding entry without editor's role", async () => {
     const [deployer, account1] = await ethers.getSigners()
-    const contract = await deploySpace({ signer: deployer })
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const contract = await deploySpaceInstance(beacon, { signer: deployer })
     await contract.configureRoles()
 
     expect(contract.connect(account1).addEntry('abc')).to.be.revertedWith(
@@ -88,8 +96,15 @@ describe('Space', () => {
 
   it('works after upgrading', async function () {
     const [deployer] = await ethers.getSigners()
-    const spaceV1 = await deploySpace({ signer: deployer })
-    const spaceV2 = await upgradeToSpaceV2(spaceV1, { signer: deployer })
+    const beacon = await deploySpaceBeacon({ signer: deployer })
+    const instance = await deploySpaceInstance(beacon, {
+      signer: deployer,
+    })
+
+    const spaceV2 = await upgradeToSpaceV2(beacon, instance, {
+      signer: deployer,
+    })
+
     expect(await spaceV2._hasBananas()).to.be.eq(true)
   })
 })
