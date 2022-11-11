@@ -20,7 +20,7 @@ async function main() {
   console.log('Deploying on network', networkId, networkConfig)
 
   const spaceRegistry = await deploySpace({ debug: true })
-  await spaceRegistry.initialize()
+  await spaceRegistry.configureRoles()
 
   const healthSpace = await deploySpace({ debug: true })
   console.log('Added new space at address: ', healthSpace.address)
@@ -85,8 +85,8 @@ async function main() {
     ).toString('base64')}`
   )
 
-  await healthSpace.initialize()
-  await valuesSpace.initialize()
+  await healthSpace.configureRoles()
+  await valuesSpace.configureRoles()
 
   saveAddress({
     chainId,
