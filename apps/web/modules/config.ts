@@ -29,11 +29,10 @@ export const configOptions: Record<AppEnv, AppConfig> = {
     subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/banana',
   },
   production: {
-    chainId: '1337',
-    rpc: 'https://devnet-dabbott.cloud.okteto.net',
-    ipfs: 'https://api.staging.thegraph.com/ipfs',
-    // ipfs: 'https://api.thegraph.com/ipfs',
-    subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
+    chainId: '137',
+    rpc: 'https://polygon-rpc.com',
+    ipfs: 'https://api.thegraph.com/ipfs',
+    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
   },
 };
 

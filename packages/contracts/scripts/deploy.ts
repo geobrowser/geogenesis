@@ -25,10 +25,10 @@ async function main() {
   await spaceRegistry.configureRoles()
 
   const healthSpace = await deploySpaceInstance(beacon, { debug: true })
-  console.log('Added new space at address: ', healthSpace.address)
+  console.log('Added Health space at address: ', healthSpace.address)
 
   const valuesSpace = await deploySpaceInstance(beacon, { debug: true })
-  console.log('Added new space 2 at address: ', valuesSpace.address)
+  console.log('Added Value Space space 2 at address: ', valuesSpace.address)
 
   const space1Id = randomUUID()
   const space2Id = randomUUID()
@@ -94,7 +94,7 @@ async function main() {
     chainId,
     contractName: 'SpaceRegistry',
     address: spaceRegistry.address,
-    blockNumber: spaceRegistry.deployTransaction.blockNumber!,
+    startBlock: spaceRegistry.deployTransaction.blockNumber!,
   })
 
   if (networkId === 'localhost') {
@@ -102,7 +102,7 @@ async function main() {
       chainId: 'localhost',
       contractName: 'SpaceRegistry',
       address: spaceRegistry.address,
-      blockNumber: spaceRegistry.deployTransaction.blockNumber!,
+      startBlock: spaceRegistry.deployTransaction.blockNumber!,
     })
   }
 }
@@ -111,12 +111,12 @@ function saveAddress({
   chainId,
   address,
   contractName,
-  blockNumber,
+  startBlock,
 }: {
   chainId: string
   contractName: string
   address: string
-  blockNumber: number
+  startBlock: number
 }) {
   const file = `addresses/${chainId}.json`
   let json: any
@@ -128,7 +128,7 @@ function saveAddress({
   }
 
   set(json, [contractName, 'address'], address)
-  set(json, [contractName, 'blockNumber'], blockNumber)
+  set(json, [contractName, 'startBlock'], startBlock)
 
   mkdirSync('addresses', { recursive: true })
 

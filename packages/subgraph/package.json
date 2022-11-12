@@ -17,8 +17,11 @@
     "local:deploy": "npm run local deploy",
     "update-contract-address:local": "yq -i \".mainnet.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" networks.json",
     "update-contract-address:mumbai": "yq -i \".mumbai.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/80001.json)\" networks.json",
-    "update-block-number:mumbai": "yq -i \".mumbai.SpaceRegistry.blockNumber = $(jq .SpaceRegistry.blockNumber ../contracts/addresses/80001.json)\" networks.json",
+    "update-block-number:mumbai": "yq -i \".mumbai.SpaceRegistry.startBlock = $(jq .SpaceRegistry.startBlock ../contracts/addresses/80001.json)\" networks.json",
     "update-config:mumbai": "npm run update-contract-address:mumbai && npm run update-block-number:mumbai",
+    "update-contract-address:matic": "yq -i \".matic.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/137.json)\" networks.json",
+    "update-block-number:matic": "yq -i \".matic.SpaceRegistry.startBlock = $(jq .SpaceRegistry.startBlock ../contracts/addresses/137.json)\" networks.json",
+    "update-config:matic": "npm run update-contract-address:matic && npm run update-block-number:matic",
     "copy-subgraph-config": "docker cp $(docker ps -q --filter=\"name=devnet\"):/app/packages/subgraph/subgraph.yaml ."
   },
   "devDependencies": {
