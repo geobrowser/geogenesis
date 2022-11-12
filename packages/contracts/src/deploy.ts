@@ -19,13 +19,13 @@ export async function deploySpaceBeacon(
   const spaceBeacon = await upgrades.deployBeacon(Space)
 
   if (debug) {
-    console.log(`Deploying 'Space' at ${spaceBeacon.address}...`)
+    console.log(`Deploying Beacon at ${spaceBeacon.address}...`)
   }
 
   const deployed = await spaceBeacon.deployed()
 
   if (debug) {
-    console.log(`Deployed 'Space' at ${spaceBeacon.address}`)
+    console.log(`Deployed Beacon at ${spaceBeacon.address}`)
   }
 
   return signer ? deployed.connect(signer) : deployed
@@ -43,13 +43,13 @@ export async function deploySpaceInstance(
   )) as Space
 
   if (debug) {
-    console.log(`Deploying 'Space Beacon Proxy' at ${space.address}...`)
+    console.log(`Deploying Space Instance at ${space.address}...`)
   }
 
   const deployed = await space.deployed()
 
   if (debug) {
-    console.log(`Deployed 'Space Beacon Proxy' at ${space.address}`)
+    console.log(`Deployed Space Instance at ${space.address}`)
   }
 
   return signer ? deployed.connect(signer) : deployed
@@ -65,14 +65,12 @@ export async function upgradeToSpaceV2(
   const SpaceV2 = await ethers.getContractFactory('FakeSpaceV2')
   await upgrades.upgradeBeacon(beacon.address, SpaceV2)
 
-  console.log('Beacon upgraded')
-
-  const upgraded = SpaceV2.attach(instance.address)
+  const upgraded = SpaceV2.attach(instance.address) as FakeSpaceV2
 
   await upgraded.initializeV2()
 
   if (debug) {
-    console.log(`Deployed 'Space' at ${upgraded.address}`)
+    console.log(`Upgraded Beacon at ${upgraded.address}`)
   }
 
   return signer ? upgraded.connect(signer) : upgraded

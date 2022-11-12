@@ -9,11 +9,11 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: SpaceRegistry
-    network: mumbai
+    network: matic
     source:
       abi: SpaceRegistry
-      address: "0x5A514fF6FeDB4501E54D83C2BA930F93CA7eAa5f"
-      startBlock: 29050589
+      address: "0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0"
+      startBlock: 35495081
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -34,7 +34,7 @@ dataSources:
 templates:
   - kind: ethereum/contract
     name: Space
-    network: mumbai
+    network: matic
     source:
       abi: Space
     mapping:
