@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
+import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -53,6 +54,10 @@ export default function Spaces() {
       <Spacer height={40} />
 
       <OboardingCarousel />
+
+      <Spacer height={100} />
+
+      <Email />
     </div>
   );
 }
