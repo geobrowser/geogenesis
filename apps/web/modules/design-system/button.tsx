@@ -16,7 +16,7 @@ import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
-type ButtonVariant = 'primary' | 'secondary' | 'teriary';
+export type ButtonVariant = 'primary' | 'secondary' | 'teriary';
 
 function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme) {
   if (disabled) {

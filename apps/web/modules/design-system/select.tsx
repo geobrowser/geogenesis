@@ -1,12 +1,13 @@
 import styled from '@emotion/styled';
 import * as SelectPrimitive from '@radix-ui/react-select';
+import { ButtonVariant } from './button';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 
-const StyledTrigger = styled(SelectPrimitive.SelectTrigger)(props => ({
+const StyledTrigger = styled(SelectPrimitive.SelectTrigger)<{ variant: ButtonVariant }>(props => ({
   all: 'unset',
   ...props.theme.typography.button,
-  color: props.theme.colors.ctaPrimary,
+  color: props.variant === 'secondary' ? props.theme.colors.ctaPrimary : props.theme.colors.white,
   flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
@@ -14,7 +15,7 @@ const StyledTrigger = styled(SelectPrimitive.SelectTrigger)(props => ({
   borderRadius: props.theme.radius,
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
   gap: 5,
-  backgroundColor: 'white',
+  backgroundColor: props.variant === 'secondary' ? props.theme.colors.white : props.theme.colors.text,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   boxShadow: `0px 1px 2px #F0F0F0`,
   textWrap: 'nowrap',
@@ -61,14 +62,15 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  variant?: 'primary' | 'secondary';
 }
 
-export const Select = ({ value, onChange, options }: Props) => (
+export const Select = ({ value, onChange, options, variant = 'secondary' }: Props) => (
   <SelectPrimitive.Root value={value} onValueChange={onChange}>
-    <StyledTrigger>
+    <StyledTrigger variant={variant}>
       <SelectPrimitive.SelectValue />
       <Spacer width={8} />
-      <ChevronDownSmall color="ctaPrimary" />
+      <ChevronDownSmall color={variant === 'secondary' ? 'ctaPrimary' : 'white'} />
     </StyledTrigger>
     <SelectPrimitive.Portal>
       <StyledContent>

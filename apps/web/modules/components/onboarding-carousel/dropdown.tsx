@@ -20,5 +20,5 @@ const SelectOptions = [
 ];
 
 export function OnboardingDropdown() {
-  return <Select value="collect-data" options={SelectOptions} onChange={value => {}} />;
+  return <Select variant="primary" value="collect-data" options={SelectOptions} onChange={value => {}} />;
 }
