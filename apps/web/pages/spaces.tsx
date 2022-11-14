@@ -1,28 +1,23 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
-import Link from 'next/link';
+import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { SYSTEM_IDS } from '~/modules/constants';
+import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useSpaces } from '~/modules/state/use-spaces';
 
 const Grid = styled.div(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fill, 340px)',
   gap: `${theme.space * 5}px`,
 }));
 
-const GridCell = styled.div({
-  cursor: 'pointer',
+const TextContainer = styled.div({
+  maxWidth: 830,
 });
-
-const CoverImage = styled.img(({ theme }) => ({
-  width: '100%',
-  aspectRatio: '1.4',
-  objectFit: 'cover',
-  borderRadius: theme.radius,
-}));
 
 export default function Spaces() {
   const { spaces } = useSpaces();
@@ -30,24 +25,34 @@ export default function Spaces() {
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
-    <Grid>
-      {spaces
-        .filter(space => isAdmin || isEditor || !space.isRootSpace)
-        .map(space => {
-          const name = space.attributes.name ?? '';
-          const image =
-            space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF';
+    <div>
+      <Text variant="mainPage">All spaces</Text>
 
-          return (
-            <Link key={space.id} href={`/space/${space.id}`}>
-              <GridCell>
-                {image && <CoverImage src={image} alt="" />}
-                <Spacer height={12} />
-                <Text variant="smallTitle">{name}</Text>
-              </GridCell>
-            </Link>
-          );
-        })}
-    </Grid>
+      <Spacer height={40} />
+
+      <Grid>
+        {spaces
+          .filter(space => isAdmin || isEditor || !space.isRootSpace)
+          .map(space => {
+            const name = space.attributes.name;
+            const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+
+            return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+          })}
+      </Grid>
+
+      <Spacer height={100} />
+
+      <TextContainer>
+        <Text variant="largeTitle">
+          Together we can change how society is organized, put power into the hands of those who’ve earned it, and
+          distribute resources and opportunity far and wide.
+        </Text>
+      </TextContainer>
+
+      <Spacer height={40} />
+
+      <OboardingCarousel />
+    </div>
   );
 }

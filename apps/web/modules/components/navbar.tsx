@@ -3,12 +3,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useSpaces } from '~/modules/state/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
 import { usePageName } from '../state/use-page-name';
+import { Dictionary } from '../types';
 
 const Header = styled.header(({ theme }) => ({
   display: 'flex',
@@ -27,8 +28,8 @@ const BreadcrumbsContainer = styled.div({
 type GetComponentRouteConfig = {
   components: string[];
   index: number;
-  spaceNames: Record<string, string>;
-  spaceImages: Record<string, string>;
+  spaceNames: Dictionary<string, string>;
+  spaceImages: Dictionary<string, string>;
   pageName: string;
 };
 
@@ -54,7 +55,7 @@ function getComponentRoute({
         case 1:
           return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
         case 2:
-          return { path, title: spaceNames[component], img: spaceImages[component] };
+          return { path, title: spaceNames[component] ?? ZERO_WIDTH_SPACE, img: spaceImages[component] ?? '' };
         case 3:
           return { path, title: pageName || titleCase(component), img: '/facts.svg' };
       }
