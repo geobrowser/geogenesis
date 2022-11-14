@@ -33,7 +33,7 @@ declare module '@tanstack/react-table' {
 const columnHelper = createColumnHelper<Triple>();
 
 // Table width, minus cell borders
-const COLUMN_SIZE = (1060 - 4) / 3;
+const COLUMN_SIZE = 1200 / 3;
 
 const columns = [
   columnHelper.accessor(row => row.entityId, {
