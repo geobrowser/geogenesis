@@ -10,6 +10,12 @@ import { Text } from '~/modules/design-system/text';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useSpaces } from '~/modules/state/use-spaces';
 
+const Column = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+  maxWidth: 1060,
+});
+
 const Grid = styled.div(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, 340px)',
@@ -26,7 +32,7 @@ export default function Spaces() {
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
-    <div>
+    <Column>
       <Text variant="mainPage">All spaces</Text>
 
       <Spacer height={40} />
@@ -58,6 +64,6 @@ export default function Spaces() {
       <Spacer height={100} />
 
       <Email />
-    </div>
+    </Column>
   );
 }
