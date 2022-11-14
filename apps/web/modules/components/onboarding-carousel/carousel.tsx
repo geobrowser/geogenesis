@@ -13,7 +13,7 @@ import { OnboardingDialogArrow } from './arrow';
 import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { DialogStep, DIALOG_CONTENT } from './content';
-import { OnboardingDropdown } from './dropdown';
+import { Select } from '~/modules/design-system/select';
 
 const Row = styled.div(({ theme }) => ({
   display: 'flex',
@@ -72,9 +72,24 @@ function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: num
   return selectedArrowPosition === 0 ? initialButtonWidth / 2 : selectedArrowPosition;
 }
 
-// We set the initial rowTop position to something closer to the true position so the arrow does not animate
-// weirdly when the carousel first loads
-const COMMON_ROW_TOP_POSITION = 769;
+const selectOptions: Record<DialogStep, { label: string; value: DialogStep }> = {
+  collect: {
+    label: 'Collect data',
+    value: 'collect',
+  },
+  organize: {
+    label: 'Organize data',
+    value: 'organize',
+  },
+  empower: {
+    label: 'Empower communities',
+    value: 'empower',
+  },
+  solve: {
+    label: 'Solve real problem',
+    value: 'solve',
+  },
+};
 
 export function OboardingCarousel() {
   const [step, setStep] = useState<DialogStep>('collect');
@@ -130,7 +145,12 @@ export function OboardingCarousel() {
             </OnboardingButton>
           </>
         ) : (
-          <OnboardingDropdown />
+          <Select
+            variant="primary"
+            value={selectOptions[step].value}
+            options={Object.values(selectOptions)}
+            onChange={value => setStep(value as DialogStep)}
+          />
         )}
       </Row>
 
