@@ -17,6 +17,10 @@ const Header = styled.header(({ theme }) => ({
   padding: theme.space * 4,
   backgroundColor: theme.colors.white,
   boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
+
+  '@media (max-width: 1920px)': {
+    padding: theme.space * 3,
+  },
 }));
 
 const BreadcrumbsContainer = styled.div({
