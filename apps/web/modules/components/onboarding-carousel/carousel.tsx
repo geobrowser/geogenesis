@@ -31,6 +31,8 @@ const OnboardingContent = styled.div(({ theme }) => ({
   maxWidth: 1060,
 }));
 
+const MotionContent = motion(OnboardingContent);
+
 interface ArrowProps {
   left?: number;
 }
@@ -58,7 +60,7 @@ const OnboardingButton = forwardRef(function OnboardingButton(
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return isActive ? (
-    <Button ref={ref} variant="teriary" onClick={onClick}>
+    <Button ref={ref} variant="tertiary" onClick={onClick}>
       {children}
     </Button>
   ) : (
@@ -156,14 +158,15 @@ export function OboardingCarousel() {
 
       <Spacer height={22} />
 
-      <OnboardingContent>
+      {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
+      <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
         <MotionArrow layout="position" left={width > 1060 ? arrowLeft : 57}>
           <OnboardingArrow />
         </MotionArrow>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />
         <Text>{ONBOARDING_CONTENT[step].description}</Text>
-      </OnboardingContent>
+      </MotionContent>
     </div>
   );
 }

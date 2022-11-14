@@ -16,7 +16,7 @@ import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'teriary';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
 
 function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme) {
   if (disabled) {
@@ -49,7 +49,7 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
         borderColorHover: theme.colors.text,
         borderColorFocus: theme.colors.text,
       };
-    case 'teriary':
+    case 'tertiary':
       return {
         color: theme.colors.white,
         backgroundColor: theme.colors.text,
@@ -146,7 +146,7 @@ function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
       return 'white';
     case 'secondary':
       return 'ctaPrimary';
-    case 'teriary':
+    case 'tertiary':
       return 'white';
   }
 }
