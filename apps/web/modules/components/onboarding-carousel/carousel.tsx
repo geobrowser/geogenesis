@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import React, { ForwardedRef, forwardRef, useEffect, useRef, useState } from 'react';
+import React, { ForwardedRef, forwardRef, useRef, useState } from 'react';
 import { Button } from '../../design-system/button';
 import { Copy } from '../../design-system/icons/copy';
 import { Entity } from '../../design-system/icons/entity';
@@ -9,10 +9,10 @@ import { Target } from '../../design-system/icons/target';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { useRect } from '@radix-ui/react-use-rect';
-import { OnboardingDialogArrow } from './arrow';
+import { OnboardingArrow } from './arrow';
 import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { DialogStep, DIALOG_CONTENT } from './content';
+import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
 
 const Row = styled.div(({ theme }) => ({
@@ -21,7 +21,7 @@ const Row = styled.div(({ theme }) => ({
   gap: theme.space * 2,
 }));
 
-const DialogContent = styled.div(({ theme }) => ({
+const OnboardingContent = styled.div(({ theme }) => ({
   position: 'relative',
   display: 'flex',
   flexDirection: 'column',
@@ -31,11 +31,11 @@ const DialogContent = styled.div(({ theme }) => ({
   maxWidth: 1060,
 }));
 
-interface DialogArrowProps {
+interface ArrowProps {
   left?: number;
 }
 
-const DialogArrow = styled.span<DialogArrowProps>(({ left = 0 }) => ({
+const ContentArrow = styled.span<ArrowProps>(({ left = 0 }) => ({
   position: 'absolute',
 
   // -10 is the height of the arrow
@@ -45,7 +45,7 @@ const DialogArrow = styled.span<DialogArrowProps>(({ left = 0 }) => ({
   left: left - 8,
 }));
 
-const MotionDialogArrow = motion(DialogArrow);
+const MotionArrow = motion(ContentArrow);
 
 interface OnboardButtonProps {
   isActive: boolean;
@@ -72,7 +72,7 @@ function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: num
   return selectedArrowPosition === 0 ? initialButtonWidth / 2 : selectedArrowPosition;
 }
 
-const selectOptions: Record<DialogStep, { label: string; value: DialogStep }> = {
+const selectOptions: Record<OnboardingStep, { label: string; value: OnboardingStep }> = {
   collect: {
     label: 'Collect data',
     value: 'collect',
@@ -92,7 +92,7 @@ const selectOptions: Record<DialogStep, { label: string; value: DialogStep }> = 
 };
 
 export function OboardingCarousel() {
-  const [step, setStep] = useState<DialogStep>('collect');
+  const [step, setStep] = useState<OnboardingStep>('collect');
   const containerRef = useRef<HTMLDivElement>(null);
   const containerRect = useRect(containerRef.current);
   const initialButtonRef = useRef<HTMLButtonElement>(null);
@@ -100,7 +100,7 @@ export function OboardingCarousel() {
   const [selectedArrowLeft, setArrowLeft] = useState(0);
   const { width } = useWindowSize();
 
-  const onStepChange = (step: DialogStep) => (event: React.MouseEvent<HTMLButtonElement>) => {
+  const onStepChange = (step: OnboardingStep) => (event: React.MouseEvent<HTMLButtonElement>) => {
     // Position the arrow relative to the button that was clicked
     setArrowLeft(event.currentTarget.offsetLeft + event.currentTarget.clientWidth / 2 - (containerRect?.left ?? 0));
     setStep(step);
@@ -149,21 +149,21 @@ export function OboardingCarousel() {
             variant="primary"
             value={selectOptions[step].value}
             options={Object.values(selectOptions)}
-            onChange={value => setStep(value as DialogStep)}
+            onChange={value => setStep(value as OnboardingStep)}
           />
         )}
       </Row>
 
       <Spacer height={22} />
 
-      <DialogContent>
-        <MotionDialogArrow layout="position" left={width > 1060 ? arrowLeft : 57}>
-          <OnboardingDialogArrow />
-        </MotionDialogArrow>
-        <Text variant="mediumTitle">{DIALOG_CONTENT[step].title}</Text>
+      <OnboardingContent>
+        <MotionArrow layout="position" left={width > 1060 ? arrowLeft : 57}>
+          <OnboardingArrow />
+        </MotionArrow>
+        <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />
-        <Text>{DIALOG_CONTENT[step].description}</Text>
-      </DialogContent>
+        <Text>{ONBOARDING_CONTENT[step].description}</Text>
+      </OnboardingContent>
     </div>
   );
 }

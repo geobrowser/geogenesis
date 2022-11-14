@@ -1,6 +1,6 @@
 import { useTheme } from '@emotion/react';
 
-export function OnboardingDialogArrow() {
+export function OnboardingArrow() {
   const { colors } = useTheme();
 
   return (

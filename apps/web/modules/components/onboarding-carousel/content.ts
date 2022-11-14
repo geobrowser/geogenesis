@@ -1,6 +1,6 @@
-export type DialogStep = 'collect' | 'organize' | 'empower' | 'solve';
+export type OnboardingStep = 'collect' | 'organize' | 'empower' | 'solve';
 
-export const DIALOG_CONTENT: Record<DialogStep, { title: string; description: string }> = {
+export const ONBOARDING_CONTENT: Record<OnboardingStep, { title: string; description: string }> = {
   collect: {
     title: 'We are here',
     description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
