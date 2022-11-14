@@ -9,6 +9,7 @@ export class SpaceStore {
   private api: INetwork;
   spaces$: ObservableComputed<Space[]>;
   admins$: ObservableComputed<SpacesAccounts>;
+  editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
   constructor({ api }: { api: INetwork }) {
@@ -25,6 +26,16 @@ export class SpaceStore {
         return this.spaces$.get().reduce((admins, space) => {
           admins[space.id] = space.admins;
           return admins;
+        }, {} as SpacesAccounts);
+      })
+    );
+
+    this.editorControllers$ = makeOptionalComputed(
+      {},
+      computed(() => {
+        return this.spaces$.get().reduce((editorControllers, space) => {
+          editorControllers[space.id] = space.editorControllers;
+          return editorControllers;
         }, {} as SpacesAccounts);
       })
     );

@@ -1,13 +1,19 @@
 {
   "mainnet": {
     "SpaceRegistry": {
-      "address": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "address": "0xD5d3E8131b293015395d3fB81259277e1F0D2951",
       "startBlock": 0
+    }
+  },
+  "matic": {
+    "SpaceRegistry": {
+      "address": "0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0",
+      "startBlock": 35495081
     }
   },
   "mumbai": {
     "SpaceRegistry": {
-      "address": "0x5A514fF6FeDB4501E54D83C2BA930F93CA7eAa5f",
+      "address": "0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0",
       "startBlock": 29050589
     }
   }

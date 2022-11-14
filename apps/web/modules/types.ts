@@ -35,6 +35,7 @@ export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
+  editorControllers: string[];
   admins: string[];
   attributes: Dictionary<string, string>;
 };

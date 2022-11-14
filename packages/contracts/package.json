@@ -14,7 +14,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "clean": "npx hardhat clean && rimraf build dist",
+    "clean": "npx hardhat clean && rimraf build dist && rimraf .openzeppelin/unknown-31337.json",
     "compile": "pnpm run clean && npx hardhat compile",
     "build": "pnpm run compile && npx tsc",
     "devnet": "npx hardhat node --hostname 0.0.0.0",
@@ -38,6 +38,8 @@
     "@nomiclabs/hardhat-etherscan": "^3.0.3",
     "@nomiclabs/hardhat-waffle": "^2.0.3",
     "@openzeppelin/contracts": "^4.6.0",
+    "@openzeppelin/contracts-upgradeable": "^4.8.0",
+    "@openzeppelin/hardhat-upgrades": "^1.21.0",
     "@typechain/ethers-v5": "^10.0.0",
     "@typechain/hardhat": "^6.0.0",
     "@types/app-root-path": "^1.2.4",

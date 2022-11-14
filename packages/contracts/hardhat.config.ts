@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 
 import '@nomiclabs/hardhat-etherscan'
 import '@nomiclabs/hardhat-waffle'
+import '@openzeppelin/hardhat-upgrades'
 import '@typechain/hardhat'
 import 'hardhat-abi-exporter'
 import 'hardhat-gas-reporter'
@@ -58,7 +59,8 @@ const config: HardhatUserConfig = {
       chainId: 80001,
       url:
         process.env.POLYGON_MUMBAI_RPC_URL ||
-        'https://rpc-mumbai.maticvigil.com',
+        // 'https://rpc-mumbai.maticvigil.com',
+        'https://matic-mumbai.chainstacklabs.com/',
       accounts,
     },
   },
@@ -67,7 +69,7 @@ const config: HardhatUserConfig = {
     currency: 'USD',
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: process.env.POLYGONSCAN_API_KEY,
   },
   typechain: {
     outDir: 'build/types',
