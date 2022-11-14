@@ -195,9 +195,6 @@ export class TripleStore implements ITripleStore {
       },
     };
 
-    console.log('before', oldTriple);
-    console.log('after', triple);
-
     this.actions$.set([...this.actions$.get(), action]);
   };
 

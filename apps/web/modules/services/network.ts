@@ -96,8 +96,6 @@ export class Network implements INetwork {
 
       const cidString = await this.storageClient.uploadObject(root);
       cids.push(`ipfs://${cidString}`);
-
-      console.log(root);
     }
 
     onChangePublishState('publishing-contract');
