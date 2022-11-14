@@ -12,13 +12,13 @@ const Container = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.divider,
   borderRadius: theme.radius,
   padding: 60,
+  overflow: 'hidden',
 }));
 
 const EmailRow = styled.div({
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  // backgroundColor: 'red',
   width: 340,
 
   '@media (max-width: 455px)': {
@@ -38,15 +38,25 @@ export function Email() {
   const onSubmitEmail = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (inputRef.current && inputRef.current.value === '') {
+      return;
+    }
+
     if (inputRef.current) {
       try {
-        await fetch('/api/email/submit?address=' + inputRef.current.value, {
+        const result = await fetch('/api/email/submit?address=' + inputRef.current.value, {
           method: 'POST',
         });
 
-        inputRef.current.value = '';
+        if (result.status === 201) {
+          inputRef.current.value = '';
+        }
+
+        if (result.status === 500) {
+          console.error('Something went wrong while submitting your email address.');
+        }
       } catch (error) {
-        console.log('error', error);
+        console.error('Something went wrong while submitting your email address.');
       }
     }
 
@@ -70,6 +80,10 @@ export function Email() {
 
           <Button>Notify me</Button>
         </EmailRow>
+
+        <Spacer height={32} />
+
+        <img src="/example-spaces.svg" alt="images of example Spaces like Vitamic C, Fungi, Storms" />
       </Container>
     </form>
   );
