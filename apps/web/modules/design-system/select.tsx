@@ -65,7 +65,7 @@ interface Props {
 
 export const Select = ({ value, onChange, options }: Props) => (
   <SelectPrimitive.Root value={value} onValueChange={onChange}>
-    <StyledTrigger aria-label="Food">
+    <StyledTrigger>
       <SelectPrimitive.SelectValue />
       <Spacer width={8} />
       <ChevronDownSmall color="ctaPrimary" />

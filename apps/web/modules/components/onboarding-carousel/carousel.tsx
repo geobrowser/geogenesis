@@ -9,46 +9,33 @@ import { Target } from '../../design-system/icons/target';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { useRect } from '@radix-ui/react-use-rect';
-import { OnboardingDialog } from './dialog';
 import { OnboardingDialogArrow } from './arrow';
 import { motion } from 'framer-motion';
-import { keyframes } from '@emotion/react';
+import { useWindowSize } from '~/modules/hooks/use-window-size';
+import { DialogStep, DIALOG_CONTENT } from './content';
+import { OnboardingDropdown } from './dropdown';
 
 const Row = styled.div(({ theme }) => ({
-  position: 'relative',
   display: 'flex',
   alignItems: 'center',
   gap: theme.space * 2,
 }));
 
-interface DialogContentProps {
-  left?: number;
-  top?: number;
-}
-
-const fade = keyframes`
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-`;
-
-const DialogContent = styled.div<DialogContentProps>(({ theme, left = 0, top = 0 }) => ({
-  position: 'absolute',
-  top: top + theme.space * 3 + 10,
-  left: left,
+const DialogContent = styled.div(({ theme }) => ({
+  position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   border: `1px solid ${theme.colors.text}`,
   borderRadius: theme.radius,
   padding: theme.space * 5,
-  width: 1060,
-  animation: `${fade} 0.2s ease-in`,
+  maxWidth: 1060,
 }));
 
-const DialogArrow = styled.span<DialogContentProps>(({ left = 0 }) => ({
+interface DialogArrowProps {
+  left?: number;
+}
+
+const DialogArrow = styled.span<DialogArrowProps>(({ left = 0 }) => ({
   position: 'absolute',
 
   // -10 is the height of the arrow
@@ -81,35 +68,6 @@ const OnboardingButton = forwardRef(function OnboardingButton(
   );
 });
 
-type DialogStep = 'collect' | 'organize' | 'empower' | 'solve';
-
-const DIALOG_CONTENT: Record<DialogStep, { title: string; description: string }> = {
-  collect: {
-    title: 'We are here',
-    description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
-    verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
-    triples/facts, which can then be used to structure meaningful content.`,
-  },
-  organize: {
-    title: 'Organize the world’s data',
-    description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
-    verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
-    triples/facts, which can then be used to structure meaningful content.`,
-  },
-  empower: {
-    title: 'Empower our communities',
-    description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
-    verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
-    triples/facts, which can then be used to structure meaningful content.`,
-  },
-  solve: {
-    title: 'Solve the world’s biggest challenges',
-    description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
-    verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
-    triples/facts, which can then be used to structure meaningful content.`,
-  },
-};
-
 function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: number) {
   return selectedArrowPosition === 0 ? initialButtonWidth / 2 : selectedArrowPosition;
 }
@@ -119,75 +77,73 @@ function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: num
 const COMMON_ROW_TOP_POSITION = 769;
 
 export function OboardingCarousel() {
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState<DialogStep>('collect');
-  const rowRef = useRef<HTMLDivElement>(null);
-  const rowRect = useRect(rowRef.current);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRect = useRect(containerRef.current);
   const initialButtonRef = useRef<HTMLButtonElement>(null);
   const initialButtonRect = useRect(initialButtonRef.current);
   const [selectedArrowLeft, setArrowLeft] = useState(0);
-
-  // There's a hydration bug if the dialog defaults to open on first render in SSR when using
-  // a portal. We render the dialog a second after page load to get around it.
-  // https://github.com/radix-ui/primitives/issues/1386
-  useEffect(() => {
-    setTimeout(() => setDialogOpen(true), 500);
-  }, []);
+  const { width } = useWindowSize();
 
   const onStepChange = (step: DialogStep) => (event: React.MouseEvent<HTMLButtonElement>) => {
     // Position the arrow relative to the button that was clicked
-    setArrowLeft(event.currentTarget.offsetLeft + event.currentTarget.clientWidth / 2);
+    setArrowLeft(event.currentTarget.offsetLeft + event.currentTarget.clientWidth / 2 - (containerRect?.left ?? 0));
     setStep(step);
   };
-
-  const rowLeft = rowRect?.left ?? 0;
-  const rowTop = (rowRect?.top ?? COMMON_ROW_TOP_POSITION) + (rowRect?.height ?? 0);
 
   // Set the initial value of the arrow position to the first button in the row
   const arrowLeft = getArrowPosition(selectedArrowLeft, initialButtonRect?.width ?? 0);
 
   return (
-    <Row ref={rowRef}>
-      <OnboardingDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent left={rowLeft} top={rowTop}>
-          <MotionDialogArrow layout="position" left={arrowLeft}>
-            <OnboardingDialogArrow />
-          </MotionDialogArrow>
-          <Text variant="mediumTitle">{DIALOG_CONTENT[step].title}</Text>
-          <Spacer height={4} />
-          <Text>{DIALOG_CONTENT[step].description}</Text>
-        </DialogContent>
-      </OnboardingDialog>
+    <div ref={containerRef}>
+      <Row>
+        {width > 1060 ? (
+          <>
+            <OnboardingButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
+              <Facts color={step === 'collect' ? 'white' : `grey-04`} />
+              <Spacer width={8} />
+              Collect data
+            </OnboardingButton>
 
-      <OnboardingButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
-        <Facts color={step === 'collect' ? 'white' : `grey-04`} />
-        <Spacer width={8} />
-        Collect data
-      </OnboardingButton>
+            <RightArrowLong color="grey-04" />
 
-      <RightArrowLong color="grey-04" />
+            <OnboardingButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
+              <Copy color={step === 'organize' ? 'white' : `grey-04`} />
+              <Spacer width={8} />
+              Organize data
+            </OnboardingButton>
 
-      <OnboardingButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
-        <Copy color={step === 'organize' ? 'white' : `grey-04`} />
-        <Spacer width={8} />
-        Organize data
-      </OnboardingButton>
+            <RightArrowLong color="grey-04" />
 
-      <RightArrowLong color="grey-04" />
+            <OnboardingButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
+              <Entity color={step === 'empower' ? 'white' : `grey-04`} />
+              <Spacer width={8} />
+              Empower communities
+            </OnboardingButton>
 
-      <OnboardingButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
-        <Entity color={step === 'empower' ? 'white' : `grey-04`} />
-        <Spacer width={8} />
-        Empower communities
-      </OnboardingButton>
+            <RightArrowLong color="grey-04" />
 
-      <RightArrowLong color="grey-04" />
+            <OnboardingButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
+              <Target color={step === 'solve' ? 'white' : `grey-04`} />
+              <Spacer width={8} />
+              Solve real problems
+            </OnboardingButton>
+          </>
+        ) : (
+          <OnboardingDropdown />
+        )}
+      </Row>
 
-      <OnboardingButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
-        <Target color={step === 'solve' ? 'white' : `grey-04`} />
-        <Spacer width={8} />
-        Solve real problems
-      </OnboardingButton>
-    </Row>
+      <Spacer height={22} />
+
+      <DialogContent>
+        <MotionDialogArrow layout="position" left={width > 1060 ? arrowLeft : 57}>
+          <OnboardingDialogArrow />
+        </MotionDialogArrow>
+        <Text variant="mediumTitle">{DIALOG_CONTENT[step].title}</Text>
+        <Spacer height={4} />
+        <Text>{DIALOG_CONTENT[step].description}</Text>
+      </DialogContent>
+    </div>
   );
 }
