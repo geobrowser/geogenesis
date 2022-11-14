@@ -84,7 +84,7 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
               )}
               <Spacer width={12} />
               {reviewState === 'publishing-ipfs' && 'Uploading changes to IPFS'}
-              {reviewState === 'publishing-contract' && 'Uploading changes to IPFS'}
+              {reviewState === 'publishing-contract' && 'Adding your changes to the blockchain'}
               {reviewState === 'publish-complete' && 'Changes published!'}
             </Toast>
           )}

@@ -27,8 +27,11 @@ async function main() {
   const healthSpace = await deploySpaceInstance(beacon, { debug: true })
   console.log('Added Health space at address: ', healthSpace.address)
 
-  const valuesSpace = await deploySpaceInstance(beacon, { debug: true })
-  console.log('Added Value Space space 2 at address: ', valuesSpace.address)
+  const sanFranciscoSpace = await deploySpaceInstance(beacon, { debug: true })
+  console.log(
+    'Added Value Space space 2 at address: ',
+    sanFranciscoSpace.address
+  )
 
   const space1Id = randomUUID()
   const space2Id = randomUUID()
@@ -63,7 +66,7 @@ async function main() {
         attributeId: 'name',
         value: {
           type: 'string',
-          value: 'Values',
+          value: 'San Francisco',
           id: randomUUID(),
         },
       },
@@ -73,7 +76,7 @@ async function main() {
         attributeId: 'space',
         value: {
           type: 'string',
-          value: valuesSpace.address,
+          value: sanFranciscoSpace.address,
           id: randomUUID(),
         },
       },
@@ -88,7 +91,7 @@ async function main() {
   )
 
   await healthSpace.configureRoles()
-  await valuesSpace.configureRoles()
+  await sanFranciscoSpace.configureRoles()
 
   saveAddress({
     chainId,

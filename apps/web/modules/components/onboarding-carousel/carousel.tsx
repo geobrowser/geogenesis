@@ -15,6 +15,9 @@ import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
 
+const BREAKPOINT = 740;
+const DEFAULT_ARROW_LEFT = 57;
+
 const Row = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
@@ -28,7 +31,6 @@ const OnboardingContent = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors.text}`,
   borderRadius: theme.radius,
   padding: theme.space * 5,
-  maxWidth: 1060,
 }));
 
 const MotionContent = motion(OnboardingContent);
@@ -88,7 +90,7 @@ const selectOptions: Record<OnboardingStep, { label: string; value: OnboardingSt
     value: 'empower',
   },
   solve: {
-    label: 'Solve real problem',
+    label: 'Solve real problems',
     value: 'solve',
   },
 };
@@ -114,7 +116,7 @@ export function OboardingCarousel() {
   return (
     <div ref={containerRef}>
       <Row>
-        {width > 1060 ? (
+        {width > BREAKPOINT ? (
           <>
             <OnboardingButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
               <Facts color={step === 'collect' ? 'white' : `grey-04`} />
@@ -160,7 +162,7 @@ export function OboardingCarousel() {
 
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
       <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-        <MotionArrow layout="position" left={width > 1060 ? arrowLeft : 57}>
+        <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
           <OnboardingArrow />
         </MotionArrow>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>

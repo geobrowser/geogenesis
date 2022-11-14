@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
+import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -8,6 +9,12 @@ import { Text } from '~/modules/design-system/text';
 
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useSpaces } from '~/modules/state/use-spaces';
+
+const Column = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+  maxWidth: 1060,
+});
 
 const Grid = styled.div(({ theme }) => ({
   display: 'grid',
@@ -25,7 +32,7 @@ export default function Spaces() {
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
-    <div>
+    <Column>
       <Text variant="mainPage">All spaces</Text>
 
       <Spacer height={40} />
@@ -53,6 +60,10 @@ export default function Spaces() {
       <Spacer height={40} />
 
       <OboardingCarousel />
-    </div>
+
+      <Spacer height={100} />
+
+      <Email />
+    </Column>
   );
 }

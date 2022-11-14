@@ -183,11 +183,6 @@ export class TripleStore implements ITripleStore {
   };
 
   update = (triple: Triple, oldTriple: Triple) => {
-    // TODO: This currently doesn't work for triples whose entity, attribute, or value has
-    // been replaced with the "name" value. Will be fixed once we do
-    // https://linear.app/geobrowser/issue/GEO-58/we-are-overwriting-the-triple-properties-in-local-store-with-entity
-    // if (triple.id === oldTriple.id) return;
-
     const action: EditTripleAction = {
       type: 'editTriple',
       before: {

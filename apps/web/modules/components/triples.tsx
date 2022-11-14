@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
-import { sign } from 'crypto';
 import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
@@ -23,12 +22,18 @@ import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import TripleTable from './triple-table';
 
-const PageHeader = styled.div({
+const TableHeader = styled.div({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   width: '100%',
 });
+
+const SpaceInfo = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space * 5,
+}));
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -166,15 +171,16 @@ function Triples({ spaceId }: Props) {
 
   return (
     <PageContainer>
-      <PageHeader>
-        <SpaceImage src={spaceImage} alt={`Cover image for ${spaceName}`} />
-        <Spacer width={20} />
-        <Text variant="mainPage" as="h1" flex="0 0 auto">
-          {spaceName}
-        </Text>
+      <TableHeader>
+        <SpaceInfo>
+          <SpaceImage src={spaceImage} alt={`Cover image for ${spaceName}`} />
+          <Text flex="0 0 auto" variant="mainPage" as="h1">
+            {spaceName}
+          </Text>
+        </SpaceInfo>
         {(isEditor || isAdmin) && (
           <>
-            <PageHeader>
+            <TableHeader>
               <div style={{ flex: 1 }} />
               {isAdmin && (
                 <Link href={`/space/${spaceId}/access-control`}>
@@ -206,10 +212,10 @@ function Triples({ spaceId }: Props) {
                   </Button>
                 </>
               )}
-            </PageHeader>
+            </TableHeader>
           </>
         )}
-      </PageHeader>
+      </TableHeader>
 
       <Spacer height={40} />
 
