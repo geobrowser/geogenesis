@@ -8,9 +8,11 @@ import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
+import { Text } from '../design-system/text';
 import { usePageName } from '../state/use-page-name';
 import { Dictionary } from '../types';
 import { EditToggle } from './edit-toggle';
+import { ExternalLink } from './external-link';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -33,6 +35,11 @@ const BreadcrumbsContainer = styled.div({
 });
 
 const NavigationItemsContainer = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+});
+
+const Row = styled.div({
   display: 'flex',
   alignItems: 'center',
 });
@@ -119,9 +126,19 @@ export function Navbar() {
         </BreadcrumbsContainer>
       </NavigationItemsContainer>
 
-      <div>
+      <Row>
+        <ExternalLink href="https://discord.gg/axFtvyxRNQ">
+          <Row>
+            <img src="/discord.svg" alt="Icon of Discord logo" />
+            <Spacer width={8} />
+            <Text variant="metadataMedium" color="grey-04">
+              Geo Discord
+            </Text>
+          </Row>
+        </ExternalLink>
+        <Spacer width={24} />
         <EditToggle spaceId={components?.[2] ?? ''} />
-      </div>
+      </Row>
     </Header>
   );
 }
