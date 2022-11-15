@@ -25,6 +25,10 @@ const TextContainer = styled.div({
   maxWidth: 830,
 });
 
+const SpacesLayoutPlaceholder = styled.div({
+  height: 295,
+});
+
 export default function Spaces() {
   const { spaces } = useSpaces();
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
@@ -37,14 +41,19 @@ export default function Spaces() {
       <Spacer height={40} />
 
       <Grid>
-        {spaces
-          .filter(space => isAdmin || isEditor || !space.isRootSpace)
-          .map(space => {
-            const name = space.attributes.name;
-            const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+        {spaces.length !== 0 ? (
+          spaces
+            .filter(space => isAdmin || isEditor || !space.isRootSpace)
+            .map(space => {
+              const name = space.attributes.name;
+              const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-            return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-          })}
+              return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+            })
+        ) : (
+          <SpacesLayoutPlaceholder />
+        )}
+        {/* <SpacesLayoutPlaceholder /> */}
       </Grid>
 
       <Spacer height={100} />

@@ -161,7 +161,7 @@ export function OboardingCarousel() {
       <Spacer height={22} />
 
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
-      <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+      <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
         <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
           <OnboardingArrow />
         </MotionArrow>

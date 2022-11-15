@@ -35,10 +35,11 @@ const globalStyles = css`
 
 const Layout = styled.main(props => ({
   paddingTop: props.theme.space * 10,
+  paddingBottom: props.theme.space * 5,
   maxWidth: 1200,
   margin: '0 auto',
 
-  '@media (max-width: 1060px)': {
+  '@media (max-width: 1200px)': {
     padding: `${props.theme.space * 10}px 2ch 4ch 2ch`,
   },
 }));

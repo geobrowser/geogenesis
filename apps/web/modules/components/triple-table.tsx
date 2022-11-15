@@ -166,6 +166,17 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           );
         }
 
+        // TODO: FIX HACK
+        // This is a super hacky workaround for now to be able to view a entity where the value string
+        // is the same as the entity id.
+        if (entityNames[value.value]) {
+          return (
+            <ChipCellContainer>
+              <Chip href={`/space/${space}/${value.value}`}>{entityNames[value.value]}</Chip>
+            </ChipCellContainer>
+          );
+        }
+
         return (
           <CellEditableInput
             isExpanded={table.options?.meta?.expandedCells[cellId]}
@@ -202,6 +213,8 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { entityNames } = useTriples();
   const { editable } = useEditable();
+
+  console.log('entityNames', entityNames);
 
   const table = useReactTable({
     data: triples,

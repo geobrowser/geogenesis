@@ -1,3 +1,4 @@
+import { keyframes } from '@emotion/react';
 import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -8,11 +9,21 @@ const CoverImageContainer = styled.div({
   overflow: 'hidden',
 });
 
+const fade = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
 const CoverImage = styled.img({
   width: 340,
   height: 240,
   objectFit: 'cover',
   transition: 'all ease-in-out 0.15s',
+  // animation: `${fade} 0.15s ease-in-out`,
 });
 
 const GridCell = styled.a(({ theme }) => ({
@@ -22,6 +33,7 @@ const GridCell = styled.a(({ theme }) => ({
   overflow: 'hidden',
   boxShadow: theme.shadows.button,
   transition: 'box-shadow ease-in-out 0.15s',
+  animation: `${fade} 0.15s ease-in-out`,
 
   '&:hover': {
     boxShadow: `0 8px 25px rgba(0, 0, 0, 0.09)`,
