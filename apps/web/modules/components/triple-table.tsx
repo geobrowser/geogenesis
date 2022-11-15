@@ -214,8 +214,6 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
   const { entityNames } = useTriples();
   const { editable } = useEditable();
 
-  console.log('entityNames', entityNames);
-
   const table = useReactTable({
     data: triples,
     columns,

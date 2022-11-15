@@ -15,7 +15,6 @@ import { createEntityId, createTripleId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
-import { useEditable } from '~/modules/state/use-editable';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
@@ -138,7 +137,6 @@ function Triples({ spaceId }: Props) {
   const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
-  const { toggleEditable, editable } = useEditable();
   const inputContainerRef = React.useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
 
@@ -190,10 +188,6 @@ function Triples({ spaceId }: Props) {
               {isAdmin && isEditor && <Spacer width={12} />}
               {isEditor && (
                 <>
-                  <Button variant="secondary" onClick={toggleEditable}>
-                    Turn {editable ? 'off' : 'on'} editing
-                  </Button>
-                  <Spacer width={12} />
                   <Button variant="secondary" icon="create" onClick={() => {}}>
                     Import
                     <FileImport
