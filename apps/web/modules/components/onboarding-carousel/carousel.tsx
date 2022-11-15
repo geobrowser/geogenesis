@@ -15,7 +15,7 @@ import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
 
-const BREAKPOINT = 740;
+const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 57;
 
 const Row = styled.div(({ theme }) => ({

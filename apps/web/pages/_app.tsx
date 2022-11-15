@@ -16,9 +16,6 @@ const Body = styled.div(props => ({
   minHeight: '100vh',
   maxWidth: '100vw',
   backgroundColor: props.theme.colors.bg,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
 }));
 
 const globalStyles = css`

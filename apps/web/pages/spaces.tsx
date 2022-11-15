@@ -13,7 +13,6 @@ import { useSpaces } from '~/modules/state/use-spaces';
 const Column = styled.div({
   display: 'flex',
   flexDirection: 'column',
-  maxWidth: 1060,
 });
 
 const Grid = styled.div(({ theme }) => ({
