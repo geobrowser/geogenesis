@@ -12,6 +12,7 @@ import { usePageName } from '../state/use-page-name';
 import { Dictionary } from '../types';
 
 const Header = styled.header(({ theme }) => ({
+  width: '100%',
   display: 'flex',
   alignItems: 'center',
   padding: theme.space * 4,
