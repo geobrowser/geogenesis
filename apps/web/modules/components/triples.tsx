@@ -190,10 +190,6 @@ function Triples({ spaceId }: Props) {
               {isAdmin && isEditor && <Spacer width={12} />}
               {isEditor && (
                 <>
-                  <Button variant="secondary" onClick={toggleEditable}>
-                    Turn {editable ? 'off' : 'on'} editing
-                  </Button>
-                  <Spacer width={12} />
                   <Button variant="secondary" icon="create" onClick={() => {}}>
                     Import
                     <FileImport

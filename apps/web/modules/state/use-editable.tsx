@@ -8,6 +8,6 @@ export const useEditable = () => {
 
   return {
     editable,
-    toggleEditable: () => editable$.set(!editable),
+    setEditable: (value: boolean) => editable$.set(value),
   };
 };

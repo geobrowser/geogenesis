@@ -120,7 +120,7 @@ export function Navbar() {
       </NavigationItemsContainer>
 
       <div>
-        <EditToggle />
+        <EditToggle spaceId={components?.[2] ?? ''} />
       </div>
     </Header>
   );
