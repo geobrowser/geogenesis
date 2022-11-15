@@ -21,15 +21,14 @@ const GridCell = styled.a(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
   boxShadow: theme.shadows.button,
-  transition: 'all ease-in-out 0.15s',
+  transition: 'box-shadow ease-in-out 0.15s',
 
   '&:hover': {
     boxShadow: `0 8px 25px rgba(0, 0, 0, 0.09)`,
+  },
 
-    // @ts-ignore -- This is valid in CSS-in-JS
-    [CoverImage]: {
-      transform: 'scale(1.05)',
-    },
+  '&:hover img': {
+    transform: 'scale(1.05)',
   },
 }));
 
