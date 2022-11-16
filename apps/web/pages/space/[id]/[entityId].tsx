@@ -8,7 +8,8 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { ToggleButton } from '~/modules/design-system/toggle-button';
 import { getConfigFromUrl } from '~/modules/params';
-import { extractValue, NetworkTriple } from '~/modules/services/network';
+import { extractValue, Network, NetworkTriple } from '~/modules/services/network';
+import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 
@@ -139,70 +140,20 @@ function RelatedEntities({
 export const getServerSideProps: GetServerSideProps = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const stringifyEntity = JSON.stringify(entityId);
   const config = getConfigFromUrl(context.resolvedUrl);
 
-  const response = await fetch(config.subgraph, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `query {
-        triples(where: {entity_: {id: ${stringifyEntity}}}) {
-          id
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          valueId
-          numberValue
-          stringValue
-          valueType
-          isProtected
-        }
-      }`,
-    }),
+  const storage = new StorageClient(config.ipfs);
+  const network = new Network(storage, config.subgraph);
+
+  const { triples, entityNames } = await network.fetchTriples({
+    space,
+    query: '',
+    skip: 0,
+    first: 100,
+    filter: [{ field: 'entity-id', value: entityId }],
   });
 
-  const json: {
-    data: {
-      triples: NetworkTriple[];
-    };
-  } = await response.json();
-
-  const triples = json.data.triples.map((networkTriple): Triple => {
-    return {
-      id: networkTriple.id,
-      entityId: networkTriple.entity.id,
-      attributeId: networkTriple.attribute.id,
-      value: extractValue(networkTriple),
-      space: space,
-    };
-  });
-
-  const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
-    if (triple.entity.name !== null) {
-      acc[triple.entity.id] = triple.entity.name;
-    }
-
-    if (triple.valueType === 'ENTITY') {
-      acc[triple.entityValue.id] = triple.entityValue.name;
-    }
-
-    if (triple.attribute.name !== null) {
-      acc[triple.attribute.id] = triple.attribute.name;
-    }
-    return acc;
-  }, {} as EntityNames);
+  console.log('triples', triples);
 
   const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
   const name = nameValue?.type === 'string' ? nameValue.value : entityId;

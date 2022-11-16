@@ -22,7 +22,9 @@ export type NetworkTriple = NetworkValue & {
   attribute: { id: string; name: string | null };
   valueId: string;
   isProtected: boolean;
-  space: string;
+  space: {
+    id: string;
+  };
 };
 
 export function extractValue(networkTriple: NetworkTriple): Value {
@@ -172,7 +174,7 @@ export class Network implements INetwork {
           entityId: networkTriple.entity.id,
           attributeId: networkTriple.attribute.id,
           value: extractValue(networkTriple),
-          space: networkTriple.space,
+          space,
         };
       });
 
