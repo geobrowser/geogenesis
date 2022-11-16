@@ -1,21 +1,35 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Chip } from '~/modules/design-system/chip';
+import { Copy } from '~/modules/design-system/icons/copy';
+import { Facts } from '~/modules/design-system/icons/facts';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { ToggleButton } from '~/modules/design-system/toggle-button';
 import { getConfigFromUrl } from '~/modules/params';
 import { extractValue, NetworkTriple } from '~/modules/services/network';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 
-const MainAttributes = styled.div(props => ({
-  marginBottom: props.theme.space * 8,
+const Content = styled.div(({ theme }) => ({
+  boxShadow: theme.shadows.button,
+  borderRadius: theme.radius,
+  backgroundColor: theme.colors.white,
 }));
 
-const Attributes = styled.div(props => ({
+const Attributes = styled.div(({ theme }) => ({
   display: 'grid',
-  gap: props.theme.space * 6,
+  gap: theme.space * 6,
+  padding: theme.space * 5,
+}));
+
+const ToggleGroup = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space * 5,
+  padding: theme.space * 5,
+  borderBottom: `1px solid ${theme.colors.divider}`,
 }));
 
 export default function EntityPage({
@@ -32,6 +46,7 @@ export default function EntityPage({
   entityNames: EntityNames;
 }) {
   const { setPageName } = usePageName();
+  const [step, setStep] = useState<'entity' | 'related'>('entity');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
@@ -40,29 +55,44 @@ export default function EntityPage({
 
   return (
     <div>
-      <MainAttributes>
-        <Text as="p" variant="largeTitle">
-          {name}
-        </Text>
-      </MainAttributes>
+      <Text as="h1" variant="mainPage">
+        {name}
+      </Text>
 
-      <Attributes>
-        {triples.map(triple => (
-          <div key={triple.id}>
-            <Text as="p" variant="metadata">
-              {entityNames[triple.attributeId] || triple.attributeId}
-            </Text>
-            <Spacer height={8} />
-            {triple.value.type === 'entity' ? (
-              <Chip href={`/space/${space}/${triple.value.id}`}>{entityNames[triple.value.id] || triple.value.id}</Chip>
-            ) : (
-              <Text as="p" variant="metadataMedium">
-                {triple.value.value}
+      <Spacer height={40} />
+
+      <Content>
+        <ToggleGroup>
+          <ToggleButton isActive={step === 'entity'} onClick={() => setStep('entity')}>
+            <Facts color={step === 'entity' ? 'white' : `grey-04`} />
+            <Spacer width={8} />
+            Entity data
+          </ToggleButton>
+
+          <ToggleButton isActive={step === 'related'} onClick={() => setStep('related')}>
+            <Copy color={step === 'related' ? 'white' : `grey-04`} />
+            <Spacer width={8} />
+            Related to
+          </ToggleButton>
+        </ToggleGroup>
+
+        <Attributes>
+          {triples.map(triple => (
+            <div key={triple.id}>
+              <Text as="p" variant="bodySemibold">
+                {entityNames[triple.attributeId] || triple.attributeId}
               </Text>
-            )}
-          </div>
-        ))}
-      </Attributes>
+              {triple.value.type === 'entity' ? (
+                <Chip href={`/space/${space}/${triple.value.id}`}>
+                  {entityNames[triple.value.id] || triple.value.id}
+                </Chip>
+              ) : (
+                <Text as="p">{triple.value.value}</Text>
+              )}
+            </div>
+          ))}
+        </Attributes>
+      </Content>
     </div>
   );
 }

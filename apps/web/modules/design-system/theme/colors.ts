@@ -18,7 +18,7 @@ export const colors = {
     'grey-02': '#DBDBDB',
     'grey-03': '#B6B6B6',
     'grey-04': '#606060',
-    divider: '#F6F6F6',
+    divider: '#F0F0F0',
     orange: '#FFA134',
     green: '#14D28E',
     red: '#FF523A',
