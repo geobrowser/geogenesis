@@ -90,26 +90,52 @@ export default function EntityPage({
         </ToggleGroup>
 
         <Attributes>
-          {triples.map(triple => (
-            <div key={triple.id}>
-              <Text as="p" variant="bodySemibold">
-                {entityNames[triple.attributeId] || triple.attributeId}
-              </Text>
-              {triple.value.type === 'entity' ? (
-                <Chip href={`/space/${space}/${triple.value.id}`}>
-                  {entityNames[triple.value.id] || triple.value.id}
-                </Chip>
-              ) : (
-                <Text as="p">{triple.value.value}</Text>
-              )}
-            </div>
-          ))}
+          {step === 'entity' && <EntityAttributes triples={triples} space={space} entityNames={entityNames} />}
+          {step === 'related' && <RelatedEntities triples={triples} space={space} entityNames={entityNames} />}
         </Attributes>
       </Content>
     </div>
   );
 }
 
+function EntityAttributes({
+  triples,
+  space,
+  entityNames,
+}: {
+  triples: Triple[];
+  space: string;
+  entityNames: EntityNames;
+}) {
+  return (
+    <>
+      {triples.map(triple => (
+        <div key={triple.id}>
+          <Text as="p" variant="bodySemibold">
+            {entityNames[triple.attributeId] || triple.attributeId}
+          </Text>
+          {triple.value.type === 'entity' ? (
+            <Chip href={`/space/${space}/${triple.value.id}`}>{entityNames[triple.value.id] || triple.value.id}</Chip>
+          ) : (
+            <Text as="p">{triple.value.value}</Text>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function RelatedEntities({
+  triples,
+  space,
+  entityNames,
+}: {
+  triples: Triple[];
+  space: string;
+  entityNames: EntityNames;
+}) {
+  return <>Hello world</>;
+}
 export const getServerSideProps: GetServerSideProps = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
