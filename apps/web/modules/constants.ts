@@ -6,6 +6,6 @@ export const ZERO_WIDTH_SPACE = '\u200b';
 
 export const PLACEHOLDER_IMAGES = {
   'San Francisco': 'https://images.unsplash.com/photo-1571785194870-35e63128e6e6',
-  Health: 'https://images.unsplash.com/photo-1543362906-acfc16c67564',
-  Values: 'https://images.unsplash.com/photo-1659948782648-72d1583efcf2',
+  Health: 'https://images.unsplash.com/photo-1535914254981-b5012eebbd15',
+  Values: 'https://images.unsplash.com/photo-1637008336770-b95d637fd5fa',
 };

@@ -17,11 +17,13 @@ const Column = styled.div({
 
 const Grid = styled.div(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, 340px)',
+  gridTemplateColumns: 'repeat(auto-fill, 590px)',
   gap: `${theme.space * 5}px`,
 }));
 
 const TextContainer = styled.div({
+  alignSelf: 'center',
+  textAlign: 'center',
   maxWidth: 830,
 });
 
