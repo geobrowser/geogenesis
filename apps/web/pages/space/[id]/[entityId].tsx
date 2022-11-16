@@ -18,6 +18,16 @@ const Content = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.white,
 }));
 
+const Header = styled.header(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space * 5,
+
+  img: {
+    borderRadius: theme.radius,
+  },
+}));
+
 const Attributes = styled.div(({ theme }) => ({
   display: 'grid',
   gap: theme.space * 6,
@@ -55,9 +65,12 @@ export default function EntityPage({
 
   return (
     <div>
-      <Text as="h1" variant="mainPage">
-        {name}
-      </Text>
+      <Header>
+        <img src="/facts-large.svg" alt="Icon representing entities in the Geo database" />
+        <Text as="h1" variant="mainPage">
+          {name}
+        </Text>
+      </Header>
 
       <Spacer height={40} />
 
