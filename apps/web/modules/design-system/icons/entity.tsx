@@ -10,21 +10,18 @@ export function Entity({ color }: Props) {
   const themeColor = theme.colors[color];
 
   return (
-    <svg width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0.333984" width="16" height="16" rx="3.49091" fill="#F0F3FF" />
-      <rect x="4.90625" y="4.42728" width="7.14546" height="7.14546" rx="1.5" stroke="#3963FE" />
-      <path
-        d="M6.44336 5.97272C6.16722 5.97272 5.94336 6.19657 5.94336 6.47272C5.94336 6.74886 6.16722 6.97272 6.44336 6.97272V5.97272ZM10.5161 6.97272C10.7922 6.97272 11.0161 6.74886 11.0161 6.47272C11.0161 6.19657 10.7922 5.97272 10.5161 5.97272V6.97272ZM6.44336 6.97272H10.5161V5.97272H6.44336V6.97272Z"
-        fill="#3963FE"
-      />
-      <path
-        d="M6.44336 7.5C6.16722 7.5 5.94336 7.72386 5.94336 8C5.94336 8.27614 6.16722 8.5 6.44336 8.5V7.5ZM10.5161 8.5C10.7922 8.5 11.0161 8.27614 11.0161 8C11.0161 7.72386 10.7922 7.5 10.5161 7.5V8.5ZM6.44336 8.5H10.5161V7.5H6.44336V8.5Z"
-        fill="#3963FE"
-      />
-      <path
-        d="M6.44336 9.02728C6.16722 9.02728 5.94336 9.25114 5.94336 9.52728C5.94336 9.80343 6.16722 10.0273 6.44336 10.0273V9.02728ZM10.5161 10.0273C10.7922 10.0273 11.0161 9.80343 11.0161 9.52728C11.0161 9.25114 10.7922 9.02728 10.5161 9.02728V10.0273ZM6.44336 10.0273H10.5161V9.02728H6.44336V10.0273Z"
-        fill="#3963FE"
-      />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="3" cy="11" r="1.5" stroke={themeColor} />
+      <circle cx="3" cy="5" r="1.5" stroke={themeColor} />
+      <path d="M8 3.5V12.5" stroke={themeColor} />
+      <path d="M12 6L8 8.5" stroke={themeColor} />
+      <path d="M12 10.5L8 8" stroke={themeColor} />
+      <path d="M4 6L8 8.5" stroke={themeColor} />
+      <path d="M4 10.5L8 8" stroke={themeColor} />
+      <circle cx="13" cy="11" r="1.5" stroke={themeColor} />
+      <circle cx="13" cy="5" r="1.5" stroke={themeColor} />
+      <circle cx="8" cy="2" r="1.5" stroke={themeColor} />
+      <circle cx="8" cy="14" r="1.5" stroke={themeColor} />
     </svg>
   );
 }
