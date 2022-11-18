@@ -4,7 +4,7 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
 import { Chip } from '~/modules/design-system/chip';
-import { Copy } from '~/modules/design-system/icons/copy';
+import { Entity } from '~/modules/design-system/icons/entity';
 import { Facts } from '~/modules/design-system/icons/facts';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -14,7 +14,7 @@ import { getConfigFromUrl } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
-import { EntityNames, StringValue, Triple } from '~/modules/types';
+import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, navUtils } from '~/modules/utils';
 
 const Content = styled.div(({ theme }) => ({
@@ -48,7 +48,7 @@ const ToggleGroup = styled.div(({ theme }) => ({
   borderBottom: `1px solid ${theme.colors.divider}`,
 }));
 
-export default function EntityPage({ triples, relatedTriples, id, name, space, entityNames, entityGroups }: Props) {
+export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
 
@@ -77,9 +77,9 @@ export default function EntityPage({ triples, relatedTriples, id, name, space, e
           </ToggleButton>
 
           <ToggleButton isActive={step === 'related'} onClick={() => setStep('related')}>
-            <Copy color={step === 'related' ? 'white' : `grey-04`} />
+            <Entity color={step === 'related' ? 'white' : `grey-04`} />
             <Spacer width={8} />
-            Related to
+            Linked by
           </ToggleButton>
         </ToggleGroup>
 
@@ -132,8 +132,6 @@ function RelatedEntities({
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
-  console.log('group', entityGroups);
-
   return (
     <>
       {Object.values(entityGroups).map(group => (
@@ -168,6 +166,8 @@ const EntityCardHeader = styled.header(({ theme }) => ({
   },
 }));
 
+const EntityAttribute = styled.div(({ theme }) => ({}));
+
 const EntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -194,6 +194,16 @@ function EntityCard({ entityGroup, space }: { entityGroup: EntityGroup; space: P
           </div>
           <RightArrowDiagonal color="grey-04" />
         </EntityCardHeader>
+        {entityGroup.description && (
+          <>
+            <Text as="p" variant="bodySemibold">
+              Description
+            </Text>
+            <Text as="p" color="grey-04">
+              {entityGroup.description}
+            </Text>
+          </>
+        )}
         <EntityCardContent>Hello world</EntityCardContent>
         <EntityCardFooter>
           <Text variant="breadcrumb">
@@ -214,7 +224,6 @@ type EntityGroup = {
 
 interface Props {
   triples: Triple[];
-  relatedTriples: Triple[];
   id: string;
   name: string;
   space: string;
@@ -247,26 +256,38 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
   ]);
 
-  const name = getEntityName(entity.triples) ?? entityId;
+  // TODO: Is there a better way to do this?
+  const relatedEntities = await Promise.all(
+    related.triples.map(triple =>
+      new Network(storage, config.subgraph).fetchTriples({
+        space,
+        query: '',
+        skip: 0,
+        first: 100,
+        filter: [{ field: 'entity-id', value: triple.entityId }],
+      })
+    )
+  );
 
-  const entityGroups: Record<string, EntityGroup> = related.triples.reduce((acc, triple) => {
-    if (!acc[triple.entityId])
-      acc[triple.entityId] = { triples: [], name: null, description: null, id: triple.entityId };
+  const entityGroups: Record<string, EntityGroup> = relatedEntities
+    .flatMap(entity => entity.triples)
+    .reduce((acc, triple) => {
+      if (!acc[triple.entityId])
+        acc[triple.entityId] = { triples: [], name: null, description: null, id: triple.entityId };
 
-    acc[triple.entityId].id = triple.entityId;
-    acc[triple.entityId].name = triple.entityName;
-    acc[triple.entityId].description = getEntityDescription(entity.triples) ?? null;
-    acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
+      acc[triple.entityId].id = triple.entityId;
+      acc[triple.entityId].name = triple.entityName;
+      acc[triple.entityId].description = getEntityDescription(entity.triples) ?? null;
+      acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
 
-    return acc;
-  }, {} as Record<string, EntityGroup>);
+      return acc;
+    }, {} as Record<string, EntityGroup>);
 
   return {
     props: {
       triples: entity.triples,
-      relatedTriples: related.triples,
       id: entityId,
-      name,
+      name: getEntityName(entity.triples) ?? entityId,
       space,
       entityNames: entity.entityNames,
       entityGroups,

@@ -28,7 +28,7 @@ export function titleCase(string: string): string {
 
 export const navUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
-  toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/entity/${entityId}`,
+  toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
 };
 
 export function getEntityName(triples: Triple[]) {
@@ -37,6 +37,6 @@ export function getEntityName(triples: Triple[]) {
 }
 
 export function getEntityDescription(triples: Triple[]) {
-  const nameValue = triples.find(triple => triple.attributeId === 'description')?.value;
+  const nameValue = triples.find(triple => triple.attributeId === 'Description')?.value;
   return nameValue?.type === 'string' ? nameValue.value : null;
 }
