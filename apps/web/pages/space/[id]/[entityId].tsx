@@ -152,13 +152,13 @@ const EntityCardContainer = styled.div(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const EntityCardHeader = styled.header(({ theme }) => ({
+const EntityCardHeader = styled.header<{ showBorder: boolean }>(({ theme, showBorder }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
 
   padding: theme.space * 3,
-  borderBottom: `1px solid ${theme.colors['grey-02']}`,
+  ...(showBorder && { borderBottom: `1px solid ${theme.colors['grey-02']}` }),
 
   div: {
     display: 'flex',
@@ -197,11 +197,13 @@ function EntityCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const shouldMaximizeContent = Boolean(isExpanded || entityGroup.description);
+
   return (
     <EntityCardContainer>
       <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
         <a>
-          <EntityCardHeader>
+          <EntityCardHeader showBorder={shouldMaximizeContent}>
             <div>
               <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
               <Text as="h2" variant="mediumTitle">
@@ -213,36 +215,40 @@ function EntityCard({
         </a>
       </Link>
 
-      <EntityCardContent>
-        {entityGroup.description && (
-          <div>
-            <Text as="p" variant="bodySemibold">
-              Description
-            </Text>
-            <Text as="p" color="grey-04">
-              {entityGroup.description}
-            </Text>
-          </div>
-        )}
-        {isExpanded &&
-          entityGroup.triples.map(triple => (
-            <div key={triple.id}>
-              <Text as="p" variant="bodySemibold">
-                {entityNames[triple.attributeId] || triple.attributeId}
-              </Text>
-              {triple.value.type === 'entity' ? (
-                <>
-                  <Spacer height={4} />
-                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                    {entityNames[triple.value.id] || triple.value.id}
-                  </Chip>
-                </>
-              ) : (
-                <Text as="p">{triple.value.value}</Text>
-              )}
-            </div>
-          ))}
-      </EntityCardContent>
+      {shouldMaximizeContent && (
+        <>
+          <EntityCardContent>
+            {entityGroup.description && (
+              <div>
+                <Text as="p" variant="bodySemibold">
+                  Description
+                </Text>
+                <Text as="p" color="grey-04">
+                  {entityGroup.description}
+                </Text>
+              </div>
+            )}
+            {isExpanded &&
+              entityGroup.triples.map(triple => (
+                <div key={triple.id}>
+                  <Text as="p" variant="bodySemibold">
+                    {entityNames[triple.attributeId] || triple.attributeId}
+                  </Text>
+                  {triple.value.type === 'entity' ? (
+                    <>
+                      <Spacer height={4} />
+                      <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                        {entityNames[triple.value.id] || triple.value.id}
+                      </Chip>
+                    </>
+                  ) : (
+                    <Text as="p">{triple.value.value}</Text>
+                  )}
+                </div>
+              ))}
+          </EntityCardContent>
+        </>
+      )}
 
       <EntityCardFooter>
         <Text variant="breadcrumb">
