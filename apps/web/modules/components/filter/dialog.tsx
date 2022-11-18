@@ -46,6 +46,7 @@ const FIELD_LABELS: Record<FilterField, string> = {
   value: 'Value contains',
   'entity-id': 'Entity ID',
   'attribute-id': 'Attribute ID',
+  'relates-to': 'Linked by Entity ID',
 };
 
 const FIELD_OPTIONS = (Object.entries(FIELD_LABELS) as [FilterField, string][]).map(([value, label]) => ({
