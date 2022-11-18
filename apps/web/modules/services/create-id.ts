@@ -23,9 +23,11 @@ export function createTripleId(
 }
 
 export function createTripleWithId(space: string, entityId: string, attributeId: string, value: Value): Triple;
-export function createTripleWithId(triple: OmitStrict<Triple, 'id'>): Triple;
+export function createTripleWithId(triple: OmitStrict<Triple, 'id' | 'entityName'>): Triple;
 export function createTripleWithId(
-  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: OmitStrict<Triple, 'id'>]
+  ...args:
+    | [space: string, entityId: string, attributeId: string, value: Value]
+    | [triple: OmitStrict<Triple, 'id' | 'entityName'>]
 ): Triple {
   if (args.length === 1) {
     const triple = args[0];
@@ -35,6 +37,7 @@ export function createTripleWithId(
       attributeId: triple.attributeId,
       value: triple.value,
       space: triple.space,
+      entityName: null,
     };
   }
 
@@ -44,6 +47,7 @@ export function createTripleWithId(
     entityId: args[1],
     attributeId: args[2],
     value: args[3],
+    entityName: null,
   };
 }
 

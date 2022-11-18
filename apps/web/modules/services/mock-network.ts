@@ -6,6 +6,7 @@ export const makeStubTriple = (name: string): Triple => {
   return {
     id: name,
     entityId: name,
+    entityName: name,
     attributeId: 'name',
     value: {
       type: 'string',

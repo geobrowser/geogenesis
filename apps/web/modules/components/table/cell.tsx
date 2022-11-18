@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import React from 'react';
-import { SmallButton } from '~/modules/design-system/button';
+import { SquareButton } from '~/modules/design-system/button';
 
 type StyledProps = Pick<Props, 'width' | 'isEditable'>;
 
@@ -46,7 +46,7 @@ export function TableCell({ children, width, isExpandable, toggleExpanded, isExp
         {children}
         {isHovered && isExpandable && !isEditable && (
           <Absolute>
-            <SmallButton
+            <SquareButton
               onClick={() => toggleExpanded()}
               icon={isExpanded ? 'contractSmall' : 'expandSmall'}
               variant="secondary"
