@@ -3,7 +3,9 @@ import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
+import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Entity } from '~/modules/design-system/icons/entity';
 import { Facts } from '~/modules/design-system/icons/facts';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
@@ -15,7 +17,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityDescription, getEntityName, navUtils } from '~/modules/utils';
+import { getEntityName, navUtils } from '~/modules/utils';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
@@ -144,7 +146,7 @@ function RelatedEntities({
   );
 }
 
-const EntityCardContainer = styled.a(({ theme }) => ({
+const EntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
@@ -169,8 +171,6 @@ const EntityCardHeader = styled.header(({ theme }) => ({
   },
 }));
 
-const EntityAttribute = styled.div(({ theme }) => ({}));
-
 const EntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -181,6 +181,7 @@ const EntityCardContent = styled.div(({ theme }) => ({
 const EntityCardFooter = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'space-between',
   padding: `${theme.space * 2}px ${theme.space * 4}px`,
   backgroundColor: theme.colors.bg,
 }));
@@ -194,55 +195,67 @@ function EntityCard({
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
-  return (
-    <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-      <EntityCardContainer>
-        <EntityCardHeader>
-          <div>
-            <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
-            <Text as="h2" variant="mediumTitle">
-              {entityGroup.name ?? entityGroup.id}
-            </Text>
-          </div>
-          <RightArrowDiagonal color="grey-04" />
-        </EntityCardHeader>
+  const [isExpanded, setIsExpanded] = useState(false);
 
-        <EntityCardContent>
-          {entityGroup.description && (
+  return (
+    <EntityCardContainer>
+      <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
+        <a>
+          <EntityCardHeader>
             <div>
-              <Text as="p" variant="bodySemibold">
-                Description
-              </Text>
-              <Text as="p" color="grey-04">
-                {entityGroup.description}
+              <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
+              <Text as="h2" variant="mediumTitle">
+                {entityGroup.name ?? entityGroup.id}
               </Text>
             </div>
-          )}
-          {entityGroup.triples.map(triple => (
-            <div key={triple.id}>
-              <Text as="p" variant="bodySemibold">
-                {entityNames[triple.attributeId] || triple.attributeId}
-              </Text>
-              {triple.value.type === 'entity' ? (
-                <>
-                  <Spacer height={4} />
-                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                    {entityNames[triple.value.id] || triple.value.id}
-                  </Chip>
-                </>
-              ) : (
-                <Text as="p">{triple.value.value}</Text>
-              )}
-            </div>
-          ))}
-        </EntityCardContent>
-        <EntityCardFooter>
-          <Text variant="breadcrumb">
-            {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
-          </Text>
-        </EntityCardFooter>
-      </EntityCardContainer>
-    </Link>
+            <RightArrowDiagonal color="grey-04" />
+          </EntityCardHeader>
+
+          <EntityCardContent>
+            {entityGroup.description && (
+              <div>
+                <Text as="p" variant="bodySemibold">
+                  Description
+                </Text>
+                <Text as="p" color="grey-04">
+                  {entityGroup.description}
+                </Text>
+              </div>
+            )}
+            {isExpanded &&
+              entityGroup.triples.map(triple => (
+                <div key={triple.id}>
+                  <Text as="p" variant="bodySemibold">
+                    {entityNames[triple.attributeId] || triple.attributeId}
+                  </Text>
+                  {triple.value.type === 'entity' ? (
+                    <>
+                      <Spacer height={4} />
+                      <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                        {entityNames[triple.value.id] || triple.value.id}
+                      </Chip>
+                    </>
+                  ) : (
+                    <Text as="p">{triple.value.value}</Text>
+                  )}
+                </div>
+              ))}
+          </EntityCardContent>
+        </a>
+      </Link>
+      <EntityCardFooter>
+        <Text variant="breadcrumb">
+          {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
+        </Text>
+        <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
+          <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
+            <ChevronDownSmall color="grey-04" />
+          </span>
+          <Spacer width={6} />
+          {isExpanded ? 'Hide all attributes' : 'Show all attributes'}
+        </SmallButton>
+      </EntityCardFooter>
+    </EntityCardContainer>
   );
 }
 
