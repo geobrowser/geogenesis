@@ -1,5 +1,7 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
+import Link from 'next/link';
+import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
 import { Chip } from '~/modules/design-system/chip';
 import { Copy } from '~/modules/design-system/icons/copy';
@@ -13,6 +15,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, StringValue, Triple } from '~/modules/types';
+import { navUtils } from '~/modules/utils';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
@@ -45,7 +48,7 @@ const ToggleGroup = styled.div(({ theme }) => ({
   borderBottom: `1px solid ${theme.colors.divider}`,
 }));
 
-export default function EntityPage({ triples, relatedTriples, id, name, space, entityNames }: Props) {
+export default function EntityPage({ triples, relatedTriples, id, name, space, entityNames, entityGroups }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
 
@@ -82,7 +85,9 @@ export default function EntityPage({ triples, relatedTriples, id, name, space, e
 
         <Attributes>
           {step === 'entity' && <EntityAttributes triples={triples} space={space} entityNames={entityNames} />}
-          {step === 'related' && <RelatedEntities triples={relatedTriples} space={space} entityNames={entityNames} />}
+          {step === 'related' && (
+            <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+          )}
         </Attributes>
       </Content>
     </div>
@@ -94,9 +99,9 @@ function EntityAttributes({
   space,
   entityNames,
 }: {
-  triples: Triple[];
-  space: string;
-  entityNames: EntityNames;
+  triples: Props['triples'];
+  space: Props['space'];
+  entityNames: Props['entityNames'];
 }) {
   return (
     <>
@@ -106,7 +111,9 @@ function EntityAttributes({
             {entityNames[triple.attributeId] || triple.attributeId}
           </Text>
           {triple.value.type === 'entity' ? (
-            <Chip href={`/space/${space}/${triple.value.id}`}>{entityNames[triple.value.id] || triple.value.id}</Chip>
+            <Chip href={navUtils.toEntity(space, triple.value.id)}>
+              {entityNames[triple.value.id] || triple.value.id}
+            </Chip>
           ) : (
             <Text as="p">{triple.value.value}</Text>
           )}
@@ -117,18 +124,26 @@ function EntityAttributes({
 }
 
 function RelatedEntities({
-  triples,
+  entityGroups,
   space,
   entityNames,
 }: {
-  triples: Triple[];
-  space: string;
-  entityNames: EntityNames;
+  entityGroups: Props['entityGroups'];
+  space: Props['space'];
+  entityNames: Props['entityNames'];
 }) {
-  return <EntityCard triples={triples} />;
+  console.log('group', entityGroups);
+
+  return (
+    <>
+      {Object.values(entityGroups).map(group => (
+        <EntityCard key={group.id} entityGroup={group} space={space} />
+      ))}
+    </>
+  );
 }
 
-const EntityCardContainer = styled.div(({ theme }) => ({
+const EntityCardContainer = styled.a(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
@@ -166,33 +181,34 @@ const EntityCardFooter = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.bg,
 }));
 
-function EntityCard({ triples }: { triples: Triple[] }) {
-  // TODO: Fix this wonkiness
-  const name = 'Unnamed';
-
+function EntityCard({ entityGroup, space }: { entityGroup: EntityGroup; space: Props['space'] }) {
   return (
-    <EntityCardContainer>
-      <EntityCardHeader>
-        <div>
-          <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
-          <Text as="h2" variant="mediumTitle">
-            {name}
+    <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
+      <EntityCardContainer>
+        <EntityCardHeader>
+          <div>
+            <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
+            <Text as="h2" variant="mediumTitle">
+              {entityGroup.name ?? entityGroup.id}
+            </Text>
+          </div>
+          <RightArrowDiagonal color="grey-04" />
+        </EntityCardHeader>
+        <EntityCardContent>Hello world</EntityCardContent>
+        <EntityCardFooter>
+          <Text variant="breadcrumb">
+            {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
           </Text>
-        </div>
-        <RightArrowDiagonal color="grey-04" />
-      </EntityCardHeader>
-      <EntityCardContent>Hello world</EntityCardContent>
-      <EntityCardFooter>
-        <Text variant="breadcrumb">{triples.length} values</Text>
-      </EntityCardFooter>
-    </EntityCardContainer>
+        </EntityCardFooter>
+      </EntityCardContainer>
+    </Link>
   );
 }
 
 type EntityGroup = {
   triples: Triple[];
-  name: string;
-  description: string;
+  name: string | null;
+  description: string | null;
   id: string;
 };
 
@@ -203,7 +219,7 @@ interface Props {
   name: string;
   space: string;
   entityNames: EntityNames;
-  entityGroups: EntityGroup[];
+  entityGroups: Record<string, EntityGroup>;
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
@@ -233,11 +249,21 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const nameValue = entity.triples.find(triple => triple.attributeId === 'name')?.value;
   const name = nameValue?.type === 'string' ? nameValue.value : entityId;
-  // TODO: entityDescription
 
-  // TODO:
-  // Group by entityId
-  // Add entityName and entityDescription to each group
+  const entityGroups: Record<string, EntityGroup> = related.triples.reduce((acc, triple) => {
+    if (!acc[triple.entityId])
+      acc[triple.entityId] = { triples: [], name: null, description: null, id: triple.entityId };
+
+    acc[triple.entityId].id = triple.entityId;
+    acc[triple.entityId].name = triple.entityName;
+    acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
+
+    const descriptionValue = entity.triples.find(triple => triple.attributeId === 'description')?.value;
+    const description = descriptionValue?.type === 'string' ? descriptionValue.value : null;
+    acc[triple.entityId].description = description;
+
+    return acc;
+  }, {} as Record<string, EntityGroup>);
 
   return {
     props: {
@@ -245,9 +271,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       relatedTriples: related.triples,
       id: entityId,
       name,
-      space: space,
+      space,
       entityNames: entity.entityNames,
-      entityGroups: [],
+      entityGroups,
     },
   };
 };

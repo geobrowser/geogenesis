@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Text } from '~/modules/design-system/text';
+import { navUtils } from '../utils';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
 const CoverImageContainer = styled.div({
@@ -62,7 +63,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Link href={`/space/${spaceId}`} passHref>
+    <Link href={navUtils.toSpace(spaceId)} passHref>
       <GridCell onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
         <Header>
           <Text variant="smallTitle">{name}</Text>

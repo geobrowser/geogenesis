@@ -152,6 +152,7 @@ function Triples({ spaceId }: Props) {
         attributeId,
         value,
         space: spaceId,
+        entityName: '',
       },
     ]);
   };

@@ -16,6 +16,7 @@ import { createTripleWithId } from '../services/create-id';
 import { useEditable } from '../state/use-editable';
 import { useTriples } from '../state/use-triples';
 import { EntityNames, Triple, Value } from '../types';
+import { navUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellEditableInput } from './table/cell-editable-input';
 
@@ -122,7 +123,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <CellEditableInput
             isEntity
-            href={`/space/${space}/${entityId}`}
+            href={navUtils.toEntity(space, entityId)}
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             placeholder="Add text..."
             isEditable={editable}
@@ -161,7 +162,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={`/space/${space}/${value.id}`}>{entityNames[value.id] || value.id}</Chip>
+              <Chip href={navUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
             </ChipCellContainer>
           );
         }
@@ -172,7 +173,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (entityNames[value.value]) {
           return (
             <ChipCellContainer>
-              <Chip href={`/space/${space}/${value.value}`}>{entityNames[value.value]}</Chip>
+              <Chip href={navUtils.toEntity(space, value.value)}>{entityNames[value.value]}</Chip>
             </ChipCellContainer>
           );
         }

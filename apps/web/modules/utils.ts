@@ -24,3 +24,8 @@ export function titleCase(string: string): string {
     .map(word => upperFirst(word))
     .join(' ');
 }
+
+export const navUtils = {
+  toSpace: (spaceId: string) => `/space/${spaceId}`,
+  toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/entity/${entityId}`,
+};
