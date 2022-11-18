@@ -303,7 +303,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       query: '',
       skip: 0,
       first: 100,
-      filter: [{ field: 'relates-to', value: entityId }],
+      filter: [{ field: 'linked-by', value: entityId }],
     }),
   ]);
 

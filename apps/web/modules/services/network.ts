@@ -126,7 +126,7 @@ export class Network implements INetwork {
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
       fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
       fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
-      fieldFilters['relates-to'] && `valueId: ${JSON.stringify(fieldFilters['relates-to'])}`,
+      fieldFilters['linked-by'] && `valueId: ${JSON.stringify(fieldFilters['linked-by'])}`,
     ]
       .filter(Boolean)
       .join(' ');
