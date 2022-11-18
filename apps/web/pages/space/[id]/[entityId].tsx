@@ -111,9 +111,12 @@ function EntityAttributes({
             {entityNames[triple.attributeId] || triple.attributeId}
           </Text>
           {triple.value.type === 'entity' ? (
-            <Chip href={navUtils.toEntity(space, triple.value.id)}>
-              {entityNames[triple.value.id] || triple.value.id}
-            </Chip>
+            <>
+              <Spacer height={4} />
+              <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                {entityNames[triple.value.id] || triple.value.id}
+              </Chip>
+            </>
           ) : (
             <Text as="p">{triple.value.value}</Text>
           )}
@@ -135,7 +138,7 @@ function RelatedEntities({
   return (
     <>
       {Object.values(entityGroups).map(group => (
-        <EntityCard key={group.id} entityGroup={group} space={space} />
+        <EntityCard key={group.id} entityGroup={group} space={space} entityNames={entityNames} />
       ))}
     </>
   );
@@ -171,6 +174,7 @@ const EntityAttribute = styled.div(({ theme }) => ({}));
 const EntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
+  gap: theme.space * 4,
   padding: theme.space * 4,
 }));
 
@@ -181,7 +185,15 @@ const EntityCardFooter = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.bg,
 }));
 
-function EntityCard({ entityGroup, space }: { entityGroup: EntityGroup; space: Props['space'] }) {
+function EntityCard({
+  entityGroup,
+  space,
+  entityNames,
+}: {
+  entityGroup: EntityGroup;
+  space: Props['space'];
+  entityNames: Props['entityNames'];
+}) {
   return (
     <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
       <EntityCardContainer>
@@ -194,17 +206,36 @@ function EntityCard({ entityGroup, space }: { entityGroup: EntityGroup; space: P
           </div>
           <RightArrowDiagonal color="grey-04" />
         </EntityCardHeader>
-        {entityGroup.description && (
-          <>
-            <Text as="p" variant="bodySemibold">
-              Description
-            </Text>
-            <Text as="p" color="grey-04">
-              {entityGroup.description}
-            </Text>
-          </>
-        )}
-        <EntityCardContent>Hello world</EntityCardContent>
+
+        <EntityCardContent>
+          {entityGroup.description && (
+            <div>
+              <Text as="p" variant="bodySemibold">
+                Description
+              </Text>
+              <Text as="p" color="grey-04">
+                {entityGroup.description}
+              </Text>
+            </div>
+          )}
+          {entityGroup.triples.map(triple => (
+            <div key={triple.id}>
+              <Text as="p" variant="bodySemibold">
+                {entityNames[triple.attributeId] || triple.attributeId}
+              </Text>
+              {triple.value.type === 'entity' ? (
+                <>
+                  <Spacer height={4} />
+                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                    {entityNames[triple.value.id] || triple.value.id}
+                  </Chip>
+                </>
+              ) : (
+                <Text as="p">{triple.value.value}</Text>
+              )}
+            </div>
+          ))}
+        </EntityCardContent>
         <EntityCardFooter>
           <Text variant="breadcrumb">
             {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
@@ -277,8 +308,14 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
       acc[triple.entityId].id = triple.entityId;
       acc[triple.entityId].name = triple.entityName;
-      acc[triple.entityId].description = getEntityDescription(entity.triples) ?? null;
+
       acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
+      if (triple.attributeId === 'Description' && triple.value.type === 'string') {
+        acc[triple.entityId].description = triple.value.value;
+        acc[triple.entityId].triples = acc[triple.entityId].triples.filter(
+          triple => triple.attributeId !== 'Description'
+        );
+      }
 
       return acc;
     }, {} as Record<string, EntityGroup>);
