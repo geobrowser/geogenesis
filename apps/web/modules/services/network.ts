@@ -22,9 +22,6 @@ export type NetworkTriple = NetworkValue & {
   attribute: { id: string; name: string | null };
   valueId: string;
   isProtected: boolean;
-  space: {
-    id: string;
-  };
 };
 
 export function extractValue(networkTriple: NetworkTriple): Value {
