@@ -210,39 +210,40 @@ function EntityCard({
             </div>
             <RightArrowDiagonal color="grey-04" />
           </EntityCardHeader>
-
-          <EntityCardContent>
-            {entityGroup.description && (
-              <div>
-                <Text as="p" variant="bodySemibold">
-                  Description
-                </Text>
-                <Text as="p" color="grey-04">
-                  {entityGroup.description}
-                </Text>
-              </div>
-            )}
-            {isExpanded &&
-              entityGroup.triples.map(triple => (
-                <div key={triple.id}>
-                  <Text as="p" variant="bodySemibold">
-                    {entityNames[triple.attributeId] || triple.attributeId}
-                  </Text>
-                  {triple.value.type === 'entity' ? (
-                    <>
-                      <Spacer height={4} />
-                      <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                        {entityNames[triple.value.id] || triple.value.id}
-                      </Chip>
-                    </>
-                  ) : (
-                    <Text as="p">{triple.value.value}</Text>
-                  )}
-                </div>
-              ))}
-          </EntityCardContent>
         </a>
       </Link>
+
+      <EntityCardContent>
+        {entityGroup.description && (
+          <div>
+            <Text as="p" variant="bodySemibold">
+              Description
+            </Text>
+            <Text as="p" color="grey-04">
+              {entityGroup.description}
+            </Text>
+          </div>
+        )}
+        {isExpanded &&
+          entityGroup.triples.map(triple => (
+            <div key={triple.id}>
+              <Text as="p" variant="bodySemibold">
+                {entityNames[triple.attributeId] || triple.attributeId}
+              </Text>
+              {triple.value.type === 'entity' ? (
+                <>
+                  <Spacer height={4} />
+                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                    {entityNames[triple.value.id] || triple.value.id}
+                  </Chip>
+                </>
+              ) : (
+                <Text as="p">{triple.value.value}</Text>
+              )}
+            </div>
+          ))}
+      </EntityCardContent>
+
       <EntityCardFooter>
         <Text variant="breadcrumb">
           {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
