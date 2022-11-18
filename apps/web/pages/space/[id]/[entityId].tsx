@@ -15,7 +15,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, StringValue, Triple } from '~/modules/types';
-import { navUtils } from '~/modules/utils';
+import { getEntityDescription, getEntityName, navUtils } from '~/modules/utils';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
@@ -247,8 +247,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
   ]);
 
-  const nameValue = entity.triples.find(triple => triple.attributeId === 'name')?.value;
-  const name = nameValue?.type === 'string' ? nameValue.value : entityId;
+  const name = getEntityName(entity.triples) ?? entityId;
 
   const entityGroups: Record<string, EntityGroup> = related.triples.reduce((acc, triple) => {
     if (!acc[triple.entityId])
@@ -256,11 +255,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
     acc[triple.entityId].id = triple.entityId;
     acc[triple.entityId].name = triple.entityName;
+    acc[triple.entityId].description = getEntityDescription(entity.triples) ?? null;
     acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
-
-    const descriptionValue = entity.triples.find(triple => triple.attributeId === 'description')?.value;
-    const description = descriptionValue?.type === 'string' ? descriptionValue.value : null;
-    acc[triple.entityId].description = description;
 
     return acc;
   }, {} as Record<string, EntityGroup>);

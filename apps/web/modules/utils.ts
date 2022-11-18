@@ -1,4 +1,5 @@
 import { computed, ObservableComputed } from '@legendapp/state';
+import { Triple } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -29,3 +30,13 @@ export const navUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/entity/${entityId}`,
 };
+
+export function getEntityName(triples: Triple[]) {
+  const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
+  return nameValue?.type === 'string' ? nameValue.value : null;
+}
+
+export function getEntityDescription(triples: Triple[]) {
+  const nameValue = triples.find(triple => triple.attributeId === 'description')?.value;
+  return nameValue?.type === 'string' ? nameValue.value : null;
+}
