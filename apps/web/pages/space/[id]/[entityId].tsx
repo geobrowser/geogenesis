@@ -1,37 +1,58 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
-import { useEffect } from 'react';
+import Link from 'next/link';
+import pluralize from 'pluralize';
+import { useEffect, useState } from 'react';
+import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { Entity } from '~/modules/design-system/icons/entity';
+import { Facts } from '~/modules/design-system/icons/facts';
+import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { ToggleButton } from '~/modules/design-system/toggle-button';
 import { getConfigFromUrl } from '~/modules/params';
-import { extractValue, NetworkTriple } from '~/modules/services/network';
+import { Network } from '~/modules/services/network';
+import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
+import { getEntityName, navUtils } from '~/modules/utils';
 
-const MainAttributes = styled.div(props => ({
-  marginBottom: props.theme.space * 8,
+const Content = styled.div(({ theme }) => ({
+  boxShadow: theme.shadows.button,
+  borderRadius: theme.radius,
+  backgroundColor: theme.colors.white,
 }));
 
-const Attributes = styled.div(props => ({
-  display: 'grid',
-  gap: props.theme.space * 6,
+const Header = styled.header(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space * 5,
+
+  img: {
+    borderRadius: theme.radius,
+  },
 }));
 
-export default function EntityPage({
-  triples,
-  id,
-  name,
-  space,
-  entityNames,
-}: {
-  triples: Triple[];
-  id: string;
-  name: string;
-  space: string;
-  entityNames: EntityNames;
-}) {
+const Attributes = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.space * 6,
+  padding: theme.space * 5,
+}));
+
+const ToggleGroup = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space * 5,
+  padding: theme.space * 5,
+  borderBottom: `1px solid ${theme.colors.divider}`,
+}));
+
+export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
   const { setPageName } = usePageName();
+  const [step, setStep] = useState<'entity' | 'related'>('entity');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
@@ -40,111 +61,293 @@ export default function EntityPage({
 
   return (
     <div>
-      <MainAttributes>
-        <Text as="p" variant="largeTitle">
+      <Header>
+        <img src="/facts-large.svg" alt="Icon representing entities in the Geo database" />
+        <Text as="h1" variant="mainPage">
           {name}
         </Text>
-      </MainAttributes>
+      </Header>
 
-      <Attributes>
-        {triples.map(triple => (
-          <div key={triple.id}>
-            <Text as="p" variant="metadata">
-              {entityNames[triple.attributeId] || triple.attributeId}
-            </Text>
-            <Spacer height={8} />
-            {triple.value.type === 'entity' ? (
-              <Chip href={`/space/${space}/${triple.value.id}`}>{entityNames[triple.value.id] || triple.value.id}</Chip>
-            ) : (
-              <Text as="p" variant="metadataMedium">
-                {triple.value.value}
-              </Text>
-            )}
-          </div>
-        ))}
-      </Attributes>
+      <Spacer height={40} />
+
+      <Content>
+        <ToggleGroup>
+          <ToggleButton isActive={step === 'entity'} onClick={() => setStep('entity')}>
+            <Facts color={step === 'entity' ? 'white' : `grey-04`} />
+            <Spacer width={8} />
+            Entity data
+          </ToggleButton>
+
+          <ToggleButton isActive={step === 'related'} onClick={() => setStep('related')}>
+            <Entity color={step === 'related' ? 'white' : `grey-04`} />
+            <Spacer width={8} />
+            Linked by
+          </ToggleButton>
+        </ToggleGroup>
+
+        <Attributes>
+          {step === 'entity' && <EntityAttributes triples={triples} space={space} entityNames={entityNames} />}
+          {step === 'related' && (
+            <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+          )}
+        </Attributes>
+      </Content>
     </div>
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async context => {
+function EntityAttributes({
+  triples,
+  space,
+  entityNames,
+}: {
+  triples: Props['triples'];
+  space: Props['space'];
+  entityNames: Props['entityNames'];
+}) {
+  return (
+    <>
+      {triples.map(triple => (
+        <div key={triple.id}>
+          <Text as="p" variant="bodySemibold">
+            {entityNames[triple.attributeId] || triple.attributeId}
+          </Text>
+          {triple.value.type === 'entity' ? (
+            <>
+              <Spacer height={4} />
+              <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                {entityNames[triple.value.id] || triple.value.id}
+              </Chip>
+            </>
+          ) : (
+            <Text as="p">{triple.value.value}</Text>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function RelatedEntities({
+  entityGroups,
+  space,
+  entityNames,
+}: {
+  entityGroups: Props['entityGroups'];
+  space: Props['space'];
+  entityNames: Props['entityNames'];
+}) {
+  return (
+    <>
+      {Object.values(entityGroups).map(group => (
+        <EntityCard key={group.id} entityGroup={group} space={space} entityNames={entityNames} />
+      ))}
+    </>
+  );
+}
+
+const EntityCardContainer = styled.div(({ theme }) => ({
+  borderRadius: theme.radius,
+  border: `1px solid ${theme.colors['grey-02']}`,
+  overflow: 'hidden',
+}));
+
+const EntityCardHeader = styled.header<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+
+  padding: theme.space * 3,
+  ...(showBorder && { borderBottom: `1px solid ${theme.colors['grey-02']}` }),
+
+  div: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.space * 3,
+  },
+
+  img: {
+    borderRadius: theme.radius,
+  },
+}));
+
+const EntityCardContent = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.space * 4,
+  padding: theme.space * 4,
+}));
+
+const EntityCardFooter = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: `${theme.space * 2}px ${theme.space * 4}px`,
+  backgroundColor: theme.colors.bg,
+}));
+
+function EntityCard({
+  entityGroup,
+  space,
+  entityNames,
+}: {
+  entityGroup: EntityGroup;
+  space: Props['space'];
+  entityNames: Props['entityNames'];
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const shouldMaximizeContent = Boolean(isExpanded || entityGroup.description);
+
+  return (
+    <EntityCardContainer>
+      <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
+        <a>
+          <EntityCardHeader showBorder={shouldMaximizeContent}>
+            <div>
+              <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
+              <Text as="h2" variant="mediumTitle">
+                {entityGroup.name ?? entityGroup.id}
+              </Text>
+            </div>
+            <RightArrowDiagonal color="grey-04" />
+          </EntityCardHeader>
+        </a>
+      </Link>
+
+      {shouldMaximizeContent && (
+        <>
+          <EntityCardContent>
+            {entityGroup.description && (
+              <div>
+                <Text as="p" variant="bodySemibold">
+                  Description
+                </Text>
+                <Text as="p" color="grey-04">
+                  {entityGroup.description}
+                </Text>
+              </div>
+            )}
+            {isExpanded &&
+              entityGroup.triples.map(triple => (
+                <div key={triple.id}>
+                  <Text as="p" variant="bodySemibold">
+                    {entityNames[triple.attributeId] || triple.attributeId}
+                  </Text>
+                  {triple.value.type === 'entity' ? (
+                    <>
+                      <Spacer height={4} />
+                      <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                        {entityNames[triple.value.id] || triple.value.id}
+                      </Chip>
+                    </>
+                  ) : (
+                    <Text as="p">{triple.value.value}</Text>
+                  )}
+                </div>
+              ))}
+          </EntityCardContent>
+        </>
+      )}
+
+      <EntityCardFooter>
+        <Text variant="breadcrumb">
+          {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
+        </Text>
+        <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
+          <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
+            <ChevronDownSmall color="grey-04" />
+          </span>
+          <Spacer width={6} />
+          {isExpanded ? 'Hide all attributes' : 'Show all attributes'}
+        </SmallButton>
+      </EntityCardFooter>
+    </EntityCardContainer>
+  );
+}
+
+type EntityGroup = {
+  triples: Triple[];
+  name: string | null;
+  description: string | null;
+  id: string;
+};
+
+interface Props {
+  triples: Triple[];
+  id: string;
+  name: string;
+  space: string;
+  entityNames: EntityNames;
+  entityGroups: Record<string, EntityGroup>;
+}
+
+export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const stringifyEntity = JSON.stringify(entityId);
   const config = getConfigFromUrl(context.resolvedUrl);
 
-  const response = await fetch(config.subgraph, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `query {
-        triples(where: {entity_: {id: ${stringifyEntity}}}) {
-          id
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          valueId
-          numberValue
-          stringValue
-          valueType
-          isProtected
-        }
-      }`,
+  const storage = new StorageClient(config.ipfs);
+
+  const [entity, related] = await Promise.all([
+    new Network(storage, config.subgraph).fetchTriples({
+      space,
+      query: '',
+      skip: 0,
+      first: 100,
+      filter: [{ field: 'entity-id', value: entityId }],
     }),
-  });
 
-  const json: {
-    data: {
-      triples: NetworkTriple[];
-    };
-  } = await response.json();
+    new Network(storage, config.subgraph).fetchTriples({
+      space,
+      query: '',
+      skip: 0,
+      first: 100,
+      filter: [{ field: 'linked-by', value: entityId }],
+    }),
+  ]);
 
-  const triples = json.data.triples.map((networkTriple): Triple => {
-    return {
-      id: networkTriple.id,
-      entityId: networkTriple.entity.id,
-      attributeId: networkTriple.attribute.id,
-      value: extractValue(networkTriple),
-      space: space,
-    };
-  });
+  // TODO: Is there a better way to do this?
+  const relatedEntities = await Promise.all(
+    related.triples.map(triple =>
+      new Network(storage, config.subgraph).fetchTriples({
+        space,
+        query: '',
+        skip: 0,
+        first: 100,
+        filter: [{ field: 'entity-id', value: triple.entityId }],
+      })
+    )
+  );
 
-  const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
-    if (triple.entity.name !== null) {
-      acc[triple.entity.id] = triple.entity.name;
-    }
+  const entityGroups: Record<string, EntityGroup> = relatedEntities
+    .flatMap(entity => entity.triples)
+    .reduce((acc, triple) => {
+      if (!acc[triple.entityId])
+        acc[triple.entityId] = { triples: [], name: null, description: null, id: triple.entityId };
 
-    if (triple.valueType === 'ENTITY') {
-      acc[triple.entityValue.id] = triple.entityValue.name;
-    }
+      acc[triple.entityId].id = triple.entityId;
+      acc[triple.entityId].name = triple.entityName;
 
-    if (triple.attribute.name !== null) {
-      acc[triple.attribute.id] = triple.attribute.name;
-    }
-    return acc;
-  }, {} as EntityNames);
+      acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
+      if (triple.attributeId === 'Description' && triple.value.type === 'string') {
+        acc[triple.entityId].description = triple.value.value;
+        acc[triple.entityId].triples = acc[triple.entityId].triples.filter(
+          triple => triple.attributeId !== 'Description'
+        );
+      }
 
-  const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
-  const name = nameValue?.type === 'string' ? nameValue.value : entityId;
+      return acc;
+    }, {} as Record<string, EntityGroup>);
 
   return {
     props: {
-      triples,
+      triples: entity.triples,
       id: entityId,
-      name,
-      space: space,
-      entityNames,
+      name: getEntityName(entity.triples) ?? entityId,
+      space,
+      entityNames: entity.entityNames,
+      entityGroups,
     },
   };
 };

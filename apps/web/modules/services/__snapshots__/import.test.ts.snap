@@ -5,6 +5,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "name",
     "entityId": "31303030-3030-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:31303030-3030-4030-b030-303030303030:name:44657669-6e30-4030-b030-303030303030",
     "space": "s",
     "value": {
@@ -16,6 +17,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "type",
     "entityId": "31303030-3030-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:31303030-3030-4030-b030-303030303030:type:70657273-6f6e-4030-b030-303030303030",
     "space": "s",
     "value": {
@@ -26,6 +28,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "name",
     "entityId": "32303030-3030-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:32303030-3030-4030-b030-303030303030:name:53616d30-3030-4030-b030-303030303030",
     "space": "s",
     "value": {
@@ -37,6 +40,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "type",
     "entityId": "32303030-3030-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:32303030-3030-4030-b030-303030303030:type:70657273-6f6e-4030-b030-303030303030",
     "space": "s",
     "value": {
@@ -47,6 +51,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "type",
     "entityId": "70657273-6f6e-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:70657273-6f6e-4030-b030-303030303030:type:type",
     "space": "s",
     "value": {
@@ -57,6 +62,7 @@ exports[`CSV Import > imports csv 1`] = `
   {
     "attributeId": "name",
     "entityId": "70657273-6f6e-4030-b030-303030303030",
+    "entityName": null,
     "id": "s:70657273-6f6e-4030-b030-303030303030:name:50657273-6f6e-4030-b030-303030303030",
     "space": "s",
     "value": {
@@ -73,6 +79,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "fact",
+    "entityName": null,
     "id": "s:fact:type:type",
     "space": "s",
     "value": {
@@ -83,6 +90,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "fact",
+    "entityName": null,
     "id": "s:fact:name:Fact",
     "space": "s",
     "value": {
@@ -94,6 +102,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "source",
+    "entityName": null,
     "id": "s:source:type:attribute",
     "space": "s",
     "value": {
@@ -104,6 +113,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "source",
+    "entityName": null,
     "id": "s:source:name:Source",
     "space": "s",
     "value": {
@@ -115,6 +125,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "source location",
+    "entityName": null,
     "id": "s:source location:type:attribute",
     "space": "s",
     "value": {
@@ -125,6 +136,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "source location",
+    "entityName": null,
     "id": "s:source location:name:Source Location",
     "space": "s",
     "value": {
@@ -136,6 +148,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "category",
+    "entityName": null,
     "id": "s:category:type:attribute",
     "space": "s",
     "value": {
@@ -146,6 +159,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "category",
+    "entityName": null,
     "id": "s:category:name:Category",
     "space": "s",
     "value": {
@@ -157,6 +171,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "sourceType",
+    "entityName": null,
     "id": "s:sourceType:type:attribute",
     "space": "s",
     "value": {
@@ -167,6 +182,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "sourceType",
+    "entityName": null,
     "id": "s:sourceType:name:Source Type",
     "space": "s",
     "value": {
@@ -178,6 +194,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "tag",
+    "entityName": null,
     "id": "s:tag:type:attribute",
     "space": "s",
     "value": {
@@ -188,6 +205,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "tag",
+    "entityName": null,
     "id": "s:tag:name:Tag",
     "space": "s",
     "value": {
@@ -199,6 +217,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "guest",
+    "entityName": null,
     "id": "s:guest:type:attribute",
     "space": "s",
     "value": {
@@ -209,6 +228,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "guest",
+    "entityName": null,
     "id": "s:guest:name:Guest",
     "space": "s",
     "value": {
@@ -220,6 +240,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "section",
+    "entityName": null,
     "id": "s:section:type:attribute",
     "space": "s",
     "value": {
@@ -230,6 +251,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "section",
+    "entityName": null,
     "id": "s:section:name:Is from Section",
     "space": "s",
     "value": {
@@ -241,6 +263,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "type",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:type:fact",
     "space": "s",
     "value": {
@@ -251,6 +274,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:name:Episode 1: How Your Brain Works & Changes | Huberman Lab",
     "space": "s",
     "value": {
@@ -262,6 +286,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "source",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:source:1000001",
     "space": "s",
     "value": {
@@ -272,6 +297,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "source location",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:source location:2000133",
     "space": "s",
     "value": {
@@ -282,6 +308,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "category",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:category:3000000",
     "space": "s",
     "value": {
@@ -292,6 +319,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "sourceType",
     "entityId": "10000000",
+    "entityName": null,
     "id": "s:10000000:sourceType:4000006",
     "space": "s",
     "value": {
@@ -302,6 +330,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "1000001",
+    "entityName": null,
     "id": "s:1000001:name:Dr. Andrew Huberman",
     "space": "s",
     "value": {
@@ -313,6 +342,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "2000133",
+    "entityName": null,
     "id": "s:2000133:name:Episode 01: How Your Brain Works & Changes | Huberman Lab",
     "space": "s",
     "value": {
@@ -324,6 +354,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "3000000",
+    "entityName": null,
     "id": "s:3000000:name:Health",
     "space": "s",
     "value": {
@@ -335,6 +366,7 @@ exports[`CSV Import > imports health data format 1`] = `
   {
     "attributeId": "name",
     "entityId": "4000006",
+    "entityName": null,
     "id": "s:4000006:name:PodcastNotes",
     "space": "s",
     "value": {

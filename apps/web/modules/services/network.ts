@@ -22,7 +22,6 @@ export type NetworkTriple = NetworkValue & {
   attribute: { id: string; name: string | null };
   valueId: string;
   isProtected: boolean;
-  space: string;
 };
 
 export function extractValue(networkTriple: NetworkTriple): Value {
@@ -47,8 +46,6 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
-let triplesAbortController = new AbortController();
-
 export type FetchTriplesOptions = {
   query: string;
   space: string;
@@ -64,8 +61,10 @@ export type PublishOptions = {
   onChangePublishState: (newState: ReviewState) => void;
 };
 
+type FetchTriplesResult = { triples: Triple[]; entityNames: EntityNames };
+
 export interface INetwork {
-  fetchTriples: (options: FetchTriplesOptions) => Promise<{ triples: Triple[]; entityNames: EntityNames }>;
+  fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
@@ -75,6 +74,8 @@ const UPLOAD_CHUNK_SIZE = 2000;
 // This service mocks a remote database. In the real implementation this will be read
 // from the subgraph
 export class Network implements INetwork {
+  triplesAbortController = new AbortController();
+
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
   publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
@@ -106,8 +107,8 @@ export class Network implements INetwork {
   };
 
   fetchTriples = async ({ space, query, skip, first, filter }: FetchTriplesOptions) => {
-    triplesAbortController.abort();
-    triplesAbortController = new AbortController();
+    this.triplesAbortController.abort();
+    this.triplesAbortController = new AbortController();
 
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
@@ -122,6 +123,7 @@ export class Network implements INetwork {
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
       fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
       fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
+      fieldFilters['linked-by'] && `valueId: ${JSON.stringify(fieldFilters['linked-by'])}`,
     ]
       .filter(Boolean)
       .join(' ');
@@ -131,7 +133,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: triplesAbortController.signal,
+      signal: this.triplesAbortController.signal,
       body: JSON.stringify({
         query: `query {
           triples(where: {${where}}, skip: ${skip}, first: ${first}) {
@@ -170,9 +172,10 @@ export class Network implements INetwork {
         return {
           id: networkTriple.id,
           entityId: networkTriple.entity.id,
+          entityName: networkTriple.entity.name,
           attributeId: networkTriple.attribute.id,
           value: extractValue(networkTriple),
-          space: networkTriple.space,
+          space,
         };
       });
 

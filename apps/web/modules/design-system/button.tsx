@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { themeVars } from '@rainbow-me/rainbowkit/dist/css/sprinkles.css';
 import React, { ForwardedRef } from 'react';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
@@ -13,6 +14,7 @@ import { Publish } from './icons/publish';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
+import { Text } from './text';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
@@ -167,7 +169,7 @@ export const Button = React.forwardRef(function Button(
   );
 });
 
-const StyledSmallButton = styled(StyledButton)<Props & { isActive?: boolean }>(props => {
+const StyledSquareButton = styled(StyledButton)<Props & { isActive?: boolean }>(props => {
   const colors = getButtonColors(props.variant, props.disabled, props.theme);
 
   return {
@@ -185,18 +187,18 @@ const StyledSmallButton = styled(StyledButton)<Props & { isActive?: boolean }>(p
   };
 });
 
-type SmallButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
+type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
 
-export const SmallButton = React.forwardRef(function SmallButton(
-  { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false }: SmallButtonProps,
+export const SquareButton = React.forwardRef(function SquareButton(
+  { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false }: SquareButtonProps,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <StyledSmallButton ref={ref} isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
+    <StyledSquareButton ref={ref} isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
       {icon ? <>{icons[icon]('grey-04')}</> : null}
       {icon && children && <Spacer width={8} />}
       {children ? <>{children}</> : null}
-    </StyledSmallButton>
+    </StyledSquareButton>
   );
 });
 
@@ -232,3 +234,30 @@ export const StyledLabel = styled(StyledButton)(props => ({
   background: props.theme.colors['grey-01'],
   boxShadow: 'none',
 }));
+
+const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
+  const colors = getButtonColors('secondary', false, theme);
+
+  return {
+    alignItems: 'center',
+    display: 'flex',
+    justifyContent: 'center',
+    padding: theme.space,
+    backgroundColor: colors.backgroundColor,
+    borderRadius: 4,
+    boxShadow: `inset 0 0 0 1px ${colors.borderColor}`,
+    ...theme.typography.smallButton,
+    color: theme.colors['grey-04'],
+  };
+});
+
+export const SmallButton = React.forwardRef(function SmallButton(
+  { onClick, children, variant = 'secondary', disabled = false }: Props,
+  ref: ForwardedRef<HTMLButtonElement>
+) {
+  return (
+    <StyledSmallButton disabled={disabled} variant={variant} ref={ref} onClick={onClick}>
+      {children}
+    </StyledSmallButton>
+  );
+});

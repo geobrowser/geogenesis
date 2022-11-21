@@ -72,6 +72,7 @@ describe('Unique', () => {
         id: 'space-1:e1:name:v2',
         attributeId: 'name',
         entityId: 'e1',
+        entityName: null,
         value: {
           type: 'string',
           value: 'John',

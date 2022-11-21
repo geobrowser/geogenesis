@@ -26,6 +26,7 @@ export type EntityNames = Record<string, string | null>;
 export type Triple = {
   id: string;
   entityId: string;
+  entityName: string | null;
   attributeId: string;
   value: Value;
   space: string;
@@ -46,7 +47,7 @@ export type Account = {
 
 export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';
 
-export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value';
+export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value' | 'linked-by';
 
 export type FilterClause = {
   field: FilterField;

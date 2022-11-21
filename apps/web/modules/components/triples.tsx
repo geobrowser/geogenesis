@@ -4,14 +4,14 @@ import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { Button, SmallButton } from '~/modules/design-system/button';
+import { Button, SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
-import { createEntityId, createTripleId } from '~/modules/services/create-id';
+import { createEntityId, createTripleWithId } from '~/modules/services/create-id';
 import { importCSVFile } from '~/modules/services/import';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
@@ -69,9 +69,9 @@ const PageNumberContainer = styled.div({
 
 function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (
-    <SmallButton isActive={isActive} onClick={onClick}>
+    <SquareButton isActive={isActive} onClick={onClick}>
       <Text variant="smallButton">{number}</Text>
-    </SmallButton>
+    </SquareButton>
   );
 }
 
@@ -145,15 +145,7 @@ function Triples({ spaceId }: Props) {
     const attributeId = '';
     const value: Value = { type: 'string', id: createEntityId(), value: '' };
 
-    tripleStore.create([
-      {
-        id: createTripleId(spaceId, entityId, attributeId, value),
-        entityId,
-        attributeId,
-        value,
-        space: spaceId,
-      },
-    ]);
+    tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
   };
 
   const onImport = async (file: File) => {

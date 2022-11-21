@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
-import React, { ForwardedRef, forwardRef, useRef, useState } from 'react';
-import { Button } from '../../design-system/button';
+import React, { useRef, useState } from 'react';
 import { Copy } from '../../design-system/icons/copy';
 import { Entity } from '../../design-system/icons/entity';
 import { Facts } from '../../design-system/icons/facts';
@@ -14,6 +13,7 @@ import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
+import { ToggleButton } from '~/modules/design-system/toggle-button';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
@@ -56,27 +56,6 @@ const ContentArrow = styled.span<ArrowProps>(({ left = 0 }) => ({
 }));
 
 const MotionArrow = motion(ContentArrow);
-
-interface OnboardButtonProps {
-  isActive: boolean;
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  children: React.ReactNode;
-}
-
-const OnboardingButton = forwardRef(function OnboardingButton(
-  { isActive, onClick, children }: OnboardButtonProps,
-  ref: ForwardedRef<HTMLButtonElement>
-) {
-  return isActive ? (
-    <Button ref={ref} variant="tertiary" onClick={onClick}>
-      {children}
-    </Button>
-  ) : (
-    <Button ref={ref} variant="secondary" onClick={onClick}>
-      {children}
-    </Button>
-  );
-});
 
 function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: number) {
   return selectedArrowPosition === 0 ? initialButtonWidth / 2 + DEFAULT_ARROW_LEFT : selectedArrowPosition;
@@ -124,35 +103,35 @@ export function OboardingCarousel() {
       <Row>
         {width > BREAKPOINT ? (
           <>
-            <OnboardingButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
+            <ToggleButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
               <Facts color={step === 'collect' ? 'white' : `grey-04`} />
               <Spacer width={8} />
               Collect data
-            </OnboardingButton>
+            </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <OnboardingButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
+            <ToggleButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
               <Copy color={step === 'organize' ? 'white' : `grey-04`} />
               <Spacer width={8} />
               Organize data
-            </OnboardingButton>
+            </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <OnboardingButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
+            <ToggleButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
               <Entity color={step === 'empower' ? 'white' : `grey-04`} />
               <Spacer width={8} />
               Empower communities
-            </OnboardingButton>
+            </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <OnboardingButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
+            <ToggleButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
               <Target color={step === 'solve' ? 'white' : `grey-04`} />
               <Spacer width={8} />
               Solve real problems
-            </OnboardingButton>
+            </ToggleButton>
           </>
         ) : (
           <Select
