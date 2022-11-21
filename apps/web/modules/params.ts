@@ -26,8 +26,8 @@ export function getConfigFromUrl(url: string): AppConfig {
   const env: AppEnv = (params.get('env') as AppEnv) ?? 'testnet';
 
   if (!(env in configOptions)) {
-    console.log(`Invalid environment "${env}", defaulting to production`);
-    return configOptions.production;
+    console.log(`Invalid environment "${env}", defaulting to testnet`);
+    return configOptions.testnet;
   }
 
   const config = configOptions[env];
