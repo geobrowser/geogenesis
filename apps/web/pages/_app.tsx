@@ -35,7 +35,7 @@ const globalStyles = css`
 
 const Layout = styled.main(props => ({
   paddingTop: props.theme.space * 10,
-  paddingBottom: props.theme.space * 5,
+  paddingBottom: props.theme.space * 20,
   maxWidth: 1200,
   margin: '0 auto',
 
