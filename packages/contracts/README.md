@@ -48,4 +48,8 @@ For faster runs of your tests and scripts, consider skipping ts-node's type chec
 
 ## Deploying
 
-There are scripts for deploying to various environments in `package.json`. e.g., `deploy:polygon:mumbai`, `deploy:polygon:mainnet`
+There are scripts for deploying to various environments in `package.json`. e.g., `deploy:polygon:mumbai`, `deploy:polygon:mainnet`.
+
+The script deploys the Space Registry, as well as two initial Spaces, San Francisco and Health. We then add the San Francisco and Health spaces to the Space Registry using the Space Registry's public functions for adding triple entries -- new spaces are just entries in the registry's triple DB. The addresses and block number for the Space Registry is added to the chain's addresses file (e.g., `137.json for Polygon mainnet). These entries are read by the subgraph deployment when configuring the `networks.json` file in the subgraph directory.
+
+**Note** that the Polygon Mumbai deployment does not have a block number associated with the deployment transaction. You'll have to go to [Mumbai's Polygonscan](https://mumbai.polygonscan.com), plug in the Space Registry contract address, take the block number from the first contract transaction, and plug it into the generated `80001.json` addresses file for `mumbai.` We can then use this file in our subgraph deployments.
