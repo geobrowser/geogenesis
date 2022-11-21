@@ -28,9 +28,9 @@ npx solhint 'contracts/**/*.sol' --fix
 
 ## Polygonscan verification
 
-To try out Polygonscan verification, you first need to deploy a contract to an Ethereum network that's supported by Polygonscan, such as Mumbai.
+TODO: Docs for verifying in mainnet
 
-In this project, copy the `.env.template` file to a file named `.env`, and then edit it to fill in the details. Enter your Polygonscan API key, your Mumbai node URL (eg from Alchemy), and the private key of the account which will send the deployment transaction. With a valid `.env` file in place, first deploy your contract:
+npx hardhat verify <address>
 
 ```shell
 hardhat run --network polygon_mumbai scripts/deploy.ts
