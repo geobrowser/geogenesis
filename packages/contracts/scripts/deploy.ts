@@ -28,10 +28,7 @@ async function main() {
   console.log('Added Health space at address: ', healthSpace.address)
 
   const sanFranciscoSpace = await deploySpaceInstance(beacon, { debug: true })
-  console.log(
-    'Added Value Space space 2 at address: ',
-    sanFranciscoSpace.address
-  )
+  console.log('Added SF Space at address: ', sanFranciscoSpace.address)
 
   const space1Id = randomUUID()
   const space2Id = randomUUID()

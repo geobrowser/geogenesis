@@ -15,6 +15,21 @@
       "address": "0xfe4E312f0D2CA3525A65d596D37d029515014a9a",
       "txHash": "0x10348ee16f9cf5b53c6a3c646f00255f5991aba7c1c4b5f27a25afd128228334",
       "kind": "beacon"
+    },
+    {
+      "address": "0x3e16f86096Dd00A98629555A730a64a43684AD05",
+      "txHash": "0xc2ec19a7c82f26c94eeb3a79cd621ff302caef74fe6ed0d356d2e168a263ee57",
+      "kind": "beacon"
+    },
+    {
+      "address": "0xEb6F0ebCEF3073d8c890d174EE19eddd661C2308",
+      "txHash": "0xf7632686c4bc235aefc1f7d2cd22aace1b9c05eff14bfd03f5ea67772d98c185",
+      "kind": "beacon"
+    },
+    {
+      "address": "0x3C9be4b42B313318091344A261DCDCd02DCd5736",
+      "txHash": "0xbe6c6a6ab48d0a423bc89070ca7979f5bbdb85e6f4dc920112bc26fae5e4a112",
+      "kind": "beacon"
     }
   ],
   "impls": {
