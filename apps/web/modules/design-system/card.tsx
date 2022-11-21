@@ -20,7 +20,7 @@ const fade = keyframes`
 `;
 
 const CoverImage = styled.img({
-  width: 340,
+  width: 590,
   height: 240,
   objectFit: 'cover',
   transition: 'all ease-in-out 0.15s',

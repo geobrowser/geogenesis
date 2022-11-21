@@ -32,11 +32,11 @@ const TESTNET_CHAIN: Chain = {
 };
 
 const DEFAULT_CHAIN: Chain = {
-  id: Number(configOptions.production.chainId),
-  name: 'Geo Genesis', // Human-readable name
-  network: 'ethereum', // Internal network name
+  id: Number(configOptions.testnet.chainId),
+  name: 'Polygon', // Human-readable name
+  network: 'mumbai', // Internal network name
   rpcUrls: {
-    default: configOptions.production.rpc,
+    default: configOptions.testnet.rpc,
   },
 };
 

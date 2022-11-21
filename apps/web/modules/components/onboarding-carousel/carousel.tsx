@@ -16,11 +16,16 @@ import { Select } from '~/modules/design-system/select';
 import { ToggleButton } from '~/modules/design-system/toggle-button';
 
 const BREAKPOINT = 789;
-const DEFAULT_ARROW_LEFT = 57;
+const DEFAULT_ARROW_LEFT = 62;
+
+const Column = styled.div({
+  alignSelf: 'center',
+});
 
 const Row = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: theme.space * 2,
 }));
 
@@ -31,6 +36,7 @@ const OnboardingContent = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors.text}`,
   borderRadius: theme.radius,
   padding: theme.space * 5,
+  maxWidth: 880,
 }));
 
 const MotionContent = motion(OnboardingContent);
@@ -52,7 +58,7 @@ const ContentArrow = styled.span<ArrowProps>(({ left = 0 }) => ({
 const MotionArrow = motion(ContentArrow);
 
 function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: number) {
-  return selectedArrowPosition === 0 ? initialButtonWidth / 2 : selectedArrowPosition;
+  return selectedArrowPosition === 0 ? initialButtonWidth / 2 + DEFAULT_ARROW_LEFT : selectedArrowPosition;
 }
 
 const selectOptions: Record<OnboardingStep, { label: string; value: OnboardingStep }> = {
@@ -93,7 +99,7 @@ export function OboardingCarousel() {
   const arrowLeft = getArrowPosition(selectedArrowLeft, initialButtonRect?.width ?? 0);
 
   return (
-    <div ref={containerRef}>
+    <Column ref={containerRef}>
       <Row>
         {width > BREAKPOINT ? (
           <>
@@ -148,6 +154,6 @@ export function OboardingCarousel() {
         <Spacer height={4} />
         <Text>{ONBOARDING_CONTENT[step].description}</Text>
       </MotionContent>
-    </div>
+    </Column>
   );
 }

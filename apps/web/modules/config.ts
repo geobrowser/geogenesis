@@ -9,6 +9,8 @@ export type AppConfig = {
   subgraph: string;
 };
 
+export const DEFAULT_ENV: AppEnv = 'testnet';
+
 export const configOptions: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',

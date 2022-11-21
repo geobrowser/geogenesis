@@ -198,6 +198,8 @@ export class Network implements INetwork {
   };
 
   fetchSpaces = async () => {
+    console.log(this.subgraphUrl);
+
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {

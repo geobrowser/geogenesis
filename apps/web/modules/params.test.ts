@@ -42,13 +42,13 @@ describe('Config params', () => {
     expect(config).toEqual(configOptions.development);
   });
 
-  it("Defaults to production if there's no param", () => {
+  it("Defaults to testnet if there's no param", () => {
     const config = getConfigFromUrl('https://banana.com/');
-    expect(config).toEqual(configOptions.production);
+    expect(config).toEqual(configOptions.testnet);
   });
 
   it('Defaults to production if param not in configOptions', () => {
     const config = getConfigFromUrl('https://banana.com/?env=banana');
-    expect(config).toEqual(configOptions.production);
+    expect(config).toEqual(configOptions.testnet);
   });
 });
