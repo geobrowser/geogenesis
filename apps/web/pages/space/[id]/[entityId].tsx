@@ -11,7 +11,7 @@ import { Facts } from '~/modules/design-system/icons/facts';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { ToggleButton } from '~/modules/design-system/toggle-button';
+import { TabButton } from '~/modules/design-system/tab-button';
 import { getConfigFromUrl } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
@@ -72,13 +72,13 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
 
       <Content>
         <ToggleGroup>
-          <ToggleButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
+          <TabButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
             Entity data
-          </ToggleButton>
+          </TabButton>
 
-          <ToggleButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
+          <TabButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
             Linked by
-          </ToggleButton>
+          </TabButton>
         </ToggleGroup>
 
         <Attributes>

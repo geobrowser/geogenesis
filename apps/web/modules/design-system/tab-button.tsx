@@ -84,7 +84,7 @@ interface Props {
   disabled?: boolean;
 }
 
-export const ToggleButton = forwardRef(function OnboardingButton(
+export const TabButton = forwardRef(function OnboardingButton(
   { isActive, onClick, children, icon, disabled = false }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {

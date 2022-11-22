@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
-import { ToggleButton } from '~/modules/design-system/toggle-button';
+import { TabButton } from '~/modules/design-system/tab-button';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
@@ -103,32 +103,32 @@ export function OboardingCarousel() {
       <Row>
         {width > BREAKPOINT ? (
           <>
-            <ToggleButton
+            <TabButton
               ref={initialButtonRef}
               onClick={onStepChange('collect')}
               icon="facts"
               isActive={step === 'collect'}
             >
               Collect data
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton icon="copy" onClick={onStepChange('organize')} isActive={step === 'organize'}>
+            <TabButton icon="copy" onClick={onStepChange('organize')} isActive={step === 'organize'}>
               Organize data
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton icon="entity" onClick={onStepChange('empower')} isActive={step === 'empower'}>
+            <TabButton icon="entity" onClick={onStepChange('empower')} isActive={step === 'empower'}>
               Empower communities
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton icon="target" onClick={onStepChange('solve')} isActive={step === 'solve'}>
+            <TabButton icon="target" onClick={onStepChange('solve')} isActive={step === 'solve'}>
               Solve real problems
-            </ToggleButton>
+            </TabButton>
           </>
         ) : (
           <Select
