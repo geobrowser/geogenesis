@@ -33,11 +33,12 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
   transition: '200ms all ease-in-out',
 
   ':hover': {
-    boxShadow: `inset 0 0 0 1px ${theme.colors.text}`,
     backgroundColor: isActive ? theme.colors.text : theme.colors.white,
   },
 
   ':focus': {
+    backgroundColor: isActive ? theme.colors.text : theme.colors.bg,
+    color: isActive ? theme.colors.white : theme.colors.text,
     boxShadow: `inset 0 0 0 2px ${theme.colors.text}`,
     outline: 'none',
   },
@@ -47,10 +48,6 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
     color: theme.colors['grey-03'],
     boxShadow: 'none',
     cursor: 'not-allowed',
-  },
-
-  svg: {
-    transition: '150ms all ease-in-out',
   },
 
   ...(isActive && {
