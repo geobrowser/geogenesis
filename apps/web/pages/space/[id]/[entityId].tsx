@@ -72,15 +72,11 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
 
       <Content>
         <ToggleGroup>
-          <ToggleButton isActive={step === 'entity'} onClick={() => setStep('entity')}>
-            <Facts color={step === 'entity' ? 'white' : `grey-04`} />
-            <Spacer width={8} />
+          <ToggleButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
             Entity data
           </ToggleButton>
 
-          <ToggleButton isActive={step === 'related'} onClick={() => setStep('related')}>
-            <Entity color={step === 'related' ? 'white' : `grey-04`} />
-            <Spacer width={8} />
+          <ToggleButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
             Linked by
           </ToggleButton>
         </ToggleGroup>

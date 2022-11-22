@@ -103,33 +103,30 @@ export function OboardingCarousel() {
       <Row>
         {width > BREAKPOINT ? (
           <>
-            <ToggleButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
-              <Facts color={step === 'collect' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <ToggleButton
+              ref={initialButtonRef}
+              onClick={onStepChange('collect')}
+              icon="facts"
+              isActive={step === 'collect'}
+            >
               Collect data
             </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
-              <Copy color={step === 'organize' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <ToggleButton icon="copy" onClick={onStepChange('organize')} isActive={step === 'organize'}>
               Organize data
             </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
-              <Entity color={step === 'empower' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <ToggleButton icon="entity" onClick={onStepChange('empower')} isActive={step === 'empower'}>
               Empower communities
             </ToggleButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
-              <Target color={step === 'solve' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <ToggleButton icon="target" onClick={onStepChange('solve')} isActive={step === 'solve'}>
               Solve real problems
             </ToggleButton>
           </>
