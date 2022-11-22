@@ -19,6 +19,7 @@ const StyledTrigger = styled(SelectPrimitive.SelectTrigger)(props => ({
   boxShadow: `0px 1px 2px #F0F0F0`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
+  width: 103,
 
   '&:hover': {
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
