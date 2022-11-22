@@ -1,10 +1,10 @@
 import styled from '@emotion/styled';
-import * as SelectPrimitive from '@radix-ui/react-select';
+import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
-const StyledTrigger = styled(SelectPrimitive.SelectTrigger)(props => ({
+const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   all: 'unset',
   ...props.theme.typography.button,
   color: props.theme.colors.text,
@@ -34,28 +34,31 @@ const StyledTrigger = styled(SelectPrimitive.SelectTrigger)(props => ({
   '&[data-placeholder]': { color: props.theme.colors.ctaPrimary },
 }));
 
-const StyledContent = styled(SelectPrimitive.Content)(props => ({
+const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   overflow: 'hidden',
   backgroundColor: 'white',
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  width: 155,
 }));
 
-const StyledViewport = styled(SelectPrimitive.Viewport)(props => ({
+const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
   overflow: 'hidden',
   borderRadius: props.theme.radius,
 }));
 
-const StyledItem = styled(SelectPrimitive.Item)<{ disabled: boolean }>(props => ({
+const StyledItem = styled(DropdownPrimitive.Item)<{ disabled: boolean; last: boolean }>(props => ({
   all: 'unset',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  // width: 155,
 
   userSelect: 'none',
-  borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
+
+  ...(!props.last && {
+    borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
+  }),
 
   '&[data-highlighted]': {
     cursor: 'pointer',
@@ -71,27 +74,29 @@ const StyledItem = styled(SelectPrimitive.Item)<{ disabled: boolean }>(props => 
 
 interface Props {
   value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string; disabled: boolean }[];
+  options: { label: string; disabled: boolean; onClick: () => void }[];
 }
 
-export const Dropdown = ({ value, onChange, options }: Props) => (
-  <SelectPrimitive.Root value={value} onValueChange={onChange}>
+export const Dropdown = ({ value, options }: Props) => (
+  <DropdownPrimitive.Root>
     <StyledTrigger>
-      <SelectPrimitive.SelectValue />
+      <Text variant="button">{value}</Text>
       <Spacer width={8} />
       <ChevronDownSmall color="ctaPrimary" />
     </StyledTrigger>
-    <SelectPrimitive.Portal>
-      <StyledContent>
-        <StyledViewport>
-          {options.map(option => (
-            <StyledItem key={option.value} value={option.value} disabled={option.disabled}>
-              <SelectPrimitive.SelectItemText>
-                <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
-                  {option.label}
-                </Text>
-              </SelectPrimitive.SelectItemText>
+    <DropdownPrimitive.Portal>
+      <StyledContent align="end" sideOffset={2}>
+        <StyledGroup>
+          {options.map((option, index) => (
+            <StyledItem
+              key={option.label}
+              disabled={option.disabled}
+              last={index === options.length - 1}
+              onClick={option.onClick}
+            >
+              <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
+                {option.label}
+              </Text>
               {option.disabled && (
                 <Text variant="footnote" color="grey-04">
                   You don’t have access yet
@@ -99,8 +104,8 @@ export const Dropdown = ({ value, onChange, options }: Props) => (
               )}
             </StyledItem>
           ))}
-        </StyledViewport>
+        </StyledGroup>
       </StyledContent>
-    </SelectPrimitive.Portal>
-  </SelectPrimitive.Root>
+    </DropdownPrimitive.Portal>
+  </DropdownPrimitive.Root>
 );
