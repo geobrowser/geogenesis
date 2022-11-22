@@ -1,8 +1,16 @@
+import styled from '@emotion/styled';
 import Link from 'next/link';
 import React from 'react';
 import { Text } from '../../design-system/text';
 import { CellInput } from './cell-input';
 import { CellTruncate } from './cell-truncate';
+
+const StyledLink = styled.a(({ theme }) => ({
+  ':hover': {
+    textDecoration: 'underline',
+    textDecorationColor: theme.colors.ctaPrimary,
+  },
+}));
 
 interface Props {
   isEditable: boolean;
@@ -20,9 +28,11 @@ interface Props {
 export function CellEditableInput({ isEditable, isExpanded, value, isEntity, href, ...rest }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <Text as="a" variant="tableCell" color="ctaPrimary">
-        {value}
-      </Text>
+      <StyledLink>
+        <Text variant="tableCell" color="ctaPrimary">
+          {value}
+        </Text>
+      </StyledLink>
     </Link>
   ) : (
     <Text variant="tableCell">{value}</Text>
