@@ -12,24 +12,11 @@ import { WalletProvider } from '~/modules/wallet';
 import 'modern-normalize';
 import '../styles/styles.css';
 
-const Body = styled.div(props => ({
-  minHeight: '100vh',
-  maxWidth: '100vw',
-  backgroundColor: props.theme.colors.bg,
-}));
-
 const globalStyles = css`
-  html {
-    /* scrollbar-gutter: stable; */
-    overflow: auto;
-  }
-
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';
     background-color: ${colors.light.bg};
-    width: 100%;
-    height: 100%;
   }
 `;
 
@@ -60,13 +47,11 @@ function MyApp({ Component, pageProps }: AppProps) {
       <ThemeProvider theme={theme}>
         <WalletProvider>
           <ServicesProvider>
-            <Body>
-              <Global styles={globalStyles} />
-              <Navbar />
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-            </Body>
+            <Global styles={globalStyles} />
+            <Navbar />
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
           </ServicesProvider>
         </WalletProvider>
       </ThemeProvider>

@@ -15,7 +15,7 @@ import { EditToggle } from './edit-toggle';
 import { ExternalLink } from './external-link';
 
 const Header = styled.header(({ theme }) => ({
-  width: '100%',
+  width: '100vw',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -26,6 +26,8 @@ const Header = styled.header(({ theme }) => ({
   '@media (max-width: 1920px)': {
     padding: `${theme.space}px ${theme.space * 4}px`,
   },
+
+  paddingRight: theme.space * 6,
 }));
 
 const BreadcrumbsContainer = styled.div({
