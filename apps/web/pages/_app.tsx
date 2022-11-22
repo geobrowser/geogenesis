@@ -13,6 +13,10 @@ import 'modern-normalize';
 import '../styles/styles.css';
 
 const globalStyles = css`
+  html {
+    overflow-y: overlay;
+  }
+
   body {
     font-family: Calibre, sans-serif;
     text-rendering: 'optimizeLegibility';

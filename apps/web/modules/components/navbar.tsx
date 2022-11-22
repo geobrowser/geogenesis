@@ -15,7 +15,6 @@ import { EditToggle } from './edit-toggle';
 import { ExternalLink } from './external-link';
 
 const Header = styled.header(({ theme }) => ({
-  width: '100vw',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
