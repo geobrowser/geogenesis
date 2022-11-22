@@ -69,7 +69,7 @@ const TableHeader = styled.th<{ width: number }>(props => ({
 
 const TableRow = styled.tr(props => ({
   ':hover': {
-    backgroundColor: props.theme.colors.bg,
+    backgroundColor: props.theme.colors['grey-01'],
   },
 }));
 

@@ -47,7 +47,7 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
   borderRadius: props.theme.radius,
 }));
 
-const StyledItem = styled(DropdownPrimitive.Item)<{ disabled: boolean; last: boolean }>(props => ({
+const StyledItem = styled(DropdownPrimitive.Item)<{ disabled: boolean; isLast: boolean }>(props => ({
   all: 'unset',
   display: 'flex',
   flexDirection: 'column',
@@ -56,7 +56,7 @@ const StyledItem = styled(DropdownPrimitive.Item)<{ disabled: boolean; last: boo
 
   userSelect: 'none',
 
-  ...(!props.last && {
+  ...(!props.isLast && {
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
   }),
 
@@ -91,7 +91,7 @@ export const Dropdown = ({ value, options }: Props) => (
             <StyledItem
               key={option.label}
               disabled={option.disabled}
-              last={index === options.length - 1}
+              isLast={index === options.length - 1}
               onClick={option.onClick}
             >
               <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
