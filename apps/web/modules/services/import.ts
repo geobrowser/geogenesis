@@ -40,17 +40,8 @@ function createValueId(value: Value): string {
   }
 }
 
-function createTripleIdUnique(space: string, entityId: string, attributeId: string, value: Value): string;
-function createTripleIdUnique(triple: Triple): string;
-function createTripleIdUnique(
-  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: Triple]
-): string {
-  if (args.length === 1) {
-    const triple = args[0];
-    return createTripleIdUnique(triple.space, triple.entityId, triple.attributeId, triple.value);
-  }
-
-  return `${args[0]}:${args[1]}:${args[2]}:${createValueId(args[3])}`;
+function createTripleIdUnique(triple: Triple): string {
+  return `${triple.space}:${triple.entityId}:${triple.attributeId}:${createValueId(triple.value)}`;
 }
 
 export function unique(triples: Triple[]): Triple[] {
@@ -233,7 +224,7 @@ export async function importCSVFile(
   return eavRowsToTriples(rows, space, createId);
 }
 
-export function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[][] {
+function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[][] {
   if (values.length === 0) return [];
 
   const result: T[][] = [];
