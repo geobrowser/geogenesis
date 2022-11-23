@@ -1,13 +1,11 @@
 import styled from '@emotion/styled';
-import React, { Children, ForwardedRef, forwardRef, useState } from 'react';
-import { text } from 'stream/consumers';
-import { Button } from './button';
+import React, { ForwardedRef, forwardRef, useState } from 'react';
 import { Copy } from './icons/copy';
 import { Entity } from './icons/entity';
 import { Facts } from './icons/facts';
 import { Target } from './icons/target';
 import { Spacer } from './spacer';
-import { ColorName } from './theme/colors';
+import { ColorName, colors } from './theme/colors';
 
 const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) => ({
   ...theme.typography.button,
@@ -29,11 +27,19 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
   // other things we can do like toggling padding but this seems simplest.
   boxShadow: `inset 0 0 0 1px ${theme.colors.text}`,
 
-  // TODO: Placeholder until we do motion design
-  transition: '200ms all ease-in-out',
+  transition: '150ms all ease-in-out',
+
+  svg: {
+    color: isActive ? theme.colors.white : theme.colors['grey-04'],
+    transition: '200ms all ease-in-out',
+  },
 
   ':hover': {
     backgroundColor: isActive ? theme.colors.text : theme.colors.white,
+
+    svg: {
+      color: isActive ? theme.colors.white : theme.colors.text,
+    },
   },
 
   ':focus': {
@@ -58,7 +64,7 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
 
 type Icon = 'entity' | 'copy' | 'facts' | 'target';
 
-const icons: Record<Icon, React.FunctionComponent<{ color: ColorName }>> = {
+const icons: Record<Icon, React.FunctionComponent<{ color?: ColorName }>> = {
   copy: Copy,
   entity: Entity,
   facts: Facts,
@@ -85,20 +91,11 @@ export const TabButton = forwardRef(function OnboardingButton(
   { isActive, onClick, children, icon, disabled = false }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
-  const [isHovered, setIsHovered] = useState(false);
-  const iconColor = getIconColor(isActive, isHovered, disabled);
   const IconComponent = icons[icon];
 
   return (
-    <StyledButton
-      disabled={disabled}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      ref={ref}
-      isActive={isActive}
-      onClick={onClick}
-    >
-      <IconComponent color={iconColor} />
+    <StyledButton disabled={disabled} ref={ref} isActive={isActive} onClick={onClick}>
+      <IconComponent />
       <Spacer width={8} />
       {children}
     </StyledButton>
