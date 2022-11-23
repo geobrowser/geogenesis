@@ -95,7 +95,13 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
         )}
         {step === 'related' && (
           <Entities>
-            <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+            {Object.entries(entityGroups).length === 0 ? (
+              <Text variant="metadataMedium" color="grey-04">
+                There are no other entities that are linking to this entity.
+              </Text>
+            ) : (
+              <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+            )}
           </Entities>
         )}
       </Content>
