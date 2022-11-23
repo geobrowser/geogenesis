@@ -42,6 +42,13 @@ const Attributes = styled.div(({ theme }) => ({
   padding: theme.space * 5,
 }));
 
+const Entities = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.space * 3,
+  padding: theme.space * 5,
+}));
+
 const ToggleGroup = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
@@ -81,12 +88,16 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
           </TabButton>
         </ToggleGroup>
 
-        <Attributes>
-          {step === 'entity' && <EntityAttributes triples={triples} space={space} entityNames={entityNames} />}
-          {step === 'related' && (
+        {step === 'entity' && (
+          <Attributes>
+            <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
+          </Attributes>
+        )}
+        {step === 'related' && (
+          <Entities>
             <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
-          )}
-        </Attributes>
+          </Entities>
+        )}
       </Content>
     </div>
   );
@@ -146,6 +157,15 @@ const EntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
+
+  ':hover': {
+    border: `1px solid ${theme.colors.text}`,
+
+    // @ts-ignore -- This is valid with emotion/styled
+    [EntityCardHeader]: {
+      borderColor: theme.colors.text,
+    },
+  },
 }));
 
 const EntityCardHeader = styled.header<{ showBorder: boolean }>(({ theme, showBorder }) => ({
