@@ -121,10 +121,16 @@ const InputContainer = styled.div({
   position: 'relative',
 });
 
-const InputIcon = styled.div(props => ({
-  position: 'absolute',
-  right: props.theme.space * 2.5,
-  top: props.theme.space * 2.5,
+const TriplesInput = styled(Input)(props => ({
+  width: '100%',
+  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
+}));
+
+const FilterIconContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  backgroundColor: props.theme.colors.white,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
 }));
 
 const SpaceImage = styled.img({
@@ -211,18 +217,18 @@ function Triples({ spaceId }: Props) {
       <Spacer height={12} />
 
       <InputContainer ref={inputContainerRef}>
-        <Input
+        <TriplesInput
           placeholder="Search facts..."
           onChange={e => tripleStore.setQuery(e.target.value)}
           value={tripleStore.query}
         />
-        <InputIcon>
+        <FilterIconContainer>
           <FilterDialog
             inputContainerWidth={inputRect?.width || 0}
             filterState={tripleStore.filterState}
             setFilterState={tripleStore.setFilterState}
           />
-        </InputIcon>
+        </FilterIconContainer>
       </InputContainer>
 
       <Spacer height={12} />

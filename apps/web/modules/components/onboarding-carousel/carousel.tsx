@@ -1,19 +1,15 @@
 import styled from '@emotion/styled';
 import React, { useRef, useState } from 'react';
-import { Copy } from '../../design-system/icons/copy';
-import { Entity } from '../../design-system/icons/entity';
-import { Facts } from '../../design-system/icons/facts';
 import { RightArrowLong } from '../../design-system/icons/right-arrow-long';
-import { Target } from '../../design-system/icons/target';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { useRect } from '@radix-ui/react-use-rect';
-import { OnboardingArrow } from './arrow';
 import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
 import { TabButton } from '~/modules/design-system/tab-button';
+import { CaretDown } from '~/modules/design-system/icons/caret-down';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
@@ -145,7 +141,7 @@ export function OboardingCarousel() {
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
       <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
         <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
-          <OnboardingArrow />
+          <CaretDown />
         </MotionArrow>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />
