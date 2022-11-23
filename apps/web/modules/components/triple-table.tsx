@@ -199,6 +199,11 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   },
 };
 
+const EmptyTableText = styled.td(props => ({
+  ...props.theme.typography.tableCell,
+  padding: props.theme.space * 2.5,
+}));
+
 interface Props {
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
@@ -268,6 +273,13 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
           ))}
         </thead>
         <tbody>
+          {table.getRowModel().rows.length === 0 && (
+            <tr style={{ textAlign: 'center' }}>
+              <td></td>
+              <EmptyTableText>No results found</EmptyTableText>
+              <td></td>
+            </tr>
+          )}
           {table.getRowModel().rows.map(row => (
             <TableRow key={row.id}>
               {row.getVisibleCells().map(cell => {
