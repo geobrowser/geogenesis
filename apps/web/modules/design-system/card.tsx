@@ -24,7 +24,6 @@ const CoverImage = styled.img({
   height: 240,
   objectFit: 'cover',
   transition: 'all ease-in-out 0.15s',
-  // animation: `${fade} 0.15s ease-in-out`,
 });
 
 const GridCell = styled.a(({ theme }) => ({
@@ -37,7 +36,7 @@ const GridCell = styled.a(({ theme }) => ({
   animation: `${fade} 0.15s ease-in-out`,
 
   '&:hover': {
-    boxShadow: `0 8px 25px rgba(0, 0, 0, 0.09)`,
+    boxShadow: theme.shadows.card,
   },
 
   '&:hover img': {

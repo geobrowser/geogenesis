@@ -19,6 +19,7 @@
     "@legendapp/state": "^0.20.0",
     "@mailchimp/mailchimp_marketing": "^3.0.80",
     "@radix-ui/react-dialog": "^1.0.2",
+    "@radix-ui/react-dropdown-menu": "^2.0.1",
     "@radix-ui/react-popover": "^1.0.2",
     "@radix-ui/react-select": "^1.1.1",
     "@radix-ui/react-use-rect": "^1.0.0",

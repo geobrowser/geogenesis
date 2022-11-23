@@ -7,8 +7,6 @@ export const Input = styled.input(props => ({
   width: '100%',
   padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
 
-  transition: '100ms all ease-in-out',
-
   '::placeholder': {
     color: props.theme.colors['grey-03'],
   },
