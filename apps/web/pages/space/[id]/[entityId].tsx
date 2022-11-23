@@ -66,6 +66,7 @@ const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
   ...(showBorder && { borderTop: `1px solid ${theme.colors['grey-02']}` }),
 
   button: {
+    ...theme.typography.button,
     color: theme.colors['grey-04'],
 
     ':hover': {
