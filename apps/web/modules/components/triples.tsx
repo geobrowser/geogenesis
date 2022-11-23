@@ -18,6 +18,7 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
+import { Search } from '../design-system/icons/search';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
@@ -125,6 +126,14 @@ const InputContainer = styled.div({
 const TriplesInput = styled(Input)(props => ({
   width: '100%',
   borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
+  paddingLeft: props.theme.space * 10,
+}));
+
+const SearchIconContainer = styled.div(props => ({
+  position: 'absolute',
+  left: props.theme.space * 3,
+  top: props.theme.space * 2.5,
+  zIndex: 100,
 }));
 
 const FilterIconContainer = styled.div(props => ({
@@ -246,6 +255,9 @@ function Triples({ spaceId }: Props) {
 
       <motion.div layout="position">
         <InputContainer ref={inputContainerRef}>
+          <SearchIconContainer>
+            <Search />
+          </SearchIconContainer>
           <TriplesInput
             placeholder="Search facts..."
             onChange={e => tripleStore.setQuery(e.target.value)}
