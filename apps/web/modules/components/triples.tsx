@@ -144,13 +144,15 @@ const PresetIconContainer = styled(FilterIconContainer)(props => ({
   button: {
     padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
 
-    ':focus': {
-      // outline: 'none',
+    '&:active': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
     },
-  },
 
-  ':focus': {
-    outline: 'blue',
+    '&:focus': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
+    },
   },
 }));
 

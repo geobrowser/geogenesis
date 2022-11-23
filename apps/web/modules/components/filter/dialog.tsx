@@ -48,11 +48,12 @@ const StyledIconButton = styled.button(props => ({
 
   '&:active': {
     color: props.theme.colors.text,
-    outline: 'none',
+    outlineColor: props.theme.colors.ctaPrimary,
   },
 
   '&:focus': {
     color: props.theme.colors.text,
+    outlineColor: props.theme.colors.ctaPrimary,
   },
 }));
 
