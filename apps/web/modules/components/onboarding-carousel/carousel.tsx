@@ -9,7 +9,7 @@ import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
 import { TabButton } from '~/modules/design-system/tab-button';
-import { CaretDown } from '~/modules/design-system/icons/caret-down';
+import { CaretUp } from '~/modules/design-system/icons/caret-up';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
@@ -141,7 +141,7 @@ export function OboardingCarousel() {
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
       <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
         <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
-          <CaretDown />
+          <CaretUp />
         </MotionArrow>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />

@@ -5,7 +5,7 @@ interface Props {
   color?: ColorName;
 }
 
-export function CaretDown({ color }: Props) {
+export function CaretUp({ color }: Props) {
   const theme = useTheme();
   const themeColor = color ? theme.colors[color] : 'currentColor';
 

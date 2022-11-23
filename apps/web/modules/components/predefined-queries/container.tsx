@@ -1,6 +1,6 @@
 import { Theme } from '@emotion/react';
 import styled from '@emotion/styled';
-import { CaretDown } from '~/modules/design-system/icons/caret-down';
+import { CaretUp } from '~/modules/design-system/icons/caret-up';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 
@@ -78,7 +78,7 @@ export function PredefinedQueriesContainer({ name }: Props) {
         data you can find within Geo.
       </Text>
       <ArrowContainer name={name}>
-        <CaretDown />
+        <CaretUp />
       </ArrowContainer>
     </Container>
   );

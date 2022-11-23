@@ -4,7 +4,7 @@ import Link from 'next/link';
 import React from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { Button, SquareButton } from '~/modules/design-system/button';
+import { Button, IconButton, SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -17,6 +17,7 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
+import { Preset } from '../design-system/icons/preset';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
@@ -131,6 +132,26 @@ const FilterIconContainer = styled.div(props => ({
   alignItems: 'center',
   backgroundColor: props.theme.colors.white,
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderLeft: 'none',
+}));
+
+const PresetIconContainer = styled(FilterIconContainer)(props => ({
+  cursor: 'pointer',
+  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
+  backgroundColor: props.theme.colors['grey-01'],
+  borderLeft: 'none',
+
+  button: {
+    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+
+    ':focus': {
+      // outline: 'none',
+    },
+  },
+
+  ':focus': {
+    outline: 'blue',
+  },
 }));
 
 const SpaceImage = styled.img({
@@ -229,6 +250,9 @@ function Triples({ spaceId }: Props) {
             setFilterState={tripleStore.setFilterState}
           />
         </FilterIconContainer>
+        <PresetIconContainer>
+          <IconButton icon="preset" />
+        </PresetIconContainer>
       </InputContainer>
 
       <Spacer height={12} />
