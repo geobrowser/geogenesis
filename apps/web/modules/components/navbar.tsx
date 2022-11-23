@@ -6,16 +6,15 @@ import { intersperse, titleCase } from '~/modules/utils';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { Breadcrumb } from '../design-system/breadcrumb';
 import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
+import { Discord } from '../design-system/icons/discord';
 import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
 import { Spacer } from '../design-system/spacer';
-import { Text } from '../design-system/text';
 import { usePageName } from '../state/use-page-name';
 import { Dictionary } from '../types';
 import { EditToggle } from './edit-toggle';
 import { ExternalLink } from './external-link';
 
 const Header = styled.header(({ theme }) => ({
-  width: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -26,6 +25,9 @@ const Header = styled.header(({ theme }) => ({
   '@media (max-width: 1920px)': {
     padding: `${theme.space}px ${theme.space * 4}px`,
   },
+
+  // Leave some extra space for the scroll bar to come in
+  paddingRight: theme.space * 6,
 }));
 
 const BreadcrumbsContainer = styled.div({
@@ -109,7 +111,7 @@ export function Navbar() {
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <Breadcrumb key={index} href={path} img={img}>
+                <Breadcrumb isNested={index < components.length - 1} key={index} href={path} img={img}>
                   {title}
                 </Breadcrumb>
               );
@@ -127,18 +129,34 @@ export function Navbar() {
       </NavigationItemsContainer>
 
       <Row>
-        <ExternalLink href="https://discord.gg/axFtvyxRNQ">
-          <Row>
-            <img src="/discord.svg" alt="Icon of Discord logo" />
-            <Spacer width={8} />
-            <Text variant="metadataMedium" color="grey-04">
-              Geo Discord
-            </Text>
-          </Row>
-        </ExternalLink>
-        <Spacer width={24} />
+        <DiscordLink />
+        <Spacer width={16} />
         <EditToggle spaceId={components?.[2] ?? ''} />
       </Row>
     </Header>
+  );
+}
+
+const DiscordLinkContainer = styled(Row)(({ theme }) => ({
+  ...theme.typography.button,
+  display: 'flex',
+  alignItems: 'center',
+  color: theme.colors['grey-04'],
+  transition: '0.15s ease-in-out all',
+
+  ':hover': {
+    color: theme.colors.text,
+  },
+}));
+
+function DiscordLink() {
+  return (
+    <ExternalLink href="https://discord.gg/axFtvyxRNQ">
+      <DiscordLinkContainer>
+        <Discord />
+        <Spacer width={8} />
+        <p>Geo Discord</p>
+      </DiscordLinkContainer>
+    </ExternalLink>
   );
 }

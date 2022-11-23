@@ -22,10 +22,11 @@ const Image = styled.img(props => ({
 interface Props {
   href: string;
   children: React.ReactNode;
+  isNested: boolean;
   img: string | null;
 }
 
-export function Breadcrumb({ children, href, img }: Props) {
+export function Breadcrumb({ children, href, img, isNested }: Props) {
   return (
     <Link href={href} passHref>
       <BreadcrumbLink>
@@ -35,7 +36,9 @@ export function Breadcrumb({ children, href, img }: Props) {
             <Spacer width={8} />
           </>
         )}
-        <Text variant="metadataMedium">{children}</Text>
+        <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'}>
+          {children}
+        </Text>
       </BreadcrumbLink>
     </Link>
   );

@@ -16,15 +16,15 @@ export function EditToggle({ spaceId }: Props) {
       label: 'Browse mode',
       value: 'browse-mode',
       disabled: false,
+      onClick: () => setEditable(false),
     },
     {
       label: 'Edit mode',
       value: 'edit-mode',
       disabled: !isEditor,
+      onClick: () => setEditable(true),
     },
   ];
 
-  const onChange = (value: string) => setEditable(value === 'edit-mode');
-
-  return <Dropdown value={editable ? 'edit-mode' : 'browse-mode'} options={options} onChange={onChange} />;
+  return <Dropdown value={editable ? 'Edit mode' : 'Browse mode'} options={options} />;
 }
