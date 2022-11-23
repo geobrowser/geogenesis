@@ -53,7 +53,7 @@ const ArrowContainer = styled.div<{ name: string }>(({ theme, name }) => {
   return {
     rotate: '180deg',
     position: 'absolute',
-    right: 20,
+    right: 13,
     bottom: -10,
 
     svg: {
