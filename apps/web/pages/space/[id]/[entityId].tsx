@@ -77,13 +77,18 @@ const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
 export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
+  const [copyText, setCopyText] = useState<'Copy Entity ID' | 'Copied!'>('Copy Entity ID');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
     return () => setPageName('');
   }, [name, id, setPageName]);
 
-  const onCopyEntityId = () => navigator.clipboard.writeText(id);
+  const onCopyEntityId = () => {
+    navigator.clipboard.writeText(id);
+    setCopyText('Copied!');
+    setTimeout(() => setCopyText('Copy Entity ID'), 3600);
+  };
 
   return (
     <div>
@@ -117,7 +122,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
 
             <IdRow showBorder={triples.length > 0}>
               <Text variant="button">{id}</Text>
-              <TextButton onClick={onCopyEntityId}>Copy Entity ID</TextButton>
+              <TextButton onClick={copyText === 'Copy Entity ID' ? onCopyEntityId : undefined}>{copyText}</TextButton>
             </IdRow>
           </>
         )}
