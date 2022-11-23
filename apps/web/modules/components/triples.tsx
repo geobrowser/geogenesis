@@ -1,7 +1,8 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
+import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
-import React from 'react';
+import React, { useState } from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Button, IconButton, SquareButton } from '~/modules/design-system/button';
@@ -17,7 +18,6 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
-import { Preset } from '../design-system/icons/preset';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
@@ -164,6 +164,7 @@ const SpaceImage = styled.img({
 });
 
 function Triples({ spaceId }: Props) {
+  const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
@@ -235,69 +236,78 @@ function Triples({ spaceId }: Props) {
 
       <Spacer height={40} />
 
-      <PredefinedQueriesContainer name={spaceName} />
+      {showPredefinedQueries && (
+        <motion.div style={{ width: '100%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <PredefinedQueriesContainer name={spaceName} />
+        </motion.div>
+      )}
 
-      <Spacer height={12} />
+      <Spacer height={showPredefinedQueries ? 21.5 : 12} />
 
-      <InputContainer ref={inputContainerRef}>
-        <TriplesInput
-          placeholder="Search facts..."
-          onChange={e => tripleStore.setQuery(e.target.value)}
-          value={tripleStore.query}
-        />
-        <FilterIconContainer>
-          <FilterDialog
-            inputContainerWidth={inputRect?.width || 0}
-            filterState={tripleStore.filterState}
-            setFilterState={tripleStore.setFilterState}
+      <motion.div layout="position">
+        <InputContainer ref={inputContainerRef}>
+          <TriplesInput
+            placeholder="Search facts..."
+            onChange={e => tripleStore.setQuery(e.target.value)}
+            value={tripleStore.query}
           />
-        </FilterIconContainer>
-        <PresetIconContainer>
-          <IconButton icon="preset" />
-        </PresetIconContainer>
-      </InputContainer>
+          <FilterIconContainer>
+            <FilterDialog
+              inputContainerWidth={inputRect?.width || 0}
+              filterState={tripleStore.filterState}
+              setFilterState={tripleStore.setFilterState}
+            />
+          </FilterIconContainer>
+          <PresetIconContainer>
+            <IconButton onClick={() => setShowPredefinedQueries(!showPredefinedQueries)} icon="preset" />
+          </PresetIconContainer>
+        </InputContainer>
 
-      <Spacer height={12} />
+        <Spacer height={12} />
 
-      <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
+        <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
 
-      <Spacer height={12} />
+        <Spacer height={12} />
 
-      <PageNumberContainer>
-        {tripleStore.pageNumber > 1 && (
-          <>
-            <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
-            {tripleStore.pageNumber > 2 ? (
-              <>
-                <Spacer width={16} />
-                <Text color="grey-03" variant="metadataMedium">
-                  ...
-                </Text>
-                <Spacer width={16} />
-              </>
-            ) : (
-              <Spacer width={4} />
-            )}
-          </>
-        )}
-        {tripleStore.hasPreviousPage && (
-          <>
-            <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
-            <Spacer width={4} />
-          </>
-        )}
-        <PageNumber isActive number={tripleStore.pageNumber + 1} />
-        {tripleStore.hasNextPage && (
-          <>
-            <Spacer width={4} />
-            <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
-          </>
-        )}
-        <Spacer width={32} />
-        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
-        <Spacer width={12} />
-        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
-      </PageNumberContainer>
+        {tripleStore.hasNextPage ||
+          (true && (
+            <PageNumberContainer>
+              {tripleStore.pageNumber > 1 && (
+                <>
+                  <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+                  {tripleStore.pageNumber > 2 ? (
+                    <>
+                      <Spacer width={16} />
+                      <Text color="grey-03" variant="metadataMedium">
+                        ...
+                      </Text>
+                      <Spacer width={16} />
+                    </>
+                  ) : (
+                    <Spacer width={4} />
+                  )}
+                </>
+              )}
+              {tripleStore.hasPreviousPage && (
+                <>
+                  <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+                  <Spacer width={4} />
+                </>
+              )}
+              <PageNumber isActive number={tripleStore.pageNumber + 1} />
+              {tripleStore.hasNextPage && (
+                <>
+                  <Spacer width={4} />
+                  <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+                </>
+              )}
+              <Spacer width={32} />
+              <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+              <Spacer width={12} />
+              <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+            </PageNumberContainer>
+          ))}
+      </motion.div>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>

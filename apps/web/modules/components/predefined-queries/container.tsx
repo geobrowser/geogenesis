@@ -34,7 +34,7 @@ function getSpaceBackgroundColors(space: string, theme: Theme): DefaultSpaceStyl
   }
 }
 
-const Container = styled.div<{ name: string }>(({ theme, name }) => {
+const Container = styled.div<Props>(({ theme, name }) => {
   const { backgroundColor, borderColor } = getSpaceBackgroundColors(name, theme);
 
   return {
@@ -43,11 +43,10 @@ const Container = styled.div<{ name: string }>(({ theme, name }) => {
     border: `1px solid ${borderColor}`,
     borderRadius: theme.radius,
     padding: `${theme.space * 4}px ${theme.space * 3}px`,
-    width: '100%',
   };
 });
 
-const ArrowContainer = styled.div<{ name: string }>(({ theme, name }) => {
+const ArrowContainer = styled.div<Props>(({ theme, name }) => {
   const { borderColor } = getSpaceBackgroundColors(name, theme);
 
   return {
