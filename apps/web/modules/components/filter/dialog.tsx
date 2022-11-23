@@ -154,7 +154,6 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                 variant="secondary"
                 onClick={() => {
                   setFilterState(initialFilterState());
-                  setOpen(false);
                 }}
               >
                 Clear all
