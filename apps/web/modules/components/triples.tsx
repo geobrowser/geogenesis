@@ -19,6 +19,7 @@ import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
+import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
 
 const TableHeader = styled.div({
@@ -204,6 +205,10 @@ function Triples({ spaceId }: Props) {
       </TableHeader>
 
       <Spacer height={40} />
+
+      <PredefinedQueriesContainer name={spaceName} />
+
+      <Spacer height={12} />
 
       <InputContainer ref={inputContainerRef}>
         <Input
