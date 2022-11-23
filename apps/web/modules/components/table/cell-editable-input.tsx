@@ -6,6 +6,8 @@ import { CellInput } from './cell-input';
 import { CellTruncate } from './cell-truncate';
 
 const StyledLink = styled.a(({ theme }) => ({
+  display: 'inline-block',
+
   ':hover': {
     textDecoration: 'underline',
     textDecorationColor: theme.colors.ctaPrimary,

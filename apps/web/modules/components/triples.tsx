@@ -1,10 +1,11 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
+import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
-import React from 'react';
+import React, { useState } from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { Button, SquareButton } from '~/modules/design-system/button';
+import { Button, IconButton, SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -17,8 +18,10 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
+import { Search } from '../design-system/icons/search';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
+import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
 
 const TableHeader = styled.div({
@@ -120,10 +123,46 @@ const InputContainer = styled.div({
   position: 'relative',
 });
 
-const InputIcon = styled.div(props => ({
+const TriplesInput = styled(Input)(props => ({
+  width: '100%',
+  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
+  paddingLeft: props.theme.space * 10,
+}));
+
+const SearchIconContainer = styled.div(props => ({
   position: 'absolute',
-  right: props.theme.space * 2.5,
+  left: props.theme.space * 3,
   top: props.theme.space * 2.5,
+  zIndex: 100,
+}));
+
+const FilterIconContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  backgroundColor: props.theme.colors.white,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderLeft: 'none',
+}));
+
+const PresetIconContainer = styled(FilterIconContainer)(props => ({
+  cursor: 'pointer',
+  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
+  backgroundColor: props.theme.colors['grey-01'],
+  borderLeft: 'none',
+
+  button: {
+    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+
+    '&:active': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
+    },
+
+    '&:focus': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
+    },
+  },
 }));
 
 const SpaceImage = styled.img({
@@ -134,6 +173,7 @@ const SpaceImage = styled.img({
 });
 
 function Triples({ spaceId }: Props) {
+  const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
@@ -205,62 +245,81 @@ function Triples({ spaceId }: Props) {
 
       <Spacer height={40} />
 
-      <InputContainer ref={inputContainerRef}>
-        <Input
-          placeholder="Search facts..."
-          onChange={e => tripleStore.setQuery(e.target.value)}
-          value={tripleStore.query}
-        />
-        <InputIcon>
-          <FilterDialog
-            inputContainerWidth={inputRect?.width || 0}
-            filterState={tripleStore.filterState}
-            setFilterState={tripleStore.setFilterState}
+      {showPredefinedQueries && (
+        <motion.div style={{ width: '100%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <PredefinedQueriesContainer name={spaceName} />
+        </motion.div>
+      )}
+
+      <Spacer height={showPredefinedQueries ? 21.5 : 12} />
+
+      <motion.div layout="position">
+        <InputContainer ref={inputContainerRef}>
+          <SearchIconContainer>
+            <Search />
+          </SearchIconContainer>
+          <TriplesInput
+            placeholder="Search facts..."
+            onChange={e => tripleStore.setQuery(e.target.value)}
+            value={tripleStore.query}
           />
-        </InputIcon>
-      </InputContainer>
+          <FilterIconContainer>
+            <FilterDialog
+              inputContainerWidth={inputRect?.width || 0}
+              filterState={tripleStore.filterState}
+              setFilterState={tripleStore.setFilterState}
+            />
+          </FilterIconContainer>
+          <PresetIconContainer>
+            <IconButton onClick={() => setShowPredefinedQueries(!showPredefinedQueries)} icon="preset" />
+          </PresetIconContainer>
+        </InputContainer>
 
-      <Spacer height={12} />
+        <Spacer height={12} />
 
-      <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
+        <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
 
-      <Spacer height={12} />
+        <Spacer height={12} />
 
-      <PageNumberContainer>
-        {tripleStore.pageNumber > 1 && (
-          <>
-            <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
-            {tripleStore.pageNumber > 2 ? (
-              <>
-                <Spacer width={16} />
-                <Text color="grey-03" variant="metadataMedium">
-                  ...
-                </Text>
-                <Spacer width={16} />
-              </>
-            ) : (
-              <Spacer width={4} />
-            )}
-          </>
-        )}
-        {tripleStore.hasPreviousPage && (
-          <>
-            <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
-            <Spacer width={4} />
-          </>
-        )}
-        <PageNumber isActive number={tripleStore.pageNumber + 1} />
-        {tripleStore.hasNextPage && (
-          <>
-            <Spacer width={4} />
-            <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
-          </>
-        )}
-        <Spacer width={32} />
-        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
-        <Spacer width={12} />
-        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
-      </PageNumberContainer>
+        {tripleStore.hasNextPage ||
+          (true && (
+            <PageNumberContainer>
+              {tripleStore.pageNumber > 1 && (
+                <>
+                  <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+                  {tripleStore.pageNumber > 2 ? (
+                    <>
+                      <Spacer width={16} />
+                      <Text color="grey-03" variant="metadataMedium">
+                        ...
+                      </Text>
+                      <Spacer width={16} />
+                    </>
+                  ) : (
+                    <Spacer width={4} />
+                  )}
+                </>
+              )}
+              {tripleStore.hasPreviousPage && (
+                <>
+                  <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+                  <Spacer width={4} />
+                </>
+              )}
+              <PageNumber isActive number={tripleStore.pageNumber + 1} />
+              {tripleStore.hasNextPage && (
+                <>
+                  <Spacer width={4} />
+                  <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+                </>
+              )}
+              <Spacer width={32} />
+              <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+              <Spacer width={12} />
+              <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+            </PageNumberContainer>
+          ))}
+      </motion.div>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
     </PageContainer>

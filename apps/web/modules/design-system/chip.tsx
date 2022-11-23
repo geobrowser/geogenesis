@@ -9,7 +9,7 @@ export const Chip = styled.a(props => ({
   backgroundColor: props.theme.colors.white,
   textDecoration: 'none',
 
-  '&:hover': {
+  '&:hover, &:focus': {
     cursor: 'pointer',
     color: props.theme.colors.ctaPrimary,
     backgroundColor: props.theme.colors.ctaTertiary,

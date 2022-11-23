@@ -10,6 +10,7 @@ import { ExpandSmall } from './icons/expand-small';
 import { Eye } from './icons/eye';
 import { Facts } from './icons/facts';
 import { Filter } from './icons/filter';
+import { Preset } from './icons/preset';
 import { Publish } from './icons/publish';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
@@ -117,20 +118,22 @@ type Icon =
   | 'trash'
   | 'tick'
   | 'facts'
-  | 'copy';
+  | 'copy'
+  | 'preset';
 
-const icons: Record<Icon, (color: ColorName) => JSX.Element> = {
-  create: (color: ColorName) => <Create color={color} />,
-  publish: (color: ColorName) => <Publish color={color} />,
-  eye: (color: ColorName) => <Eye color={color} />,
-  expand: (color: ColorName) => <Expand color={color} />,
-  expandSmall: (color: ColorName) => <ExpandSmall color={color} />,
-  contractSmall: (color: ColorName) => <ContractSmall color={color} />,
-  filter: (color: ColorName) => <Filter color={color} />,
-  trash: (color: ColorName) => <Trash color={color} />,
-  tick: (color: ColorName) => <Tick color={color} />,
-  facts: (color: ColorName) => <Facts color={color} />,
-  copy: (color: ColorName) => <Copy color={color} />,
+const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
+  create: (color?: ColorName) => <Create color={color} />,
+  publish: (color?: ColorName) => <Publish color={color} />,
+  eye: (color?: ColorName) => <Eye color={color} />,
+  expand: (color?: ColorName) => <Expand color={color} />,
+  expandSmall: (color?: ColorName) => <ExpandSmall color={color} />,
+  contractSmall: (color?: ColorName) => <ContractSmall color={color} />,
+  filter: (color?: ColorName) => <Filter color={color} />,
+  trash: (color?: ColorName) => <Trash color={color} />,
+  tick: (color?: ColorName) => <Tick color={color} />,
+  facts: (color?: ColorName) => <Facts color={color} />,
+  copy: (color?: ColorName) => <Copy color={color} />,
+  preset: (color?: ColorName) => <Preset color={color} />,
 };
 
 interface Props {
@@ -218,7 +221,7 @@ const UnstyledButton = styled.button({
 });
 
 export const IconButton = React.forwardRef(function IconButton(
-  { onClick, icon, color = 'text' }: IconButtonProps,
+  { onClick, icon, color }: IconButtonProps,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
