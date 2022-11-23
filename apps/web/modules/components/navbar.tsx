@@ -26,6 +26,7 @@ const Header = styled.header(({ theme }) => ({
     padding: `${theme.space}px ${theme.space * 4}px`,
   },
 
+  // Leave some extra space for the scroll bar to come in
   paddingRight: theme.space * 6,
 }));
 
