@@ -110,7 +110,7 @@ export function Navbar() {
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <Breadcrumb key={index} href={path} img={img}>
+                <Breadcrumb isNested={index < components.length - 1} key={index} href={path} img={img}>
                   {title}
                 </Breadcrumb>
               );
