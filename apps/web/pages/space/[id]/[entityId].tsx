@@ -348,6 +348,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       space,
       entityNames: entity.entityNames,
       entityGroups,
+      key: entityId,
     },
   };
 };
