@@ -6,8 +6,6 @@ import { useEffect, useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { Entity } from '~/modules/design-system/icons/entity';
-import { Facts } from '~/modules/design-system/icons/facts';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -18,6 +16,7 @@ import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityName, navUtils } from '~/modules/utils';
+import { TextButton } from '~/modules/design-system/text-button';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
@@ -54,7 +53,25 @@ const ToggleGroup = styled.div(({ theme }) => ({
   alignItems: 'center',
   gap: theme.space * 5,
   padding: theme.space * 5,
-  borderBottom: `1px solid ${theme.colors.divider}`,
+  borderBottom: `1px solid ${theme.colors['grey-02']}`,
+}));
+
+const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+  ...theme.typography.button,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: theme.space * 5,
+
+  ...(showBorder && { borderTop: `1px solid ${theme.colors['grey-02']}` }),
+
+  button: {
+    color: theme.colors['grey-04'],
+
+    ':hover': {
+      color: theme.colors.text,
+    },
+  },
 }));
 
 export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
@@ -65,6 +82,8 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
     if (name !== id) setPageName(name);
     return () => setPageName('');
   }, [name, id, setPageName]);
+
+  const onCopyEntityId = () => navigator.clipboard.writeText(id);
 
   return (
     <div>
@@ -89,10 +108,20 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
         </ToggleGroup>
 
         {step === 'entity' && (
-          <Attributes>
-            <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
-          </Attributes>
+          <>
+            {triples.length > 0 && (
+              <Attributes>
+                <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
+              </Attributes>
+            )}
+
+            <IdRow showBorder={triples.length > 0}>
+              <Text variant="button">{id}</Text>
+              <TextButton onClick={onCopyEntityId}>Copy Entity ID</TextButton>
+            </IdRow>
+          </>
         )}
+
         {step === 'related' && (
           <Entities>
             {Object.entries(entityGroups).length === 0 ? (
