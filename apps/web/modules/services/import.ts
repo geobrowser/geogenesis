@@ -79,13 +79,13 @@ type ConvertHealthDataOptions = { rowCount?: number; shouldIncludeSections?: boo
 
 export function convertHealthFacts(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
 ) {
   // Since we can have many columns with the same name (many-to-many relationships) we can't use a key-value type
-  // as the parser will override the previous name's values. Since this is kinda crappy for TS consumption we can
+  // as the parser will override the previous key's value. Since this is kinda crappy for TS consumption we can
   // used named tuples to make it a bit nicer. If you hover over an item in the array you'll see the column names.
   // e.g., row[0] will show ID as the type name.
   type HealthDataFactRow = [
@@ -201,16 +201,27 @@ export function convertHealthFacts(
       row[34] ? [row[0], 'article section', row[34]] : null,
       ...typesTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
       ...isAboutTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
       ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
       ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
       ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
