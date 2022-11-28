@@ -9,6 +9,7 @@ const StyledLink = styled.a(({ theme }) => ({
   ...theme.typography.tableCell,
   display: 'inline-block',
   color: theme.colors.ctaPrimary,
+  transition: 'color 0.15s ease-in-out',
 
   ':hover': {
     textDecoration: 'underline',
