@@ -26,6 +26,7 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
   boxShadow: props.theme.shadows.dropdown,
+  zIndex: 10,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
 }));
@@ -99,78 +100,84 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
           <Filter />
         </StyledIconButton>
       </PopoverPrimitive.Trigger>
-      <PopoverPrimitive.Portal>
-        <MotionContent
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            opacity: { duration: 0.2 },
-          }}
-          width={inputContainerWidth}
-          sideOffset={theme.space * 2.5 + 2}
-          alignOffset={-(theme.space * 2) + 4}
-          align="end"
-        >
-          <Text variant="button">Show triples</Text>
-          <Spacer height={12} />
-          {intersperse(
-            filterState.map((filterClause, index) => (
-              <FilterInputGroup
-                label={index === 0 ? 'Where' : 'And'}
-                key={index}
-                options={getFilterOptions(filterState, filterClause)}
-                filterClause={filterClause}
-                onChange={newFilterClause => {
-                  const newFilterState = produce(filterState, draft => {
-                    draft[index] = newFilterClause;
-                  });
-
-                  setFilterState(newFilterState);
-                }}
-                isDeletable={filterState.length > 1}
-                onDelete={() => {
-                  const newFilterState = produce(filterState, draft => {
-                    draft.splice(index, 1);
-                  });
-
-                  setFilterState(newFilterState);
-                }}
-              />
-            )),
+      <AnimatePresence mode="wait">
+        {open ? (
+          <MotionContent
+            key="banana"
+            forceMount={true} // We force mounting so we can control exit animations through framer-motion
+            initial={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.1,
+              ease: 'easeInOut',
+            }}
+            width={inputContainerWidth}
+            sideOffset={theme.space * 2.5 + 2}
+            alignOffset={-(theme.space * 2) + 4}
+            align="end"
+          >
+            <Text variant="button">Show triples</Text>
             <Spacer height={12} />
-          )}
-          <Spacer height={12} />
-          <ButtonGroup>
-            <Button
-              icon="create"
-              variant="secondary"
-              disabled={getFilterOptions(filterState).length === 0}
-              onClick={() => {
-                const defaultOption = getFilterOptions(filterState)[0];
+            {intersperse(
+              filterState.map((filterClause, index) => (
+                <FilterInputGroup
+                  label={index === 0 ? 'Where' : 'And'}
+                  key={index}
+                  options={getFilterOptions(filterState, filterClause)}
+                  filterClause={filterClause}
+                  onChange={newFilterClause => {
+                    const newFilterState = produce(filterState, draft => {
+                      draft[index] = newFilterClause;
+                    });
 
-                const newFilterState = produce(filterState, draft => {
-                  draft.push({ field: defaultOption.value, value: '' });
-                });
+                    setFilterState(newFilterState);
+                  }}
+                  isDeletable={filterState.length > 1}
+                  onDelete={() => {
+                    const newFilterState = produce(filterState, draft => {
+                      draft.splice(index, 1);
+                    });
 
-                setFilterState(newFilterState);
-              }}
-            >
-              And
-            </Button>
+                    setFilterState(newFilterState);
+                  }}
+                />
+              )),
+              <Spacer height={12} />
+            )}
+            <Spacer height={12} />
             <ButtonGroup>
               <Button
-                icon="trash"
+                icon="create"
                 variant="secondary"
+                disabled={getFilterOptions(filterState).length === 0}
                 onClick={() => {
-                  setFilterState(initialFilterState());
+                  const defaultOption = getFilterOptions(filterState)[0];
+
+                  const newFilterState = produce(filterState, draft => {
+                    draft.push({ field: defaultOption.value, value: '' });
+                  });
+
+                  setFilterState(newFilterState);
                 }}
               >
-                Clear all
+                And
               </Button>
+              <ButtonGroup>
+                <Button
+                  icon="trash"
+                  variant="secondary"
+                  onClick={() => {
+                    setFilterState(initialFilterState());
+                  }}
+                >
+                  Clear all
+                </Button>
+              </ButtonGroup>
             </ButtonGroup>
-          </ButtonGroup>
-        </MotionContent>
-      </PopoverPrimitive.Portal>
+          </MotionContent>
+        ) : null}
+      </AnimatePresence>
     </PopoverPrimitive.Root>
   );
 }
