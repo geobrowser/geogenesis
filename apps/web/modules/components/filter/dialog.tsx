@@ -91,10 +91,12 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
 
 export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
   const theme = useTheme();
+
+  // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
-    <PopoverPrimitive.Root onOpenChange={setOpen} open={open}>
+    <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledIconButton open={open}>
           <Filter />
@@ -103,7 +105,6 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
       <AnimatePresence mode="wait">
         {open ? (
           <MotionContent
-            key="banana"
             forceMount={true} // We force mounting so we can control exit animations through framer-motion
             initial={{ opacity: 0, y: -10 }}
             exit={{ opacity: 0, y: -10 }}

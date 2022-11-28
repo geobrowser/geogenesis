@@ -1,5 +1,7 @@
 import styled from '@emotion/styled';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
@@ -42,6 +44,8 @@ const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   width: 155,
 }));
 
+const MotionContent = motion(StyledContent);
+
 const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
   overflow: 'hidden',
   borderRadius: props.theme.radius,
@@ -77,35 +81,55 @@ interface Props {
   options: { label: string; disabled: boolean; onClick: () => void }[];
 }
 
-export const Dropdown = ({ value, options }: Props) => (
-  <DropdownPrimitive.Root>
-    <StyledTrigger>
-      <Text variant="button">{value}</Text>
-      <Spacer width={8} />
-      <ChevronDownSmall color="ctaPrimary" />
-    </StyledTrigger>
-    <DropdownPrimitive.Portal>
-      <StyledContent align="end" sideOffset={2}>
-        <StyledGroup>
-          {options.map((option, index) => (
-            <StyledItem
-              key={option.label}
-              disabled={option.disabled}
-              isLast={index === options.length - 1}
-              onClick={option.onClick}
-            >
-              <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
-                {option.label}
-              </Text>
-              {option.disabled && (
-                <Text variant="footnote" color="grey-04">
-                  You don’t have access yet
-                </Text>
-              )}
-            </StyledItem>
-          ))}
-        </StyledGroup>
-      </StyledContent>
-    </DropdownPrimitive.Portal>
-  </DropdownPrimitive.Root>
-);
+export const Dropdown = ({ value, options }: Props) => {
+  // Using a controlled state to enable exit animations with framer-motion
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownPrimitive.Root onOpenChange={setOpen}>
+      <StyledTrigger>
+        <Text variant="button">{value}</Text>
+        <Spacer width={8} />
+        <ChevronDownSmall color="ctaPrimary" />
+      </StyledTrigger>
+      {/* <DropdownPrimitive.Portal> */}
+      <AnimatePresence>
+        {open && (
+          <MotionContent
+            forceMount={true} // We force mounting so we can control exit animations through framer-motion
+            initial={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.1,
+              ease: 'easeInOut',
+            }}
+            align="end"
+            sideOffset={2}
+          >
+            <StyledGroup>
+              {options.map((option, index) => (
+                <StyledItem
+                  key={option.label}
+                  disabled={option.disabled}
+                  isLast={index === options.length - 1}
+                  onClick={option.onClick}
+                >
+                  <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
+                    {option.label}
+                  </Text>
+                  {option.disabled && (
+                    <Text variant="footnote" color="grey-04">
+                      You don’t have access yet
+                    </Text>
+                  )}
+                </StyledItem>
+              ))}
+            </StyledGroup>
+          </MotionContent>
+        )}
+      </AnimatePresence>
+      {/* </DropdownPrimitive.Portal> */}
+    </DropdownPrimitive.Root>
+  );
+};
