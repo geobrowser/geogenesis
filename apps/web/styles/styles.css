@@ -32,13 +32,6 @@
   font-weight: 600;
   src: url('/fonts/calibre-semibold.woff2') format('woff2');
 }
-/* 
-@font-face {
-  font-family: 'Calibre';
-  font-style: italic;
-  font-weight: 600;
-  src: url('/fonts/TestCalibre-SemiboldItalic.otf') format('opentype');
-} */
 
 @font-face {
   font-family: 'Calibre';
@@ -46,13 +39,6 @@
   font-weight: 700;
   src: url('/fonts/calibre-bold.woff2') format('woff2');
 }
-
-/* @font-face {
-  font-family: 'Calibre';
-  font-style: italic;
-  font-weight: 700;
-  src: url('/fonts/TestCalibre-BoldItalic.otf') format('opentype');
-} */
 
 /* 
   Additional resets based on Tailwind's Preflight

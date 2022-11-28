@@ -1,19 +1,15 @@
 import styled from '@emotion/styled';
 import React, { useRef, useState } from 'react';
-import { Copy } from '../../design-system/icons/copy';
-import { Entity } from '../../design-system/icons/entity';
-import { Facts } from '../../design-system/icons/facts';
 import { RightArrowLong } from '../../design-system/icons/right-arrow-long';
-import { Target } from '../../design-system/icons/target';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { useRect } from '@radix-ui/react-use-rect';
-import { OnboardingArrow } from './arrow';
 import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
-import { ToggleButton } from '~/modules/design-system/toggle-button';
+import { TabButton } from '~/modules/design-system/tab-button';
+import { CaretUp } from '~/modules/design-system/icons/caret-up';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
@@ -103,35 +99,32 @@ export function OboardingCarousel() {
       <Row>
         {width > BREAKPOINT ? (
           <>
-            <ToggleButton ref={initialButtonRef} onClick={onStepChange('collect')} isActive={step === 'collect'}>
-              <Facts color={step === 'collect' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <TabButton
+              ref={initialButtonRef}
+              onClick={onStepChange('collect')}
+              icon="facts"
+              isActive={step === 'collect'}
+            >
               Collect data
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('organize')} isActive={step === 'organize'}>
-              <Copy color={step === 'organize' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <TabButton icon="copy" onClick={onStepChange('organize')} isActive={step === 'organize'}>
               Organize data
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('empower')} isActive={step === 'empower'}>
-              <Entity color={step === 'empower' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <TabButton icon="entity" onClick={onStepChange('empower')} isActive={step === 'empower'}>
               Empower communities
-            </ToggleButton>
+            </TabButton>
 
             <RightArrowLong color="grey-04" />
 
-            <ToggleButton onClick={onStepChange('solve')} isActive={step === 'solve'}>
-              <Target color={step === 'solve' ? 'white' : `grey-04`} />
-              <Spacer width={8} />
+            <TabButton icon="target" onClick={onStepChange('solve')} isActive={step === 'solve'}>
               Solve real problems
-            </ToggleButton>
+            </TabButton>
           </>
         ) : (
           <Select
@@ -148,7 +141,7 @@ export function OboardingCarousel() {
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
       <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
         <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
-          <OnboardingArrow />
+          <CaretUp />
         </MotionArrow>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />

@@ -6,18 +6,17 @@ import { useEffect, useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { Entity } from '~/modules/design-system/icons/entity';
-import { Facts } from '~/modules/design-system/icons/facts';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { ToggleButton } from '~/modules/design-system/toggle-button';
+import { TabButton } from '~/modules/design-system/tab-button';
 import { getConfigFromUrl } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityName, navUtils } from '~/modules/utils';
+import { TextButton } from '~/modules/design-system/text-button';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
@@ -42,22 +41,55 @@ const Attributes = styled.div(({ theme }) => ({
   padding: theme.space * 5,
 }));
 
+const Entities = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.space * 3,
+  padding: theme.space * 5,
+}));
+
 const ToggleGroup = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.space * 5,
   padding: theme.space * 5,
-  borderBottom: `1px solid ${theme.colors.divider}`,
+  borderBottom: `1px solid ${theme.colors['grey-02']}`,
+}));
+
+const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+  ...theme.typography.button,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: theme.space * 5,
+
+  ...(showBorder && { borderTop: `1px solid ${theme.colors['grey-02']}` }),
+
+  button: {
+    ...theme.typography.button,
+    color: theme.colors['grey-04'],
+
+    ':hover': {
+      color: theme.colors.text,
+    },
+  },
 }));
 
 export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
+  const [copyText, setCopyText] = useState<'Copy Entity ID' | 'Copied!'>('Copy Entity ID');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
     return () => setPageName('');
   }, [name, id, setPageName]);
+
+  const onCopyEntityId = () => {
+    navigator.clipboard.writeText(id);
+    setCopyText('Copied!');
+    setTimeout(() => setCopyText('Copy Entity ID'), 3600);
+  };
 
   return (
     <div>
@@ -72,25 +104,41 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
 
       <Content>
         <ToggleGroup>
-          <ToggleButton isActive={step === 'entity'} onClick={() => setStep('entity')}>
-            <Facts color={step === 'entity' ? 'white' : `grey-04`} />
-            <Spacer width={8} />
+          <TabButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
             Entity data
-          </ToggleButton>
+          </TabButton>
 
-          <ToggleButton isActive={step === 'related'} onClick={() => setStep('related')}>
-            <Entity color={step === 'related' ? 'white' : `grey-04`} />
-            <Spacer width={8} />
+          <TabButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
             Linked by
-          </ToggleButton>
+          </TabButton>
         </ToggleGroup>
 
-        <Attributes>
-          {step === 'entity' && <EntityAttributes triples={triples} space={space} entityNames={entityNames} />}
-          {step === 'related' && (
-            <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
-          )}
-        </Attributes>
+        {step === 'entity' && (
+          <>
+            {triples.length > 0 && (
+              <Attributes>
+                <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
+              </Attributes>
+            )}
+
+            <IdRow showBorder={triples.length > 0}>
+              <Text variant="button">{id}</Text>
+              <TextButton onClick={copyText === 'Copy Entity ID' ? onCopyEntityId : undefined}>{copyText}</TextButton>
+            </IdRow>
+          </>
+        )}
+
+        {step === 'related' && (
+          <Entities>
+            {Object.entries(entityGroups).length === 0 ? (
+              <Text variant="metadataMedium" color="grey-04">
+                There are no other entities that are linking to this entity.
+              </Text>
+            ) : (
+              <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+            )}
+          </Entities>
+        )}
       </Content>
     </div>
   );
@@ -150,6 +198,15 @@ const EntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
+
+  ':hover': {
+    border: `1px solid ${theme.colors.text}`,
+
+    // @ts-ignore -- This is valid with emotion/styled
+    [EntityCardHeader]: {
+      borderColor: theme.colors.text,
+    },
+  },
 }));
 
 const EntityCardHeader = styled.header<{ showBorder: boolean }>(({ theme, showBorder }) => ({
@@ -348,6 +405,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       space,
       entityNames: entity.entityNames,
       entityGroups,
+      key: entityId,
     },
   };
 };

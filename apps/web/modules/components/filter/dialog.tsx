@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import produce from 'immer';
 import React, { useState } from 'react';
+import { Filter } from '~/modules/design-system/icons/filter';
 import { initialFilterState } from '~/modules/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
@@ -33,6 +34,28 @@ const ButtonGroup = styled.div({
   alignItems: 'center',
   justifyContent: 'space-between',
 });
+
+const StyledIconButton = styled.button(props => ({
+  all: 'unset',
+  color: props.theme.colors['grey-04'],
+  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+
+  '&:hover': {
+    cursor: 'pointer',
+
+    color: props.theme.colors.text,
+  },
+
+  '&:active': {
+    color: props.theme.colors.text,
+    outlineColor: props.theme.colors.ctaPrimary,
+  },
+
+  '&:focus': {
+    color: props.theme.colors.text,
+    outlineColor: props.theme.colors.ctaPrimary,
+  },
+}));
 
 interface Props {
   inputContainerWidth: number;
@@ -68,7 +91,9 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen} open={open}>
       <PopoverPrimitive.Trigger asChild>
-        <IconButton icon="filter" />
+        <StyledIconButton>
+          <Filter />
+        </StyledIconButton>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <StyledContent
@@ -76,7 +101,6 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
           sideOffset={theme.space * 2.5 + 2}
           alignOffset={-(theme.space * 2.5)}
           align="end"
-          onOpenAutoFocus={event => event.preventDefault()}
         >
           <Text variant="button">Show triples</Text>
           <Spacer height={12} />
@@ -130,7 +154,6 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                 variant="secondary"
                 onClick={() => {
                   setFilterState(initialFilterState());
-                  setOpen(false);
                 }}
               >
                 Clear all
