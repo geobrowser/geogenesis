@@ -1,13 +1,14 @@
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
 import React, { useState } from 'react';
 import { Filter } from '~/modules/design-system/icons/filter';
 import { initialFilterState } from '~/modules/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
-import { Button, IconButton } from '../../design-system/button';
+import { Button } from '../../design-system/button';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
@@ -29,20 +30,24 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
 }));
 
+const MotionContent = motion(StyledContent);
+
 const ButtonGroup = styled.div({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
 });
 
-const StyledIconButton = styled.button(props => ({
+const StyledIconButton = styled.button<{ open: boolean }>(props => ({
   all: 'unset',
+  backgroundColor: props.open ? props.theme.colors['grey-01'] : props.theme.colors.white,
   color: props.theme.colors['grey-04'],
   padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  transition: 'colors 0.15s ease-in-out',
 
   '&:hover': {
     cursor: 'pointer',
-
+    backgroundColor: props.theme.colors['grey-01'],
     color: props.theme.colors.text,
   },
 
@@ -85,21 +90,25 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
 
 export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
   const theme = useTheme();
-
   const [open, setOpen] = useState(false);
 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen} open={open}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledIconButton>
+        <StyledIconButton open={open}>
           <Filter />
         </StyledIconButton>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <StyledContent
+        <MotionContent
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            opacity: { duration: 0.2 },
+          }}
           width={inputContainerWidth}
           sideOffset={theme.space * 2.5 + 2}
-          alignOffset={-(theme.space * 2.5)}
+          alignOffset={-(theme.space * 2) + 4}
           align="end"
         >
           <Text variant="button">Show triples</Text>
@@ -160,7 +169,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               </Button>
             </ButtonGroup>
           </ButtonGroup>
-        </StyledContent>
+        </MotionContent>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
   );

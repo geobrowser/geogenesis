@@ -144,11 +144,16 @@ const FilterIconContainer = styled.div(props => ({
   borderLeft: 'none',
 }));
 
-const PresetIconContainer = styled(FilterIconContainer)(props => ({
+const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
   cursor: 'pointer',
   borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  backgroundColor: props.theme.colors['grey-01'],
+  backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
   borderLeft: 'none',
+  transition: 'colors 0.15s ease-in-out',
+
+  '&:hover': {
+    backgroundColor: props.theme.colors['grey-01'],
+  },
 
   button: {
     padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
@@ -270,7 +275,7 @@ function Triples({ spaceId }: Props) {
               setFilterState={tripleStore.setFilterState}
             />
           </FilterIconContainer>
-          <PresetIconContainer>
+          <PresetIconContainer showPredefinedQueries={showPredefinedQueries}>
             <IconButton onClick={() => setShowPredefinedQueries(!showPredefinedQueries)} icon="preset" />
           </PresetIconContainer>
         </InputContainer>
