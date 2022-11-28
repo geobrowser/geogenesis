@@ -75,9 +75,154 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   return unique(triples);
 }
 
-export function convertHealthData(
+type ConvertHealthDataOptions = { rowCount?: number; shouldIncludeSections?: boolean };
+
+export function convertHealthFacts(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: { rowCount?: number; shouldIncludeSections?: boolean } = {
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  // Since we can have many columns with the same name (many-to-many relationships) we can't use a key-value type
+  // as the parser will override the previous name's values. Since this is kinda crappy for TS consumption we can
+  // used named tuples to make it a bit nicer. If you hover over an item in the array you'll see the column names.
+  // e.g., row[0] will show ID as the type name.
+  type HealthDataFactRow = [
+    ID: string, // 0
+    Text: string,
+    Source: string,
+    Publishing_source: string,
+    Publish_date: string,
+    Types: string, // 5
+    Types: string,
+    Types: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string, // 10
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string, // 15
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Relevant_age: string, // 20
+    Relevant_age: string,
+    Relevant_age: string,
+    Natural_Medicines_Comprehensive_Database_effectiveness_rating: string,
+    Importance: string,
+    Unit_of_measurement: string, // 25
+    Unit_of_measurement: string,
+    Sourced_from: string,
+    Sourced_from: string,
+    Sourced_from: string,
+    Relevant_sex: string, // 30
+    Relevant_sex: string,
+    Relevant_age: string,
+    Amount: string,
+    Article_section: string // 34
+  ];
+
+  const results = parseCSV<HealthDataFactRow>(csv);
+
+  const attributeRows: EavRow[] = [
+    ['text', 'type', 'attribute'],
+    ['text', 'name', 'Text'],
+    ['source', 'type', 'attribute'],
+    ['source', 'name', 'Source'],
+    ['publishing source', 'type', 'attribute'],
+    ['publishing source', 'name', 'Publishing source'],
+    ['publish date', 'type', 'attribute'],
+    ['publish date', 'name', 'Publish date'],
+    ['is about', 'type', 'attribute'],
+    ['is about', 'name', 'Is about'],
+    ['relevant age', 'type', 'attribute'],
+    ['relevant age', 'name', 'Relevant age'],
+    ['natural medicines comprehensive database effectiveness rating', 'type', 'attribute'],
+    [
+      'natural medicines comprehensive database effectiveness rating',
+      'name',
+      'Natural Medicines Comprehensive Database effectiveness rating',
+    ],
+    ['importance', 'type', 'attribute'],
+    ['importance', 'name', 'Importance'],
+    ['unit of measurement', 'type', 'attribute'],
+    ['unit of measurement', 'name', 'Unit of measurement'],
+    ['sourced from', 'type', 'attribute'],
+    ['sourced from', 'name', 'Sourced from'],
+    ['relevant sex', 'type', 'attribute'],
+    ['relevant sex', 'name', 'Relevant sex'],
+    ['amount', 'type', 'attribute'],
+    ['amount', 'name', 'Amount'],
+    ['article section', 'type', 'attribute'],
+    ['article section', 'name', 'Article section'],
+  ];
+
+  function toEavRow(row: HealthDataFactRow): EavRow[] {
+    const typesTuples = [{ name: row[5] }, { name: row[6] }, { name: row[7] }].filter(({ name }) => name !== '');
+
+    const isAboutTuples = [
+      { name: row[8] },
+      { name: row[9] },
+      { name: row[10] },
+      { name: row[11] },
+      { name: row[12] },
+      { name: row[13] },
+      { name: row[14] },
+      { name: row[15] },
+      { name: row[16] },
+      { name: row[17] },
+      { name: row[18] },
+      { name: row[19] },
+    ].filter(({ name }) => name !== '');
+
+    const relevantAgeTuples = [{ name: row[20] }, { name: row[21] }, { name: row[22] }, { name: row[32] }].filter(
+      ({ name }) => name !== ''
+    );
+
+    const unitOfMeasurementTuples = [{ name: row[25] }, { name: row[26] }].filter(({ name }) => name !== '');
+    const sourcedFromTuples = [{ name: row[27] }, { name: row[28] }, { name: row[29] }].filter(
+      ({ name }) => name !== ''
+    );
+
+    const relevantSexTuples = [{ name: row[30] }, { name: row[31] }].filter(({ name }) => name !== '');
+
+    return [
+      row[1] ? [row[0], 'name', row[1]] : null,
+      row[2] ? [row[0], 'source', row[2]] : null,
+      row[3] ? [row[0], 'publishing source', row[3]] : null,
+      row[4] ? [row[0], 'publish date', row[4]] : null,
+      row[23] ? [row[0], 'natural medicines comprehensive database effectiveness rating', row[23]] : null,
+      row[24] ? [row[0], 'importance', row[24]] : null,
+      row[33] ? [row[0], 'amount', row[33]] : null,
+      row[34] ? [row[0], 'article section', row[34]] : null,
+      ...typesTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...isAboutTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  // We can skip the headers row.
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  return [...attributeRows, ...eavRows];
+}
+
+export function convertLegacyHealthData(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
@@ -220,8 +365,14 @@ export async function importCSVFile(
   createId: CreateUuid = createEntityId
 ): Promise<Triple[]> {
   const csv = await readFileAsText(file);
-  const rows = file.name === 'healthdata.csv' ? convertHealthData(csv) : readCSV(csv);
-  return eavRowsToTriples(rows, space, createId);
+  switch (file.name) {
+    case 'healthdata.csv':
+      return eavRowsToTriples(convertLegacyHealthData(csv), space, createId);
+    case 'healthdata-facts.csv':
+      return eavRowsToTriples(convertHealthFacts(csv), space, createId);
+    default:
+      return eavRowsToTriples(readCSV(csv), space, createId);
+  }
 }
 
 function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[][] {
