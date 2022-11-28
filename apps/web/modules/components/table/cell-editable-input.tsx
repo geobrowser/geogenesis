@@ -6,11 +6,14 @@ import { CellInput } from './cell-input';
 import { CellTruncate } from './cell-truncate';
 
 const StyledLink = styled.a(({ theme }) => ({
+  ...theme.typography.tableCell,
   display: 'inline-block',
+  color: theme.colors.ctaPrimary,
 
   ':hover': {
     textDecoration: 'underline',
-    textDecorationColor: theme.colors.ctaPrimary,
+    textDecorationColor: theme.colors.ctaHover,
+    color: theme.colors.ctaHover,
   },
 }));
 
@@ -30,11 +33,7 @@ interface Props {
 export function CellEditableInput({ isEditable, isExpanded, value, isEntity, href, ...rest }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <StyledLink>
-        <Text variant="tableCell" color="ctaPrimary">
-          {value}
-        </Text>
-      </StyledLink>
+      <StyledLink>{value}</StyledLink>
     </Link>
   ) : (
     <Text variant="tableCell">{value}</Text>
