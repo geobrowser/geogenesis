@@ -29,6 +29,7 @@ const StyledContent = styled(SelectPrimitive.Content)(props => ({
   backgroundColor: 'white',
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  zIndex: 2,
 }));
 
 const StyledViewport = styled(SelectPrimitive.Viewport)(props => ({

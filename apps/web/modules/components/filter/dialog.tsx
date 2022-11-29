@@ -26,7 +26,7 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
   boxShadow: props.theme.shadows.dropdown,
-  zIndex: 10,
+  zIndex: 1,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
 }));
@@ -124,7 +124,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               filterState.map((filterClause, index) => (
                 <FilterInputGroup
                   label={index === 0 ? 'Where' : 'And'}
-                  key={index}
+                  key={`filter-state-item-${index}`}
                   options={getFilterOptions(filterState, filterClause)}
                   filterClause={filterClause}
                   onChange={newFilterClause => {
