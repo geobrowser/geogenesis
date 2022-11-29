@@ -65,7 +65,7 @@ const StyledItem = styled(SelectPrimitive.Item, { shouldForwardProp: prop => isP
 
     '&[data-highlighted]': {
       cursor: 'pointer',
-      backgroundColor: props.theme.colors.divider,
+      backgroundColor: props.theme.colors.bg,
       color: props.theme.colors.text,
     },
   })
