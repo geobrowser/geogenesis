@@ -1,3 +1,4 @@
+import isPropValid from '@emotion/is-prop-valid';
 import styled from '@emotion/styled';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -17,8 +18,7 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   borderRadius: props.theme.radius,
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
   backgroundColor: props.theme.colors.white,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  boxShadow: `0px 1px 2px #F0F0F0`,
+  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
   width: 103,
@@ -33,7 +33,7 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
     outline: 'none',
   },
 
-  '&[data-placeholder]': { color: props.theme.colors.ctaPrimary },
+  '&[data-placeholder]': { color: props.theme.colors.text },
 }));
 
 const StyledContent = styled(DropdownPrimitive.Content)(props => ({
@@ -51,7 +51,10 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
   borderRadius: props.theme.radius,
 }));
 
-const StyledItem = styled(DropdownPrimitive.Item)<{ disabled: boolean; isLast: boolean }>(props => ({
+const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
+  disabled: boolean;
+  isLast: boolean;
+}>(props => ({
   all: 'unset',
   display: 'flex',
   flexDirection: 'column',
