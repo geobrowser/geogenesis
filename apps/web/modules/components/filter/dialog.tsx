@@ -144,7 +144,9 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                   }}
                 />
               )),
-              <Spacer height={12} />
+              ({ index }) => (
+                <Spacer key={`filter-state-spacer-${index}`} height={12} />
+              )
             )}
             <Spacer height={12} />
             <ButtonGroup>
