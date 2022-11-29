@@ -3,7 +3,7 @@ import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { describe, expect, it } from 'vitest';
 import { createTripleWithId } from './create-id';
-import { convertHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
+import { convertLegacyHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
 
 function readMockFile(filename: string) {
   const simple = readFileSync(path.join(__dirname, 'mocks', filename), 'utf8');
@@ -31,7 +31,7 @@ describe('CSV Import', () => {
   it('imports health data format', async () => {
     const file = readMockFile('healthdata.csv');
     const csv = await readFileAsText(file);
-    const rows = convertHealthData(csv, { rowCount: 1, shouldIncludeSections: false });
+    const rows = convertLegacyHealthData(csv, { rowCount: 1, shouldIncludeSections: false });
 
     // So we can see what matches in snapshot tests
     const mockId = (value: string) => value;
