@@ -251,8 +251,6 @@ function convertHealthPodcastNotes(
 
   const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
 
-  // TODO: Will we need to dedupe these if we've already created the attribute locally?
-  // We may want to do an initial pass where we create all of the attributes.
   const attributeRows: EavRow[] = [
     ['author', 'type', 'attribute'],
     ['author', 'name', 'Author'],
@@ -277,6 +275,59 @@ function convertHealthPodcastNotes(
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
       row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
       row['Podcast episode'] ? [row.Entity, 'podcast episode', row['Podcast episode']] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
+function convertHealthOriginalPodcasts(
+  csv: string,
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Entity: string;
+    Types: string;
+    'Authored by': string;
+    'Contributed by': string;
+    Name: string;
+    Podcast: string;
+    URL: string;
+    'Publish date': string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['authored by', 'type', 'attribute'],
+    ['authored by', 'name', 'Authored by'],
+    ['contributed by', 'type', 'attribute'],
+    ['contributed by', 'name', 'Contributed by'],
+    ['podcast', 'type', 'attribute'],
+    ['podcast', 'name', 'Podcast'],
+    ['url', 'type', 'attribute'],
+    ['url', 'name', 'URL'],
+    ['publish date', 'type', 'attribute'],
+    ['publish date', 'name', 'Publish date'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      row.Entity ? [row.Entity, 'name', row.Name] : null, // The Entity and the name are the same
+      row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+      row['Authored by'] ? [row.Entity, 'author', row['Authored by']] : null,
+      row['Contributed by'] ? [row.Entity, 'author', row['Contributed by']] : null,
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row.URL ? [row.Entity, 'url', row.URL] : null,
+      row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
@@ -443,6 +494,9 @@ export async function importCSVFile(
         break;
       case 'healthdata-podcast-notes.csv':
         eavs = [...eavs, ...convertHealthPodcastNotes(csv)];
+        break;
+      case 'healthdata-original-podcasts.csv':
+        eavs = [...eavs, ...convertHealthOriginalPodcasts(csv)];
         break;
       default:
         eavs = [...eavs, ...readCSV(csv)];
