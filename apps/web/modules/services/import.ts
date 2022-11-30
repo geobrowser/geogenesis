@@ -171,10 +171,8 @@ export function convertHealthFacts(
     ['amount', 'name', 'Amount'],
     ['article section', 'type', 'attribute'],
     ['article section', 'name', 'Article section'],
-    ['tips', 'type', 'attribute'],
-    ['benefits', 'type', 'attribute'],
-    ['benefits', 'name', 'Benefits'],
-    ['tips', 'name', 'Tips'],
+    ['collections', 'type', 'attribute'],
+    ['collections', 'name', 'Tollections'],
   ];
 
   function toEavRow(row: HealthDataFactRow): EavRow[] {
@@ -238,31 +236,31 @@ export function convertHealthFacts(
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...isAboutTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...isAboutTuples.map(({ name }): EavRow => [row[0], 'is about', name.toLowerCase()]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'relevant age', name.toLowerCase()]),
       ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'unit of measurement', name.toLowerCase()]),
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'sourced from', name.toLowerCase()]),
       ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'relevant sex', name.toLowerCase()]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...benefitsTuples.map(({ name }): EavRow => [row[0], 'benefits', name.toLowerCase()]),
+      ...benefitsTuples.map(({ name }): EavRow => [row[0], 'collections', name.toLowerCase()]),
       ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...tipsTuples.map(({ name }): EavRow => [row[0], 'tips', name.toLowerCase()]),
+      ...tipsTuples.map(({ name }): EavRow => [row[0], 'collections', name.toLowerCase()]),
       ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
@@ -270,7 +268,7 @@ export function convertHealthFacts(
 
   // Since we aren't using header rows the parser parses the first row as the headers.
   // We can skip the headers row. There's also an additional row of instructions we can skip.
-  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(9565, 9566).flatMap(toEavRow);
   return [...attributeRows, ...eavRows];
 }
 
@@ -856,6 +854,63 @@ export function convertLegacyHealthData(
 }
 
 function convertSanFranciscoData(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = [
+    ID: string,
+    _: string,
+    Text: string,
+    Types: string,
+    Related_to: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Author: string
+  ];
+
+  const results = parseCSV<HealthDataSourceRow>(csv);
+
+  const attributeRows: EavRow[] = [
+    ['author', 'type', 'attribute'],
+    ['author', 'name', 'Author'],
+    ['is about', 'type', 'attribute'],
+    ['is about', 'name', 'Is about'],
+    ['related to', 'type', 'attribute'],
+    ['related to', 'name', 'Related to'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    const isAboutTuples = [{ name: row[5] }, { name: row[6] }, { name: row[7] }].filter(({ name }) => name !== '');
+
+    return [
+      row[2] ? [row[2], 'name', row[2]] : null,
+      row[3] ? [row[2], 'type', row[3].toLowerCase()] : null,
+      row[3] ? [row[3].toLowerCase(), 'type', 'attribute'] : null,
+      row[3] ? [row[3].toLowerCase(), 'name', row[3]] : null,
+      row[4] ? [row[2], 'related to', [row[4]]] : null,
+      row[4] ? [row[4], 'name', row[4]] : null,
+      row[4] ? [row[4], 'type', 'attribute'] : null,
+      row[8] ? [row[2], 'author', row[8]] : null,
+      row[8] ? [row[8], 'name', row[8]] : null,
+      row[8] ? [row[8], 'type', 'author'] : null,
+
+      ...isAboutTuples.map(({ name }): EavRow => [row[2], 'is about', name.toLowerCase()]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
+function convertSanFrancisco(
   csv: string,
   { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
     rowCount: Infinity,
