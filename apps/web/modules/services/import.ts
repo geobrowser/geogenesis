@@ -228,6 +228,11 @@ export function convertHealthFacts(
       row[2] ? [row[0], 'topic', [row[2]]] : null,
       row[3] ? [row[0], 'name', row[3]] : null,
       row[4] ? [row[0], 'author', row[4]] : null,
+
+      // We shouldn't have to create a Person here since we create them later
+      row[4] ? [row[4], 'type', 'person'] : null,
+      row[4] ? [row[4], 'name', row[4]] : null,
+
       row[5] ? [row[0], 'source', row[5]] : null,
       row[6] ? [row[0], 'publish date', row[6]] : null,
       row[25] ? [row[0], 'ncmd rating', row[25]] : null,
@@ -555,8 +560,8 @@ function convertHealthPodcastNotes(
       row.Author ? [row.Entity, 'author', row.Author] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
-      row.Podcast ? [row.Entity, 'podcast', row.Podcast.toLowerCase()] : null,
-      row.Podcast ? [row.Podcast.toLowerCase(), 'name', row.Podcast] : null,
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row.Podcast ? [row.Podcast, 'name', row.Podcast] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
@@ -609,14 +614,15 @@ function convertHealthOriginalPodcasts(
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
       row['about'] ? [row.Entity, 'author', row['about']] : null,
+
+      // If the authoredby Person doesn't exist yet we need to create them
       row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null, // Dr. Andrew Huberman
 
       // If the contributedby Person doesn't exist yet we need to create them
-      row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by'].toLowerCase()] : null,
-      row['Contributed by'] ? [row['Contributed by'].toLowerCase(), 'type', 'person'] : null,
-      row['Contributed by'] ? [row['Contributed by'].toLowerCase(), 'name', row['Contributed by']] : null,
-      row.Podcast ? [row.Entity, 'podcast', row.Podcast.toLowerCase()] : null,
-      row.Podcast ? [row.Podcast.toLowerCase(), 'name', row.Podcast] : null,
+      row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by']] : null,
+
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row.Podcast ? [row.Podcast, 'name', row.Podcast] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
@@ -701,12 +707,12 @@ function convertHealthArticles(
 
   function toEavRow(row: HealthDataSourceRow): EavRow[] {
     return [
-      row.Entity ? [row.Entity, 'name', row.Entity] : null, // The Entity and the name are the same
+      row.Entity ? [row.Entity, 'name', row.Entity] : null,
       row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
-      row.Author ? [row.Entity, 'author', row.Author.toLowerCase()] : null,
-      row.Author ? [row.Author.toLowerCase(), 'name', row.Author] : null,
+      row.Author ? [row.Entity, 'author', row.Author] : null,
+      row.Author ? [row.Author, 'name', row.Author] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
