@@ -65,7 +65,9 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
     const mappedEntityId = entityIdMap[entityId];
     const mappedAttributeId = entityIdMap[attributeId];
     const mappedValue: Value =
-      value in entityIdMap
+      // If the attribute is name we want to set the value to the name itself and not the mapped id
+      // This is due to how we import references on other datasheets by name instead of id.
+      value in entityIdMap && mappedAttributeId !== 'name'
         ? { type: 'entity', id: entityIdMap[value] }
         : { type: 'string', id: createId(value), value };
 
@@ -86,7 +88,7 @@ export function convertHealthFacts(
 ) {
   // Since we can have many columns with the same name (many-to-many relationships) we can't use a key-value type
   // as the parser will override the previous key's value. Since this is kinda crappy for TS consumption we can
-  // used named tuples to make it a bit nicer. If you hover over an item in the array you'll see the column names.
+  // use named tuples to make it a bit nicer. If you hover over an item in the array you'll see the column names.
   // e.g., row[0] will show ID as the type name.
   type HealthDataFactRow = [
     ID: string, // 0
@@ -226,6 +228,61 @@ export function convertHealthFacts(
   // Since we aren't using header rows the parser parses the first row as the headers.
   // We can skip the headers row. There's also an additional row of instructions we can skip.
   const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+  return [...attributeRows, ...eavRows];
+}
+
+function convertHealthPodcastNotes(
+  csv: string,
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Entity: string;
+    Types: string;
+    Name: string;
+    Author: string;
+    URL: string;
+    'Publish date': string;
+    Podcast: string;
+    'Podcast episode': string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  // TODO: Will we need to dedupe these if we've already created the attribute locally?
+  // We may want to do an initial pass where we create all of the attributes.
+  const attributeRows: EavRow[] = [
+    ['author', 'type', 'attribute'],
+    ['author', 'name', 'Author'],
+    ['url', 'type', 'attribute'],
+    ['url', 'name', 'URL'],
+    ['publish date', 'type', 'attribute'],
+    ['publish date', 'name', 'Publish date'],
+    ['podcast', 'type', 'attribute'],
+    ['podcast', 'name', 'Podcast'],
+    ['podcast episode', 'type', 'attribute'],
+    ['podcast episode', 'name', 'Podcast episode'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      row.Entity ? [row.Entity, 'name', row.Name] : null, // The Entity and the name are the same
+      row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+      row.Author ? [row.Entity, 'author', row.Author] : null,
+      row.URL ? [row.Entity, 'url', row.URL] : null,
+      row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row['Podcast episode'] ? [row.Entity, 'podcast episode', row['Podcast episode']] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+
   return [...attributeRows, ...eavRows];
 }
 
@@ -369,19 +426,31 @@ export function convertLegacyHealthData(
 }
 
 export async function importCSVFile(
-  file: File,
+  files: File[],
   space: string,
   createId: CreateUuid = createEntityId
 ): Promise<Triple[]> {
-  const csv = await readFileAsText(file);
-  switch (file.name) {
-    case 'healthdata.csv':
-      return eavRowsToTriples(convertLegacyHealthData(csv), space, createId);
-    case 'healthdata-facts.csv':
-      return eavRowsToTriples(convertHealthFacts(csv), space, createId);
-    default:
-      return eavRowsToTriples(readCSV(csv), space, createId);
+  let eavs: EavRow[] = [];
+
+  for (const file of files) {
+    const csv = await readFileAsText(file);
+    switch (file.name) {
+      case 'healthdata.csv':
+        eavs = [...eavs, ...convertLegacyHealthData(csv)];
+        break;
+      case 'healthdata-facts.csv':
+        eavs = [...eavs, ...convertHealthFacts(csv)];
+        break;
+      case 'healthdata-podcast-notes.csv':
+        eavs = [...eavs, ...convertHealthPodcastNotes(csv)];
+        break;
+      default:
+        eavs = [...eavs, ...readCSV(csv)];
+        break;
+    }
   }
+
+  return eavRowsToTriples(eavs, space, createId);
 }
 
 function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[][] {

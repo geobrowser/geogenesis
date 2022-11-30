@@ -23,7 +23,7 @@ function deterministicUuid(value: string) {
 describe('CSV Import', () => {
   it('imports csv', async () => {
     const file = readMockFile('simple.csv');
-    const triples = await importCSVFile(file, 's', deterministicUuid);
+    const triples = await importCSVFile([file], 's', deterministicUuid);
 
     expect(triples).toMatchSnapshot();
   });

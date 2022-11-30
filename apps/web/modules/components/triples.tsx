@@ -21,6 +21,7 @@ import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { Search } from '../design-system/icons/search';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
+import { getFilesFromFileList } from '../utils';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
 
@@ -193,8 +194,8 @@ function Triples({ spaceId }: Props) {
     tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
   };
 
-  const onImport = async (file: File) => {
-    const triples = await importCSVFile(file, spaceId);
+  const onImport = async (files: FileList) => {
+    const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
     tripleStore.create(triples);
   };
 
@@ -230,10 +231,9 @@ function Triples({ spaceId }: Props) {
                     <FileImport
                       type="file"
                       accept=".csv"
+                      multiple={true}
                       onChange={event => {
-                        for (let file of event.target.files ?? []) {
-                          onImport(file);
-                        }
+                        onImport(event.target.files ?? []);
                       }}
                     />
                   </Button>
