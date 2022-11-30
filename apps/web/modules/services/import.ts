@@ -58,8 +58,6 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   // Ensure entity ids are either valid uuids or builtins
   const entityIdMap = Object.fromEntries([...entityIds].map(id => [id, isValidEntityId(id) ? id : createId(id)]));
 
-  console.log('entityIdMap', entityIdMap);
-
   // Create triples, attempting to detect entity references
   const triples = rows.map((row): Triple => {
     const [entityId, attributeId, value] = row;
@@ -350,8 +348,6 @@ export function convertHealthEntities(
   const results = parseCSV<HealthDataFactRow>(csv);
 
   const attributeRows: EavRow[] = [
-    // ['text', 'type', 'attribute'],
-    // ['text', 'name', 'Text'],
     ['description', 'type', 'attribute'],
     ['description', 'name', 'Description'],
     ['belongs to', 'type', 'attribute'],
@@ -613,8 +609,12 @@ function convertHealthOriginalPodcasts(
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
       row['about'] ? [row.Entity, 'author', row['about']] : null,
-      row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null,
-      row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by']] : null,
+      row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null, // Dr. Andrew Huberman
+
+      // If the contributedby Person doesn't exist yet we need to create them
+      row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by'].toLowerCase()] : null,
+      row['Contributed by'] ? [row['Contributed by'].toLowerCase(), 'type', 'person'] : null,
+      row['Contributed by'] ? [row['Contributed by'].toLowerCase(), 'name', row['Contributed by']] : null,
       row.Podcast ? [row.Entity, 'podcast', row.Podcast.toLowerCase()] : null,
       row.Podcast ? [row.Podcast.toLowerCase(), 'name', row.Podcast] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
@@ -657,7 +657,7 @@ function convertHealthPeople(
 
   function toEavRow(row: HealthDataSourceRow): EavRow[] {
     return [
-      row.Entity ? [row.Entity, 'name', row.Name] : null, // The Entity and the name are the same
+      row.Entity ? [row.Entity, 'name', row.Name] : null, // Dr. Andrew Huberman <> Andrew Huberman
       row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
