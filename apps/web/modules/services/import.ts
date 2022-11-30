@@ -382,6 +382,50 @@ function convertHealthPeople(
   return [...attributeRows, ...eavRows];
 }
 
+function convertHealthArticles(
+  csv: string,
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Entity: string;
+    Types: string;
+    Author: string;
+    URL: string;
+    'Publish date': string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['author', 'type', 'attribute'],
+    ['author', 'name', 'Author'],
+    ['url', 'type', 'attribute'],
+    ['url', 'name', 'URL'],
+    ['publish date', 'type', 'attribute'],
+    ['publish date', 'name', 'Publish date'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      row.Entity ? [row.Entity, 'name', row.Entity] : null, // The Entity and the name are the same
+      row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+      row.Author ? [row.Entity, 'author', row.Author] : null,
+      row.URL ? [row.Entity, 'url', row.URL] : null,
+      row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
 export function convertLegacyHealthData(
   csv: string,
   { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
@@ -545,6 +589,9 @@ export async function importCSVFile(
         break;
       case 'healthdata-people.csv':
         eavs = [...eavs, ...convertHealthPeople(csv)];
+        break;
+      case 'healthdata-articles.csv':
+        eavs = [...eavs, ...convertHealthArticles(csv)];
         break;
       default:
         eavs = [...eavs, ...readCSV(csv)];
