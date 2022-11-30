@@ -90,15 +90,15 @@ export function convertHealthFacts(
   // e.g., row[0] will show ID as the type name.
   type HealthDataFactRow = [
     ID: string, // 0
-    Text: string,
-    Source: string,
-    Publishing_source: string,
+    Above_Row: string,
+    Topic_ID: string,
+    Name: string,
+    Author: string,
+    Source: string, // 5
     Publish_date: string,
-    Types: string, // 5
     Types: string,
     Types: string,
-    Is_about: string,
-    Is_about: string,
+    Types: string,
     Is_about: string, // 10
     Is_about: string,
     Is_about: string,
@@ -109,44 +109,42 @@ export function convertHealthFacts(
     Is_about: string,
     Is_about: string,
     Is_about: string,
-    Relevant_age: string, // 20
+    Is_about: string, // 20
+    Is_about: string,
     Relevant_age: string,
     Relevant_age: string,
-    Natural_Medicines_Comprehensive_Database_effectiveness_rating: string,
+    Relevant_age: string,
+    NCMD_Rating: string, // 25
     Importance: string,
-    Unit_of_measurement: string, // 25
+    Unit_of_measurement: string,
     Unit_of_measurement: string,
     Sourced_from: string,
+    Sourced_from: string, // 30
     Sourced_from: string,
-    Sourced_from: string,
-    Relevant_sex: string, // 30
+    Relevant_sex: string,
     Relevant_sex: string,
     Relevant_age: string,
-    Amount: string,
-    Article_section: string // 34
+    Amount: string, // 35
+    Article_section: string // 36
   ];
 
   const results = parseCSV<HealthDataFactRow>(csv);
 
   const attributeRows: EavRow[] = [
-    ['text', 'type', 'attribute'],
-    ['text', 'name', 'Text'],
+    // ['text', 'type', 'attribute'],
+    // ['text', 'name', 'Text'],
+    ['author', 'type', 'attribute'],
+    ['author', 'name', 'Author'],
     ['source', 'type', 'attribute'],
     ['source', 'name', 'Source'],
-    ['publishing source', 'type', 'attribute'],
-    ['publishing source', 'name', 'Publishing source'],
     ['publish date', 'type', 'attribute'],
     ['publish date', 'name', 'Publish date'],
     ['is about', 'type', 'attribute'],
     ['is about', 'name', 'Is about'],
     ['relevant age', 'type', 'attribute'],
     ['relevant age', 'name', 'Relevant age'],
-    ['natural medicines comprehensive database effectiveness rating', 'type', 'attribute'],
-    [
-      'natural medicines comprehensive database effectiveness rating',
-      'name',
-      'Natural Medicines Comprehensive Database effectiveness rating',
-    ],
+    ['ncmd rating', 'type', 'attribute'],
+    ['ncmd rating', 'name', 'NCMD Rating'],
     ['importance', 'type', 'attribute'],
     ['importance', 'name', 'Importance'],
     ['unit of measurement', 'type', 'attribute'],
@@ -162,11 +160,9 @@ export function convertHealthFacts(
   ];
 
   function toEavRow(row: HealthDataFactRow): EavRow[] {
-    const typesTuples = [{ name: row[5] }, { name: row[6] }, { name: row[7] }].filter(({ name }) => name !== '');
+    const typesTuples = [{ name: row[7] }, { name: row[8] }, { name: row[9] }].filter(({ name }) => name !== '');
 
     const isAboutTuples = [
-      { name: row[8] },
-      { name: row[9] },
       { name: row[10] },
       { name: row[11] },
       { name: row[12] },
@@ -177,28 +173,30 @@ export function convertHealthFacts(
       { name: row[17] },
       { name: row[18] },
       { name: row[19] },
+      { name: row[20] },
+      { name: row[21] },
     ].filter(({ name }) => name !== '');
 
-    const relevantAgeTuples = [{ name: row[20] }, { name: row[21] }, { name: row[22] }, { name: row[32] }].filter(
+    const relevantAgeTuples = [{ name: row[21] }, { name: row[22] }, { name: row[23] }, { name: row[34] }].filter(
       ({ name }) => name !== ''
     );
 
-    const unitOfMeasurementTuples = [{ name: row[25] }, { name: row[26] }].filter(({ name }) => name !== '');
-    const sourcedFromTuples = [{ name: row[27] }, { name: row[28] }, { name: row[29] }].filter(
+    const unitOfMeasurementTuples = [{ name: row[27] }, { name: row[28] }].filter(({ name }) => name !== '');
+    const sourcedFromTuples = [{ name: row[29] }, { name: row[30] }, { name: row[31] }].filter(
       ({ name }) => name !== ''
     );
 
-    const relevantSexTuples = [{ name: row[30] }, { name: row[31] }].filter(({ name }) => name !== '');
+    const relevantSexTuples = [{ name: row[32] }, { name: row[33] }].filter(({ name }) => name !== '');
 
     return [
-      row[1] ? [row[0], 'name', row[1]] : null,
-      row[2] ? [row[0], 'source', row[2]] : null,
-      row[3] ? [row[0], 'publishing source', row[3]] : null,
-      row[4] ? [row[0], 'publish date', row[4]] : null,
-      row[23] ? [row[0], 'natural medicines comprehensive database effectiveness rating', row[23]] : null,
-      row[24] ? [row[0], 'importance', row[24]] : null,
-      row[33] ? [row[0], 'amount', row[33]] : null,
-      row[34] ? [row[0], 'article section', row[34]] : null,
+      row[3] ? [row[0], 'name', row[3]] : null,
+      row[4] ? [row[0], 'author', row[4]] : null,
+      row[5] ? [row[0], 'source', row[5]] : null,
+      row[6] ? [row[0], 'publish date', row[6]] : null,
+      row[25] ? [row[0], 'ncmd rating', row[25]] : null,
+      row[26] ? [row[0], 'importance', row[26]] : null,
+      row[35] ? [row[0], 'amount', row[35]] : null,
+      row[36] ? [row[0], 'article section', row[36]] : null,
       ...typesTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
@@ -226,8 +224,8 @@ export function convertHealthFacts(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  // We can skip the headers row.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  // We can skip the headers row. There's also an additional row of instructions we can skip.
+  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
   return [...attributeRows, ...eavRows];
 }
 
