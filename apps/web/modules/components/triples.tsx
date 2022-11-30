@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { FilterDialog } from '~/modules/components/filter/dialog';
@@ -286,44 +286,41 @@ function Triples({ spaceId }: Props) {
 
         <Spacer height={12} />
 
-        {tripleStore.hasNextPage ||
-          (true && (
-            <PageNumberContainer>
-              {tripleStore.pageNumber > 1 && (
+        <PageNumberContainer>
+          {tripleStore.pageNumber > 1 && (
+            <>
+              <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+              {tripleStore.pageNumber > 2 ? (
                 <>
-                  <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
-                  {tripleStore.pageNumber > 2 ? (
-                    <>
-                      <Spacer width={16} />
-                      <Text color="grey-03" variant="metadataMedium">
-                        ...
-                      </Text>
-                      <Spacer width={16} />
-                    </>
-                  ) : (
-                    <Spacer width={4} />
-                  )}
+                  <Spacer width={16} />
+                  <Text color="grey-03" variant="metadataMedium">
+                    ...
+                  </Text>
+                  <Spacer width={16} />
                 </>
+              ) : (
+                <Spacer width={4} />
               )}
-              {tripleStore.hasPreviousPage && (
-                <>
-                  <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
-                  <Spacer width={4} />
-                </>
-              )}
-              <PageNumber isActive number={tripleStore.pageNumber + 1} />
-              {tripleStore.hasNextPage && (
-                <>
-                  <Spacer width={4} />
-                  <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
-                </>
-              )}
-              <Spacer width={32} />
-              <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
-              <Spacer width={12} />
-              <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
-            </PageNumberContainer>
-          ))}
+            </>
+          )}
+          {tripleStore.hasPreviousPage && (
+            <>
+              <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+              <Spacer width={4} />
+            </>
+          )}
+          <PageNumber isActive number={tripleStore.pageNumber + 1} />
+          {tripleStore.hasNextPage && (
+            <>
+              <Spacer width={4} />
+              <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+            </>
+          )}
+          <Spacer width={32} />
+          <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+          <Spacer width={12} />
+          <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+        </PageNumberContainer>
       </motion.div>
 
       <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
