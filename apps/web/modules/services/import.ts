@@ -593,6 +593,8 @@ function convertHealthOriginalPodcasts(
   const attributeRows: EavRow[] = [
     ['about', 'type', 'attribute'],
     ['about', 'name', 'about'],
+    ['authored by', 'type', 'attribute'],
+    ['authored by', 'name', 'Authored by'],
     ['contributed by', 'type', 'attribute'],
     ['contributed by', 'name', 'Contributed by'],
     ['podcast', 'type', 'attribute'],
@@ -610,6 +612,7 @@ function convertHealthOriginalPodcasts(
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
       row['about'] ? [row.Entity, 'author', row['about']] : null,
+      row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null,
       row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by']] : null,
       row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
