@@ -58,6 +58,8 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   // Ensure entity ids are either valid uuids or builtins
   const entityIdMap = Object.fromEntries([...entityIds].map(id => [id, isValidEntityId(id) ? id : createId(id)]));
 
+  console.log('entityIdMap', entityIdMap);
+
   // Create triples, attempting to detect entity references
   const triples = rows.map((row): Triple => {
     const [entityId, attributeId, value] = row;
@@ -127,14 +129,26 @@ export function convertHealthFacts(
     Relevant_sex: string,
     Relevant_age: string,
     Amount: string, // 35
-    Article_section: string // 36
+    Article_section: string,
+    Benefits: string,
+    Benefits: string,
+    Benefits: string,
+    Benefits: string, // 40
+    Benefits: string,
+    Benefits: string,
+    Tips: string,
+    Tips: string,
+    Tips: string, // 45
+    Tips: string,
+    Tips: string,
+    Tips: string // 48
   ];
 
   const results = parseCSV<HealthDataFactRow>(csv);
 
   const attributeRows: EavRow[] = [
-    // ['text', 'type', 'attribute'],
-    // ['text', 'name', 'Text'],
+    ['topic', 'type', 'attribute'],
+    ['topic', 'name', 'Topic'],
     ['author', 'type', 'attribute'],
     ['author', 'name', 'Author'],
     ['source', 'type', 'attribute'],
@@ -159,6 +173,10 @@ export function convertHealthFacts(
     ['amount', 'name', 'Amount'],
     ['article section', 'type', 'attribute'],
     ['article section', 'name', 'Article section'],
+    ['tips', 'type', 'attribute'],
+    ['benefits', 'type', 'attribute'],
+    ['benefits', 'name', 'Benefits'],
+    ['tips', 'name', 'Tips'],
   ];
 
   function toEavRow(row: HealthDataFactRow): EavRow[] {
@@ -190,7 +208,26 @@ export function convertHealthFacts(
 
     const relevantSexTuples = [{ name: row[32] }, { name: row[33] }].filter(({ name }) => name !== '');
 
+    const benefitsTuples = [
+      { name: row[37] },
+      { name: row[38] },
+      { name: row[39] },
+      { name: row[40] },
+      { name: row[41] },
+      { name: row[42] },
+    ].filter(({ name }) => name !== '');
+
+    const tipsTuples = [
+      { name: row[43] },
+      { name: row[44] },
+      { name: row[45] },
+      { name: row[46] },
+      { name: row[47] },
+      { name: row[48] },
+    ].filter(({ name }) => name !== '');
+
     return [
+      row[2] ? [row[0], 'topic', [row[2]]] : null,
       row[3] ? [row[0], 'name', row[3]] : null,
       row[4] ? [row[0], 'author', row[4]] : null,
       row[5] ? [row[0], 'source', row[5]] : null,
@@ -222,6 +259,14 @@ export function convertHealthFacts(
       ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
+      ...benefitsTuples.map(({ name }): EavRow => [row[0], 'benefits', name.toLowerCase()]),
+      ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
+      ...tipsTuples.map(({ name }): EavRow => [row[0], 'tips', name.toLowerCase()]),
+      ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
