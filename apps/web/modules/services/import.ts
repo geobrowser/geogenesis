@@ -559,8 +559,8 @@ function convertHealthPodcastNotes(
       row.Author ? [row.Entity, 'author', row.Author] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
-      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
-      row['Podcast episode'] ? [row.Entity, 'podcast episode', row['Podcast episode']] : null,
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast.toLowerCase()] : null,
+      row.Podcast ? [row.Podcast.toLowerCase(), 'name', row.Podcast] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
@@ -581,6 +581,7 @@ function convertHealthOriginalPodcasts(
     Entity: string;
     Types: string;
     about: string;
+    'Authored by': string;
     'Contributed by': string;
     Name: string;
     Podcast: string;
@@ -614,7 +615,8 @@ function convertHealthOriginalPodcasts(
       row['about'] ? [row.Entity, 'author', row['about']] : null,
       row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null,
       row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by']] : null,
-      row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row.Podcast ? [row.Entity, 'podcast', row.Podcast.toLowerCase()] : null,
+      row.Podcast ? [row.Podcast.toLowerCase(), 'name', row.Podcast] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
@@ -703,7 +705,8 @@ function convertHealthArticles(
       row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
-      row.Author ? [row.Entity, 'author', row.Author] : null,
+      row.Author ? [row.Entity, 'author', row.Author.toLowerCase()] : null,
+      row.Author ? [row.Author.toLowerCase(), 'name', row.Author] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
