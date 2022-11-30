@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { themeVars } from '@rainbow-me/rainbowkit/dist/css/sprinkles.css';
 import React, { ForwardedRef } from 'react';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';

@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import debounce from 'lodash.debounce';
 import { Button, StyledLabel } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
@@ -50,10 +51,9 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
       <Spacer width={12} />
       <InputWrapper>
         <Input
-          value={filterClause.value}
           onChange={e => {
             const newFilterClause: FilterClause = { ...filterClause, value: e.target.value };
-            onChange(newFilterClause);
+            debounce(onChange, 500)(newFilterClause);
           }}
         />
       </InputWrapper>

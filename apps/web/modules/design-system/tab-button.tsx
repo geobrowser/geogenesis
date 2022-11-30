@@ -5,7 +5,7 @@ import { Entity } from './icons/entity';
 import { Facts } from './icons/facts';
 import { Target } from './icons/target';
 import { Spacer } from './spacer';
-import { ColorName, colors } from './theme/colors';
+import { ColorName } from './theme/colors';
 
 const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) => ({
   ...theme.typography.button,

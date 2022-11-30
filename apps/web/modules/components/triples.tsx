@@ -1,13 +1,10 @@
 import styled from '@emotion/styled';
-import { useRect } from '@radix-ui/react-use-rect';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import React, { useState } from 'react';
-import { FilterDialog } from '~/modules/components/filter/dialog';
+import { useState } from 'react';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { Button, IconButton, SquareButton } from '~/modules/design-system/button';
+import { Button, SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
-import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
@@ -18,12 +15,12 @@ import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
-import { Search } from '../design-system/icons/search';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { getFilesFromFileList } from '../utils';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
+import { TriplesInput } from './triples-input';
 
 const TableHeader = styled.div({
   display: 'flex',
@@ -118,59 +115,6 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
   );
 }
 
-const InputContainer = styled.div({
-  width: '100%',
-  display: 'flex',
-  position: 'relative',
-});
-
-const TriplesInput = styled(Input)(props => ({
-  width: '100%',
-  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
-  paddingLeft: props.theme.space * 10,
-}));
-
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 3,
-  top: props.theme.space * 2.5,
-  zIndex: 100,
-}));
-
-const FilterIconContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  backgroundColor: props.theme.colors.white,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderLeft: 'none',
-}));
-
-const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
-  cursor: 'pointer',
-  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
-  borderLeft: 'none',
-  transition: 'colors 0.15s ease-in-out',
-
-  '&:hover': {
-    backgroundColor: props.theme.colors['grey-01'],
-  },
-
-  button: {
-    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-
-    '&:active': {
-      color: props.theme.colors.text,
-      outlineColor: props.theme.colors.ctaPrimary,
-    },
-
-    '&:focus': {
-      color: props.theme.colors.text,
-      outlineColor: props.theme.colors.ctaPrimary,
-    },
-  },
-}));
-
 const SpaceImage = styled.img({
   width: 56,
   height: 56,
@@ -183,8 +127,6 @@ function Triples({ spaceId }: Props) {
   const { isEditor, isAdmin } = useAccessControl(spaceId);
 
   const tripleStore = useTriples();
-  const inputContainerRef = React.useRef<HTMLDivElement>(null);
-  const inputRect = useRect(inputContainerRef.current);
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
@@ -204,6 +146,8 @@ function Triples({ spaceId }: Props) {
   const spaceName = space?.attributes.name ?? ZERO_WIDTH_SPACE;
   const spaceImage =
     space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF';
+
+  console.log(tripleStore.query);
 
   return (
     <PageContainer>
@@ -259,26 +203,10 @@ function Triples({ spaceId }: Props) {
       <Spacer height={showPredefinedQueries ? 21.5 : 12} />
 
       <motion.div layout="position">
-        <InputContainer ref={inputContainerRef}>
-          <SearchIconContainer>
-            <Search />
-          </SearchIconContainer>
-          <TriplesInput
-            placeholder="Search facts..."
-            onChange={e => tripleStore.setQuery(e.target.value)}
-            value={tripleStore.query}
-          />
-          <FilterIconContainer>
-            <FilterDialog
-              inputContainerWidth={inputRect?.width || 0}
-              filterState={tripleStore.filterState}
-              setFilterState={tripleStore.setFilterState}
-            />
-          </FilterIconContainer>
-          <PresetIconContainer showPredefinedQueries={showPredefinedQueries}>
-            <IconButton onClick={() => setShowPredefinedQueries(!showPredefinedQueries)} icon="preset" />
-          </PresetIconContainer>
-        </InputContainer>
+        <TriplesInput
+          showPredefinedQueries={showPredefinedQueries}
+          onShowPredefinedQueriesChange={setShowPredefinedQueries}
+        />
 
         <Spacer height={12} />
 
