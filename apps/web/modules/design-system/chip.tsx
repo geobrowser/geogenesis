@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
+import Link from 'next/link';
 
-export const Chip = styled.a(props => ({
+const StyledChip = styled.a(props => ({
   ...props.theme.typography.metadataMedium,
   borderRadius: props.theme.radius,
   boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
@@ -16,3 +17,16 @@ export const Chip = styled.a(props => ({
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
   },
 }));
+
+interface Props {
+  href: string;
+  children: React.ReactNode;
+}
+
+export function Chip({ href, children }: Props) {
+  return (
+    <Link href={href} passHref>
+      <StyledChip>{children}</StyledChip>
+    </Link>
+  );
+}
