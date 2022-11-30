@@ -228,11 +228,6 @@ export function convertHealthFacts(
       row[2] ? [row[0], 'topic', [row[2]]] : null,
       row[3] ? [row[0], 'name', row[3]] : null,
       row[4] ? [row[0], 'author', row[4]] : null,
-
-      // We shouldn't have to create a Person here since we create them later
-      row[4] ? [row[4], 'type', 'person'] : null,
-      row[4] ? [row[4], 'name', row[4]] : null,
-
       row[5] ? [row[0], 'source', row[5]] : null,
       row[6] ? [row[0], 'publish date', row[6]] : null,
       row[25] ? [row[0], 'ncmd rating', row[25]] : null,
@@ -566,7 +561,7 @@ function convertHealthPodcastNotes(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -629,7 +624,7 @@ function convertHealthOriginalPodcasts(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -674,7 +669,7 @@ function convertHealthPeople(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -719,7 +714,7 @@ function convertHealthArticles(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
