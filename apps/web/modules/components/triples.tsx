@@ -233,7 +233,7 @@ function Triples({ spaceId }: Props) {
                       accept=".csv"
                       multiple={true}
                       onChange={event => {
-                        onImport(event.target.files ?? []);
+                        onImport(event.target.files ?? new FileList());
                       }}
                     />
                   </Button>
