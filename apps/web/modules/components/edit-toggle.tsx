@@ -22,7 +22,7 @@ export function EditToggle({ spaceId }: Props) {
       label: 'Edit mode',
       value: 'edit-mode',
       disabled: !isEditor,
-      onClick: () => setEditable(true),
+      onClick: () => isEditor && setEditable(true),
     },
   ];
 

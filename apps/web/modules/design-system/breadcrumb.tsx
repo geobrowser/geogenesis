@@ -10,6 +10,16 @@ const BreadcrumbLink = styled.a(props => ({
   alignItems: 'center',
   cursor: 'pointer',
   padding: '1px 0', // creates space above the image and text to make focus state look better
+
+  span: {
+    transition: 'color 0.15s ease-in-out',
+  },
+
+  '&:hover': {
+    span: {
+      color: props.theme.colors.text,
+    },
+  },
 }));
 
 const Image = styled.img(props => ({

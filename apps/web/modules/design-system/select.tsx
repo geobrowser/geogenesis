@@ -1,3 +1,4 @@
+import isPropValid from '@emotion/is-prop-valid';
 import styled from '@emotion/styled';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { ButtonVariant } from './button';
@@ -7,7 +8,7 @@ import { Spacer } from './spacer';
 const StyledTrigger = styled(SelectPrimitive.SelectTrigger)<{ variant: ButtonVariant }>(props => ({
   all: 'unset',
   ...props.theme.typography.button,
-  color: props.variant === 'secondary' ? props.theme.colors.ctaPrimary : props.theme.colors.white,
+  color: props.variant === 'secondary' ? props.theme.colors.text : props.theme.colors.white,
   flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
@@ -16,47 +17,59 @@ const StyledTrigger = styled(SelectPrimitive.SelectTrigger)<{ variant: ButtonVar
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
   gap: 5,
   backgroundColor: props.variant === 'secondary' ? props.theme.colors.white : props.theme.colors.text,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  boxShadow: `0px 1px 2px #F0F0F0`,
+  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
 
-  '&[data-placeholder]': { color: props.theme.colors.ctaPrimary },
+  '&:hover': {
+    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
+    cursor: 'pointer',
+  },
+
+  '&:focus': {
+    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
+    outline: 'none',
+  },
+
+  '&[data-placeholder]': { color: props.theme.colors.text },
 }));
 
 const StyledContent = styled(SelectPrimitive.Content)(props => ({
   overflow: 'hidden',
-  backgroundColor: 'white',
+  backgroundColor: props.theme.colors.white,
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  zIndex: 2,
 }));
 
 const StyledViewport = styled(SelectPrimitive.Viewport)(props => ({
   overflow: 'hidden',
-  padding: props.theme.space,
   borderRadius: props.theme.radius,
 }));
 
-const StyledItem = styled(SelectPrimitive.Item)(props => ({
-  ...props.theme.typography.button,
-  all: 'unset',
-  borderRadius: 4,
-  display: 'flex',
-  alignItems: 'center',
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  position: 'relative',
-  userSelect: 'none',
+const StyledItem = styled(SelectPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{ isLast: boolean }>(
+  props => ({
+    all: 'unset',
+    ...props.theme.typography.button,
+    color: props.theme.colors['grey-04'],
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
 
-  '&[data-highlighted]': {
-    backgroundColor: props.theme.colors.ctaPrimary,
-    color: props.theme.colors.white,
-  },
-}));
+    userSelect: 'none',
 
-const StyledItemText = styled(SelectPrimitive.SelectItemText)(props => ({
-  ...props.theme.typography.button,
-  color: props.theme.colors.ctaHover,
-}));
+    ...(!props.isLast && {
+      borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
+    }),
+
+    '&[data-highlighted]': {
+      cursor: 'pointer',
+      backgroundColor: props.theme.colors.bg,
+      color: props.theme.colors.text,
+    },
+  })
+);
 
 interface Props {
   value: string;
@@ -76,9 +89,9 @@ export const Select = ({ value, onChange, options, variant = 'secondary' }: Prop
       <StyledContent>
         <StyledViewport>
           <SelectPrimitive.Group>
-            {options.map(option => (
-              <StyledItem key={option.value} value={option.value}>
-                <StyledItemText>{option.label}</StyledItemText>
+            {options.map((option, index) => (
+              <StyledItem isLast={index === options.length - 1} key={option.value} value={option.value}>
+                <SelectPrimitive.SelectItemText>{option.label}</SelectPrimitive.SelectItemText>
               </StyledItem>
             ))}
           </SelectPrimitive.Group>

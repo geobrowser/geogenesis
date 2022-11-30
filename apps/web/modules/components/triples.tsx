@@ -21,6 +21,7 @@ import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { Search } from '../design-system/icons/search';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
+import { getFilesFromFileList } from '../utils';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
 
@@ -144,11 +145,16 @@ const FilterIconContainer = styled.div(props => ({
   borderLeft: 'none',
 }));
 
-const PresetIconContainer = styled(FilterIconContainer)(props => ({
+const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
   cursor: 'pointer',
   borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  backgroundColor: props.theme.colors['grey-01'],
+  backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
   borderLeft: 'none',
+  transition: 'colors 0.15s ease-in-out',
+
+  '&:hover': {
+    backgroundColor: props.theme.colors['grey-01'],
+  },
 
   button: {
     padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
@@ -188,8 +194,8 @@ function Triples({ spaceId }: Props) {
     tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
   };
 
-  const onImport = async (file: File) => {
-    const triples = await importCSVFile(file, spaceId);
+  const onImport = async (files: FileList) => {
+    const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
     tripleStore.create(triples);
   };
 
@@ -225,10 +231,9 @@ function Triples({ spaceId }: Props) {
                     <FileImport
                       type="file"
                       accept=".csv"
+                      multiple={true}
                       onChange={event => {
-                        for (let file of event.target.files ?? []) {
-                          onImport(file);
-                        }
+                        onImport(event.target.files ?? new FileList());
                       }}
                     />
                   </Button>
@@ -270,7 +275,7 @@ function Triples({ spaceId }: Props) {
               setFilterState={tripleStore.setFilterState}
             />
           </FilterIconContainer>
-          <PresetIconContainer>
+          <PresetIconContainer showPredefinedQueries={showPredefinedQueries}>
             <IconButton onClick={() => setShowPredefinedQueries(!showPredefinedQueries)} icon="preset" />
           </PresetIconContainer>
         </InputContainer>

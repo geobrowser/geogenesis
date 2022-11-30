@@ -397,13 +397,21 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       return acc;
     }, {} as Record<string, EntityGroup>);
 
+  const relatedEntityAttributeNames = relatedEntities.reduce((acc, { entityNames }) => {
+    return { ...acc, ...entityNames };
+  }, {} as EntityNames);
+
   return {
     props: {
       triples: entity.triples,
       id: entityId,
       name: getEntityName(entity.triples) ?? entityId,
       space,
-      entityNames: entity.entityNames,
+      entityNames: {
+        ...entity.entityNames,
+        ...related.entityNames,
+        ...relatedEntityAttributeNames,
+      },
       entityGroups,
       key: entityId,
     },
