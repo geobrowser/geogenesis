@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef, forwardRef, useState } from 'react';
+import { HACKY_COPY_FILL_CLASS_NAME } from '../constants';
 import { Copy } from './icons/copy';
 import { Entity } from './icons/entity';
 import { Facts } from './icons/facts';
@@ -28,6 +29,10 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
   boxShadow: `inset 0 0 0 1px ${theme.colors.text}`,
 
   transition: '150ms all ease-in-out',
+
+  ['.' + HACKY_COPY_FILL_CLASS_NAME]: {
+    fill: theme.colors.bg,
+  },
 
   svg: {
     color: isActive ? theme.colors.white : theme.colors['grey-04'],
@@ -59,6 +64,12 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
   ...(isActive && {
     backgroundColor: theme.colors.text,
     color: theme.colors.white,
+
+    // HACK: The way our copy icon is designed the top "page" in the icon expects a fill color in order
+    // to correctly render. For now we can just set the background color match the button background color.
+    ['.' + HACKY_COPY_FILL_CLASS_NAME]: {
+      fill: theme.colors.text,
+    },
   }),
 }));
 

@@ -1,9 +1,10 @@
 import styled from '@emotion/styled';
+import { motion } from 'framer-motion';
 import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
-import { SmallButton } from '~/modules/design-system/button';
+import { Button, SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
@@ -16,10 +17,12 @@ import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityName, groupBy, navUtils } from '~/modules/utils';
-import { TextButton } from '~/modules/design-system/text-button';
+import { Tick } from '~/modules/design-system/icons/tick';
+import { AnimatePresence } from 'framer-motion';
 
 const Content = styled.div(({ theme }) => ({
   boxShadow: theme.shadows.button,
+  border: `1px solid ${theme.colors['grey-02']}`,
   borderRadius: theme.radius,
   backgroundColor: theme.colors.white,
 }));
@@ -51,34 +54,40 @@ const Entities = styled.div(({ theme }) => ({
 const ToggleGroup = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
-  gap: theme.space * 5,
-  padding: theme.space * 5,
-  borderBottom: `1px solid ${theme.colors['grey-02']}`,
-}));
-
-const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
-  ...theme.typography.button,
-  display: 'flex',
-  alignItems: 'center',
   justifyContent: 'space-between',
   padding: theme.space * 5,
+  borderBottom: `1px solid ${theme.colors['grey-02']}`,
 
-  ...(showBorder && { borderTop: `1px solid ${theme.colors['grey-02']}` }),
-
-  button: {
-    ...theme.typography.button,
-    color: theme.colors['grey-04'],
-
-    ':hover': {
-      color: theme.colors.text,
-    },
+  div: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.space * 2,
   },
 }));
+
+const EntityId = styled.p(props => ({
+  ...props.theme.typography.button,
+  backgroundColor: props.theme.colors['grey-01'],
+  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  borderRadius: props.theme.radius,
+}));
+
+const CopyButton = styled(Button)`
+  display: inline-flex;
+  width: 143px;
+`;
+
+const CopyText = styled(Text)`
+  display: inline-flex;
+  align-items: center;
+`;
+
+const MotionCopyText = motion(CopyText);
 
 export default function EntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
-  const [copyText, setCopyText] = useState<'Copy Entity ID' | 'Copied!'>('Copy Entity ID');
+  const [copyText, setCopyText] = useState<'Copy Entity ID' | 'ID Copied!'>('Copy Entity ID');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
@@ -87,9 +96,12 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   const onCopyEntityId = () => {
     navigator.clipboard.writeText(id);
-    setCopyText('Copied!');
+    setCopyText('ID Copied!');
     setTimeout(() => setCopyText('Copy Entity ID'), 3600);
   };
+
+  // e.g., 48234k...934893
+  const truncatedEntityId = `${id.slice(0, 7)}${id.length > 7 ? '...' : ''}${id.slice(-6)}`;
 
   return (
     <div>
@@ -104,28 +116,53 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
       <Content>
         <ToggleGroup>
-          <TabButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
-            Entity data
-          </TabButton>
+          <div>
+            <TabButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
+              Entity data
+            </TabButton>
 
-          <TabButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
-            Linked by
-          </TabButton>
+            <TabButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
+              Linked by
+            </TabButton>
+          </div>
+
+          <div>
+            <EntityId>{truncatedEntityId}</EntityId>
+            <CopyButton
+              onClick={onCopyEntityId}
+              variant={copyText === 'ID Copied!' ? 'done' : 'secondary'}
+              icon={copyText === 'ID Copied!' ? undefined : 'copy'}
+            >
+              <AnimatePresence mode="wait">
+                {copyText === 'ID Copied!' ? (
+                  <MotionCopyText
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    variant="button"
+                  >
+                    <Tick />
+                    <Spacer width={4} />
+                    {copyText}
+                  </MotionCopyText>
+                ) : (
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                  >
+                    {copyText}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </CopyButton>
+          </div>
         </ToggleGroup>
 
-        {step === 'entity' && (
-          <>
-            {triples.length > 0 && (
-              <Attributes>
-                <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
-              </Attributes>
-            )}
-
-            <IdRow showBorder={triples.length > 0}>
-              <Text variant="button">{id}</Text>
-              <TextButton onClick={copyText === 'Copy Entity ID' ? onCopyEntityId : undefined}>{copyText}</TextButton>
-            </IdRow>
-          </>
+        {step === 'entity' && triples.length > 0 && (
+          <Attributes>
+            <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
+          </Attributes>
         )}
 
         {step === 'related' && (
@@ -215,23 +252,30 @@ const EntityCardContainer = styled.div(({ theme }) => ({
   },
 }));
 
-const EntityCardHeader = styled.header<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+const EntityCardHeader = styled.a<{ showBorder: boolean }>(({ theme, showBorder }) => ({
   display: 'flex',
-  alignItems: 'center',
   justifyContent: 'space-between',
+  verticalAlign: 'top',
+  gap: theme.space * 5,
 
   padding: theme.space * 3,
   ...(showBorder && { borderBottom: `1px solid ${theme.colors['grey-02']}` }),
 
   div: {
     display: 'flex',
-    alignItems: 'center',
-    gap: theme.space * 3,
+    alignItems: 'flex-start',
+    gap: theme.space * 4,
   },
 
   img: {
     borderRadius: theme.radius,
   },
+}));
+
+const IconContainer = styled.div(({ theme }) => ({
+  // HACK: Fix visual alignment when aligning the content to the top. The icon does not
+  // line up visually because of the text line height.
+  marginTop: 6,
 }));
 
 const EntityCardContent = styled.div(({ theme }) => ({
@@ -259,24 +303,24 @@ function EntityCard({
   entityNames: Props['entityNames'];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const groupedTriples = groupBy(entityGroup.triples, t => t.attributeId);
 
   const shouldMaximizeContent = Boolean(isExpanded || entityGroup.description);
 
   return (
     <EntityCardContainer>
       <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-        <a>
-          <EntityCardHeader showBorder={shouldMaximizeContent}>
-            <div>
-              <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
-              <Text as="h2" variant="mediumTitle">
-                {entityGroup.name ?? entityGroup.id}
-              </Text>
-            </div>
+        <EntityCardHeader showBorder={shouldMaximizeContent}>
+          <div>
+            <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
+            <Text as="h2" variant="cardEntityTitle">
+              {entityGroup.name ?? entityGroup.id}
+            </Text>
+          </div>
+          {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
+          <IconContainer>
             <RightArrowDiagonal color="grey-04" />
-          </EntityCardHeader>
-        </a>
+          </IconContainer>
+        </EntityCardHeader>
       </Link>
 
       {shouldMaximizeContent && (

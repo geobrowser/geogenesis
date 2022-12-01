@@ -9,3 +9,5 @@ export const PLACEHOLDER_IMAGES = {
   Health: 'https://images.unsplash.com/photo-1535914254981-b5012eebbd15',
   Values: 'https://images.unsplash.com/photo-1637008336770-b95d637fd5fa',
 };
+
+export const HACKY_COPY_FILL_CLASS_NAME = 'hacky-copy-fill';

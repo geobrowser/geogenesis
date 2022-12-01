@@ -35,6 +35,12 @@ const baseTypography = {
       lineHeight: '1.8125rem',
       fontWeight: WEIGHTS.semibold,
     },
+    cardEntityTitle: {
+      color: colors.light.text,
+      fontSize: '1.3125rem',
+      lineHeight: '1.75rem',
+      fontWeight: WEIGHTS.medium,
+    },
     smallTitle: {
       color: colors.light.text,
       fontSize: '1.1875rem',

@@ -20,7 +20,7 @@ export const colors = {
     'grey-04': '#606060',
     divider: '#F0F0F0',
     orange: '#FFA134',
-    green: '#14D28E',
+    green: '#2ACE9D',
     red: '#FF523A',
   },
 } as const;
