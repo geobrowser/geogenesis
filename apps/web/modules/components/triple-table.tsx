@@ -208,6 +208,7 @@ interface Props {
   update: (triple: Triple, oldTriple: Triple) => void;
   triples: Triple[];
   space: string;
+  entityNames: EntityNames;
 }
 
 // Using a default export here instead of named import to play better with Next's
@@ -216,10 +217,11 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-const TripleTable = memo(function TripleTable({ update, triples, space }: Props) {
+const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-  const { entityNames } = useTriples();
   const { editable } = useEditable();
+
+  console.log('rerendering');
 
   const table = useReactTable({
     data: triples,
@@ -231,7 +233,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 50,
       },
     },
     meta: {

@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import debounce from 'lodash.debounce';
 import { Button, StyledLabel } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';

@@ -208,7 +208,12 @@ function Triples({ spaceId }: Props) {
 
         <Spacer height={12} />
 
-        <TripleTable space={spaceId} triples={tripleStore.triples} update={tripleStore.update} />
+        <TripleTable
+          space={spaceId}
+          triples={tripleStore.triples}
+          entityNames={tripleStore.entityNames}
+          update={tripleStore.update}
+        />
 
         <Spacer height={12} />
 
