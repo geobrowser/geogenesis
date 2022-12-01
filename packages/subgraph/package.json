@@ -10,7 +10,7 @@
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "deploy:testnet": "graph deploy --product hosted-service --network mumbai baiirun/banana",
-    "deploy:production": "graph deploy --product hosted-service --network mumbai baiirun/banana",
+    "deploy:production": "graph deploy --product hosted-service --network matic baiirun/geo",
     "cat": "cat subgraph.yaml",
     "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.staging.thegraph.com/ipfs npm run",
     "local:create": "npm run local create",

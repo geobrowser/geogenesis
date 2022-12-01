@@ -127,14 +127,26 @@ export function convertHealthFacts(
     Relevant_sex: string,
     Relevant_age: string,
     Amount: string, // 35
-    Article_section: string // 36
+    Article_section: string,
+    Benefits: string,
+    Benefits: string,
+    Benefits: string,
+    Benefits: string, // 40
+    Benefits: string,
+    Benefits: string,
+    Tips: string,
+    Tips: string,
+    Tips: string, // 45
+    Tips: string,
+    Tips: string,
+    Tips: string // 48
   ];
 
   const results = parseCSV<HealthDataFactRow>(csv);
 
   const attributeRows: EavRow[] = [
-    // ['text', 'type', 'attribute'],
-    // ['text', 'name', 'Text'],
+    ['topic', 'type', 'attribute'],
+    ['topic', 'name', 'Topic'],
     ['author', 'type', 'attribute'],
     ['author', 'name', 'Author'],
     ['source', 'type', 'attribute'],
@@ -159,6 +171,8 @@ export function convertHealthFacts(
     ['amount', 'name', 'Amount'],
     ['article section', 'type', 'attribute'],
     ['article section', 'name', 'Article section'],
+    ['collections', 'type', 'attribute'],
+    ['collections', 'name', 'Tollections'],
   ];
 
   function toEavRow(row: HealthDataFactRow): EavRow[] {
@@ -190,7 +204,26 @@ export function convertHealthFacts(
 
     const relevantSexTuples = [{ name: row[32] }, { name: row[33] }].filter(({ name }) => name !== '');
 
+    const benefitsTuples = [
+      { name: row[37] },
+      { name: row[38] },
+      { name: row[39] },
+      { name: row[40] },
+      { name: row[41] },
+      { name: row[42] },
+    ].filter(({ name }) => name !== '');
+
+    const tipsTuples = [
+      { name: row[43] },
+      { name: row[44] },
+      { name: row[45] },
+      { name: row[46] },
+      { name: row[47] },
+      { name: row[48] },
+    ].filter(({ name }) => name !== '');
+
     return [
+      row[2] ? [row[0], 'topic', [row[2]]] : null,
       row[3] ? [row[0], 'name', row[3]] : null,
       row[4] ? [row[0], 'author', row[4]] : null,
       row[5] ? [row[0], 'source', row[5]] : null,
@@ -203,25 +236,33 @@ export function convertHealthFacts(
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...typesTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...isAboutTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...isAboutTuples.map(({ name }): EavRow => [row[0], 'is about', name.toLowerCase()]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantAgeTuples.map(({ name }): EavRow => [row[0], 'relevant age', name.toLowerCase()]),
       ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...relevantAgeTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...unitOfMeasurementTuples.map(({ name }): EavRow => [row[0], 'unit of measurement', name.toLowerCase()]),
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...unitOfMeasurementTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...sourcedFromTuples.map(({ name }): EavRow => [row[0], 'sourced from', name.toLowerCase()]),
       ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...sourcedFromTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
 
-      ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'type', name.toLowerCase()]),
+      ...relevantSexTuples.map(({ name }): EavRow => [row[0], 'relevant sex', name.toLowerCase()]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
       ...relevantSexTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
+      ...benefitsTuples.map(({ name }): EavRow => [row[0], 'collections', name.toLowerCase()]),
+      ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...benefitsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+
+      ...tipsTuples.map(({ name }): EavRow => [row[0], 'collections', name.toLowerCase()]),
+      ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...tipsTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
@@ -305,8 +346,6 @@ export function convertHealthEntities(
   const results = parseCSV<HealthDataFactRow>(csv);
 
   const attributeRows: EavRow[] = [
-    // ['text', 'type', 'attribute'],
-    // ['text', 'name', 'Text'],
     ['description', 'type', 'attribute'],
     ['description', 'name', 'Description'],
     ['belongs to', 'type', 'attribute'],
@@ -515,12 +554,12 @@ function convertHealthPodcastNotes(
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
       row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
-      row['Podcast episode'] ? [row.Entity, 'podcast episode', row['Podcast episode']] : null,
+      row.Podcast ? [row.Podcast, 'name', row.Podcast] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -536,6 +575,7 @@ function convertHealthOriginalPodcasts(
     Entity: string;
     Types: string;
     about: string;
+    'Authored by': string;
     'Contributed by': string;
     Name: string;
     Podcast: string;
@@ -548,6 +588,8 @@ function convertHealthOriginalPodcasts(
   const attributeRows: EavRow[] = [
     ['about', 'type', 'attribute'],
     ['about', 'name', 'about'],
+    ['authored by', 'type', 'attribute'],
+    ['authored by', 'name', 'Authored by'],
     ['contributed by', 'type', 'attribute'],
     ['contributed by', 'name', 'Contributed by'],
     ['podcast', 'type', 'attribute'],
@@ -565,15 +607,19 @@ function convertHealthOriginalPodcasts(
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
       row['about'] ? [row.Entity, 'author', row['about']] : null,
+      row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null, // Dr. Andrew Huberman
       row['Contributed by'] ? [row.Entity, 'contributed by', row['Contributed by']] : null,
+
+      // There's nowhere else where we create the podcast entity so let's do it here
       row.Podcast ? [row.Entity, 'podcast', row.Podcast] : null,
+      row.Podcast ? [row.Podcast, 'name', row.Podcast] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -607,7 +653,7 @@ function convertHealthPeople(
 
   function toEavRow(row: HealthDataSourceRow): EavRow[] {
     return [
-      row.Entity ? [row.Entity, 'name', row.Name] : null, // The Entity and the name are the same
+      row.Entity ? [row.Entity, 'name', row.Name] : null, // Dr. Andrew Huberman <> Andrew Huberman
       row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
@@ -618,7 +664,7 @@ function convertHealthPeople(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -651,18 +697,19 @@ function convertHealthArticles(
 
   function toEavRow(row: HealthDataSourceRow): EavRow[] {
     return [
-      row.Entity ? [row.Entity, 'name', row.Entity] : null, // The Entity and the name are the same
+      row.Entity ? [row.Entity, 'name', row.Entity] : null,
       row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
       row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
       row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
       row.Author ? [row.Entity, 'author', row.Author] : null,
+      row.Author ? [row.Author, 'name', row.Author] : null,
       row.URL ? [row.Entity, 'url', row.URL] : null,
       row['Publish date'] ? [row.Entity, 'publish date', row['Publish date']] : null,
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }
@@ -806,6 +853,139 @@ export function convertLegacyHealthData(
   return [...attributeRows, ...(shouldIncludeSections ? sectionEavs : []), ...eavRows];
 }
 
+function convertSanFranciscoData(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = [
+    ID: string,
+    _: string,
+    Text: string,
+    Types: string,
+    Related_to: string,
+    Is_about: string,
+    Is_about: string,
+    Is_about: string,
+    Author: string
+  ];
+
+  const results = parseCSV<HealthDataSourceRow>(csv);
+
+  const attributeRows: EavRow[] = [
+    ['author', 'type', 'attribute'],
+    ['author', 'name', 'Author'],
+    ['is about', 'type', 'attribute'],
+    ['is about', 'name', 'Is about'],
+    ['related to', 'type', 'attribute'],
+    ['related to', 'name', 'Related to'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    const isAboutTuples = [{ name: row[5] }, { name: row[6] }, { name: row[7] }].filter(({ name }) => name !== '');
+
+    return [
+      row[2] ? [row[2], 'name', row[2]] : null,
+      row[3] ? [row[2], 'type', row[3].toLowerCase()] : null,
+      row[3] ? [row[3].toLowerCase(), 'type', 'attribute'] : null,
+      row[3] ? [row[3].toLowerCase(), 'name', row[3]] : null,
+      row[4] ? [row[2], 'related to', [row[4]]] : null,
+      row[4] ? [row[4], 'name', row[4]] : null,
+      row[4] ? [row[4], 'type', 'attribute'] : null,
+      row[8] ? [row[2], 'author', row[8]] : null,
+      row[8] ? [row[8], 'name', row[8]] : null,
+      row[8] ? [row[8], 'type', 'author'] : null,
+
+      ...isAboutTuples.map(({ name }): EavRow => [row[2], 'is about', name.toLowerCase()]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  // Since we aren't using header rows the parser parses the first row as the headers.
+  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
+function convertSanFranciscoEntities(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Entity: string;
+    'Description by AI': string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['description', 'type', 'attribute'],
+    ['description', 'name', 'Description'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      row.Entity ? [row.Entity, 'name', row.Entity] : null,
+      row['Description by AI'] ? [row.Entity, 'description', row['Description by AI']] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
+function convertSanFranciscoSources(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Name: string;
+    Types: string;
+    Url: string;
+    'Authored by': string;
+    Description: string;
+    URL: string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['url', 'type', 'attribute'],
+    ['url', 'name', 'URL'],
+    ['authored by', 'type', 'attribute'],
+    ['authored by', 'name', 'Authored by'],
+    ['description', 'type', 'attribute'],
+    ['description', 'name', 'Description'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      row.Name ? [row.Name, 'name', row.Name] : null,
+
+      row.Types ? [row.Name, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+
+      row.Url ? [row.Name, 'url', row.Url] : null,
+      row['Authored by'] ? [row.Name, 'authored by', row['Authored by']] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
 export async function importCSVFile(
   files: File[],
   space: string,
@@ -836,6 +1016,15 @@ export async function importCSVFile(
         break;
       case 'healthdata-entities.csv':
         eavs = [...eavs, ...convertHealthEntities(csv)];
+        break;
+      case 'sfdata.csv':
+        eavs = [...eavs, ...convertSanFranciscoData(csv)];
+        break;
+      case 'sfdata-entities.csv':
+        eavs = [...eavs, ...convertSanFranciscoEntities(csv)];
+        break;
+      case 'sfdata-sources.csv':
+        eavs = [...eavs, ...convertSanFranciscoSources(csv)];
         break;
       default:
         eavs = [...eavs, ...readCSV(csv)];

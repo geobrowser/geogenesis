@@ -15,7 +15,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityName, navUtils } from '~/modules/utils';
+import { getEntityName, groupBy, navUtils } from '~/modules/utils';
 import { TextButton } from '~/modules/design-system/text-button';
 
 const Content = styled.div(({ theme }) => ({
@@ -75,7 +75,7 @@ const IdRow = styled.div<{ showBorder: boolean }>(({ theme, showBorder }) => ({
   },
 }));
 
-export default function EntityPage({ triples, id, name, space, entityNames, entityGroups }: Props) {
+export default function EntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const { setPageName } = usePageName();
   const [step, setStep] = useState<'entity' | 'related'>('entity');
   const [copyText, setCopyText] = useState<'Copy Entity ID' | 'Copied!'>('Copy Entity ID');
@@ -130,12 +130,12 @@ export default function EntityPage({ triples, id, name, space, entityNames, enti
 
         {step === 'related' && (
           <Entities>
-            {Object.entries(entityGroups).length === 0 ? (
+            {Object.entries(linkedEntities).length === 0 ? (
               <Text variant="metadataMedium" color="grey-04">
                 There are no other entities that are linking to this entity.
               </Text>
             ) : (
-              <RelatedEntities entityGroups={entityGroups} space={space} entityNames={entityNames} />
+              <RelatedEntities linkedEntities={linkedEntities} space={space} entityNames={entityNames} />
             )}
           </Entities>
         )}
@@ -153,23 +153,29 @@ function EntityAttributes({
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
+  const groupedTriples = groupBy(triples, t => t.attributeId);
+
   return (
     <>
-      {triples.map(triple => (
-        <div key={triple.id}>
+      {Object.entries(groupedTriples).map(([attributeId, triples]) => (
+        <div key={attributeId}>
           <Text as="p" variant="bodySemibold">
-            {entityNames[triple.attributeId] || triple.attributeId}
+            {entityNames[attributeId] || attributeId}
           </Text>
-          {triple.value.type === 'entity' ? (
-            <>
-              <Spacer height={4} />
-              <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                {entityNames[triple.value.id] || triple.value.id}
-              </Chip>
-            </>
-          ) : (
-            <Text as="p">{triple.value.value}</Text>
-          )}
+          <Spacer height={4} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            {triples.map(triple =>
+              triple.value.type === 'entity' ? (
+                <>
+                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                    {entityNames[triple.value.id] || triple.value.id}
+                  </Chip>
+                </>
+              ) : (
+                <Text as="p">{triple.value.value}</Text>
+              )
+            )}
+          </div>
         </div>
       ))}
     </>
@@ -177,17 +183,17 @@ function EntityAttributes({
 }
 
 function RelatedEntities({
-  entityGroups,
+  linkedEntities,
   space,
   entityNames,
 }: {
-  entityGroups: Props['entityGroups'];
+  linkedEntities: Props['linkedEntities'];
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
   return (
     <>
-      {Object.values(entityGroups).map(group => (
+      {Object.values(linkedEntities).map(group => (
         <EntityCard key={group.id} entityGroup={group} space={space} entityNames={entityNames} />
       ))}
     </>
@@ -253,6 +259,7 @@ function EntityCard({
   entityNames: Props['entityNames'];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const groupedTriples = groupBy(entityGroup.triples, t => t.attributeId);
 
   const shouldMaximizeContent = Boolean(isExpanded || entityGroup.description);
 
@@ -285,24 +292,7 @@ function EntityCard({
                 </Text>
               </div>
             )}
-            {isExpanded &&
-              entityGroup.triples.map(triple => (
-                <div key={triple.id}>
-                  <Text as="p" variant="bodySemibold">
-                    {entityNames[triple.attributeId] || triple.attributeId}
-                  </Text>
-                  {triple.value.type === 'entity' ? (
-                    <>
-                      <Spacer height={4} />
-                      <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                        {entityNames[triple.value.id] || triple.value.id}
-                      </Chip>
-                    </>
-                  ) : (
-                    <Text as="p">{triple.value.value}</Text>
-                  )}
-                </div>
-              ))}
+            {isExpanded && <EntityAttributes triples={entityGroup.triples} space={space} entityNames={entityNames} />}
           </EntityCardContent>
         </>
       )}
@@ -336,7 +326,7 @@ interface Props {
   name: string;
   space: string;
   entityNames: EntityNames;
-  entityGroups: Record<string, EntityGroup>;
+  linkedEntities: Record<string, EntityGroup>;
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
@@ -377,7 +367,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     )
   );
 
-  const entityGroups: Record<string, EntityGroup> = relatedEntities
+  const linkedEntities: Record<string, EntityGroup> = relatedEntities
     .flatMap(entity => entity.triples)
     .reduce((acc, triple) => {
       if (!acc[triple.entityId])
@@ -412,7 +402,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         ...related.entityNames,
         ...relatedEntityAttributeNames,
       },
-      entityGroups,
+      linkedEntities,
       key: entityId,
     },
   };
