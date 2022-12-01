@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
-import { ZERO_WIDTH_SPACE } from '../constants';
+import { HACKY_COPY_FILL_CLASS_NAME, ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
 import { Copy } from './icons/copy';
 import { Create } from './icons/create';
@@ -17,7 +17,7 @@ import { Spacer } from './spacer';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'done';
 
 function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme) {
   if (disabled) {
@@ -59,6 +59,15 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
         borderColorHover: theme.colors.white,
         borderColorFocus: theme.colors.white,
       };
+    case 'done':
+      return {
+        color: theme.colors.text,
+        backgroundColor: theme.colors.green,
+        backgroundColorHover: theme.colors.green,
+        borderColor: theme.colors.green,
+        borderColorHover: theme.colors.green,
+        borderColorFocus: theme.colors.green,
+      };
   }
 }
 
@@ -85,8 +94,13 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
     // other things we can do like toggling padding but this seems simplest.
     boxShadow: `inset 0 0 0 1px ${buttonColors.borderColor}`,
 
-    // TODO: Placeholder until we do motion design
     transition: '200ms all ease-in-out',
+
+    // HACK: The way our copy icon is designed the top "page" in the icon expects a fill color in order
+    // to correctly render. For now we can just set the background color match the button background color.
+    ['.' + HACKY_COPY_FILL_CLASS_NAME]: {
+      fill: buttonColors.backgroundColor,
+    },
 
     ':hover': {
       boxShadow: `inset 0 0 0 1px ${buttonColors.borderColorHover}`,
@@ -142,7 +156,7 @@ interface Props {
   disabled?: boolean;
 }
 
-function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
+function getIconColor(variant: ButtonVariant, disabled: boolean, icon?: Icon): ColorName {
   if (disabled) return 'grey-03';
   switch (variant) {
     case 'primary':
@@ -151,17 +165,19 @@ function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
       return 'ctaPrimary';
     case 'tertiary':
       return 'white';
+    case 'done':
+      return 'text';
   }
 }
 
 export const Button = React.forwardRef(function Button(
-  { children, onClick, icon, variant = 'primary', disabled = false }: Props,
+  { children, onClick, icon, variant = 'primary', disabled = false, ...props }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
-  const iconColor = getIconColor(variant, disabled);
+  const iconColor = getIconColor(variant, disabled, icon);
 
   return (
-    <StyledButton ref={ref} disabled={disabled} variant={variant} onClick={onClick}>
+    <StyledButton ref={ref} disabled={disabled} variant={variant} onClick={onClick} {...props}>
       {icon && icons[icon](iconColor)}
       {icon && children && <Spacer width={8} />}
       {/* Use zero-width space to enforce min line height */}
@@ -191,11 +207,18 @@ const StyledSquareButton = styled(StyledButton)<Props & { isActive?: boolean }>(
 type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
 
 export const SquareButton = React.forwardRef(function SquareButton(
-  { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false }: SquareButtonProps,
+  { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false, ...props }: SquareButtonProps,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <StyledSquareButton ref={ref} isActive={isActive} variant={variant} disabled={disabled} onClick={onClick}>
+    <StyledSquareButton
+      ref={ref}
+      isActive={isActive}
+      variant={variant}
+      disabled={disabled}
+      onClick={onClick}
+      {...props}
+    >
       {icon ? <>{icons[icon]('grey-04')}</> : null}
       {icon && children && <Spacer width={8} />}
       {children ? <>{children}</> : null}
@@ -219,11 +242,11 @@ const UnstyledButton = styled.button({
 });
 
 export const IconButton = React.forwardRef(function IconButton(
-  { onClick, icon, color }: IconButtonProps,
+  { onClick, icon, color, ...props }: IconButtonProps,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <UnstyledButton ref={ref} onClick={onClick}>
+    <UnstyledButton ref={ref} onClick={onClick} {...props}>
       {icons[icon](color)}
     </UnstyledButton>
   );
@@ -253,11 +276,11 @@ const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
 });
 
 export const SmallButton = React.forwardRef(function SmallButton(
-  { onClick, children, variant = 'secondary', disabled = false }: Props,
+  { onClick, children, variant = 'secondary', disabled = false, ...props }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <StyledSmallButton disabled={disabled} variant={variant} ref={ref} onClick={onClick}>
+    <StyledSmallButton disabled={disabled} variant={variant} ref={ref} onClick={onClick} {...props}>
       {children}
     </StyledSmallButton>
   );
