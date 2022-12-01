@@ -92,7 +92,6 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
 
   const onAdvancedFilterClick = (field: FilterClause['field']) => {
     const filteredFilters = tripleStore.filterState.filter(filter => filter.field !== field);
-    console.log(filteredFilters);
     tripleStore.setFilterState(filteredFilters);
   };
 
