@@ -221,8 +221,6 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
 
-  console.log('rerendering');
-
   const table = useReactTable({
     data: triples,
     columns,
@@ -233,7 +231,7 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: 100,
       },
     },
     meta: {
