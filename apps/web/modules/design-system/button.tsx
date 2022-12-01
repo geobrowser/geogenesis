@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { themeVars } from '@rainbow-me/rainbowkit/dist/css/sprinkles.css';
 import React, { ForwardedRef } from 'react';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
@@ -15,7 +14,6 @@ import { Publish } from './icons/publish';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
-import { Text } from './text';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 

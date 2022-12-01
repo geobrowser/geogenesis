@@ -1,9 +1,8 @@
-import { v4 as uuid } from 'uuid';
 import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { createTripleWithId, createValueId } from '../services/create-id';
+import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
@@ -233,7 +232,8 @@ export class TripleStore implements ITripleStore {
   };
 
   setFilterState = (filter: FilterState) => {
+    const newState = filter.length === 0 ? initialFilterState() : filter;
     this.setPageNumber(0);
-    this.filterState$.set(filter);
+    this.filterState$.set(newState);
   };
 }
