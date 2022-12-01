@@ -2,8 +2,10 @@ import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
 import { IconButton, SmallButton } from '../design-system/button';
+import { CheckCloseSmall } from '../design-system/icons/check-close-small';
 import { Search } from '../design-system/icons/search';
 import { Input } from '../design-system/input';
+import { Spacer } from '../design-system/spacer';
 import { useTriples } from '../state/use-triples';
 import { FilterClause } from '../types';
 import { FilterDialog } from './filter/dialog';
@@ -68,7 +70,7 @@ const AdvancedFilters = styled.div(props => ({
   width: '100%',
   borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
+  // padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
   paddingLeft: props.theme.space * 10,
   backgroundColor: props.theme.colors.white,
 }));
@@ -88,6 +90,12 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
     tripleStore.setQuery(event.target.value);
   };
 
+  const onAdvancedFilterClick = (field: FilterClause['field']) => {
+    const filteredFilters = tripleStore.filterState.filter(filter => filter.field !== field);
+    console.log(filteredFilters);
+    tripleStore.setFilterState(filteredFilters);
+  };
+
   return (
     <InputContainer ref={inputContainerRef}>
       <SearchIconContainer>
@@ -98,7 +106,11 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
       ) : (
         <AdvancedFilters>
           {tripleStore.filterState.map(filter => (
-            <AdvancedFilterPill key={filter.field} filterClause={filter} />
+            <AdvancedFilterPill
+              key={filter.field}
+              filterClause={filter}
+              onClick={() => onAdvancedFilterClick(filter.field)}
+            />
           ))}
         </AdvancedFilters>
       )}
@@ -116,13 +128,31 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
   );
 }
 
-const AdvancedFilterPillContainer = styled.div(props => ({
+const AdvancedFilterPillContainer = styled.button(props => ({
+  ...props.theme.typography.metadataMedium,
   display: 'flex',
-  padding: `${props.theme.space * 2}px ${props.theme.space}px`,
+  alignItems: 'center',
+  padding: `${props.theme.space}px ${props.theme.space * 2}px`,
+  borderRadius: props.theme.space,
+  backgroundColor: props.theme.colors.white,
+  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
+
+  '&:hover': {
+    backgroundColor: props.theme.colors.bg,
+    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
+    cursor: 'pointer',
+  },
+
+  '&:focus': {
+    backgroundColor: props.theme.colors.bg,
+    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
+    outline: 'none',
+  },
 }));
 
 interface AdvancedFilterPillprops {
   filterClause: FilterClause;
+  onClick: () => void;
 }
 
 function getFilterLabel(field: FilterClause['field']) {
@@ -142,17 +172,15 @@ function getFilterLabel(field: FilterClause['field']) {
   }
 }
 
-function AdvancedFilterPill({ filterClause }: AdvancedFilterPillprops) {
+function AdvancedFilterPill({ filterClause, onClick }: AdvancedFilterPillprops) {
   const { field, value } = filterClause;
   const label = getFilterLabel(field);
 
   return (
-    // <AdvancedFilterPillContainer>
-    <SmallButton>
-      <>
-        {label} {value}
-      </>
-    </SmallButton>
-    // </AdvancedFilterPillContainer>
+    <AdvancedFilterPillContainer onClick={onClick}>
+      {label} {value}
+      <Spacer width={8} />
+      <CheckCloseSmall />
+    </AdvancedFilterPillContainer>
   );
 }

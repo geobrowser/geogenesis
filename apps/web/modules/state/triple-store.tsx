@@ -232,7 +232,8 @@ export class TripleStore implements ITripleStore {
   };
 
   setFilterState = (filter: FilterState) => {
+    const newState = filter.length === 0 ? initialFilterState() : filter;
     this.setPageNumber(0);
-    this.filterState$.set(filter);
+    this.filterState$.set(newState);
   };
 }

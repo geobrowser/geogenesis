@@ -14,7 +14,6 @@ import { Publish } from './icons/publish';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
-import { Text } from './text';
 import { Theme } from './theme';
 import { ColorName } from './theme/colors';
 
