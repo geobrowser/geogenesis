@@ -1,11 +1,11 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
-import debounce from 'lodash.debounce';
 import { useRef } from 'react';
-import { IconButton } from '../design-system/button';
+import { IconButton, SmallButton } from '../design-system/button';
 import { Search } from '../design-system/icons/search';
 import { Input } from '../design-system/input';
 import { useTriples } from '../state/use-triples';
+import { FilterClause } from '../types';
 import { FilterDialog } from './filter/dialog';
 
 const SearchIconContainer = styled.div(props => ({
@@ -61,26 +61,47 @@ const TriplesInputField = styled(Input)(props => ({
   paddingLeft: props.theme.space * 10,
 }));
 
+const AdvancedFilters = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space,
+  width: '100%',
+  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
+  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
+  padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
+  paddingLeft: props.theme.space * 10,
+  backgroundColor: props.theme.colors.white,
+}));
+
 interface Props {
   showPredefinedQueries: boolean;
   onShowPredefinedQueriesChange: (showPredefinedQueries: boolean) => void;
 }
 
-export function TriplesInput({ showPredefinedQueries, onShowPredefinedQueriesChange }: Props) {
+export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChange }: Props) {
   const tripleStore = useTriples();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
+  const showBasicFilter = tripleStore.filterState.length === 1 && tripleStore.filterState[0].field === 'entity-name';
+
+  const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    tripleStore.setQuery(event.target.value);
+  };
 
   return (
     <InputContainer ref={inputContainerRef}>
       <SearchIconContainer>
         <Search />
       </SearchIconContainer>
-      <TriplesInputField
-        defaultValue={tripleStore.query}
-        placeholder="Search facts..."
-        onChange={e => debounce(tripleStore.setQuery, 500)(e.target.value)}
-      />
+      {showBasicFilter ? (
+        <TriplesInputField placeholder="Search facts..." value={tripleStore.query} onChange={onChange} />
+      ) : (
+        <AdvancedFilters>
+          {tripleStore.filterState.map(filter => (
+            <AdvancedFilterPill key={filter.field} filterClause={filter} />
+          ))}
+        </AdvancedFilters>
+      )}
       <FilterIconContainer>
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
@@ -92,5 +113,46 @@ export function TriplesInput({ showPredefinedQueries, onShowPredefinedQueriesCha
         <IconButton onClick={() => onShowPredefinedQueriesChange(!showPredefinedQueries)} icon="preset" />
       </PresetIconContainer>
     </InputContainer>
+  );
+}
+
+const AdvancedFilterPillContainer = styled.div(props => ({
+  display: 'flex',
+  padding: `${props.theme.space * 2}px ${props.theme.space}px`,
+}));
+
+interface AdvancedFilterPillprops {
+  filterClause: FilterClause;
+}
+
+function getFilterLabel(field: FilterClause['field']) {
+  switch (field) {
+    case 'entity-id':
+      return 'Entity ID is';
+    case 'entity-name':
+      return 'Entity name contains';
+    case 'attribute-name':
+      return 'Attribute name contains';
+    case 'attribute-id':
+      return 'Attribute ID is';
+    case 'value':
+      return 'Value contains';
+    case 'linked-by':
+      return 'Entity contains reference to';
+  }
+}
+
+function AdvancedFilterPill({ filterClause }: AdvancedFilterPillprops) {
+  const { field, value } = filterClause;
+  const label = getFilterLabel(field);
+
+  return (
+    // <AdvancedFilterPillContainer>
+    <SmallButton>
+      <>
+        {label} {value}
+      </>
+    </SmallButton>
+    // </AdvancedFilterPillContainer>
   );
 }

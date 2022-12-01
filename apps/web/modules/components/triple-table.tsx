@@ -231,7 +231,7 @@ const TripleTable = memo(function TripleTable({ update, triples, space }: Props)
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 50,
       },
     },
     meta: {

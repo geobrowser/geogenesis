@@ -51,9 +51,10 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
       <Spacer width={12} />
       <InputWrapper>
         <Input
+          value={filterClause.value}
           onChange={e => {
             const newFilterClause: FilterClause = { ...filterClause, value: e.target.value };
-            debounce(onChange, 500)(newFilterClause);
+            onChange(newFilterClause);
           }}
         />
       </InputWrapper>

@@ -81,7 +81,7 @@ export class TripleStore implements ITripleStore {
     this.space = space;
     this.query$ = computed(() => {
       const filterState = this.filterState$.get();
-      return filterState.find(f => f.field === 'entity-name')?.value || initialParams.query;
+      return filterState.find(f => f.field === 'entity-name')?.value || '';
     });
 
     const networkData$ = makeOptionalComputed(

@@ -20,7 +20,7 @@ import { Value } from '../types';
 import { getFilesFromFileList } from '../utils';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import TripleTable from './triple-table';
-import { TriplesInput } from './triples-input';
+import { TripleInput } from './triple-input';
 
 const TableHeader = styled.div({
   display: 'flex',
@@ -147,8 +147,6 @@ function Triples({ spaceId }: Props) {
   const spaceImage =
     space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF';
 
-  console.log(tripleStore.query);
-
   return (
     <PageContainer>
       <TableHeader>
@@ -203,7 +201,7 @@ function Triples({ spaceId }: Props) {
       <Spacer height={showPredefinedQueries ? 21.5 : 12} />
 
       <motion.div layout="position">
-        <TriplesInput
+        <TripleInput
           showPredefinedQueries={showPredefinedQueries}
           onShowPredefinedQueriesChange={setShowPredefinedQueries}
         />
