@@ -19,10 +19,10 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
     fact: new CreateTripleAction(
       'type',
       'name',
-      new StringValue('type', 'Type')
+      new StringValue('type', 'Types')
     ),
     space,
-    isProtected: true,
+    isProtected: false,
     createdAtBlock,
   })
 
