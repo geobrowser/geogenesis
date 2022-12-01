@@ -100,8 +100,8 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
     setTimeout(() => setCopyText('Copy Entity ID'), 3600);
   };
 
-  // e.g., 48234k...934893
-  const truncatedEntityId = `${id.slice(0, 7)}${id.length > 7 ? '...' : ''}${id.slice(-6)}`;
+  // e.g., 4834k...934h3
+  const truncatedEntityId = `${id.slice(0, 6)}${id.length > 6 ? '...' : ''}${id.slice(-5)}`;
 
   return (
     <div>
