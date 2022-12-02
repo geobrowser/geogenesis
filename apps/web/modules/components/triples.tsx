@@ -201,7 +201,7 @@ function Triples({ spaceId }: Props) {
         </>
       )}
 
-      <motion.div layout="position" transition={{ duration: 0.1 }}>
+      <motion.div style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
         <TripleInput
           showPredefinedQueries={showPredefinedQueries}
           onShowPredefinedQueriesChange={setShowPredefinedQueries}
