@@ -85,7 +85,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
         {name}
       </Text>
 
-      <Spacer height={40} />
+      <Spacer height={20} />
 
       <EntityActionGroup>
         <SmallButton onClick={onCopyEntityId} variant="secondary" icon={copyText === 'ID Copied!' ? undefined : 'copy'}>
@@ -114,7 +114,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
         </SmallButton>
       </EntityActionGroup>
 
-      <Spacer height={4} />
+      <Spacer height={8} />
 
       <Content>
         <Attributes>
