@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
+import { CellTruncate } from '../components/table/cell-truncate';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
@@ -20,14 +21,6 @@ const BreadcrumbLink = styled.a<{ shouldTruncate?: boolean }>(props => ({
       color: props.theme.colors.text,
     },
   },
-}));
-
-const Truncate = styled.div<{ shouldTruncate?: boolean }>(props => ({
-  ...(props.shouldTruncate && {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'pre',
-  }),
 }));
 
 const Image = styled.img(props => ({
@@ -55,11 +48,11 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
             <Spacer width={8} />
           </>
         )}
-        <Truncate shouldTruncate={shouldTruncate}>
-          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'}>
+        <CellTruncate shouldTruncate={shouldTruncate}>
+          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'} ellipsize={shouldTruncate}>
             {children}
           </Text>
-        </Truncate>
+        </CellTruncate>
       </BreadcrumbLink>
     </Link>
   );
