@@ -4,7 +4,7 @@ import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
-import { Button, SmallButton } from '~/modules/design-system/button';
+import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
@@ -51,18 +51,6 @@ interface Props {
   entityNames: EntityNames;
   linkedEntities: Record<string, EntityGroup>;
 }
-
-const EntityId = styled.p(props => ({
-  ...props.theme.typography.button,
-  backgroundColor: props.theme.colors['grey-01'],
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-  borderRadius: props.theme.radius,
-}));
-
-const CopyButton = styled(Button)`
-  display: inline-flex;
-  width: 143px;
-`;
 
 const CopyText = styled(Text)`
   display: inline-flex;
@@ -229,14 +217,13 @@ const EntityCardContainer = styled.div(({ theme }) => ({
   },
 }));
 
-const EntityCardHeader = styled.a<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+const EntityCardHeader = styled.a(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   verticalAlign: 'top',
   gap: theme.space * 5,
 
-  padding: theme.space * 3,
-  ...(showBorder && { borderBottom: `1px solid ${theme.colors['grey-02']}` }),
+  padding: theme.space * 4,
 
   div: {
     display: 'flex',
@@ -260,6 +247,7 @@ const EntityCardContent = styled.div(({ theme }) => ({
   flexDirection: 'column',
   gap: theme.space * 4,
   padding: theme.space * 4,
+  backgroundColor: theme.colors.white,
 }));
 
 const EntityCardFooter = styled.div(({ theme }) => ({
@@ -290,6 +278,12 @@ function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space
   );
 }
 
+const LinkedEntityDescription = styled.div(({ theme }) => ({
+  padding: theme.space * 4,
+  paddingTop: 0,
+  backgroundColor: theme.colors.bg,
+}));
+
 function EntityCard({
   originalEntityId,
   entityGroup,
@@ -309,15 +303,16 @@ function EntityCard({
   );
 
   const description = getEntityDescription(entityGroup.triples, entityNames);
-  const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
   const triplesWithoutDescription = unlinkedTriples.filter(t =>
     t.value.type === 'string' ? t.value.value !== description : true
   );
 
+  const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
+
   return (
     <EntityCardContainer>
       <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-        <EntityCardHeader showBorder={shouldMaximizeContent}>
+        <EntityCardHeader>
           <Text as="h2" variant="cardEntityTitle">
             {entityGroup.name ?? entityGroup.id}
           </Text>
@@ -328,14 +323,17 @@ function EntityCard({
         </EntityCardHeader>
       </Link>
 
-      {shouldMaximizeContent && (
-        <>
-          <EntityCardContent>
-            {description && (
-              <Text as="p" color="grey-04">
-                {description}
-              </Text>
-            )}
+      {description && (
+        <LinkedEntityDescription>
+          <Text as="p" color="grey-04">
+            {description}
+          </Text>
+        </LinkedEntityDescription>
+      )}
+
+      <EntityCardContent>
+        {shouldMaximizeContent && (
+          <>
             {linkedTriples.map((triple, i) => (
               <EntityAttribute
                 key={`${triple.attributeId}-${triple.id}-${i}`}
@@ -347,9 +345,9 @@ function EntityCard({
             {isExpanded && (
               <EntityAttributes triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
             )}
-          </EntityCardContent>
-        </>
-      )}
+          </>
+        )}
+      </EntityCardContent>
 
       <EntityCardFooter>
         <Text variant="breadcrumb">
@@ -360,7 +358,9 @@ function EntityCard({
             <ChevronDownSmall color="grey-04" />
           </span>
           <Spacer width={6} />
-          {isExpanded ? 'Hide all attributes' : 'Show all attributes'}
+          {isExpanded
+            ? `Hide ${triplesWithoutDescription.length} more values`
+            : `Show ${triplesWithoutDescription.length} more values`}
         </SmallButton>
       </EntityCardFooter>
     </EntityCardContainer>
