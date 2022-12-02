@@ -166,7 +166,7 @@ function getFilterLabel(field: FilterClause['field']) {
       return 'Attribute ID is';
     case 'value':
       return 'Value contains';
-    case 'linked-by':
+    case 'linked-to':
       return 'Entity contains reference to';
   }
 }

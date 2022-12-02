@@ -125,7 +125,7 @@ export class Network implements INetwork {
 
       // Until we have OR we can't search for name_contains OR value string contains
       fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
-      fieldFilters['linked-by'] && `valueId: ${JSON.stringify(fieldFilters['linked-by'])}`,
+      fieldFilters['linked-to'] && `valueId: ${JSON.stringify(fieldFilters['linked-to'])}`,
     ]
       .filter(Boolean)
       .join(' ');
