@@ -36,7 +36,6 @@ const BreadcrumbsContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
-  width: '65%',
   overflow: 'hidden',
 });
 
@@ -44,6 +43,7 @@ const NavigationItemsContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
   overflow: 'hidden',
+  width: '40%',
 
   'a:last-child': {
     overflow: 'hidden',
@@ -124,7 +124,7 @@ export function Navbar() {
               return (
                 <Breadcrumb
                   isNested={index < components.length - 1}
-                  shouldTruncate={index === components.length - 1}
+                  shouldTruncate={index === 3}
                   key={index}
                   href={path}
                   img={img}
