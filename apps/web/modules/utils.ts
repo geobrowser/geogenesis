@@ -70,10 +70,10 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
 }
 
 export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
-  return array.reduce(
+  return array.reduce<[T[], T[]]>(
     ([pass, fail], item) => {
       return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
     },
-    [[], []] as [T[], T[]]
+    [[], []]
   );
 }
