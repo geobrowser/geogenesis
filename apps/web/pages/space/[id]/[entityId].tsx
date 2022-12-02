@@ -18,6 +18,7 @@ import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, groupBy, navUtils, partition } from '~/modules/utils';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { AnimatePresence } from 'framer-motion';
+import { CellTruncate } from '~/modules/components/table/cell-truncate';
 
 const Content = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -81,11 +82,11 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   return (
     <div>
-      <Text as="h1" variant="mainPage">
-        {name}
-      </Text>
-
-      <Spacer height={12} />
+      <CellTruncate maxLines={3} shouldTruncate>
+        <Text as="h1" variant="mainPage">
+          {name}
+        </Text>
+      </CellTruncate>
 
       {description && (
         <>
@@ -129,8 +130,6 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
       <Content>
         <Attributes>
-            </Text>
-          )}
           <EntityAttributes entityId={id} triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
         </Attributes>
       </Content>
@@ -143,8 +142,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
       <Entities>
         {Object.entries(linkedEntities).length === 0 ? (
-            There are no other entities that are linking to this entity.
-          </Text>
+          <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
         ) : (
           Object.values(linkedEntities).map(group => (
             <>
@@ -185,10 +183,12 @@ function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space
 }
 
 function EntityAttributes({
+  entityId,
   triples,
   space,
   entityNames,
 }: {
+  entityId: string;
   triples: Props['triples'];
   space: Props['space'];
   entityNames: Props['entityNames'];
@@ -198,7 +198,7 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples]) => (
-        <div key={`entity-attributes-${attributeId}`}>
+        <div key={`${entityId}-entity-attributes-${attributeId}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
@@ -351,7 +351,12 @@ function LinkedEntityCard({
               />
             ))}
             {isExpanded && (
-              <EntityAttributes triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
+              <EntityAttributes
+                entityId={entityGroup.id}
+                triples={triplesWithoutDescription}
+                space={space}
+                entityNames={entityNames}
+              />
             )}
           </>
         )}
