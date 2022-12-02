@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import { CellTruncate } from '../components/table/cell-truncate';
+import { Truncate } from './truncate';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
@@ -48,11 +48,11 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
             <Spacer width={8} />
           </>
         )}
-        <CellTruncate shouldTruncate={shouldTruncate}>
+        <Truncate shouldTruncate={shouldTruncate}>
           <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'} ellipsize={shouldTruncate}>
             {children}
           </Text>
-        </CellTruncate>
+        </Truncate>
       </BreadcrumbLink>
     </Link>
   );

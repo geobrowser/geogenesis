@@ -18,7 +18,7 @@ import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, groupBy, navUtils, partition } from '~/modules/utils';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { AnimatePresence } from 'framer-motion';
-import { CellTruncate } from '~/modules/components/table/cell-truncate';
+import { Truncate } from '~/modules/design-system/truncate';
 
 const Content = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -82,11 +82,11 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   return (
     <div>
-      <CellTruncate maxLines={3} shouldTruncate>
+      <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
-      </CellTruncate>
+      </Truncate>
 
       {description && (
         <>
