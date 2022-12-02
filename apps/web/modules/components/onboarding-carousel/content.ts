@@ -5,7 +5,7 @@ export const ONBOARDING_CONTENT: Record<OnboardingStep, { title: string; descrip
     title: 'We are here',
     description: `Geo is built on the principle that data should be owned and created by its users in a decentralized and
     verifiable way. The first and most crucial step is to collect data for a wide range of spaces as
-    triples/facts, which can then be used to structure meaningful content.`,
+    triples, which can then be used to structure meaningful content.`,
   },
   organize: {
     title: 'Organize the world’s data',
