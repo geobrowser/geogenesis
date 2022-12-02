@@ -4,7 +4,7 @@ import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
-import { SmallButton } from '~/modules/design-system/button';
+import { Button, SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
@@ -58,6 +58,25 @@ interface Props {
   entityNames: EntityNames;
   linkedEntities: Record<string, EntityGroup>;
 }
+
+const EntityId = styled.p(props => ({
+  ...props.theme.typography.button,
+  backgroundColor: props.theme.colors['grey-01'],
+  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  borderRadius: props.theme.radius,
+}));
+
+const CopyButton = styled(Button)`
+  display: inline-flex;
+  width: 143px;
+`;
+
+const CopyText = styled(Text)`
+  display: inline-flex;
+  align-items: center;
+`;
+
+const MotionCopyText = motion(CopyText);
 
 export default function EntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const { setPageName } = usePageName();
