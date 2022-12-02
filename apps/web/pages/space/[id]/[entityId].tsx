@@ -142,7 +142,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
           </Text>
         ) : (
           Object.values(linkedEntities).map(group => (
-            <EntityCard
+            <LinkedEntityCard
               key={group.id}
               originalEntityId={id}
               entityGroup={group}
@@ -152,6 +152,26 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
           ))
         )}
       </Entities>
+    </div>
+  );
+}
+
+function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
+  return (
+    <div key={triple.attributeId}>
+      <Text as="p" variant="bodySemibold">
+        {entityNames[triple.attributeId] || triple.attributeId}
+      </Text>
+      {triple.value.type === 'entity' ? (
+        <>
+          <Spacer height={4} />
+          <Chip href={navUtils.toEntity(space, triple.value.id)}>
+            {entityNames[triple.value.id] || triple.value.id}
+          </Chip>
+        </>
+      ) : (
+        <Text as="p">{triple.value.value}</Text>
+      )}
     </div>
   );
 }
@@ -202,7 +222,7 @@ function EntityAttributes({
   );
 }
 
-const EntityCardContainer = styled.div(({ theme }) => ({
+const LinkedEntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
@@ -211,13 +231,13 @@ const EntityCardContainer = styled.div(({ theme }) => ({
     border: `1px solid ${theme.colors.text}`,
 
     // @ts-ignore -- This is valid with emotion/styled
-    [EntityCardHeader]: {
+    [LinkedEntityCardHeader]: {
       borderColor: theme.colors.text,
     },
   },
 }));
 
-const EntityCardHeader = styled.a(({ theme }) => ({
+const LinkedEntityCardHeader = styled.a(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   verticalAlign: 'top',
@@ -242,7 +262,7 @@ const IconContainer = styled.div(({ theme }) => ({
   marginTop: 6,
 }));
 
-const EntityCardContent = styled.div(({ theme }) => ({
+const LinkedEntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.space * 4,
@@ -250,7 +270,7 @@ const EntityCardContent = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.white,
 }));
 
-const EntityCardFooter = styled.div(({ theme }) => ({
+const LinkedEntityCardFooter = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -258,33 +278,13 @@ const EntityCardFooter = styled.div(({ theme }) => ({
   backgroundColor: theme.colors.white,
 }));
 
-function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
-  return (
-    <div key={triple.attributeId}>
-      <Text as="p" variant="bodySemibold">
-        {entityNames[triple.attributeId] || triple.attributeId}
-      </Text>
-      {triple.value.type === 'entity' ? (
-        <>
-          <Spacer height={4} />
-          <Chip href={navUtils.toEntity(space, triple.value.id)}>
-            {entityNames[triple.value.id] || triple.value.id}
-          </Chip>
-        </>
-      ) : (
-        <Text as="p">{triple.value.value}</Text>
-      )}
-    </div>
-  );
-}
-
 const LinkedEntityDescription = styled.div(({ theme }) => ({
   padding: theme.space * 4,
   paddingTop: 0,
   backgroundColor: theme.colors.bg,
 }));
 
-function EntityCard({
+function LinkedEntityCard({
   originalEntityId,
   entityGroup,
   space,
@@ -310,9 +310,9 @@ function EntityCard({
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
   return (
-    <EntityCardContainer>
+    <LinkedEntityCardContainer>
       <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-        <EntityCardHeader>
+        <LinkedEntityCardHeader>
           <Text as="h2" variant="cardEntityTitle">
             {entityGroup.name ?? entityGroup.id}
           </Text>
@@ -320,7 +320,7 @@ function EntityCard({
           <IconContainer>
             <RightArrowDiagonal color="grey-04" />
           </IconContainer>
-        </EntityCardHeader>
+        </LinkedEntityCardHeader>
       </Link>
 
       {description && (
@@ -331,7 +331,7 @@ function EntityCard({
         </LinkedEntityDescription>
       )}
 
-      <EntityCardContent>
+      <LinkedEntityCardContent>
         {shouldMaximizeContent && (
           <>
             {linkedTriples.map((triple, i) => (
@@ -347,9 +347,9 @@ function EntityCard({
             )}
           </>
         )}
-      </EntityCardContent>
+      </LinkedEntityCardContent>
 
-      <EntityCardFooter>
+      <LinkedEntityCardFooter>
         <Text variant="breadcrumb">
           {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
         </Text>
@@ -362,8 +362,8 @@ function EntityCard({
             ? `Hide ${triplesWithoutDescription.length} more values`
             : `Show ${triplesWithoutDescription.length} more values`}
         </SmallButton>
-      </EntityCardFooter>
-    </EntityCardContainer>
+      </LinkedEntityCardFooter>
+    </LinkedEntityCardContainer>
   );
 }
 
