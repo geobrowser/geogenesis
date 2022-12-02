@@ -14,7 +14,6 @@ import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { createTripleWithId } from '../services/create-id';
 import { useEditable } from '../state/use-editable';
-import { useTriples } from '../state/use-triples';
 import { EntityNames, Triple, Value } from '../types';
 import { navUtils } from '../utils';
 import { TableCell } from './table/cell';
@@ -288,7 +287,7 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
                 return (
                   <TableCell
                     isEditable={editable}
-                    isExpandable={cell.column.id === 'value'}
+                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'string'}
                     isExpanded={expandedCells[cellId]}
                     width={cell.column.getSize()}
                     key={cell.id}
