@@ -62,7 +62,7 @@ const MotionCopyText = motion(CopyText);
 
 export default function EntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const { setPageName } = usePageName();
-  const [copyText, setCopyText] = useState<'Copy ID' | 'ID Copied!'>('Copy ID');
+  const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
@@ -71,7 +71,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   const onCopyEntityId = () => {
     navigator.clipboard.writeText(id);
-    setCopyText('ID Copied!');
+    setCopyText('Entity ID Copied');
     setTimeout(() => setCopyText('Copy ID'), 3600);
   };
 
@@ -100,10 +100,15 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
       <Spacer height={16} />
 
       <EntityActionGroup>
-        <SmallButton onClick={onCopyEntityId} variant="secondary" icon={copyText === 'ID Copied!' ? undefined : 'copy'}>
+        <SmallButton
+          onClick={onCopyEntityId}
+          variant={copyText === 'Entity ID Copied' ? 'tertiary' : 'secondary'}
+          icon={copyText === 'Entity ID Copied' ? undefined : 'copy'}
+        >
           <AnimatePresence mode="wait">
-            {copyText === 'ID Copied!' ? (
+            {copyText === 'Entity ID Copied' ? (
               <MotionCopyText
+                color="white"
                 initial={{ opacity: 0, scale: 0.85 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.85 }}
