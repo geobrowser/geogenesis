@@ -15,12 +15,14 @@ import { EditToggle } from './edit-toggle';
 import { ExternalLink } from './external-link';
 
 const Header = styled.header(({ theme }) => ({
+  width: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: `${theme.space * 2}px ${theme.space * 4}px`,
   backgroundColor: theme.colors.white,
   boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
+  gap: theme.space * 5,
 
   '@media (max-width: 1920px)': {
     padding: `${theme.space}px ${theme.space * 4}px`,
@@ -34,11 +36,20 @@ const BreadcrumbsContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
+  width: '65%',
+  overflow: 'hidden',
 });
 
 const NavigationItemsContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
+  overflow: 'hidden',
+
+  'a:last-child': {
+    overflow: 'hidden',
+    // To make the text container slightly smaller than parent container so the ellipsis renders
+    maxWidth: '99%',
+  },
 });
 
 const Row = styled.div({
@@ -111,7 +122,13 @@ export function Navbar() {
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <Breadcrumb isNested={index < components.length - 1} key={index} href={path} img={img}>
+                <Breadcrumb
+                  isNested={index < components.length - 1}
+                  shouldTruncate={index === components.length - 1}
+                  key={index}
+                  href={path}
+                  img={img}
+                >
                   {title}
                 </Breadcrumb>
               );
@@ -143,6 +160,7 @@ const DiscordLinkContainer = styled(Row)(({ theme }) => ({
   alignItems: 'center',
   color: theme.colors['grey-04'],
   transition: '0.15s ease-in-out all',
+  width: 105,
 
   ':hover': {
     color: theme.colors.text,
