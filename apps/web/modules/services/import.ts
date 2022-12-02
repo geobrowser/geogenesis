@@ -172,7 +172,7 @@ export function convertHealthFacts(
     ['article section', 'type', 'attribute'],
     ['article section', 'name', 'Article section'],
     ['collections', 'type', 'attribute'],
-    ['collections', 'name', 'Tollections'],
+    ['collections', 'name', 'Collections'],
   ];
 
   function toEavRow(row: HealthDataFactRow): EavRow[] {
