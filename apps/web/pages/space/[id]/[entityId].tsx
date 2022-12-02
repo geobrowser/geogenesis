@@ -149,9 +149,9 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
         {Object.entries(linkedEntities).length === 0 ? (
           <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
         ) : (
-          Object.values(linkedEntities).map(group => (
-            <>
-              <Spacer height={12} />
+          <>
+            <Spacer height={12} />
+            {Object.values(linkedEntities).map(group => (
               <LinkedEntityCard
                 key={group.id}
                 originalEntityId={id}
@@ -159,8 +159,8 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
                 space={space}
                 entityNames={entityNames}
               />
-            </>
-          ))
+            ))}
+          </>
         )}
       </Entities>
     </div>
@@ -212,7 +212,6 @@ function EntityAttributes({
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
             */}
-            <Spacer height={4} />
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
                 <>
