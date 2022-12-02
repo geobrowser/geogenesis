@@ -39,18 +39,19 @@ const BreadcrumbsContainer = styled.div({
   overflow: 'hidden',
 });
 
-const NavigationItemsContainer = styled.div({
+const NavigationItemsContainer = styled.div(props => ({
   display: 'flex',
   alignItems: 'center',
   overflow: 'hidden',
-  width: '40%',
+  maxWidth: '40%',
+  gap: props.theme.space * 8,
 
   'a:last-child': {
     overflow: 'hidden',
     // To make the text container slightly smaller than parent container so the ellipsis renders
     maxWidth: '99%',
   },
-});
+}));
 
 const Row = styled.div({
   display: 'flex',
@@ -114,7 +115,6 @@ export function Navbar() {
             <GeoLogoLarge />
           </a>
         </Link>
-        <Spacer width={32} />
         <BreadcrumbsContainer>
           {intersperse(
             components.map((component, index) => {
