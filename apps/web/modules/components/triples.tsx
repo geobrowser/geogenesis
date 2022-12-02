@@ -19,8 +19,8 @@ import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { getFilesFromFileList } from '../utils';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
-import TripleTable from './triple-table';
 import { TripleInput } from './triple-input';
+import TripleTable from './triple-table';
 
 const TableHeader = styled.div({
   display: 'flex',
@@ -195,7 +195,27 @@ function Triples({ spaceId }: Props) {
       {showPredefinedQueries && (
         <>
           <motion.div style={{ width: '100%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <PredefinedQueriesContainer name={spaceName} />
+            <PredefinedQueriesContainer
+              spaceName={spaceName}
+              onSetFilterState={tripleStore.setFilterState}
+              predefinedQueries={[
+                {
+                  label: 'Supplements for COVID',
+                  filterState: [
+                    { field: 'entity-name', value: 'COVID' },
+                    { field: 'attribute-name', value: 'Is about' },
+                    { field: 'value', value: 'Supplements' },
+                  ],
+                },
+                {
+                  label: 'Author is Rhonda Patrick',
+                  filterState: [
+                    { field: 'attribute-name', value: 'Author' },
+                    { field: 'value', value: 'Rhonda Patrick' },
+                  ],
+                },
+              ]}
+            />
           </motion.div>
           <Spacer height={22} />
         </>
