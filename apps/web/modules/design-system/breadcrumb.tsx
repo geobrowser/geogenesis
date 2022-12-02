@@ -34,7 +34,6 @@ const Truncate = styled.div<{ shouldTruncate?: boolean }>(props => ({
     maxWidth: '100%',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'pre',
   }),
 }));
 
