@@ -165,7 +165,7 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples]) => (
-        <div key={attributeId}>
+        <div key={`entity-attributes-${attributeId}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
