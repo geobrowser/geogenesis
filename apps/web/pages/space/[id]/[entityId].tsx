@@ -43,13 +43,6 @@ const EntityActionGroup = styled.div(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
-const CopyText = styled(Text)`
-  display: inline-flex;
-  align-items: center;
-`;
-
-const MotionCopyText = motion(CopyText);
-
 interface Props {
   triples: Triple[];
   id: string;
