@@ -87,7 +87,9 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
   };
 
   const description = getEntityDescription(triples, entityNames);
-  const triplesWithoutDescription = triples.filter(t => t.value.type === 'string' && t.value.value !== description);
+  const triplesWithoutDescription = triples.filter(t =>
+    t.value.type === 'string' ? t.value.value !== description : true
+  );
 
   return (
     <div>
@@ -151,12 +153,15 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
             There are no other entities that are linking to this entity.
           </Text>
         ) : (
-          <RelatedEntities
-            originalEntityId={id}
-            linkedEntities={linkedEntities}
-            space={space}
-            entityNames={entityNames}
-          />
+          Object.values(linkedEntities).map(group => (
+            <EntityCard
+              key={group.id}
+              originalEntityId={id}
+              entityGroup={group}
+              space={space}
+              entityNames={entityNames}
+            />
+          ))
         )}
       </Entities>
     </div>
@@ -204,32 +209,6 @@ function EntityAttributes({
             )}
           </div>
         </div>
-      ))}
-    </>
-  );
-}
-
-function RelatedEntities({
-  originalEntityId,
-  linkedEntities,
-  space,
-  entityNames,
-}: {
-  originalEntityId: string;
-  linkedEntities: Props['linkedEntities'];
-  space: Props['space'];
-  entityNames: Props['entityNames'];
-}) {
-  return (
-    <>
-      {Object.values(linkedEntities).map(group => (
-        <EntityCard
-          key={group.id}
-          originalEntityId={originalEntityId}
-          entityGroup={group}
-          space={space}
-          entityNames={entityNames}
-        />
       ))}
     </>
   );
@@ -331,8 +310,8 @@ function EntityCard({
 
   const description = getEntityDescription(entityGroup.triples, entityNames);
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
-  const triplesWithoutDescription = unlinkedTriples.filter(
-    t => t.value.type === 'string' && t.value.value !== description
+  const triplesWithoutDescription = unlinkedTriples.filter(t =>
+    t.value.type === 'string' ? t.value.value !== description : true
   );
 
   return (
@@ -419,7 +398,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
   ]);
 
-  // TODO: Is there a better way to do this?
   const relatedEntities = await Promise.all(
     related.triples.map(triple =>
       new Network(storage, config.subgraph).fetchTriples({
@@ -436,12 +414,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     .flatMap(entity => entity.triples)
     .reduce((acc, triple) => {
       if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
-
       acc[triple.entityId].id = triple.entityId;
       acc[triple.entityId].name = triple.entityName;
-
       acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
-
       return acc;
     }, {} as Record<string, EntityGroup>);
 
