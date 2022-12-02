@@ -75,6 +75,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
   };
 
   const description = getEntityDescription(triples, entityNames);
+  const triplesWithoutDescription = triples.filter(t => t.value.type === 'string' && t.value.value !== description);
 
   return (
     <div>
@@ -120,7 +121,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
               {description}
             </Text>
           )}
-          <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
+          <EntityAttributes triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
         </Attributes>
       </Content>
 
@@ -311,7 +312,6 @@ function EntityCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // TODO: We need a function to split the triples by this predicate
   const [linkedTriples, unlinkedTriples] = partition(
     entityGroup.triples,
     t => t.value.type === 'entity' && t.value.id === originalEntityId
@@ -319,6 +319,9 @@ function EntityCard({
 
   const description = getEntityDescription(entityGroup.triples, entityNames);
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
+  const triplesWithoutDescription = unlinkedTriples.filter(
+    t => t.value.type === 'string' && t.value.value !== description
+  );
 
   return (
     <EntityCardContainer>
@@ -350,7 +353,9 @@ function EntityCard({
                 entityNames={entityNames}
               />
             ))}
-            {isExpanded && <EntityAttributes triples={unlinkedTriples} space={space} entityNames={entityNames} />}
+            {isExpanded && (
+              <EntityAttributes triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
+            )}
           </EntityCardContent>
         </>
       )}
