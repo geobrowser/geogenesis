@@ -266,6 +266,7 @@ const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
     alignItems: 'center',
     display: 'flex',
     justifyContent: 'center',
+    gap: theme.space * 1.5,
     padding: theme.space,
     backgroundColor: colors.backgroundColor,
     borderRadius: 4,
@@ -276,11 +277,12 @@ const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
 });
 
 export const SmallButton = React.forwardRef(function SmallButton(
-  { onClick, children, variant = 'secondary', disabled = false, ...props }: Props,
+  { onClick, children, icon, variant = 'secondary', disabled = false, ...props }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
   return (
     <StyledSmallButton disabled={disabled} variant={variant} ref={ref} onClick={onClick} {...props}>
+      {icon ? <>{icons[icon]('grey-04')}</> : null}
       {children}
     </StyledSmallButton>
   );
