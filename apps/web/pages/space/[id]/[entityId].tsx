@@ -88,9 +88,12 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
       <Spacer height={12} />
 
       {description && (
-        <Text as="p" color="grey-04">
-          {description}
-        </Text>
+        <>
+          <Spacer height={16} />
+          <Text as="p" color="grey-04">
+            {description}
+          </Text>
+        </>
       )}
 
       <Spacer height={16} />
