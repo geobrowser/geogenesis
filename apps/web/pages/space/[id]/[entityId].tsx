@@ -207,23 +207,21 @@ function EntityAttributes({
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
-          <div style={{ display: 'flex' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             {/* 
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
             */}
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
-                <>
+                <div style={{ marginTop: 4 }}>
                   <Chip href={navUtils.toEntity(space, triple.value.id)}>
                     {entityNames[triple.value.id] || triple.value.id}
                   </Chip>
-                  <Spacer width={8} />
-                </>
+                </div>
               ) : (
                 <>
                   <Text as="p">{triple.value.value}</Text>
-                  <Spacer width={8} />
                 </>
               )
             )}
