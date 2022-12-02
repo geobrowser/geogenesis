@@ -85,7 +85,15 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
         {name}
       </Text>
 
-      <Spacer height={20} />
+      <Spacer height={12} />
+
+      {description && (
+        <Text as="p" color="grey-04">
+          {description}
+        </Text>
+      )}
+
+      <Spacer height={16} />
 
       <EntityActionGroup>
         <SmallButton onClick={onCopyEntityId} variant="secondary" icon={copyText === 'ID Copied!' ? undefined : 'copy'}>
@@ -118,37 +126,34 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
       <Content>
         <Attributes>
-          {description && (
-            <Text as="p" color="grey-04">
-              {description}
             </Text>
           )}
-          <EntityAttributes triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
+          <EntityAttributes entityId={id} triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
         </Attributes>
       </Content>
 
       <Spacer height={40} />
 
-      <Text as="h2" variant="largeTitle">
+      <Text as="h2" variant="mediumTitle">
         Linked by
       </Text>
 
-      <Spacer height={12} />
-
       <Entities>
         {Object.entries(linkedEntities).length === 0 ? (
-          <Text variant="metadataMedium" color="grey-04">
             There are no other entities that are linking to this entity.
           </Text>
         ) : (
           Object.values(linkedEntities).map(group => (
-            <LinkedEntityCard
-              key={group.id}
-              originalEntityId={id}
-              entityGroup={group}
-              space={space}
-              entityNames={entityNames}
-            />
+            <>
+              <Spacer height={12} />
+              <LinkedEntityCard
+                key={group.id}
+                originalEntityId={id}
+                entityGroup={group}
+                space={space}
+                entityNames={entityNames}
+              />
+            </>
           ))
         )}
       </Entities>
