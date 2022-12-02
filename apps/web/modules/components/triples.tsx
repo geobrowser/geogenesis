@@ -193,14 +193,15 @@ function Triples({ spaceId }: Props) {
       <Spacer height={40} />
 
       {showPredefinedQueries && (
-        <motion.div style={{ width: '100%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <PredefinedQueriesContainer name={spaceName} />
-        </motion.div>
+        <>
+          <motion.div style={{ width: '100%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <PredefinedQueriesContainer name={spaceName} />
+          </motion.div>
+          <Spacer height={22} />
+        </>
       )}
 
-      <Spacer height={showPredefinedQueries ? 21.5 : 12} />
-
-      <motion.div layout="position">
+      <motion.div style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
         <TripleInput
           showPredefinedQueries={showPredefinedQueries}
           onShowPredefinedQueriesChange={setShowPredefinedQueries}

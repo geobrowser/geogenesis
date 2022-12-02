@@ -5,7 +5,7 @@ interface Props {
   maxLines?: number;
 }
 
-export const CellTruncate = styled.div<Props>(props => ({
+export const Truncate = styled.div<Props>(props => ({
   display: '-webkit-box',
   WebkitBoxOrient: 'vertical',
 

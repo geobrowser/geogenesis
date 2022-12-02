@@ -1,5 +1,5 @@
 import { computed, ObservableComputed } from '@legendapp/state';
-import { Triple } from './types';
+import { EntityNames, Triple } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -36,6 +36,15 @@ export function getEntityName(triples: Triple[]) {
   return nameValue?.type === 'string' ? nameValue.value : null;
 }
 
+export function getEntityDescription(triples: Triple[], entityNames: EntityNames) {
+  const descriptionEntityId = Object.entries(entityNames).find(
+    ([_, attributeId]) => attributeId === 'Description'
+  )?.[0];
+
+  const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
+  return descriptionValue?.type === 'string' ? descriptionValue.value : null;
+}
+
 export function getFilesFromFileList(fileList: FileList): File[] {
   const files: File[] = [];
   for (let i = 0; i < fileList.length; i++) {
@@ -58,4 +67,13 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
   });
 
   return result;
+}
+
+export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
+  return array.reduce<[T[], T[]]>(
+    ([pass, fail], item) => {
+      return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
+    },
+    [[], []]
+  );
 }

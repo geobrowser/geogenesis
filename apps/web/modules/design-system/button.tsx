@@ -56,8 +56,8 @@ function getButtonColors(variant: ButtonVariant, disabled: boolean, theme: Theme
         backgroundColor: theme.colors.text,
         backgroundColorHover: theme.colors.text,
         borderColor: theme.colors.text,
-        borderColorHover: theme.colors.white,
-        borderColorFocus: theme.colors.white,
+        borderColorHover: theme.colors.text,
+        borderColorFocus: theme.colors.text,
       };
     case 'done':
       return {
@@ -260,7 +260,7 @@ export const StyledLabel = styled(StyledButton)(props => ({
 }));
 
 const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
-  const colors = getButtonColors('secondary', false, theme);
+  const colors = getButtonColors(variant, false, theme);
 
   return {
     alignItems: 'center',
@@ -271,16 +271,20 @@ const StyledSmallButton = styled(StyledButton)(({ variant, theme }) => {
     borderRadius: 4,
     boxShadow: `inset 0 0 0 1px ${colors.borderColor}`,
     ...theme.typography.smallButton,
-    color: theme.colors['grey-04'],
+    color: colors.color,
   };
 });
 
 export const SmallButton = React.forwardRef(function SmallButton(
-  { onClick, children, variant = 'secondary', disabled = false, ...props }: Props,
+  { onClick, children, icon, variant = 'secondary', disabled = false, ...props }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
+  const iconColor = getIconColor(variant, disabled, icon);
+
   return (
     <StyledSmallButton disabled={disabled} variant={variant} ref={ref} onClick={onClick} {...props}>
+      {icon ? <>{icons[icon](variant === 'secondary' ? 'grey-04' : iconColor)}</> : null}
+      {icon ? <Spacer width={6} /> : null}
       {children}
     </StyledSmallButton>
   );

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import React from 'react';
 import { Text } from '../../design-system/text';
 import { CellInput } from './cell-input';
-import { CellTruncate } from './cell-truncate';
+import { Truncate } from '../../design-system/truncate';
 
 const StyledLink = styled.a(({ theme }) => ({
   ...theme.typography.tableCell,
@@ -43,8 +43,8 @@ export function CellEditableInput({ isEditable, isExpanded, value, isEntity, hre
   return isEditable ? (
     <CellInput value={value} {...rest} />
   ) : (
-    <CellTruncate maxLines={isEntity ? 1 : 3} shouldTruncate={!isExpanded}>
+    <Truncate maxLines={isEntity ? 1 : 3} shouldTruncate={!isExpanded}>
       {content}
-    </CellTruncate>
+    </Truncate>
   );
 }

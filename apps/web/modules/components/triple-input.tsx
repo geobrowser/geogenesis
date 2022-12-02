@@ -52,7 +52,7 @@ const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries:
 }));
 
 const InputContainer = styled.div({
-  width: '100%',
+  overflow: 'hidden',
   display: 'flex',
   position: 'relative',
 });
@@ -64,13 +64,13 @@ const TriplesInputField = styled(Input)(props => ({
 }));
 
 const AdvancedFilters = styled.div(props => ({
+  overflow: 'hidden',
   display: 'flex',
   alignItems: 'center',
   gap: props.theme.space,
   width: '100%',
   borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  // padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
   paddingLeft: props.theme.space * 10,
   backgroundColor: props.theme.colors.white,
 }));
@@ -129,6 +129,8 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
 
 const AdvancedFilterPillContainer = styled.button(props => ({
   ...props.theme.typography.metadataMedium,
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
   display: 'flex',
   alignItems: 'center',
   padding: `${props.theme.space}px ${props.theme.space * 2}px`,
@@ -166,7 +168,7 @@ function getFilterLabel(field: FilterClause['field']) {
       return 'Attribute ID is';
     case 'value':
       return 'Value contains';
-    case 'linked-by':
+    case 'linked-to':
       return 'Entity contains reference to';
   }
 }

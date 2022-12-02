@@ -4,37 +4,26 @@ import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useEffect, useState } from 'react';
-import { Button, SmallButton } from '~/modules/design-system/button';
+import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { TabButton } from '~/modules/design-system/tab-button';
 import { getConfigFromUrl } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityName, groupBy, navUtils } from '~/modules/utils';
+import { getEntityDescription, getEntityName, groupBy, navUtils, partition } from '~/modules/utils';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { AnimatePresence } from 'framer-motion';
+import { Truncate } from '~/modules/design-system/truncate';
 
 const Content = styled.div(({ theme }) => ({
-  boxShadow: theme.shadows.button,
   border: `1px solid ${theme.colors['grey-02']}`,
   borderRadius: theme.radius,
   backgroundColor: theme.colors.white,
-}));
-
-const Header = styled.header(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.space * 5,
-
-  img: {
-    borderRadius: theme.radius,
-  },
 }));
 
 const Attributes = styled.div(({ theme }) => ({
@@ -48,34 +37,21 @@ const Entities = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.space * 3,
-  padding: theme.space * 5,
 }));
 
-const ToggleGroup = styled.div(({ theme }) => ({
+const EntityActionGroup = styled.div(({ theme }) => ({
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: theme.space * 5,
-  borderBottom: `1px solid ${theme.colors['grey-02']}`,
-
-  div: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.space * 2,
-  },
+  justifyContent: 'flex-end',
 }));
 
-const EntityId = styled.p(props => ({
-  ...props.theme.typography.button,
-  backgroundColor: props.theme.colors['grey-01'],
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-  borderRadius: props.theme.radius,
-}));
-
-const CopyButton = styled(Button)`
-  display: inline-flex;
-  width: 143px;
-`;
+interface Props {
+  triples: Triple[];
+  id: string;
+  name: string;
+  space: string;
+  entityNames: EntityNames;
+  linkedEntities: Record<string, EntityGroup>;
+}
 
 const CopyText = styled(Text)`
   display: inline-flex;
@@ -86,8 +62,7 @@ const MotionCopyText = motion(CopyText);
 
 export default function EntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const { setPageName } = usePageName();
-  const [step, setStep] = useState<'entity' | 'related'>('entity');
-  const [copyText, setCopyText] = useState<'Copy Entity ID' | 'ID Copied!'>('Copy Entity ID');
+  const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
 
   useEffect(() => {
     if (name !== id) setPageName(name);
@@ -96,96 +71,129 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   const onCopyEntityId = () => {
     navigator.clipboard.writeText(id);
-    setCopyText('ID Copied!');
-    setTimeout(() => setCopyText('Copy Entity ID'), 3600);
+    setCopyText('Entity ID Copied');
+    setTimeout(() => setCopyText('Copy ID'), 3600);
   };
 
-  // e.g., 4834k...934h3
-  const truncatedEntityId = `${id.slice(0, 6)}${id.length > 6 ? '...' : ''}${id.slice(-5)}`;
+  const description = getEntityDescription(triples, entityNames);
+  const triplesWithoutDescription = triples.filter(t =>
+    t.value.type === 'string' ? t.value.value !== description : true
+  );
 
   return (
     <div>
-      <Header>
-        <img src="/facts-large.svg" alt="Icon representing entities in the Geo database" />
+      <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
-      </Header>
+      </Truncate>
+
+      {description && (
+        <>
+          <Spacer height={16} />
+          <Text as="p" color="grey-04">
+            {description}
+          </Text>
+        </>
+      )}
+
+      <Spacer height={16} />
+
+      <EntityActionGroup>
+        <SmallButton
+          onClick={onCopyEntityId}
+          variant={copyText === 'Entity ID Copied' ? 'tertiary' : 'secondary'}
+          icon={copyText === 'Entity ID Copied' ? undefined : 'copy'}
+        >
+          <AnimatePresence mode="wait">
+            {copyText === 'Entity ID Copied' ? (
+              <MotionCopyText
+                color="white"
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                variant="smallButton"
+              >
+                <Tick />
+                <Spacer width={4} />
+                {copyText}
+              </MotionCopyText>
+            ) : (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+              >
+                {copyText}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </SmallButton>
+      </EntityActionGroup>
+
+      <Spacer height={8} />
+
+      <Content>
+        <Attributes>
+          <EntityAttributes entityId={id} triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
+        </Attributes>
+      </Content>
 
       <Spacer height={40} />
 
-      <Content>
-        <ToggleGroup>
-          <div>
-            <TabButton icon="facts" isActive={step === 'entity'} onClick={() => setStep('entity')}>
-              Entity data
-            </TabButton>
+      <Text as="h2" variant="mediumTitle">
+        Linked by
+      </Text>
 
-            <TabButton icon="entity" isActive={step === 'related'} onClick={() => setStep('related')}>
-              Linked by
-            </TabButton>
-          </div>
-
-          <div>
-            <EntityId>{truncatedEntityId}</EntityId>
-            <CopyButton
-              onClick={onCopyEntityId}
-              variant={copyText === 'ID Copied!' ? 'done' : 'secondary'}
-              icon={copyText === 'ID Copied!' ? undefined : 'copy'}
-            >
-              <AnimatePresence mode="wait">
-                {copyText === 'ID Copied!' ? (
-                  <MotionCopyText
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.85 }}
-                    variant="button"
-                  >
-                    <Tick />
-                    <Spacer width={4} />
-                    {copyText}
-                  </MotionCopyText>
-                ) : (
-                  <motion.span
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.85 }}
-                  >
-                    {copyText}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </CopyButton>
-          </div>
-        </ToggleGroup>
-
-        {step === 'entity' && triples.length > 0 && (
-          <Attributes>
-            <EntityAttributes triples={triples} space={space} entityNames={entityNames} />
-          </Attributes>
+      <Entities>
+        {Object.entries(linkedEntities).length === 0 ? (
+          <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
+        ) : (
+          <>
+            <Spacer height={12} />
+            {Object.values(linkedEntities).map(group => (
+              <LinkedEntityCard
+                key={group.id}
+                originalEntityId={id}
+                entityGroup={group}
+                space={space}
+                entityNames={entityNames}
+              />
+            ))}
+          </>
         )}
+      </Entities>
+    </div>
+  );
+}
 
-        {step === 'related' && (
-          <Entities>
-            {Object.entries(linkedEntities).length === 0 ? (
-              <Text variant="metadataMedium" color="grey-04">
-                There are no other entities that are linking to this entity.
-              </Text>
-            ) : (
-              <RelatedEntities linkedEntities={linkedEntities} space={space} entityNames={entityNames} />
-            )}
-          </Entities>
-        )}
-      </Content>
+function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
+  return (
+    <div key={triple.attributeId}>
+      <Text as="p" variant="bodySemibold">
+        {entityNames[triple.attributeId] || triple.attributeId}
+      </Text>
+      {triple.value.type === 'entity' ? (
+        <>
+          <Spacer height={4} />
+          <Chip href={navUtils.toEntity(space, triple.value.id)}>
+            {entityNames[triple.value.id] || triple.value.id}
+          </Chip>
+        </>
+      ) : (
+        <Text as="p">{triple.value.value}</Text>
+      )}
     </div>
   );
 }
 
 function EntityAttributes({
+  entityId,
   triples,
   space,
   entityNames,
 }: {
+  entityId: string;
   triples: Props['triples'];
   space: Props['space'];
   entityNames: Props['entityNames'];
@@ -195,21 +203,26 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples]) => (
-        <div key={attributeId}>
+        <div key={`${entityId}-entity-attributes-${attributeId}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
-          <Spacer height={4} />
           <div style={{ display: 'flex', gap: 8 }}>
+            {/* 
+              Have to do some janky layout stuff instead of being able to just use gap since we want different
+              height between the attribute name and the attribute value for entities vs strings
+            */}
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
-                <>
+                <div style={{ marginTop: 4 }}>
                   <Chip href={navUtils.toEntity(space, triple.value.id)}>
                     {entityNames[triple.value.id] || triple.value.id}
                   </Chip>
-                </>
+                </div>
               ) : (
-                <Text as="p">{triple.value.value}</Text>
+                <>
+                  <Text as="p">{triple.value.value}</Text>
+                </>
               )
             )}
           </div>
@@ -219,25 +232,7 @@ function EntityAttributes({
   );
 }
 
-function RelatedEntities({
-  linkedEntities,
-  space,
-  entityNames,
-}: {
-  linkedEntities: Props['linkedEntities'];
-  space: Props['space'];
-  entityNames: Props['entityNames'];
-}) {
-  return (
-    <>
-      {Object.values(linkedEntities).map(group => (
-        <EntityCard key={group.id} entityGroup={group} space={space} entityNames={entityNames} />
-      ))}
-    </>
-  );
-}
-
-const EntityCardContainer = styled.div(({ theme }) => ({
+const LinkedEntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
@@ -246,20 +241,19 @@ const EntityCardContainer = styled.div(({ theme }) => ({
     border: `1px solid ${theme.colors.text}`,
 
     // @ts-ignore -- This is valid with emotion/styled
-    [EntityCardHeader]: {
+    [LinkedEntityCardHeader]: {
       borderColor: theme.colors.text,
     },
   },
 }));
 
-const EntityCardHeader = styled.a<{ showBorder: boolean }>(({ theme, showBorder }) => ({
+const LinkedEntityCardHeader = styled.a(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   verticalAlign: 'top',
   gap: theme.space * 5,
 
-  padding: theme.space * 3,
-  ...(showBorder && { borderBottom: `1px solid ${theme.colors['grey-02']}` }),
+  padding: theme.space * 4,
 
   div: {
     display: 'flex',
@@ -278,70 +272,99 @@ const IconContainer = styled.div(({ theme }) => ({
   marginTop: 6,
 }));
 
-const EntityCardContent = styled.div(({ theme }) => ({
+const LinkedEntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.space * 4,
   padding: theme.space * 4,
+  backgroundColor: theme.colors.white,
 }));
 
-const EntityCardFooter = styled.div(({ theme }) => ({
+const LinkedEntityCardFooter = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: `${theme.space * 2}px ${theme.space * 4}px`,
+  backgroundColor: theme.colors.white,
+}));
+
+const LinkedEntityDescription = styled.div(({ theme }) => ({
+  padding: theme.space * 4,
+  paddingTop: 0,
   backgroundColor: theme.colors.bg,
 }));
 
-function EntityCard({
+function LinkedEntityCard({
+  originalEntityId,
   entityGroup,
   space,
   entityNames,
 }: {
+  originalEntityId: string;
   entityGroup: EntityGroup;
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const shouldMaximizeContent = Boolean(isExpanded || entityGroup.description);
+  const [linkedTriples, unlinkedTriples] = partition(
+    entityGroup.triples,
+    t => t.value.type === 'entity' && t.value.id === originalEntityId
+  );
+
+  const description = getEntityDescription(entityGroup.triples, entityNames);
+  const triplesWithoutDescription = unlinkedTriples.filter(t =>
+    t.value.type === 'string' ? t.value.value !== description : true
+  );
+
+  const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
   return (
-    <EntityCardContainer>
+    <LinkedEntityCardContainer>
       <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-        <EntityCardHeader showBorder={shouldMaximizeContent}>
-          <div>
-            <img src="/facts-medium.svg" alt="Icon representing entities in the Geo database" />
-            <Text as="h2" variant="cardEntityTitle">
-              {entityGroup.name ?? entityGroup.id}
-            </Text>
-          </div>
+        <LinkedEntityCardHeader>
+          <Text as="h2" variant="cardEntityTitle">
+            {entityGroup.name ?? entityGroup.id}
+          </Text>
           {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
           <IconContainer>
             <RightArrowDiagonal color="grey-04" />
           </IconContainer>
-        </EntityCardHeader>
+        </LinkedEntityCardHeader>
       </Link>
 
-      {shouldMaximizeContent && (
-        <>
-          <EntityCardContent>
-            {entityGroup.description && (
-              <div>
-                <Text as="p" variant="bodySemibold">
-                  Description
-                </Text>
-                <Text as="p" color="grey-04">
-                  {entityGroup.description}
-                </Text>
-              </div>
-            )}
-            {isExpanded && <EntityAttributes triples={entityGroup.triples} space={space} entityNames={entityNames} />}
-          </EntityCardContent>
-        </>
+      {description && (
+        <LinkedEntityDescription>
+          <Text as="p" color="grey-04">
+            {description}
+          </Text>
+        </LinkedEntityDescription>
       )}
 
-      <EntityCardFooter>
+      <LinkedEntityCardContent>
+        {shouldMaximizeContent && (
+          <>
+            {linkedTriples.map((triple, i) => (
+              <EntityAttribute
+                key={`${triple.attributeId}-${triple.id}-${i}`}
+                triple={triple}
+                space={space}
+                entityNames={entityNames}
+              />
+            ))}
+            {isExpanded && (
+              <EntityAttributes
+                entityId={entityGroup.id}
+                triples={triplesWithoutDescription}
+                space={space}
+                entityNames={entityNames}
+              />
+            )}
+          </>
+        )}
+      </LinkedEntityCardContent>
+
+      <LinkedEntityCardFooter>
         <Text variant="breadcrumb">
           {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
         </Text>
@@ -350,28 +373,20 @@ function EntityCard({
             <ChevronDownSmall color="grey-04" />
           </span>
           <Spacer width={6} />
-          {isExpanded ? 'Hide all attributes' : 'Show all attributes'}
+          {isExpanded
+            ? `Hide ${triplesWithoutDescription.length} more values`
+            : `Show ${triplesWithoutDescription.length} more values`}
         </SmallButton>
-      </EntityCardFooter>
-    </EntityCardContainer>
+      </LinkedEntityCardFooter>
+    </LinkedEntityCardContainer>
   );
 }
 
 type EntityGroup = {
   triples: Triple[];
   name: string | null;
-  description: string | null;
   id: string;
 };
-
-interface Props {
-  triples: Triple[];
-  id: string;
-  name: string;
-  space: string;
-  entityNames: EntityNames;
-  linkedEntities: Record<string, EntityGroup>;
-}
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
@@ -394,11 +409,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       query: '',
       skip: 0,
       first: 100,
-      filter: [{ field: 'linked-by', value: entityId }],
+      filter: [{ field: 'linked-to', value: entityId }],
     }),
   ]);
 
-  // TODO: Is there a better way to do this?
   const relatedEntities = await Promise.all(
     related.triples.map(triple =>
       new Network(storage, config.subgraph).fetchTriples({
@@ -414,20 +428,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const linkedEntities: Record<string, EntityGroup> = relatedEntities
     .flatMap(entity => entity.triples)
     .reduce((acc, triple) => {
-      if (!acc[triple.entityId])
-        acc[triple.entityId] = { triples: [], name: null, description: null, id: triple.entityId };
-
+      if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
       acc[triple.entityId].id = triple.entityId;
       acc[triple.entityId].name = triple.entityName;
-
       acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
-      if (triple.attributeId === 'Description' && triple.value.type === 'string') {
-        acc[triple.entityId].description = triple.value.value;
-        acc[triple.entityId].triples = acc[triple.entityId].triples.filter(
-          triple => triple.attributeId !== 'Description'
-        );
-      }
-
       return acc;
     }, {} as Record<string, EntityGroup>);
 
