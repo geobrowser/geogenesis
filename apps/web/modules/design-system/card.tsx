@@ -24,6 +24,11 @@ const CoverImage = styled.img({
   height: 240,
   objectFit: 'cover',
   transition: 'all ease-in-out 0.15s',
+
+  '@media (max-width: 1200px)': {
+    width: '92vw',
+    maxHeight: 240,
+  },
 });
 
 const GridCell = styled.a(({ theme }) => ({
