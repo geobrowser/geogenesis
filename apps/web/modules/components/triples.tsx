@@ -18,6 +18,7 @@ import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
 import { useSpaces } from '../state/use-spaces';
 import { Value } from '../types';
 import { getFilesFromFileList } from '../utils';
+import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import { TripleInput } from './triple-input';
 import TripleTable from './triple-table';
@@ -198,23 +199,7 @@ function Triples({ spaceId }: Props) {
             <PredefinedQueriesContainer
               spaceName={spaceName}
               onSetFilterState={tripleStore.setFilterState}
-              predefinedQueries={[
-                {
-                  label: 'Supplements for COVID',
-                  filterState: [
-                    { field: 'entity-name', value: 'COVID' },
-                    { field: 'attribute-name', value: 'Is about' },
-                    { field: 'value', value: 'Supplements' },
-                  ],
-                },
-                {
-                  label: 'Author is Rhonda Patrick',
-                  filterState: [
-                    { field: 'attribute-name', value: 'Author' },
-                    { field: 'value', value: 'Rhonda Patrick' },
-                  ],
-                },
-              ]}
+              predefinedQueries={PREDEFINED_QUERIES[spaceName] ?? []}
             />
           </motion.div>
           <Spacer height={22} />

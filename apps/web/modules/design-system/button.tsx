@@ -272,6 +272,15 @@ const StyledSmallButton = styled(StyledButton)<{ borderColor?: string }>(({ vari
     boxShadow: `inset 0 0 0 1px ${borderColor || colors.borderColor}`,
     ...theme.typography.smallButton,
     color: colors.color,
+
+    ':hover': {
+      boxShadow: `inset 0 0 0 1px ${borderColor || colors.borderColor}`,
+    },
+
+    ':focus': {
+      boxShadow: `inset 0 0 0 2px ${borderColor || colors.borderColor}`,
+      outline: 'none',
+    },
   };
 });
 

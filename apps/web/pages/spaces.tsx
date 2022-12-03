@@ -16,9 +16,14 @@ const Column = styled.div({
 });
 
 const Grid = styled.div(({ theme }) => ({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, 590px)',
-  gap: `${theme.space * 5}px`,
+  display: 'flex',
+  justifyItems: 'space-between',
+  flexWrap: 'wrap',
+  gap: 16,
+
+  '@media (max-width: 1200px)': {
+    alignItems: 'center',
+  },
 }));
 
 const TextContainer = styled.div({
@@ -55,7 +60,6 @@ export default function Spaces() {
         ) : (
           <SpacesLayoutPlaceholder />
         )}
-        {/* <SpacesLayoutPlaceholder /> */}
       </Grid>
 
       <Spacer height={100} />
