@@ -42,7 +42,8 @@ export function getConfig(chainId: string) {
   const config = Object.values(configOptions).find(options => options.chainId === chainId);
 
   if (!config) {
-    throw new Error(`No config for chain ${chainId}`);
+    console.error(`No config for chain ${chainId}`);
+    return configOptions.production;
   }
 
   return config;
