@@ -853,6 +853,49 @@ export function convertLegacyHealthData(
   return [...attributeRows, ...(shouldIncludeSections ? sectionEavs : []), ...eavRows];
 }
 
+function convertHealthSources(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataSourceRow = {
+    Entity: string;
+    Types: string;
+    Name: string;
+    Description: string;
+    'Authored by': string;
+    URL: string;
+  };
+
+  const results = parseCSV<HealthDataSourceRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['authored by', 'type', 'attribute'],
+    ['authored by', 'name', 'Authored by'],
+    ['url', 'type', 'attribute'],
+    ['url', 'name', 'URL'],
+    ['description', 'type', 'attribute'],
+    ['description', 'name', 'Description'],
+  ];
+
+  function toEavRow(row: HealthDataSourceRow): EavRow[] {
+    return [
+      [row.Entity, 'name', row.Name],
+      row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+      row.Description ? [row.Entity, 'description', row.Description] : null,
+      row['Authored by'] ? [row.Entity, 'authored by', row['Authored by']] : null,
+      row.URL ? [row.Entity, 'url', row.URL] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
+  return [...attributeRows, ...eavRows];
+}
+
 function convertSanFranciscoData(
   csv: string,
   { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
@@ -964,8 +1007,8 @@ function convertSanFranciscoSources(
     ['url', 'name', 'URL'],
     ['authored by', 'type', 'attribute'],
     ['authored by', 'name', 'Authored by'],
-    ['description', 'type', 'attribute'],
-    ['description', 'name', 'Description'],
+    // ['description', 'type', 'attribute'],
+    // ['description', 'name', 'Description'],
   ];
 
   function toEavRow(row: HealthDataSourceRow): EavRow[] {
@@ -1016,6 +1059,9 @@ export async function importCSVFile(
         break;
       case 'healthdata-entities.csv':
         eavs = [...eavs, ...convertHealthEntities(csv)];
+        break;
+      case 'healthdata-sources.csv':
+        eavs = [...eavs, ...convertHealthSources(csv)];
         break;
       case 'sfdata.csv':
         eavs = [...eavs, ...convertSanFranciscoData(csv)];
