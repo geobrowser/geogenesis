@@ -36,6 +36,7 @@ const Attributes = styled.div(({ theme }) => ({
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
+  flexWrap: 'wrap',
   gap: theme.space * 3,
 }));
 
@@ -177,6 +178,12 @@ const EntityAttributeContainer = styled.div(({ theme }) => ({
   wordBreak: 'break-word',
 }));
 
+const GroupedAttributes = styled.div(({ theme }) => ({
+  display: 'flex',
+  gap: theme.space * 2,
+  flexWrap: 'wrap',
+}));
+
 function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
   return (
     <div key={triple.attributeId}>
@@ -217,7 +224,7 @@ function EntityAttributes({
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <GroupedAttributes>
             {/* 
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
@@ -235,7 +242,7 @@ function EntityAttributes({
                 </>
               )
             )}
-          </div>
+          </GroupedAttributes>
         </EntityAttributeContainer>
       ))}
     </>
