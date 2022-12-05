@@ -42,6 +42,12 @@ const Entities = styled.div(({ theme }) => ({
 const EntityActionGroup = styled.div(({ theme }) => ({
   display: 'flex',
   justifyContent: 'flex-end',
+
+  '@media (max-width: 600px)': {
+    button: {
+      flexGrow: 1,
+    },
+  },
 }));
 
 interface Props {
