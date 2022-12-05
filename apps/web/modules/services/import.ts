@@ -268,7 +268,7 @@ export function convertHealthFacts(
 
   // Since we aren't using header rows the parser parses the first row as the headers.
   // We can skip the headers row. There's also an additional row of instructions we can skip.
-  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
   return [...attributeRows, ...eavRows];
 }
 
