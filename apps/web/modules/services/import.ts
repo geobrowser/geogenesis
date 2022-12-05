@@ -896,6 +896,41 @@ function convertHealthSources(
   return [...attributeRows, ...eavRows];
 }
 
+function convertHealthDescriptions(
+  csv: string,
+  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+    rowCount: Infinity,
+    shouldIncludeSections: true,
+  }
+) {
+  type HealthDataDescriptionRow = {
+    Entity: string;
+    Types: string;
+    Source: string;
+  };
+
+  const results = parseCSV<HealthDataDescriptionRow>(csv, { header: true });
+
+  const attributeRows: EavRow[] = [
+    ['source', 'type', 'attribute'],
+    ['source', 'name', 'Source'],
+  ];
+
+  function toEavRow(row: HealthDataDescriptionRow): EavRow[] {
+    return [
+      [row.Entity, 'name', row.Entity],
+      row.Types ? [row.Entity, 'type', row.Types.toLowerCase()] : null,
+      row.Types ? [row.Types.toLowerCase(), 'name', row.Types] : null,
+      row.Types ? [row.Types.toLowerCase(), 'type', 'attribute'] : null,
+      row.Source ? [row.Entity, 'source', row.Source] : null,
+    ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
+  }
+
+  const eavRows = results.data.slice(0, rowCount).flatMap(toEavRow);
+
+  return [...attributeRows, ...eavRows];
+}
+
 function convertSanFranciscoData(
   csv: string,
   { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
@@ -1062,6 +1097,9 @@ export async function importCSVFile(
         break;
       case 'healthdata-sources.csv':
         eavs = [...eavs, ...convertHealthSources(csv)];
+        break;
+      case 'healthdata-descriptions.csv':
+        eavs = [...eavs, ...convertHealthDescriptions(csv)];
         break;
       case 'sfdata.csv':
         eavs = [...eavs, ...convertSanFranciscoData(csv)];
