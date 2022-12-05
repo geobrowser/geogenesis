@@ -167,6 +167,10 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
   );
 }
 
+const EntityAttributeContainer = styled.div(({ theme }) => ({
+  wordBreak: 'break-word',
+}));
+
 function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
   return (
     <div key={triple.attributeId}>
@@ -203,7 +207,7 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples]) => (
-        <div key={`${entityId}-entity-attributes-${attributeId}`}>
+        <EntityAttributeContainer key={`${entityId}-entity-attributes-${attributeId}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
@@ -226,7 +230,7 @@ function EntityAttributes({
               )
             )}
           </div>
-        </div>
+        </EntityAttributeContainer>
       ))}
     </>
   );

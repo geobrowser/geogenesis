@@ -150,7 +150,7 @@ export function Navbar() {
       <Row>
         <DiscordLink />
         <Spacer width={16} />
-        <EditToggle spaceId={components?.[2].split('?')[0] ?? ''} />
+        <EditToggle spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </Row>
     </Header>
   );
