@@ -82,15 +82,17 @@ function getComponentRoute({
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
+  const componentName = component.split('?')?.[0];
+
   switch (components[1]) {
     case 'space':
       switch (index) {
         case 1:
           return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
         case 2:
-          return { path, title: spaceNames[component] ?? ZERO_WIDTH_SPACE, img: spaceImages[component] ?? '' };
+          return { path, title: spaceNames[componentName] ?? ZERO_WIDTH_SPACE, img: spaceImages[componentName] ?? '' };
         case 3:
-          return { path, title: pageName || titleCase(component), img: '/facts.svg' };
+          return { path, title: pageName || titleCase(componentName), img: '/facts.svg' };
       }
   }
 
@@ -148,7 +150,7 @@ export function Navbar() {
       <Row>
         <DiscordLink />
         <Spacer width={16} />
-        <EditToggle spaceId={components?.[2] ?? ''} />
+        <EditToggle spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </Row>
     </Header>
   );

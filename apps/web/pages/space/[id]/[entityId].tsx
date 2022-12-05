@@ -42,6 +42,12 @@ const Entities = styled.div(({ theme }) => ({
 const EntityActionGroup = styled.div(({ theme }) => ({
   display: 'flex',
   justifyContent: 'flex-end',
+
+  '@media (max-width: 600px)': {
+    button: {
+      flexGrow: 1,
+    },
+  },
 }));
 
 interface Props {
@@ -167,6 +173,10 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
   );
 }
 
+const EntityAttributeContainer = styled.div(({ theme }) => ({
+  wordBreak: 'break-word',
+}));
+
 function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
   return (
     <div key={triple.attributeId}>
@@ -203,7 +213,7 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples]) => (
-        <div key={`${entityId}-entity-attributes-${attributeId}`}>
+        <EntityAttributeContainer key={`${entityId}-entity-attributes-${attributeId}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
@@ -226,7 +236,7 @@ function EntityAttributes({
               )
             )}
           </div>
-        </div>
+        </EntityAttributeContainer>
       ))}
     </>
   );
