@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { motion } from 'framer-motion';
+import { LayoutGroup, motion } from 'framer-motion';
 import { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import pluralize from 'pluralize';
@@ -19,6 +19,7 @@ import { getEntityDescription, getEntityName, groupBy, navUtils, partition } fro
 import { Tick } from '~/modules/design-system/icons/tick';
 import { AnimatePresence } from 'framer-motion';
 import { Truncate } from '~/modules/design-system/truncate';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 
 const Content = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -156,7 +157,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
         {Object.entries(linkedEntities).length === 0 ? (
           <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
         ) : (
-          <>
+          <LayoutGroup>
             <Spacer height={12} />
             {Object.values(linkedEntities).map(group => (
               <LinkedEntityCard
@@ -167,7 +168,7 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
                 entityNames={entityNames}
               />
             ))}
-          </>
+          </LayoutGroup>
         )}
       </Entities>
     </div>
@@ -337,65 +338,67 @@ function LinkedEntityCard({
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
   return (
-    <LinkedEntityCardContainer>
-      <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
-        <LinkedEntityCardHeader>
-          <Text as="h2" variant="cardEntityTitle">
-            {entityGroup.name ?? entityGroup.id}
-          </Text>
-          {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
-          <IconContainer>
-            <RightArrowDiagonal color="grey-04" />
-          </IconContainer>
-        </LinkedEntityCardHeader>
-      </Link>
+    <ResizableContainer>
+      <LinkedEntityCardContainer>
+        <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
+          <LinkedEntityCardHeader>
+            <Text as="h2" variant="cardEntityTitle">
+              {entityGroup.name ?? entityGroup.id}
+            </Text>
+            {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
+            <IconContainer>
+              <RightArrowDiagonal color="grey-04" />
+            </IconContainer>
+          </LinkedEntityCardHeader>
+        </Link>
 
-      {description && (
-        <LinkedEntityDescription>
-          <Text as="p" color="grey-04">
-            {description}
-          </Text>
-        </LinkedEntityDescription>
-      )}
-
-      <LinkedEntityCardContent>
-        {shouldMaximizeContent && (
-          <>
-            {linkedTriples.map((triple, i) => (
-              <EntityAttribute
-                key={`${triple.attributeId}-${triple.id}-${i}`}
-                triple={triple}
-                space={space}
-                entityNames={entityNames}
-              />
-            ))}
-            {isExpanded && (
-              <EntityAttributes
-                entityId={entityGroup.id}
-                triples={triplesWithoutDescription}
-                space={space}
-                entityNames={entityNames}
-              />
-            )}
-          </>
+        {description && (
+          <LinkedEntityDescription>
+            <Text as="p" color="grey-04">
+              {description}
+            </Text>
+          </LinkedEntityDescription>
         )}
-      </LinkedEntityCardContent>
 
-      <LinkedEntityCardFooter>
-        <Text variant="breadcrumb">
-          {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
-        </Text>
-        <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
-          <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
-            <ChevronDownSmall color="grey-04" />
-          </span>
-          <Spacer width={6} />
-          {isExpanded
-            ? `Hide ${triplesWithoutDescription.length} more values`
-            : `Show ${triplesWithoutDescription.length} more values`}
-        </SmallButton>
-      </LinkedEntityCardFooter>
-    </LinkedEntityCardContainer>
+        <LinkedEntityCardContent>
+          {shouldMaximizeContent && (
+            <>
+              {linkedTriples.map((triple, i) => (
+                <EntityAttribute
+                  key={`${triple.attributeId}-${triple.id}-${i}`}
+                  triple={triple}
+                  space={space}
+                  entityNames={entityNames}
+                />
+              ))}
+              {isExpanded && (
+                <EntityAttributes
+                  entityId={entityGroup.id}
+                  triples={triplesWithoutDescription}
+                  space={space}
+                  entityNames={entityNames}
+                />
+              )}
+            </>
+          )}
+        </LinkedEntityCardContent>
+
+        <LinkedEntityCardFooter>
+          <Text variant="breadcrumb">
+            {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
+          </Text>
+          <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
+            <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
+              <ChevronDownSmall color="grey-04" />
+            </span>
+            <Spacer width={6} />
+            {isExpanded
+              ? `Hide ${triplesWithoutDescription.length} more values`
+              : `Show ${triplesWithoutDescription.length} more values`}
+          </SmallButton>
+        </LinkedEntityCardFooter>
+      </LinkedEntityCardContainer>
+    </ResizableContainer>
   );
 }
 

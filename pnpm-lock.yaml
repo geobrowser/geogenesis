@@ -57,6 +57,7 @@ importers:
       react: ^18.1.0
       react-dom: ^18.1.0
       react-query: ^3.39.2
+      react-use-measure: ^2.1.1
       typescript: ^4.8.4
       undici: ^5.10.0
       uuid: ^9.0.0
@@ -90,6 +91,7 @@ importers:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-query: 3.39.2_biqbaboplfbrettd7655fr4n2y
+      react-use-measure: 2.1.1_biqbaboplfbrettd7655fr4n2y
       undici: 5.11.0
       wagmi: 0.7.9_alnjoy2yz3ld5jj2ozbquoyrju
     devDependencies:
@@ -6224,6 +6226,10 @@ packages:
   /death/1.1.0:
     resolution: {integrity: sha512-vsV6S4KVHvTGxbEcij7hkWRv0It+sGGWVOM67dQde/o5Xjnr+KmLjxWJii2uEObIrt1CcM9w0Yaovx+iOlIL+w==}
     dev: true
+
+  /debounce/1.2.1:
+    resolution: {integrity: sha512-XRRe6Glud4rd/ZGQfiV1ruXSfbvfJedlV9Y6zOlP+2K04vBYiJEte6stfFkCP03aMnY5tsipamumUjL14fofug==}
+    dev: false
 
   /debug/2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -13449,6 +13455,17 @@ packages:
       invariant: 2.2.4
       react: 18.2.0
       tslib: 2.4.0
+    dev: false
+
+  /react-use-measure/2.1.1_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-nocZhN26cproIiIduswYpV5y5lQpSQS1y/4KuvUCjSKmw7ZWIS/+g3aFnX3WdBkyuGUtTLif3UTqnLLhbDoQig==}
+    peerDependencies:
+      react: '>=16.13'
+      react-dom: '>=16.13'
+    dependencies:
+      debounce: 1.2.1
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
     dev: false
 
   /react/18.2.0:
