@@ -20,7 +20,7 @@ export function ServicesProvider({ children }: Props) {
   const { chain } = useNetwork();
 
   // Default to production chain
-  const chainId = chain ? String(chain.id) : configOptions.testnet.chainId;
+  const chainId = chain ? String(chain.id) : configOptions.production.chainId;
 
   const services = useMemo((): Services => {
     const config = getConfig(chainId);

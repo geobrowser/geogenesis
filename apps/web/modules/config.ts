@@ -9,7 +9,7 @@ export type AppConfig = {
   subgraph: string;
 };
 
-export const DEFAULT_ENV: AppEnv = 'testnet';
+export const DEFAULT_ENV: AppEnv = 'production';
 
 export const configOptions: Record<AppEnv, AppConfig> = {
   development: {
