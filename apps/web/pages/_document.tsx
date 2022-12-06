@@ -30,14 +30,14 @@ class MyDocument extends Document {
             property="og:description"
             content="Browse and organize the world's public knowledge and information in a decentralized way."
           />
-          <meta property="og:image" content="https://www.geobrowser.io/spaces/static/geo-social-image.png" />
+          <meta property="og:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
 
           {/* Less essential */}
           <meta name="twitter:card" content="summary_large_image" />
           <meta property="og:site_name" content="geobrowser.io" />
           <meta name="twitter:site" content="@geobrowser" />
           <meta name="twitter:creator" content="@geobrowser" />
-          <meta name="twitter:image" content="https://www.geobrowser.io/spaces/static/geo-social-image.png" />
+          <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
 
           {/* Less essential */}
           <meta property="og:site_name" content="geobrowser.io" />
