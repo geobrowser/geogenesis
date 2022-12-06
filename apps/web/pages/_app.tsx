@@ -11,6 +11,7 @@ import { WalletProvider } from '~/modules/wallet';
 
 import 'modern-normalize';
 import '../styles/styles.css';
+import Head from 'next/head';
 
 const globalStyles = css`
   html {
@@ -51,6 +52,9 @@ function MyApp({ Component, pageProps }: AppProps) {
       <ThemeProvider theme={theme}>
         <WalletProvider>
           <ServicesProvider>
+            <Head>
+              <title>Geo</title>
+            </Head>
             <Global styles={globalStyles} />
             <Navbar />
             <Layout>
