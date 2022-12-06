@@ -17,7 +17,12 @@ async function main() {
   const networkConfig = config.networks![networkId]!
   const chainId = networkConfig.chainId!.toString()
 
-  console.log('Deploying on network', networkId, networkConfig)
+  console.log('Deploying on network', networkId, {
+    ...networkConfig,
+    gas: 50000000000,
+    gasLimit: 50000000000,
+    gasPrice: 50000000000, // 50 gwei
+  })
 
   const beacon = await deploySpaceBeacon({ debug: true })
 
