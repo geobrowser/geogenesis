@@ -67,10 +67,6 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
     color: props.theme.colors.text,
     outlineColor: props.theme.colors.ctaPrimary,
   },
-
-  button: {
-    color: props.theme.colors['grey-04'],
-  },
 }));
 
 interface Props {
