@@ -5,7 +5,7 @@ export const Input = styled.input(props => ({
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
   width: '100%',
-  padding: `${props.theme.space * 2}px ${props.theme.space * 2.5}px`,
+  padding: `${9}px ${props.theme.space * 2.5}px`,
   outline: 'none',
   WebkitAppearance: 'none',
 
