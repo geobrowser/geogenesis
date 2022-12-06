@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
-import { IconButton, SmallButton } from '../design-system/button';
+import { IconButton } from '../design-system/button';
 import { CheckCloseSmall } from '../design-system/icons/check-close-small';
 import { Search } from '../design-system/icons/search';
 import { Input } from '../design-system/input';
@@ -23,6 +23,7 @@ const FilterIconContainer = styled.div(props => ({
   backgroundColor: props.theme.colors.white,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderLeft: 'none',
+  color: props.theme.colors['grey-04'],
 }));
 
 const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
@@ -31,13 +32,16 @@ const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries:
   backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
   borderLeft: 'none',
   transition: 'colors 0.15s ease-in-out',
+  color: props.theme.colors['grey-04'],
 
   '&:hover': {
+    color: props.theme.colors.text,
     backgroundColor: props.theme.colors['grey-01'],
   },
 
   button: {
     padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+    color: props.showPredefinedQueries ? props.theme.colors.text : props.theme.colors['grey-04'],
 
     '&:active': {
       color: props.theme.colors.text,
