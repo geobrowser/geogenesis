@@ -110,7 +110,7 @@ export function OboardingCarousel() {
 
             <RightArrowLong color="grey-04" />
 
-            <TabButton icon="copy" onClick={onStepChange('organize')} isActive={step === 'organize'}>
+            <TabButton icon="organize-data" onClick={onStepChange('organize')} isActive={step === 'organize'}>
               Organize data
             </TabButton>
 

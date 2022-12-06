@@ -67,15 +67,31 @@ export const PREDEFINED_QUERIES: Record<string, PredefinedQuery> = {
   ],
   'San Francisco': [
     {
+      label: 'Goals',
+      filterState: [{ field: 'value', value: 'Goal' }],
+    },
+    {
       label: 'Problems that lead to homelessness',
       filterState: [{ field: 'value', value: 'Problem' }],
     },
     {
-      label: 'Homelessness issues relating to health',
+      label: 'Solutions for ending homelessness',
       filterState: [
-        { field: 'attribute-name', value: 'Related to' },
-        { field: 'value', value: 'Health' },
+        { field: 'attribute-name', value: 'Types' },
+        { field: 'value', value: 'Solution' },
       ],
+    },
+    {
+      label: 'Homelessness issues related to health',
+      filterState: [{ field: 'value', value: 'Health' }],
+    },
+    {
+      label: 'Claims by Coalition for the Homeless',
+      filterState: [{ field: 'value', value: 'Coalition for the Homeless' }],
+    },
+    {
+      label: 'Homelessness issues related to drugs',
+      filterState: [{ field: 'value', value: 'Drugs' }],
     },
   ],
   'Root Space': [],

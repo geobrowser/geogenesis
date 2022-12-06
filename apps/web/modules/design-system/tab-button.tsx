@@ -1,9 +1,9 @@
 import styled from '@emotion/styled';
-import React, { ForwardedRef, forwardRef, useState } from 'react';
+import React, { ForwardedRef, forwardRef } from 'react';
 import { HACKY_COPY_FILL_CLASS_NAME } from '../constants';
-import { Copy } from './icons/copy';
 import { Entity } from './icons/entity';
 import { Facts } from './icons/facts';
+import { OrganizeData } from './icons/organize-data';
 import { Target } from './icons/target';
 import { Spacer } from './spacer';
 import { ColorName } from './theme/colors';
@@ -73,10 +73,10 @@ const StyledButton = styled.button<{ isActive: boolean }>(({ theme, isActive }) 
   }),
 }));
 
-type Icon = 'entity' | 'copy' | 'facts' | 'target';
+type Icon = 'entity' | 'organize-data' | 'facts' | 'target';
 
 const icons: Record<Icon, React.FunctionComponent<{ color?: ColorName }>> = {
-  copy: Copy,
+  'organize-data': OrganizeData,
   entity: Entity,
   facts: Facts,
   target: Target,
