@@ -6,6 +6,7 @@ class MyDocument extends Document {
       <Html lang="en">
         <Head>
           <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="robots" content="follow, index" />
 
           <link rel="apple-touch-icon" sizes="76x76" href="/static/apple-touch-icon.png" />
           <link rel="shortcut icon" type="image/png" href="/static/favicon.png" />
@@ -20,7 +21,7 @@ class MyDocument extends Document {
           <meta property="og:type" content="website" />
 
           {/* Essential for socials */}
-          <meta property="og:title" content="Geo" />
+          <meta property="og:title" content="Geo Genesis" />
           <meta
             name="description"
             content="Browse and organize the world's public knowledge and information in a decentralized way."
@@ -29,6 +30,14 @@ class MyDocument extends Document {
             property="og:description"
             content="Browse and organize the world's public knowledge and information in a decentralized way."
           />
+          <meta property="og:image" content="/static/geo-social-image.webp" />
+
+          {/* Less essential */}
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta property="og:site_name" content="geobrowser.io" />
+          <meta name="twitter:site" content="@geobrowser" />
+          <meta name="twitter:creator" content="@geobrowser" />
+          <meta name="twitter:image" content="/static/geo-social-image.webp" />
           <meta name="twitter:card" content="summary_large_image" />
           <meta property="og:image" content="/static/geo-social-image.webp" />
 
