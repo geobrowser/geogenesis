@@ -21,7 +21,7 @@ class MyDocument extends Document {
           <meta property="og:type" content="website" />
 
           {/* Essential for socials */}
-          <meta property="og:title" content="Geo" />
+          <meta property="og:title" content="Geo Genesis" />
           <meta
             name="description"
             content="Browse and organize the world's public knowledge and information in a decentralized way."

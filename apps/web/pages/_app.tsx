@@ -53,7 +53,7 @@ function MyApp({ Component, pageProps }: AppProps) {
         <WalletProvider>
           <ServicesProvider>
             <Head>
-              <title>Geo</title>
+              <title>Geo Genesis</title>
             </Head>
             <Global styles={globalStyles} />
             <Navbar />
