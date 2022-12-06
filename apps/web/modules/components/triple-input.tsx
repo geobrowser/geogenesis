@@ -41,7 +41,7 @@ const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries:
 
   button: {
     padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-    color: props.theme.colors['grey-04'],
+    color: props.showPredefinedQueries ? props.theme.colors.text : props.theme.colors['grey-04'],
 
     '&:active': {
       color: props.theme.colors.text,
