@@ -25,7 +25,7 @@ export default function Custom404() {
   return (
     <ErrorContainer>
       <Content>
-        <img src="/404.svg" />
+        <img src="/404.svg" alt="Image of a 404 error." />
         <Spacer height={24} />
         <Text as="h1" variant="bodySemibold">
           This page could not be found :-(
@@ -42,9 +42,21 @@ export default function Custom404() {
         </Button>
       </Content>
 
-      <img src="/405.svg" style={{ position: 'absolute', opacity: 1, zIndex: 5 }} />
-      <img src="/406.svg" style={{ position: 'absolute', opacity: 1, zIndex: 4 }} />
-      <img src="/407.svg" style={{ position: 'absolute', opacity: 1, zIndex: 3 }} />
+      <img
+        src="/405.svg"
+        style={{ position: 'absolute', opacity: 1, zIndex: 5 }}
+        alt="Background image of a 404 error"
+      />
+      <img
+        src="/406.svg"
+        style={{ position: 'absolute', opacity: 1, zIndex: 4 }}
+        alt="Background image of a 404 error"
+      />
+      <img
+        src="/407.svg"
+        style={{ position: 'absolute', opacity: 1, zIndex: 3 }}
+        alt="Background image of a 404 error"
+      />
     </ErrorContainer>
   );
 }
