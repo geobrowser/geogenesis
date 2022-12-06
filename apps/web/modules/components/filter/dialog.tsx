@@ -61,6 +61,10 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
     color: props.theme.colors.text,
     outlineColor: props.theme.colors.ctaPrimary,
   },
+
+  svg: {
+    color: 'inherit',
+  },
 }));
 
 interface Props {
