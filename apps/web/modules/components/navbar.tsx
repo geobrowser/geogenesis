@@ -19,7 +19,7 @@ const Header = styled.header(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: `${theme.space * 2}px ${theme.space * 4}px`,
+  padding: `${theme.space}px ${theme.space * 4}px`,
   backgroundColor: theme.colors.white,
   boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
   gap: theme.space * 5,
@@ -28,16 +28,25 @@ const Header = styled.header(({ theme }) => ({
     padding: `${theme.space}px ${theme.space * 4}px`,
   },
 
+  '@media (max-width: 768px)': {
+    padding: `${theme.space * 3}px ${theme.space * 4}px`,
+
+    // @ts-ignore -- this is valid in emotion
+    [Row]: {
+      display: 'none',
+    },
+  },
+
   // Leave some extra space for the scroll bar to come in
   paddingRight: theme.space * 6,
 }));
 
-const BreadcrumbsContainer = styled.div({
+const BreadcrumbsContainer = styled.div(props => ({
   display: 'flex',
   alignItems: 'center',
-  gap: '8px',
+  gap: props.theme.space * 2,
   overflow: 'hidden',
-});
+}));
 
 const NavigationItemsContainer = styled.div(props => ({
   display: 'flex',
@@ -50,6 +59,19 @@ const NavigationItemsContainer = styled.div(props => ({
     overflow: 'hidden',
     // To make the text container slightly smaller than parent container so the ellipsis renders
     maxWidth: '99%',
+  },
+
+  '@media (max-width: 768px)': {
+    maxWidth: '100%',
+    gap: props.theme.space * 4,
+
+    'a:nth-of-type(3)': {
+      display: 'none',
+    },
+
+    'span:nth-of-type(2)': {
+      display: 'none',
+    },
   },
 }));
 
