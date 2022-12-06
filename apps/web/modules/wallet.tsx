@@ -32,11 +32,11 @@ const TESTNET_CHAIN: Chain = {
 };
 
 const DEFAULT_CHAIN: Chain = {
-  id: Number(configOptions.testnet.chainId),
-  name: 'Polygon Mumbai', // Human-readable name
-  network: 'mumbai', // Internal network name
+  id: Number(configOptions.production.chainId),
+  name: 'Polygon', // Human-readable name
+  network: 'polygon', // Internal network name
   rpcUrls: {
-    default: configOptions.testnet.rpc,
+    default: configOptions.production.rpc,
   },
 };
 

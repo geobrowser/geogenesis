@@ -9,7 +9,7 @@ export type AppConfig = {
   subgraph: string;
 };
 
-export const DEFAULT_ENV: AppEnv = 'testnet';
+export const DEFAULT_ENV: AppEnv = 'production';
 
 export const configOptions: Record<AppEnv, AppConfig> = {
   development: {
@@ -42,7 +42,8 @@ export function getConfig(chainId: string) {
   const config = Object.values(configOptions).find(options => options.chainId === chainId);
 
   if (!config) {
-    throw new Error(`No config for chain ${chainId}`);
+    console.error(`No config for chain ${chainId}`);
+    return configOptions.production;
   }
 
   return config;

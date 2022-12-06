@@ -52,15 +52,20 @@ const config: HardhatUserConfig = {
     },
     polygon_mainnet: {
       chainId: 137,
-      url: process.env.POLYGON_MAINNET_RPC_URL || 'https://polygon-rpc.com',
+      url:
+        process.env.POLYGON_MAINNET_RPC_URL ||
+        'https://rpc-mainnet.maticvigil.com',
+      // 'https://rpc-mainnet.matic.network' ||
+      // 'https://matic-mainnet.chainstacklabs.com' ||
+      // 'https://polygon-rpc.com',
       accounts,
     },
     polygon_mumbai: {
       chainId: 80001,
       url:
         process.env.POLYGON_MUMBAI_RPC_URL ||
-        // 'https://rpc-mumbai.maticvigil.com',
-        'https://matic-mumbai.chainstacklabs.com/',
+        'https://rpc-mumbai.maticvigil.com',
+      // 'https://matic-mumbai.chainstacklabs.com/',
       accounts,
     },
   },
