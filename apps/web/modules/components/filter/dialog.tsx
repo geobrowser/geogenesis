@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
 import React, { useState } from 'react';
 import { Filter } from '~/modules/design-system/icons/filter';
+import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { initialFilterState } from '~/modules/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
@@ -29,6 +30,11 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   zIndex: 1,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
+
+  '@media (max-width: 768px)': {
+    margin: '0 auto',
+    width: '98vw',
+  },
 }));
 
 const MotionContent = motion(StyledContent);
@@ -62,8 +68,8 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
     outlineColor: props.theme.colors.ctaPrimary,
   },
 
-  svg: {
-    color: 'inherit',
+  button: {
+    color: props.theme.colors['grey-04'],
   },
 }));
 
@@ -95,6 +101,7 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
 
 export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
   const theme = useTheme();
+  const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -117,10 +124,11 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               duration: 0.1,
               ease: 'easeInOut',
             }}
+            avoidCollisions={true}
             width={inputContainerWidth}
             sideOffset={theme.space * 2.5 + 2}
             alignOffset={-(theme.space * 2) + 4}
-            align="end"
+            align={width > 768 ? 'end' : 'start'}
           >
             <Text variant="button">Show triples</Text>
             <Spacer height={12} />
