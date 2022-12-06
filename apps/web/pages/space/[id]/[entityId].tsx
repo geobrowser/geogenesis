@@ -20,6 +20,7 @@ import { Tick } from '~/modules/design-system/icons/tick';
 import { AnimatePresence } from 'framer-motion';
 import { Truncate } from '~/modules/design-system/truncate';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import Head from 'next/head';
 
 const Content = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -94,6 +95,11 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   return (
     <div>
+      <Head>
+        <title>{name ?? id}</title>
+        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+      </Head>
+
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}

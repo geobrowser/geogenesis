@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
+import Head from 'next/head';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
@@ -42,42 +43,47 @@ export default function Spaces() {
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
-    <Column>
-      <Text variant="mainPage">All spaces</Text>
+    <div>
+      <Head>
+        <meta property="og:url" content={`https://geobrowser.io/spaces`} />
+      </Head>
+      <Column>
+        <Text variant="mainPage">All spaces</Text>
 
-      <Spacer height={40} />
+        <Spacer height={40} />
 
-      <Grid>
-        {spaces.length !== 0 ? (
-          spaces
-            .filter(space => isAdmin || isEditor || !space.isRootSpace)
-            .map(space => {
-              const name = space.attributes.name;
-              const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+        <Grid>
+          {spaces.length !== 0 ? (
+            spaces
+              .filter(space => isAdmin || isEditor || !space.isRootSpace)
+              .map(space => {
+                const name = space.attributes.name;
+                const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-              return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-            })
-        ) : (
-          <SpacesLayoutPlaceholder />
-        )}
-      </Grid>
+                return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+              })
+          ) : (
+            <SpacesLayoutPlaceholder />
+          )}
+        </Grid>
 
-      <Spacer height={100} />
+        <Spacer height={100} />
 
-      <TextContainer>
-        <Text variant="largeTitle">
-          Together we can change how society is organized, put power into the hands of those who’ve earned it, and
-          distribute resources and opportunity far and wide.
-        </Text>
-      </TextContainer>
+        <TextContainer>
+          <Text variant="largeTitle">
+            Together we can change how society is organized, put power into the hands of those who’ve earned it, and
+            distribute resources and opportunity far and wide.
+          </Text>
+        </TextContainer>
 
-      <Spacer height={40} />
+        <Spacer height={40} />
 
-      <OboardingCarousel />
+        <OboardingCarousel />
 
-      <Spacer height={100} />
+        <Spacer height={100} />
 
-      <Email />
-    </Column>
+        <Email />
+      </Column>
+    </div>
   );
 }
