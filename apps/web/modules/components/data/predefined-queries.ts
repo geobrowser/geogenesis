@@ -41,7 +41,7 @@ export const PREDEFINED_QUERIES: Record<string, PredefinedQuery> = {
     {
       label: 'Claims by Andrew Huberman',
       filterState: [
-        { field: 'linked-to', value: 'ddb0fea6-d494-4b0b-8f3e-32307f8fe45d' },
+        { field: 'linked-to', value: 'dffb5a2a-74b2-4c60-8e7c-7a37159d2807' },
         { field: 'attribute-name', value: 'Author' },
       ],
     },
@@ -56,11 +56,11 @@ export const PREDEFINED_QUERIES: Record<string, PredefinedQuery> = {
       ],
     },
     {
-      label: 'How we see and process color',
+      label: 'Is about caffeine',
       filterState: [
         {
           field: 'linked-to',
-          value: '01d0c9ad-cee3-4044-9f75-7285e9873d30',
+          value: '1393b29e-1261-4ee0-a79e-1f8ef9ed3e52',
         },
       ],
     },

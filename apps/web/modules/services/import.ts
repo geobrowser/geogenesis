@@ -983,7 +983,7 @@ function convertSanFranciscoData(
   }
 
   // Since we aren't using header rows the parser parses the first row as the headers.
-  const eavRows = results.data.slice(2, rowCount).flatMap(toEavRow);
+  const eavRows = results.data.slice(1, rowCount).flatMap(toEavRow);
 
   return [...attributeRows, ...eavRows];
 }

@@ -85,7 +85,11 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
 
   const description = getEntityDescription(triples, entityNames);
   const triplesWithoutDescription = triples.filter(t =>
-    t.value.type === 'string' ? t.value.value !== description : true
+    t.value.type === 'entity'
+      ? entityNames[t.value.id] !== description
+      : t.value.type === 'string'
+      ? t.value.value !== description
+      : false
   );
 
   return (
@@ -332,7 +336,11 @@ function LinkedEntityCard({
 
   const description = getEntityDescription(entityGroup.triples, entityNames);
   const triplesWithoutDescription = unlinkedTriples.filter(t =>
-    t.value.type === 'string' ? t.value.value !== description : true
+    t.value.type === 'entity'
+      ? entityNames[t.value.id] !== description
+      : t.value.type === 'string'
+      ? t.value.value !== description
+      : false
   );
 
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);

@@ -42,7 +42,11 @@ export function getEntityDescription(triples: Triple[], entityNames: EntityNames
   )?.[0];
 
   const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
-  return descriptionValue?.type === 'string' ? descriptionValue.value : null;
+  return descriptionValue?.type === 'entity'
+    ? entityNames[descriptionValue.id]
+    : descriptionValue?.type === 'string'
+    ? descriptionValue.value
+    : null;
 }
 
 export function getFilesFromFileList(fileList: FileList): File[] {
