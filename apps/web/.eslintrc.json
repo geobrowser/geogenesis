@@ -16,5 +16,5 @@
     "sourceType": "module"
   },
   "plugins": ["@typescript-eslint"],
-  "ignorePatterns": ["next.config.js", "vite.config.js"]
+  "ignorePatterns": ["next.config.js", "vite.config.js", ".next/", "node_modules/", ".turbo/"]
 }
