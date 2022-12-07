@@ -1,89 +1,89 @@
-import styled from '@emotion/styled';
-import { ethers } from 'ethers';
-import Head from 'next/head';
-import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
-import { Email } from '~/modules/components/onboarding-carousel/email';
-import { SYSTEM_IDS } from '~/modules/constants';
-import { Card } from '~/modules/design-system/card';
-import { Spacer } from '~/modules/design-system/spacer';
-import { Text } from '~/modules/design-system/text';
+import styled from '@emotion/styled'
+import { ethers } from 'ethers'
+import Head from 'next/head'
+import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel'
+import { Email } from '~/modules/components/onboarding-carousel/email'
+import { SYSTEM_IDS } from '~/modules/constants'
+import { Card } from '~/modules/design-system/card'
+import { Spacer } from '~/modules/design-system/spacer'
+import { Text } from '~/modules/design-system/text'
 
-import { useAccessControl } from '~/modules/state/use-access-control';
-import { useSpaces } from '~/modules/state/use-spaces';
+import { useAccessControl } from '~/modules/state/use-access-control'
+import { useSpaces } from '~/modules/state/use-spaces'
 
 const Column = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-});
+	display: 'flex',
+	flexDirection: 'column',
+})
 
 const Grid = styled.div(({ theme }) => ({
-  display: 'flex',
-  justifyItems: 'space-between',
-  flexWrap: 'wrap',
-  gap: 16,
+	display: 'flex',
+	justifyItems: 'space-between',
+	flexWrap: 'wrap',
+	gap: 16,
 
-  '@media (max-width: 1200px)': {
-    alignItems: 'center',
-  },
-}));
+	'@media (max-width: 1200px)': {
+		alignItems: 'center',
+	},
+}))
 
 const TextContainer = styled.div({
-  alignSelf: 'center',
-  textAlign: 'center',
-  maxWidth: 830,
-});
+	alignSelf: 'center',
+	textAlign: 'center',
+	maxWidth: 830,
+})
 
 const SpacesLayoutPlaceholder = styled.div({
-  height: 295,
-});
+	height: 295,
+})
 
 export default function Spaces() {
-  const { spaces } = useSpaces();
-  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
-  const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
+	const { spaces } = useSpaces()
+	const rootSpaceId = spaces.find((space) => space.isRootSpace)?.id ?? ethers.constants.AddressZero
+	const { isEditor, isAdmin } = useAccessControl(rootSpaceId)
 
-  return (
-    <div>
-      <Head>
-        <meta property="og:url" content={`https://geobrowser.io/spaces`} />
-      </Head>
-      <Column>
-        <Text variant="mainPage">All spaces</Text>
+	return (
+		<div>
+			<Head>
+				<meta property="og:url" content={`https://geobrowser.io/spaces`} />
+			</Head>
+			<Column>
+				<Text variant="mainPage">All spaces</Text>
 
-        <Spacer height={40} />
+				<Spacer height={40} />
 
-        <Grid>
-          {spaces.length !== 0 ? (
-            spaces
-              .filter(space => isAdmin || isEditor || !space.isRootSpace)
-              .map(space => {
-                const name = space.attributes.name;
-                const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+				<Grid>
+					{spaces.length !== 0 ? (
+						spaces
+							.filter((space) => isAdmin || isEditor || !space.isRootSpace)
+							.map((space) => {
+								const name = space.attributes.name
+								const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]
 
-                return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-              })
-          ) : (
-            <SpacesLayoutPlaceholder />
-          )}
-        </Grid>
+								return <Card key={space.id} spaceId={space.id} name={name} image={image} />
+							})
+					) : (
+						<SpacesLayoutPlaceholder />
+					)}
+				</Grid>
 
-        <Spacer height={100} />
+				<Spacer height={100} />
 
-        <TextContainer>
-          <Text variant="largeTitle">
-            Together we can change how society is organized, put power into the hands of those who’ve earned it, and
-            distribute resources and opportunity far and wide.
-          </Text>
-        </TextContainer>
+				<TextContainer>
+					<Text variant="largeTitle">
+						Together we can change how society is organized, put power into the hands of those who’ve earned it, and
+						distribute resources and opportunity far and wide.
+					</Text>
+				</TextContainer>
 
-        <Spacer height={40} />
+				<Spacer height={40} />
 
-        <OboardingCarousel />
+				<OboardingCarousel />
 
-        <Spacer height={100} />
+				<Spacer height={100} />
 
-        <Email />
-      </Column>
-    </div>
-  );
+				<Email />
+			</Column>
+		</div>
+	)
 }

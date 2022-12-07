@@ -2,56 +2,56 @@ import pRetry from 'p-retry'
 import { expect, it } from 'vitest'
 
 type NodeError = {
-  errno: number
-  code: string
-  syscall: string
-  address: string
-  port: string
+	errno: number
+	code: string
+	syscall: string
+	address: string
+	port: string
 }
 
 async function checkRunning() {
-  const url = 'http://localhost:8000/subgraphs/name/example'
+	const url = 'http://localhost:8000/subgraphs/name/example'
 
-  let json: any
+	let json: any
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: 'query { geoEntities { id } }',
-      }),
-    })
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				query: 'query { geoEntities { id } }',
+			}),
+		})
 
-    json = await response.json()
-  } catch (e) {
-    if ((e as { cause: NodeError }).cause.code === 'ECONNREFUSED') {
-      throw new Error(`Connection refused by '${url}'`)
-    }
+		json = await response.json()
+	} catch (e) {
+		if ((e as { cause: NodeError }).cause.code === 'ECONNREFUSED') {
+			throw new Error(`Connection refused by '${url}'`)
+		}
 
-    throw new Error(e as any)
-  }
+		throw new Error(e as any)
+	}
 
-  if ('errors' in json) {
-    throw new Error(json.errors.map((item: any) => item.message).join('\n'))
-  }
+	if ('errors' in json) {
+		throw new Error(json.errors.map((item: any) => item.message).join('\n'))
+	}
 
-  return json
+	return json
 }
 
 it('subgraph runs', async () => {
-  const retries = 20
-  const result = await pRetry(checkRunning, {
-    retries,
-    factor: 1,
-    minTimeout: 5 * 1000,
-    maxTimeout: 5 * 1000,
-    onFailedAttempt: (error) => {
-      console.log(`(${error.attemptNumber}/${retries}) ${error.message}`)
-    },
-  })
+	const retries = 20
+	const result = await pRetry(checkRunning, {
+		retries,
+		factor: 1,
+		minTimeout: 5 * 1000,
+		maxTimeout: 5 * 1000,
+		onFailedAttempt: (error) => {
+			console.log(`(${error.attemptNumber}/${retries}) ${error.message}`)
+		},
+	})
 
-  expect(result.data.geoEntities.length > 1).toEqual(true)
+	expect(result.data.geoEntities.length > 1).toEqual(true)
 }, 120000)

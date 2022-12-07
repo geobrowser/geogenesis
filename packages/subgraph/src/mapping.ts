@@ -6,35 +6,35 @@ import { getChecksumAddress } from './get-checksum-address'
 import { RoleRevoked } from '../generated/SpaceRegistry/SpaceRegistry'
 
 export function handleEntryAdded(event: EntryAdded): void {
-  const address = getChecksumAddress(event.address)
+	const address = getChecksumAddress(event.address)
 
-  const rootSpace = Space.load(address)
+	const rootSpace = Space.load(address)
 
-  if (rootSpace && rootSpace.isRootSpace) {
-    return
-  }
+	if (rootSpace && rootSpace.isRootSpace) {
+		return
+	}
 
-  addEntry({
-    space: address,
-    index: event.params.index,
-    uri: event.params.uri,
-    author: event.params.author,
-    createdAtBlock: event.block.number,
-  })
+	addEntry({
+		space: address,
+		index: event.params.index,
+		uri: event.params.uri,
+		author: event.params.author,
+		createdAtBlock: event.block.number,
+	})
 }
 
 export function handleRoleGranted(event: RoleGranted): void {
-  addRole({
-    space: getChecksumAddress(event.address),
-    role: event.params.role,
-    account: getChecksumAddress(event.params.account),
-  })
+	addRole({
+		space: getChecksumAddress(event.address),
+		role: event.params.role,
+		account: getChecksumAddress(event.params.account),
+	})
 }
 
 export function handleRoleRevoked(event: RoleRevoked): void {
-  removeRole({
-    space: getChecksumAddress(event.address),
-    role: event.params.role,
-    account: getChecksumAddress(event.params.account),
-  })
+	removeRole({
+		space: getChecksumAddress(event.address),
+		role: event.params.role,
+		account: getChecksumAddress(event.params.account),
+	})
 }

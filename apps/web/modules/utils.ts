@@ -1,83 +1,81 @@
-import { computed, ObservableComputed } from '@legendapp/state';
-import { EntityNames, Triple } from './types';
+import { computed, ObservableComputed } from '@legendapp/state'
+import { EntityNames, Triple } from './types'
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
-  return computed(() => {
-    const data = observable.get() as T;
-    if (data === undefined) return initialValue;
-    return data;
-  });
+	return computed(() => {
+		const data = observable.get() as T
+		if (data === undefined) return initialValue
+		return data
+	})
 }
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
-  return elements.flatMap((element, index) =>
-    index === 0 ? [element] : [separator instanceof Function ? separator({ index }) : separator, element]
-  );
+	return elements.flatMap((element, index) =>
+		index === 0 ? [element] : [separator instanceof Function ? separator({ index }) : separator, element]
+	)
 }
 
 export function upperFirst(string: string): string {
-  return string.slice(0, 1).toLocaleUpperCase() + string.slice(1);
+	return string.slice(0, 1).toLocaleUpperCase() + string.slice(1)
 }
 
 export function titleCase(string: string): string {
-  return string
-    .split(' ')
-    .map(word => upperFirst(word))
-    .join(' ');
+	return string
+		.split(' ')
+		.map((word) => upperFirst(word))
+		.join(' ')
 }
 
 export const navUtils = {
-  toSpace: (spaceId: string) => `/space/${spaceId}`,
-  toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
-};
+	toSpace: (spaceId: string) => `/space/${spaceId}`,
+	toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
+}
 
 export function getEntityName(triples: Triple[]) {
-  const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
-  return nameValue?.type === 'string' ? nameValue.value : null;
+	const nameValue = triples.find((triple) => triple.attributeId === 'name')?.value
+	return nameValue?.type === 'string' ? nameValue.value : null
 }
 
 export function getEntityDescription(triples: Triple[], entityNames: EntityNames) {
-  const descriptionEntityId = Object.entries(entityNames).find(
-    ([_, attributeId]) => attributeId === 'Description'
-  )?.[0];
+	const descriptionEntityId = Object.entries(entityNames).find(([_, attributeId]) => attributeId === 'Description')?.[0]
 
-  const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
-  return descriptionValue?.type === 'entity'
-    ? entityNames[descriptionValue.id]
-    : descriptionValue?.type === 'string'
-    ? descriptionValue.value
-    : null;
+	const descriptionValue = triples.find((t) => t.attributeId === descriptionEntityId)?.value
+	return descriptionValue?.type === 'entity'
+		? entityNames[descriptionValue.id]
+		: descriptionValue?.type === 'string'
+		? descriptionValue.value
+		: null
 }
 
 export function getFilesFromFileList(fileList: FileList): File[] {
-  const files: File[] = [];
-  for (let i = 0; i < fileList.length; i++) {
-    files.push(fileList[i]);
-  }
-  return files;
+	const files: File[] = []
+	for (let i = 0; i < fileList.length; i++) {
+		files.push(fileList[i])
+	}
+	return files
 }
 
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
-  const result: { [key in PropertyKey]: T[] } = {};
+	const result: { [key in PropertyKey]: T[] } = {}
 
-  values.forEach(value => {
-    const key = projection(value);
+	values.forEach((value) => {
+		const key = projection(value)
 
-    if (key in result) {
-      result[key].push(value);
-    } else {
-      result[key] = [value];
-    }
-  });
+		if (key in result) {
+			result[key].push(value)
+		} else {
+			result[key] = [value]
+		}
+	})
 
-  return result;
+	return result
 }
 
 export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
-  return array.reduce<[T[], T[]]>(
-    ([pass, fail], item) => {
-      return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
-    },
-    [[], []]
-  );
+	return array.reduce<[T[], T[]]>(
+		([pass, fail], item) => {
+			return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]]
+		},
+		[[], []]
+	)
 }

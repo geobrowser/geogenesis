@@ -20,7 +20,27 @@
       }
     }
   },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": true,
+    "indentStyle": "tab",
+    "indentSize": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "quoteProperties": "asNeeded",
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingComma": "es5"
+    }
+  },
   "files": {
-    "ignore": ["./**/build/**/*", "./**/dist/**/*", "./**/.next/**/*"]
+    "ignore": [
+      "./**/build/**/*",
+      "./**/dist/**/*",
+      "./**/.next/**/*",
+      "./**/node_modules/**/*"
+    ]
   }
 }

@@ -1,5 +1,5 @@
-import { ColorThemeValue } from './colors';
+import { ColorThemeValue } from './colors'
 
 export type Theme = {
-  colors: ColorThemeValue;
-};
+	colors: ColorThemeValue
+}

@@ -1,18 +1,18 @@
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
-import { useCallback } from 'react';
+import { observable } from '@legendapp/state'
+import { useSelector } from '@legendapp/state/react'
+import { useCallback } from 'react'
 
-const pageName$ = observable('');
+const pageName$ = observable('')
 
 export function usePageName() {
-  const pageName = useSelector(pageName$);
+	const pageName = useSelector(pageName$)
 
-  const setPageName = useCallback((newName: string) => {
-    pageName$.set(newName);
-  }, []);
+	const setPageName = useCallback((newName: string) => {
+		pageName$.set(newName)
+	}, [])
 
-  return {
-    pageName,
-    setPageName,
-  };
+	return {
+		pageName,
+		setPageName,
+	}
 }

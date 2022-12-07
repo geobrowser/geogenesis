@@ -7,6 +7,6 @@ const ajv = new Ajv()
 export * from './action'
 
 export const ActionSchema = {
-  schema,
-  validate: ajv.compile<Root>(schema),
+	schema,
+	validate: ajv.compile<Root>(schema),
 }

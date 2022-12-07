@@ -1,25 +1,25 @@
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-});
+	enabled: process.env.ANALYZE === 'true',
+})
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  // experimental: {
-  //   runtime: 'experimental-edge',
-  // },
-  compiler: {
-    emotion: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
-  },
-};
+	reactStrictMode: true,
+	swcMinify: true,
+	// experimental: {
+	//   runtime: 'experimental-edge',
+	// },
+	compiler: {
+		emotion: true,
+	},
+	images: {
+		remotePatterns: [
+			{
+				protocol: 'https',
+				hostname: '**',
+			},
+		],
+	},
+}
 
-module.exports = withBundleAnalyzer(nextConfig);
+module.exports = withBundleAnalyzer(nextConfig)

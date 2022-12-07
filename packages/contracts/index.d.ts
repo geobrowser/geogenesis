@@ -1,5 +1,5 @@
 export * from './dist/build/types'
 export {
-  EntryAddedEventObject,
-  EntryAddedEvent,
+	EntryAddedEventObject,
+	EntryAddedEvent,
 } from './dist/build/types/contracts/Log'
