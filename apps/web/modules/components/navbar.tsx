@@ -149,7 +149,7 @@ export function Navbar() {
                 <Breadcrumb
                   isNested={index < components.length - 1}
                   shouldTruncate={index === 3}
-                  key={index}
+                  key={`${path}-${title}-${index}}`}
                   href={path}
                   img={img}
                 >

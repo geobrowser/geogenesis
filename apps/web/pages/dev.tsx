@@ -27,7 +27,7 @@ const Colors = Object.entries(colors.light).map(([name, color]) => {
 
 const Typography = Object.keys(typography.light).map((name, index) => {
   return (
-    <Text key={index} variant={name as TypographyName}>
+    <Text key={`${index}-${name}`} variant={name as TypographyName}>
       {name}
     </Text>
   );

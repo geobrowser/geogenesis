@@ -55,7 +55,7 @@ export default function AccessControl() {
     <div>
       <form onSubmit={onSubmit('editor')}>
         <input name="address" placeholder="Editor address..." />
-        <button>Add editor</button>
+        <button type="submit">Add editor</button>
       </form>
 
       <h1 style={{ marginTop: 16 }}>Editors</h1>
@@ -76,7 +76,7 @@ export default function AccessControl() {
 
           <form onSubmit={onSubmit('editorController')}>
             <input name="address" placeholder="Editor controller address..." />
-            <button>Add editor controller</button>
+            <button type="submit">Add editor controller</button>
           </form>
 
           <h1 style={{ marginTop: 16 }}>Editor Controllers</h1>
@@ -99,7 +99,7 @@ export default function AccessControl() {
           </h1>
           <form onSubmit={onSubmit('admin')}>
             <input name="address" placeholder="Admin address..." />
-            <button>Add admin</button>
+            <button type="submit">Add admin</button>
           </form>
 
           <h1 style={{ marginTop: 16 }}>Admins</h1>

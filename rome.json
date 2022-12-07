@@ -1,0 +1,26 @@
+{
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": {
+        "useTemplate": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useSingleVarDeclarator": "off"
+      },
+      "complexity": {
+        "useOptionalChain": "off"
+      },
+      "suspicious": {
+        "noDoubleEquals": "off",
+        "noShadowRestrictedNames": "off",
+        "noExplicitAny": "off"
+      },
+      "a11y": {
+        "useValidAnchor": "off"
+      }
+    }
+  },
+  "files": {
+    "ignore": ["./**/build/**/*", "./**/dist/**/*", "./**/.next/**/*"]
+  }
+}
