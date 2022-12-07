@@ -23,4 +23,6 @@ module.exports = {
     ],
     camelcase: 'off',
   },
+  // index relies on build artifacts that may not exist during linting
+  ignorePatterns: ['index.js'],
 }
