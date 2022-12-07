@@ -37,6 +37,8 @@ function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, s
     return {};
   }
 
+  // We currently encode the entity-name filter into the base query=x param. If the only
+  // advanced filter is entity-name, we can skip it.
   if (filterState.length === 1 && filterState[0].field === 'entity-name') {
     return {};
   }
