@@ -4,10 +4,20 @@ import { getConfigFromUrl, parseQueryParameters, stringifyQueryParameters } from
 
 describe('TripleStore params', () => {
   it('Parses triple store params from url', () => {
-    const params = parseQueryParameters('https://banana.com/?query=banana&page=1');
+    const params = parseQueryParameters(
+      'https://banana.com/?query=banana&page=1&attribute-id=banana&entity-id=banana&linked-to=banana&attribute-name=banana&value=banana'
+    );
+
     expect(params).toEqual({
       query: 'banana',
       pageNumber: 1,
+      filterState: [
+        { field: 'attribute-id', value: 'banana' },
+        { field: 'entity-id', value: 'banana' },
+        { field: 'linked-to', value: 'banana' },
+        { field: 'attribute-name', value: 'banana' },
+        { field: 'value', value: 'banana' },
+      ],
     });
   });
 
@@ -16,6 +26,7 @@ describe('TripleStore params', () => {
     expect(params).toEqual({
       query: '',
       pageNumber: 0,
+      filterState: [],
     });
   });
 
@@ -23,14 +34,35 @@ describe('TripleStore params', () => {
     const params = stringifyQueryParameters({
       query: 'banana',
       pageNumber: 1,
+      filterState: [
+        { field: 'attribute-id', value: 'banana' },
+        { field: 'entity-id', value: 'banana' },
+        { field: 'linked-to', value: 'banana' },
+        { field: 'attribute-name', value: 'banana' },
+        { field: 'value', value: 'banana' },
+      ],
     });
-    expect(params).toBe('query=banana&page=1');
+
+    expect(params).toBe(
+      'query=banana&page=1&attribute-id=banana&entity-id=banana&linked-to=banana&attribute-name=banana&value=banana'
+    );
+  });
+
+  it('Stringifies triple store params for entity-name into the regular query param', () => {
+    const params = stringifyQueryParameters({
+      query: 'banana',
+      pageNumber: 0,
+      filterState: [{ field: 'entity-name', value: 'banana' }],
+    });
+
+    expect(params).toBe('query=banana');
   });
 
   it('Stringifies triple store params to url with empty query', () => {
     const params = stringifyQueryParameters({
       query: '',
       pageNumber: 0,
+      filterState: [],
     });
     expect(params).toBe('');
   });
