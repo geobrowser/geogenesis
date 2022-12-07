@@ -1,24 +1,56 @@
+import { ParsedUrlQuery } from 'querystring';
 import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
 import { InitialTripleStoreParams } from './state/triple-store';
+import { FilterField, FilterState } from './types';
 
 export function parseQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
+  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
+
+  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
+    console.log(key);
+    const value = params.get(key);
+    if (!value) return acc;
+    return [...acc, { field: key as FilterField, value }];
+  }, []);
 
   return {
     query,
     pageNumber,
+    filterState: filterStateResult,
   };
 }
 
-export function stringifyQueryParameters({ query, pageNumber }: InitialTripleStoreParams): string {
+export function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
+    ...getAdvancedQueryParams(filterState),
   });
 
+  console.log(params);
+
   return params.toString();
+}
+
+function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | {} {
+  if (filterState.length === 0) {
+    return {};
+  }
+
+  if (filterState.length === 1 && filterState[0].field === 'entity-name') {
+    return {};
+  }
+
+  return filterState.reduce<Record<string, string>>((acc, filter) => {
+    if (filter.field) {
+      acc[filter.field] = filter.value;
+    }
+
+    return acc;
+  }, {});
 }
 
 export function getConfigFromUrl(url: string): AppConfig {

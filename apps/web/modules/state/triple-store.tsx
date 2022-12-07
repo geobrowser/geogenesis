@@ -25,6 +25,7 @@ interface ITripleStore {
 export type InitialTripleStoreParams = {
   query: string;
   pageNumber: number;
+  filterState: FilterState;
 };
 
 interface ITripleStoreConfig {
@@ -46,6 +47,7 @@ const DEFAULT_PAGE_SIZE = 100;
 const DEFAULT_INITIAL_PARAMS = {
   query: '',
   pageNumber: 0,
+  filterState: [],
 };
 
 export function initialFilterState(): FilterState {
@@ -77,7 +79,9 @@ export class TripleStore implements ITripleStore {
   }: ITripleStoreConfig) {
     this.api = api;
     this.pageNumber$ = observable(initialParams.pageNumber);
-    this.filterState$ = observable<FilterState>(initialFilterState());
+    this.filterState$ = observable<FilterState>(
+      initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
+    );
     this.space = space;
     this.query$ = computed(() => {
       const filterState = this.filterState$.get();
