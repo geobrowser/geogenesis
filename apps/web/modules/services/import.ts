@@ -971,14 +971,14 @@ function convertSanFranciscoData(
       row[3] ? [row[3].toLowerCase(), 'name', row[3]] : null,
       row[4] ? [row[2], 'related to', [row[4]]] : null,
       row[4] ? [row[4], 'name', row[4]] : null,
-      row[4] ? [row[4], 'type', 'attribute'] : null,
+      row[4] ? [row[4], 'type', 'related to'] : null,
       row[8] ? [row[2], 'author', row[8]] : null,
       row[8] ? [row[8], 'name', row[8]] : null,
       row[8] ? [row[8], 'type', 'author'] : null,
 
       ...isAboutTuples.map(({ name }): EavRow => [row[2], 'is about', name.toLowerCase()]),
       ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'name', name]),
-      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'attribute']),
+      ...isAboutTuples.map(({ name }): EavRow => [name.toLowerCase(), 'type', 'is about']),
     ].flatMap((row): EavRow[] => (row ? [row as EavRow] : []));
   }
 
