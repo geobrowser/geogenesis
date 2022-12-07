@@ -242,7 +242,7 @@ function EntityAttributes({
             */}
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
-                <div style={{ marginTop: 4 }}>
+                <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
                   <Chip href={navUtils.toEntity(space, triple.value.id)}>
                     {entityNames[triple.value.id] || triple.value.id}
                   </Chip>
