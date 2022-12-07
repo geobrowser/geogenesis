@@ -230,7 +230,7 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: 100,
       },
     },
     meta: {
@@ -274,9 +274,9 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr style={{ textAlign: 'center' }}>
-              <td></td>
+              <td />
               <EmptyTableText>No results found</EmptyTableText>
-              <td></td>
+              <td />
             </tr>
           )}
           {table.getRowModel().rows.map(row => (
