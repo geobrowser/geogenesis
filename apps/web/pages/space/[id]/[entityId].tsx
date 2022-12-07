@@ -42,7 +42,7 @@ const Entities = styled.div(({ theme }) => ({
   gap: theme.space * 3,
 }));
 
-const EntityActionGroup = styled.div(({ theme }) => ({
+const EntityActionGroup = styled.div({
   display: 'flex',
   justifyContent: 'flex-end',
 
@@ -51,7 +51,7 @@ const EntityActionGroup = styled.div(({ theme }) => ({
       flexGrow: 1,
     },
   },
-}));
+});
 
 interface Props {
   triples: Triple[];
@@ -185,9 +185,9 @@ export default function EntityPage({ triples, id, name, space, entityNames, link
   );
 }
 
-const EntityAttributeContainer = styled.div(({ theme }) => ({
+const EntityAttributeContainer = styled.div({
   wordBreak: 'break-word',
-}));
+});
 
 const GroupedAttributes = styled.div(({ theme }) => ({
   display: 'flex',
@@ -242,7 +242,7 @@ function EntityAttributes({
             */}
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
-                <div style={{ marginTop: 4 }}>
+                <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
                   <Chip href={navUtils.toEntity(space, triple.value.id)}>
                     {entityNames[triple.value.id] || triple.value.id}
                   </Chip>
@@ -268,7 +268,7 @@ const LinkedEntityCardContainer = styled.div(({ theme }) => ({
   ':hover': {
     border: `1px solid ${theme.colors.text}`,
 
-    // @ts-ignore -- This is valid with emotion/styled
+    // @ts-expect-error -- This is valid with emotion/styled
     [LinkedEntityCardHeader]: {
       borderColor: theme.colors.text,
     },
@@ -294,11 +294,11 @@ const LinkedEntityCardHeader = styled.a(({ theme }) => ({
   },
 }));
 
-const IconContainer = styled.div(({ theme }) => ({
+const IconContainer = styled.div({
   // HACK: Fix visual alignment when aligning the content to the top. The icon does not
   // line up visually because of the text line height.
   marginTop: 6,
-}));
+});
 
 const LinkedEntityCardContent = styled.div(({ theme }) => ({
   display: 'flex',

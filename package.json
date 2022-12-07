@@ -5,6 +5,8 @@
   "scripts": {
     "test": "turbo run test",
     "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
     "dev": "turbo run dev",
     "clean": "turbo run clean && rimraf \"**/.turbo\"",
     "docker:build": "docker compose build --build-arg TURBO_TEAM --build-arg TURBO_TOKEN",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "eslint": "^8.15.0",
     "eslint-config-turbo": "^0.0.3",
+    "prettier": "^2.6.2",
     "rimraf": "^3.0.2",
     "turbo": "^1.4.6"
   }
