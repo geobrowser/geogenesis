@@ -6,6 +6,7 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "format": "turbo run format",
     "dev": "turbo run dev",
     "clean": "turbo run clean && rimraf \"**/.turbo\"",
     "docker:build": "docker compose build --build-arg TURBO_TEAM --build-arg TURBO_TOKEN",

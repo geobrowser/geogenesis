@@ -8,6 +8,9 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "format": {
+      "dependsOn": ["^format"]
+    },
     "codegen": {
       "dependsOn": ["^codegen"]
     },
@@ -31,7 +34,7 @@
       "dependsOn": ["@geogenesis/contracts#build"]
     },
     "deploy": {
-      "dependsOn": ["build", "test", "lint"],
+      "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
     }
   }
