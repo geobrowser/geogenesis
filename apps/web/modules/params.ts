@@ -10,7 +10,6 @@ export function parseQueryParameters(url: string): InitialTripleStoreParams {
   const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
 
   const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-    console.log(key);
     const value = params.get(key);
     if (!value) return acc;
     return [...acc, { field: key as FilterField, value }];
@@ -29,8 +28,6 @@ export function stringifyQueryParameters({ query, pageNumber, filterState }: Ini
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
     ...getAdvancedQueryParams(filterState),
   });
-
-  console.log(params);
 
   return params.toString();
 }
