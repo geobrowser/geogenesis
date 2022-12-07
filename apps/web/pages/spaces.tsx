@@ -16,7 +16,7 @@ const Column = styled.div({
   flexDirection: 'column',
 });
 
-const Grid = styled.div(({ theme }) => ({
+const Grid = styled.div({
   display: 'flex',
   justifyItems: 'space-between',
   flexWrap: 'wrap',
@@ -25,7 +25,7 @@ const Grid = styled.div(({ theme }) => ({
   '@media (max-width: 1200px)': {
     alignItems: 'center',
   },
-}));
+});
 
 const TextContainer = styled.div({
   alignSelf: 'center',

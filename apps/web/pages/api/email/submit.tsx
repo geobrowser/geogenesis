@@ -14,7 +14,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    await mailchimp.lists.addListMember(process.env.MAILCHIMP_AUDIENCE_ID!, {
+    if (!process.env.MAILCHIMP_AUDIENCE_ID) {
+      return res.status(500).json({ address: null });
+    }
+
+    await mailchimp.lists.addListMember(process.env.MAILCHIMP_AUDIENCE_ID, {
       email_address: address,
       status: 'subscribed',
     });

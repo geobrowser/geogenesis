@@ -5,6 +5,9 @@
       "dependsOn": ["codegen", "^build"],
       "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
     "codegen": {
       "dependsOn": ["^codegen"]
     },
