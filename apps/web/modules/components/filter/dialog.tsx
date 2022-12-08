@@ -105,7 +105,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledIconButton open={open}>
+        <StyledIconButton aria-label="advanced-filter-button" open={open}>
           <Filter />
         </StyledIconButton>
       </PopoverPrimitive.Trigger>
