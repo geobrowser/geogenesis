@@ -1,23 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Providers } from '~/modules/services/providers';
 import TriplesPage from '~/pages/space/[id]';
-
-vi.mock('next/router', () => ({
-  useRouter() {
-    return {
-      route: '/',
-      pathname: '',
-      query: '',
-      asPath: '',
-      replace: () => {
-        //
-      },
-    };
-  },
-}));
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {

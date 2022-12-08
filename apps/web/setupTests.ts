@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/extend-expect';
 
-import { expect, afterEach } from 'vitest';
+import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import matchers from '@testing-library/jest-dom/matchers';
 
@@ -11,6 +11,20 @@ expect.extend(matchers);
 afterEach(() => {
   cleanup();
 });
+
+vi.mock('next/router', () => ({
+  useRouter() {
+    return {
+      route: '/',
+      pathname: '',
+      query: '',
+      asPath: '',
+      replace: () => {
+        //
+      },
+    };
+  },
+}));
 
 // JSDOM doesn't implement PointerEvent so we need to mock our own implementation
 // Default to mouse left click interaction
