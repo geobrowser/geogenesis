@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FlowBar } from '~/modules/components/flow-bar';
@@ -84,10 +85,15 @@ export function Triples({
     <PageContainer>
       <TableHeader>
         <SpaceInfo>
-          <SpaceImage
-            src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
-            alt={`Cover image for ${spaceName}`}
-          />
+          <SpaceImageContainer>
+            <Image
+              objectFit="cover"
+              layout="fill"
+              src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
+              alt={`Cover image for ${spaceName}`}
+            />
+          </SpaceImageContainer>
+
           <Text flex="0 0 auto" variant="mainPage" as="h1">
             {spaceName}
           </Text>
@@ -259,9 +265,12 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
   );
 }
 
-const SpaceImage = styled.img({
-  width: 56,
-  height: 56,
-  objectFit: 'cover',
-  borderRadius: 8,
-});
+const SpaceImageContainer = styled.div(props => ({
+  // this is required for next/image
+  // https://nextjs.org/docs/api-reference/next/image#fill
+  position: 'relative',
+  overflow: 'hidden',
+  width: props.theme.space * 14,
+  height: props.theme.space * 14,
+  borderRadius: props.theme.radius * 2,
+}));
