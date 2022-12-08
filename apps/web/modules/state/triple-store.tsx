@@ -33,6 +33,8 @@ interface ITripleStoreConfig {
   space: string;
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
+  initialTriples: Triple[];
+  initialEntityNames: EntityNames;
 }
 
 type EditTripleAction = {
@@ -43,8 +45,8 @@ type EditTripleAction = {
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
-const DEFAULT_PAGE_SIZE = 100;
-const DEFAULT_INITIAL_PARAMS = {
+export const DEFAULT_PAGE_SIZE = 100;
+export const DEFAULT_INITIAL_PARAMS = {
   query: '',
   pageNumber: 0,
   filterState: [],
@@ -74,10 +76,14 @@ export class TripleStore implements ITripleStore {
   constructor({
     api,
     space,
+    initialEntityNames,
+    initialTriples,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
+    this.triples$ = observable(initialTriples);
+    this.entityNames$ = observable(initialEntityNames);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
@@ -103,6 +109,7 @@ export class TripleStore implements ITripleStore {
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             return new Promise(() => {});
           }
 

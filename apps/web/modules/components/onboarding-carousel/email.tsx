@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useReducer, useState } from 'react';
+import React, { useReducer } from 'react';
 import { Button, ButtonVariant } from '~/modules/design-system/button';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Input } from '~/modules/design-system/input';
@@ -86,7 +86,7 @@ export function Email() {
       try {
         // write a regex to validate an email
         const emailRegex = new RegExp(
-          /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+          /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
         );
 
         if (!emailRegex.test(inputRef.current.value)) {

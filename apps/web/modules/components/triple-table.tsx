@@ -22,6 +22,7 @@ import { CellEditableInput } from './table/cell-editable-input';
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
 declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     space: string;
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
@@ -156,7 +157,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           />
         );
       }
-      case 'value':
+      case 'value': {
         const value = cellData as Value;
 
         if (value.type === 'entity') {
@@ -194,6 +195,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             onBlur={onBlur}
           />
         );
+      }
     }
   },
 };
@@ -210,13 +212,7 @@ interface Props {
   entityNames: EntityNames;
 }
 
-// Using a default export here instead of named import to play better with Next's
-// dynamic import syntax. We're dynamically importing TripleTable in the /triples
-// route. Check the comment there for more context.
-//
-// When using a named export Next might fail on the TypeScript type checking during
-// build. Using default export works.
-const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
+export const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
 
@@ -309,5 +305,3 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
     </Container>
   );
 });
-
-export default TripleTable;

@@ -855,7 +855,7 @@ export function convertLegacyHealthData(
 
 function convertHealthSources(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
@@ -898,7 +898,7 @@ function convertHealthSources(
 
 function convertHealthDescriptions(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
@@ -933,7 +933,7 @@ function convertHealthDescriptions(
 
 function convertSanFranciscoData(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
@@ -990,7 +990,7 @@ function convertSanFranciscoData(
 
 function convertSanFranciscoEntities(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }
@@ -1021,7 +1021,7 @@ function convertSanFranciscoEntities(
 
 function convertSanFranciscoSources(
   csv: string,
-  { rowCount = Infinity, shouldIncludeSections = true }: ConvertHealthDataOptions = {
+  { rowCount = Infinity }: ConvertHealthDataOptions = {
     rowCount: Infinity,
     shouldIncludeSections: true,
   }

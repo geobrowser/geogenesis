@@ -3,12 +3,19 @@ import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import * as params from '../params';
 import { useServices } from '../services';
-import { FilterState } from '../types';
+import { EntityNames, FilterState, Triple } from '../types';
 import { TripleStore } from './triple-store';
 
 const TripleStoreContext = createContext<TripleStore | undefined>(undefined);
 
-export function TripleStoreProvider({ space, children }: { space: string; children: React.ReactNode }) {
+interface Props {
+  space: string;
+  children: React.ReactNode;
+  initialTriples: Triple[];
+  initialEntityNames: EntityNames;
+}
+
+export function TripleStoreProvider({ space, children, initialTriples, initialEntityNames }: Props) {
   const { network } = useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
@@ -18,8 +25,8 @@ export function TripleStoreProvider({ space, children }: { space: string; childr
 
   const store = useMemo(() => {
     const initialParams = params.parseQueryParameters(urlRef.current);
-    return new TripleStore({ api: network, space, initialParams });
-  }, [network, space]);
+    return new TripleStore({ api: network, space, initialParams, initialTriples, initialEntityNames });
+  }, [network, space, initialTriples, initialEntityNames]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

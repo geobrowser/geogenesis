@@ -1,4 +1,3 @@
-import { ParsedUrlQuery } from 'querystring';
 import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
@@ -32,7 +31,7 @@ export function stringifyQueryParameters({ query, pageNumber, filterState }: Ini
   return params.toString();
 }
 
-function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | {} {
+function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | object {
   if (filterState.length === 0) {
     return {};
   }
