@@ -9,7 +9,7 @@ const BreadcrumbLink = styled.a(props => ({
   display: 'flex',
   alignItems: 'center',
   cursor: 'pointer',
-  padding: '1px 0', // creates space above the SpaceImage and text to make focus state look better
+  padding: '1px 0', // creates space above the image and text to make focus state look better
   whiteSpace: 'nowrap',
 
   span: {
@@ -56,7 +56,7 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
         {img && (
           <>
             <ImageContainer>
-              <Image layout="fill" objectFit="cover" src={img} alt="" />
+              <Image layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
             </ImageContainer>
             <Spacer width={8} />
           </>
