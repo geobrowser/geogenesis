@@ -97,7 +97,6 @@ export default function Spaces({ spaces }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = getConfigFromUrl(context.resolvedUrl);
-
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();

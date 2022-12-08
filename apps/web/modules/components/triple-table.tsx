@@ -216,7 +216,7 @@ interface Props {
 //
 // When using a named export Next might fail on the TypeScript type checking during
 // build. Using default export works.
-const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
+export const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
 
@@ -309,5 +309,3 @@ const TripleTable = memo(function TripleTable({ update, triples, entityNames, sp
     </Container>
   );
 });
-
-export default TripleTable;
