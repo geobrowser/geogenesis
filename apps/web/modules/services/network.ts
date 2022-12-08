@@ -280,6 +280,7 @@ async function addEntries(spaceContract: SpaceContract, uris: string[]) {
   const mintTx = await spaceContract.addEntries(uris);
   console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
   return eventObject;
 }
@@ -288,7 +289,7 @@ function waitForLog(id: string, subgraphUrl: string, space: string) {
   const transformedId = id.replace('0x0', '0x');
 
   let retryCount = 0;
-  let maxRetries = 30;
+  const maxRetries = 30;
 
   return new Promise<void>((resolve, reject) => {
     const interval = setInterval(async () => {

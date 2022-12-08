@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { ethers } from 'ethers';
+import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
@@ -7,9 +8,12 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { getConfigFromUrl } from '~/modules/params';
+import { Network } from '~/modules/services/network';
+import { StorageClient } from '~/modules/services/storage';
+import { Space } from '~/modules/types';
 
 import { useAccessControl } from '~/modules/state/use-access-control';
-import { useSpaces } from '~/modules/state/use-spaces';
 
 const Column = styled.div({
   display: 'flex',
@@ -37,8 +41,11 @@ const SpacesLayoutPlaceholder = styled.div({
   height: 295,
 });
 
-export default function Spaces() {
-  const { spaces } = useSpaces();
+interface Props {
+  spaces: Space[];
+}
+
+export default function Spaces({ spaces }: Props) {
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
@@ -87,3 +94,17 @@ export default function Spaces() {
     </div>
   );
 }
+
+export const getServerSideProps: GetServerSideProps<Props> = async context => {
+  const config = getConfigFromUrl(context.resolvedUrl);
+
+  const storage = new StorageClient(config.ipfs);
+  const network = new Network(storage, config.subgraph);
+  const spaces = await network.fetchSpaces();
+
+  return {
+    props: {
+      spaces,
+    },
+  };
+};

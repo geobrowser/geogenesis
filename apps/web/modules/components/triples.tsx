@@ -169,7 +169,7 @@ function Triples({ spaceId }: Props) {
               {isAdmin && isEditor && <Spacer width={12} />}
               {isEditor && (
                 <>
-                  <Button variant="secondary" icon="create" onClick={() => {}}>
+                  <Button variant="secondary" icon="create">
                     Import
                     <FileImport
                       type="file"
