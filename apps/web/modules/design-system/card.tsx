@@ -1,5 +1,6 @@
 import { keyframes } from '@emotion/react';
 import styled from '@emotion/styled';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Text } from '~/modules/design-system/text';
@@ -7,19 +8,11 @@ import { navUtils } from '../utils';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
 const CoverImageContainer = styled.div({
+  // this is required for next/image
+  // https://nextjs.org/docs/api-reference/next/image#fill
+  position: 'relative',
   overflow: 'hidden',
-});
 
-const fade = keyframes`
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-`;
-
-const CoverImage = styled.img({
   width: 590,
   height: 240,
   objectFit: 'cover',
@@ -30,6 +23,19 @@ const CoverImage = styled.img({
     maxHeight: 240,
   },
 });
+
+const CoverImage = styled(Image)({
+  transition: 'all ease-in-out 0.15s',
+});
+
+const fade = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
 
 const GridCell = styled.a(({ theme }) => ({
   cursor: 'pointer',
@@ -76,7 +82,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
 
         {image && (
           <CoverImageContainer>
-            <CoverImage src={image} alt={`Cover image for ${name}`} />
+            <CoverImage objectFit="cover" priority layout="fill" src={image} alt={`Cover image for ${name}`} />
           </CoverImageContainer>
         )}
       </GridCell>
