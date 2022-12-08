@@ -37,9 +37,7 @@ export function getEntityName(triples: Triple[]) {
 }
 
 export function getEntityDescription(triples: Triple[], entityNames: EntityNames) {
-  const descriptionEntityId = Object.entries(entityNames).find(
-    ([_, attributeId]) => attributeId === 'Description'
-  )?.[0];
+  const descriptionEntityId = Object.entries(entityNames).find(([, attributeId]) => attributeId === 'Description')?.[0];
 
   const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
   return descriptionValue?.type === 'entity'

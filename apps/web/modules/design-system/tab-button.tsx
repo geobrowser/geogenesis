@@ -82,13 +82,13 @@ const icons: Record<Icon, React.FunctionComponent<{ color?: ColorName }>> = {
   target: Target,
 };
 
-function getIconColor(isActive: boolean, isHovered: boolean, disabled: boolean): ColorName {
-  if (disabled) return 'grey-03';
-  if (isHovered && isActive) return 'white';
-  if (isActive) return 'white';
-  if (isHovered) return 'text';
-  return 'grey-04';
-}
+// function getIconColor(isActive: boolean, isHovered: boolean, disabled: boolean): ColorName {
+//   if (disabled) return 'grey-03';
+//   if (isHovered && isActive) return 'white';
+//   if (isActive) return 'white';
+//   if (isHovered) return 'text';
+//   return 'grey-04';
+// }
 
 interface Props {
   isActive: boolean;

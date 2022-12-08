@@ -109,6 +109,7 @@ export class TripleStore implements ITripleStore {
           return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             return new Promise(() => {});
           }
 

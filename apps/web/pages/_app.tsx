@@ -53,6 +53,7 @@ function MyApp({ Component, pageProps }: AppProps) {
         <WalletProvider>
           <ServicesProvider>
             <Head>
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
               <title>Geo Genesis</title>
             </Head>
             <Global styles={globalStyles} />

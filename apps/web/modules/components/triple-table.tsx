@@ -22,6 +22,7 @@ import { CellEditableInput } from './table/cell-editable-input';
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
 declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     space: string;
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
@@ -156,7 +157,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           />
         );
       }
-      case 'value':
+      case 'value': {
         const value = cellData as Value;
 
         if (value.type === 'entity') {
@@ -194,6 +195,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             onBlur={onBlur}
           />
         );
+      }
     }
   },
 };

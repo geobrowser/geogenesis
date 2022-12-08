@@ -31,6 +31,7 @@ const Header = styled.header(({ theme }) => ({
   '@media (max-width: 768px)': {
     padding: `${theme.space * 3}px ${theme.space * 4}px`,
 
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore -- this is valid in emotion
     [Row]: {
       display: 'none',

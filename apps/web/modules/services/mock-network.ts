@@ -27,7 +27,7 @@ export class MockNetwork implements INetwork {
     this.triples = triples;
   }
 
-  fetchTriples = async ({ query, skip, first }: FetchTriplesOptions) => {
+  fetchTriples = async ({ skip, first }: FetchTriplesOptions) => {
     const triples = this.triples.slice(skip, skip + first);
 
     return {
@@ -45,5 +45,8 @@ export class MockNetwork implements INetwork {
     return [];
   };
 
-  publish = async () => {};
+  publish = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    await new Promise(() => {});
+  };
 }

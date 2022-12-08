@@ -156,7 +156,7 @@ interface Props {
   disabled?: boolean;
 }
 
-function getIconColor(variant: ButtonVariant, disabled: boolean, icon?: Icon): ColorName {
+function getIconColor(variant: ButtonVariant, disabled: boolean): ColorName {
   if (disabled) return 'grey-03';
   switch (variant) {
     case 'primary':
@@ -174,7 +174,7 @@ export const Button = React.forwardRef(function Button(
   { children, onClick, icon, variant = 'primary', disabled = false, ...props }: Props,
   ref: ForwardedRef<HTMLButtonElement>
 ) {
-  const iconColor = getIconColor(variant, disabled, icon);
+  const iconColor = getIconColor(variant, disabled);
 
   return (
     <StyledButton ref={ref} disabled={disabled} variant={variant} onClick={onClick} {...props}>
@@ -296,7 +296,7 @@ export const SmallButton = React.forwardRef(function SmallButton(
   }: Props & { borderColor?: string },
   ref: ForwardedRef<HTMLButtonElement>
 ) {
-  const iconColor = getIconColor(variant, disabled, icon);
+  const iconColor = getIconColor(variant, disabled);
 
   return (
     <StyledSmallButton
