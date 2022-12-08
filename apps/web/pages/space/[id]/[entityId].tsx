@@ -264,12 +264,12 @@ const LinkedEntityCardContainer = styled.div(({ theme }) => ({
   borderRadius: theme.radius,
   border: `1px solid ${theme.colors['grey-02']}`,
   overflow: 'hidden',
+  transition: 'border-color 0.15s ease-in-out',
 
   ':hover': {
     border: `1px solid ${theme.colors.text}`,
 
-    // @ts-expect-error -- This is valid with emotion/styled
-    [LinkedEntityCardHeader]: {
+    a: {
       borderColor: theme.colors.text,
     },
   },
@@ -407,8 +407,8 @@ function LinkedEntityCard({
             </span>
             <Spacer width={6} />
             {isExpanded
-              ? `Hide ${triplesWithoutDescription.length} more values`
-              : `Show ${triplesWithoutDescription.length} more values`}
+              ? `Hide ${triplesWithoutDescription.length} more ${pluralize('value', triplesWithoutDescription.length)}`
+              : `Show ${triplesWithoutDescription.length} more ${pluralize('value', triplesWithoutDescription.length)}`}
           </SmallButton>
         </LinkedEntityCardFooter>
       </LinkedEntityCardContainer>

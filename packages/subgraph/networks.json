@@ -7,8 +7,8 @@
   },
   "matic": {
     "SpaceRegistry": {
-      "address": "0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0",
-      "startBlock": 35495081
+      "address": "0x170b749413328ac9a94762031a7A05b00c1D2e34",
+      "startBlock": 36472400
     }
   },
   "mumbai": {

@@ -1,17 +1,13 @@
-import { css, Global, Theme, ThemeProvider } from '@emotion/react';
+import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
-import { QueryClient, QueryClientProvider } from 'react-query';
 import { Navbar } from '~/modules/components/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
-import { shadows } from '~/modules/design-system/theme/shadows';
-import { typography } from '~/modules/design-system/theme/typography';
-import { ServicesProvider } from '~/modules/services';
-import { WalletProvider } from '~/modules/wallet';
 
 import 'modern-normalize';
 import '../styles/styles.css';
 import Head from 'next/head';
+import { Providers } from '~/modules/services/providers';
 
 const globalStyles = css`
   html {
@@ -36,35 +32,19 @@ const Layout = styled.main(props => ({
   },
 }));
 
-const theme: Theme = {
-  colors: colors.light,
-  typography: typography.light,
-  space: 4,
-  radius: 6,
-  shadows,
-};
-
-const queryClient = new QueryClient();
-
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <WalletProvider>
-          <ServicesProvider>
-            <Head>
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>Geo Genesis</title>
-            </Head>
-            <Global styles={globalStyles} />
-            <Navbar />
-            <Layout>
-              <Component {...pageProps} />
-            </Layout>
-          </ServicesProvider>
-        </WalletProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <Providers>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Geo Genesis</title>
+      </Head>
+      <Global styles={globalStyles} />
+      <Navbar />
+      <Layout>
+        <Component {...pageProps} />
+      </Layout>
+    </Providers>
   );
 }
 

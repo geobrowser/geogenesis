@@ -125,7 +125,11 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
         />
       </FilterIconContainer>
       <PresetIconContainer showPredefinedQueries={showPredefinedQueries}>
-        <IconButton onClick={() => onShowPredefinedQueriesChange(!showPredefinedQueries)} icon="preset" />
+        <IconButton
+          aria-label="predefined-queries-button"
+          onClick={() => onShowPredefinedQueriesChange(!showPredefinedQueries)}
+          icon="preset"
+        />
       </PresetIconContainer>
     </InputContainer>
   );

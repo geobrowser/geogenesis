@@ -91,7 +91,7 @@ export const Dropdown = ({ value, options }: Props) => {
   return (
     <DropdownPrimitive.Root onOpenChange={setOpen}>
       <StyledTrigger>
-        <Text variant="button">{value}</Text>
+        {value}
         <Spacer width={8} />
         <ChevronDownSmall color="ctaPrimary" />
       </StyledTrigger>

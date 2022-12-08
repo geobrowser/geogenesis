@@ -90,7 +90,12 @@ export const Select = ({ value, onChange, options, variant = 'secondary' }: Prop
         <StyledViewport>
           <SelectPrimitive.Group>
             {options.map((option, index) => (
-              <StyledItem isLast={index === options.length - 1} key={option.value} value={option.value}>
+              <StyledItem
+                aria-label={option.label}
+                isLast={index === options.length - 1}
+                key={option.value}
+                value={option.value}
+              >
                 <SelectPrimitive.SelectItemText>{option.label}</SelectPrimitive.SelectItemText>
               </StyledItem>
             ))}
