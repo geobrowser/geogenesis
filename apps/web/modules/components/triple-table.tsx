@@ -212,12 +212,6 @@ interface Props {
   entityNames: EntityNames;
 }
 
-// Using a default export here instead of named import to play better with Next's
-// dynamic import syntax. We're dynamically importing TripleTable in the /triples
-// route. Check the comment there for more context.
-//
-// When using a named export Next might fail on the TypeScript type checking during
-// build. Using default export works.
 export const TripleTable = memo(function TripleTable({ update, triples, entityNames, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
