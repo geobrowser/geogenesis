@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Spacer } from './spacer';
 import { Text } from './text';
@@ -8,7 +9,7 @@ const BreadcrumbLink = styled.a(props => ({
   display: 'flex',
   alignItems: 'center',
   cursor: 'pointer',
-  padding: '1px 0', // creates space above the image and text to make focus state look better
+  padding: '1px 0', // creates space above the SpaceImage and text to make focus state look better
   whiteSpace: 'nowrap',
 
   span: {
@@ -22,10 +23,13 @@ const BreadcrumbLink = styled.a(props => ({
   },
 }));
 
-const Image = styled.img(props => ({
-  width: '16px',
-  height: '16px',
-  objectFit: 'cover',
+const ImageContainer = styled.div(props => ({
+  // this is required for next/image
+  // https://nextjs.org/docs/api-reference/next/image#fill
+  position: 'relative',
+  overflow: 'hidden',
+  width: props.theme.space * 4,
+  height: props.theme.space * 4,
   borderRadius: props.theme.radius / 1.5,
 }));
 
@@ -51,7 +55,9 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
       <BreadcrumbLink title={children}>
         {img && (
           <>
-            <Image src={img} alt="" />
+            <ImageContainer>
+              <Image layout="fill" objectFit="cover" src={img} alt="" />
+            </ImageContainer>
             <Spacer width={8} />
           </>
         )}
