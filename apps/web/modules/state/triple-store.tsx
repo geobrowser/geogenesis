@@ -1,10 +1,10 @@
-import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
+import { CreateTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { EntityNames, FilterState, ReviewState, Triple } from '../types';
+import { Action, EditTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
@@ -36,14 +36,6 @@ interface ITripleStoreConfig {
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
 }
-
-type EditTripleAction = {
-  type: 'editTriple';
-  before: DeleteTripleAction;
-  after: CreateTripleAction;
-};
-
-export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const DEFAULT_INITIAL_PARAMS = {

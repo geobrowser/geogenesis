@@ -69,6 +69,8 @@ export function ReadableEntityPage({ triples, id, name, space, entityNames, link
   const { setPageName } = usePageName();
   const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
 
+  // This is a janky way to set the name in the navbar until we have nested layouts
+  // and the navbar can query the name itself in a nice way.
   useEffect(() => {
     if (name !== id) setPageName(name);
     return () => setPageName('');

@@ -8,6 +8,8 @@ import { LinkedEntityGroup } from '~/modules/components/entity/types';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
+import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
+import { EntityStoreProvider } from '~/modules/state/entity-store-provider';
 
 interface Props {
   triples: Triple[];
@@ -21,17 +23,21 @@ interface Props {
 export default function EntityPage(props: Props) {
   const { isEditor } = useAccessControl(props.space);
   const { editable } = useEditable();
-  const renderEditablePage = isEditor && editable;
-  // const renderEditablePage = true;
+  // const renderEditablePage = isEditor && editable;
+  const renderEditablePage = true;
+  const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
-  return renderEditablePage ? <div>Hello world</div> : <ReadableEntityPage {...props} />;
+  return (
+    <EntityStoreProvider spaceId={props.space} initialEntityNames={props.entityNames} initialTriples={props.triples}>
+      <Page {...props} />
+    </EntityStoreProvider>
+  );
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = getConfigFromUrl(context.resolvedUrl);
-
   const storage = new StorageClient(config.ipfs);
 
   const [entity, related] = await Promise.all([
