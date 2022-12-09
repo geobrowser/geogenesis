@@ -3,10 +3,12 @@ import Head from 'next/head';
 import { Chip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { createTripleWithId, createValueId } from '~/modules/services/create-id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityDescription, groupBy, navUtils } from '~/modules/utils';
+import { getEntityDescription, getEntityName, groupBy, navUtils } from '~/modules/utils';
 import { FlowBar } from '../flow-bar';
+import { CopyIdButton } from './copy-id';
 import { StringField } from './editable-fields';
 
 const PageContainer = styled.div({
@@ -32,6 +34,17 @@ const Attributes = styled.div(({ theme }) => ({
   padding: theme.space * 5,
 }));
 
+const EntityActionGroup = styled.div({
+  display: 'flex',
+  justifyContent: 'flex-end',
+
+  '@media (max-width: 600px)': {
+    button: {
+      flexGrow: 1,
+    },
+  },
+});
+
 interface Props {
   triples: Triple[];
   id: string;
@@ -40,21 +53,31 @@ interface Props {
   entityNames: EntityNames;
 }
 
-export function EditableEntityPage({ id, name, space, triples: serverTriples, entityNames }: Props) {
-  const { triples: localTriples, actions, publish } = useEntityTriples();
+export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples, entityNames }: Props) {
+  const { triples: localTriples, actions, publish, update, create } = useEntityTriples();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? serverTriples : localTriples;
-
+  const nameTriple = triples.find(t => t.attributeId === 'name');
   const description = getEntityDescription(triples, entityNames);
-  const triplesWithoutDescription = triples.filter(t =>
-    t.value.type === 'entity'
-      ? entityNames[t.value.id] !== description
-      : t.value.type === 'string'
-      ? t.value.value !== description
-      : false
-  );
+  const name = getEntityName(triples) ?? serverName;
+
+  const onNameBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (!nameTriple) {
+      return create([
+        createTripleWithId(space, id, 'name', { id: createValueId(), type: 'string', value: e.target.value }),
+      ]);
+    }
+
+    update(
+      {
+        ...nameTriple,
+        value: { ...nameTriple.value, type: 'string', value: e.target.value },
+      },
+      nameTriple
+    );
+  };
 
   return (
     <PageContainer>
@@ -64,9 +87,13 @@ export function EditableEntityPage({ id, name, space, triples: serverTriples, en
           <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
         </Head>
 
-        <Text as="h1" variant="mainPage">
-          {name}
-        </Text>
+        <StringField
+          variant="mainPage"
+          color="text"
+          placeholder="Entity name..."
+          initialValue={name ?? id}
+          onBlur={onNameBlur}
+        />
 
         {description && (
           <>
@@ -77,16 +104,17 @@ export function EditableEntityPage({ id, name, space, triples: serverTriples, en
           </>
         )}
 
+        <Spacer height={16} />
+
+        <EntityActionGroup>
+          <CopyIdButton id={id} />
+        </EntityActionGroup>
+
         <Spacer height={8} />
 
         <Content>
           <Attributes>
-            <EntityAttributes
-              entityId={id}
-              triples={triplesWithoutDescription}
-              space={space}
-              entityNames={entityNames}
-            />
+            <EntityAttributes entityId={id} triples={triples} space={space} entityNames={entityNames} />
           </Attributes>
         </Content>
       </EntityContainer>
@@ -142,8 +170,9 @@ function EntityAttributes({
               ) : (
                 <>
                   <StringField
+                    variant="body"
                     placeholder="Add value..."
-                    onChange={e =>
+                    onBlur={e =>
                       update(
                         {
                           ...triple,
@@ -152,7 +181,7 @@ function EntityAttributes({
                         triple
                       )
                     }
-                    value={triple.value.value}
+                    initialValue={triple.value.value}
                   />
                 </>
               )

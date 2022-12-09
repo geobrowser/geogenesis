@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
 import pluralize from 'pluralize';
@@ -8,13 +8,13 @@ import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
-import { Tick } from '~/modules/design-system/icons/tick';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, groupBy, navUtils, partition } from '~/modules/utils';
+import { CopyIdButton } from './copy-id';
 import { LinkedEntityGroup } from './types';
 
 const Content = styled.div(({ theme }) => ({
@@ -48,13 +48,6 @@ const EntityActionGroup = styled.div({
   },
 });
 
-const CopyText = styled(Text)`
-  display: inline-flex;
-  align-items: center;
-`;
-
-const MotionCopyText = motion(CopyText);
-
 interface Props {
   triples: Triple[];
   id: string;
@@ -65,14 +58,6 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
-  const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
-
-  const onCopyEntityId = () => {
-    navigator.clipboard.writeText(id);
-    setCopyText('Entity ID Copied');
-    setTimeout(() => setCopyText('Copy ID'), 3600);
-  };
-
   const description = getEntityDescription(triples, entityNames);
   const triplesWithoutDescription = triples.filter(t =>
     t.value.type === 'entity'
@@ -107,35 +92,7 @@ export function ReadableEntityPage({ triples, id, name, space, entityNames, link
       <Spacer height={16} />
 
       <EntityActionGroup>
-        <SmallButton
-          onClick={onCopyEntityId}
-          variant={copyText === 'Entity ID Copied' ? 'tertiary' : 'secondary'}
-          icon={copyText === 'Entity ID Copied' ? undefined : 'copy'}
-        >
-          <AnimatePresence mode="wait">
-            {copyText === 'Entity ID Copied' ? (
-              <MotionCopyText
-                color="white"
-                initial={{ opacity: 0, scale: 0.85 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.85 }}
-                variant="smallButton"
-              >
-                <Tick />
-                <Spacer width={4} />
-                {copyText}
-              </MotionCopyText>
-            ) : (
-              <motion.span
-                initial={{ opacity: 0, scale: 0.85 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.85 }}
-              >
-                {copyText}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </SmallButton>
+        <CopyIdButton id={id} />
       </EntityActionGroup>
 
       <Spacer height={8} />
