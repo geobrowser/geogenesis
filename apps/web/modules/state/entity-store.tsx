@@ -1,6 +1,8 @@
+import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { CreateTripleAction } from '~/../../packages/action-schema/dist/src';
+import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
 
@@ -18,11 +20,11 @@ interface IEntityStoreConfig {
 }
 
 export class EntityStore implements IEntityStore {
-  private readonly api: INetwork;
-  private readonly spaceId: string;
-  private readonly triples$: Observable<Triple[]>;
-  private readonly entityNames$: Observable<EntityNames>;
-  private readonly actions$: Observable<Action[]>;
+  private api: INetwork;
+  spaceId: string;
+  triples$: ObservableComputed<Triple[]>;
+  entityNames$: Observable<EntityNames>;
+  actions$: Observable<Action[]>;
 
   constructor({ api, initialEntityNames, initialTriples, spaceId }: IEntityStoreConfig) {
     this.api = api;
@@ -30,6 +32,34 @@ export class EntityStore implements IEntityStore {
     this.entityNames$ = observable(initialEntityNames);
     this.actions$ = observable<Action[]>([]);
     this.spaceId = spaceId;
+
+    this.triples$ = computed(() => {
+      // We operate on the triples array in reverse so that we can `push` instead of `unshift`
+      // when creating new triples, which is significantly faster.
+      const triples: Triple[] = [...initialTriples].reverse();
+
+      // If our actions have modified one of the network triples, we don't want to add that
+      // network triple to the triples array
+      this.actions$.get().forEach(action => {
+        switch (action.type) {
+          case 'createTriple':
+            triples.push(createTripleWithId({ ...action, space: spaceId }));
+            break;
+          case 'deleteTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: spaceId }).id);
+            triples.splice(index, 1);
+            break;
+          }
+          case 'editTriple': {
+            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: spaceId }).id);
+            triples[index] = createTripleWithId({ ...action.after, space: spaceId });
+            break;
+          }
+        }
+      });
+
+      return triples.reverse();
+    });
   }
 
   create = (triples: Triple[]) => {
@@ -61,12 +91,4 @@ export class EntityStore implements IEntityStore {
     await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.spaceId });
     this.actions$.set([]);
   };
-
-  get triples() {
-    return this.triples$.get();
-  }
-
-  get entityNames() {
-    return this.entityNames$.get();
-  }
 }

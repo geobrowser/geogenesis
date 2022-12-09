@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
 import pluralize from 'pluralize';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
@@ -13,7 +13,6 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
-import { usePageName } from '~/modules/state/use-page-name';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, groupBy, navUtils, partition } from '~/modules/utils';
 import { LinkedEntityGroup } from './types';
@@ -66,15 +65,7 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
-  const { setPageName } = usePageName();
   const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
-
-  // This is a janky way to set the name in the navbar until we have nested layouts
-  // and the navbar can query the name itself in a nice way.
-  useEffect(() => {
-    if (name !== id) setPageName(name);
-    return () => setPageName('');
-  }, [name, id, setPageName]);
 
   const onCopyEntityId = () => {
     navigator.clipboard.writeText(id);

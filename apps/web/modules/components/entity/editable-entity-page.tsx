@@ -1,14 +1,23 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { useEffect } from 'react';
 import { Chip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { useEntityStore } from '~/modules/state/entity-store-provider';
-import { usePageName } from '~/modules/state/use-page-name';
+import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, groupBy, navUtils } from '~/modules/utils';
+import { FlowBar } from '../flow-bar';
 import { StringField } from './editable-fields';
+
+const PageContainer = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+});
+
+const EntityContainer = styled.div({
+  width: '100%',
+});
 
 const Content = styled.div(({ theme }) => ({
   border: `1px solid ${theme.colors['grey-02']}`,
@@ -31,18 +40,8 @@ interface Props {
   entityNames: EntityNames;
 }
 
-// TODO: Can probably scope down the Triples store for just reading data in the triples table
-
 export function EditableEntityPage({ id, name, space, triples: serverTriples, entityNames }: Props) {
-  const { setPageName } = usePageName();
-  const { triples: localTriples } = useEntityStore();
-
-  // This is a janky way to set the name in the navbar until we have nested layouts
-  // and the navbar can query the name itself in a nice way.
-  useEffect(() => {
-    if (name !== id) setPageName(name);
-    return () => setPageName('');
-  }, [name, id, setPageName]);
+  const { triples: localTriples, actions, publish } = useEntityTriples();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -58,33 +57,42 @@ export function EditableEntityPage({ id, name, space, triples: serverTriples, en
   );
 
   return (
-    <div>
-      <Head>
-        <title>{name ?? id}</title>
-        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-      </Head>
+    <PageContainer>
+      <EntityContainer>
+        <Head>
+          <title>{name ?? id}</title>
+          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+        </Head>
 
-      <Text as="h1" variant="mainPage">
-        {name}
-      </Text>
+        <Text as="h1" variant="mainPage">
+          {name}
+        </Text>
 
-      {description && (
-        <>
-          <Spacer height={16} />
-          <Text as="p" color="grey-04">
-            {description}
-          </Text>
-        </>
-      )}
+        {description && (
+          <>
+            <Spacer height={16} />
+            <Text as="p" color="grey-04">
+              {description}
+            </Text>
+          </>
+        )}
 
-      <Spacer height={8} />
+        <Spacer height={8} />
 
-      <Content>
-        <Attributes>
-          <EntityAttributes entityId={id} triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
-        </Attributes>
-      </Content>
-    </div>
+        <Content>
+          <Attributes>
+            <EntityAttributes
+              entityId={id}
+              triples={triplesWithoutDescription}
+              space={space}
+              entityNames={entityNames}
+            />
+          </Attributes>
+        </Content>
+      </EntityContainer>
+
+      <FlowBar actionsCount={actions.length} onPublish={publish} />
+    </PageContainer>
   );
 }
 
@@ -109,6 +117,7 @@ function EntityAttributes({
   space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
+  const { update } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   return (
@@ -134,8 +143,16 @@ function EntityAttributes({
                 <>
                   <StringField
                     placeholder="Add value..."
-                    // onChange={tripleStore etc etc}
-                    defaultValue={triple.value.value}
+                    onChange={e =>
+                      update(
+                        {
+                          ...triple,
+                          value: { ...triple.value, type: 'string', value: e.target.value },
+                        },
+                        triple
+                      )
+                    }
+                    value={triple.value.value}
                   />
                 </>
               )

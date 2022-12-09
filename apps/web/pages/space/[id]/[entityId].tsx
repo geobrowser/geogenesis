@@ -10,6 +10,8 @@ import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { EntityStoreProvider } from '~/modules/state/entity-store-provider';
+import { useEffect } from 'react';
+import { usePageName } from '~/modules/state/use-page-name';
 
 interface Props {
   triples: Triple[];
@@ -21,8 +23,17 @@ interface Props {
 }
 
 export default function EntityPage(props: Props) {
+  const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.space);
   const { editable } = useEditable();
+
+  // This is a janky way to set the name in the navbar until we have nested layouts
+  // and the navbar can query the name itself in a nice way.
+  useEffect(() => {
+    if (props.name !== props.id) setPageName(props.name);
+    return () => setPageName('');
+  }, [props.name, props.id, setPageName]);
+
   // const renderEditablePage = isEditor && editable;
   const renderEditablePage = true;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
