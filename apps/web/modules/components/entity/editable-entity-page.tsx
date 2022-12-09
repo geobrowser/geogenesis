@@ -9,7 +9,7 @@ import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, groupBy, navUtils } from '~/modules/utils';
 import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
-import { StringField } from './editable-fields';
+import { NumberField, StringField } from './editable-fields';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -148,44 +148,67 @@ function EntityAttributes({
   const { update } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
+  const tripleToEditableField = (triple: Triple) => {
+    switch (triple.value.type) {
+      case 'string':
+        return (
+          <StringField
+            key={triple.id}
+            variant="body"
+            placeholder="Add value..."
+            onBlur={e =>
+              update(
+                {
+                  ...triple,
+                  value: { ...triple.value, type: 'string', value: e.target.value },
+                },
+                triple
+              )
+            }
+            initialValue={triple.value.value}
+          />
+        );
+      case 'number':
+        return (
+          <NumberField
+            key={triple.id}
+            placeholder="Add value..."
+            onBlur={e =>
+              update(
+                {
+                  ...triple,
+                  value: { ...triple.value, type: 'string', value: e.target.value },
+                },
+                triple
+              )
+            }
+            initialValue={triple.value.value}
+          />
+        );
+      case 'entity':
+        return (
+          <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
+            <Chip href={navUtils.toEntity(space, triple.value.id)}>
+              {entityNames[triple.value.id] || triple.value.id}
+            </Chip>
+          </div>
+        );
+    }
+  };
+
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <EntityAttributeContainer key={`${entityId}-entity-attributes-${attributeId}-${index}`}>
+        <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
           <Text as="p" variant="bodySemibold">
             {entityNames[attributeId] || attributeId}
           </Text>
           <GroupedAttributes>
             {/* 
-              Have to do some janky layout stuff instead of being able to just use gap since we want different
-              height between the attribute name and the attribute value for entities vs strings
-            */}
-            {triples.map(triple =>
-              triple.value.type === 'entity' ? (
-                <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
-                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
-                    {entityNames[triple.value.id] || triple.value.id}
-                  </Chip>
-                </div>
-              ) : (
-                <>
-                  <StringField
-                    variant="body"
-                    placeholder="Add value..."
-                    onBlur={e =>
-                      update(
-                        {
-                          ...triple,
-                          value: { ...triple.value, type: 'string', value: e.target.value },
-                        },
-                        triple
-                      )
-                    }
-                    initialValue={triple.value.value}
-                  />
-                </>
-              )
-            )}
+          Have to do some janky layout stuff instead of being able to just use gap since we want different
+          height between the attribute name and the attribute value for entities vs strings
+        */}
+            {triples.map(tripleToEditableField)}
           </GroupedAttributes>
         </EntityAttributeContainer>
       ))}

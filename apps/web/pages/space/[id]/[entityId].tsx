@@ -34,8 +34,8 @@ export default function EntityPage(props: Props) {
     return () => setPageName('');
   }, [props.name, props.id, setPageName]);
 
-  // const renderEditablePage = isEditor && editable;
-  const renderEditablePage = true;
+  const renderEditablePage = isEditor && editable;
+  // const renderEditablePage = true;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (

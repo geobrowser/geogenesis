@@ -4,14 +4,15 @@
 // Entity name autocomplete field
 
 import styled from '@emotion/styled';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // TODO: How do we handle attribute names editing. Attributes are entities, so we can't just use a string field.
 // We'll need entity search and everything probably.
 
-const Textarea = styled.textarea<Required<Pick<NameFieldProps, 'color' | 'variant'>>>(props => ({
+const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'variant'>>>(props => ({
   ...props.theme.typography[props.variant],
   width: '100%',
+  height: '100%',
   resize: 'none',
   backgroundColor: 'transparent',
   overflow: 'hidden',
@@ -26,7 +27,7 @@ const Textarea = styled.textarea<Required<Pick<NameFieldProps, 'color' | 'varian
   },
 }));
 
-interface NameFieldProps {
+interface StringFieldProps {
   initialValue: string;
   onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
@@ -34,7 +35,7 @@ interface NameFieldProps {
   color?: 'text' | 'grey-04';
 }
 
-export function StringField({ variant = 'body', color = 'text', ...props }: NameFieldProps) {
+export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Name
       ref.current.style.height = 'auto';
       ref.current.style.height = ref.current.scrollHeight + 'px';
     }
-  }, []);
+  });
 
   const onChange = () => {
     if (ref.current) {
@@ -61,6 +62,64 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Name
       onBlur={props.onBlur}
       variant={variant}
       color={color}
+    />
+  );
+}
+
+const NumberInput = styled.input(props => ({
+  ...props.theme.typography.body,
+  width: '100%',
+  backgroundColor: 'transparent',
+
+  '&::placeholder': {
+    color: props.theme.colors['grey-02'],
+  },
+
+  '&:focus': {
+    outline: 'none',
+  },
+}));
+
+interface NumberFieldProps {
+  initialValue: string;
+  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+}
+
+export function NumberField(props: NumberFieldProps) {
+  // We're using controlled state instead of refs in order to more easily validate the keypresses
+  const [value, setValue] = useState('');
+
+  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const numberRegex = /^[0-9]*$/;
+
+    // TODO: Validation UI?
+    if (!numberRegex.test(e.target.value)) {
+      return;
+    }
+
+    props.onBlur(e);
+  };
+
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numberRegex = /^[0-9]*$/;
+    if (!numberRegex.test(e.target.value)) {
+      return;
+    }
+
+    setValue(e.target.value);
+  };
+
+  // Mimicking the type="number" behavior so we don't show the weird arrows
+  return (
+    <NumberInput
+      {...props}
+      type="text"
+      onBlur={onBlur}
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={value}
+      onChange={onChange}
     />
   );
 }
