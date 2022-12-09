@@ -6,6 +6,8 @@ import { EntityNames, Triple } from '~/modules/types';
 import { getEntityName } from '~/modules/utils';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
+import { useAccessControl } from '~/modules/state/use-access-control';
+import { useEditable } from '~/modules/state/use-editable';
 
 interface Props {
   triples: Triple[];
@@ -17,7 +19,12 @@ interface Props {
 }
 
 export default function EntityPage(props: Props) {
-  return <ReadableEntityPage {...props} />;
+  const { isEditor } = useAccessControl(props.space);
+  const { editable } = useEditable();
+  const renderEditablePage = isEditor && editable;
+  // const renderEditablePage = true;
+
+  return renderEditablePage ? <div>Hello world</div> : <ReadableEntityPage {...props} />;
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
