@@ -12,6 +12,7 @@ import { Facts } from './icons/facts';
 import { Filter } from './icons/filter';
 import { Preset } from './icons/preset';
 import { Publish } from './icons/publish';
+import { Relation } from './icons/relation';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
@@ -133,7 +134,8 @@ type Icon =
   | 'tick'
   | 'facts'
   | 'copy'
-  | 'preset';
+  | 'preset'
+  | 'relation';
 
 const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   create: (color?: ColorName) => <Create color={color} />,
@@ -149,6 +151,7 @@ const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   facts: (color?: ColorName) => <Facts color={color} />,
   copy: (color?: ColorName) => <Copy color={color} />,
   preset: (color?: ColorName) => <Preset color={color} />,
+  relation: (color?: ColorName) => <Relation color={color} />,
 };
 
 interface Props {

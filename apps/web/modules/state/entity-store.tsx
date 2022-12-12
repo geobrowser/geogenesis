@@ -9,7 +9,7 @@ import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../t
 interface IEntityStore {
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
-  remove(triple: Triple): void;
+  remove(triples: Triple[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
@@ -82,13 +82,13 @@ export class EntityStore implements IEntityStore {
     this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
-  remove = (triple: Triple) => {
-    const action: DeleteTripleAction = {
+  remove = (triples: Triple[]) => {
+    const actions: DeleteTripleAction[] = triples.map(triple => ({
       ...triple,
       type: 'deleteTriple',
-    };
+    }));
 
-    this.actions$.set([...this.actions$.get(), action]);
+    this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {

@@ -143,8 +143,20 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 }
 
 const EntityAttributeContainer = styled.div({
+  position: 'relative',
   wordBreak: 'break-word',
 });
+
+const TripleActions = styled.div(props => ({
+  position: 'absolute',
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space * 2,
+
+  // HACK to visually align the buttons with the attribut name line-height
+  top: 6,
+  right: 0,
+}));
 
 const GroupedAttributes = styled.div(({ theme }) => ({
   display: 'flex',
@@ -229,7 +241,7 @@ function EntityAttributes({
       case 'entity':
         return (
           <div key={`entity-${triple.id}`}>
-            <ChipButton icon="check-close" onClick={() => remove(triple)}>
+            <ChipButton icon="check-close" onClick={() => remove([triple])}>
               {entityNames[triple.value.id] || triple.value.id}
             </ChipButton>
           </div>
@@ -257,6 +269,10 @@ function EntityAttributes({
                 onDone={entity => linkEntityToAttribute(attributeId, entity)}
               />
             )}
+            <TripleActions>
+              <SquareButton icon="relation" />
+              <SquareButton icon="trash" onClick={() => remove(triples.filter(t => t.attributeId === attributeId))} />
+            </TripleActions>
           </GroupedAttributes>
         </EntityAttributeContainer>
       ))}
