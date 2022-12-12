@@ -1,12 +1,12 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { Chip, ChipButton } from '~/modules/design-system/chip';
+import { ChipButton } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createTripleWithId, createValueId } from '~/modules/services/create-id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityDescription, getEntityName, groupBy, navUtils } from '~/modules/utils';
+import { getEntityDescription, getEntityName, groupBy } from '~/modules/utils';
 import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
@@ -114,7 +114,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
         <Content>
           <Attributes>
-            <EntityAttributes entityId={id} triples={triples} space={space} entityNames={entityNames} />
+            <EntityAttributes entityId={id} triples={triples} entityNames={entityNames} />
           </Attributes>
         </Content>
       </EntityContainer>
@@ -203,9 +203,9 @@ function EntityAttributes({
           </Text>
           <GroupedAttributes>
             {/* 
-          Have to do some janky layout stuff instead of being able to just use gap since we want different
-          height between the attribute name and the attribute value for entities vs strings
-        */}
+              Have to do some janky layout stuff instead of being able to just use gap since we want different
+              height between the attribute name and the attribute value for entities vs strings
+            */}
             {triples.map(tripleToEditableField)}
           </GroupedAttributes>
         </EntityAttributeContainer>
