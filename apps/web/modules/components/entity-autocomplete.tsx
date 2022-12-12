@@ -92,8 +92,8 @@ class EntityAutocomplete {
     );
   }
 
-  onQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.query$.set(e.target.value);
+  onQueryChange = (query: string) => {
+    this.query$.set(query);
   };
 }
 
@@ -147,8 +147,8 @@ export function EntityAutocompleteDialog({ withSearch, trigger, onDone }: Props)
               duration: 0.1,
               ease: 'easeInOut',
             }}
+            avoidCollisions={false}
             sideOffset={theme.space * 2}
-            avoidCollisions={true}
             align="center"
           >
             {withSearch ? (
@@ -157,7 +157,7 @@ export function EntityAutocompleteDialog({ withSearch, trigger, onDone }: Props)
                   <SearchIconContainer>
                     <Search />
                   </SearchIconContainer>
-                  <AutocompleteInput onChange={onQueryChange} />
+                  <AutocompleteInput onChange={e => onQueryChange(e.target.value)} />
                 </InputContainer>
               </>
             ) : null}
