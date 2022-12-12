@@ -26,6 +26,8 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   boxShadow: props.theme.shadows.dropdown,
   zIndex: 1,
   width: 384,
+  overflow: 'hidden',
+  height: '100%',
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
 
@@ -56,6 +58,9 @@ const ResultsList = styled.ul({
   justifyContent: 'flex-start',
   margin: 0,
   padding: 0,
+
+  maxHeight: 580,
+  overflowY: 'auto',
 });
 
 const Result = styled.button(props => ({
