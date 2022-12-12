@@ -1,7 +1,7 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { CreateTripleAction } from '~/../../packages/action-schema/dist/src';
+import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
@@ -9,6 +9,7 @@ import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../t
 interface IEntityStore {
   create(triples: Triple[]): void;
   update(triple: Triple, oldTriple: Triple): void;
+  remove(triple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
@@ -69,6 +70,15 @@ export class EntityStore implements IEntityStore {
     }));
 
     this.actions$.set([...this.actions$.get(), ...actions]);
+  };
+
+  remove = (triple: Triple) => {
+    const action: DeleteTripleAction = {
+      ...triple,
+      type: 'deleteTriple',
+    };
+
+    this.actions$.set([...this.actions$.get(), action]);
   };
 
   update = (triple: Triple, oldTriple: Triple) => {

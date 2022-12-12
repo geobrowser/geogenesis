@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { Chip } from '~/modules/design-system/chip';
+import { Chip, ChipButton } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createTripleWithId, createValueId } from '~/modules/services/create-id';
@@ -137,15 +137,13 @@ const GroupedAttributes = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
-  space,
   entityNames,
 }: {
   entityId: string;
   triples: Props['triples'];
-  space: Props['space'];
   entityNames: Props['entityNames'];
 }) {
-  const { update } = useEntityTriples();
+  const { update, remove } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const tripleToEditableField = (triple: Triple) => {
@@ -188,9 +186,9 @@ function EntityAttributes({
       case 'entity':
         return (
           <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
-            <Chip href={navUtils.toEntity(space, triple.value.id)}>
+            <ChipButton icon="check-close" onClick={() => remove(triple)}>
               {entityNames[triple.value.id] || triple.value.id}
-            </Chip>
+            </ChipButton>
           </div>
         );
     }
