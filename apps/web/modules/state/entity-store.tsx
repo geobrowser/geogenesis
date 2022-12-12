@@ -43,9 +43,19 @@ export class EntityStore implements IEntityStore {
       // network triple to the triples array
       this.actions$.get().forEach(action => {
         switch (action.type) {
-          case 'createTriple':
-            triples.push(createTripleWithId({ ...action, space: spaceId }));
+          case 'createTriple': {
+            // We may add a triple that has the same attributeId as other triples. We want to insert
+            // the new triple into the triples array in the same place as the other triples so the
+            // list doesn't reorder.
+            const indexOfSiblingTriples = triples.findIndex(t => t.attributeId === action.attributeId);
+            if (indexOfSiblingTriples === -1) {
+              triples.push(createTripleWithId({ ...action, space: spaceId }));
+              break;
+            }
+
+            triples.splice(indexOfSiblingTriples, 0, createTripleWithId({ ...action, space: spaceId }));
             break;
+          }
           case 'deleteTriple': {
             const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: spaceId }).id);
             triples.splice(index, 1);
