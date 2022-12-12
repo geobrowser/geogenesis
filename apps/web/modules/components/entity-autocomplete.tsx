@@ -140,9 +140,9 @@ export function EntityAutocompleteDialog({ withSearch, trigger, onDone }: Props)
         {open ? (
           <MotionContent
             forceMount={true} // We force mounting so we can control exit animations through framer-motion
-            initial={{ opacity: 0, y: -10 }}
-            exit={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{
               duration: 0.1,
               ease: 'easeInOut',
