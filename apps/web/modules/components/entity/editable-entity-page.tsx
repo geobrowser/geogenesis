@@ -62,6 +62,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? serverTriples : localTriples;
   const nameTriple = triples.find(t => t.attributeId === 'name');
+  const descriptionTriple = triples.find(t => t.attributeId === 'Description');
   const description = getEntityDescription(triples, entityNames);
   const name = getEntityName(triples) ?? serverName;
 
@@ -81,6 +82,22 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
     );
   };
 
+  const onDescriptionBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (!descriptionTriple) {
+      return create([
+        createTripleWithId(space, id, 'Description', { id: createValueId(), type: 'string', value: e.target.value }),
+      ]);
+    }
+
+    update(
+      {
+        ...descriptionTriple,
+        value: { ...descriptionTriple.value, type: 'string', value: e.target.value },
+      },
+      descriptionTriple
+    );
+  };
+
   return (
     <PageContainer>
       <EntityContainer>
@@ -97,14 +114,13 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           onBlur={onNameBlur}
         />
 
-        {description && (
-          <>
-            <Spacer height={16} />
-            <Text as="p" color="grey-04">
-              {description}
-            </Text>
-          </>
-        )}
+        <Spacer height={16} />
+        <StringField
+          variant="body"
+          placeholder="Add a description..."
+          initialValue={description ?? ''}
+          onBlur={onDescriptionBlur}
+        />
 
         <Spacer height={16} />
 

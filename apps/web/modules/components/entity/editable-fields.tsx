@@ -17,6 +17,8 @@ const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'vari
   backgroundColor: 'transparent',
   overflow: 'hidden',
   color: props.theme.colors[props.color],
+  margin: 0,
+  padding: 0,
 
   '&::placeholder': {
     color: props.theme.colors['grey-02'],
