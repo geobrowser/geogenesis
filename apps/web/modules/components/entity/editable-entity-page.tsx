@@ -1,14 +1,14 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { IconButton, SmallButton, SquareButton } from '~/modules/design-system/button';
+import { SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
-import { Create } from '~/modules/design-system/icons/create';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createTripleWithId, createValueId } from '~/modules/services/create-id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, groupBy } from '~/modules/utils';
+import { EntityAutocompleteDialog } from '../entity-autocomplete';
 import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
@@ -116,7 +116,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
         <Content>
           <Attributes>
-            <EntityAttributes entityId={id} triples={triples} entityNames={entityNames} />
+            <EntityAttributes entityId={id} space={space} triples={triples} entityNames={entityNames} />
           </Attributes>
         </Content>
       </EntityContainer>
@@ -156,17 +156,20 @@ function EntityAttributes({
   const { create, update, remove } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
-  const linkEntityToAttribute = (attributeId: string, linkedEntityId: string) => {
+  const linkEntityToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
     create([
-      createTripleWithId({
-        space: space,
-        entityId: entityId,
-        attributeId: attributeId,
-        value: {
-          type: 'entity',
-          id: linkedEntityId,
-        },
-      }),
+      {
+        ...createTripleWithId({
+          space: space,
+          entityId: entityId,
+          attributeId: attributeId,
+          value: {
+            type: 'entity',
+            id: linkedEntity.id,
+          },
+        }),
+        entityName: linkedEntity.name,
+      },
     ]);
   };
 
@@ -232,7 +235,11 @@ function EntityAttributes({
             */}
             {triples.map(tripleToEditableField)}
             {triples.find(t => t.value.type === 'entity') && (
-              <AddEntityButton onClick={() => linkEntityToAttribute(attributeId, 'Banana')} icon="createSmall" />
+              <EntityAutocompleteDialog
+                withSearch={triples.length > 0}
+                trigger={<AddEntityButton icon="createSmall" />}
+                onDone={entity => linkEntityToAttribute(attributeId, entity)}
+              />
             )}
           </GroupedAttributes>
         </EntityAttributeContainer>

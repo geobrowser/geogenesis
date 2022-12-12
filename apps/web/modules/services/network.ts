@@ -1,8 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer } from 'ethers';
-import { Action } from '../state/triple-store';
-import { Account, EntityNames, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
+import { Account, Action, EntityNames, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -66,6 +65,7 @@ type FetchTriplesResult = { triples: Triple[]; entityNames: EntityNames };
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
+  fetchEntities: (name: string) => Promise<{ id: string; name: string | null }[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -75,6 +75,7 @@ const UPLOAD_CHUNK_SIZE = 2000;
 // from the subgraph
 export class Network implements INetwork {
   triplesAbortController = new AbortController();
+  entitiesAbortController = new AbortController();
 
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
@@ -197,6 +198,35 @@ export class Network implements INetwork {
     }, {} as EntityNames);
 
     return { triples, entityNames };
+  };
+
+  fetchEntities = async (name: string) => {
+    this.entitiesAbortController.abort();
+    this.entitiesAbortController = new AbortController();
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: this.entitiesAbortController.signal,
+      body: JSON.stringify({
+        query: `query {
+          geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
+            id,
+            name
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        geoEntities: { name: string | null; id: string }[];
+      };
+    } = await response.json();
+
+    return json.data.geoEntities;
   };
 
   fetchSpaces = async () => {
