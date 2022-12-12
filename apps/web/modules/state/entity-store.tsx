@@ -7,7 +7,7 @@ import { INetwork } from '../services/network';
 import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
 
 interface IEntityStore {
-  create(triples: Triple[]): void;
+  create(triples: (Triple & { attributeName?: string | null })[]): void;
   update(triple: Triple, oldTriple: Triple): void;
   remove(triples: Triple[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
@@ -73,11 +73,21 @@ export class EntityStore implements IEntityStore {
     });
   }
 
-  create = (triples: Triple[]) => {
+  create = (triples: (Triple & { attributeName?: string | null })[]) => {
     const actions: CreateTripleAction[] = triples.map(triple => ({
       ...triple,
       type: 'createTriple',
     }));
+
+    const newEntityNames = triples.reduce<EntityNames>((acc, triple) => {
+      acc[triple.value.id] = triple.attributeName ?? null;
+      return acc;
+    }, {});
+
+    this.entityNames$.set({
+      ...this.entityNames$.get(),
+      ...newEntityNames,
+    });
 
     this.actions$.set([...this.actions$.get(), ...actions]);
   };

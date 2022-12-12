@@ -55,12 +55,20 @@ interface Props {
   entityNames: EntityNames;
 }
 
-export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples, entityNames }: Props) {
-  const { triples: localTriples, actions, publish, update, create } = useEntityTriples();
+export function EditableEntityPage({
+  id,
+  name: serverName,
+  space,
+  triples: serverTriples,
+  entityNames: serverEntityNames,
+}: Props) {
+  const { triples: localTriples, actions, publish, update, create, entityNames: localEntityNames } = useEntityTriples();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? serverTriples : localTriples;
+  const entityNames = Object.keys(localEntityNames).length === 0 ? serverEntityNames : localEntityNames;
+
   const nameTriple = triples.find(t => t.attributeId === 'name');
   const descriptionTriple = triples.find(t => t.attributeId === 'Description');
   const description = getEntityDescription(triples, entityNames);
@@ -215,6 +223,7 @@ function EntityAttributes({
             id: linkedEntity.id,
           },
         }),
+        attributeName: linkedEntity.name,
         entityName: linkedEntity.name,
       },
     ]);
