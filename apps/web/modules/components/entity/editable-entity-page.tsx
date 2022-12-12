@@ -184,6 +184,25 @@ function EntityAttributes({
   const { create, update, remove } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
+  const removeOrResetTriple = (triple: Triple) => {
+    if (triple.value.type === 'entity') {
+      // When we remove the last linked entity, we just want to set the value to empty
+      // instead of completely deleting the last triple.
+      // TODO: Set it to entity type instead of string
+      if (groupedTriples[triple.attributeId].length === 1) {
+        return update(
+          {
+            ...triple,
+            value: { ...triple.value, type: 'string', value: '' },
+          },
+          triple
+        );
+      }
+    }
+
+    return remove([triple]);
+  };
+
   const linkEntityToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
     create([
       {
@@ -241,7 +260,7 @@ function EntityAttributes({
       case 'entity':
         return (
           <div key={`entity-${triple.id}`}>
-            <ChipButton icon="check-close" onClick={() => remove([triple])}>
+            <ChipButton icon="check-close" onClick={() => removeOrResetTriple(triple)}>
               {entityNames[triple.value.id] || triple.value.id}
             </ChipButton>
           </div>
