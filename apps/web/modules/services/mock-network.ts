@@ -45,6 +45,10 @@ export class MockNetwork implements INetwork {
     return [];
   };
 
+  fetchEntities = async () => {
+    return [];
+  };
+
   publish = async () => {
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     await new Promise(() => {});
