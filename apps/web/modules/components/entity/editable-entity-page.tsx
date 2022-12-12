@@ -1,6 +1,8 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { IconButton, SmallButton, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
+import { Create } from '~/modules/design-system/icons/create';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createTripleWithId, createValueId } from '~/modules/services/create-id';
@@ -130,21 +132,43 @@ const EntityAttributeContainer = styled.div({
 
 const GroupedAttributes = styled.div(({ theme }) => ({
   display: 'flex',
-  gap: theme.space * 2,
+  alignItems: 'center',
+  gap: theme.space,
   flexWrap: 'wrap',
 }));
 
+const AddEntityButton = styled(SquareButton)({
+  width: 23,
+  height: 23,
+});
+
 function EntityAttributes({
   entityId,
+  space,
   triples,
   entityNames,
 }: {
   entityId: string;
+  space: Props['space'];
   triples: Props['triples'];
   entityNames: Props['entityNames'];
 }) {
-  const { update, remove } = useEntityTriples();
+  const { create, update, remove } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
+
+  const linkEntityToAttribute = (attributeId: string, linkedEntityId: string) => {
+    create([
+      createTripleWithId({
+        space: space,
+        entityId: entityId,
+        attributeId: attributeId,
+        value: {
+          type: 'entity',
+          id: linkedEntityId,
+        },
+      }),
+    ]);
+  };
 
   const tripleToEditableField = (triple: Triple) => {
     switch (triple.value.type) {
@@ -185,7 +209,7 @@ function EntityAttributes({
         );
       case 'entity':
         return (
-          <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
+          <div key={`entity-${triple.id}`}>
             <ChipButton icon="check-close" onClick={() => remove(triple)}>
               {entityNames[triple.value.id] || triple.value.id}
             </ChipButton>
@@ -207,6 +231,9 @@ function EntityAttributes({
               height between the attribute name and the attribute value for entities vs strings
             */}
             {triples.map(tripleToEditableField)}
+            {triples.find(t => t.value.type === 'entity') && (
+              <AddEntityButton onClick={() => linkEntityToAttribute(attributeId, 'Banana')} icon="createSmall" />
+            )}
           </GroupedAttributes>
         </EntityAttributeContainer>
       ))}
