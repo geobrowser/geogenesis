@@ -16,7 +16,6 @@ import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { useAutocomplete } from './autocomplete';
-import { EntityAutocompleteText } from './textual-autocomplete';
 
 const PageContainer = styled.div({
   display: 'flex',

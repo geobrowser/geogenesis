@@ -8,6 +8,7 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   all: 'unset',
   ...props.theme.typography.button,
   color: props.theme.colors.text,
+  backgroundColor: props.theme.colors.white,
   flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
@@ -15,7 +16,6 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   borderRadius: props.theme.radius,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
-  zIndex: 10,
 
   '&:hover': {
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
@@ -36,6 +36,7 @@ const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   width: 155,
+  zIndex: 10,
 }));
 
 const MotionContent = motion(StyledContent);
@@ -53,8 +54,8 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
   flexDirection: 'column',
   justifyContent: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
+  backgroundColor: props.theme.colors.white,
   color: props.theme.colors['grey-04'],
-
   userSelect: 'none',
 
   ...(!props.isLast && {
