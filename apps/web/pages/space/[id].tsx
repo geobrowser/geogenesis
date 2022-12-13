@@ -2,12 +2,11 @@ import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { Triples } from '~/modules/components/triples';
 import { SYSTEM_IDS } from '~/modules/constants';
-import { getConfigFromUrl } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { EntityNames, Triple } from '~/modules/types';
-import * as params from '~/modules/params';
+import { Params } from '~/modules/params';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
 
 interface Props {
@@ -40,8 +39,8 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = params.parseQueryParameters(context.resolvedUrl);
-  const config = getConfigFromUrl(context.resolvedUrl);
+  const initialParams = Params.parseQueryParameters(context.resolvedUrl);
+  const config = Params.getConfigFromUrl(context.resolvedUrl);
 
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);

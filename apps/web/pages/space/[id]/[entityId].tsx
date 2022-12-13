@@ -1,5 +1,5 @@
 import { GetServerSideProps } from 'next';
-import { getConfigFromUrl } from '~/modules/params';
+import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { EntityNames, Triple } from '~/modules/types';
@@ -48,7 +48,7 @@ export default function EntityPage(props: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const config = getConfigFromUrl(context.resolvedUrl);
+  const config = Params.getConfigFromUrl(context.resolvedUrl);
   const storage = new StorageClient(config.ipfs);
 
   const [entity, related] = await Promise.all([

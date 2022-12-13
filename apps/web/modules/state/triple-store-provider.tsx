@@ -1,7 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import * as params from '../params';
+import { Params } from '../params';
 import { useServices } from '../services';
 import { EntityNames, FilterState, Triple } from '../types';
 import { TripleStore } from './triple-store';
@@ -24,7 +24,7 @@ export function TripleStoreProvider({ space, children, initialTriples, initialEn
   const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
-    const initialParams = params.parseQueryParameters(urlRef.current);
+    const initialParams = Params.parseQueryParameters(urlRef.current);
     return new TripleStore({ api: network, space, initialParams, initialTriples, initialEntityNames });
   }, [network, space, initialTriples, initialEntityNames]);
 
@@ -39,7 +39,7 @@ export function TripleStoreProvider({ space, children, initialTriples, initialEn
     replace.current(
       {
         pathname: basePath,
-        query: params.stringifyQueryParameters({ query, pageNumber, filterState }),
+        query: Params.stringifyQueryParameters({ query, pageNumber, filterState }),
       },
       undefined,
       { shallow: true, scroll: false }
