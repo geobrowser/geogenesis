@@ -70,7 +70,7 @@ export function EditableEntityPage({
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 ? serverTriples : localTriples;
+  const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
   const entityNames = Object.keys(localEntityNames).length === 0 ? serverEntityNames : localEntityNames;
 
   const nameTriple = triples.find(t => t.attributeId === 'name');
@@ -368,7 +368,7 @@ function EntityAttributes({
                         </div>
                       ),
                       onClick: () => onChangeTripleType('entity', triples),
-                      disabled: isEntityGroup,
+                      disabled: Boolean(isEntityGroup),
                     },
                   ]}
                 />
