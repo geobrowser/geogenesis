@@ -1,16 +1,13 @@
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
-import { computed, observable, ObservableComputed } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Search } from '../design-system/icons/search';
-import { Input } from '../design-system/input';
-import { Text } from '../design-system/text';
-import { useServices } from '../services';
-import { INetwork } from '../services/network';
-import { makeOptionalComputed } from '../utils';
+import React, { useState } from 'react';
+import { SquareButton } from '~/modules/design-system/button';
+import { Search } from '../../design-system/icons/search';
+import { Input } from '../../design-system/input';
+import { Text } from '../../design-system/text';
+import { useAutocomplete } from './autocomplete';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -26,6 +23,7 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   boxShadow: props.theme.shadows.dropdown,
   zIndex: 1,
   width: 384,
+  minHeight: 200,
   overflow: 'hidden',
   height: '100%',
 
@@ -77,65 +75,48 @@ const Result = styled.button(props => ({
   },
 }));
 
+const AddEntityButton = styled(SquareButton)({
+  width: 23,
+  height: 23,
+});
+
 const AutocompleteInput = styled(Input)(props => ({
   paddingLeft: props.theme.space * 9,
 }));
 
-class EntityAutocomplete {
-  query$ = observable('');
-  results$: ObservableComputed<{ id: string; name: string | null }[]>;
+const BaseInput = styled.input(props => ({
+  ...props.theme.typography.body,
+  width: '100%',
+  backgroundColor: 'transparent',
+  color: props.theme.colors.text,
+  margin: 0,
+  padding: 0,
 
-  constructor({ api }: { api: INetwork }) {
-    this.results$ = makeOptionalComputed(
-      [],
-      computed(async () => await api.fetchEntities(this.query$.get()))
-    );
-  }
+  '&::placeholder': {
+    color: props.theme.colors['grey-02'],
+  },
 
-  onQueryChange = (query: string) => {
-    this.query$.set(query);
-  };
-}
-
-function useAutocomplete() {
-  const { network } = useServices();
-
-  const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network });
-  }, [network]);
-
-  useEffect(() => {
-    return () => {
-      autocomplete.query$.set('');
-    };
-  }, [autocomplete]);
-
-  const results = useSelector(autocomplete.results$);
-  const query = useSelector(autocomplete.query$);
-
-  return {
-    results,
-    query,
-    onQueryChange: autocomplete.onQueryChange,
-  };
-}
+  '&:focus': {
+    outline: 'none',
+  },
+}));
 
 interface Props {
-  withSearch?: boolean;
-  trigger: React.ReactNode;
+  autocomplete: ReturnType<typeof useAutocomplete>;
   onDone: (result: { id: string; name: string | null }) => void;
 }
 
-export function EntityAutocompleteDialog({ withSearch, trigger, onDone }: Props) {
+export function EntityAutocompleteDialog({ onDone, autocomplete }: Props) {
   const theme = useTheme();
-  const { results, query, onQueryChange } = useAutocomplete();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
-    <PopoverPrimitive.Root onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Trigger asChild>
+        <AddEntityButton as="span" icon="createSmall" />
+      </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
           <MotionContent
@@ -149,21 +130,17 @@ export function EntityAutocompleteDialog({ withSearch, trigger, onDone }: Props)
             }}
             avoidCollisions={false}
             sideOffset={theme.space * 2}
-            align="center"
+            align="start"
           >
-            {withSearch ? (
-              <>
-                <InputContainer>
-                  <SearchIconContainer>
-                    <Search />
-                  </SearchIconContainer>
-                  <AutocompleteInput onChange={e => onQueryChange(e.target.value)} />
-                </InputContainer>
-              </>
-            ) : null}
+            <InputContainer>
+              <SearchIconContainer>
+                <Search />
+              </SearchIconContainer>
+              <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.target.value)} />
+            </InputContainer>
             <ResultsList>
-              {query.length > 0
-                ? results.map(result => (
+              {autocomplete.query.length > 0
+                ? autocomplete.results.map(result => (
                     <Result key={result.id} onClick={() => onDone(result)}>
                       <Text as="li" variant="metadataMedium" ellipsize>
                         {result.name ?? result.id}

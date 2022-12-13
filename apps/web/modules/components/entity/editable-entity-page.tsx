@@ -2,16 +2,21 @@ import styled from '@emotion/styled';
 import Head from 'next/head';
 import { SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
+import { CreateSmall } from '~/modules/design-system/icons/create-small';
+import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { createTripleWithId, createValueId } from '~/modules/services/create-id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { EntityNames, Triple } from '~/modules/types';
 import { getEntityDescription, getEntityName, groupBy } from '~/modules/utils';
-import { EntityAutocompleteDialog } from '../entity-autocomplete';
+import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
+import { TripleTypeDropdown } from './triple-type-dropdown';
+import { useAutocomplete } from './autocomplete';
+import { EntityAutocompleteText } from './textual-autocomplete';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -76,9 +81,9 @@ export function EditableEntityPage({
 
   const onNameBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
     if (!nameTriple) {
-      return create([
-        createTripleWithId(space, id, 'name', { id: createValueId(), type: 'string', value: e.target.value }),
-      ]);
+      return create(
+        createTripleWithId(space, id, 'name', { id: createValueId(), type: 'string', value: e.target.value })
+      );
     }
 
     update(
@@ -92,9 +97,9 @@ export function EditableEntityPage({
 
   const onDescriptionBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
     if (!descriptionTriple) {
-      return create([
-        createTripleWithId(space, id, 'Description', { id: createValueId(), type: 'string', value: e.target.value }),
-      ]);
+      return create(
+        createTripleWithId(space, id, 'Description', { id: createValueId(), type: 'string', value: e.target.value })
+      );
     }
 
     update(
@@ -166,17 +171,12 @@ const TripleActions = styled.div(props => ({
   right: 0,
 }));
 
-const GroupedAttributes = styled.div(({ theme }) => ({
+const GroupedAttributesList = styled.div(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.space,
   flexWrap: 'wrap',
 }));
-
-const AddEntityButton = styled(SquareButton)({
-  width: 23,
-  height: 23,
-});
 
 function EntityAttributes({
   entityId,
@@ -189,8 +189,26 @@ function EntityAttributes({
   triples: Props['triples'];
   entityNames: Props['entityNames'];
 }) {
-  const { create, update, remove } = useEntityTriples();
+  const { update, remove } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
+  const autocomplete = useAutocomplete();
+
+  const onChangeTripleType = (type: 'string' | 'entity', triples: Triple[]) => {
+    triples.forEach(triple => {
+      update(
+        {
+          ...triple,
+          value: {
+            ...triple.value,
+            type,
+            value: '',
+            ...(type === 'entity' ? { id: '' } : {}),
+          },
+        },
+        triple
+      );
+    });
+  };
 
   const removeOrResetTriple = (triple: Triple) => {
     if (triple.value.type === 'entity') {
@@ -212,7 +230,7 @@ function EntityAttributes({
   };
 
   const linkEntityToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
-    create([
+    update(
       {
         ...createTripleWithId({
           space: space,
@@ -224,12 +242,12 @@ function EntityAttributes({
           },
         }),
         attributeName: linkedEntity.name,
-        entityName: linkedEntity.name,
       },
-    ]);
+      groupedTriples[attributeId][0]
+    );
   };
 
-  const tripleToEditableField = (triple: Triple) => {
+  const tripleToEditableField = (attributeId: string, triple: Triple) => {
     switch (triple.value.type) {
       case 'string':
         return (
@@ -267,6 +285,17 @@ function EntityAttributes({
           />
         );
       case 'entity':
+        if (!triple.value.id) {
+          // return (
+          //   <EntityAutocompleteText
+          //     key={`entity-${attributeId}-${triple.id}`}
+          //     autocomplete={autocomplete}
+          //     onDone={entity => linkEntityToAttribute(attributeId, entity)}
+          //   />
+          // );
+          return null;
+        }
+
         return (
           <div key={`entity-${triple.id}`}>
             <ChipButton icon="check-close" onClick={() => removeOrResetTriple(triple)}>
@@ -279,31 +308,59 @@ function EntityAttributes({
 
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
-          <Text as="p" variant="bodySemibold">
-            {entityNames[attributeId] || attributeId}
-          </Text>
-          <GroupedAttributes>
-            {/* 
-              Have to do some janky layout stuff instead of being able to just use gap since we want different
-              height between the attribute name and the attribute value for entities vs strings
-            */}
-            {triples.map(tripleToEditableField)}
-            {triples.find(t => t.value.type === 'entity') && (
-              <EntityAutocompleteDialog
-                withSearch={triples.length > 0}
-                trigger={<AddEntityButton icon="createSmall" />}
-                onDone={entity => linkEntityToAttribute(attributeId, entity)}
-              />
-            )}
-            <TripleActions>
-              <SquareButton icon="relation" />
-              <SquareButton icon="trash" onClick={() => remove(triples.filter(t => t.attributeId === attributeId))} />
-            </TripleActions>
-          </GroupedAttributes>
-        </EntityAttributeContainer>
-      ))}
+      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
+        const isEntityGroup = triples.find(t => t.value.type === 'entity');
+        // const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
+
+        return (
+          <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
+            <Text as="p" variant="bodySemibold">
+              {entityNames[attributeId] || attributeId}
+            </Text>
+            <GroupedAttributesList>
+              {/* 
+                Have to do some janky layout stuff instead of being able to just use gap since we want different
+                height between the attribute name and the attribute value for entities vs strings
+              */}
+              {triples.map(triple => tripleToEditableField(attributeId, triple))}
+              {isEntityGroup && (
+                <EntityAutocompleteDialog
+                  autocomplete={autocomplete}
+                  onDone={entity => linkEntityToAttribute(attributeId, entity)}
+                />
+              )}
+              <TripleActions>
+                <TripleTypeDropdown
+                  value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'create'} />}
+                  options={[
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <CreateSmall />
+                          <Spacer width={8} />
+                          <Text variant="button">Text</Text>
+                        </div>
+                      ),
+                      onClick: () => onChangeTripleType('string', triples),
+                    },
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <Relation />
+                          <Spacer width={8} />
+                          <Text variant="button">Relation</Text>
+                        </div>
+                      ),
+                      onClick: () => onChangeTripleType('entity', triples),
+                    },
+                  ]}
+                />
+                <SquareButton icon="trash" onClick={() => remove(triples.filter(t => t.attributeId === attributeId))} />
+              </TripleActions>
+            </GroupedAttributesList>
+          </EntityAttributeContainer>
+        );
+      })}
     </>
   );
 }

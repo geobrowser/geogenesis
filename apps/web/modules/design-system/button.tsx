@@ -210,7 +210,7 @@ const StyledSquareButton = styled(StyledButton)<Props & { isActive?: boolean }>(
   };
 });
 
-type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
+type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode; as?: 'span' };
 
 export const SquareButton = React.forwardRef(function SquareButton(
   { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false, ...props }: SquareButtonProps,

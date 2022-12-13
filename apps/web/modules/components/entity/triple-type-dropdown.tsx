@@ -3,9 +3,6 @@ import styled from '@emotion/styled';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
-import { ChevronDownSmall } from './icons/chevron-down-small';
-import { Spacer } from './spacer';
-import { Text } from './text';
 
 const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   all: 'unset',
@@ -16,12 +13,9 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   alignItems: 'center',
   justifyContent: 'space-between',
   borderRadius: props.theme.radius,
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
-  width: 103,
+  zIndex: 10,
 
   '&:hover': {
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
@@ -52,7 +46,6 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
 }));
 
 const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
-  disabled: boolean;
   isLast: boolean;
 }>(props => ({
   all: 'unset',
@@ -60,12 +53,17 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
   flexDirection: 'column',
   justifyContent: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
+  color: props.theme.colors['grey-04'],
 
   userSelect: 'none',
 
   ...(!props.isLast && {
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
   }),
+
+  '&:hover': {
+    color: props.theme.colors.text,
+  },
 
   '&[data-highlighted]': {
     cursor: 'pointer',
@@ -81,21 +79,16 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
 
 interface Props {
   value: React.ReactNode;
-  options: { label: string; disabled: boolean; onClick: () => void }[];
+  options: { label: React.ReactNode; onClick: () => void }[];
 }
 
-export const Dropdown = ({ value, options }: Props) => {
+export const TripleTypeDropdown = ({ value, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
     <DropdownPrimitive.Root onOpenChange={setOpen}>
-      <StyledTrigger>
-        {value}
-        <Spacer width={8} />
-        <ChevronDownSmall color="ctaPrimary" />
-      </StyledTrigger>
-      {/* <DropdownPrimitive.Portal> */}
+      <StyledTrigger>{value}</StyledTrigger>
       <AnimatePresence>
         {open && (
           <MotionContent
@@ -113,26 +106,17 @@ export const Dropdown = ({ value, options }: Props) => {
             <StyledGroup>
               {options.map((option, index) => (
                 <StyledItem
-                  key={option.label}
-                  disabled={option.disabled}
+                  key={`triple-type-dropdown-${index}`}
                   isLast={index === options.length - 1}
                   onClick={option.onClick}
                 >
-                  <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
-                    {option.label}
-                  </Text>
-                  {option.disabled && (
-                    <Text variant="footnote" color="grey-04">
-                      You don’t have access yet
-                    </Text>
-                  )}
+                  {option.label}
                 </StyledItem>
               ))}
             </StyledGroup>
           </MotionContent>
         )}
       </AnimatePresence>
-      {/* </DropdownPrimitive.Portal> */}
     </DropdownPrimitive.Root>
   );
 };

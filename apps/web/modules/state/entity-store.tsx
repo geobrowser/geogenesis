@@ -7,8 +7,8 @@ import { INetwork } from '../services/network';
 import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
 
 interface IEntityStore {
-  create(triples: (Triple & { attributeName?: string | null })[]): void;
-  update(triple: Triple, oldTriple: Triple): void;
+  create(triple: Triple & { attributeName?: string | null }): void;
+  update(triple: Triple & { attributeName?: string | null }, oldTriple: Triple): void;
   remove(triples: Triple[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
@@ -73,23 +73,22 @@ export class EntityStore implements IEntityStore {
     });
   }
 
-  create = (triples: (Triple & { attributeName?: string | null })[]) => {
-    const actions: CreateTripleAction[] = triples.map(triple => ({
+  create = (triple: Triple & { attributeName?: string | null }) => {
+    const action: CreateTripleAction = {
       ...triple,
       type: 'createTriple',
-    }));
+    };
 
-    const newEntityNames = triples.reduce<EntityNames>((acc, triple) => {
-      acc[triple.value.id] = triple.attributeName ?? null;
-      return acc;
-    }, {});
+    const newEntityNames: EntityNames = {
+      [triple.value.id]: triple.attributeName ?? null,
+    };
 
     this.entityNames$.set({
       ...this.entityNames$.get(),
       ...newEntityNames,
     });
 
-    this.actions$.set([...this.actions$.get(), ...actions]);
+    this.actions$.set([...this.actions$.get(), action]);
   };
 
   remove = (triples: Triple[]) => {
@@ -101,7 +100,7 @@ export class EntityStore implements IEntityStore {
     this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
-  update = (triple: Triple, oldTriple: Triple) => {
+  update = (triple: Triple & { attributeName?: string | null }, oldTriple: Triple) => {
     const action: EditTripleAction = {
       type: 'editTriple',
       before: {
@@ -113,6 +112,15 @@ export class EntityStore implements IEntityStore {
         type: 'createTriple',
       },
     };
+
+    const newEntityNames: EntityNames = {
+      [triple.value.id]: triple.attributeName ?? null,
+    };
+
+    this.entityNames$.set({
+      ...this.entityNames$.get(),
+      ...newEntityNames,
+    });
 
     this.actions$.set([...this.actions$.get(), action]);
   };
