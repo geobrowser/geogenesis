@@ -84,23 +84,6 @@ const AutocompleteInput = styled(Input)(props => ({
   paddingLeft: props.theme.space * 9,
 }));
 
-const BaseInput = styled.input(props => ({
-  ...props.theme.typography.body,
-  width: '100%',
-  backgroundColor: 'transparent',
-  color: props.theme.colors.text,
-  margin: 0,
-  padding: 0,
-
-  '&::placeholder': {
-    color: props.theme.colors['grey-02'],
-  },
-
-  '&:focus': {
-    outline: 'none',
-  },
-}));
-
 interface Props {
   autocomplete: ReturnType<typeof useAutocomplete>;
   onDone: (result: { id: string; name: string | null }) => void;

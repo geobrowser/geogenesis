@@ -80,7 +80,7 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
 
 interface Props {
   value: React.ReactNode;
-  options: { label: React.ReactNode; onClick: () => void }[];
+  options: { label: React.ReactNode; onClick: () => void; disabled: boolean }[];
 }
 
 export const TripleTypeDropdown = ({ value, options }: Props) => {
@@ -109,7 +109,7 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
                 <StyledItem
                   key={`triple-type-dropdown-${index}`}
                   isLast={index === options.length - 1}
-                  onClick={option.onClick}
+                  onClick={option.disabled ? undefined : option.onClick}
                 >
                   {option.label}
                 </StyledItem>

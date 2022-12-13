@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import Head from 'next/head';
 import { SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
-import { CreateSmall } from '~/modules/design-system/icons/create-small';
+import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -188,7 +188,7 @@ function EntityAttributes({
   triples: Props['triples'];
   entityNames: Props['entityNames'];
 }) {
-  const { update, remove } = useEntityTriples();
+  const { update, remove, create } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
   const autocomplete = useAutocomplete();
 
@@ -229,21 +229,37 @@ function EntityAttributes({
   };
 
   const linkEntityToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
-    update(
-      {
-        ...createTripleWithId({
-          space: space,
-          entityId: entityId,
-          attributeId: attributeId,
+    if (
+      groupedTriples[attributeId]?.length === 1 &&
+      groupedTriples[attributeId][0].value.type === 'entity' &&
+      !groupedTriples[attributeId][0].value.id
+    ) {
+      return update(
+        {
+          ...groupedTriples[attributeId][0],
           value: {
+            ...groupedTriples[attributeId][0].value,
             type: 'entity',
             id: linkedEntity.id,
           },
-        }),
-        attributeName: linkedEntity.name,
-      },
-      groupedTriples[attributeId][0]
-    );
+          attributeName: linkedEntity.name,
+        },
+        groupedTriples[attributeId][0]
+      );
+    }
+
+    create({
+      ...createTripleWithId({
+        space: space,
+        entityId: entityId,
+        attributeId: attributeId,
+        value: {
+          type: 'entity',
+          id: linkedEntity.id,
+        },
+      }),
+      attributeName: linkedEntity.name,
+    });
   };
 
   const tripleToEditableField = (attributeId: string, triple: Triple) => {
@@ -330,17 +346,18 @@ function EntityAttributes({
               )}
               <TripleActions>
                 <TripleTypeDropdown
-                  value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'create'} />}
+                  value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
                   options={[
                     {
                       label: (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <CreateSmall />
+                          <TextIcon />
                           <Spacer width={8} />
                           <Text variant="button">Text</Text>
                         </div>
                       ),
                       onClick: () => onChangeTripleType('string', triples),
+                      disabled: !isEntityGroup,
                     },
                     {
                       label: (
@@ -351,6 +368,7 @@ function EntityAttributes({
                         </div>
                       ),
                       onClick: () => onChangeTripleType('entity', triples),
+                      disabled: isEntityGroup,
                     },
                   ]}
                 />
