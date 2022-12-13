@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { SquareButton } from '~/modules/design-system/button';
+import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
@@ -50,6 +50,10 @@ const EntityActionGroup = styled.div({
     },
   },
 });
+
+const AddTripleContainer = styled.div(({ theme }) => ({
+  padding: theme.space * 4,
+}));
 
 interface Props {
   triples: Triple[];
@@ -110,6 +114,10 @@ export function EditableEntityPage({
     );
   };
 
+  const onCreateNewTriple = () => {
+    create(createTripleWithId(space, id, 'banana', { id: createValueId(), type: 'string', value: '' }));
+  };
+
   return (
     <PageContainer>
       <EntityContainer>
@@ -146,6 +154,11 @@ export function EditableEntityPage({
           <Attributes>
             <EntityAttributes entityId={id} space={space} triples={triples} entityNames={entityNames} />
           </Attributes>
+          <AddTripleContainer>
+            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+              Add triple
+            </Button>
+          </AddTripleContainer>
         </Content>
       </EntityContainer>
 

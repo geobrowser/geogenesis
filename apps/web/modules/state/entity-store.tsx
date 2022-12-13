@@ -72,7 +72,7 @@ export class EntityStore implements IEntityStore {
         }
       });
 
-      return triples.reverse();
+      return triples;
     });
   }
 
