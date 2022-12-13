@@ -6,6 +6,9 @@ import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
 
+// HACK: We're adding attributeName since we need it to update the entityNames object.
+// In the near future we'll be merging entity/attribute names into the triple at
+// request time instead of infecting the codebase with entityName checks.
 interface IEntityStore {
   create(triple: Triple & { attributeName?: string | null }): void;
   update(triple: Triple & { attributeName?: string | null }, oldTriple: Triple): void;
