@@ -210,7 +210,7 @@ function EntityAttributes({
     });
   };
 
-  const removeOrResetTriple = (triple: Triple) => {
+  const removeOrResetEntityTriple = (triple: Triple) => {
     if (triple.value.type === 'entity') {
       // When we remove the last linked entity, we just want to set the value to empty
       // instead of completely deleting the last triple.
@@ -219,7 +219,7 @@ function EntityAttributes({
         return update(
           {
             ...triple,
-            value: { ...triple.value, type: 'string', value: '' },
+            value: { ...triple.value, type: 'entity', id: '' },
           },
           triple
         );
@@ -298,7 +298,7 @@ function EntityAttributes({
 
         return (
           <div key={`entity-${triple.id}`}>
-            <ChipButton icon="check-close" onClick={() => removeOrResetTriple(triple)}>
+            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
               {entityNames[triple.value.id] || triple.value.id}
             </ChipButton>
           </div>
