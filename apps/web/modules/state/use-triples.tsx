@@ -5,7 +5,6 @@ import { useTripleStore } from './triple-store-provider';
 export const useTriples = () => {
   const {
     create,
-    update,
     publish,
     triples$,
     query$,
@@ -35,7 +34,6 @@ export const useTriples = () => {
     actions,
     entityNames,
     create,
-    update,
     publish,
     query,
     setQuery,
