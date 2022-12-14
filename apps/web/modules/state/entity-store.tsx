@@ -145,8 +145,6 @@ export class EntityStore implements IEntityStore {
       },
     };
 
-    console.log(triple, oldTriple);
-
     const entityNames = this.entityNames$.get();
 
     const newEntityNames: EntityNames = {
