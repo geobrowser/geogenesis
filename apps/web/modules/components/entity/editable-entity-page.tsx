@@ -17,6 +17,7 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
+import { Action } from './Action';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -71,7 +72,7 @@ export function EditableEntityPage({
   triples: serverTriples,
   entityNames: serverEntityNames,
 }: Props) {
-  const { triples: localTriples, actions, update, create, entityNames: localEntityNames } = useEntityTriples();
+  const { triples: localTriples, actions, update, create, entityNames: localEntityNames, publish } = useEntityTriples();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -171,7 +172,7 @@ export function EditableEntityPage({
         </Content>
       </EntityContainer>
 
-      <FlowBar spaceId={space} />
+      <FlowBar actionsCount={Action.getChangeCount(actions)} onPublish={publish} />
     </PageContainer>
   );
 }

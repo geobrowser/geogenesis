@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { FlowBar } from '~/modules/components/flow-bar';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -209,8 +208,6 @@ export function Triples({
           <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
         </PageNumberContainer>
       </motion.div>
-
-      <FlowBar spaceId={spaceId} />
     </PageContainer>
   );
 }

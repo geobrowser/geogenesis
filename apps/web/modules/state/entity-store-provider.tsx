@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo } from 'react';
 import { useServices } from '../services';
 import { EntityNames, Triple } from '../types';
 import { EntityStore } from './entity-store';
-import { addStore } from './entity-stores';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
 
@@ -18,12 +17,7 @@ export function EntityStoreProvider({ id, spaceId, children, initialTriples, ini
   const { network } = useServices();
 
   const store = useMemo(() => {
-    const newStore = new EntityStore({ api: network, spaceId, initialTriples, initialEntityNames, id });
-
-    // HACK: This is a temporary workaround for tracking all changes across stores until we design the
-    // changes page.
-    addStore(id, newStore);
-    return newStore;
+    return new EntityStore({ api: network, spaceId, initialTriples, initialEntityNames, id });
   }, [network, spaceId, initialTriples, initialEntityNames, id]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;

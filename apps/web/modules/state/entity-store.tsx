@@ -21,7 +21,7 @@ interface IEntityStore {
   create(triple: Triple & { attributeName?: string | null }): void;
   update(triple: Triple & { attributeName?: string | null }, oldTriple: Triple): void;
   remove(triples: Triple[]): void;
-  publish(actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
 const createInitialDefaultTriples = (spaceId: string, entityId: string): Triple[] => {
@@ -164,8 +164,8 @@ export class EntityStore implements IEntityStore {
     this.actions$.set([...this.actions$.get(), action]);
   };
 
-  publish = async (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish({ actions, signer, onChangePublishState, space: this.spaceId });
+  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
+    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.spaceId });
     this.actions$.set([]);
   };
 }
