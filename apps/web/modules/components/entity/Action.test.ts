@@ -42,7 +42,7 @@ const actions: ActionType[] = [
 
 describe('Action', () => {
   it('Generates correct change counts from actions', () => {
-    const changes = Action.getChangeCount(actions, 's');
+    const changes = Action.getChangeCount(actions);
     expect(changes).toEqual(3);
   });
 });
