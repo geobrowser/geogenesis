@@ -60,9 +60,6 @@ export default function Dev() {
         <a>Spaces</a>
       </Link>
 
-      <GeoConnectButton />
-      <ConnectButton />
-
       <VerticalBox>
         <HorizontalBox>
           <Text variant="mediumTitle">Colors</Text>
