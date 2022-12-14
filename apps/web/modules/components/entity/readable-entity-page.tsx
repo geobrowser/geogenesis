@@ -59,13 +59,6 @@ interface Props {
 
 export function ReadableEntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
   const description = getEntityDescription(triples, entityNames);
-  const triplesWithoutDescription = triples.filter(t =>
-    t.value.type === 'entity'
-      ? entityNames[t.value.id] !== description
-      : t.value.type === 'string'
-      ? t.value.value !== description
-      : false
-  );
 
   return (
     <div>
@@ -99,7 +92,7 @@ export function ReadableEntityPage({ triples, id, name, space, entityNames, link
 
       <Content>
         <Attributes>
-          <EntityAttributes entityId={id} triples={triplesWithoutDescription} space={space} entityNames={entityNames} />
+          <EntityAttributes entityId={id} triples={triples} space={space} entityNames={entityNames} />
         </Attributes>
       </Content>
 
@@ -287,13 +280,6 @@ function LinkedEntityCard({
   );
 
   const description = getEntityDescription(entityGroup.triples, entityNames);
-  const triplesWithoutDescription = unlinkedTriples.filter(t =>
-    t.value.type === 'entity'
-      ? entityNames[t.value.id] !== description
-      : t.value.type === 'string'
-      ? t.value.value !== description
-      : false
-  );
 
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
@@ -334,7 +320,7 @@ function LinkedEntityCard({
               {isExpanded && (
                 <EntityAttributes
                   entityId={entityGroup.id}
-                  triples={triplesWithoutDescription}
+                  triples={unlinkedTriples}
                   space={space}
                   entityNames={entityNames}
                 />
@@ -353,8 +339,8 @@ function LinkedEntityCard({
             </span>
             <Spacer width={6} />
             {isExpanded
-              ? `Hide ${triplesWithoutDescription.length} more ${pluralize('value', triplesWithoutDescription.length)}`
-              : `Show ${triplesWithoutDescription.length} more ${pluralize('value', triplesWithoutDescription.length)}`}
+              ? `Hide ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`
+              : `Show ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`}
           </SmallButton>
         </LinkedEntityCardFooter>
       </LinkedEntityCardContainer>
