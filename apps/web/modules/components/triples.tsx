@@ -15,6 +15,7 @@ import { ColorName } from '~/modules/design-system/theme/colors';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
+import { useEditable } from '../state/use-editable';
 import { EntityNames, Triple } from '../types';
 import { NavUtils } from '../utils';
 // import { getFilesFromFileList } from '../utils';
@@ -72,6 +73,7 @@ export function Triples({
 }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
+  const { editable } = useEditable();
   const tripleStore = useTriples();
   const theme = useTheme();
 
@@ -101,7 +103,7 @@ export function Triples({
         </SpaceInfo>
 
         <Actions>
-          {(isEditor || isAdmin) && (
+          {(isEditor || isAdmin) && editable && (
             <TableHeader>
               {isAdmin && (
                 <Link href={`/space/${spaceId}/access-control`}>
