@@ -1,10 +1,9 @@
-import { CreateTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { Action, EditTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
+import { Action, CreateTripleAction, EditTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {

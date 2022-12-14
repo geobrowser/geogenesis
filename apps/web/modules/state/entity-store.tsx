@@ -1,10 +1,17 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { Action, EditTripleAction, EntityNames, ReviewState, Triple } from '../types';
+import {
+  Action,
+  CreateTripleAction,
+  DeleteTripleAction,
+  EditTripleAction,
+  EntityNames,
+  ReviewState,
+  Triple,
+} from '../types';
 
 // HACK: We're adding attributeName since we need it to update the entityNames object.
 // In the near future we'll be merging entity/attribute names into the triple at

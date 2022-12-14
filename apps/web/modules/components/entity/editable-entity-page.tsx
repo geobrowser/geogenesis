@@ -16,6 +16,7 @@ import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { useAutocomplete } from './autocomplete';
+import { Action } from './Action';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -162,7 +163,7 @@ export function EditableEntityPage({
         </Content>
       </EntityContainer>
 
-      <FlowBar actionsCount={actions.length} onPublish={publish} />
+      <FlowBar actionsCount={Action.getChangeCount(actions)} onPublish={publish} />
     </PageContainer>
   );
 }
