@@ -101,7 +101,10 @@ export class Network implements INetwork {
     }
 
     onChangePublishState('publishing-contract');
-    return await addEntries(contract, cids);
+    const tx = await addEntries(contract, cids);
+
+    await waitForLog(tx.index.toHexString(), this.subgraphUrl, space);
+    console.log('Subgraph finished logging.', tx.index);
   };
 
   fetchTriples = async ({ space, query, skip, first, filter }: FetchTriplesOptions) => {
@@ -310,4 +313,48 @@ async function addEntries(spaceContract: SpaceContract, uris: string[]) {
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
   return eventObject;
+}
+
+function waitForLog(id: string, subgraphUrl: string, space: string) {
+  const transformedId = id.replace('0x0', '0x');
+
+  let retryCount = 0;
+  const maxRetries = 30;
+
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(async () => {
+      retryCount++;
+
+      if (retryCount > maxRetries) {
+        reject();
+        clearInterval(interval);
+        return;
+      }
+
+      const response = await fetch(subgraphUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `query {
+            logEntry(id: ${JSON.stringify(`${space}:${transformedId}`)}) {
+              id
+            }
+          } `,
+        }),
+      });
+
+      const json: {
+        data: {
+          logEntry: { id: string };
+        };
+      } = await response.json();
+
+      if (json.data.logEntry) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 1000);
+  });
 }
