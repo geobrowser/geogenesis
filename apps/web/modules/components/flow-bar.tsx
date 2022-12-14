@@ -2,7 +2,6 @@ import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
-import { Signer } from 'ethers';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
 import { Trash } from '../design-system/icons/trash';
@@ -11,6 +10,9 @@ import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
+import { useEntityStores } from '../state/entity-stores';
+import { Action } from './entity/Action';
+import { useServices } from '../services';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -30,13 +32,23 @@ const Container = styled.div(props => ({
 const MotionContainer = motion(Container);
 
 interface Props {
-  actionsCount: number;
-  onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
+  spaceId: string;
 }
 
-export function FlowBar({ actionsCount, onPublish }: Props) {
+export function FlowBar({ spaceId }: Props) {
   const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
+  const { stores } = useEntityStores();
+  const { network } = useServices();
+
+  // HACK: This is a temporary hack for aggregating all store counts until we have a better
+  // system for reviewing changes.
+  const actionsCount = Object.values(stores).reduce(
+    (acc, store) => acc + Action.getChangeCount(store.actions$.get()),
+    0
+  );
+
+  const actions = Object.values(stores).flatMap(store => store.actions$.get());
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
   // deletes since that would double the change count.
@@ -45,7 +57,7 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
   const publish = async () => {
-    await onPublish(signer!, setReviewState);
+    await network.publish({ actions, signer: signer!, onChangePublishState: setReviewState, space: spaceId });
     setReviewState('publish-complete');
     await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
   };

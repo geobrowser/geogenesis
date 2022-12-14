@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { useEffect, useRef } from 'react';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
 
@@ -11,6 +12,16 @@ const QueryInput = styled.input(props => ({
   ...props.theme.typography.body,
   width: '100%',
   height: '100%',
+  padding: 0,
+  margin: 0,
+
+  '&::placeholder': {
+    color: props.theme.colors['grey-02'],
+  },
+
+  '&:focus': {
+    outline: 'none',
+  },
 }));
 
 const ResultListContainer = styled.div(props => ({
@@ -52,20 +63,43 @@ const ResultItem = styled.li(props => ({
   },
 }));
 
-export function EntityTextAutocomplete() {
+interface Props {
+  placeholder?: string;
+  onDone: (result: { id: string; name: string | null }) => void;
+}
+
+export function EntityTextAutocomplete({ placeholder, onDone }: Props) {
   const { query, results, onQueryChange } = useAutocomplete();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    document.addEventListener('click', e => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onQueryChange('');
+      }
+    });
+  }, [onQueryChange]);
+
+  // TODO: Implement keyboard navigation
 
   return (
     <Container>
-      <QueryInput value={query} onChange={e => onQueryChange(e.target.value)} />
-      {results.length > 0 && (
-        <ResultListContainer>
+      <QueryInput
+        placeholder={placeholder}
+        defaultValue={'banana'}
+        value={query}
+        onChange={e => onQueryChange(e.target.value)}
+      />
+      {query && (
+        <ResultListContainer ref={containerRef}>
           <ResultListHeader>
             <Text variant="smallButton">Add a relation</Text>
           </ResultListHeader>
           <ResultList>
             {results.map(result => (
-              <ResultItem key={result.id}>{result.name}</ResultItem>
+              <ResultItem onClick={() => onDone(result)} key={result.id}>
+                {result.name}
+              </ResultItem>
             ))}
           </ResultList>
         </ResultListContainer>

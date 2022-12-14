@@ -12,7 +12,6 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
-import { useEditable } from '../state/use-editable';
 import { EntityNames, Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
@@ -166,7 +165,6 @@ interface Props {
 
 export const TripleTable = memo(function TripleTable({ triples, entityNames, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-  const { editable } = useEditable();
 
   const table = useReactTable({
     data: triples,

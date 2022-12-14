@@ -21,7 +21,7 @@ interface IEntityStore {
   create(triple: Triple & { attributeName?: string | null }): void;
   update(triple: Triple & { attributeName?: string | null }, oldTriple: Triple): void;
   remove(triples: Triple[]): void;
-  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  publish(actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
 const createInitialDefaultTriples = (spaceId: string, entityId: string): Triple[] => {
@@ -145,20 +145,27 @@ export class EntityStore implements IEntityStore {
       },
     };
 
+    console.log(triple, oldTriple);
+
+    const entityNames = this.entityNames$.get();
+
     const newEntityNames: EntityNames = {
-      [triple.value.id]: triple.attributeName ?? null,
+      [triple.attributeId]: entityNames[triple.attributeId]
+        ? entityNames[triple.attributeId]
+        : triple.attributeName ?? null,
+      [triple.value.id]: entityNames[triple.value.id] ? entityNames[triple.value.id] : triple.attributeName ?? null,
     };
 
     this.entityNames$.set({
-      ...this.entityNames$.get(),
+      ...entityNames,
       ...newEntityNames,
     });
 
     this.actions$.set([...this.actions$.get(), action]);
   };
 
-  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.spaceId });
+  publish = async (actions: Action[], signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
+    await this.api.publish({ actions, signer, onChangePublishState, space: this.spaceId });
     this.actions$.set([]);
   };
 }

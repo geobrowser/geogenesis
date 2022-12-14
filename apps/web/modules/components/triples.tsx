@@ -210,7 +210,7 @@ export function Triples({
         </PageNumberContainer>
       </motion.div>
 
-      <FlowBar actionsCount={tripleStore.actions.length} onPublish={tripleStore.publish} />
+      <FlowBar spaceId={spaceId} />
     </PageContainer>
   );
 }
