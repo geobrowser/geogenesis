@@ -20,14 +20,12 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   flexDirection: 'column',
   borderRadius: props.theme.radius,
   backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.dropdown,
   zIndex: 1,
   width: 384,
-  minHeight: 200,
   overflow: 'hidden',
   height: '100%',
 
-  border: `1px solid ${props.theme.colors['grey-02']}`,
+  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
 
   '@media (max-width: 768px)': {
     margin: '0 auto',
@@ -57,7 +55,7 @@ const ResultsList = styled.ul({
   margin: 0,
   padding: 0,
 
-  maxHeight: 580,
+  maxHeight: 340,
   overflowY: 'auto',
 });
 

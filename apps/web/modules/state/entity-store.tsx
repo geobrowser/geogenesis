@@ -145,12 +145,17 @@ export class EntityStore implements IEntityStore {
       },
     };
 
+    const entityNames = this.entityNames$.get();
+
     const newEntityNames: EntityNames = {
-      [triple.value.id]: triple.attributeName ?? null,
+      [triple.attributeId]: entityNames[triple.attributeId]
+        ? entityNames[triple.attributeId]
+        : triple.attributeName ?? null,
+      [triple.value.id]: entityNames[triple.value.id] ? entityNames[triple.value.id] : triple.attributeName ?? null,
     };
 
     this.entityNames$.set({
-      ...this.entityNames$.get(),
+      ...entityNames,
       ...newEntityNames,
     });
 

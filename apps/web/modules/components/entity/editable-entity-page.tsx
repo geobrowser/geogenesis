@@ -15,8 +15,9 @@ import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
-import { Action } from './Action';
 import { SYSTEM_IDS } from '~/modules/constants';
+import { EntityTextAutocomplete } from './entity-text-autocomplete';
+import { Action } from './Action';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -71,7 +72,7 @@ export function EditableEntityPage({
   triples: serverTriples,
   entityNames: serverEntityNames,
 }: Props) {
-  const { triples: localTriples, actions, publish, update, create, entityNames: localEntityNames } = useEntityTriples();
+  const { triples: localTriples, actions, update, create, entityNames: localEntityNames, publish } = useEntityTriples();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -122,7 +123,7 @@ export function EditableEntityPage({
   };
 
   const onCreateNewTriple = () => {
-    create(createTripleWithId(space, id, 'banana', { id: createValueId(), type: 'string', value: '' }));
+    create(createTripleWithId(space, id, '', { id: createValueId(), type: 'string', value: '' }));
   };
 
   return (
@@ -249,7 +250,28 @@ function EntityAttributes({
     return remove([triple]);
   };
 
-  const linkEntityToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
+  const linkEntityAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
+    const triplesToUpdate = groupedTriples[oldAttributeId];
+
+    if (triplesToUpdate.length > 0) {
+      if (groupedTriples[attribute.id]?.length > 0) {
+        // If triples at the new id already exists we want the user to use the existing entry method
+        return;
+      }
+
+      triplesToUpdate.forEach(triple => {
+        const newTriple = {
+          ...triple,
+          attributeId: attribute.id,
+          attributeName: attribute.name,
+        };
+
+        update(newTriple, triple);
+      });
+    }
+  };
+
+  const linkEntityValueToAttribute = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
     if (
       groupedTriples[attributeId]?.length === 1 &&
       groupedTriples[attributeId][0].value.type === 'entity' &&
@@ -283,7 +305,7 @@ function EntityAttributes({
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: Triple) => {
+  const tripleToEditableField = (attributeId: string, triple: Triple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
         return (
@@ -321,15 +343,14 @@ function EntityAttributes({
           />
         );
       case 'entity':
-        if (!triple.value.id) {
-          // return (
-          //   <EntityAutocompleteText
-          //     key={`entity-${attributeId}-${triple.id}`}
-          //     autocomplete={autocomplete}
-          //     onDone={entity => linkEntityToAttribute(attributeId, entity)}
-          //   />
-          // );
-          return null;
+        if (isEmptyEntity) {
+          return (
+            <EntityTextAutocomplete
+              key={`entity-${attributeId}-${triple.id}`}
+              placeholder="Add value..."
+              onDone={result => linkEntityValueToAttribute(attributeId, result)}
+            />
+          );
         }
 
         return (
@@ -346,21 +367,28 @@ function EntityAttributes({
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(t => t.value.type === 'entity');
-        // const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
+        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
 
         return (
           <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
-            <Text as="p" variant="bodySemibold">
-              {entityNames[attributeId] || attributeId}
-            </Text>
+            {attributeId === '' ? (
+              <EntityTextAutocomplete
+                placeholder="Add attribute..."
+                onDone={result => linkEntityAttribute(attributeId, result)}
+              />
+            ) : (
+              <Text as="p" variant="bodySemibold">
+                {entityNames[attributeId] || attributeId}
+              </Text>
+            )}
             <GroupedAttributesList>
               {/* 
                 Have to do some janky layout stuff instead of being able to just use gap since we want different
                 height between the attribute name and the attribute value for entities vs strings
               */}
-              {triples.map(triple => tripleToEditableField(attributeId, triple))}
-              {isEntityGroup && (
-                <EntityAutocompleteDialog onDone={entity => linkEntityToAttribute(attributeId, entity)} />
+              {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
+              {isEntityGroup && !isEmptyEntity && (
+                <EntityAutocompleteDialog onDone={entity => linkEntityValueToAttribute(attributeId, entity)} />
               )}
               <TripleActions>
                 <TripleTypeDropdown

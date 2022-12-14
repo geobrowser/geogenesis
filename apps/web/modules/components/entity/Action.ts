@@ -33,6 +33,10 @@ function getChangeCount(actions: ActionType[]) {
       return acc;
     }
 
+    if (first?.type === 'createTriple' && last?.type === 'editTriple') {
+      return acc;
+    }
+
     return acc + 1;
   }, 0);
 
