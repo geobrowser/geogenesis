@@ -1,8 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import React from 'react';
 import { Text } from '../../design-system/text';
-import { CellInput } from './cell-input';
 import { Truncate } from '../../design-system/truncate';
 
 const StyledLink = styled.a(({ theme }) => ({
@@ -19,19 +17,13 @@ const StyledLink = styled.a(({ theme }) => ({
 }));
 
 interface Props {
-  isEditable: boolean;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  onBlur: () => void;
   isExpanded?: boolean;
-  disabled?: boolean;
-  placeholder?: string;
   isEntity?: boolean;
-  ellipsize?: boolean;
   href?: string;
 }
 
-export function CellEditableInput({ isEditable, isExpanded, value, isEntity, href, ...rest }: Props) {
+export function CellContent({ isExpanded, value, isEntity, href }: Props) {
   const content = href ? (
     <Link href={href} passHref>
       <StyledLink>{value}</StyledLink>
@@ -40,9 +32,7 @@ export function CellEditableInput({ isEditable, isExpanded, value, isEntity, hre
     <Text variant="tableCell">{value}</Text>
   );
 
-  return isEditable ? (
-    <CellInput value={value} {...rest} />
-  ) : (
+  return (
     <Truncate maxLines={isEntity ? 1 : 3} shouldTruncate={!isExpanded}>
       {content}
     </Truncate>

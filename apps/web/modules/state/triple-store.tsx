@@ -3,7 +3,7 @@ import { Signer } from 'ethers';
 import produce from 'immer';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { Action, CreateTripleAction, EditTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
+import { Action, CreateTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
@@ -15,7 +15,6 @@ interface ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
-  update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
@@ -181,22 +180,6 @@ export class TripleStore implements ITripleStore {
     }));
 
     this.actions$.set([...this.actions$.get(), ...actions]);
-  };
-
-  update = (triple: Triple, oldTriple: Triple) => {
-    const action: EditTripleAction = {
-      type: 'editTriple',
-      before: {
-        ...oldTriple,
-        type: 'deleteTriple',
-      },
-      after: {
-        ...triple,
-        type: 'createTriple',
-      },
-    };
-
-    this.actions$.set([...this.actions$.get(), action]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {

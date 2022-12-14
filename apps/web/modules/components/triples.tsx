@@ -11,12 +11,12 @@ import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { createEntityId, createTripleWithId } from '~/modules/services/create-id';
-import { importCSVFile } from '~/modules/services/import';
+// import { importCSVFile } from '~/modules/services/import';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { EntityNames, Triple, Value } from '../types';
-import { getFilesFromFileList } from '../utils';
+// import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import { TripleInput } from './triple-input';
@@ -41,13 +41,13 @@ const PageContainer = styled.div({
   alignItems: 'center',
 });
 
-const FileImport = styled.input({
-  margin: '0',
-  padding: '0',
-  opacity: '0',
-  position: 'absolute',
-  inset: '0',
-});
+// const FileImport = styled.input({
+//   margin: '0',
+//   padding: '0',
+//   opacity: '0',
+//   position: 'absolute',
+//   inset: '0',
+// });
 
 interface Props {
   spaceId: string;
@@ -76,10 +76,10 @@ export function Triples({
     tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
   };
 
-  const onImport = async (files: FileList) => {
-    const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
-    tripleStore.create(triples);
-  };
+  // const onImport = async (files: FileList) => {
+  //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
+  //   tripleStore.create(triples);
+  // };
 
   return (
     <PageContainer>
@@ -98,19 +98,20 @@ export function Triples({
             {spaceName}
           </Text>
         </SpaceInfo>
+
         {(isEditor || isAdmin) && (
           <>
             <TableHeader>
               <div style={{ flex: 1 }} />
               {isAdmin && (
                 <Link href={`/space/${spaceId}/access-control`}>
-                  <Button variant="secondary">Admin</Button>
+                  <Button variant="secondary">Devvy Admin</Button>
                 </Link>
               )}
               {isAdmin && isEditor && <Spacer width={12} />}
               {isEditor && (
                 <>
-                  <Button variant="secondary" icon="create">
+                  {/* <Button variant="secondary" icon="create">
                     Import
                     <FileImport
                       type="file"
@@ -120,7 +121,7 @@ export function Triples({
                         onImport(event.target.files ?? new FileList());
                       }}
                     />
-                  </Button>
+                  </Button> */}
                   <Spacer width={12} />
                   <Button icon="create" onClick={onAddTriple}>
                     New entity
@@ -164,7 +165,6 @@ export function Triples({
           space={spaceId}
           triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
           entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
-          update={tripleStore.update}
         />
 
         <Spacer height={12} />
