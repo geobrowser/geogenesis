@@ -85,8 +85,11 @@ export function EditableEntityPage({
   );
   const description = getEntityDescription(triples, entityNames);
   const name = getEntityName(triples) ?? serverName;
+  console.log('triples', triples);
+  console.log('description triple', descriptionTriple);
+  console.log('description', description);
 
-  const onNameBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!nameTriple) {
       return create(
         createTripleWithId(space, id, 'name', { id: createValueId(), type: 'string', value: e.target.value })
@@ -102,7 +105,7 @@ export function EditableEntityPage({
     );
   };
 
-  const onDescriptionBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!descriptionTriple) {
       return create(
         createTripleWithId(space, id, 'Description', {
@@ -138,16 +141,16 @@ export function EditableEntityPage({
           variant="mainPage"
           color="text"
           placeholder="Entity name..."
-          initialValue={name ?? id}
-          onBlur={onNameBlur}
+          value={name}
+          onChange={onNameChange}
         />
 
         <Spacer height={16} />
         <StringField
           variant="body"
           placeholder="Add a description..."
-          initialValue={description ?? ''}
-          onBlur={onDescriptionBlur}
+          value={description ?? undefined}
+          onChange={onDescriptionChange}
         />
 
         <Spacer height={16} />
@@ -291,7 +294,7 @@ function EntityAttributes({
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onBlur={e =>
+            onChange={e =>
               update(
                 {
                   ...triple,
@@ -300,7 +303,7 @@ function EntityAttributes({
                 triple
               )
             }
-            initialValue={triple.value.value}
+            value={triple.value.value}
           />
         );
       case 'number':

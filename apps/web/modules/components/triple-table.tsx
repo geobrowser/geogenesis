@@ -14,7 +14,7 @@ import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { useEditable } from '../state/use-editable';
 import { EntityNames, Triple, Value } from '../types';
-import { navUtils } from '../utils';
+import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
 
@@ -117,7 +117,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         return (
           <CellContent
             isEntity
-            href={navUtils.toEntity(space, entityId)}
+            href={NavUtils.toEntity(space, entityId)}
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             value={value}
           />
@@ -142,7 +142,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={navUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
+              <Chip href={NavUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
             </ChipCellContainer>
           );
         }

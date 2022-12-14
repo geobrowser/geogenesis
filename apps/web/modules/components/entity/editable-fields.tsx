@@ -4,7 +4,7 @@
 // Entity name autocomplete field
 
 import styled from '@emotion/styled';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 // TODO: How do we handle attribute names editing. Attributes are entities, so we can't just use a string field.
 // We'll need entity search and everything probably.
@@ -30,11 +30,11 @@ const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'vari
 }));
 
 interface StringFieldProps {
-  initialValue: string;
-  onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body';
   color?: 'text' | 'grey-04';
+  value?: string;
 }
 
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
@@ -47,24 +47,17 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
     }
   });
 
-  const onChange = () => {
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (ref.current) {
       ref.current.style.height = 'auto';
       ref.current.style.height = ref.current.scrollHeight + 'px';
     }
+
+    props.onChange(e);
   };
 
   return (
-    <Textarea
-      {...props}
-      ref={ref}
-      rows={1}
-      defaultValue={props.initialValue}
-      onChange={onChange}
-      onBlur={props.onBlur}
-      variant={variant}
-      color={color}
-    />
+    <Textarea {...props} ref={ref} rows={1} onChange={onChange} variant={variant} color={color} value={props.value} />
   );
 }
 

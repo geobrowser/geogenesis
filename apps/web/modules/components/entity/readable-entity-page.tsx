@@ -13,7 +13,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { EntityNames, Triple } from '~/modules/types';
-import { getEntityDescription, groupBy, navUtils, partition } from '~/modules/utils';
+import { getEntityDescription, groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
 import { LinkedEntityGroup } from './types';
 
@@ -143,7 +143,7 @@ function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space
       {triple.value.type === 'entity' ? (
         <>
           <Spacer height={4} />
-          <Chip href={navUtils.toEntity(space, triple.value.id)}>
+          <Chip href={NavUtils.toEntity(space, triple.value.id)}>
             {entityNames[triple.value.id] || triple.value.id}
           </Chip>
         </>
@@ -182,7 +182,7 @@ function EntityAttributes({
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
                 <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
-                  <Chip href={navUtils.toEntity(space, triple.value.id)}>
+                  <Chip href={NavUtils.toEntity(space, triple.value.id)}>
                     {entityNames[triple.value.id] || triple.value.id}
                   </Chip>
                 </div>
@@ -286,7 +286,7 @@ function LinkedEntityCard({
   return (
     <ResizableContainer>
       <LinkedEntityCardContainer>
-        <Link href={navUtils.toEntity(space, entityGroup.id)} passHref>
+        <Link href={NavUtils.toEntity(space, entityGroup.id)} passHref>
           <LinkedEntityCardHeader>
             <Text as="h2" variant="cardEntityTitle">
               {entityGroup.name ?? entityGroup.id}

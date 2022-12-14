@@ -11,12 +11,12 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
-import { createEntityId, createTripleWithId } from '~/modules/services/create-id';
 // import { importCSVFile } from '~/modules/services/import';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
-import { EntityNames, Triple, Value } from '../types';
+import { EntityNames, Triple } from '../types';
+import { NavUtils } from '../utils';
 // import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
@@ -75,14 +75,6 @@ export function Triples({
   const tripleStore = useTriples();
   const theme = useTheme();
 
-  const onAddTriple = async () => {
-    const entityId = createEntityId();
-    const attributeId = '';
-    const value: Value = { type: 'string', id: createEntityId(), value: '' };
-
-    tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
-  };
-
   // const onImport = async (files: FileList) => {
   //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
   //   tripleStore.create(triples);
@@ -131,9 +123,18 @@ export function Triples({
                     />
                   </Button> */}
                   <Spacer width={12} />
-                  <Button icon="create" onClick={onAddTriple}>
-                    New entity
-                  </Button>
+                  <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
+                    <a>
+                      <Button
+                        icon="create"
+                        onClick={() => {
+                          //
+                        }}
+                      >
+                        New entity
+                      </Button>
+                    </a>
+                  </Link>
                 </>
               )}
             </TableHeader>

@@ -27,9 +27,10 @@ export function titleCase(string: string): string {
     .join(' ');
 }
 
-export const navUtils = {
+export const NavUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
+  toCreateEntity: (spaceId: string) => `/space/${spaceId}/create-entity`,
 };
 
 export function getEntityName(triples: Triple[]) {
@@ -41,6 +42,14 @@ export function getEntityDescription(triples: Triple[], entityNames: EntityNames
   const descriptionEntityId = Object.entries(entityNames).find(
     ([, attributeId]) => attributeId === SYSTEM_IDS.DESCRIPTION || attributeId === 'Description'
   )?.[0];
+
+  if (!descriptionEntityId) {
+    const descriptionValue = triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION || triple.attributeId === 'Description'
+    )?.value;
+
+    return descriptionValue?.type === 'string' ? descriptionValue.value : null;
+  }
 
   const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
   return descriptionValue?.type === 'entity'
