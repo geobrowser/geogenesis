@@ -17,6 +17,7 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { Action } from './Action';
 import { SYSTEM_IDS } from '~/modules/constants';
+import { EntityTextAutocomplete } from './entity-text-autocomplete';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -322,14 +323,13 @@ function EntityAttributes({
         );
       case 'entity':
         if (!triple.value.id) {
-          // return (
-          //   <EntityAutocompleteText
-          //     key={`entity-${attributeId}-${triple.id}`}
-          //     autocomplete={autocomplete}
-          //     onDone={entity => linkEntityToAttribute(attributeId, entity)}
-          //   />
-          // );
-          return null;
+          return (
+            <EntityTextAutocomplete
+              key={`entity-${attributeId}-${triple.id}`}
+              // autocomplete={autocomplete}
+              // onDone={entity => linkEntityToAttribute(attributeId, entity)}
+            />
+          );
         }
 
         return (
@@ -346,7 +346,7 @@ function EntityAttributes({
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(t => t.value.type === 'entity');
-        // const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
+        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
 
         return (
           <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
@@ -359,7 +359,7 @@ function EntityAttributes({
                 height between the attribute name and the attribute value for entities vs strings
               */}
               {triples.map(triple => tripleToEditableField(attributeId, triple))}
-              {isEntityGroup && (
+              {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog onDone={entity => linkEntityToAttribute(attributeId, entity)} />
               )}
               <TripleActions>
