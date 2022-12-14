@@ -54,7 +54,6 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
 const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
   disabled: boolean;
   isLast: boolean;
-  isActive: boolean;
 }>(props => ({
   all: 'unset',
   ...props.theme.typography.button,
