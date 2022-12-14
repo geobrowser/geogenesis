@@ -59,7 +59,7 @@ export default function Dev() {
         <a>Spaces</a>
       </Link>
 
-      <ConnectButton accountStatus="avatar" />
+      <ConnectButton />
 
       <VerticalBox>
         <HorizontalBox>

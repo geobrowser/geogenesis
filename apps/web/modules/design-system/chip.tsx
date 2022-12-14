@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
+import { CheckCloseSmall } from '~/modules/design-system/icons/check-close-small';
 
 const StyledChip = styled.a(props => ({
   ...props.theme.typography.metadataMedium,
@@ -28,5 +29,28 @@ export function Chip({ href, children }: Props) {
     <Link href={href} passHref>
       <StyledChip>{children}</StyledChip>
     </Link>
+  );
+}
+
+type Icon = 'check-close';
+
+const StyledChipButton = styled(StyledChip)(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space,
+}));
+
+interface ChipButtonProps {
+  onClick: () => void;
+  children: React.ReactNode;
+  icon?: Icon;
+}
+
+export function ChipButton({ onClick, children, icon }: ChipButtonProps) {
+  return (
+    <StyledChipButton as="button" onClick={onClick} role="button">
+      {children}
+      {icon === 'check-close' ? <CheckCloseSmall /> : null}
+    </StyledChipButton>
   );
 }

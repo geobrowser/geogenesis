@@ -4,6 +4,7 @@ import { HACKY_COPY_FILL_CLASS_NAME, ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
 import { Copy } from './icons/copy';
 import { Create } from './icons/create';
+import { CreateSmall } from './icons/create-small';
 import { Expand } from './icons/expand';
 import { ExpandSmall } from './icons/expand-small';
 import { Eye } from './icons/eye';
@@ -11,6 +12,8 @@ import { Facts } from './icons/facts';
 import { Filter } from './icons/filter';
 import { Preset } from './icons/preset';
 import { Publish } from './icons/publish';
+import { Relation } from './icons/relation';
+import { Text } from './icons/text';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
 import { Spacer } from './spacer';
@@ -121,6 +124,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 
 type Icon =
   | 'create'
+  | 'createSmall'
   | 'publish'
   | 'eye'
   | 'expand'
@@ -131,10 +135,13 @@ type Icon =
   | 'tick'
   | 'facts'
   | 'copy'
-  | 'preset';
+  | 'preset'
+  | 'relation'
+  | 'text';
 
 const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   create: (color?: ColorName) => <Create color={color} />,
+  createSmall: (color?: ColorName) => <CreateSmall color={color} />,
   publish: (color?: ColorName) => <Publish color={color} />,
   eye: (color?: ColorName) => <Eye color={color} />,
   expand: (color?: ColorName) => <Expand color={color} />,
@@ -146,6 +153,8 @@ const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   facts: (color?: ColorName) => <Facts color={color} />,
   copy: (color?: ColorName) => <Copy color={color} />,
   preset: (color?: ColorName) => <Preset color={color} />,
+  relation: (color?: ColorName) => <Relation color={color} />,
+  text: (color?: ColorName) => <Text color={color} />,
 };
 
 interface Props {
@@ -193,10 +202,10 @@ const StyledSquareButton = styled(StyledButton)<Props & { isActive?: boolean }>(
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: `${props.theme.space}px`,
+    padding: `${props.theme.space + 1}px`,
     height: props.theme.space * 5,
     width: props.theme.space * 5,
-
+    borderRadius: props.theme.space,
     backgroundColor: props.isActive ? colors.backgroundColorHover : colors.backgroundColor,
     fontFeatureSettings: '"tnum" 1',
 
@@ -204,7 +213,7 @@ const StyledSquareButton = styled(StyledButton)<Props & { isActive?: boolean }>(
   };
 });
 
-type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode };
+type SquareButtonProps = Omit<Props, 'children'> & { isActive?: boolean; children?: React.ReactNode; as?: 'span' };
 
 export const SquareButton = React.forwardRef(function SquareButton(
   { onClick, icon, children, isActive = false, variant = 'secondary', disabled = false, ...props }: SquareButtonProps,

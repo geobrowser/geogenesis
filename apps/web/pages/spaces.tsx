@@ -8,7 +8,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { getConfigFromUrl } from '~/modules/params';
+import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
@@ -96,7 +96,7 @@ export default function Spaces({ spaces }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const config = getConfigFromUrl(context.resolvedUrl);
+  const config = Params.getConfigFromUrl(context.resolvedUrl);
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();

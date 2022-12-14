@@ -2,7 +2,7 @@ import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './conf
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
-export function parseQueryParameters(url: string): InitialTripleStoreParams {
+function parseQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -21,7 +21,7 @@ export function parseQueryParameters(url: string): InitialTripleStoreParams {
   };
 }
 
-export function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
+function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
@@ -51,7 +51,7 @@ function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, s
   }, {});
 }
 
-export function getConfigFromUrl(url: string): AppConfig {
+function getConfigFromUrl(url: string): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
   const env: AppEnv = (params.get('env') as AppEnv) ?? DEFAULT_ENV;
 
@@ -63,3 +63,9 @@ export function getConfigFromUrl(url: string): AppConfig {
   const config = configOptions[env];
   return getConfig(config.chainId);
 }
+
+export const Params = {
+  parseQueryParameters,
+  stringifyQueryParameters,
+  getConfigFromUrl,
+};

@@ -86,7 +86,7 @@ describe('Entity page', () => {
       </Providers>
     );
 
-    expect(screen.getByText('Description of a Banana')).toBeInTheDocument();
+    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
   it('Renders entity triples', () => {

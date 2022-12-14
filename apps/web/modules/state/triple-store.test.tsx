@@ -24,32 +24,6 @@ describe('TripleStore', () => {
     expect(store.triples$.get()).toStrictEqual([newTriple]);
   });
 
-  it('Updates existing triple', async () => {
-    const store = new TripleStore({
-      api: new MockNetwork(),
-      space: 's',
-      initialTriples: [],
-      initialEntityNames: {},
-    });
-
-    const originalTriple: Triple = createTripleWithId('s', 'alice', 'name', {
-      type: 'string',
-      id: `s~alice`,
-      value: 'Alice',
-    });
-    store.create([originalTriple]);
-
-    const newTriple: Triple = createTripleWithId('s', originalTriple.entityId, originalTriple.attributeId, {
-      type: 'string',
-      id: `s~bob`,
-      value: 'Bob',
-    });
-
-    store.update(newTriple, originalTriple);
-    expect(store.triples$.get()).toStrictEqual([newTriple]);
-    expect(store.entityNames$.get()).toStrictEqual({ [newTriple.entityId]: 'Bob' });
-  });
-
   it('Tracks the created triple', async () => {
     const store = new TripleStore({ api: new MockNetwork(), space: 's', initialTriples: [], initialEntityNames: {} });
 
@@ -60,7 +34,6 @@ describe('TripleStore', () => {
     });
 
     store.create([newTriple]);
-    // expect(store.actions$)).toStrictEqual([]);
     expect(store.actions$.get()).toStrictEqual([
       {
         ...newTriple,

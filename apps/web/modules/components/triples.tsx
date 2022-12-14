@@ -1,3 +1,4 @@
+import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
@@ -10,13 +11,14 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
-import { createEntityId, createTripleWithId } from '~/modules/services/create-id';
-import { importCSVFile } from '~/modules/services/import';
+// import { importCSVFile } from '~/modules/services/import';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
-import { EntityNames, Triple, Value } from '../types';
-import { getFilesFromFileList } from '../utils';
+import { useEditable } from '../state/use-editable';
+import { EntityNames, Triple } from '../types';
+import { NavUtils } from '../utils';
+// import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import { TripleInput } from './triple-input';
@@ -41,13 +43,18 @@ const PageContainer = styled.div({
   alignItems: 'center',
 });
 
-const FileImport = styled.input({
-  margin: '0',
-  padding: '0',
-  opacity: '0',
-  position: 'absolute',
-  inset: '0',
+const Actions = styled.div({
+  display: 'flex',
+  alignItems: 'center',
 });
+
+// const FileImport = styled.input({
+//   margin: '0',
+//   padding: '0',
+//   opacity: '0',
+//   position: 'absolute',
+//   inset: '0',
+// });
 
 interface Props {
   spaceId: string;
@@ -66,20 +73,14 @@ export function Triples({
 }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
+  const { editable } = useEditable();
   const tripleStore = useTriples();
+  const theme = useTheme();
 
-  const onAddTriple = async () => {
-    const entityId = createEntityId();
-    const attributeId = '';
-    const value: Value = { type: 'string', id: createEntityId(), value: '' };
-
-    tripleStore.create([createTripleWithId(spaceId, entityId, attributeId, value)]);
-  };
-
-  const onImport = async (files: FileList) => {
-    const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
-    tripleStore.create(triples);
-  };
+  // const onImport = async (files: FileList) => {
+  //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
+  //   tripleStore.create(triples);
+  // };
 
   return (
     <PageContainer>
@@ -89,6 +90,8 @@ export function Triples({
             <Image
               objectFit="cover"
               layout="fill"
+              width={theme.space * 14}
+              height={theme.space * 14}
               src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
               alt={`Cover image for ${spaceName}`}
             />
@@ -98,19 +101,19 @@ export function Triples({
             {spaceName}
           </Text>
         </SpaceInfo>
-        {(isEditor || isAdmin) && (
-          <>
+
+        <Actions>
+          {(isEditor || isAdmin) && editable && (
             <TableHeader>
-              <div style={{ flex: 1 }} />
               {isAdmin && (
                 <Link href={`/space/${spaceId}/access-control`}>
-                  <Button variant="secondary">Admin</Button>
+                  <Button variant="secondary">Devvy Admin</Button>
                 </Link>
               )}
-              {isAdmin && isEditor && <Spacer width={12} />}
+              {isAdmin && isEditor && <Spacer width={8} />}
               {isEditor && (
                 <>
-                  <Button variant="secondary" icon="create">
+                  {/* <Button variant="secondary" icon="create">
                     Import
                     <FileImport
                       type="file"
@@ -120,16 +123,18 @@ export function Triples({
                         onImport(event.target.files ?? new FileList());
                       }}
                     />
-                  </Button>
+                  </Button> */}
                   <Spacer width={12} />
-                  <Button icon="create" onClick={onAddTriple}>
-                    New entity
-                  </Button>
+                  <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
+                    <a>
+                      <Button icon="create">New entity</Button>
+                    </a>
+                  </Link>
                 </>
               )}
             </TableHeader>
-          </>
-        )}
+          )}
+        </Actions>
       </TableHeader>
 
       <Spacer height={40} />
@@ -164,7 +169,6 @@ export function Triples({
           space={spaceId}
           triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
           entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
-          update={tripleStore.update}
         />
 
         <Spacer height={12} />
@@ -270,7 +274,7 @@ const SpaceImageContainer = styled.div(props => ({
   // https://nextjs.org/docs/api-reference/next/image#fill
   position: 'relative',
   overflow: 'hidden',
+  borderRadius: props.theme.radius * 2,
   width: props.theme.space * 14,
   height: props.theme.space * 14,
-  borderRadius: props.theme.radius * 2,
 }));

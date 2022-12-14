@@ -1,10 +1,10 @@
-import { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { SYSTEM_IDS } from '../constants';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { EntityNames, FilterState, ReviewState, Triple } from '../types';
+import { Action, CreateTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
@@ -16,7 +16,6 @@ interface ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: Triple[]): void;
-  update(triple: Triple, oldTriple: Triple): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
@@ -36,14 +35,6 @@ interface ITripleStoreConfig {
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
 }
-
-type EditTripleAction = {
-  type: 'editTriple';
-  before: DeleteTripleAction;
-  after: CreateTripleAction;
-};
-
-export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const DEFAULT_INITIAL_PARAMS = {
@@ -159,7 +150,7 @@ export class TripleStore implements ITripleStore {
         (acc, action) => {
           switch (action.type) {
             case 'createTriple':
-              if (action.attributeId === 'name' && action.value.type === 'string') {
+              if (action.attributeId === SYSTEM_IDS.NAME && action.value.type === 'string') {
                 acc[action.entityId] = action.value.value;
               }
 
@@ -167,7 +158,7 @@ export class TripleStore implements ITripleStore {
             case 'deleteTriple':
               break;
             case 'editTriple':
-              if (action.after.attributeId === 'name' && action.after.value.type === 'string') {
+              if (action.after.attributeId === SYSTEM_IDS.NAME && action.after.value.type === 'string') {
                 acc[action.after.entityId] = action.after.value.value;
               }
 
@@ -190,22 +181,6 @@ export class TripleStore implements ITripleStore {
     }));
 
     this.actions$.set([...this.actions$.get(), ...actions]);
-  };
-
-  update = (triple: Triple, oldTriple: Triple) => {
-    const action: EditTripleAction = {
-      type: 'editTriple',
-      before: {
-        ...oldTriple,
-        type: 'deleteTriple',
-      },
-      after: {
-        ...triple,
-        type: 'createTriple',
-      },
-    };
-
-    this.actions$.set([...this.actions$.get(), action]);
   };
 
   publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {

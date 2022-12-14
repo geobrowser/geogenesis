@@ -5,15 +5,12 @@ import { useSigner } from 'wagmi';
 import { Signer } from 'ethers';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
-import { Divider } from '../design-system/divider';
-import { LeftArrowLong } from '../design-system/icons/left-arrow-long';
 import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
-import { TextButton } from '../design-system/text-button';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -25,6 +22,7 @@ const Container = styled.div(props => ({
   backgroundColor: props.theme.colors.white,
   boxShadow: `0px 1px 2px #F0F0F0`,
   padding: props.theme.space * 2,
+  paddingLeft: props.theme.space * 4,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
 }));
@@ -42,7 +40,7 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
 
   // An "edit" is really a delete + create behind the scenes. We don't need to count the
   // deletes since that would double the change count.
-  const showFlowBar = reviewState === 'idle' || reviewState === 'reviewing';
+  const showFlowBar = reviewState === 'idle';
   const showToast =
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
@@ -66,9 +64,6 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
               key="action-bar"
             >
               {reviewState === 'idle' && (
-                <Idle actionsCount={actionsCount} onNext={() => setReviewState('reviewing')} />
-              )}
-              {reviewState === 'reviewing' && (
                 <Review actionsCount={actionsCount} onBack={() => setReviewState('idle')} onNext={publish} />
               )}
             </MotionContainer>
@@ -94,15 +89,15 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
   );
 }
 
-interface IdleProps {
+interface ReviewProps {
+  onBack: () => void;
   actionsCount: number;
   onNext: () => void;
 }
 
-function Idle({ actionsCount, onNext }: IdleProps) {
+function Review({ actionsCount, onNext }: ReviewProps) {
   return (
     <>
-      <Spacer width={8} />
       <Trash color="grey-04" />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
@@ -110,52 +105,9 @@ function Idle({ actionsCount, onNext }: IdleProps) {
       </Text>
 
       <Spacer width={16} />
-      <Divider type="vertical" />
-      <Spacer width={16} />
 
-      <Button variant="primary" onClick={onNext} icon="eye">
-        Review changes
-      </Button>
-    </>
-  );
-}
-
-interface ReviewProps extends IdleProps {
-  onBack: () => void;
-}
-
-function Review({ actionsCount, onNext, onBack }: ReviewProps) {
-  return (
-    <>
-      <Spacer width={8} />
-      <TextButton onClick={onBack}>
-        <LeftArrowLong color="grey-04" />
-        <Spacer width={8} />
-        <Text color="grey-04" variant="button">
-          Back
-        </Text>
-      </TextButton>
-
-      <Spacer width={16} />
-      <Divider type="vertical" />
-      <Spacer width={16} />
-
-      <Trash color="grey-04" />
-      <Spacer width={8} />
-      <Text color="grey-04" variant="button">
-        {actionsCount} {pluralize('change', actionsCount)}
-      </Text>
-
-      <Spacer width={16} />
-      <Divider type="vertical" />
-      <Spacer width={16} />
-
-      <Text variant="button">Happy with these changes?</Text>
-
-      <Spacer width={16} />
-
-      <Button variant="primary" onClick={onNext} icon="publish">
-        Publish
+      <Button icon="eye" variant="primary" onClick={onNext}>
+        Publish changes
       </Button>
     </>
   );

@@ -3,25 +3,19 @@ import styled from '@emotion/styled';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
-import { ChevronDownSmall } from './icons/chevron-down-small';
-import { Spacer } from './spacer';
-import { Text } from './text';
 
 const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
   all: 'unset',
   ...props.theme.typography.button,
   color: props.theme.colors.text,
+  backgroundColor: props.theme.colors.white,
   flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   borderRadius: props.theme.radius,
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
-  width: 103,
 
   '&:hover': {
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
@@ -38,11 +32,11 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
 
 const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   overflow: 'hidden',
-  backgroundColor: props.theme.colors.white,
-  zIndex: 10,
+  backgroundColor: 'white',
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  width: 273,
+  width: 155,
+  zIndex: 10,
 }));
 
 const MotionContent = motion(StyledContent);
@@ -53,22 +47,24 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
 }));
 
 const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
-  disabled: boolean;
   isLast: boolean;
 }>(props => ({
   all: 'unset',
-  ...props.theme.typography.button,
   display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
+  flexDirection: 'column',
+  justifyContent: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
+  backgroundColor: props.theme.colors.white,
   color: props.theme.colors['grey-04'],
-
   userSelect: 'none',
 
   ...(!props.isLast && {
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
   }),
+
+  '&:hover': {
+    color: props.theme.colors.text,
+  },
 
   '&[data-highlighted]': {
     cursor: 'pointer',
@@ -83,21 +79,17 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
 }));
 
 interface Props {
-  trigger: React.ReactNode;
-  options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
+  value: React.ReactNode;
+  options: { label: React.ReactNode; onClick: () => void; disabled: boolean }[];
 }
 
-export const Dropdown = ({ trigger, options }: Props) => {
+export const TripleTypeDropdown = ({ value, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
     <DropdownPrimitive.Root onOpenChange={setOpen}>
-      <StyledTrigger>
-        {trigger}
-        <Spacer width={8} />
-        <ChevronDownSmall color="ctaPrimary" />
-      </StyledTrigger>
+      <StyledTrigger>{value}</StyledTrigger>
       <AnimatePresence>
         {open && (
           <MotionContent
@@ -115,17 +107,11 @@ export const Dropdown = ({ trigger, options }: Props) => {
             <StyledGroup>
               {options.map((option, index) => (
                 <StyledItem
-                  key={`dropdown-item-${index}`}
-                  disabled={option.disabled}
+                  key={`triple-type-dropdown-${index}`}
                   isLast={index === options.length - 1}
-                  onClick={option.onClick}
+                  onClick={option.disabled ? undefined : option.onClick}
                 >
                   {option.label}
-                  {option.disabled && (
-                    <Text variant="smallButton" color="grey-04">
-                      {option.sublabel}
-                    </Text>
-                  )}
                 </StyledItem>
               ))}
             </StyledGroup>

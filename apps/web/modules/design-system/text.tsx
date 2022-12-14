@@ -7,7 +7,7 @@ interface Props {
   children: React.ReactNode;
   color?: ColorName;
   variant?: TypographyName;
-  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div' | 'a';
+  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div' | 'a' | 'li';
   ellipsize?: boolean;
   flex?: string;
   href?: string;

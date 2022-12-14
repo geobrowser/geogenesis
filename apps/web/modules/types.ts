@@ -1,3 +1,8 @@
+import {
+  CreateTripleAction as CreateTripleActionSchema,
+  DeleteTripleAction as DeleteTripleActionSchema,
+} from '@geogenesis/action-schema';
+
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -55,3 +60,18 @@ export type FilterClause = {
 };
 
 export type FilterState = FilterClause[];
+
+export type CreateTripleAction = CreateTripleActionSchema & Identifiable;
+export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable;
+
+export type EditTripleAction = {
+  type: 'editTriple';
+  before: DeleteTripleAction;
+  after: CreateTripleAction;
+};
+
+type Identifiable = {
+  id: string;
+};
+
+export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
