@@ -1,13 +1,5 @@
-// TODO
-// Number field
-// Date field
-// Entity name autocomplete field
-
 import styled from '@emotion/styled';
 import React, { useEffect, useRef, useState } from 'react';
-
-// TODO: How do we handle attribute names editing. Attributes are entities, so we can't just use a string field.
-// We'll need entity search and everything probably.
 
 const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'variant'>>>(props => ({
   ...props.theme.typography[props.variant],

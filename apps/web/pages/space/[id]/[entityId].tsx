@@ -39,7 +39,12 @@ export default function EntityPage(props: Props) {
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider spaceId={props.space} initialEntityNames={props.entityNames} initialTriples={props.triples}>
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.space}
+      initialEntityNames={props.entityNames}
+      initialTriples={props.triples}
+    >
       <Page {...props} />
     </EntityStoreProvider>
   );

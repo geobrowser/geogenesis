@@ -108,7 +108,7 @@ export function Triples({
                   <Button variant="secondary">Devvy Admin</Button>
                 </Link>
               )}
-              {isAdmin && isEditor && <Spacer width={12} />}
+              {isAdmin && isEditor && <Spacer width={8} />}
               {isEditor && (
                 <>
                   {/* <Button variant="secondary" icon="create">
@@ -125,14 +125,7 @@ export function Triples({
                   <Spacer width={12} />
                   <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
                     <a>
-                      <Button
-                        icon="create"
-                        onClick={() => {
-                          //
-                        }}
-                      >
-                        New entity
-                      </Button>
+                      <Button icon="create">New entity</Button>
                     </a>
                   </Link>
                 </>

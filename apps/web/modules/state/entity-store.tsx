@@ -1,6 +1,7 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
+import { SYSTEM_IDS } from '../constants';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import {
@@ -23,9 +24,25 @@ interface IEntityStore {
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
+const createInitialDefaultTriples = (spaceId: string, entityId: string): Triple[] => {
+  return [
+    createTripleWithId(spaceId, entityId, SYSTEM_IDS.TYPE, {
+      id: '',
+      type: 'entity',
+    }),
+  ];
+};
+
+const createInitialDefaultNames = (): EntityNames => {
+  return {
+    [SYSTEM_IDS.TYPE]: 'Types',
+  };
+};
+
 interface IEntityStoreConfig {
   api: INetwork;
   spaceId: string;
+  id: string;
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
 }
@@ -37,17 +54,22 @@ export class EntityStore implements IEntityStore {
   entityNames$: Observable<EntityNames>;
   actions$: Observable<Action[]>;
 
-  constructor({ api, initialEntityNames, initialTriples, spaceId }: IEntityStoreConfig) {
+  constructor({ api, initialEntityNames, initialTriples, spaceId, id }: IEntityStoreConfig) {
+    const initialDefaultTriples =
+      initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
+    const initialDefaultNames =
+      Object.entries(initialEntityNames).length === 0 ? createInitialDefaultNames() : initialEntityNames;
+
     this.api = api;
-    this.triples$ = observable(initialTriples);
-    this.entityNames$ = observable(initialEntityNames);
+    this.triples$ = observable(initialDefaultTriples);
+    this.entityNames$ = observable<EntityNames>(initialDefaultNames);
     this.actions$ = observable<Action[]>([]);
     this.spaceId = spaceId;
 
     this.triples$ = computed(() => {
       // We operate on the triples array in reverse so that we can `push` instead of `unshift`
       // when creating new triples, which is significantly faster.
-      const triples: Triple[] = [...initialTriples].reverse();
+      const triples: Triple[] = [...initialDefaultTriples].reverse();
 
       // If our actions have modified one of the network triples, we don't want to add that
       // network triple to the triples array

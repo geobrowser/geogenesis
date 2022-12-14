@@ -158,9 +158,11 @@ export function EditableEntityPage({
         <Spacer height={8} />
 
         <Content>
-          <Attributes>
-            <EntityAttributes entityId={id} space={space} triples={triples} entityNames={entityNames} />
-          </Attributes>
+          {triples.length > 0 ? (
+            <Attributes>
+              <EntityAttributes entityId={id} space={space} triples={triples} entityNames={entityNames} />
+            </Attributes>
+          ) : null}
           <AddTripleContainer>
             <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
               Add triple

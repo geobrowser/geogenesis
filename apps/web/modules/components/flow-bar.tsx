@@ -63,9 +63,6 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
               transition={{ duration: 0.1, ease: 'easeInOut' }}
               key="action-bar"
             >
-              {/* {reviewState === 'idle' && (
-                <Idle actionsCount={actionsCount} onNext={() => setReviewState('reviewing')} />
-              )} */}
               {reviewState === 'idle' && (
                 <Review actionsCount={actionsCount} onBack={() => setReviewState('idle')} onNext={publish} />
               )}
@@ -92,34 +89,10 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
   );
 }
 
-interface IdleProps {
+interface ReviewProps {
+  onBack: () => void;
   actionsCount: number;
   onNext: () => void;
-}
-
-// function Idle({ actionsCount, onNext }: IdleProps) {
-//   return (
-//     <>
-//       <Spacer width={8} />
-//       <Trash color="grey-04" />
-//       <Spacer width={8} />
-//       <Text color="grey-04" variant="button">
-//         {actionsCount} {pluralize('change', actionsCount)}
-//       </Text>
-
-//       <Spacer width={16} />
-//       <Divider type="vertical" />
-//       <Spacer width={16} />
-
-//       <Button variant="primary" onClick={onNext} icon="eye">
-//         Review changes
-//       </Button>
-//     </>
-//   );
-// }
-
-interface ReviewProps extends IdleProps {
-  onBack: () => void;
 }
 
 function Review({ actionsCount, onNext }: ReviewProps) {
