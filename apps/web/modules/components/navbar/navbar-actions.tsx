@@ -71,7 +71,9 @@ export function NavbarActions({ spaceId }: Props) {
       label: <GeoConnectButton />,
       value: 'connect-wallet',
       disabled: false,
-      onClick: () => {},
+      onClick: () => {
+        //
+      },
     },
   ];
 
