@@ -2,6 +2,7 @@ import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
+import { Signer } from 'ethers';
 import pluralize from 'pluralize';
 import { Button } from '../design-system/button';
 import { Trash } from '../design-system/icons/trash';
@@ -10,7 +11,6 @@ import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
-import { Signer } from 'ethers';
 
 const Container = styled.div(props => ({
   display: 'flex',
