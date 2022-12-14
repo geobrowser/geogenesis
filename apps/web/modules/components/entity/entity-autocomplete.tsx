@@ -4,10 +4,10 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
-import { Search } from '../../design-system/icons/search';
-import { Input } from '../../design-system/input';
-import { Text } from '../../design-system/text';
-import { useAutocomplete } from './autocomplete';
+import { Search } from '~/modules/design-system/icons/search';
+import { Input } from '~/modules/design-system/input';
+import { Text } from '~/modules/design-system/text';
+import { useAutocomplete } from '~/modules/entity/autocomplete';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -85,11 +85,11 @@ const AutocompleteInput = styled(Input)(props => ({
 }));
 
 interface Props {
-  autocomplete: ReturnType<typeof useAutocomplete>;
   onDone: (result: { id: string; name: string | null }) => void;
 }
 
-export function EntityAutocompleteDialog({ onDone, autocomplete }: Props) {
+export function EntityAutocompleteDialog({ onDone }: Props) {
+  const autocomplete = useAutocomplete();
   const theme = useTheme();
 
   // Using a controlled state to enable exit animations with framer-motion

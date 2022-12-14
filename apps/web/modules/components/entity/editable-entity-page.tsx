@@ -15,7 +15,6 @@ import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
-import { useAutocomplete } from './autocomplete';
 import { Action } from './Action';
 import { SYSTEM_IDS } from '~/modules/constants';
 
@@ -211,7 +210,6 @@ function EntityAttributes({
 }) {
   const { update, remove, create } = useEntityTriples();
   const groupedTriples = groupBy(triples, t => t.attributeId);
-  const autocomplete = useAutocomplete();
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: Triple[]) => {
     triples.forEach(triple => {
@@ -360,10 +358,7 @@ function EntityAttributes({
               */}
               {triples.map(triple => tripleToEditableField(attributeId, triple))}
               {isEntityGroup && (
-                <EntityAutocompleteDialog
-                  autocomplete={autocomplete}
-                  onDone={entity => linkEntityToAttribute(attributeId, entity)}
-                />
+                <EntityAutocompleteDialog onDone={entity => linkEntityToAttribute(attributeId, entity)} />
               )}
               <TripleActions>
                 <TripleTypeDropdown
