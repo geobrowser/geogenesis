@@ -8,10 +8,7 @@ import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
-
-interface Props {
-  spaceId: string;
-}
+import { useAccount } from 'wagmi';
 
 type ColorOption = ColorName;
 
@@ -30,8 +27,19 @@ type DropdownOption = {
   onClick: () => void;
 };
 
+function getEditSublabel(isEditor: boolean, address?: string) {
+  if (address && isEditor) return undefined;
+  if (!address) return 'Connect wallet to edit';
+  return 'You don’t have edit access';
+}
+
+interface Props {
+  spaceId: string;
+}
+
 export function NavbarActions({ spaceId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
+  const { address } = useAccount();
   const { setEditable, editable } = useEditable();
   const [value, setValue] = useState<DropdownOptionValue>('browse-mode');
 
@@ -59,7 +67,7 @@ export function NavbarActions({ spaceId }: Props) {
           Edit mode
         </LabelRow>
       ),
-      sublabel: 'Connect wallet to edit',
+      sublabel: getEditSublabel(isEditor, address),
       value: 'edit-mode',
       disabled: !isEditor,
       onClick: () => {
