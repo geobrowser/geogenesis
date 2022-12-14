@@ -1,5 +1,10 @@
 export const SYSTEM_IDS = {
   IMAGE_ATTRIBUTE: '457a27af-7b0b-485c-ac07-aa37756adafa',
+  DESCRIPTION: 'be5564ac-3953-4127-800a-9f9f22f2c610',
+  NAME: 'name',
+  TYPE: 'type',
+  SPACE: 'space',
+  ATTRIBUTE: 'attribute',
 };
 
 export const ZERO_WIDTH_SPACE = '\u200b';

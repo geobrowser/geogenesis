@@ -38,7 +38,8 @@ const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
 
 const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   overflow: 'hidden',
-  backgroundColor: 'white',
+  backgroundColor: props.theme.colors.white,
+  zIndex: 10,
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   width: 273,

@@ -1,3 +1,4 @@
+import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
@@ -41,6 +42,11 @@ const PageContainer = styled.div({
   alignItems: 'center',
 });
 
+const Actions = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+});
+
 // const FileImport = styled.input({
 //   margin: '0',
 //   padding: '0',
@@ -67,6 +73,7 @@ export function Triples({
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
   const tripleStore = useTriples();
+  const theme = useTheme();
 
   const onAddTriple = async () => {
     const entityId = createEntityId();
@@ -89,6 +96,8 @@ export function Triples({
             <Image
               objectFit="cover"
               layout="fill"
+              width={theme.space * 14}
+              height={theme.space * 14}
               src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
               alt={`Cover image for ${spaceName}`}
             />
@@ -99,10 +108,9 @@ export function Triples({
           </Text>
         </SpaceInfo>
 
-        {(isEditor || isAdmin) && (
-          <>
+        <Actions>
+          {(isEditor || isAdmin) && (
             <TableHeader>
-              <div style={{ flex: 1 }} />
               {isAdmin && (
                 <Link href={`/space/${spaceId}/access-control`}>
                   <Button variant="secondary">Devvy Admin</Button>
@@ -129,8 +137,8 @@ export function Triples({
                 </>
               )}
             </TableHeader>
-          </>
-        )}
+          )}
+        </Actions>
       </TableHeader>
 
       <Spacer height={40} />
@@ -270,7 +278,7 @@ const SpaceImageContainer = styled.div(props => ({
   // https://nextjs.org/docs/api-reference/next/image#fill
   position: 'relative',
   overflow: 'hidden',
+  borderRadius: props.theme.radius * 2,
   width: props.theme.space * 14,
   height: props.theme.space * 14,
-  borderRadius: props.theme.radius * 2,
 }));

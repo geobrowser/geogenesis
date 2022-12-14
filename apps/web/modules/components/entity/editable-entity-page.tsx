@@ -17,6 +17,7 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { useAutocomplete } from './autocomplete';
 import { Action } from './Action';
+import { SYSTEM_IDS } from '~/modules/constants';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -78,8 +79,10 @@ export function EditableEntityPage({
   const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
   const entityNames = Object.keys(localEntityNames).length === 0 ? serverEntityNames : localEntityNames;
 
-  const nameTriple = triples.find(t => t.attributeId === 'name');
-  const descriptionTriple = triples.find(t => t.attributeId === 'Description');
+  const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+  const descriptionTriple = triples.find(
+    t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeId === 'Description'
+  );
   const description = getEntityDescription(triples, entityNames);
   const name = getEntityName(triples) ?? serverName;
 
@@ -102,7 +105,11 @@ export function EditableEntityPage({
   const onDescriptionBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
     if (!descriptionTriple) {
       return create(
-        createTripleWithId(space, id, 'Description', { id: createValueId(), type: 'string', value: e.target.value })
+        createTripleWithId(space, id, 'Description', {
+          id: createValueId(),
+          type: 'string',
+          value: e.target.value,
+        })
       );
     }
 

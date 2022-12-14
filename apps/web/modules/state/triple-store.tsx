@@ -1,6 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { SYSTEM_IDS } from '../constants';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import { Action, CreateTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
@@ -149,7 +150,7 @@ export class TripleStore implements ITripleStore {
         (acc, action) => {
           switch (action.type) {
             case 'createTriple':
-              if (action.attributeId === 'name' && action.value.type === 'string') {
+              if (action.attributeId === SYSTEM_IDS.NAME && action.value.type === 'string') {
                 acc[action.entityId] = action.value.value;
               }
 
@@ -157,7 +158,7 @@ export class TripleStore implements ITripleStore {
             case 'deleteTriple':
               break;
             case 'editTriple':
-              if (action.after.attributeId === 'name' && action.after.value.type === 'string') {
+              if (action.after.attributeId === SYSTEM_IDS.NAME && action.after.value.type === 'string') {
                 acc[action.after.entityId] = action.after.value.value;
               }
 

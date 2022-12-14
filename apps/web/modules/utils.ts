@@ -1,4 +1,5 @@
 import { computed, ObservableComputed } from '@legendapp/state';
+import { SYSTEM_IDS } from './constants';
 import { EntityNames, Triple } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
@@ -32,12 +33,14 @@ export const navUtils = {
 };
 
 export function getEntityName(triples: Triple[]) {
-  const nameValue = triples.find(triple => triple.attributeId === 'name')?.value;
+  const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
   return nameValue?.type === 'string' ? nameValue.value : null;
 }
 
 export function getEntityDescription(triples: Triple[], entityNames: EntityNames) {
-  const descriptionEntityId = Object.entries(entityNames).find(([, attributeId]) => attributeId === 'Description')?.[0];
+  const descriptionEntityId = Object.entries(entityNames).find(
+    ([, attributeId]) => attributeId === SYSTEM_IDS.DESCRIPTION || attributeId === 'Description'
+  )?.[0];
 
   const descriptionValue = triples.find(t => t.attributeId === descriptionEntityId)?.value;
   return descriptionValue?.type === 'entity'
