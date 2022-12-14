@@ -85,9 +85,6 @@ export function EditableEntityPage({
   );
   const description = getEntityDescription(triples, entityNames);
   const name = getEntityName(triples) ?? serverName;
-  console.log('triples', triples);
-  console.log('description triple', descriptionTriple);
-  console.log('description', description);
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!nameTriple) {
