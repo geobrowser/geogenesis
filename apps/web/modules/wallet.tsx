@@ -1,8 +1,10 @@
-import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import styled from '@emotion/styled';
+import { ConnectButton, getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
 import { configOptions } from './config';
+import { TextButton } from '~/modules/design-system/text-button';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(configOptions.development.chainId),
@@ -83,3 +85,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     </WagmiConfig>
   );
 }
+
+export function GeoConnectButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, openAccountModal, openChainModal, openConnectModal, authenticationStatus, mounted }) => {
+        return <StyledConnectButton>Connect</StyledConnectButton>;
+      }}
+    </ConnectButton.Custom>
+  );
+}
+
+const StyledConnectButton = styled(TextButton)(props => ({
+  ...props.theme.typography.button,
+  color: props.theme.colors.ctaPrimary,
+}));

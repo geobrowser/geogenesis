@@ -41,7 +41,7 @@ const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   backgroundColor: 'white',
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  width: 155,
+  width: 273,
 }));
 
 const MotionContent = motion(StyledContent);
@@ -54,12 +54,15 @@ const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
 const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
   disabled: boolean;
   isLast: boolean;
+  isActive: boolean;
 }>(props => ({
   all: 'unset',
+  ...props.theme.typography.button,
   display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
+  justifyContent: 'space-between',
+  alignItems: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
+  color: props.theme.colors['grey-04'],
 
   userSelect: 'none',
 
@@ -80,22 +83,21 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
 }));
 
 interface Props {
-  value: React.ReactNode;
-  options: { label: string; disabled: boolean; onClick: () => void }[];
+  trigger: React.ReactNode;
+  options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
 
-export const Dropdown = ({ value, options }: Props) => {
+export const Dropdown = ({ trigger, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
     <DropdownPrimitive.Root onOpenChange={setOpen}>
       <StyledTrigger>
-        {value}
+        {trigger}
         <Spacer width={8} />
         <ChevronDownSmall color="ctaPrimary" />
       </StyledTrigger>
-      {/* <DropdownPrimitive.Portal> */}
       <AnimatePresence>
         {open && (
           <MotionContent
@@ -113,17 +115,15 @@ export const Dropdown = ({ value, options }: Props) => {
             <StyledGroup>
               {options.map((option, index) => (
                 <StyledItem
-                  key={option.label}
+                  key={`dropdown-item-${index}`}
                   disabled={option.disabled}
                   isLast={index === options.length - 1}
                   onClick={option.onClick}
                 >
-                  <Text variant="button" color={option.disabled ? 'grey-04' : 'text'}>
-                    {option.label}
-                  </Text>
+                  {option.label}
                   {option.disabled && (
-                    <Text variant="footnote" color="grey-04">
-                      You don’t have access yet
+                    <Text variant="smallButton" color="grey-04">
+                      {option.sublabel}
                     </Text>
                   )}
                 </StyledItem>
@@ -132,7 +132,6 @@ export const Dropdown = ({ value, options }: Props) => {
           </MotionContent>
         )}
       </AnimatePresence>
-      {/* </DropdownPrimitive.Portal> */}
     </DropdownPrimitive.Root>
   );
 };

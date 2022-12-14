@@ -1,7 +1,7 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
-import { Navbar } from '~/modules/components/navbar';
+import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 
 import 'modern-normalize';

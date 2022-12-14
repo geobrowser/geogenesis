@@ -3,16 +3,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useSpaces } from '~/modules/state/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
-import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '../constants';
-import { Breadcrumb } from '../design-system/breadcrumb';
-import { ChevronDownSmall } from '../design-system/icons/chevron-down-small';
-import { Discord } from '../design-system/icons/discord';
-import { GeoLogoLarge } from '../design-system/icons/geo-logo-large';
-import { Spacer } from '../design-system/spacer';
-import { usePageName } from '../state/use-page-name';
-import { Dictionary } from '../types';
-import { EditToggle } from './edit-toggle';
-import { ExternalLink } from './external-link';
+import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '~/modules/constants';
+import { Breadcrumb } from '~/modules/design-system/breadcrumb';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { Discord } from '~/modules/design-system/icons/discord';
+import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
+import { Spacer } from '~/modules/design-system/spacer';
+import { usePageName } from '~/modules/state/use-page-name';
+import { Dictionary } from '~/modules/types';
+import { NavbarActions } from './navbar-actions';
+import { ExternalLink } from '../external-link';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -173,7 +173,7 @@ export function Navbar() {
       <Row>
         <DiscordLink />
         <Spacer width={16} />
-        <EditToggle spaceId={components?.[2]?.split('?')[0] ?? ''} />
+        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </Row>
     </Header>
   );
