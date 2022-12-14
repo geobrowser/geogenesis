@@ -1,6 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
-import { ContractTransaction, Event, Signer } from 'ethers';
+import { BigNumber, ContractTransaction, Event, Signer, utils } from 'ethers';
 import { Account, Action, EntityNames, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
@@ -71,8 +71,6 @@ export interface INetwork {
 
 const UPLOAD_CHUNK_SIZE = 2000;
 
-// This service mocks a remote database. In the real implementation this will be read
-// from the subgraph
 export class Network implements INetwork {
   triplesAbortController = new AbortController();
   entitiesAbortController = new AbortController();
@@ -304,7 +302,22 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
 }
 
 async function addEntries(spaceContract: SpaceContract, uris: string[]) {
-  const mintTx = await spaceContract.addEntries(uris);
+  const gasResponse = await fetch('https://gasstation-mainnet.matic.network/v2');
+  const gasSuggestion: {
+    standard: {
+      maxPriorityFee: number;
+      maxFee: number;
+    };
+    estimatedBaseFee: number;
+  } = await gasResponse.json();
+
+  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.standard.maxFee.toFixed().toString(), 'gwei');
+  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.standard.maxPriorityFee.toFixed().toString(), 'gwei');
+
+  const mintTx = await spaceContract.addEntries(uris, {
+    maxFeePerGas: maxFeeAsGWei,
+    maxPriorityFeePerGas: maxPriorityFeeAsGWei,
+  });
   console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
