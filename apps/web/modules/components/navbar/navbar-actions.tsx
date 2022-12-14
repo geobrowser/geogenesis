@@ -1,17 +1,13 @@
 import styled from '@emotion/styled';
-import { useAccountModal, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import React, { useState } from 'react';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Edit } from '~/modules/design-system/icons/edit';
 import { Eye } from '~/modules/design-system/icons/eye';
-import { Link } from '~/modules/design-system/icons/link';
-import { Unlink } from '~/modules/design-system/icons/unlink';
 import { Spacer } from '~/modules/design-system/spacer';
-import { Text } from '~/modules/design-system/text';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
+import { GeoConnectButton } from '~/modules/wallet';
 
 interface Props {
   spaceId: string;
@@ -35,11 +31,8 @@ type DropdownOption = {
 };
 
 export function NavbarActions({ spaceId }: Props) {
-  const { address } = useAccount();
   const { isEditor } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
-  const { openConnectModal } = useConnectModal();
-  const { openAccountModal } = useAccountModal();
   const [value, setValue] = useState<DropdownOptionValue>('browse-mode');
 
   const options: DropdownOption[] = [
@@ -75,21 +68,10 @@ export function NavbarActions({ spaceId }: Props) {
       },
     },
     {
-      label: (
-        <LabelRow color="ctaPrimary">
-          {address ? <Unlink /> : <Link />}
-          <Spacer width={8} />
-          <Text color="ctaPrimary" variant="button">
-            {address ? 'Disconnect wallet' : 'Connect wallet'}
-          </Text>
-        </LabelRow>
-      ),
+      label: <GeoConnectButton />,
       value: 'connect-wallet',
       disabled: false,
-      onClick: () => {
-        address ? openAccountModal?.() : openConnectModal?.();
-        setValue(address ? 'browse-mode' : 'edit-mode');
-      },
+      onClick: () => {},
     },
   ];
 

@@ -6,7 +6,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { colors, ColorValue } from '~/modules/design-system/theme/colors';
 import { typography, TypographyName } from '~/modules/design-system/theme/typography';
-import { GeoConnectButton } from '~/modules/wallet';
 
 const Swatch = styled.div<{ color: ColorValue }>(props => ({
   width: 150,
@@ -59,6 +58,8 @@ export default function Dev() {
       <Link href="/spaces">
         <a>Spaces</a>
       </Link>
+
+      <ConnectButton />
 
       <VerticalBox>
         <HorizontalBox>

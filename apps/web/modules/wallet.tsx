@@ -1,8 +1,13 @@
-import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import styled from '@emotion/styled';
+import { ConnectButton, getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
 import { configOptions } from './config';
+import { Link } from './design-system/icons/link';
+import { Unlink } from './design-system/icons/unlink';
+import { Spacer } from './design-system/spacer';
+import { Text } from './design-system/text';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(configOptions.development.chainId),
@@ -81,5 +86,35 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     <WagmiConfig client={wagmiClient}>
       <RainbowKitProvider chains={chains}>{children}</RainbowKitProvider>
     </WagmiConfig>
+  );
+}
+
+const StyledConnectButton = styled.button(props => ({
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  color: props.theme.colors.ctaPrimary,
+  display: 'flex',
+  width: '100%',
+  alignItems: 'center',
+  padding: 0,
+  margin: 0,
+}));
+
+export function GeoConnectButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ openAccountModal, openConnectModal, account }) => {
+        return (
+          <StyledConnectButton onClick={account ? openAccountModal : openConnectModal}>
+            {account ? <Unlink /> : <Link />}
+            <Spacer width={8} />
+            <Text color="ctaPrimary" variant="button">
+              {account ? 'Disconnect wallet' : 'Connect wallet'}
+            </Text>
+          </StyledConnectButton>
+        );
+      }}
+    </ConnectButton.Custom>
   );
 }
