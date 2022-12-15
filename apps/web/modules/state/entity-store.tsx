@@ -3,7 +3,6 @@ import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../models/Triple';
-import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
 import {
   Action,
@@ -78,21 +77,21 @@ export class EntityStore implements IEntityStore {
             // list doesn't reorder.
             const indexOfSiblingTriples = triples.findIndex(t => t.attributeId === action.attributeId);
             if (indexOfSiblingTriples === -1) {
-              triples.push(createTripleWithId({ ...action, space: spaceId }));
+              triples.push(Triple.withId({ ...action, space: spaceId }));
               break;
             }
 
-            triples.splice(indexOfSiblingTriples, 0, createTripleWithId({ ...action, space: spaceId }));
+            triples.splice(indexOfSiblingTriples, 0, Triple.withId({ ...action, space: spaceId }));
             break;
           }
           case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: spaceId }).id);
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action, space: spaceId }).id);
             triples.splice(index, 1);
             break;
           }
           case 'editTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: spaceId }).id);
-            triples[index] = createTripleWithId({ ...action.after, space: spaceId });
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action.before, space: spaceId }).id);
+            triples[index] = Triple.withId({ ...action.after, space: spaceId });
             break;
           }
         }

@@ -9,7 +9,7 @@ import { Text } from '~/modules/design-system/text';
 import { createValueId } from '~/modules/services/create-id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { Triple as TripleType } from '~/modules/types';
-import { getEntityDescription, getEntityName, groupBy } from '~/modules/utils';
+import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
@@ -19,6 +19,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Action } from './Action';
 import { Triple } from '~/modules/models/Triple';
+import { Entity } from '~/modules/models/Entity';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -76,8 +77,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   const descriptionTriple = triples.find(
     t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeId === 'Description'
   );
-  const description = getEntityDescription(triples, {});
-  const name = getEntityName(triples) ?? serverName;
+  const description = Entity.description(triples);
+  const name = Entity.name(triples) ?? serverName;
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!nameTriple) {

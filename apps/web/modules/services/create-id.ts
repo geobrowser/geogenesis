@@ -1,5 +1,5 @@
 import { v4, validate, version } from 'uuid';
-import { Triple } from '../types';
+import { OmitStrict, Triple } from '../types';
 
 export function createEntityId() {
   return v4();
@@ -9,7 +9,7 @@ export function createEntityId() {
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
-export function createTripleId(triple: Triple): string {
+export function createTripleId(triple: OmitStrict<Triple, 'attributeName' | 'entityName' | 'id'>): string {
   return `${triple.space}:${triple.entityId}:${triple.attributeId}:${triple.value.id}`;
 }
 

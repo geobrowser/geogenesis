@@ -15,7 +15,7 @@ import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { useEditable } from '../state/use-editable';
-import { EntityNames, Triple } from '../types';
+import { Triple } from '../types';
 import { NavUtils } from '../utils';
 // import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';

@@ -12,8 +12,9 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
+import { Entity } from '~/modules/models/Entity';
 import { Triple } from '~/modules/types';
-import { getEntityDescription, groupBy, NavUtils, partition } from '~/modules/utils';
+import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
 import { LinkedEntityGroup } from './types';
 
@@ -57,7 +58,7 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples, id, name, space, linkedEntities }: Props) {
-  const description = getEntityDescription(triples, {});
+  const description = Entity.description(triples);
 
   return (
     <div>
@@ -264,7 +265,7 @@ function LinkedEntityCard({
     t => t.value.type === 'entity' && t.value.id === originalEntityId
   );
 
-  const description = getEntityDescription(entityGroup.triples, {});
+  const description = Entity.description(entityGroup.triples);
 
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { describe, expect, it } from 'vitest';
-import { createTripleWithId } from './create-id';
+import { Triple } from '../models/Triple';
 import { convertLegacyHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
 
 function readMockFile(filename: string) {
@@ -46,9 +46,11 @@ describe('Unique', () => {
   it('returns unique values', () => {
     expect(
       unique([
-        createTripleWithId({
+        Triple.withId({
           attributeId: 'name',
+          attributeName: 'Name',
           entityId: 'e1',
+          entityName: 'John',
           value: {
             type: 'string',
             value: 'John',
@@ -56,9 +58,11 @@ describe('Unique', () => {
           },
           space: 'space-1',
         }),
-        createTripleWithId({
+        Triple.withId({
           attributeId: 'name',
+          attributeName: 'Name',
           entityId: 'e1',
+          entityName: 'John',
           value: {
             type: 'string',
             value: 'John',
@@ -71,8 +75,9 @@ describe('Unique', () => {
       {
         id: 'space-1:e1:name:v2',
         attributeId: 'name',
+        attributeName: 'Name',
         entityId: 'e1',
-        entityName: null,
+        entityName: 'John',
         value: {
           type: 'string',
           value: 'John',

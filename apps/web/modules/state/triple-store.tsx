@@ -1,19 +1,19 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { createTripleWithId } from '../services/create-id';
+import { Triple } from '../models/Triple';
 import { INetwork } from '../services/network';
-import { Action, CreateTripleAction, FilterState, ReviewState, Triple } from '../types';
+import { Action, CreateTripleAction, FilterState, ReviewState, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
-  triples$: ObservableComputed<Triple[]>;
+  triples$: ObservableComputed<TripleType[]>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
-  create(triples: Triple[]): void;
+  create(triples: TripleType[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
@@ -30,7 +30,7 @@ interface ITripleStoreConfig {
   space: string;
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
-  initialTriples: Triple[];
+  initialTriples: TripleType[];
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -52,7 +52,7 @@ export function initialFilterState(): FilterState {
 export class TripleStore implements ITripleStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
-  triples$: ObservableComputed<Triple[]> = observable([]);
+  triples$: ObservableComputed<TripleType[]> = observable([]);
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
@@ -113,23 +113,23 @@ export class TripleStore implements ITripleStore {
 
       // We operate on the triples array in reverse so that we can `push` instead of `unshift`
       // when creating new triples, which is significantly faster.
-      const triples: Triple[] = [...networkTriples].reverse();
+      const triples: TripleType[] = [...networkTriples].reverse();
 
       // If our actions have modified one of the network triples, we don't want to add that
       // network triple to the triples array
       this.actions$.get().forEach(action => {
         switch (action.type) {
           case 'createTriple':
-            triples.push(createTripleWithId({ ...action, space: 's' }));
+            triples.push(Triple.withId({ ...action, space: 's' }));
             break;
           case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: 's' }).id);
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action, space: 's' }).id);
             triples.splice(index, 1);
             break;
           }
           case 'editTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: 's' }).id);
-            triples[index] = createTripleWithId({ ...action.after, space: 's' });
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action.before, space: 's' }).id);
+            triples[index] = Triple.withId({ ...action.after, space: 's' });
             break;
           }
         }
@@ -139,7 +139,7 @@ export class TripleStore implements ITripleStore {
     });
   }
 
-  create = (triples: Triple[]) => {
+  create = (triples: TripleType[]) => {
     const actions: CreateTripleAction[] = triples.map(triple => ({
       ...triple,
       type: 'createTriple',

@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
-import { EntityNames, Triple } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { Params } from '~/modules/params';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
 
