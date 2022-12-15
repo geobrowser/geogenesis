@@ -1,3 +1,13 @@
+type _Schema_
+  @fulltext(
+    name: "entitySearch"
+    language: en
+    algorithm: rank
+    include: [
+      { entity: "GeoEntity", fields: [{ name: "name" }, { name: "id" }] }
+    ]
+  )
+
 type Space @entity {
   id: ID!
 

@@ -207,7 +207,7 @@ export class Network implements INetwork {
       signal: this.entitiesAbortController.signal,
       body: JSON.stringify({
         query: `query {
-          geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
+          entitySearch(text: ${JSON.stringify(name)}) {
             id,
             name
           }
@@ -217,11 +217,11 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        geoEntities: { name: string | null; id: string }[];
+        entitySearch: { name: string | null; id: string }[];
       };
     } = await response.json();
 
-    return json.data.geoEntities;
+    return json.data.entitySearch;
   };
 
   fetchSpaces = async () => {
