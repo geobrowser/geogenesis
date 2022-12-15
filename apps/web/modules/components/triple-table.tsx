@@ -12,7 +12,7 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
-import { EntityNames, Triple, Value } from '../types';
+import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
@@ -23,7 +23,6 @@ declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     space: string;
-    entityNames: EntityNames;
     expandedCells: Record<string, boolean>;
   }
 }
@@ -90,7 +89,6 @@ const ChipCellContainer = styled.div({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
-    const entityNames = table.options?.meta?.entityNames || {};
 
     const initialCellData = getValue();
     // We need to keep and update the state of the cell normally
@@ -111,7 +109,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
 
-        const value = entityNames[entityId] ?? entityId;
+        const value = entityId;
 
         return (
           <CellContent
@@ -132,7 +130,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       }
       case 'attributeId': {
         const attributeId = cellData as string;
-        const value = entityNames[attributeId] ?? attributeId;
+        const value = attributeId;
         return <CellContent value={value} />;
       }
       case 'value': {
@@ -141,7 +139,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={NavUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
+              <Chip href={NavUtils.toEntity(space, value.id)}>{value.id}</Chip>
             </ChipCellContainer>
           );
         }
@@ -160,10 +158,9 @@ const EmptyTableText = styled.td(props => ({
 interface Props {
   triples: Triple[];
   space: string;
-  entityNames: EntityNames;
 }
 
-export const TripleTable = memo(function TripleTable({ triples, entityNames, space }: Props) {
+export const TripleTable = memo(function TripleTable({ triples, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
@@ -180,7 +177,6 @@ export const TripleTable = memo(function TripleTable({ triples, entityNames, spa
       },
     },
     meta: {
-      entityNames,
       expandedCells,
       space,
     },

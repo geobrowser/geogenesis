@@ -8,6 +8,7 @@ export const makeStubTriple = (name: string): Triple => {
     entityId: name,
     entityName: name,
     attributeId: 'name',
+    attributeName: 'Name',
     value: {
       type: 'string',
       value: name,

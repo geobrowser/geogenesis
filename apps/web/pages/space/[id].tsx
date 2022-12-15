@@ -14,24 +14,17 @@ interface Props {
   spaceName?: string;
   spaceImage: string | null;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
 }
 
-export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples, initialEntityNames }: Props) {
+export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples }: Props) {
   return (
     <div>
       <Head>
         <title>{spaceName ?? spaceId}</title>
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
-      <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
-        <Triples
-          spaceId={spaceId}
-          spaceName={spaceName}
-          spaceImage={spaceImage}
-          initialEntityNames={initialEntityNames}
-          initialTriples={initialTriples}
-        />
+      <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
+        <Triples spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} initialTriples={initialTriples} />
       </TripleStoreProvider>
     </div>
   );
@@ -63,7 +56,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceName,
       spaceImage,
       initialTriples: triples.triples,
-      initialEntityNames: triples.entityNames,
     },
   };
 };

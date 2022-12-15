@@ -1,6 +1,7 @@
 import { parse as parseCSV } from 'papaparse';
-import { Triple, Value } from '../types';
-import { BUILTIN_ENTITY_IDS, createEntityId, createTripleWithId, isValidEntityId } from './create-id';
+import { Triple } from '../models/Triple';
+import { Triple as TripleType, Value } from '../types';
+import { BUILTIN_ENTITY_IDS, createEntityId, isValidEntityId } from './create-id';
 
 export function readFileAsText(file: File) {
   return new Promise<string>(resolve => {
@@ -40,15 +41,15 @@ function createValueId(value: Value): string {
   }
 }
 
-function createTripleIdUnique(triple: Triple): string {
+function createTripleIdUnique(triple: TripleType): string {
   return `${triple.space}:${triple.entityId}:${triple.attributeId}:${createValueId(triple.value)}`;
 }
 
-export function unique(triples: Triple[]): Triple[] {
+export function unique(triples: TripleType[]): TripleType[] {
   return Object.values(Object.fromEntries(triples.map(triple => [createTripleIdUnique(triple), triple])));
 }
 
-export function eavRowsToTriples(rows: EavRow[], space: string, createId: CreateUuid = createEntityId): Triple[] {
+export function eavRowsToTriples(rows: EavRow[], space: string, createId: CreateUuid = createEntityId): TripleType[] {
   // Create a collection of all known entity ids
   const entityIds = new Set([
     ...BUILTIN_ENTITY_IDS,
@@ -59,7 +60,7 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
   const entityIdMap = Object.fromEntries([...entityIds].map(id => [id, isValidEntityId(id) ? id : createId(id)]));
 
   // Create triples, attempting to detect entity references
-  const triples = rows.map((row): Triple => {
+  const triples = rows.map((row): TripleType => {
     const [entityId, attributeId, value] = row;
 
     const mappedEntityId = entityIdMap[entityId];
@@ -68,10 +69,17 @@ export function eavRowsToTriples(rows: EavRow[], space: string, createId: Create
       // If the attribute is name we want to set the value to the name itself and not the mapped id
       // This is due to how we import references on other datasheets by name instead of id.
       value in entityIdMap && mappedAttributeId !== 'name'
-        ? { type: 'entity', id: entityIdMap[value] }
+        ? { type: 'entity', id: entityIdMap[value], name: '' }
         : { type: 'string', id: createId(value), value };
 
-    return createTripleWithId(space, mappedEntityId, mappedAttributeId, mappedValue);
+    return Triple.withId({
+      space,
+      entityId: mappedEntityId,
+      attributeId: mappedAttributeId,
+      value: mappedValue,
+      attributeName: '',
+      entityName: '',
+    });
   });
 
   return unique(triples);
@@ -1068,7 +1076,7 @@ export async function importCSVFile(
   files: File[],
   space: string,
   createId: CreateUuid = createEntityId
-): Promise<Triple[]> {
+): Promise<TripleType[]> {
   let eavs: EavRow[] = [];
 
   for (const file of files) {

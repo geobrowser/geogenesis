@@ -1,15 +1,13 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { SYSTEM_IDS } from '../constants';
 import { createTripleWithId } from '../services/create-id';
 import { INetwork } from '../services/network';
-import { Action, CreateTripleAction, EntityNames, FilterState, ReviewState, Triple } from '../types';
+import { Action, CreateTripleAction, FilterState, ReviewState, Triple } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
   actions$: Observable<Action[]>;
-  entityNames$: ObservableComputed<EntityNames>;
   triples$: ObservableComputed<Triple[]>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
@@ -33,7 +31,6 @@ interface ITripleStoreConfig {
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -55,7 +52,6 @@ export function initialFilterState(): FilterState {
 export class TripleStore implements ITripleStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
-  entityNames$: ObservableComputed<EntityNames> = observable<EntityNames>({});
   triples$: ObservableComputed<Triple[]> = observable([]);
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
@@ -67,14 +63,12 @@ export class TripleStore implements ITripleStore {
   constructor({
     api,
     space,
-    initialEntityNames,
     initialTriples,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
     this.triples$ = observable(initialTriples);
-    this.entityNames$ = observable(initialEntityNames);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
@@ -86,10 +80,10 @@ export class TripleStore implements ITripleStore {
     });
 
     const networkData$ = makeOptionalComputed(
-      { triples: [], entityNames: {}, hasNextPage: false },
+      { triples: [], hasNextPage: false },
       computed(async () => {
         try {
-          const { triples, entityNames } = await this.api.fetchTriples({
+          const { triples } = await this.api.fetchTriples({
             query: this.query$.get(),
             space: this.space,
             skip: this.pageNumber$.get() * pageSize,
@@ -97,7 +91,7 @@ export class TripleStore implements ITripleStore {
             filter: this.filterState$.get(),
           });
 
-          return { triples: triples.slice(0, pageSize), entityNames, hasNextPage: triples.length > pageSize };
+          return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -106,7 +100,7 @@ export class TripleStore implements ITripleStore {
 
           // TODO: Real error handling
 
-          return { triples: [], entityNames: {}, hasNextPage: false };
+          return { triples: [], hasNextPage: false };
         }
       })
     );
@@ -142,35 +136,6 @@ export class TripleStore implements ITripleStore {
       });
 
       return triples.reverse();
-    });
-
-    this.entityNames$ = computed(() => {
-      const { entityNames: networkEntityNames } = networkData$.get();
-      const entityNames = this.actions$.get().reduce(
-        (acc, action) => {
-          switch (action.type) {
-            case 'createTriple':
-              if (action.attributeId === SYSTEM_IDS.NAME && action.value.type === 'string') {
-                acc[action.entityId] = action.value.value;
-              }
-
-              break;
-            case 'deleteTriple':
-              break;
-            case 'editTriple':
-              if (action.after.attributeId === SYSTEM_IDS.NAME && action.after.value.type === 'string') {
-                acc[action.after.entityId] = action.after.value.value;
-              }
-
-              break;
-          }
-
-          return acc;
-        },
-        { ...networkEntityNames } as EntityNames
-      );
-
-      return entityNames;
     });
   }
 

@@ -60,16 +60,9 @@ interface Props {
   spaceName?: string;
   spaceImage: string | null;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
 }
 
-export function Triples({
-  spaceId,
-  initialEntityNames,
-  initialTriples,
-  spaceImage,
-  spaceName = ZERO_WIDTH_SPACE,
-}: Props) {
+export function Triples({ spaceId, initialTriples, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const { isEditor, isAdmin } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -167,7 +160,6 @@ export function Triples({
         <TripleTable
           space={spaceId}
           triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
-          entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
         />
 
         <Spacer height={12} />

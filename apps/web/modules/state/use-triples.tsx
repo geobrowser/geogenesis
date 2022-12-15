@@ -9,7 +9,6 @@ export const useTriples = () => {
     triples$,
     query$,
     actions$,
-    entityNames$,
     setQuery,
     setPageNumber,
     setNextPage,
@@ -22,7 +21,6 @@ export const useTriples = () => {
   } = useTripleStore();
   const triples = useSelector(triples$);
   const actions = useSelector(actions$);
-  const entityNames = useSelector(entityNames$);
   const pageNumber = useSelector(pageNumber$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const hasNextPage = useSelector(hasNextPage$);
@@ -32,7 +30,6 @@ export const useTriples = () => {
   return {
     triples,
     actions,
-    entityNames,
     create,
     publish,
     query,
