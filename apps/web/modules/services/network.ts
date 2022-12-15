@@ -210,9 +210,7 @@ export class Network implements INetwork {
       signal: this.entitiesAbortController.signal,
       body: JSON.stringify({
         query: `query {
-          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(
-            name
-          )}}, orderBy: name, orderDirection: asc) {
+          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
             id,
             name
           }
@@ -232,30 +230,8 @@ export class Network implements INetwork {
     } = await response.json();
 
     const { startEntities, containEntities } = json.data;
-    const startEntityIds = startEntities.map(entity => entity.id);
 
-    const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
-      if (a === null && b === null) {
-        return 0;
-      }
-      if (a === null) {
-        return 1;
-      }
-      if (b === null) {
-        return -1;
-      }
-      if (a.length === b.length) {
-        return a.localeCompare(b);
-      }
-      return a.length - b.length;
-    };
-
-    const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-    const secondaryResults = containEntities
-      .filter(entity => !startEntityIds.includes(entity.id))
-      .sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-
-    return [...primaryResults, ...secondaryResults];
+    return sortSearchResultsByRelevance(startEntities, containEntities);
   };
 
   fetchSpaces = async () => {
@@ -328,6 +304,36 @@ export class Network implements INetwork {
 
     return spaces;
   };
+}
+
+const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
+  if (a === null && b === null) {
+    return 0;
+  }
+  if (a === null) {
+    return 1;
+  }
+  if (b === null) {
+    return -1;
+  }
+  if (a.length === b.length) {
+    return a.localeCompare(b);
+  }
+  return a.length - b.length;
+};
+
+function sortSearchResultsByRelevance(
+  startEntities: { id: string; name: string | null }[],
+  containEntities: { id: string; name: string | null }[]
+) {
+  const startEntityIds = startEntities.map(entity => entity.id);
+
+  const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
+  const secondaryResults = containEntities
+    .filter(entity => !startEntityIds.includes(entity.id))
+    .sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
+
+  return [...primaryResults, ...secondaryResults];
 }
 
 async function findEvents(tx: ContractTransaction, name: string): Promise<Event[]> {
