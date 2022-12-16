@@ -14,7 +14,6 @@ import { EntityNames, Triple } from '../types';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import { PageContainer, PageNumberContainer } from './table/styles';
-import { TableHeader } from './table/table-header';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 
@@ -51,8 +50,6 @@ export function Triples({
 
   return (
     <PageContainer>
-      <TableHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
-
       <Spacer height={40} />
 
       {showPredefinedQueries && (

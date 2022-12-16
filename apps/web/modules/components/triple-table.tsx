@@ -58,7 +58,7 @@ const Table = styled.table(props => ({
   backgroundColor: props.theme.colors.white,
 }));
 
-const TableHeader = styled.th<{ width: number }>(props => ({
+const SpaceHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
   textAlign: 'left',
@@ -193,9 +193,9 @@ export const TripleTable = memo(function TripleTable({ triples, entityNames, spa
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <TableHeader width={header.column.getSize()} key={header.id}>
+                <SpaceHeader width={header.column.getSize()} key={header.id}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHeader>
+                </SpaceHeader>
               ))}
             </tr>
           ))}

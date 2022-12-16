@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 
-export const TableHeaderContainer = styled.div({
+export const SpaceHeaderContainer = styled.div({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
