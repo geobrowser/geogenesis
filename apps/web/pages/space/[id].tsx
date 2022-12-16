@@ -1,5 +1,6 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { Entities } from '~/modules/components/entities/entities';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { SYSTEM_IDS } from '~/modules/constants';
@@ -8,6 +9,7 @@ import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
+import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { EntityNames, Triple } from '~/modules/types';
 
 interface Props {
@@ -16,6 +18,7 @@ interface Props {
   spaceImage: string | null;
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
+  types: Triple[];
 }
 
 export default function EntitiesPage({
@@ -38,6 +41,16 @@ export default function EntitiesPage({
 
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
+
+      <TripleStoreProvider>
+        <Entities
+          types={types}
+          spaceId={spaceId}
+          initialTriples={initialTriples}
+          spaceName={spaceName}
+          initialEntityNames={initialEntityNames}
+        />
+      </TripleStoreProvider>
     </div>
   );
 }
@@ -84,7 +97,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceImage,
       initialTriples: triples.triples,
       initialEntityNames: triples.entityNames,
-      types,
+      types: types.triples,
     },
   };
 };
