@@ -1,14 +1,14 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
-import { IconButton } from '../design-system/button';
-import { CheckCloseSmall } from '../design-system/icons/check-close-small';
-import { Search } from '../design-system/icons/search';
-import { Input } from '../design-system/input';
-import { Spacer } from '../design-system/spacer';
-import { useTriples } from '../state/use-triples';
-import { FilterClause } from '../types';
-import { FilterDialog } from './filter/dialog';
+import { IconButton } from '../../design-system/button';
+import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
+import { Search } from '../../design-system/icons/search';
+import { Input } from '../../design-system/input';
+import { Spacer } from '../../design-system/spacer';
+import { useTriples } from '../../state/use-triples';
+import { FilterClause } from '../../types';
+import { FilterDialog } from '../filter/dialog';
 
 const SearchIconContainer = styled.div(props => ({
   position: 'absolute',

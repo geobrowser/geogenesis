@@ -8,12 +8,12 @@ import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 // import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/use-triples';
-import { ZERO_WIDTH_SPACE } from '../constants';
-import { EntityNames, Triple } from '../types';
+import { ZERO_WIDTH_SPACE } from '../../constants';
+import { EntityNames, Triple } from '../../types';
 // import { getFilesFromFileList } from '../utils';
-import { PREDEFINED_QUERIES } from './data/predefined-queries';
-import { PredefinedQueriesContainer } from './predefined-queries/container';
-import { PageContainer, PageNumberContainer } from './table/styles';
+import { PREDEFINED_QUERIES } from '../data/predefined-queries';
+import { PredefinedQueriesContainer } from '../predefined-queries/container';
+import { PageContainer, PageNumberContainer } from '../table/styles';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 
