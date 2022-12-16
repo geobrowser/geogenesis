@@ -22,13 +22,13 @@ const NavbarContainer = styled.div({
 });
 
 export const SpaceNavbar = ({ spaceId }: Props) => {
-  const { query } = useRouter();
+  const { route, query } = useRouter();
 
   const { isEditor, isAdmin } = useAccessControl(spaceId);
   const { editable } = useEditable();
 
-  const tabEntitiesSelected = !!query.tabOne;
-  const tabTriplesSelected = !!query.tabTwo;
+  const tabEntitiesSelected = !route.includes('/triples');
+  const tabTriplesSelected = route.includes('/triples');
 
   const tabs = [
     {
