@@ -33,12 +33,12 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
   const tabs = [
     {
       name: 'Entities',
-      href: `/space/${query.id}?tabOne=true`,
+      href: `/space/${spaceId}`,
       selected: tabEntitiesSelected,
     },
     {
       name: 'Triples',
-      href: `/space/${query.id}?tabTwo=true`,
+      href: `/space/${query.id}/triples`,
       selected: tabTriplesSelected,
     },
   ];

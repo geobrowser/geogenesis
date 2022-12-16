@@ -28,18 +28,11 @@ import { TripleTable } from './triple-table';
 interface Props {
   spaceId: string;
   spaceName?: string;
-  spaceImage: string | null;
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
 }
 
-export function Triples({
-  spaceId,
-  initialEntityNames,
-  initialTriples,
-  spaceImage,
-  spaceName = ZERO_WIDTH_SPACE,
-}: Props) {
+export function Triples({ spaceId, initialEntityNames, initialTriples, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
 
@@ -50,7 +43,7 @@ export function Triples({
 
   return (
     <PageContainer>
-      <Spacer height={40} />
+      <Spacer height={20} />
 
       {showPredefinedQueries && (
         <>

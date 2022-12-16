@@ -2,12 +2,14 @@ import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
+import { Triples } from '~/modules/components/triples';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
+import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
 import { EntityNames, Triple } from '~/modules/types';
 
 interface Props {
@@ -29,6 +31,15 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
 
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
+
+      <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
+        <Triples
+          spaceId={spaceId}
+          spaceName={spaceName}
+          initialEntityNames={initialEntityNames}
+          initialTriples={initialTriples}
+        />
+      </TripleStoreProvider>
     </div>
   );
 }
