@@ -1,10 +1,7 @@
 import { useTheme } from '@emotion/react';
-import styled from '@emotion/styled';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
-import Link from 'next/link';
 import { useState } from 'react';
-import { Button, SquareButton } from '~/modules/design-system/button';
+import { SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -16,36 +13,13 @@ import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { useEditable } from '../state/use-editable';
 import { EntityNames, Triple } from '../types';
-import { NavUtils } from '../utils';
 // import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
+import { PageContainer, PageNumberContainer } from './table/styles';
+import { TableHeader } from './table/table-header';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
-
-const TableHeader = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
-});
-
-const SpaceInfo = styled.div(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.space * 5,
-}));
-
-const PageContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-});
-
-const Actions = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-});
 
 // const FileImport = styled.input({
 //   margin: '0',
@@ -83,58 +57,7 @@ export function Triples({
 
   return (
     <PageContainer>
-      <TableHeader>
-        <SpaceInfo>
-          <SpaceImageContainer>
-            <Image
-              objectFit="cover"
-              layout="fill"
-              width={theme.space * 14}
-              height={theme.space * 14}
-              src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
-              alt={`Cover image for ${spaceName}`}
-            />
-          </SpaceImageContainer>
-
-          <Text flex="0 0 auto" variant="mainPage" as="h1">
-            {spaceName}
-          </Text>
-        </SpaceInfo>
-
-        <Actions>
-          {(isEditor || isAdmin) && editable && (
-            <TableHeader>
-              {isAdmin && (
-                <Link href={`/space/${spaceId}/access-control`}>
-                  <Button variant="secondary">Devvy Admin</Button>
-                </Link>
-              )}
-              {isAdmin && isEditor && <Spacer width={8} />}
-              {isEditor && (
-                <>
-                  {/* <Button variant="secondary" icon="create">
-                    Import
-                    <FileImport
-                      type="file"
-                      accept=".csv"
-                      multiple={true}
-                      onChange={event => {
-                        onImport(event.target.files ?? new FileList());
-                      }}
-                    />
-                  </Button> */}
-                  <Spacer width={12} />
-                  <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-                    <a>
-                      <Button icon="create">New entity</Button>
-                    </a>
-                  </Link>
-                </>
-              )}
-            </TableHeader>
-          )}
-        </Actions>
-      </TableHeader>
+      <TableHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
 
       <Spacer height={40} />
 
@@ -212,13 +135,6 @@ export function Triples({
   );
 }
 
-const PageNumberContainer = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  alignSelf: 'flex-end',
-});
-
 function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
   return (
     <SquareButton isActive={isActive} onClick={onClick}>
@@ -265,13 +181,3 @@ function NextButton({ onClick, isDisabled }: PageButtonProps) {
     </TextButton>
   );
 }
-
-const SpaceImageContainer = styled.div(props => ({
-  // this is required for next/image
-  // https://nextjs.org/docs/api-reference/next/image#fill
-  position: 'relative',
-  overflow: 'hidden',
-  borderRadius: props.theme.radius * 2,
-  width: props.theme.space * 14,
-  height: props.theme.space * 14,
-}));
