@@ -1,4 +1,3 @@
-import { useTheme } from '@emotion/react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
@@ -8,10 +7,8 @@ import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 // import { importCSVFile } from '~/modules/services/import';
-import { useAccessControl } from '~/modules/state/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
-import { useEditable } from '../state/use-editable';
 import { EntityNames, Triple } from '../types';
 // import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
@@ -45,10 +42,7 @@ export function Triples({
   spaceName = ZERO_WIDTH_SPACE,
 }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
-  const { isEditor, isAdmin } = useAccessControl(spaceId);
-  const { editable } = useEditable();
   const tripleStore = useTriples();
-  const theme = useTheme();
 
   // const onImport = async (files: FileList) => {
   //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);

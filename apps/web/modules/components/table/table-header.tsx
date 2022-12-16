@@ -52,7 +52,7 @@ export function TableHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
 
       <Actions>
         {(isEditor || isAdmin) && editable && (
-          <TableHeader>
+          <TableHeaderContainer>
             {isAdmin && (
               <Link href={`/space/${spaceId}/access-control`}>
                 <Button variant="secondary">Devvy Admin</Button>
@@ -80,7 +80,7 @@ export function TableHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
                 </Link>
               </>
             )}
-          </TableHeader>
+          </TableHeaderContainer>
         )}
       </Actions>
     </TableHeaderContainer>
