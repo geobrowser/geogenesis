@@ -9,13 +9,13 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useEffect, useState } from 'react';
-import { Chip } from '../../design-system/chip';
-import { Text } from '../../design-system/text';
-import { EntityNames, Triple, Value } from '../../types';
-import { NavUtils } from '../../utils';
-import { TableCell } from '../table/cell';
-import { CellContent } from '../table/cell-content';
-import { ChipCellContainer, Container, EmptyTableText, SpaceHeader, Table, TableRow } from '../table/styles';
+import { Chip } from '../design-system/chip';
+import { Text } from '../design-system/text';
+import { EntityNames, Triple, Value } from '../types';
+import { NavUtils } from '../utils';
+import { TableCell } from './table/cell';
+import { CellContent } from './table/cell-content';
+import { ChipCellContainer, Container, EmptyTableText, SpaceHeader, Table, TableRow } from './table/styles';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
