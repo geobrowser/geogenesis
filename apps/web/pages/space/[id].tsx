@@ -18,7 +18,16 @@ interface Props {
   initialEntityNames: EntityNames;
 }
 
-export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples, initialEntityNames }: Props) {
+export default function EntitiesPage({
+  spaceId,
+  spaceName,
+  spaceImage,
+  initialTriples,
+  initialEntityNames,
+  types,
+}: Props) {
+  console.log(types);
+
   return (
     <div>
       <Head>
@@ -45,6 +54,21 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
+
+  const types = await network.fetchTriples({
+    query: initialParams.query,
+    space: spaceId,
+    first: DEFAULT_PAGE_SIZE,
+    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
+      {
+        field: 'linked-to',
+        value: SYSTEM_IDS.TYPE_VALUE,
+      },
+    ],
+  });
+
   const triples = await network.fetchTriples({
     query: initialParams.query,
     space: spaceId,
@@ -60,6 +84,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceImage,
       initialTriples: triples.triples,
       initialEntityNames: triples.entityNames,
+      types,
     },
   };
 };
