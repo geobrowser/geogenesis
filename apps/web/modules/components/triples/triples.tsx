@@ -1,11 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { SquareButton } from '~/modules/design-system/button';
-import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { TextButton } from '~/modules/design-system/text-button';
-import { ColorName } from '~/modules/design-system/theme/colors';
 // import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../../constants';
@@ -14,6 +10,7 @@ import { EntityNames, Triple } from '../../types';
 import { PREDEFINED_QUERIES } from '../data/predefined-queries';
 import { PredefinedQueriesContainer } from '../predefined-queries/container';
 import { PageContainer, PageNumberContainer } from '../table/styles';
+import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 
@@ -116,52 +113,5 @@ export function Triples({ spaceId, initialEntityNames, initialTriples, spaceName
         </PageNumberContainer>
       </motion.div>
     </PageContainer>
-  );
-}
-
-function PageNumber({ number, onClick, isActive }: { number: number; onClick?: () => void; isActive?: boolean }) {
-  return (
-    <SquareButton isActive={isActive} onClick={onClick}>
-      <Text variant="smallButton">{number}</Text>
-    </SquareButton>
-  );
-}
-
-interface PageButtonProps {
-  onClick: () => void;
-  isDisabled: boolean;
-}
-
-function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
-  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
-
-  return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
-      <LeftArrowLong color={color} />
-      <Spacer width={8} />
-      <Text color={color} variant="smallButton">
-        Previous
-      </Text>
-    </TextButton>
-  );
-}
-
-function NextButton({ onClick, isDisabled }: PageButtonProps) {
-  const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
-
-  return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
-      <Text color={color} variant="smallButton">
-        Next
-      </Text>
-      <Spacer width={8} />
-      <span
-        style={{
-          transform: 'rotate(180deg)',
-        }}
-      >
-        <LeftArrowLong color={color} />
-      </span>
-    </TextButton>
   );
 }
