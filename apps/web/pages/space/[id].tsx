@@ -27,9 +27,11 @@ export default function EntitiesPage({
   spaceImage,
   initialTriples,
   initialEntityNames,
+  initialColumns,
+  initialType,
   types,
 }: Props) {
-  console.log(types);
+  console.log(initialColumns, initialType);
 
   return (
     <div>
@@ -82,6 +84,20 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
+  // TODO: this is a hack to get the initial type to be a user-defined type and not a system type
+  const initialType = types.triples[1];
+
+  const initialColumns = await network.fetchTriples({
+    query: initialParams.query,
+    space: spaceId,
+    first: DEFAULT_PAGE_SIZE,
+    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: initialType.entityId },
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPE_ATTRIBUTES },
+    ],
+  });
+
   const triples = await network.fetchTriples({
     query: initialParams.query,
     space: spaceId,
@@ -90,13 +106,20 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     filter: initialParams.filterState,
   });
 
+  const initialEntityNames = {
+    ...triples.entityNames,
+    ...types.entityNames,
+  };
+
   return {
     props: {
       spaceId,
       spaceName,
       spaceImage,
+      initialType: initialType.entityId,
+      initialColumns: initialColumns.triples,
       initialTriples: triples.triples,
-      initialEntityNames: triples.entityNames,
+      initialEntityNames,
       types: types.triples,
     },
   };

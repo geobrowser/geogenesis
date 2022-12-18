@@ -3,6 +3,7 @@ export const SYSTEM_IDS = {
   DESCRIPTION: 'be5564ac-3953-4127-800a-9f9f22f2c610',
   NAME: 'name',
   TYPE: 'type',
+  TYPE_ATTRIBUTES: '01412f83-8189-4ab1-8365-65c7fd358cc1',
   TYPE_VALUE: 'd7ab4092-0ab5-441e-88c3-5c27952de773',
   SPACE: 'space',
   ATTRIBUTE: 'attribute',
