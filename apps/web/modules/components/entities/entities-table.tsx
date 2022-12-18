@@ -38,11 +38,19 @@ const triplesToColumns = (triples: Triple[], entityNames: EntityNames) => {
       This would allow us to use the columnHelper.accessor function to easily get the value rather than having to
       do a find on the array.
     */
-    return columnHelper.accessor(row => row.triples.find(triple => triple.attributeId === triple.entityId)?.value, {
-      id: triple.entityId,
-      header: () => <Text variant="smallTitle">{entityNames[triple.entityId] || triple.entityName}</Text>,
-      size: COLUMN_SIZE,
-    });
+    return columnHelper.accessor(
+      row => {
+        console.log(row);
+        return 'Hello';
+        debugger;
+        return row.triples.find(triple => triple.attributeId === triple.entityId)?.value;
+      },
+      {
+        id: triple.entityId,
+        header: () => <Text variant="smallTitle">{entityNames[triple.entityId] || triple.entityName}</Text>,
+        size: COLUMN_SIZE,
+      }
+    );
   });
 
   return columns;
@@ -176,12 +184,12 @@ interface Props {
   entityNames: EntityNames;
 }
 
-export const EntitiesTable = memo(function EntitiesTable({ triples, entityNames, space }: Props) {
+export const EntitiesTable = memo(function EntitiesTable({ triples, entityNames, space, initialColumns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
     data: triples,
-    columns: triplesToColumns(triples, entityNames),
+    columns: triplesToColumns(initialColumns, entityNames),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

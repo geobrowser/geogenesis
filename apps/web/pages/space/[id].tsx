@@ -1,6 +1,5 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { Entities } from '~/modules/components/entities/entities';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { SYSTEM_IDS } from '~/modules/constants';
@@ -29,10 +28,10 @@ export default function EntitiesPage({
   initialEntityNames,
   initialColumns,
   initialType,
-  initialRowData,
+  initialRows,
   types,
 }: Props) {
-  console.log({ initialType, initialColumns, initialRowData });
+  console.log({ initialType, initialColumns, initialRows, initialEntityNames });
 
   return (
     <div>
@@ -46,13 +45,14 @@ export default function EntitiesPage({
       <SpaceNavbar spaceId={spaceId} />
 
       <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
-        <Entities
+        {/* <Entities
           types={types}
           spaceId={spaceId}
-          initialTriples={initialTriples}
+          initialColumns={initialColumns}
+          initialTriples={initialRows}
           spaceName={spaceName}
           initialEntityNames={initialEntityNames}
-        />
+        /> */}
       </TripleStoreProvider>
     </div>
   );
@@ -88,7 +88,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   // TODO: this is a hack to get the initial type to be a user-defined type and not a system type
   const initialType = types.triples[1];
 
-  const initialColumns = await network.fetchTriples({
+  const columnsTriples = await network.fetchTriples({
     query: initialParams.query,
     space: spaceId,
     first: DEFAULT_PAGE_SIZE,
@@ -99,7 +99,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
-  const initialEntities = await network.fetchTriples({
+  const typedTriples = await network.fetchTriples({
     query: initialParams.query,
     space: spaceId,
     first: DEFAULT_PAGE_SIZE,
@@ -110,8 +110,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
-  const initialRowData = await Promise.all(
-    initialEntities.triples.map(triple =>
+  const rowTriples = await Promise.all(
+    typedTriples.triples.map(triple =>
       new Network(storage, config.subgraph).fetchTriples({
         space: spaceId,
         query: '',
@@ -122,7 +122,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     )
   );
 
-  const initialRowDataEntityNames = initialRowData.reduce((acc, { entityNames }) => {
+  const rowTriplesEntityNames = rowTriples.reduce((acc, { entityNames }) => {
     return { ...acc, ...entityNames };
   }, {} as EntityNames);
 
@@ -137,8 +137,22 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialEntityNames = {
     ...triples.entityNames,
     ...types.entityNames,
-    ...initialRowDataEntityNames,
+    ...rowTriplesEntityNames,
   };
+
+  const initialColumns = columnsTriples.triples.map(triple => ({
+    label: initialEntityNames[triple.value.id],
+    value: triple.value.id,
+  }));
+
+  const initialRows = rowTriples.map(row => {
+    return row.triples.map(triple => {
+      return {
+        label: initialEntityNames[triple.value.id] || triple.value.id,
+        value: triple.value.id,
+      };
+    });
+  });
 
   return {
     props: {
@@ -146,11 +160,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceName,
       spaceImage,
       initialType: initialType.entityId,
-      initialColumns: initialColumns.triples,
+      initialColumns,
       initialTriples: triples.triples,
       initialEntityNames,
       types: types.triples,
-      initialRowData,
+      initialRows,
     },
   };
 };
