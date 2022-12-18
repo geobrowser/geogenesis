@@ -29,9 +29,10 @@ export default function EntitiesPage({
   initialEntityNames,
   initialColumns,
   initialType,
+  initialRowData,
   types,
 }: Props) {
-  console.log(initialColumns, initialType);
+  console.log({ initialType, initialColumns, initialRowData });
 
   return (
     <div>
@@ -98,6 +99,33 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
+  const initialEntities = await network.fetchTriples({
+    query: initialParams.query,
+    space: spaceId,
+    first: DEFAULT_PAGE_SIZE,
+    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
+      { field: 'linked-to', value: initialType.entityId },
+    ],
+  });
+
+  const initialRowData = await Promise.all(
+    initialEntities.triples.map(triple =>
+      new Network(storage, config.subgraph).fetchTriples({
+        space: spaceId,
+        query: '',
+        skip: 0,
+        first: 100,
+        filter: [{ field: 'entity-id', value: triple.entityId }],
+      })
+    )
+  );
+
+  const initialRowDataEntityNames = initialRowData.reduce((acc, { entityNames }) => {
+    return { ...acc, ...entityNames };
+  }, {} as EntityNames);
+
   const triples = await network.fetchTriples({
     query: initialParams.query,
     space: spaceId,
@@ -109,6 +137,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialEntityNames = {
     ...triples.entityNames,
     ...types.entityNames,
+    ...initialRowDataEntityNames,
   };
 
   return {
@@ -121,6 +150,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialTriples: triples.triples,
       initialEntityNames,
       types: types.triples,
+      initialRowData,
     },
   };
 };

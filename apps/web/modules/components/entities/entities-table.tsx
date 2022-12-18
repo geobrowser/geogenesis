@@ -14,6 +14,7 @@ import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
 import { EntityNames, Triple, Value } from '../../types';
 import { NavUtils } from '../../utils';
+import { LinkedEntityGroup } from '../entity/types';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
 
@@ -28,28 +29,45 @@ declare module '@tanstack/react-table' {
   }
 }
 
-const columnHelper = createColumnHelper<Triple>();
+const columnHelper = createColumnHelper<LinkedEntityGroup>();
+
+const triplesToColumns = (triples: Triple[], entityNames: EntityNames) => {
+  const columns = triples.map(triple => {
+    /*
+      Might be worth restructuring EntityGroup to be have a map of triples by attributeId instead of an array.
+      This would allow us to use the columnHelper.accessor function to easily get the value rather than having to
+      do a find on the array.
+    */
+    return columnHelper.accessor(row => row.triples.find(triple => triple.attributeId === triple.entityId)?.value, {
+      id: triple.entityId,
+      header: () => <Text variant="smallTitle">{entityNames[triple.entityId] || triple.entityName}</Text>,
+      size: COLUMN_SIZE,
+    });
+  });
+
+  return columns;
+};
 
 // Table width, minus cell borders
 const COLUMN_SIZE = 1200 / 3;
 
-const columns = [
-  columnHelper.accessor(row => row.entityId, {
-    id: 'entityId',
-    header: () => <Text variant="smallTitle">Entity</Text>,
-    size: COLUMN_SIZE,
-  }),
-  columnHelper.accessor(row => row.attributeId, {
-    id: 'attributeId',
-    header: () => <Text variant="smallTitle">Attribute</Text>,
-    size: COLUMN_SIZE,
-  }),
-  columnHelper.accessor(row => row.value, {
-    id: 'value',
-    header: () => <Text variant="smallTitle">Value</Text>,
-    size: COLUMN_SIZE,
-  }),
-];
+// const columns = [
+//   columnHelper.accessor(row => row.entityId, {
+//     id: 'entityId',
+//     header: () => <Text variant="smallTitle">Entity</Text>,
+//     size: COLUMN_SIZE,
+//   }),
+//   columnHelper.accessor(row => row.attributeId, {
+//     id: 'attributeId',
+//     header: () => <Text variant="smallTitle">Attribute</Text>,
+//     size: COLUMN_SIZE,
+//   }),
+//   columnHelper.accessor(row => row.value, {
+//     id: 'value',
+//     header: () => <Text variant="smallTitle">Value</Text>,
+//     size: COLUMN_SIZE,
+//   }),
+// ];
 
 const Table = styled.table(props => ({
   width: '100%',
@@ -163,7 +181,7 @@ export const EntitiesTable = memo(function EntitiesTable({ triples, entityNames,
 
   const table = useReactTable({
     data: triples,
-    columns,
+    columns: triplesToColumns(triples, entityNames),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
