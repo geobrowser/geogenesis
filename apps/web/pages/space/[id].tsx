@@ -42,7 +42,7 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TripleStoreProvider>
+      <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
         <Entities
           types={types}
           spaceId={spaceId}
