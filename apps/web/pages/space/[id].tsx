@@ -1,5 +1,6 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { Entities } from '~/modules/components/entities/entities';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { SYSTEM_IDS } from '~/modules/constants';
@@ -19,6 +20,13 @@ interface Props {
   initialEntityNames: EntityNames;
   types: Triple[];
 }
+
+interface Column {
+  value: string; // attribute ID
+  label: string;
+}
+
+type Row = Record<string, Triple[]>;
 
 export default function EntitiesPage({
   spaceId,
@@ -46,14 +54,14 @@ export default function EntitiesPage({
       <SpaceNavbar spaceId={spaceId} />
 
       <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
-        {/* <Entities
+        <Entities
           types={types}
           spaceId={spaceId}
           initialColumns={initialColumns}
-          initialTriples={initialRows}
+          initialRows={initialRows}
           spaceName={spaceName}
           initialEntityNames={initialEntityNames}
-        /> */}
+        />
       </TripleStoreProvider>
     </div>
   );

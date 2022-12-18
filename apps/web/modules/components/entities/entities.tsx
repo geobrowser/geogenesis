@@ -32,7 +32,7 @@ interface Props {
   types: Triple[];
 }
 
-export function Entities({ spaceId, initialEntityNames, initialTriples, types }: Props) {
+export function Entities({ spaceId, initialEntityNames, initialTriples, initialRows, types }: Props) {
   const [selectedType, setSelectedType] = useState<Triple>(types[0]);
 
   const tripleStore = useTriples();
@@ -63,7 +63,8 @@ export function Entities({ spaceId, initialEntityNames, initialTriples, types }:
 
         <EntitiesTable
           space={spaceId}
-          triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
+          rows={initialRows}
+          // triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
           entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
         />
 

@@ -178,18 +178,23 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   },
 };
 
-interface Props {
+interface Row {
+  id: string;
   triples: Triple[];
-  space: string;
-  entityNames: EntityNames;
 }
 
-export const EntitiesTable = memo(function EntitiesTable({ triples, entityNames, space, initialColumns }: Props) {
+interface Props {
+  space: string;
+  entityNames: EntityNames;
+  rows: Row[];
+}
+
+export const EntitiesTable = memo(function EntitiesTable({ rows, entityNames, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
-    data: triples,
-    columns: triplesToColumns(initialColumns, entityNames),
+    data: rows,
+    columns: triplesToColumns(columns, entityNames),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
