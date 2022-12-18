@@ -28,10 +28,11 @@ export default function EntitiesPage({
   initialEntityNames,
   initialColumns,
   initialType,
+  rowTriples,
   initialRows,
   types,
 }: Props) {
-  console.log({ initialType, initialColumns, initialRows, initialEntityNames });
+  console.log({ initialColumns, rowTriples, initialRows, initialEntityNames });
 
   return (
     <div>
@@ -146,12 +147,20 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   }));
 
   const initialRows = rowTriples.map(row => {
-    return row.triples.map(triple => {
+    return row.triples.reduce((acc, triple) => {
+      const column = initialColumns.find(column => column.value === triple.attributeId);
+      if (!column) {
+        return acc;
+      }
+
       return {
-        label: initialEntityNames[triple.value.id] || triple.value.id,
-        value: triple.value.id,
+        ...acc,
+        [column.value]: {
+          label: initialEntityNames[triple.value.id] || triple.value.value,
+          value: triple.value.id,
+        },
       };
-    });
+    }, {} as Record<string, { label: string; value: string }>);
   });
 
   return {
@@ -163,6 +172,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialColumns,
       initialTriples: triples.triples,
       initialEntityNames,
+      rowTriples,
       types: types.triples,
       initialRows,
     },
