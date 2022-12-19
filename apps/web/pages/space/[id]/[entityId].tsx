@@ -6,11 +6,11 @@ import { Triple } from '~/modules/types';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { useEditable } from '~/modules/state/use-editable';
+import { useEditable } from '~/modules/stores/use-editable';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { EntityStoreProvider } from '~/modules/state/entity-store-provider';
+import { EntityStoreProvider } from '~/modules/stores/entity-store-provider';
 import { useEffect } from 'react';
-import { usePageName } from '~/modules/state/use-page-name';
+import { usePageName } from '~/modules/stores/use-page-name';
 import { Entity } from '~/modules/entity';
 
 interface Props {

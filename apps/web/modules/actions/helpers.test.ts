@@ -1,7 +1,7 @@
 import { describe, expect } from 'vitest';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Action as ActionType } from '~/modules/types';
-import { Action } from './Action';
+import { getChangeCount } from './helpers';
 
 // Count should be 3
 const actions: ActionType[] = [
@@ -42,7 +42,7 @@ const actions: ActionType[] = [
 
 describe('Action', () => {
   it('Generates correct change counts from actions', () => {
-    const changes = Action.getChangeCount(actions);
+    const changes = getChangeCount(actions);
     expect(changes).toEqual(3);
   });
 });

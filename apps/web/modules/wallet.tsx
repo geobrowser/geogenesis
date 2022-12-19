@@ -3,14 +3,14 @@ import { ConnectButton, getDefaultWallets, RainbowKitProvider } from '@rainbow-m
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
-import { configOptions } from './config';
+import { Config } from './config';
 import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
 // const LOCAL_CHAIN: Chain = {
-//   id: Number(configOptions.development.chainId),
+//   id: Number(options.development.chainId),
 //   name: 'Geo Genesis Dev', // Human-readable name
 //   network: 'ethereum', // Internal network name
 //   nativeCurrency: {
@@ -20,13 +20,13 @@ import { Text } from './design-system/text';
 //   },
 //   rpcUrls: {
 //     default: {
-//       http: [configOptions.development.rpc],
+//       http: [options.development.rpc],
 //     },
 //   },
 // };
 
 // const STAGING_CHAIN: Chain = {
-//   id: Number(configOptions.staging.chainId),
+//   id: Number(options.staging.chainId),
 //   name: 'Geo Genesis Staging', // Human-readable name
 //   network: 'ethereum', // Internal network name
 //   nativeCurrency: {
@@ -35,12 +35,12 @@ import { Text } from './design-system/text';
 //     decimals: 18,
 //   },
 //   rpcUrls: {
-//     default: configOptions.staging.rpc,
+//     default: options.staging.rpc,
 //   },
 // };
 
 const TESTNET_CHAIN: Chain = {
-  id: Number(configOptions.testnet.chainId),
+  id: Number(Config.options.testnet.chainId),
   name: 'Polygon Mumbai', // Human-readable name
   network: 'mumbai', // Internal network name
   nativeCurrency: {
@@ -49,12 +49,12 @@ const TESTNET_CHAIN: Chain = {
     decimals: 18,
   },
   rpcUrls: {
-    default: configOptions.testnet.rpc,
+    default: Config.options.testnet.rpc,
   },
 };
 
 const DEFAULT_CHAIN: Chain = {
-  id: Number(configOptions.production.chainId),
+  id: Number(Config.options.production.chainId),
   name: 'Polygon', // Human-readable name
   network: 'polygon', // Internal network name
   nativeCurrency: {
@@ -63,7 +63,7 @@ const DEFAULT_CHAIN: Chain = {
     decimals: 18,
   },
   rpcUrls: {
-    default: configOptions.production.rpc,
+    default: Config.options.production.rpc,
   },
 };
 

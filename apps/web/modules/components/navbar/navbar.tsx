@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useSpaces } from '~/modules/state/use-spaces';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
@@ -9,7 +9,7 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
-import { usePageName } from '~/modules/state/use-page-name';
+import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
 import { NavbarActions } from './navbar-actions';
 import { ExternalLink } from '../external-link';

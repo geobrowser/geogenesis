@@ -1,7 +1,7 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { useEffect, useMemo } from 'react';
-import { useServices } from '~/modules/services';
+import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 
@@ -22,7 +22,7 @@ class EntityAutocomplete {
 }
 
 export function useAutocomplete() {
-  const { network } = useServices();
+  const { network } = Services.useServices();
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({ api: network });

@@ -7,7 +7,7 @@ import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { ID } from '~/modules/id';
-import { useEntityTriples } from '~/modules/state/use-entity-triples';
+import { useEntityTriples } from '~/modules/stores/use-entity-triples';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
@@ -17,7 +17,7 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Action } from './Action';
+import { Action } from '~/modules/actions';
 import { Triple } from '~/modules/triple';
 import { Entity } from '~/modules/entity';
 

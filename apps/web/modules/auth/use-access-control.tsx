@@ -1,6 +1,6 @@
 import { useAccount } from 'wagmi';
 import { useHydrated } from '../hooks/use-hydrated';
-import { useSpaces } from '../state/use-spaces';
+import { useSpaces } from '../spaces/use-spaces';
 
 export function useAccessControl(space: string) {
   // We need to wait for the client to check the status of the client-side wallet

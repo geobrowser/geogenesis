@@ -2,7 +2,7 @@ import { Action as ActionType } from '~/modules/types';
 
 // For each id we find, we need to traverse the list to find the first and last actions associated with that id
 // Then we need to check the first and last actions and compare to see if they've changed.
-function getChangeCount(actions: ActionType[]) {
+export function getChangeCount(actions: ActionType[]) {
   const firstAndLastActions = getFirstAndLastChanges(actions);
 
   /**
@@ -85,7 +85,3 @@ function getFirstAndLastChanges(actions: ActionType[]) {
     return acc;
   }, {});
 }
-
-export const Action = {
-  getChangeCount,
-};

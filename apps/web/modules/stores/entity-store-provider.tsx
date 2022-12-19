@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from 'react';
-import { useServices } from '../services';
+import { Services } from '../services';
 import { Triple } from '../types';
 import { EntityStore } from './entity-store';
 
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function EntityStoreProvider({ id, spaceId, children, initialTriples }: Props) {
-  const { network } = useServices();
+  const { network } = Services.useServices();
 
   const store = useMemo(() => {
     return new EntityStore({ api: network, spaceId, initialTriples, id });

@@ -1,5 +1,5 @@
-import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
-import { InitialTripleStoreParams } from './state/triple-store';
+import { AppConfig, AppEnv, Config } from './config';
+import { InitialTripleStoreParams } from './stores/triple-store';
 import { FilterField, FilterState } from './types';
 
 const ENV_PARAM_NAME = 'env';
@@ -78,14 +78,14 @@ function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
   const env: AppEnv = params.get('env') as AppEnv;
 
-  if (!(cookie && cookie in configOptions) && !(env in configOptions)) {
-    console.log(`Invalid environment "${env}", defaulting to ${DEFAULT_ENV}`);
-    return configOptions[DEFAULT_ENV];
+  if (!(cookie && cookie in Config.options) && !(env in Config.options)) {
+    console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);
+    return Config.options[Config.DEFAULT_ENV];
   }
 
   // Default to the environment if it's set, otherwise use the cookie
-  const config = configOptions[env ?? cookie];
-  return getConfig(config.chainId);
+  const config = Config.options[env ?? cookie];
+  return Config.getConfig(config.chainId);
 }
 
 export const Params = {

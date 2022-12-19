@@ -2,7 +2,7 @@ import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { Params } from '../params';
-import { useServices } from '../services';
+import { Services } from '../services';
 import { FilterState, Triple } from '../types';
 import { TripleStore } from './triple-store';
 
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function TripleStoreProvider({ space, children, initialTriples }: Props) {
-  const { network } = useServices();
+  const { network } = Services.useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);

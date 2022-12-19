@@ -6,7 +6,7 @@ import { CheckCloseSmall } from '../design-system/icons/check-close-small';
 import { Search } from '../design-system/icons/search';
 import { Input } from '../design-system/input';
 import { Spacer } from '../design-system/spacer';
-import { useTriples } from '../state/use-triples';
+import { useTriples } from '../triple/use-triples';
 import { FilterClause } from '../types';
 import { FilterDialog } from './filter/dialog';
 

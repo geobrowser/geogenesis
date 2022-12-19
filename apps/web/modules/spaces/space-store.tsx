@@ -1,4 +1,5 @@
 import { computed, ObservableComputed } from '@legendapp/state';
+import { Services } from '../services';
 import { INetwork } from '../services/network';
 import { Space } from '../types';
 import { makeOptionalComputed } from '../utils';
@@ -50,4 +51,8 @@ export class SpaceStore {
       })
     );
   }
+}
+
+export function useSpaceStore() {
+  return Services.useServices().spaceStore;
 }
