@@ -4,7 +4,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/use-triples';
-import { EntityNames, Triple } from '../../types';
+import { EntityNames, Row, Triple } from '../../types';
 // import { getFilesFromFileList } from '../utils';
 import styled from '@emotion/styled';
 import { useState } from 'react';
@@ -29,10 +29,12 @@ interface Props {
   spaceName?: string;
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
+  initialRows: Row[];
+  initialColumns: string[];
   types: Triple[];
 }
 
-export function Entities({ spaceId, initialEntityNames, initialTriples, initialRows, types }: Props) {
+export function Entities({ spaceId, initialEntityNames, initialColumns, initialRows, types }: Props) {
   const [selectedType, setSelectedType] = useState<Triple>(types[0]);
 
   const tripleStore = useTriples();
@@ -64,6 +66,7 @@ export function Entities({ spaceId, initialEntityNames, initialTriples, initialR
         <EntitiesTable
           space={spaceId}
           rows={initialRows}
+          columns={initialColumns}
           // triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
           entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
         />

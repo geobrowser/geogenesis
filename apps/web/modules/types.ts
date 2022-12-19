@@ -75,3 +75,15 @@ type Identifiable = {
 };
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
+
+export interface Column {
+  id: string;
+  name: string;
+}
+
+export interface Cell {
+  columnId: string;
+  triples: Triple[];
+}
+
+export type Row = Record<string, Cell>;

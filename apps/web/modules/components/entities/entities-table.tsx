@@ -12,9 +12,8 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
-import { EntityNames, Triple, Value } from '../../types';
+import { Column, EntityNames, Row, Value } from '../../types';
 import { NavUtils } from '../../utils';
-import { LinkedEntityGroup } from '../entity/types';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
 
@@ -29,31 +28,16 @@ declare module '@tanstack/react-table' {
   }
 }
 
-const columnHelper = createColumnHelper<LinkedEntityGroup>();
+const columnHelper = createColumnHelper<Row>();
 
-const triplesToColumns = (triples: Triple[], entityNames: EntityNames) => {
-  const columns = triples.map(triple => {
-    /*
-      Might be worth restructuring EntityGroup to be have a map of triples by attributeId instead of an array.
-      This would allow us to use the columnHelper.accessor function to easily get the value rather than having to
-      do a find on the array.
-    */
-    return columnHelper.accessor(
-      row => {
-        console.log(row);
-        return 'Hello';
-        debugger;
-        return row.triples.find(triple => triple.attributeId === triple.entityId)?.value;
-      },
-      {
-        id: triple.entityId,
-        header: () => <Text variant="smallTitle">{entityNames[triple.entityId] || triple.entityName}</Text>,
-        size: COLUMN_SIZE,
-      }
-    );
-  });
-
-  return columns;
+const formatColumns = (columns: Column[]) => {
+  return columns.map(column =>
+    columnHelper.accessor(row => row[column.id], {
+      id: column.id,
+      header: () => <Text variant="smallTitle">{column.name}</Text>,
+      size: COLUMN_SIZE,
+    })
+  );
 };
 
 // Table width, minus cell borders
@@ -113,7 +97,7 @@ const ChipCellContainer = styled.div({
 });
 
 // Give our default column cell renderer editing superpowers!
-const defaultColumn: Partial<ColumnDef<Triple>> = {
+const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
     const entityNames = table.options?.meta?.entityNames || {};
@@ -178,14 +162,10 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
   },
 };
 
-interface Row {
-  id: string;
-  triples: Triple[];
-}
-
 interface Props {
   space: string;
   entityNames: EntityNames;
+  columns: Column[];
   rows: Row[];
 }
 
@@ -194,7 +174,7 @@ export const EntitiesTable = memo(function EntitiesTable({ rows, entityNames, sp
 
   const table = useReactTable({
     data: rows,
-    columns: triplesToColumns(columns, entityNames),
+    columns: formatColumns(columns),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
