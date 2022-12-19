@@ -18,8 +18,8 @@ import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Action } from './Action';
-import { Triple } from '~/modules/models/Triple';
-import { Entity } from '~/modules/models/Entity';
+import { Triple } from '~/modules/triple';
+import { Entity } from '~/modules/entity';
 
 const PageContainer = styled.div({
   display: 'flex',

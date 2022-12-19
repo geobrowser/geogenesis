@@ -1,7 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { Triple } from '../models/Triple';
+import { Triple } from '../triple';
 import { INetwork } from '../services/network';
 import { Action, CreateTripleAction, FilterState, ReviewState, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';

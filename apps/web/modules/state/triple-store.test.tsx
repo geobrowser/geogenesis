@@ -1,6 +1,6 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
-import { Triple } from '../models/Triple';
+import { Triple } from '../triple';
 import { makeStubTriple, MockNetwork } from '../services/mock-network';
 import { OmitStrict, Triple as TripleType } from '../types';
 import { TripleStore } from './triple-store';

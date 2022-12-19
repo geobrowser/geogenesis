@@ -1,5 +1,5 @@
 import { parse as parseCSV } from 'papaparse';
-import { Triple } from '../models/Triple';
+import { Triple } from '../triple';
 import { Triple as TripleType, Value } from '../types';
 import { ID } from '../id';
 

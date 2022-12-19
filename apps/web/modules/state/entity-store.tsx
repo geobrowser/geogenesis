@@ -2,7 +2,7 @@ import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
-import { Triple } from '../models/Triple';
+import { Triple } from '../triple';
 import { INetwork } from '../services/network';
 import {
   Action,
