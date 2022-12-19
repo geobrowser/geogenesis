@@ -17,7 +17,7 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Action } from '~/modules/actions';
+import { Action } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity } from '~/modules/entity';
 
