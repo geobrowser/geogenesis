@@ -170,6 +170,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
                 setFilter(e.target.value);
               }}
             />
+            <Spacer height={12} />
 
             <ResultList>
               {filteredTypes.map(type => (
