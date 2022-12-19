@@ -103,6 +103,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityNames = table.options?.meta?.entityNames || {};
 
     const initialCellData = getValue();
+
+    console.log(initialCellData);
     // We need to keep and update the state of the cell normally
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);

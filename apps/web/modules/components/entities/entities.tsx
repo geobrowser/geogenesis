@@ -4,7 +4,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/use-triples';
-import { EntityNames, Row, Triple } from '../../types';
+import { Column, EntityNames, Row, Triple } from '../../types';
 // import { getFilesFromFileList } from '../utils';
 import styled from '@emotion/styled';
 import { useState } from 'react';
@@ -30,7 +30,7 @@ interface Props {
   initialTriples: Triple[];
   initialEntityNames: EntityNames;
   initialRows: Row[];
-  initialColumns: string[];
+  initialColumns: Column[];
   types: Triple[];
 }
 
