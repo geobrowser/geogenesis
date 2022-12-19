@@ -5,20 +5,19 @@ import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
+import { Entity } from '~/modules/models/Entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
+import { TableStoreProvider } from '~/modules/state/table-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
-import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
-import { Column, EntityNames, Row, Triple } from '~/modules/types';
+import { Column, Row, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
   initialTypeId: string;
-  initialTriples: Triple[];
-  initialEntityNames: EntityNames;
   initialColumns: Column[];
   initialRows: Row[];
   types: Triple[];
@@ -28,15 +27,11 @@ export default function EntitiesPage({
   spaceId,
   spaceName,
   spaceImage,
-  initialTriples,
-  initialEntityNames,
   initialColumns,
   initialTypeId,
   initialRows,
   types,
 }: Props) {
-  console.log({ initialColumns, initialRows, initialEntityNames });
-
   return (
     <div>
       <Head>
@@ -48,7 +43,7 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
+      <TableStoreProvider space={spaceId} initialRows={initialRows}>
         <Entities
           types={types}
           spaceId={spaceId}
@@ -56,9 +51,8 @@ export default function EntitiesPage({
           initialColumns={initialColumns}
           initialRows={initialRows}
           initialTypeId={initialTypeId}
-          initialEntityNames={initialEntityNames}
         />
-      </TripleStoreProvider>
+      </TableStoreProvider>
     </div>
   );
 }
@@ -133,19 +127,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     )
   );
 
-  /* Getting all of the entityNames for the rows... */
-  const rowTriplesEntityNames = rowTriples.reduce((acc, { entityNames }) => {
-    return { ...acc, ...entityNames };
-  }, {} as EntityNames);
-
-  const initialEntityNames = {
-    ...types.entityNames,
-    ...rowTriplesEntityNames,
-  };
-
   /* ...and then we can build our initialColumns */
   const initialColumns = columnsTriples.triples.map(triple => ({
-    name: initialEntityNames[triple.value.id] || triple.value.id,
+    name: Entity.entityName(triple) || triple.value.id,
     id: triple.value.id,
   })) as Column[];
 
@@ -174,9 +158,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceId,
       spaceName,
       spaceImage,
-      initialType: initialType.entityId,
+      initialTypeId: initialType.entityId,
       initialColumns,
-      initialEntityNames,
       rowTriples,
       types: types.triples,
       initialRows,

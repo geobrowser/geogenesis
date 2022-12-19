@@ -5,7 +5,7 @@ import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
 import { Spacer } from '../../design-system/spacer';
-import { useTriples } from '../../state/use-triples';
+import { useTables } from '../../state/use-triples';
 import { FilterClause } from '../../types';
 import { FilterDialog } from '../filter/dialog';
 
@@ -50,18 +50,18 @@ const AdvancedFilters = styled.div(props => ({
 }));
 
 export function EntityDropdown() {
-  const tripleStore = useTriples();
+  const tableStore = useTables();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
-  const showBasicFilter = tripleStore.filterState.length === 1 && tripleStore.filterState[0].field === 'entity-name';
+  const showBasicFilter = tableStore.filterState.length === 1 && tableStore.filterState[0].field === 'entity-name';
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    tripleStore.setQuery(event.target.value);
+    tableStore.setQuery(event.target.value);
   };
 
   const onAdvancedFilterClick = (field: FilterClause['field']) => {
-    const filteredFilters = tripleStore.filterState.filter(filter => filter.field !== field);
-    tripleStore.setFilterState(filteredFilters);
+    const filteredFilters = tableStore.filterState.filter(filter => filter.field !== field);
+    tableStore.setFilterState(filteredFilters);
   };
 
   return (
@@ -70,15 +70,10 @@ export function EntityDropdown() {
         <Search />
       </SearchIconContainer>
       {showBasicFilter ? (
-        <TriplesInputField
-          disabled={true}
-          placeholder="Search facts..."
-          value={tripleStore.query}
-          onChange={onChange}
-        />
+        <TriplesInputField disabled={true} placeholder="Search facts..." value={tableStore.query} onChange={onChange} />
       ) : (
         <AdvancedFilters>
-          {tripleStore.filterState.map(filter => (
+          {tableStore.filterState.map(filter => (
             <AdvancedFilterPill
               key={filter.field}
               filterClause={filter}
@@ -90,8 +85,8 @@ export function EntityDropdown() {
       <FilterIconContainer>
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
-          filterState={tripleStore.filterState}
-          setFilterState={tripleStore.setFilterState}
+          filterState={tableStore.filterState}
+          setFilterState={tableStore.setFilterState}
         />
       </FilterIconContainer>
     </InputContainer>

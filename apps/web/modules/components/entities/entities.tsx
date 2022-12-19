@@ -3,11 +3,11 @@ import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
-import { useTriples } from '~/modules/state/use-triples';
-import { Column, EntityNames, Row, Triple } from '../../types';
+import { Column, Row, Triple } from '../../types';
 // import { getFilesFromFileList } from '../utils';
 import styled from '@emotion/styled';
 import { useState } from 'react';
+import { useTables } from '~/modules/state/use-tables';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntitiesTable } from './entities-table';
@@ -28,16 +28,15 @@ interface Props {
   spaceId: string;
   spaceName?: string;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
   initialRows: Row[];
   initialColumns: Column[];
   types: Triple[];
 }
 
-export function Entities({ spaceId, initialEntityNames, initialColumns, initialRows, types }: Props) {
+export function Entities({ spaceId, initialColumns, initialRows, types }: Props) {
   const [selectedType, setSelectedType] = useState<Triple>(types[0]);
 
-  const tripleStore = useTriples();
+  const tableStore = useTables();
   const typeOptions = types.map(type => {
     return {
       label: type.entityName,
@@ -68,16 +67,15 @@ export function Entities({ spaceId, initialEntityNames, initialColumns, initialR
           rows={initialRows}
           columns={initialColumns}
           // triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
-          entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
         />
 
         <Spacer height={12} />
 
         <PageNumberContainer>
-          {tripleStore.pageNumber > 1 && (
+          {tableStore.pageNumber > 1 && (
             <>
-              <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
-              {tripleStore.pageNumber > 2 ? (
+              <PageNumber number={1} onClick={() => tableStore.setPageNumber(0)} />
+              {tableStore.pageNumber > 2 ? (
                 <>
                   <Spacer width={16} />
                   <Text color="grey-03" variant="metadataMedium">
@@ -90,23 +88,23 @@ export function Entities({ spaceId, initialEntityNames, initialColumns, initialR
               )}
             </>
           )}
-          {tripleStore.hasPreviousPage && (
+          {tableStore.hasPreviousPage && (
             <>
-              <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+              <PageNumber number={tableStore.pageNumber} onClick={tableStore.setPreviousPage} />
               <Spacer width={4} />
             </>
           )}
-          <PageNumber isActive number={tripleStore.pageNumber + 1} />
-          {tripleStore.hasNextPage && (
+          <PageNumber isActive number={tableStore.pageNumber + 1} />
+          {tableStore.hasNextPage && (
             <>
               <Spacer width={4} />
-              <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+              <PageNumber number={tableStore.pageNumber + 2} onClick={tableStore.setNextPage} />
             </>
           )}
           <Spacer width={32} />
-          <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+          <PreviousButton isDisabled={!tableStore.hasPreviousPage} onClick={tableStore.setPreviousPage} />
           <Spacer width={12} />
-          <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+          <NextButton isDisabled={!tableStore.hasNextPage} onClick={tableStore.setNextPage} />
         </PageNumberContainer>
       </motion.div>
     </PageContainer>
