@@ -1,4 +1,4 @@
-import { getChangeCount } from './helpers';
+import { getChangeCount } from './action';
 
 export const Action = {
   getChangeCount,

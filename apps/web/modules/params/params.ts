@@ -1,10 +1,10 @@
-import { AppConfig, AppEnv, Config } from './config';
-import { InitialTripleStoreParams } from './stores/triple-store';
-import { FilterField, FilterState } from './types';
+import { AppConfig, AppEnv, Config } from '../config';
+import { InitialTripleStoreParams } from '../stores/triple-store';
+import { FilterField, FilterState } from '../types';
 
-const ENV_PARAM_NAME = 'env';
+export const ENV_PARAM_NAME = 'env';
 
-function parseQueryParameters(url: string): InitialTripleStoreParams {
+export function parseQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -23,7 +23,7 @@ function parseQueryParameters(url: string): InitialTripleStoreParams {
   };
 }
 
-function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
+export function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
@@ -74,7 +74,7 @@ function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, s
  * @param cookie -- The cookie value for the environment from the `ENV_PARAM_NAME` cookie name.
  * @returns AppConfig
  */
-function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
+export function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
   const env: AppEnv = params.get('env') as AppEnv;
 
@@ -87,10 +87,3 @@ function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const config = Config.options[env ?? cookie];
   return Config.getConfig(config.chainId);
 }
-
-export const Params = {
-  parseQueryParameters,
-  stringifyQueryParameters,
-  getConfigFromUrl,
-  ENV_PARAM_NAME,
-};

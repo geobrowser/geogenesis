@@ -1,7 +1,7 @@
 import { describe, expect } from 'vitest';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Action as ActionType } from '~/modules/types';
-import { getChangeCount } from './helpers';
+import { getChangeCount } from './action';
 
 // Count should be 3
 const actions: ActionType[] = [
