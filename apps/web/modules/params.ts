@@ -2,6 +2,8 @@ import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './conf
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
+const ENV_PARAM_NAME = 'env';
+
 function parseQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
@@ -51,16 +53,17 @@ function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, s
   }, {});
 }
 
-function getConfigFromUrl(url: string): AppConfig {
+function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
-  const env: AppEnv = (params.get('env') as AppEnv) ?? DEFAULT_ENV;
+  const env: AppEnv = params.get('env') as AppEnv;
 
-  if (!(env in configOptions)) {
+  if (!(cookie && cookie in configOptions) && !(env in configOptions)) {
     console.log(`Invalid environment "${env}", defaulting to ${DEFAULT_ENV}`);
     return configOptions[DEFAULT_ENV];
   }
 
-  const config = configOptions[env];
+  // Default to the environment if it's set, otherwise use the cookie
+  const config = configOptions[env ?? cookie];
   return getConfig(config.chainId);
 }
 
@@ -68,4 +71,5 @@ export const Params = {
   parseQueryParameters,
   stringifyQueryParameters,
   getConfigFromUrl,
+  ENV_PARAM_NAME,
 };
