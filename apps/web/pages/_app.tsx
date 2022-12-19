@@ -7,7 +7,7 @@ import { colors } from '~/modules/design-system/theme/colors';
 import 'modern-normalize';
 import '../styles/styles.css';
 import Head from 'next/head';
-import { Providers } from '~/modules/services/providers';
+import { Providers } from '~/modules/providers';
 
 const globalStyles = css`
   html {

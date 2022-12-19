@@ -6,7 +6,7 @@ import { Triple } from '../triple';
 import { convertLegacyHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
 
 function readMockFile(filename: string) {
-  const simple = readFileSync(path.join(__dirname, 'mocks', filename), 'utf8');
+  const simple = readFileSync(path.join(__dirname, 'csv', filename), 'utf8');
   return new File([simple], filename);
 }
 

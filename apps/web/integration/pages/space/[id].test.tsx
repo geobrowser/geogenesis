@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { makeStubTriple } from '~/modules/services/mock-network';
-import { Providers } from '~/modules/services/providers';
+import { Providers } from '~/modules/providers';
 import TriplesPage from '~/pages/space/[id]';
 
 describe('Space page', () => {

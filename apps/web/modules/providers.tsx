@@ -1,9 +1,9 @@
 import { Theme, ThemeProvider } from '@emotion/react';
-import { colors } from '../design-system/theme/colors';
-import { shadows } from '../design-system/theme/shadows';
-import { typography } from '../design-system/theme/typography';
-import { ServicesProvider } from '../services';
-import { WalletProvider } from '../wallet';
+import { colors } from './design-system/theme/colors';
+import { shadows } from './design-system/theme/shadows';
+import { typography } from './design-system/theme/typography';
+import { ServicesProvider } from './services';
+import { WalletProvider } from './wallet';
 
 const theme: Theme = {
   colors: colors.light,
