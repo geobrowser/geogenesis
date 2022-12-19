@@ -47,7 +47,7 @@ export default function EntityPage(props: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const config = Params.getConfigFromUrl(context.resolvedUrl);
+  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
   const [entity, related] = await Promise.all([
