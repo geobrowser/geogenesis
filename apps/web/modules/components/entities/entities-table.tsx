@@ -31,17 +31,18 @@ declare module '@tanstack/react-table' {
 const columnHelper = createColumnHelper<Row>();
 
 const formatColumns = (columns: Column[]) => {
+  const columnSize = 1200 / columns.length;
+
   return columns.map(column =>
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => <Text variant="smallTitle">{column.name}</Text>,
-      size: COLUMN_SIZE,
+      size: columnSize,
     })
   );
 };
 
 // Table width, minus cell borders
-const COLUMN_SIZE = 1200 / 3;
 
 // const columns = [
 //   columnHelper.accessor(row => row.entityId, {
@@ -116,6 +117,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     }, [initialCellData]);
 
     const cellId = `${row.original.id}-${cell.column.id}`;
+
+    return JSON.stringify(cellData);
 
     switch (id) {
       case 'entityId': {
