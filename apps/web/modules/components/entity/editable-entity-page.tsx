@@ -6,7 +6,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { createValueId } from '~/modules/services/create-id';
+import { ID } from '~/modules/id';
 import { useEntityTriples } from '~/modules/state/use-entity-triples';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
@@ -89,7 +89,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           entityName: e.target.value,
           attributeId: 'name',
           attributeName: 'Name',
-          value: { id: createValueId(), type: 'string', value: e.target.value },
+          value: { id: ID.createValueId(), type: 'string', value: e.target.value },
         })
       );
     }
@@ -113,7 +113,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           attributeName: 'Description',
           entityName: name,
           value: {
-            id: createValueId(),
+            id: ID.createValueId(),
             type: 'string',
             value: e.target.value,
           },

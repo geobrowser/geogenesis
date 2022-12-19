@@ -1,7 +1,7 @@
 import { parse as parseCSV } from 'papaparse';
 import { Triple } from '../models/Triple';
 import { Triple as TripleType, Value } from '../types';
-import { BUILTIN_ENTITY_IDS, createEntityId, isValidEntityId } from './create-id';
+import { ID } from '../id';
 
 export function readFileAsText(file: File) {
   return new Promise<string>(resolve => {
@@ -49,15 +49,19 @@ export function unique(triples: TripleType[]): TripleType[] {
   return Object.values(Object.fromEntries(triples.map(triple => [createTripleIdUnique(triple), triple])));
 }
 
-export function eavRowsToTriples(rows: EavRow[], space: string, createId: CreateUuid = createEntityId): TripleType[] {
+export function eavRowsToTriples(
+  rows: EavRow[],
+  space: string,
+  createId: CreateUuid = ID.createEntityId
+): TripleType[] {
   // Create a collection of all known entity ids
   const entityIds = new Set([
-    ...BUILTIN_ENTITY_IDS,
+    ...ID.BUILTIN_ENTITY_IDS,
     ...rows.flatMap(([entityId, attributeId]) => [entityId, attributeId]),
   ]);
 
   // Ensure entity ids are either valid uuids or builtins
-  const entityIdMap = Object.fromEntries([...entityIds].map(id => [id, isValidEntityId(id) ? id : createId(id)]));
+  const entityIdMap = Object.fromEntries([...entityIds].map(id => [id, ID.isValidEntityId(id) ? id : createId(id)]));
 
   // Create triples, attempting to detect entity references
   const triples = rows.map((row): TripleType => {
@@ -1075,7 +1079,7 @@ function convertSanFranciscoSources(
 export async function importCSVFile(
   files: File[],
   space: string,
-  createId: CreateUuid = createEntityId
+  createId: CreateUuid = ID.createEntityId
 ): Promise<TripleType[]> {
   let eavs: EavRow[] = [];
 
