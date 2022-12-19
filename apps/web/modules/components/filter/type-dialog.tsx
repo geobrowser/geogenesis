@@ -2,16 +2,14 @@ import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import produce from 'immer';
 import React, { useState } from 'react';
+import { Input } from '~/modules/design-system/input';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { initialFilterState } from '~/modules/state/triple-store';
-import { FilterClause, FilterField, FilterState } from '~/modules/types';
-import { intersperse } from '~/modules/utils';
-import { Button } from '../../design-system/button';
+import { useTables } from '~/modules/state/use-tables';
+import { FilterClause, FilterField, FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
-import { FilterInputGroup } from './input-group';
+import { ResultItem, ResultList } from '../entity/entity-text-autocomplete';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -123,17 +121,29 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
   );
 }
 
-export function TypeDialog({ selectedType, inputContainerWidth, filterState, setFilterState }: Props) {
+export function TypeDialog({ inputContainerWidth }: Props) {
   const theme = useTheme();
+  const tableStore = useTables();
+
   const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
+  const [filter, setFilter] = useState('');
+
+  const types = tableStore.types || [];
+  const filteredTypes = types.filter(type => (type.entityName || '').toLowerCase().includes(filter.toLowerCase()));
+
+  const handleSelect = (type: Triple) => {
+    tableStore.setType(type);
+    setOpen(false);
+  };
+
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledTrigger open={open}>Hello World</StyledTrigger>
+        <StyledTrigger open={open}>{tableStore.type.entityName}</StyledTrigger>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
@@ -152,66 +162,22 @@ export function TypeDialog({ selectedType, inputContainerWidth, filterState, set
             alignOffset={-(theme.space * 2) + 4}
             align={width > 768 ? 'end' : 'start'}
           >
-            <Text variant="button">Show triples</Text>
+            <Text variant="button">All types</Text>
             <Spacer height={12} />
-            {intersperse(
-              filterState.map((filterClause, index) => (
-                <FilterInputGroup
-                  label={index === 0 ? 'Where' : 'And'}
-                  key={`filter-state-item-${index}`}
-                  options={getFilterOptions(filterState, filterClause)}
-                  filterClause={filterClause}
-                  onChange={newFilterClause => {
-                    const newFilterState = produce(filterState, draft => {
-                      draft[index] = newFilterClause;
-                    });
+            <Input
+              value={filter}
+              onChange={e => {
+                setFilter(e.target.value);
+              }}
+            />
 
-                    setFilterState(newFilterState);
-                  }}
-                  isDeletable={filterState.length > 1}
-                  onDelete={() => {
-                    const newFilterState = produce(filterState, draft => {
-                      draft.splice(index, 1);
-                    });
-
-                    setFilterState(newFilterState);
-                  }}
-                />
-              )),
-              ({ index }) => (
-                <Spacer key={`filter-state-spacer-${index}`} height={12} />
-              )
-            )}
-            <Spacer height={12} />
-            <ButtonGroup>
-              <Button
-                icon="create"
-                variant="secondary"
-                disabled={getFilterOptions(filterState).length === 0}
-                onClick={() => {
-                  const defaultOption = getFilterOptions(filterState)[0];
-
-                  const newFilterState = produce(filterState, draft => {
-                    draft.push({ field: defaultOption.value, value: '' });
-                  });
-
-                  setFilterState(newFilterState);
-                }}
-              >
-                And
-              </Button>
-              <ButtonGroup>
-                <Button
-                  icon="trash"
-                  variant="secondary"
-                  onClick={() => {
-                    setFilterState(initialFilterState());
-                  }}
-                >
-                  Clear all
-                </Button>
-              </ButtonGroup>
-            </ButtonGroup>
+            <ResultList>
+              {filteredTypes.map(type => (
+                <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                  {type.entityName}
+                </ResultItem>
+              ))}
+            </ResultList>
           </MotionContent>
         ) : null}
       </AnimatePresence>

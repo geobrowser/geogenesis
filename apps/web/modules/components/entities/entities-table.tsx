@@ -169,12 +169,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  entityNames: EntityNames;
   columns: Column[];
   rows: Row[];
 }
 
-export const EntitiesTable = memo(function EntitiesTable({ rows, entityNames, space, columns }: Props) {
+export const EntitiesTable = memo(function EntitiesTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
@@ -191,7 +190,6 @@ export const EntitiesTable = memo(function EntitiesTable({ rows, entityNames, sp
       },
     },
     meta: {
-      entityNames,
       expandedCells,
       space,
     },

@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { Params } from '../params';
 import { useServices } from '../services';
-import { FilterState, Row } from '../types';
+import { Column, FilterState, Row, Triple } from '../types';
 import { TableStore } from './table-store';
 
 const TableStoreContext = createContext<TableStore | undefined>(undefined);
@@ -12,10 +12,12 @@ interface Props {
   space: string;
   children: React.ReactNode;
   initialRows: Row[];
-  initialTypeId: string;
+  initialType: Triple;
+  initialColumns: Column[];
+  initialTypes: Triple[];
 }
 
-export function TableStoreProvider({ space, children, initialRows, initialTypeId }: Props) {
+export function TableStoreProvider({ space, children, initialRows, initialType, initialColumns, initialTypes }: Props) {
   const { network } = useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
@@ -24,9 +26,17 @@ export function TableStoreProvider({ space, children, initialRows, initialTypeId
   const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
-    const initialParams = Params.parseTripleQueryParameters(urlRef.current);
-    return new TableStore({ api: network, space, initialParams, initialRows });
-  }, [network, space, initialRows, initialTypeId]);
+    const initialParams = Params.parseTypeQueryParameters(urlRef.current);
+    return new TableStore({
+      api: network,
+      space,
+      initialParams,
+      initialRows,
+      initialType,
+      initialColumns,
+      initialTypes,
+    });
+  }, [network, space, initialRows, initialType, initialColumns, initialTypes]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

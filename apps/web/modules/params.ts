@@ -1,4 +1,5 @@
 import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
+import { InitialTableStoreParams } from './state/table-store';
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
@@ -17,6 +18,27 @@ function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   return {
     query,
     pageNumber,
+    filterState: filterStateResult,
+  };
+}
+
+function parseTypeQueryParameters(url: string): InitialTableStoreParams {
+  const params = new URLSearchParams(url.split('?')[1]);
+  const query = params.get('query') || '';
+  const pageNumber = Number(params.get('page') || 0);
+  const typeId = params.get('typeId') || '';
+  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
+
+  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
+    const value = params.get(key);
+    if (!value) return acc;
+    return [...acc, { field: key as FilterField, value }];
+  }, []);
+
+  return {
+    query,
+    pageNumber,
+    typeId,
     filterState: filterStateResult,
   };
 }
@@ -66,6 +88,7 @@ function getConfigFromUrl(url: string): AppConfig {
 
 export const Params = {
   parseTripleQueryParameters,
+  parseTypeQueryParameters,
   stringifyQueryParameters,
   getConfigFromUrl,
 };

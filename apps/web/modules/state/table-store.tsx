@@ -1,14 +1,24 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { Triple } from '../models/Triple';
 import { INetwork } from '../services/network';
-import { Action, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../types';
+import {
+  Action,
+  Column,
+  CreateTripleAction,
+  FilterState,
+  ReviewState,
+  Row,
+  Triple,
+  Triple as TripleType,
+} from '../types';
 import { makeOptionalComputed } from '../utils';
 
-interface ITripleStore {
+interface ITableStore {
   actions$: Observable<Action[]>;
   rows$: ObservableComputed<Row[]>;
+  columns$: ObservableComputed<Column[]>;
+  types$: ObservableComputed<TripleType[]>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -23,15 +33,17 @@ export type InitialTableStoreParams = {
   query: string;
   pageNumber: number;
   filterState: FilterState;
-  typeId: string;
 };
 
-interface ITripleStoreConfig {
+interface ITableStoreConfig {
   api: INetwork;
   space: string;
   initialParams?: InitialTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
+  initialType: Triple;
+  initialTypes: TripleType[];
+  initialColumns: Column[];
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -50,11 +62,14 @@ export function initialFilterState(): FilterState {
   ];
 }
 
-export class TableStore implements ITripleStore {
+export class TableStore implements ITableStore {
   private api: INetwork;
   actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]> = observable([]);
   pageNumber$: Observable<number>;
+  type$: Observable<Triple>;
+  columns$: ObservableComputed<Column[]>;
+  types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -65,12 +80,18 @@ export class TableStore implements ITripleStore {
     api,
     space,
     initialRows,
+    initialType,
+    initialColumns,
+    initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
-  }: ITripleStoreConfig) {
+  }: ITableStoreConfig) {
     this.api = api;
     this.rows$ = observable(initialRows);
+    this.type$ = observable(initialType);
     this.pageNumber$ = observable(initialParams.pageNumber);
+    this.columns$ = observable(initialColumns);
+    this.types$ = observable(initialTypes);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
@@ -108,36 +129,6 @@ export class TableStore implements ITripleStore {
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
-
-    this.triples$ = computed(() => {
-      const { triples: networkTriples } = networkData$.get();
-
-      // We operate on the triples array in reverse so that we can `push` instead of `unshift`
-      // when creating new triples, which is significantly faster.
-      const triples: TripleType[] = [...networkTriples].reverse();
-
-      // If our actions have modified one of the network triples, we don't want to add that
-      // network triple to the triples array
-      this.actions$.get().forEach(action => {
-        switch (action.type) {
-          case 'createTriple':
-            triples.push(Triple.withId({ ...action, space: 's' }));
-            break;
-          case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === Triple.withId({ ...action, space: 's' }).id);
-            triples.splice(index, 1);
-            break;
-          }
-          case 'editTriple': {
-            const index = triples.findIndex(t => t.id === Triple.withId({ ...action.before, space: 's' }).id);
-            triples[index] = Triple.withId({ ...action.after, space: 's' });
-            break;
-          }
-        }
-      });
-
-      return triples.reverse();
-    });
   }
 
   create = (triples: TripleType[]) => {
@@ -170,6 +161,10 @@ export class TableStore implements ITripleStore {
 
   setPageNumber = (pageNumber: number) => {
     this.pageNumber$.set(pageNumber);
+  };
+
+  setType = (type: Triple) => {
+    this.type$.set(type);
   };
 
   setNextPage = () => {

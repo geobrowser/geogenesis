@@ -4,24 +4,11 @@ import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
 import { Column, Row, Triple } from '../../types';
 // import { getFilesFromFileList } from '../utils';
-import styled from '@emotion/styled';
-import { useState } from 'react';
 import { useTables } from '~/modules/state/use-tables';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntitiesTable } from './entities-table';
 import { EntityInput } from './entity-input';
-
-const EntityFilterBar = styled.div({
-  display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'center',
-  width: '100%',
-});
-
-const TypeSelect = styled.div({
-  marginRight: '16px',
-});
 
 interface Props {
   spaceId: string;
@@ -30,24 +17,11 @@ interface Props {
   initialRows: Row[];
   initialColumns: Column[];
   types: Triple[];
-  initialTypeId: string;
 }
 
-export function Entities({ spaceId, initialColumns, initialRows, types, initialTypeId }: Props) {
-  const initialType = types.find(type => type.entityId === initialTypeId) ?? types[0];
-  const [selectedType, setSelectedType] = useState<Triple>(initialType);
-
+export function Entities({ spaceId, initialColumns, initialRows, types }: Props) {
   const tableStore = useTables();
-  const typeOptions = types.map(type => {
-    return {
-      label: type.entityName,
-      value: type.entityId,
-      onClick: () => {
-        setSelectedType(type);
-      },
-      disabled: false,
-    };
-  });
+
   return (
     <PageContainer>
       <Spacer height={20} />
@@ -59,7 +33,7 @@ export function Entities({ spaceId, initialColumns, initialRows, types, initialT
         <EntitiesTable
           space={spaceId}
           rows={initialRows}
-          columns={initialColumns}
+          columns={tableStore.columns.length === 0 ? initialColumns : tableStore.columns}
           // triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
         />
 

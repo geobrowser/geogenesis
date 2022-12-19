@@ -17,10 +17,10 @@ interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
-  initialTypeId: string;
+  initialType: Triple;
+  initialTypes: Triple[];
   initialColumns: Column[];
   initialRows: Row[];
-  types: Triple[];
 }
 
 export default function EntitiesPage({
@@ -28,9 +28,9 @@ export default function EntitiesPage({
   spaceName,
   spaceImage,
   initialColumns,
-  initialTypeId,
+  initialType,
   initialRows,
-  types,
+  initialTypes,
 }: Props) {
   return (
     <div>
@@ -43,14 +43,19 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TableStoreProvider space={spaceId} initialRows={initialRows} initialTypeId={initialTypeId}>
+      <TableStoreProvider
+        space={spaceId}
+        initialRows={initialRows}
+        initialType={initialType}
+        initialColumns={initialColumns}
+        initialTypes={initialTypes}
+      >
         <Entities
-          types={types}
+          types={initialTypes}
           spaceId={spaceId}
           spaceName={spaceName}
           initialColumns={initialColumns}
           initialRows={initialRows}
-          initialTypeId={initialTypeId}
         />
       </TableStoreProvider>
     </div>
@@ -158,10 +163,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceId,
       spaceName,
       spaceImage,
-      initialTypeId: initialType.entityId,
+      initialType,
       initialColumns,
       rowTriples,
-      types: types.triples,
+      initialTypes: types.triples,
       initialRows,
     },
   };
