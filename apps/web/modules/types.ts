@@ -21,18 +21,17 @@ export type StringValue = {
 export type EntityValue = {
   type: 'entity';
   id: string;
+  name: string | null;
 };
 
 export type Value = NumberValue | StringValue | EntityValue;
-
-// id -> name
-export type EntityNames = Record<string, string | null>;
 
 export type Triple = {
   id: string;
   entityId: string;
   entityName: string | null;
   attributeId: string;
+  attributeName: string | null;
   value: Value;
   space: string;
 };
@@ -61,8 +60,8 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-export type CreateTripleAction = CreateTripleActionSchema & Identifiable;
-export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable;
+export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple;
+export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple;
 
 export type EditTripleAction = {
   type: 'editTriple';

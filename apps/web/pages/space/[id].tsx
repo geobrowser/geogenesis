@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
-import { EntityNames, Triple } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { Params } from '~/modules/params';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
 
@@ -14,24 +14,17 @@ interface Props {
   spaceName?: string;
   spaceImage: string | null;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
 }
 
-export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples, initialEntityNames }: Props) {
+export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples }: Props) {
   return (
     <div>
       <Head>
         <title>{spaceName ?? spaceId}</title>
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
-      <TripleStoreProvider space={spaceId} initialEntityNames={initialEntityNames} initialTriples={initialTriples}>
-        <Triples
-          spaceId={spaceId}
-          spaceName={spaceName}
-          spaceImage={spaceImage}
-          initialEntityNames={initialEntityNames}
-          initialTriples={initialTriples}
-        />
+      <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
+        <Triples spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} initialTriples={initialTriples} />
       </TripleStoreProvider>
     </div>
   );
@@ -63,7 +56,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceName,
       spaceImage,
       initialTriples: triples.triples,
-      initialEntityNames: triples.entityNames,
     },
   };
 };

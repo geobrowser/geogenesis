@@ -1,5 +1,5 @@
 import { v4, validate, version } from 'uuid';
-import { OmitStrict, Triple, Value } from '../types';
+import { OmitStrict, Triple } from '../types';
 
 export function createEntityId() {
   return v4();
@@ -9,45 +9,19 @@ export function createEntityId() {
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
-export function createTripleId(space: string, entityId: string, attributeId: string, value: Value): string;
-export function createTripleId(triple: Triple): string;
-export function createTripleId(
-  ...args: [space: string, entityId: string, attributeId: string, value: Value] | [triple: Triple]
-): string {
-  if (args.length === 1) {
-    const triple = args[0];
-    return createTripleId(triple.space, triple.entityId, triple.attributeId, triple.value);
-  }
-
-  return `${args[0]}:${args[1]}:${args[2]}:${args[3].id}`;
+export function createTripleId(triple: OmitStrict<Triple, 'attributeName' | 'entityName' | 'id'>): string {
+  return `${triple.space}:${triple.entityId}:${triple.attributeId}:${triple.value.id}`;
 }
 
-export function createTripleWithId(space: string, entityId: string, attributeId: string, value: Value): Triple;
-export function createTripleWithId(triple: OmitStrict<Triple, 'id' | 'entityName'>): Triple;
-export function createTripleWithId(
-  ...args:
-    | [space: string, entityId: string, attributeId: string, value: Value]
-    | [triple: OmitStrict<Triple, 'id' | 'entityName'>]
-): Triple {
-  if (args.length === 1) {
-    const triple = args[0];
-    return {
-      id: createTripleId(triple.space, triple.entityId, triple.attributeId, triple.value),
-      entityId: triple.entityId,
-      attributeId: triple.attributeId,
-      value: triple.value,
-      space: triple.space,
-      entityName: null,
-    };
-  }
-
+export function createTripleWithId(triple: Triple): Triple {
   return {
-    id: createTripleId(args[0], args[1], args[2], args[3]),
-    space: args[0],
-    entityId: args[1],
-    attributeId: args[2],
-    value: args[3],
-    entityName: null,
+    id: createTripleId(triple),
+    entityId: triple.entityId,
+    attributeId: triple.attributeId,
+    attributeName: triple.attributeName,
+    value: triple.value,
+    space: triple.space,
+    entityName: triple.entityName,
   };
 }
 

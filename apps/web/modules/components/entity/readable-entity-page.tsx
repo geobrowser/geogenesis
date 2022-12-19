@@ -12,8 +12,9 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
-import { EntityNames, Triple } from '~/modules/types';
-import { getEntityDescription, groupBy, NavUtils, partition } from '~/modules/utils';
+import { Entity } from '~/modules/models/Entity';
+import { Triple } from '~/modules/types';
+import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
 import { LinkedEntityGroup } from './types';
 
@@ -53,12 +54,11 @@ interface Props {
   id: string;
   name: string;
   space: string;
-  entityNames: EntityNames;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ triples, id, name, space, entityNames, linkedEntities }: Props) {
-  const description = getEntityDescription(triples, entityNames);
+export function ReadableEntityPage({ triples, id, name, space, linkedEntities }: Props) {
+  const description = Entity.description(triples);
 
   return (
     <div>
@@ -92,7 +92,7 @@ export function ReadableEntityPage({ triples, id, name, space, entityNames, link
 
       <Content>
         <Attributes>
-          <EntityAttributes entityId={id} triples={triples} space={space} entityNames={entityNames} />
+          <EntityAttributes entityId={id} triples={triples} space={space} />
         </Attributes>
       </Content>
 
@@ -109,13 +109,7 @@ export function ReadableEntityPage({ triples, id, name, space, entityNames, link
           <LayoutGroup>
             <Spacer height={12} />
             {Object.values(linkedEntities).map(group => (
-              <LinkedEntityCard
-                key={group.id}
-                originalEntityId={id}
-                entityGroup={group}
-                space={space}
-                entityNames={entityNames}
-              />
+              <LinkedEntityCard key={group.id} originalEntityId={id} entityGroup={group} space={space} />
             ))}
           </LayoutGroup>
         )}
@@ -134,18 +128,16 @@ const GroupedAttributes = styled.div(({ theme }) => ({
   flexWrap: 'wrap',
 }));
 
-function EntityAttribute({ triple, space, entityNames }: { triple: Triple; space: string; entityNames: EntityNames }) {
+function EntityAttribute({ triple, space }: { triple: Triple; space: string }) {
   return (
     <div key={triple.attributeId}>
       <Text as="p" variant="bodySemibold">
-        {entityNames[triple.attributeId] || triple.attributeId}
+        {triple.attributeName || triple.attributeId}
       </Text>
       {triple.value.type === 'entity' ? (
         <>
           <Spacer height={4} />
-          <Chip href={NavUtils.toEntity(space, triple.value.id)}>
-            {entityNames[triple.value.id] || triple.value.id}
-          </Chip>
+          <Chip href={NavUtils.toEntity(space, triple.value.id)}>{triple.value.name || triple.value.id}</Chip>
         </>
       ) : (
         <Text as="p">{triple.value.value}</Text>
@@ -158,12 +150,10 @@ function EntityAttributes({
   entityId,
   triples,
   space,
-  entityNames,
 }: {
   entityId: string;
   triples: Props['triples'];
   space: Props['space'];
-  entityNames: Props['entityNames'];
 }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
@@ -172,7 +162,7 @@ function EntityAttributes({
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
         <EntityAttributeContainer key={`${entityId}--${attributeId}-${index}`}>
           <Text as="p" variant="bodySemibold">
-            {entityNames[attributeId] || attributeId}
+            {triples[0].attributeName || attributeId}
           </Text>
           <GroupedAttributes>
             {/* 
@@ -182,9 +172,7 @@ function EntityAttributes({
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
                 <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
-                  <Chip href={NavUtils.toEntity(space, triple.value.id)}>
-                    {entityNames[triple.value.id] || triple.value.id}
-                  </Chip>
+                  <Chip href={NavUtils.toEntity(space, triple.value.id)}>{triple.value.name || triple.value.id}</Chip>
                 </div>
               ) : (
                 <>
@@ -265,12 +253,10 @@ function LinkedEntityCard({
   originalEntityId,
   entityGroup,
   space,
-  entityNames,
 }: {
   originalEntityId: string;
   entityGroup: LinkedEntityGroup;
   space: Props['space'];
-  entityNames: Props['entityNames'];
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -279,7 +265,7 @@ function LinkedEntityCard({
     t => t.value.type === 'entity' && t.value.id === originalEntityId
   );
 
-  const description = getEntityDescription(entityGroup.triples, entityNames);
+  const description = Entity.description(entityGroup.triples);
 
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
@@ -310,21 +296,9 @@ function LinkedEntityCard({
           {shouldMaximizeContent && (
             <>
               {linkedTriples.map((triple, i) => (
-                <EntityAttribute
-                  key={`${triple.attributeId}-${triple.id}-${i}`}
-                  triple={triple}
-                  space={space}
-                  entityNames={entityNames}
-                />
+                <EntityAttribute key={`${triple.attributeId}-${triple.id}-${i}`} triple={triple} space={space} />
               ))}
-              {isExpanded && (
-                <EntityAttributes
-                  entityId={entityGroup.id}
-                  triples={unlinkedTriples}
-                  space={space}
-                  entityNames={entityNames}
-                />
-              )}
+              {isExpanded && <EntityAttributes entityId={entityGroup.id} triples={unlinkedTriples} space={space} />}
             </>
           )}
         </LinkedEntityCardContent>

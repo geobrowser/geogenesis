@@ -1,5 +1,5 @@
 import { observable } from '@legendapp/state';
-import { EntityNames, Triple } from '../types';
+import { Triple } from '../types';
 import { FetchTriplesOptions, INetwork } from './network';
 
 export const makeStubTriple = (name: string): Triple => {
@@ -8,6 +8,7 @@ export const makeStubTriple = (name: string): Triple => {
     entityId: name,
     entityName: name,
     attributeId: 'name',
+    attributeName: 'Name',
     value: {
       type: 'string',
       value: name,
@@ -32,12 +33,6 @@ export class MockNetwork implements INetwork {
 
     return {
       triples,
-      entityNames: triples.reduce((acc, triple) => {
-        if (triple.value.type === 'string') {
-          acc[triple.entityId] = triple.value.value;
-        }
-        return acc;
-      }, {} as EntityNames),
     };
   };
 

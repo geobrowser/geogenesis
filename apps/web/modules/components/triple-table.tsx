@@ -9,10 +9,10 @@ import {
   RowData,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { Chip } from '../design-system/chip';
 import { Text } from '../design-system/text';
-import { EntityNames, Triple, Value } from '../types';
+import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
@@ -23,7 +23,6 @@ declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     space: string;
-    entityNames: EntityNames;
     expandedCells: Record<string, boolean>;
   }
 }
@@ -39,7 +38,7 @@ const columns = [
     header: () => <Text variant="smallTitle">Entity</Text>,
     size: COLUMN_SIZE,
   }),
-  columnHelper.accessor(row => row.attributeId, {
+  columnHelper.accessor(row => row.attributeName, {
     id: 'attributeId',
     header: () => <Text variant="smallTitle">Attribute</Text>,
     size: COLUMN_SIZE,
@@ -90,28 +89,14 @@ const ChipCellContainer = styled.div({
 const defaultColumn: Partial<ColumnDef<Triple>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
-    const entityNames = table.options?.meta?.entityNames || {};
-
-    const initialCellData = getValue();
-    // We need to keep and update the state of the cell normally
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
-
-    // If the initialValue is changed external, sync it up with our state
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => {
-      setCellData(initialCellData);
-    }, [initialCellData]);
-
+    const cellData = getValue();
+    const triple = row.original;
     const cellId = `${row.original.id}-${cell.column.id}`;
 
     switch (id) {
       case 'entityId': {
         const entityId = cellData as string;
-
-        // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
-
-        const value = entityNames[entityId] ?? entityId;
+        const value = triple.entityName ?? triple.entityId;
 
         return (
           <CellContent
@@ -121,18 +106,10 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
             value={value}
           />
         );
-
-        // return (
-        //   <CellTruncate shouldTruncate={true}>
-        //     <Text color="ctaPrimary" variant="tableCell" ellipsize>
-        //       {entityNames[entityId] || entityId}
-        //     </Text>
-        //   </CellTruncate>
-        // );
       }
       case 'attributeId': {
         const attributeId = cellData as string;
-        const value = entityNames[attributeId] ?? attributeId;
+        const value = triple.attributeName ?? attributeId;
         return <CellContent value={value} />;
       }
       case 'value': {
@@ -141,7 +118,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={NavUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
+              <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
             </ChipCellContainer>
           );
         }
@@ -160,10 +137,9 @@ const EmptyTableText = styled.td(props => ({
 interface Props {
   triples: Triple[];
   space: string;
-  entityNames: EntityNames;
 }
 
-export const TripleTable = memo(function TripleTable({ triples, entityNames, space }: Props) {
+export const TripleTable = memo(function TripleTable({ triples, space }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
@@ -180,7 +156,6 @@ export const TripleTable = memo(function TripleTable({ triples, entityNames, spa
       },
     },
     meta: {
-      entityNames,
       expandedCells,
       space,
     },

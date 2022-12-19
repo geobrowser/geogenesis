@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { Account, Action, EntityNames, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
+import { Account, Action, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -30,7 +30,7 @@ export function extractValue(networkTriple: NetworkTriple): Value {
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
     case 'ENTITY':
-      return { type: 'entity', id: networkTriple.entityValue.id };
+      return { type: 'entity', id: networkTriple.entityValue.id, name: networkTriple.entityValue.name };
   }
 }
 
@@ -60,7 +60,7 @@ export type PublishOptions = {
   onChangePublishState: (newState: ReviewState) => void;
 };
 
-type FetchTriplesResult = { triples: Triple[]; entityNames: EntityNames };
+type FetchTriplesResult = { triples: Triple[] };
 
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
@@ -172,27 +172,13 @@ export class Network implements INetwork {
           entityId: networkTriple.entity.id,
           entityName: networkTriple.entity.name,
           attributeId: networkTriple.attribute.id,
+          attributeName: networkTriple.attribute.name,
           value: extractValue(networkTriple),
           space,
         };
       });
 
-    const entityNames: EntityNames = json.data.triples.reduce((acc, triple) => {
-      if (triple.entity.name !== null) {
-        acc[triple.entity.id] = triple.entity.name;
-      }
-
-      if (triple.valueType === 'ENTITY') {
-        acc[triple.entityValue.id] = triple.entityValue.name;
-      }
-
-      if (triple.attribute.name !== null) {
-        acc[triple.attribute.id] = triple.attribute.name;
-      }
-      return acc;
-    }, {} as EntityNames);
-
-    return { triples, entityNames };
+    return { triples };
   };
 
   fetchEntities = async (name: string) => {
