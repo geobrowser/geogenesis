@@ -26,7 +26,16 @@ interface Column {
   label: string;
 }
 
-type Row = Record<string, Triple[]>;
+/* 
+
+*/
+type Row = Record<
+  string,
+  {
+    label: string;
+    triples: Triple[];
+  }
+>;
 
 export default function EntitiesPage({
   spaceId,
@@ -165,6 +174,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         ...acc,
         [column.value]: {
           label: initialEntityNames[triple.value.id] || triple.value.value,
+          triples: [...(acc[column.value]?.triples ?? []), triple],
           value: triple.value.id,
         },
       };
