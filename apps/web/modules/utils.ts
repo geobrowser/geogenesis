@@ -1,6 +1,4 @@
 import { computed, ObservableComputed } from '@legendapp/state';
-import { SYSTEM_IDS } from './constants';
-import { Triple } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -32,11 +30,6 @@ export const NavUtils = {
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
   toCreateEntity: (spaceId: string) => `/space/${spaceId}/create-entity`,
 };
-
-export function getEntityName(triples: Triple[]) {
-  const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
-  return nameValue?.type === 'string' ? nameValue.value : null;
-}
 
 export function getFilesFromFileList(fileList: FileList): File[] {
   const files: File[] = [];

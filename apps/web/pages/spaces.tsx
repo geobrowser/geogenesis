@@ -13,7 +13,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
 
-import { useAccessControl } from '~/modules/state/use-access-control';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 
 const Column = styled.div({
   display: 'flex',

@@ -11,7 +11,7 @@ import { Text } from '~/modules/design-system/text';
 import { TextButton } from '~/modules/design-system/text-button';
 import { ColorName } from '~/modules/design-system/theme/colors';
 // import { importCSVFile } from '~/modules/services/import';
-import { useAccessControl } from '~/modules/state/use-access-control';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { useEditable } from '../state/use-editable';

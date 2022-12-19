@@ -4,7 +4,7 @@ import { Dropdown } from '~/modules/design-system/dropdown';
 import { Edit } from '~/modules/design-system/icons/edit';
 import { Eye } from '~/modules/design-system/icons/eye';
 import { Spacer } from '~/modules/design-system/spacer';
-import { useAccessControl } from '~/modules/state/use-access-control';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
