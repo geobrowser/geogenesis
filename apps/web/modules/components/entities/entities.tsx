@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
@@ -31,10 +30,12 @@ interface Props {
   initialRows: Row[];
   initialColumns: Column[];
   types: Triple[];
+  initialTypeId: string;
 }
 
-export function Entities({ spaceId, initialColumns, initialRows, types }: Props) {
-  const [selectedType, setSelectedType] = useState<Triple>(types[0]);
+export function Entities({ spaceId, initialColumns, initialRows, types, initialTypeId }: Props) {
+  const initialType = types.find(type => type.entityId === initialTypeId) ?? types[0];
+  const [selectedType, setSelectedType] = useState<Triple>(initialType);
 
   const tableStore = useTables();
   const typeOptions = types.map(type => {
@@ -52,14 +53,7 @@ export function Entities({ spaceId, initialColumns, initialRows, types }: Props)
       <Spacer height={20} />
 
       <motion.div style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
-        <EntityFilterBar>
-          <TypeSelect>
-            <Dropdown trigger={selectedType.entityName} options={typeOptions} />
-          </TypeSelect>
-
-          <EntityInput />
-        </EntityFilterBar>
-
+        <EntityInput />
         <Spacer height={12} />
 
         <EntitiesTable

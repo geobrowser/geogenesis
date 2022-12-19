@@ -28,7 +28,7 @@ interface Props {
   initialTriples: Triple[];
 }
 
-export function Triples({ spaceId, initialTriples, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
+export function Triples({ spaceId, initialTriples, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
 

@@ -6,6 +6,13 @@ import { Input } from '../../design-system/input';
 import { Spacer } from '../../design-system/spacer';
 import { useTables } from '../../state/use-tables';
 import { FilterClause } from '../../types';
+import { TypeDialog } from '../filter/type-dialog';
+
+const SearchInputContainer = styled.div(props => ({
+  position: 'relative',
+  width: '100%',
+  marginLeft: props.theme.space * 4,
+}));
 
 const SearchIconContainer = styled.div(props => ({
   position: 'absolute',
@@ -21,35 +28,6 @@ const FilterIconContainer = styled.div(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderLeft: 'none',
   color: props.theme.colors['grey-04'],
-}));
-
-const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
-  cursor: 'pointer',
-  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
-  borderLeft: 'none',
-  transition: 'colors 0.15s ease-in-out',
-  color: props.theme.colors['grey-04'],
-
-  '&:hover': {
-    color: props.theme.colors.text,
-    backgroundColor: props.theme.colors['grey-01'],
-  },
-
-  button: {
-    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-    color: props.showPredefinedQueries ? props.theme.colors.text : props.theme.colors['grey-04'],
-
-    '&:active': {
-      color: props.theme.colors.text,
-      outlineColor: props.theme.colors.ctaPrimary,
-    },
-
-    '&:focus': {
-      color: props.theme.colors.text,
-      outlineColor: props.theme.colors.ctaPrimary,
-    },
-  },
 }));
 
 const InputContainer = styled.div({
@@ -93,34 +71,35 @@ export function EntityInput() {
 
   return (
     <InputContainer ref={inputContainerRef}>
-      <SearchIconContainer>
-        <Search />
-      </SearchIconContainer>
-      {showBasicFilter ? (
-        <TriplesInputField
-          disabled={true}
-          placeholder="Search entities..."
-          value={tableStore.query}
-          onChange={onChange}
-        />
-      ) : (
-        <AdvancedFilters>
-          {tableStore.filterState.map(filter => (
-            <AdvancedFilterPill
-              key={filter.field}
-              filterClause={filter}
-              onClick={() => onAdvancedFilterClick(filter.field)}
-            />
-          ))}
-        </AdvancedFilters>
-      )}
-      {/* <FilterIconContainer>
-        <FilterDialog
-          inputContainerWidth={inputRect?.width || 578}
-          filterState={tableStore.filterState}
-          setFilterState={tableStore.setFilterState}
-        />
-      </FilterIconContainer> */}
+      <TypeDialog
+        inputContainerWidth={578}
+        filterState={tableStore.filterState}
+        setFilterState={tableStore.setFilterState}
+      />
+
+      <SearchInputContainer>
+        <SearchIconContainer>
+          <Search />
+        </SearchIconContainer>
+        {showBasicFilter ? (
+          <TriplesInputField
+            disabled={true}
+            placeholder="Search entities..."
+            value={tableStore.query}
+            onChange={onChange}
+          />
+        ) : (
+          <AdvancedFilters>
+            {tableStore.filterState.map(filter => (
+              <AdvancedFilterPill
+                key={filter.field}
+                filterClause={filter}
+                onClick={() => onAdvancedFilterClick(filter.field)}
+              />
+            ))}
+          </AdvancedFilters>
+        )}
+      </SearchInputContainer>
     </InputContainer>
   );
 }

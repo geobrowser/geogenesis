@@ -19,16 +19,17 @@ interface ITripleStore {
   setPageNumber(page: number): void;
 }
 
-export type InitialTripleStoreParams = {
+export type InitialTableStoreParams = {
   query: string;
   pageNumber: number;
   filterState: FilterState;
+  typeId: string;
 };
 
 interface ITripleStoreConfig {
   api: INetwork;
   space: string;
-  initialParams?: InitialTripleStoreParams;
+  initialParams?: InitialTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
 }

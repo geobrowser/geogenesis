@@ -2,7 +2,7 @@ import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './conf
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
-function parseQueryParameters(url: string): InitialTripleStoreParams {
+function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -65,7 +65,7 @@ function getConfigFromUrl(url: string): AppConfig {
 }
 
 export const Params = {
-  parseQueryParameters,
+  parseTripleQueryParameters,
   stringifyQueryParameters,
   getConfigFromUrl,
 };

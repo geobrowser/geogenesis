@@ -41,7 +41,7 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseQueryParameters(context.resolvedUrl);
+  const initialParams = Params.parseTripleQueryParameters(context.resolvedUrl);
   const config = Params.getConfigFromUrl(context.resolvedUrl);
 
   const storage = new StorageClient(config.ipfs);

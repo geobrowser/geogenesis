@@ -12,9 +12,10 @@ interface Props {
   space: string;
   children: React.ReactNode;
   initialRows: Row[];
+  initialTypeId: string;
 }
 
-export function TableStoreProvider({ space, children, initialRows }: Props) {
+export function TableStoreProvider({ space, children, initialRows, initialTypeId }: Props) {
   const { network } = useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
@@ -23,9 +24,9 @@ export function TableStoreProvider({ space, children, initialRows }: Props) {
   const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
-    const initialParams = Params.parseQueryParameters(urlRef.current);
+    const initialParams = Params.parseTripleQueryParameters(urlRef.current);
     return new TableStore({ api: network, space, initialParams, initialRows });
-  }, [network, space, initialRows]);
+  }, [network, space, initialRows, initialTypeId]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

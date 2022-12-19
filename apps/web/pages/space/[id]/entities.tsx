@@ -43,7 +43,7 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TableStoreProvider space={spaceId} initialRows={initialRows}>
+      <TableStoreProvider space={spaceId} initialRows={initialRows} initialTypeId={initialTypeId}>
         <Entities
           types={types}
           spaceId={spaceId}
@@ -59,7 +59,7 @@ export default function EntitiesPage({
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseQueryParameters(context.resolvedUrl);
+  const initialParams = Params.parseTripleQueryParameters(context.resolvedUrl);
   const config = Params.getConfigFromUrl(context.resolvedUrl);
 
   const storage = new StorageClient(config.ipfs);
