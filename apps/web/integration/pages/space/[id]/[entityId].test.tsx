@@ -11,6 +11,7 @@ const scalarDescriptionTriple: Triple = {
   entityId: '1',
   space: '1',
   attributeId: 'Description',
+  attributeName: 'Description',
   entityName: 'Banana',
   value: {
     id: '1',
@@ -24,10 +25,12 @@ const linkedDescriptionTriple: Triple = {
   entityId: '1',
   space: '1',
   attributeId: 'Description',
+  attributeName: 'Description',
   entityName: 'Banana',
   value: {
     id: '1',
     type: 'entity',
+    name: 'Description of a Banana',
   },
 };
 
@@ -36,6 +39,7 @@ const genericAttribute: Triple = {
   entityId: '1',
   space: '1',
   attributeId: 'attribute-1',
+  attributeName: 'Attribute 1',
   entityName: 'Banana',
   value: {
     id: '1',
@@ -48,41 +52,27 @@ describe('Entity page', () => {
   it('Renders page name', () => {
     render(
       <Providers>
-        <EntityPage entityNames={{}} id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
       </Providers>
     );
 
     expect(screen.getByText('Banana')).toBeInTheDocument();
   });
 
-  it('Renders entity description from linked description', () => {
+  it('Renders entity description from description that is an entity type', () => {
     render(
       <Providers>
-        <EntityPage
-          entityNames={{ '1': 'Banana' }}
-          id="1"
-          name="Description of a Banana"
-          space="1"
-          triples={[linkedDescriptionTriple]}
-          linkedEntities={{}}
-        />
+        <EntityPage id="1" name="Banana" space="1" triples={[linkedDescriptionTriple]} linkedEntities={{}} />
       </Providers>
     );
 
-    expect(screen.getByText('Description of a Banana')).toBeInTheDocument();
+    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
-  it('Renders entity description from scalar description', () => {
+  it('Renders entity description from description that is a string type', () => {
     render(
       <Providers>
-        <EntityPage
-          entityNames={{}}
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[scalarDescriptionTriple]}
-          linkedEntities={{}}
-        />
+        <EntityPage id="1" name="Banana" space="1" triples={[scalarDescriptionTriple]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -92,16 +82,7 @@ describe('Entity page', () => {
   it('Renders entity triples', () => {
     render(
       <Providers>
-        <EntityPage
-          entityNames={{
-            'attribute-1': 'Attribute 1',
-          }}
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[genericAttribute]}
-          linkedEntities={{}}
-        />
+        <EntityPage id="1" name="Banana" space="1" triples={[genericAttribute]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -111,7 +92,13 @@ describe('Entity page', () => {
   it('Renders entity triples without names', () => {
     render(
       <Providers>
-        <EntityPage entityNames={{}} id="1" name="Banana" space="1" triples={[genericAttribute]} linkedEntities={{}} />
+        <EntityPage
+          id="1"
+          name="Banana"
+          space="1"
+          triples={[{ ...genericAttribute, attributeName: null }]}
+          linkedEntities={{}}
+        />
       </Providers>
     );
 
@@ -121,7 +108,7 @@ describe('Entity page', () => {
   it('Renders empty linked entities', () => {
     render(
       <Providers>
-        <EntityPage entityNames={{}} id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -132,7 +119,6 @@ describe('Entity page', () => {
     render(
       <Providers>
         <EntityPage
-          entityNames={{}}
           id="1"
           name="Banana"
           space="1"
@@ -155,9 +141,6 @@ describe('Entity page', () => {
     render(
       <Providers>
         <EntityPage
-          entityNames={{
-            Description: 'Description of a Banana',
-          }}
           id="1"
           name="Banana"
           space="1"
@@ -173,14 +156,13 @@ describe('Entity page', () => {
       </Providers>
     );
 
-    expect(screen.getByText('Description of a Banana')).toBeInTheDocument();
+    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
   it('Does not render linked entity description if empty', () => {
     render(
       <Providers>
         <EntityPage
-          entityNames={{}}
           id="1"
           name="Banana"
           space="1"
@@ -205,7 +187,6 @@ describe('Entity page', () => {
     render(
       <Providers>
         <EntityPage
-          entityNames={{}}
           id="1"
           name="Banana"
           space="1"
@@ -235,7 +216,6 @@ describe('Entity page', () => {
     render(
       <Providers>
         <EntityPage
-          entityNames={{}}
           id="1"
           name="Banana"
           space="1"
@@ -248,6 +228,7 @@ describe('Entity page', () => {
                   value: {
                     type: 'entity',
                     id: '1',
+                    name: 'Alice',
                   },
                 },
                 makeStubTriple('Bob'),

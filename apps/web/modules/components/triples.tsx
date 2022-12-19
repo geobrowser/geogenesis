@@ -5,7 +5,7 @@ import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/state/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
-import { EntityNames, Triple } from '../types';
+import { Triple } from '../types';
 // import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
@@ -26,10 +26,9 @@ interface Props {
   spaceId: string;
   spaceName?: string;
   initialTriples: Triple[];
-  initialEntityNames: EntityNames;
 }
 
-export function Triples({ spaceId, initialEntityNames, initialTriples, spaceName = ZERO_WIDTH_SPACE }: Props) {
+export function Triples({ spaceId, initialTriples, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
 
@@ -71,7 +70,6 @@ export function Triples({ spaceId, initialEntityNames, initialTriples, spaceName
         <TripleTable
           space={spaceId}
           triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
-          entityNames={Object.keys(tripleStore.entityNames).length === 0 ? initialEntityNames : tripleStore.entityNames}
         />
 
         <Spacer height={12} />

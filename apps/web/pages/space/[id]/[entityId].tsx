@@ -2,7 +2,7 @@ import { GetServerSideProps } from 'next';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { EntityNames, Triple } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { getEntityName } from '~/modules/utils';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
@@ -18,7 +18,6 @@ interface Props {
   id: string;
   name: string;
   space: string;
-  entityNames: EntityNames;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
@@ -39,12 +38,7 @@ export default function EntityPage(props: Props) {
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.space}
-      initialEntityNames={props.entityNames}
-      initialTriples={props.triples}
-    >
+    <EntityStoreProvider id={props.id} spaceId={props.space} initialTriples={props.triples}>
       <Page {...props} />
     </EntityStoreProvider>
   );
@@ -96,21 +90,12 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       return acc;
     }, {} as Record<string, LinkedEntityGroup>);
 
-  const relatedEntityAttributeNames = relatedEntities.reduce((acc, { entityNames }) => {
-    return { ...acc, ...entityNames };
-  }, {} as EntityNames);
-
   return {
     props: {
       triples: entity.triples,
       id: entityId,
       name: getEntityName(entity.triples) ?? entityId,
       space,
-      entityNames: {
-        ...entity.entityNames,
-        ...related.entityNames,
-        ...relatedEntityAttributeNames,
-      },
       linkedEntities,
       key: entityId,
     },

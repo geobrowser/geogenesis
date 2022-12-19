@@ -2,74 +2,70 @@ import { computed, ObservableComputed } from '@legendapp/state';
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
-import { createTripleWithId } from '../services/create-id';
+import { Triple } from '../models/Triple';
 import { INetwork } from '../services/network';
 import {
   Action,
   CreateTripleAction,
   DeleteTripleAction,
   EditTripleAction,
-  EntityNames,
   ReviewState,
-  Triple,
+  Triple as TripleType,
 } from '../types';
 
 // HACK: We're adding attributeName since we need it to update the entityNames object.
 // In the near future we'll be merging entity/attribute names into the triple at
 // request time instead of infecting the codebase with entityName checks.
 interface IEntityStore {
-  create(triple: Triple & { attributeName?: string | null }): void;
-  update(triple: Triple & { attributeName?: string | null }, oldTriple: Triple): void;
-  remove(triples: Triple[]): void;
+  create(triple: TripleType): void;
+  update(triple: TripleType, oldTriple: TripleType): void;
+  remove(triples: TripleType[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
-const createInitialDefaultTriples = (spaceId: string, entityId: string): Triple[] => {
+const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
   return [
-    createTripleWithId(spaceId, entityId, SYSTEM_IDS.TYPE, {
-      id: '',
-      type: 'entity',
+    Triple.withId({
+      space: spaceId,
+      entityId,
+      entityName: '',
+      attributeName: 'Types',
+      attributeId: SYSTEM_IDS.TYPE,
+      value: {
+        id: '',
+        type: 'entity',
+        name: '',
+      },
     }),
   ];
-};
-
-const createInitialDefaultNames = (): EntityNames => {
-  return {
-    [SYSTEM_IDS.TYPE]: 'Types',
-  };
 };
 
 interface IEntityStoreConfig {
   api: INetwork;
   spaceId: string;
   id: string;
-  initialTriples: Triple[];
-  initialEntityNames: EntityNames;
+  initialTriples: TripleType[];
 }
 
 export class EntityStore implements IEntityStore {
   private api: INetwork;
   spaceId: string;
-  triples$: ObservableComputed<Triple[]>;
-  entityNames$: Observable<EntityNames>;
+  triples$: ObservableComputed<TripleType[]>;
   actions$: Observable<Action[]>;
 
-  constructor({ api, initialEntityNames, initialTriples, spaceId, id }: IEntityStoreConfig) {
+  constructor({ api, initialTriples, spaceId, id }: IEntityStoreConfig) {
     const initialDefaultTriples =
       initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
-    const initialDefaultNames =
-      Object.entries(initialEntityNames).length === 0 ? createInitialDefaultNames() : initialEntityNames;
 
     this.api = api;
     this.triples$ = observable(initialDefaultTriples);
-    this.entityNames$ = observable<EntityNames>(initialDefaultNames);
     this.actions$ = observable<Action[]>([]);
     this.spaceId = spaceId;
 
     this.triples$ = computed(() => {
       // We operate on the triples array in reverse so that we can `push` instead of `unshift`
       // when creating new triples, which is significantly faster.
-      const triples: Triple[] = [...initialDefaultTriples].reverse();
+      const triples: TripleType[] = [...initialDefaultTriples].reverse();
 
       // If our actions have modified one of the network triples, we don't want to add that
       // network triple to the triples array
@@ -81,21 +77,21 @@ export class EntityStore implements IEntityStore {
             // list doesn't reorder.
             const indexOfSiblingTriples = triples.findIndex(t => t.attributeId === action.attributeId);
             if (indexOfSiblingTriples === -1) {
-              triples.push(createTripleWithId({ ...action, space: spaceId }));
+              triples.push(Triple.withId({ ...action, space: spaceId }));
               break;
             }
 
-            triples.splice(indexOfSiblingTriples, 0, createTripleWithId({ ...action, space: spaceId }));
+            triples.splice(indexOfSiblingTriples, 0, Triple.withId({ ...action, space: spaceId }));
             break;
           }
           case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action, space: spaceId }).id);
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action, space: spaceId }).id);
             triples.splice(index, 1);
             break;
           }
           case 'editTriple': {
-            const index = triples.findIndex(t => t.id === createTripleWithId({ ...action.before, space: spaceId }).id);
-            triples[index] = createTripleWithId({ ...action.after, space: spaceId });
+            const index = triples.findIndex(t => t.id === Triple.withId({ ...action.before, space: spaceId }).id);
+            triples[index] = Triple.withId({ ...action.after, space: spaceId });
             break;
           }
         }
@@ -105,25 +101,16 @@ export class EntityStore implements IEntityStore {
     });
   }
 
-  create = (triple: Triple & { attributeName?: string | null }) => {
+  create = (triple: TripleType) => {
     const action: CreateTripleAction = {
       ...triple,
       type: 'createTriple',
     };
 
-    const newEntityNames: EntityNames = {
-      [triple.value.id]: triple.attributeName ?? null,
-    };
-
-    this.entityNames$.set({
-      ...this.entityNames$.get(),
-      ...newEntityNames,
-    });
-
     this.actions$.set([...this.actions$.get(), action]);
   };
 
-  remove = (triples: Triple[]) => {
+  remove = (triples: TripleType[]) => {
     const actions: DeleteTripleAction[] = triples.map(triple => ({
       ...triple,
       type: 'deleteTriple',
@@ -132,7 +119,7 @@ export class EntityStore implements IEntityStore {
     this.actions$.set([...this.actions$.get(), ...actions]);
   };
 
-  update = (triple: Triple & { attributeName?: string | null }, oldTriple: Triple) => {
+  update = (triple: TripleType, oldTriple: TripleType) => {
     const action: EditTripleAction = {
       type: 'editTriple',
       before: {
@@ -144,20 +131,6 @@ export class EntityStore implements IEntityStore {
         type: 'createTriple',
       },
     };
-
-    const entityNames = this.entityNames$.get();
-
-    const newEntityNames: EntityNames = {
-      [triple.attributeId]: entityNames[triple.attributeId]
-        ? entityNames[triple.attributeId]
-        : triple.attributeName ?? null,
-      [triple.value.id]: entityNames[triple.value.id] ? entityNames[triple.value.id] : triple.attributeName ?? null,
-    };
-
-    this.entityNames$.set({
-      ...entityNames,
-      ...newEntityNames,
-    });
 
     this.actions$.set([...this.actions$.get(), action]);
   };
