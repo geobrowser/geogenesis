@@ -185,6 +185,9 @@ export class Network implements INetwork {
     this.entitiesAbortController.abort();
     this.entitiesAbortController = new AbortController();
 
+    // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
+    // followed by a list of entities that contain the search term.
+    // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -193,7 +196,11 @@ export class Network implements INetwork {
       signal: this.entitiesAbortController.signal,
       body: JSON.stringify({
         query: `query {
-          geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
+          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
+            id,
+            name
+          }
+          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
             id,
             name
           }
@@ -203,11 +210,14 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        geoEntities: { name: string | null; id: string }[];
+        startEntities: { name: string | null; id: string }[];
+        containEntities: { name: string | null; id: string }[];
       };
     } = await response.json();
 
-    return json.data.geoEntities;
+    const { startEntities, containEntities } = json.data;
+
+    return sortSearchResultsByRelevance(startEntities, containEntities);
   };
 
   fetchSpaces = async () => {
@@ -280,6 +290,36 @@ export class Network implements INetwork {
 
     return spaces;
   };
+}
+
+const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
+  if (a === null && b === null) {
+    return 0;
+  }
+  if (a === null) {
+    return 1;
+  }
+  if (b === null) {
+    return -1;
+  }
+  if (a.length === b.length) {
+    return a.localeCompare(b);
+  }
+  return a.length - b.length;
+};
+
+function sortSearchResultsByRelevance(
+  startEntities: { id: string; name: string | null }[],
+  containEntities: { id: string; name: string | null }[]
+) {
+  const startEntityIds = startEntities.map(entity => entity.id);
+
+  const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
+  const secondaryResults = containEntities
+    .filter(entity => !startEntityIds.includes(entity.id))
+    .sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
+
+  return [...primaryResults, ...secondaryResults];
 }
 
 async function findEvents(tx: ContractTransaction, name: string): Promise<Event[]> {
