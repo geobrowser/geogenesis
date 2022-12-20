@@ -70,17 +70,27 @@ describe('TripleStore params', () => {
 
 describe('Config params', () => {
   it('Parses environment from url', () => {
-    const config = Params.getConfigFromUrl('https://banana.com/?env=development');
+    const config = Params.getConfigFromUrl('https://banana.com/?env=development', undefined);
     expect(config).toEqual(configOptions.development);
   });
 
   it("Defaults to production if there's no param", () => {
-    const config = Params.getConfigFromUrl('https://banana.com/');
+    const config = Params.getConfigFromUrl('https://banana.com/', undefined);
     expect(config).toEqual(configOptions.production);
   });
 
   it('Defaults to production if param not in configOptions', () => {
-    const config = Params.getConfigFromUrl('https://banana.com/?env=banana');
+    const config = Params.getConfigFromUrl('https://banana.com/?env=banana', undefined);
+    expect(config).toEqual(configOptions.production);
+  });
+
+  it('Defaults to cookie environment if it exists', () => {
+    const config = Params.getConfigFromUrl('https://banana.com/', 'development');
+    expect(config).toEqual(configOptions.development);
+  });
+
+  it('Defaults to url param if both the param and cookie exists', () => {
+    const config = Params.getConfigFromUrl('https://banana.com/?env=production', 'development');
     expect(config).toEqual(configOptions.production);
   });
 });

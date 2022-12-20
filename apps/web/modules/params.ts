@@ -3,6 +3,8 @@ import { InitialTableStoreParams } from './state/table-store';
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
+const ENV_PARAM_NAME = 'env';
+
 function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
@@ -73,16 +75,38 @@ function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, s
   }, {});
 }
 
-function getConfigFromUrl(url: string): AppConfig {
+/**
+ * We currently set the environment and API URLs based on the chain that the connected wallet
+ * is connected to. As a dev this can be annoying since we may not have a wallet connected or
+ * may want to connect to a different environment.
+ *
+ * There is an escape hatch for this by setting the `ENV_PARAM_NAME` query param in the URL.
+ * Each SSR'd page should read from this param and set the application config in server-fetched
+ * situations based on this param.
+ *
+ * As a developer experience enhancement, we set this configured escape hatch in a cookie so you
+ * don't have to manually add the param to the URL each time there is a page navigation.
+ *
+ * The priority order of URL param and cookie is:
+ * 1. URL param
+ * 2. Cookie
+ * 3. Defaults to production if neither are set.
+ *
+ * @param url -- The full URL to parse the param from.
+ * @param cookie -- The cookie value for the environment from the `ENV_PARAM_NAME` cookie name.
+ * @returns AppConfig
+ */
+function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
-  const env: AppEnv = (params.get('env') as AppEnv) ?? DEFAULT_ENV;
+  const env: AppEnv = params.get('env') as AppEnv;
 
-  if (!(env in configOptions)) {
+  if (!(cookie && cookie in configOptions) && !(env in configOptions)) {
     console.log(`Invalid environment "${env}", defaulting to ${DEFAULT_ENV}`);
     return configOptions[DEFAULT_ENV];
   }
 
-  const config = configOptions[env];
+  // Default to the environment if it's set, otherwise use the cookie
+  const config = configOptions[env ?? cookie];
   return getConfig(config.chainId);
 }
 
@@ -91,4 +115,5 @@ export const Params = {
   parseTypeQueryParameters,
   stringifyQueryParameters,
   getConfigFromUrl,
+  ENV_PARAM_NAME,
 };
