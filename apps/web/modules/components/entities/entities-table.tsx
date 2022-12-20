@@ -103,6 +103,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const space = table.options.meta!.space;
     const entityNames = table.options?.meta?.entityNames || {};
 
+    const cellId = `${row.original.id}-${cell.column.id}`;
+
     const initialCellData = getValue<Cell>();
 
     console.log(initialCellData);
@@ -116,8 +118,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       setCellData(initialCellData);
     }, [initialCellData]);
 
-    const cellId = `${row.original.id}-${cell.column.id}`;
-
     return (
       <div>
         {cellData.triples.map(({ value }) => {
@@ -128,7 +128,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
               </ChipCellContainer>
             );
           } else {
-            return <CellContent key={value.id} value={value.value} />;
+            return (
+              <CellContent key={value.id} isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />
+            );
           }
         })}
       </div>

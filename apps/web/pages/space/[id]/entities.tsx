@@ -9,6 +9,7 @@ import { Entity } from '~/modules/models/Entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
+import { InitialTableStoreParams } from '~/modules/state/table-store';
 import { TableStoreProvider } from '~/modules/state/table-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
 import { Column, Row, Triple } from '~/modules/types';
@@ -58,8 +59,8 @@ export default function EntitiesPage({
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseTripleQueryParameters(context.resolvedUrl);
-  const config = Params.getConfigFromUrl(context.resolvedUrl);
+  const initialParams = Params.parseTypeQueryParameters(context.resolvedUrl);
+  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
@@ -87,6 +88,37 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   /* Get the first type */
   const initialType = types.triples[1];
 
+  const { columns, rows } = await fetchEntityTableData({
+    typeEntityId: initialType.entityId,
+    spaceId,
+    initialParams,
+    network,
+  });
+
+  return {
+    props: {
+      spaceId,
+      spaceName,
+      spaceImage,
+      initialType,
+      initialColumns: columns,
+      initialRows: rows,
+      initialTypes: types.triples,
+    },
+  };
+};
+
+export const fetchEntityTableData = async ({
+  typeEntityId,
+  spaceId,
+  initialParams,
+  network,
+}: {
+  typeEntityId: string;
+  spaceId: string;
+  initialParams: InitialTableStoreParams;
+  network: Network;
+}) => {
   /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
   const columnsTriples = await network.fetchTriples({
     query: initialParams.query,
@@ -94,7 +126,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     filter: [
-      { field: 'entity-id', value: initialType.entityId },
+      { field: 'entity-id', value: typeEntityId },
       { field: 'attribute-id', value: SYSTEM_IDS.TYPE_ATTRIBUTES },
     ],
   });
@@ -108,7 +140,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
       filter: [
         { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
-        { field: 'linked-to', value: initialType.entityId },
+        { field: 'linked-to', value: typeEntityId },
       ],
     })
   ).triples.map(triple => triple.entityId);
@@ -116,7 +148,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   /* Then we then fetch all triples associated with those entity IDs */
   const rowTriples = await Promise.all(
     rowEntityIds.map(entityId =>
-      new Network(storage, config.subgraph).fetchTriples({
+      network.fetchTriples({
         space: spaceId,
         query: '',
         skip: 0,
@@ -127,15 +159,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   );
 
   /* ...and then we can build our initialColumns */
-  const initialColumns = columnsTriples.triples.map(triple => ({
+  const columns = columnsTriples.triples.map(triple => ({
     name: Entity.entityName(triple) || triple.value.id,
     id: triple.value.id,
   })) as Column[];
 
   /* Finally, we can build our initialRows */
-  const initialRows = rowTriples.map(row => {
+  const rows = rowTriples.map(row => {
     return row.triples.reduce((acc, triple) => {
-      const column = initialColumns.find(column => column.id === triple.attributeId);
+      const column = columns.find(column => column.id === triple.attributeId);
 
       /* If the column doesn't exist, we don't want to add it to the row */
       if (!column) {
@@ -153,15 +185,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   });
 
   return {
-    props: {
-      spaceId,
-      spaceName,
-      spaceImage,
-      initialType,
-      initialColumns,
-      rowTriples,
-      initialTypes: types.triples,
-      initialRows,
-    },
+    columns,
+    rows,
   };
 };
