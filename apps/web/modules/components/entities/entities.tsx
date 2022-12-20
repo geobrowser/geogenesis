@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
-import { Column, Row, Triple } from '../../types';
+import { Column, Row } from '../../types';
 // import { getFilesFromFileList } from '../utils';
 import { useTables } from '~/modules/state/use-tables';
 import { PageContainer, PageNumberContainer } from '../table/styles';
@@ -13,13 +13,11 @@ import { EntityInput } from './entity-input';
 interface Props {
   spaceId: string;
   spaceName?: string;
-  initialTriples: Triple[];
   initialRows: Row[];
   initialColumns: Column[];
-  types: Triple[];
 }
 
-export function Entities({ spaceId, initialColumns, initialRows, types }: Props) {
+export function Entities({ spaceId, initialColumns, initialRows }: Props) {
   const tableStore = useTables();
 
   return (

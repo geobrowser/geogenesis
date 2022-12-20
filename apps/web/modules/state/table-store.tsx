@@ -33,6 +33,7 @@ export type InitialTableStoreParams = {
   query: string;
   pageNumber: number;
   filterState: FilterState;
+  typeId: string;
 };
 
 interface ITableStoreConfig {
@@ -51,6 +52,7 @@ export const DEFAULT_INITIAL_PARAMS = {
   query: '',
   pageNumber: 0,
   filterState: [],
+  typeId: '',
 };
 
 export function initialFilterState(): FilterState {

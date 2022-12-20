@@ -12,10 +12,11 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
-import { Cell, Column, EntityNames, Row, Value } from '../../types';
+import { Cell, Column, Row, Value } from '../../types';
 import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
+import { EmptyTableText } from '../table/styles';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -23,7 +24,6 @@ declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     space: string;
-    entityNames: EntityNames;
     expandedCells: Record<string, boolean>;
   }
 }

@@ -94,7 +94,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledTrigger open={open}>
+        <StyledTrigger>
           {tableStore.type.entityName} <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </StyledTrigger>

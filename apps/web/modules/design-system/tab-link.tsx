@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import React, { ForwardedRef, forwardRef } from 'react';
+import React from 'react';
 
 const StyledLink = styled.a<{ isActive: boolean }>(({ theme, isActive }) => ({
   ...theme.typography.largeTitle,
@@ -20,15 +20,10 @@ interface Props {
   disabled?: boolean;
 }
 
-export const TabLink = forwardRef(function OnboardingButton(
-  { isActive, href, children, disabled = false }: Props,
-  ref: ForwardedRef<HTMLButtonElement>
-) {
+export const TabLink = ({ isActive, href, children }: Props) => {
   return (
     <Link href={href}>
-      <StyledLink disabled={disabled} ref={ref} isActive={isActive}>
-        {children}
-      </StyledLink>
+      <StyledLink isActive={isActive}>{children}</StyledLink>
     </Link>
   );
-});
+};

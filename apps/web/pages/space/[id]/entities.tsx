@@ -50,13 +50,7 @@ export default function EntitiesPage({
         initialColumns={initialColumns}
         initialTypes={initialTypes}
       >
-        <Entities
-          types={initialTypes}
-          spaceId={spaceId}
-          spaceName={spaceName}
-          initialColumns={initialColumns}
-          initialRows={initialRows}
-        />
+        <Entities spaceId={spaceId} spaceName={spaceName} initialColumns={initialColumns} initialRows={initialRows} />
       </TableStoreProvider>
     </div>
   );
