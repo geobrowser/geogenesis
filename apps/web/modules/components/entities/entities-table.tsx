@@ -12,7 +12,7 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
-import { Column, EntityNames, Row, Value } from '../../types';
+import { Cell, Column, EntityNames, Row, Value } from '../../types';
 import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
@@ -103,12 +103,12 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const space = table.options.meta!.space;
     const entityNames = table.options?.meta?.entityNames || {};
 
-    const initialCellData = getValue();
+    const initialCellData = getValue<Cell>();
 
     console.log(initialCellData);
     // We need to keep and update the state of the cell normally
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [cellData, setCellData] = useState<string | Value | unknown>(initialCellData);
+    const [cellData, setCellData] = useState<Cell>(initialCellData);
 
     // If the initialValue is changed external, sync it up with our state
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -118,52 +118,21 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellId = `${row.original.id}-${cell.column.id}`;
 
-    return JSON.stringify(cellData);
-
-    switch (id) {
-      case 'entityId': {
-        const entityId = cellData as string;
-
-        // TODO: Instead of a direct input this should be an autocomplete field for entity names/ids
-
-        const value = entityNames[entityId] ?? entityId;
-
-        return (
-          <CellContent
-            isEntity
-            href={NavUtils.toEntity(space, entityId)}
-            isExpanded={table.options?.meta?.expandedCells[cellId]}
-            value={value}
-          />
-        );
-
-        // return (
-        //   <CellTruncate shouldTruncate={true}>
-        //     <Text color="ctaPrimary" variant="tableCell" ellipsize>
-        //       {entityNames[entityId] || entityId}
-        //     </Text>
-        //   </CellTruncate>
-        // );
-      }
-      case 'attributeId': {
-        const attributeId = cellData as string;
-        const value = entityNames[attributeId] ?? attributeId;
-        return <CellContent value={value} />;
-      }
-      case 'value': {
-        const value = cellData as Value;
-
-        if (value.type === 'entity') {
-          return (
-            <ChipCellContainer>
-              <Chip href={NavUtils.toEntity(space, value.id)}>{entityNames[value.id] || value.id}</Chip>
-            </ChipCellContainer>
-          );
-        }
-
-        return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;
-      }
-    }
+    return (
+      <div>
+        {cellData.triples.map(({ value }) => {
+          if (value.type === 'entity') {
+            return (
+              <ChipCellContainer key={value.id}>
+                <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
+              </ChipCellContainer>
+            );
+          } else {
+            return <CellContent key={value.id} value={value.value} />;
+          }
+        })}
+      </div>
+    );
   },
 };
 
