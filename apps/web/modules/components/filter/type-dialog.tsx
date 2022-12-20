@@ -3,10 +3,11 @@ import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { useTables } from '~/modules/state/use-tables';
-import { FilterClause, FilterField, FilterState, Triple } from '~/modules/types';
+import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultItem, ResultList } from '../entity/entity-text-autocomplete';
@@ -65,60 +66,10 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
 
 const MotionContent = motion(StyledContent);
 
-const ButtonGroup = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-});
-
-const StyledIconButton = styled.button<{ open: boolean }>(props => ({
-  all: 'unset',
-  backgroundColor: props.open ? props.theme.colors['grey-01'] : props.theme.colors.white,
-  color: props.theme.colors['grey-04'],
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-  transition: 'colors 0.15s ease-in-out',
-
-  '&:hover': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors['grey-01'],
-    color: props.theme.colors.text,
-  },
-
-  '&:active': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-
-  '&:focus': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-}));
-
 interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
   setFilterState: (filterState: FilterState) => void;
-}
-
-const FIELD_LABELS: Record<FilterField, string> = {
-  'entity-name': 'Entity contains',
-  'attribute-name': 'Attribute contains',
-  value: 'Value contains',
-  'entity-id': 'Entity ID',
-  'attribute-id': 'Attribute ID',
-  'linked-to': 'Linked to Entity ID',
-};
-
-const FIELD_OPTIONS = (Object.entries(FIELD_LABELS) as [FilterField, string][]).map(([value, label]) => ({
-  value,
-  label,
-}));
-
-function getFilterOptions(filterState: FilterState, value?: FilterClause) {
-  return FIELD_OPTIONS.filter(
-    option => option.value === value?.field || !filterState.find(item => item.field === option.value)
-  );
 }
 
 export function TypeDialog({ inputContainerWidth }: Props) {
@@ -143,7 +94,10 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledTrigger open={open}>{tableStore.type.entityName}</StyledTrigger>
+        <StyledTrigger open={open}>
+          {tableStore.type.entityName} <Spacer width={8} />
+          <ChevronDownSmall color="ctaPrimary" />
+        </StyledTrigger>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
