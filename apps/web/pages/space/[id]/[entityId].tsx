@@ -8,7 +8,7 @@ import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useEditable } from '~/modules/stores/use-editable';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { EntityStoreProvider } from '~/modules/stores/entity-store-provider';
+import { EntityStoreProvider } from '~/modules/entity/entity-store-provider';
 import { useEffect } from 'react';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Entity } from '~/modules/entity';

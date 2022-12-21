@@ -24,7 +24,7 @@ import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 import { FlowBar } from './flow-bar';
 import { Action } from '../action';
-import { useActions } from '../stores/use-actions-store';
+import { useActionsStore } from '../action/use-actions-store';
 
 const TableHeader = styled.div({
   display: 'flex',
@@ -71,7 +71,7 @@ export function Triples({ spaceId, initialTriples, spaceImage, spaceName = ZERO_
   const { editable } = useEditable();
   const tripleStore = useTriples();
   const theme = useTheme();
-  const { actions, publish } = useActions(spaceId);
+  const { actions, publish } = useActionsStore(spaceId);
 
   // const onImport = async (files: FileList) => {
   //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);

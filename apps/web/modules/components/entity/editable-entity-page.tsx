@@ -7,7 +7,6 @@ import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { ID } from '~/modules/id';
-import { useEntityTriples } from '~/modules/stores/use-entity-triples';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
@@ -19,8 +18,8 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Action } from '~/modules/action';
 import { Triple } from '~/modules/triple';
-import { Entity } from '~/modules/entity';
-import { useActions } from '~/modules/stores/use-actions-store';
+import { Entity, useEntityStore } from '~/modules/entity';
+import { useActionsStore } from '~/modules/action';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -68,8 +67,8 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create } = useEntityTriples();
-  const { actions, publish } = useActions(space);
+  const { triples: localTriples, update, create } = useEntityStore();
+  const { actions, publish } = useActionsStore(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -219,7 +218,7 @@ function EntityAttributes({
   triples: Props['triples'];
   name: string;
 }) {
-  const { update, remove, create } = useEntityTriples();
+  const { update, remove, create } = useEntityStore();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {

@@ -2,7 +2,7 @@ import { GetServerSideProps } from 'next';
 import { useMemo } from 'react';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ID } from '~/modules/id';
-import { EntityStoreProvider } from '~/modules/stores/entity-store-provider';
+import { EntityStoreProvider } from '~/modules/entity/entity-store-provider';
 
 interface Props {
   spaceId: string;

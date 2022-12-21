@@ -50,7 +50,7 @@ export function TripleStoreProvider({ space, children, initialTriples }: Props) 
   return <TripleStoreContext.Provider value={store}>{children}</TripleStoreContext.Provider>;
 }
 
-export function useTripleStore() {
+export function useTripleStoreContext() {
   const value = useContext(TripleStoreContext);
 
   if (!value) {

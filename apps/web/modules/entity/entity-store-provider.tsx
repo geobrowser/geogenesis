@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from 'react';
+import { useActionsStoreContext } from '../action';
 import { Services } from '../services';
 import { Triple } from '../types';
-import { useActionsStore } from './actions-store-provider';
 import { EntityStore } from './entity-store';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
@@ -15,7 +15,7 @@ interface Props {
 
 export function EntityStoreProvider({ id, spaceId, children, initialTriples }: Props) {
   const { network } = Services.useServices();
-  const ActionsStore = useActionsStore();
+  const ActionsStore = useActionsStoreContext();
 
   const store = useMemo(() => {
     return new EntityStore({ api: network, spaceId, initialTriples, id, ActionsStore });
@@ -24,7 +24,7 @@ export function EntityStoreProvider({ id, spaceId, children, initialTriples }: P
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
 
-export function useEntityStore() {
+export function useEntityStoreContext() {
   const value = useContext(EntityStoreContext);
 
   if (!value) {

@@ -4,7 +4,7 @@ import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../triple';
 import { INetwork } from '../services/network';
 import { Triple as TripleType } from '../types';
-import { ActionsStore } from './actions-store';
+import { ActionsStore } from '../action';
 
 interface IEntityStore {
   create(triple: TripleType): void;
