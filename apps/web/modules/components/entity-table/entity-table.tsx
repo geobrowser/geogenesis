@@ -77,6 +77,12 @@ const ChipCellContainer = styled.div({
   margin: '-1px 0',
 });
 
+const Entities = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: theme.space * 3,
+}));
+
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
@@ -101,7 +107,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     }
 
     return (
-      <div>
+      <Entities>
         {cellData.triples.map(({ value, attributeId, entityId, entityName }) => {
           if (attributeId === 'name') {
             const value = entityName ?? entityId;
@@ -127,7 +133,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
             );
           }
         })}
-      </div>
+      </Entities>
     );
   },
 };
