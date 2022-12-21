@@ -42,26 +42,6 @@ const formatColumns = (columns: Column[]) => {
   );
 };
 
-// Table width, minus cell borders
-
-// const columns = [
-//   columnHelper.accessor(row => row.entityId, {
-//     id: 'entityId',
-//     header: () => <Text variant="smallTitle">Entity</Text>,
-//     size: COLUMN_SIZE,
-//   }),
-//   columnHelper.accessor(row => row.attributeId, {
-//     id: 'attributeId',
-//     header: () => <Text variant="smallTitle">Attribute</Text>,
-//     size: COLUMN_SIZE,
-//   }),
-//   columnHelper.accessor(row => row.value, {
-//     id: 'value',
-//     header: () => <Text variant="smallTitle">Value</Text>,
-//     size: COLUMN_SIZE,
-//   }),
-// ];
-
 const Table = styled.table(props => ({
   width: '100%',
   borderStyle: 'hidden',
@@ -107,7 +87,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const initialCellData = getValue<Cell>();
 
-    console.log(initialCellData);
     // We need to keep and update the state of the cell normally
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [cellData, setCellData] = useState<Cell>(initialCellData);
@@ -118,9 +97,27 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       setCellData(initialCellData);
     }, [initialCellData]);
 
+    console.log(cellData);
+
+    if (!cellData) {
+      return <div />;
+    }
+
     return (
       <div>
-        {cellData.triples.map(({ value }) => {
+        {cellData.triples.map(({ value, attributeId, entityId, entityName }) => {
+          if (attributeId === 'name') {
+            const value = entityName ?? entityId;
+            return (
+              <CellContent
+                key={value}
+                isEntity
+                href={NavUtils.toEntity(space, entityId)}
+                isExpanded={table.options?.meta?.expandedCells[cellId]}
+                value={value}
+              />
+            );
+          }
           if (value.type === 'entity') {
             return (
               <ChipCellContainer key={value.id}>
