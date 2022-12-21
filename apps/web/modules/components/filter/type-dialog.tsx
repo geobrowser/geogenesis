@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { useTables } from '~/modules/state/use-tables';
+import { useEntityTable } from '~/modules/state/use-entity-tables';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
@@ -74,7 +74,7 @@ interface Props {
 
 export function TypeDialog({ inputContainerWidth }: Props) {
   const theme = useTheme();
-  const tableStore = useTables();
+  const entityTableStore = useEntityTable();
 
   const { width } = useWindowSize();
 
@@ -83,11 +83,11 @@ export function TypeDialog({ inputContainerWidth }: Props) {
 
   const [filter, setFilter] = useState('');
 
-  const types = tableStore.types || [];
+  const types = entityTableStore.types || [];
   const filteredTypes = types.filter(type => (type.entityName || '').toLowerCase().includes(filter.toLowerCase()));
 
   const handleSelect = (type: Triple) => {
-    tableStore.setType(type);
+    entityTableStore.setType(type);
     setOpen(false);
   };
 
@@ -95,7 +95,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledTrigger>
-          {tableStore.type.entityName} <Spacer width={8} />
+          {entityTableStore.type.entityName} <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </StyledTrigger>
       </PopoverPrimitive.Trigger>

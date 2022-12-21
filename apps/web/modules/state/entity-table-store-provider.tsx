@@ -5,9 +5,9 @@ import { AppConfig } from '../config';
 import { Params } from '../params';
 import { useServices } from '../services';
 import { Column, FilterState, Row, Triple } from '../types';
-import { TableStore } from './table-store';
+import { EntityTableStore } from './entity-table-store';
 
-const TableStoreContext = createContext<TableStore | undefined>(undefined);
+const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
 interface Props {
   space: string;
@@ -19,7 +19,7 @@ interface Props {
   config: AppConfig;
 }
 
-export function TableStoreProvider({
+export function EntityTableStoreProvider({
   space,
   config,
   children,
@@ -37,7 +37,7 @@ export function TableStoreProvider({
 
   const store = useMemo(() => {
     const initialParams = Params.parseTypeQueryParameters(urlRef.current);
-    return new TableStore({
+    return new EntityTableStore({
       api: network,
       space,
       initialParams,
@@ -67,11 +67,11 @@ export function TableStoreProvider({
     );
   }, [basePath, query, pageNumber, filterState]);
 
-  return <TableStoreContext.Provider value={store}>{children}</TableStoreContext.Provider>;
+  return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }
 
-export function useTableStore() {
-  const value = useContext(TableStoreContext);
+export function useEntityTableStore() {
+  const value = useContext(EntityTableStoreContext);
 
   if (!value) {
     throw new Error(`Missing TripleStoreProvider`);

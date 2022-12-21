@@ -4,7 +4,7 @@ import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
 import { Column, Row } from '../../types';
 // import { getFilesFromFileList } from '../utils';
-import { useTables } from '~/modules/state/use-tables';
+import { useEntityTable } from '~/modules/state/use-entity-tables';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntitiesTable } from './entities-table';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function Entities({ spaceId, initialColumns, initialRows }: Props) {
-  const tableStore = useTables();
+  const entityTableStore = useEntityTable();
 
   return (
     <PageContainer>
@@ -30,17 +30,17 @@ export function Entities({ spaceId, initialColumns, initialRows }: Props) {
 
         <EntitiesTable
           space={spaceId}
-          columns={tableStore.columns.length === 0 ? initialColumns : tableStore.columns}
-          rows={tableStore.rows.length === 0 ? initialRows : tableStore.rows}
+          columns={entityTableStore.columns.length === 0 ? initialColumns : entityTableStore.columns}
+          rows={entityTableStore.rows.length === 0 ? initialRows : entityTableStore.rows}
         />
 
         <Spacer height={12} />
 
         <PageNumberContainer>
-          {tableStore.pageNumber > 1 && (
+          {entityTableStore.pageNumber > 1 && (
             <>
-              <PageNumber number={1} onClick={() => tableStore.setPageNumber(0)} />
-              {tableStore.pageNumber > 2 ? (
+              <PageNumber number={1} onClick={() => entityTableStore.setPageNumber(0)} />
+              {entityTableStore.pageNumber > 2 ? (
                 <>
                   <Spacer width={16} />
                   <Text color="grey-03" variant="metadataMedium">
@@ -53,23 +53,23 @@ export function Entities({ spaceId, initialColumns, initialRows }: Props) {
               )}
             </>
           )}
-          {tableStore.hasPreviousPage && (
+          {entityTableStore.hasPreviousPage && (
             <>
-              <PageNumber number={tableStore.pageNumber} onClick={tableStore.setPreviousPage} />
+              <PageNumber number={entityTableStore.pageNumber} onClick={entityTableStore.setPreviousPage} />
               <Spacer width={4} />
             </>
           )}
-          <PageNumber isActive number={tableStore.pageNumber + 1} />
-          {tableStore.hasNextPage && (
+          <PageNumber isActive number={entityTableStore.pageNumber + 1} />
+          {entityTableStore.hasNextPage && (
             <>
               <Spacer width={4} />
-              <PageNumber number={tableStore.pageNumber + 2} onClick={tableStore.setNextPage} />
+              <PageNumber number={entityTableStore.pageNumber + 2} onClick={entityTableStore.setNextPage} />
             </>
           )}
           <Spacer width={32} />
-          <PreviousButton isDisabled={!tableStore.hasPreviousPage} onClick={tableStore.setPreviousPage} />
+          <PreviousButton isDisabled={!entityTableStore.hasPreviousPage} onClick={entityTableStore.setPreviousPage} />
           <Spacer width={12} />
-          <NextButton isDisabled={!tableStore.hasNextPage} onClick={tableStore.setNextPage} />
+          <NextButton isDisabled={!entityTableStore.hasNextPage} onClick={entityTableStore.setNextPage} />
         </PageNumberContainer>
       </motion.div>
     </PageContainer>

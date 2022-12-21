@@ -1,8 +1,8 @@
 import { useSelector } from '@legendapp/state/react';
 import { FilterState } from '../types';
-import { useTableStore } from './table-store-provider';
+import { useEntityTableStore } from './entity-table-store-provider';
 
-export const useTables = () => {
+export const useEntityTable = () => {
   const {
     create,
     publish,
@@ -22,7 +22,7 @@ export const useTables = () => {
     columns$,
     types$,
     setFilterState,
-  } = useTableStore();
+  } = useEntityTableStore();
   const rows = useSelector(rows$);
   const actions = useSelector(actions$);
   const columns = useSelector(columns$);

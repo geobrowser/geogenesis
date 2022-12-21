@@ -5,7 +5,7 @@ import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
 import { Spacer } from '../../design-system/spacer';
-import { useTables } from '../../state/use-tables';
+import { useEntityTable } from '../../state/use-entity-tables';
 import { FilterClause } from '../../types';
 import { TypeDialog } from '../filter/type-dialog';
 
@@ -48,26 +48,27 @@ const AdvancedFilters = styled.div(props => ({
 }));
 
 export function EntityInput() {
-  const tableStore = useTables();
+  const entityTableStore = useEntityTable();
   const inputContainerRef = useRef<HTMLDivElement>(null);
-  const showBasicFilter = tableStore.filterState.length === 1 && tableStore.filterState[0].field === 'entity-name';
+  const showBasicFilter =
+    entityTableStore.filterState.length === 1 && entityTableStore.filterState[0].field === 'entity-name';
   const inputRect = useRect(inputContainerRef.current);
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    tableStore.setQuery(event.target.value);
+    entityTableStore.setQuery(event.target.value);
   };
 
   const onAdvancedFilterClick = (field: FilterClause['field']) => {
-    const filteredFilters = tableStore.filterState.filter(filter => filter.field !== field);
-    tableStore.setFilterState(filteredFilters);
+    const filteredFilters = entityTableStore.filterState.filter(filter => filter.field !== field);
+    entityTableStore.setFilterState(filteredFilters);
   };
 
   return (
     <InputContainer ref={inputContainerRef}>
       <TypeDialog
         inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
-        filterState={tableStore.filterState}
-        setFilterState={tableStore.setFilterState}
+        filterState={entityTableStore.filterState}
+        setFilterState={entityTableStore.setFilterState}
       />
 
       <SearchInputContainer>
@@ -75,10 +76,10 @@ export function EntityInput() {
           <Search />
         </SearchIconContainer>
         {showBasicFilter ? (
-          <TriplesInputField placeholder="Search entities..." value={tableStore.query} onChange={onChange} />
+          <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
         ) : (
           <AdvancedFilters>
-            {tableStore.filterState.map(filter => (
+            {entityTableStore.filterState.map(filter => (
               <AdvancedFilterPill
                 key={filter.field}
                 filterClause={filter}

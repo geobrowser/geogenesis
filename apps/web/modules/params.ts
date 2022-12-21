@@ -1,5 +1,5 @@
 import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
-import { InitialTableStoreParams } from './state/table-store';
+import { InitialEntityTableStoreParams } from './state/entity-table-store';
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
@@ -24,7 +24,7 @@ function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   };
 }
 
-function parseTypeQueryParameters(url: string): InitialTableStoreParams {
+function parseTypeQueryParameters(url: string): InitialEntityTableStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);

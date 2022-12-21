@@ -10,8 +10,8 @@ import { Entity } from '~/modules/models/Entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { InitialTableStoreParams } from '~/modules/state/table-store';
-import { TableStoreProvider } from '~/modules/state/table-store-provider';
+import { InitialEntityTableStoreParams } from '~/modules/state/entity-table-store';
+import { EntityTableStoreProvider } from '~/modules/state/entity-table-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
 import { Column, Row, Triple } from '~/modules/types';
 
@@ -47,7 +47,7 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TableStoreProvider
+      <EntityTableStoreProvider
         space={spaceId}
         config={config}
         initialRows={initialRows}
@@ -56,7 +56,7 @@ export default function EntitiesPage({
         initialTypes={initialTypes}
       >
         <Entities spaceId={spaceId} spaceName={spaceName} initialColumns={initialColumns} initialRows={initialRows} />
-      </TableStoreProvider>
+      </EntityTableStoreProvider>
     </div>
   );
 }
@@ -123,7 +123,7 @@ export const fetchEntityTableData = async ({
 }: {
   typeEntityId: string;
   spaceId: string;
-  initialParams: InitialTableStoreParams;
+  initialParams: InitialEntityTableStoreParams;
   config: AppConfig;
 }) => {
   const storage = new StorageClient(config.ipfs);

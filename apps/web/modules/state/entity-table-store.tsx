@@ -16,7 +16,7 @@ import {
 } from '../types';
 import { makeOptionalComputed } from '../utils';
 
-interface ITableStore {
+interface IEntityTableStore {
   actions$: Observable<Action[]>;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
@@ -31,17 +31,17 @@ interface ITableStore {
   setPageNumber(page: number): void;
 }
 
-export type InitialTableStoreParams = {
+export type InitialEntityTableStoreParams = {
   query: string;
   pageNumber: number;
   filterState: FilterState;
   typeId: string;
 };
 
-interface ITableStoreConfig {
+interface IEntityTableStoreConfig {
   api: INetwork;
   space: string;
-  initialParams?: InitialTableStoreParams;
+  initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
   initialType: Triple;
@@ -67,7 +67,7 @@ export function initialFilterState(): FilterState {
   ];
 }
 
-export class TableStore implements ITableStore {
+export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
   private config: AppConfig;
   actions$: Observable<Action[]> = observable<Action[]>([]);
@@ -92,7 +92,7 @@ export class TableStore implements ITableStore {
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
     config,
-  }: ITableStoreConfig) {
+  }: IEntityTableStoreConfig) {
     this.api = api;
     this.config = config;
 
