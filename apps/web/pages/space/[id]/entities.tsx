@@ -82,13 +82,17 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialTypes = await fetchSpaceTypeTriples(network, spaceId);
 
   const initialSelectedType = (
-    initialParams.typeId ? initialTypes.find(t => t.entityId === initialParams.typeId) : initialTypes[1]
+    initialParams.typeId ? initialTypes.find(t => t.entityId === initialParams.typeId) : initialTypes[0]
   ) as Triple;
 
+  const params = {
+    ...initialParams,
+    typeId: initialSelectedType.entityId,
+  };
+
   const { columns, rows } = await fetchEntityTableData({
-    typeEntityId: initialSelectedType.entityId,
     spaceId,
-    params: initialParams,
+    params,
     config,
   });
 
@@ -126,12 +130,10 @@ export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) 
 };
 
 export const fetchEntityTableData = async ({
-  typeEntityId,
   spaceId,
   params,
   config,
 }: {
-  typeEntityId: string;
   spaceId: string;
   params: InitialEntityTableStoreParams;
   config: AppConfig;
@@ -146,7 +148,7 @@ export const fetchEntityTableData = async ({
     first: 100,
     skip: 0,
     filter: [
-      { field: 'entity-id', value: typeEntityId },
+      { field: 'entity-id', value: params.typeId },
       { field: 'attribute-id', value: SYSTEM_IDS.TYPE_ATTRIBUTES },
     ],
   });
@@ -160,7 +162,7 @@ export const fetchEntityTableData = async ({
       skip: params.pageNumber * DEFAULT_PAGE_SIZE,
       filter: [
         { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
-        { field: 'linked-to', value: typeEntityId },
+        { field: 'linked-to', value: params.typeId },
       ],
     })
   ).triples.map(triple => triple.entityId);

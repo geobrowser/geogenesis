@@ -117,16 +117,17 @@ export class EntityTableStore implements IEntityTableStore {
         try {
           const { entityId } = this.selectedType$.get();
 
-          const { rows, columns } = await fetchEntityTableData({
-            typeEntityId: entityId,
-            spaceId: space,
-            params: initialParams,
-            config: this.config,
-          });
+          const params = {
+            query: this.query$.get(),
+            pageNumber: this.pageNumber$.get(),
+            filterState: this.filterState$.get(),
+            typeId: entityId,
+          };
 
-          console.log({
-            rows,
-            columns,
+          const { rows, columns } = await fetchEntityTableData({
+            spaceId: space,
+            params,
+            config: this.config,
           });
 
           return { columns, rows: rows.slice(0, pageSize), hasNextPage: rows.length > pageSize };
