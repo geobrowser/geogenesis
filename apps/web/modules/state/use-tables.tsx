@@ -18,7 +18,7 @@ export const useTables = () => {
     hasPreviousPage$,
     hasNextPage$,
     filterState$,
-    type$,
+    selectedType$,
     columns$,
     types$,
     setFilterState,
@@ -27,7 +27,7 @@ export const useTables = () => {
   const actions = useSelector(actions$);
   const columns = useSelector(columns$);
   const types = useSelector(types$);
-  const type = useSelector(type$);
+  const type = useSelector(selectedType$);
   const pageNumber = useSelector(pageNumber$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const hasNextPage = useSelector(hasNextPage$);

@@ -75,7 +75,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceName = spaceNames[spaceId];
 
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-  const types = await network.fetchTriples({
+  const types = await new Network(storage, config.subgraph).fetchTriples({
     query: initialParams.query,
     space: spaceId,
     first: DEFAULT_PAGE_SIZE,
@@ -170,6 +170,10 @@ export const fetchEntityTableData = async ({
     {
       name: 'Name',
       id: SYSTEM_IDS.NAME,
+    },
+    {
+      name: 'Type',
+      id: SYSTEM_IDS.TYPE,
     },
   ];
 

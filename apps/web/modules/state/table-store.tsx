@@ -73,7 +73,7 @@ export class TableStore implements ITableStore {
   actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]> = observable([]);
   pageNumber$: Observable<number>;
-  type$: Observable<Triple>;
+  selectedType$: Observable<Triple>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
@@ -97,7 +97,7 @@ export class TableStore implements ITableStore {
     this.config = config;
 
     this.rows$ = observable(initialRows);
-    this.type$ = observable(initialType);
+    this.selectedType$ = observable(initialType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
     this.types$ = observable(initialTypes);
@@ -114,7 +114,7 @@ export class TableStore implements ITableStore {
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
-          const { entityId } = this.type$.get();
+          const { entityId } = this.selectedType$.get();
 
           const { rows, columns } = await fetchEntityTableData({
             typeEntityId: entityId,
@@ -188,7 +188,7 @@ export class TableStore implements ITableStore {
   };
 
   setType = (type: Triple) => {
-    this.type$.set(type);
+    this.selectedType$.set(type);
   };
 
   setNextPage = () => {
