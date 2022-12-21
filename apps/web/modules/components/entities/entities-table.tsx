@@ -12,7 +12,7 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
-import { Cell, Column, Row, Value } from '../../types';
+import { Cell, Column, Row } from '../../types';
 import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
@@ -186,10 +186,12 @@ export const EntitiesTable = memo(function EntitiesTable({ rows, space, columns 
             <TableRow key={row.id}>
               {row.getVisibleCells().map(cell => {
                 const cellId = `${row.original.id}-${cell.column.id}`;
+                const firstTriple = cell.getValue<Cell>()?.triples[0];
+                const isExpandable = firstTriple && firstTriple.value.type === 'string';
 
                 return (
                   <TableCell
-                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'string'}
+                    isExpandable={isExpandable}
                     isExpanded={expandedCells[cellId]}
                     width={cell.column.getSize()}
                     key={cell.id}
