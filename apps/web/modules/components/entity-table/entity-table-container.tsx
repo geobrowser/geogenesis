@@ -20,6 +20,8 @@ interface Props {
 export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
 
+  const isSSR = typeof window === 'undefined';
+
   return (
     <PageContainer>
       <Spacer height={20} />
@@ -30,8 +32,8 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
 
         <EntityTable
           space={spaceId}
-          columns={entityTableStore.columns.length === 0 ? initialColumns : entityTableStore.columns}
-          rows={entityTableStore.rows.length === 0 ? initialRows : entityTableStore.rows}
+          columns={isSSR ? initialColumns : entityTableStore.columns}
+          rows={isSSR ? initialRows : entityTableStore.rows}
         />
 
         <Spacer height={12} />

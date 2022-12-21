@@ -6,7 +6,6 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  RowData,
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useEffect, useState } from 'react';
@@ -17,16 +16,6 @@ import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
 import { EmptyTableText } from '../table/styles';
-
-// We declare a new function that we will define and pass into the useTable hook.
-// See: https://tanstack.com/table/v8/docs/examples/react/editable-data
-declare module '@tanstack/react-table' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface TableMeta<TData extends RowData> {
-    space: string;
-    expandedCells: Record<string, boolean>;
-  }
-}
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -182,10 +171,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
         </thead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
-            <tr style={{ textAlign: 'center' }}>
-              <td />
+            <tr>
               <EmptyTableText>No results found</EmptyTableText>
-              <td />
             </tr>
           )}
           {table.getRowModel().rows.map(row => (
