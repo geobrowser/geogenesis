@@ -1,6 +1,6 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { Entities } from '~/modules/components/entities/entities';
+import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { AppConfig } from '~/modules/config';
@@ -55,7 +55,12 @@ export default function EntitiesPage({
         initialColumns={initialColumns}
         initialTypes={initialTypes}
       >
-        <Entities spaceId={spaceId} spaceName={spaceName} initialColumns={initialColumns} initialRows={initialRows} />
+        <EntityTableContainer
+          spaceId={spaceId}
+          spaceName={spaceName}
+          initialColumns={initialColumns}
+          initialRows={initialRows}
+        />
       </EntityTableStoreProvider>
     </div>
   );
@@ -168,6 +173,7 @@ export const fetchEntityTableData = async ({
     )
   );
 
+  /* Name and Type are the default columns... */
   const defaultColumns = [
     {
       name: 'Name',
@@ -179,7 +185,7 @@ export const fetchEntityTableData = async ({
     },
   ];
 
-  /* ...and then we can build our initialColumns */
+  /* ...and then we can format our user-defined schemaColumns */
   const schemaColumns = columnsTriples.triples.map(triple => ({
     name: Entity.entityName(triple) || triple.value.id,
     id: triple.value.id,
@@ -197,6 +203,7 @@ export const fetchEntityTableData = async ({
         return acc;
       }
 
+      /* Multiple triples are allowed to be displayed in a single column */
       return {
         ...acc,
         [column.id]: {

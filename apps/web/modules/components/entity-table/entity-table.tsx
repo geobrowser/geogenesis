@@ -138,7 +138,7 @@ interface Props {
   rows: Row[];
 }
 
-export const EntitiesTable = memo(function EntitiesTable({ rows, space, columns }: Props) {
+export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({

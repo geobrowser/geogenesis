@@ -7,8 +7,8 @@ import { Column, Row } from '../../types';
 import { useEntityTable } from '~/modules/state/use-entity-tables';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
-import { EntitiesTable } from './entities-table';
 import { EntityInput } from './entity-input';
+import { EntityTable } from './entity-table';
 
 interface Props {
   spaceId: string;
@@ -17,7 +17,7 @@ interface Props {
   initialColumns: Column[];
 }
 
-export function Entities({ spaceId, initialColumns, initialRows }: Props) {
+export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
 
   return (
@@ -28,7 +28,7 @@ export function Entities({ spaceId, initialColumns, initialRows }: Props) {
         <EntityInput />
         <Spacer height={12} />
 
-        <EntitiesTable
+        <EntityTable
           space={spaceId}
           columns={entityTableStore.columns.length === 0 ? initialColumns : entityTableStore.columns}
           rows={entityTableStore.rows.length === 0 ? initialRows : entityTableStore.rows}
