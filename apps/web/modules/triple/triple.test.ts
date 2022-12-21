@@ -25,8 +25,8 @@ describe('Triple', () => {
   });
 
   it('Returns an empty triple', () => {
-    expect(empty('banana-id')).toEqual({
-      id: '',
+    expect(empty('space-id', 'banana-id')).toEqual({
+      id: 'space-id:banana-id::',
       entityId: 'banana-id',
       attributeId: '',
       attributeName: '',
@@ -35,7 +35,7 @@ describe('Triple', () => {
         type: 'string',
         value: '',
       },
-      space: '',
+      space: 'space-id',
       entityName: '',
     });
   });

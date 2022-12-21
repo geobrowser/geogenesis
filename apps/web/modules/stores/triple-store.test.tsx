@@ -24,29 +24,6 @@ describe('TripleStore', () => {
     expect(store.triples$.get()).toStrictEqual([]);
   });
 
-  it('Adds new triple', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: 's', initialTriples: [] });
-
-    const newTriple: TripleType = Triple.withId(testBob);
-
-    store.create([newTriple]);
-    expect(store.triples$.get()).toStrictEqual([newTriple]);
-  });
-
-  it('Tracks the created triple', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: 's', initialTriples: [] });
-
-    const newTriple: TripleType = Triple.withId(testBob);
-
-    store.create([newTriple]);
-    expect(store.actions$.get()).toStrictEqual([
-      {
-        ...newTriple,
-        type: 'createTriple',
-      },
-    ]);
-  });
-
   it('Computes triples from page size', async () => {
     const initialTriples = [makeStubTriple('Alice')];
 

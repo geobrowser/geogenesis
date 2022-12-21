@@ -4,7 +4,7 @@ import { Action as ActionType } from '~/modules/types';
 import { getChangeCount } from './action';
 
 // Count should be 3
-const actions: ActionType[] = [
+const basicActions: ActionType[] = [
   {
     type: 'createTriple',
     ...makeStubTriple('Devin'),
@@ -25,6 +25,21 @@ const actions: ActionType[] = [
     type: 'deleteTriple',
     ...makeStubTriple('Bob'),
   },
+];
+
+const multipleEditsToSameTriple: ActionType[] = [
+  {
+    type: 'editTriple',
+    before: {
+      type: 'deleteTriple',
+      ...makeStubTriple('Alice'),
+    },
+    after: {
+      type: 'createTriple',
+      ...makeStubTriple('Alice'),
+      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
+    },
+  },
   {
     type: 'editTriple',
     before: {
@@ -40,9 +55,42 @@ const actions: ActionType[] = [
   },
 ];
 
+const createEditDeleteSameTriple: ActionType[] = [
+  {
+    type: 'createTriple',
+    ...makeStubTriple('Devin'),
+  },
+  {
+    type: 'editTriple',
+    before: {
+      type: 'deleteTriple',
+      ...makeStubTriple('Devin'),
+    },
+    after: {
+      type: 'createTriple',
+      ...makeStubTriple('Devin'),
+      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
+    },
+  },
+  {
+    type: 'deleteTriple',
+    ...makeStubTriple('Devin'),
+  },
+];
+
 describe('Action', () => {
-  it('Generates correct change counts from actions', () => {
-    const changes = getChangeCount(actions);
+  it('Generates correct change counts from base create/edit/delete actions', () => {
+    const changes = getChangeCount(basicActions);
     expect(changes).toEqual(3);
+  });
+
+  it('Generates correct change counts for multiple edits on the same triple', () => {
+    const changes = getChangeCount(multipleEditsToSameTriple);
+    expect(changes).toEqual(1);
+  });
+
+  it('Generates correct change counts for creating, editing, then deleting the same triple', () => {
+    const changes = getChangeCount(createEditDeleteSameTriple);
+    expect(changes).toEqual(0);
   });
 });
