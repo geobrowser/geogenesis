@@ -35,14 +35,10 @@ export class ActionsStore implements IActionsStore {
 
   private addActions = (spaceId: string, actions: Action[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
-    console.log('prevActions', prevActions);
-
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? []), ...actions],
     };
-
-    console.log('newActions', newActions);
 
     this.actions$.set(newActions);
   };
@@ -87,7 +83,6 @@ export class ActionsStore implements IActionsStore {
 
   publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     const spaceActions: Action[] = this.actions$.get()[spaceId];
-
     if (!spaceActions) return;
 
     await this.api.publish({
