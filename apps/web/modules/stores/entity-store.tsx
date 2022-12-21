@@ -6,9 +6,6 @@ import { INetwork } from '../services/network';
 import { Triple as TripleType } from '../types';
 import { ActionsStore } from './actions-store';
 
-// HACK: We're adding attributeName since we need it to update the entityNames object.
-// In the near future we'll be merging entity/attribute names into the triple at
-// request time instead of infecting the codebase with entityName checks.
 interface IEntityStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
@@ -56,12 +53,9 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      // We operate on the triples array in reverse so that we can `push` instead of `unshift`
-      // when creating new triples, which is significantly faster.
       const actions = ActionsStore.actions$.get()[spaceId];
 
-      // If our actions have modified one of the network triples, we don't want to add that
-      // network triple to the triples array
+      // We want to merge any local actions with the network triples
       return Triple.fromActions(spaceId, actions, initialDefaultTriples);
     });
   }

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { Params } from '../params';
 import { Services } from '../services';
 import { FilterState, Triple } from '../types';
+import { useActionsStore } from './actions-store-provider';
 import { TripleStore } from './triple-store';
 
 const TripleStoreContext = createContext<TripleStore | undefined>(undefined);
@@ -16,6 +17,7 @@ interface Props {
 
 export function TripleStoreProvider({ space, children, initialTriples }: Props) {
   const { network } = Services.useServices();
+  const ActionsStore = useActionsStore();
   const router = useRouter();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
@@ -24,8 +26,8 @@ export function TripleStoreProvider({ space, children, initialTriples }: Props) 
 
   const store = useMemo(() => {
     const initialParams = Params.parseQueryParameters(urlRef.current);
-    return new TripleStore({ api: network, space, initialParams, initialTriples });
-  }, [network, space, initialTriples]);
+    return new TripleStore({ api: network, space, initialParams, initialTriples, ActionsStore });
+  }, [network, space, initialTriples, ActionsStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

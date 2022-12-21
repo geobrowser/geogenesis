@@ -1,8 +1,10 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import produce from 'immer';
 import { INetwork } from '../services/network';
+import { Triple } from '../triple';
 import { FilterState, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
+import { ActionsStore } from './actions-store';
 
 interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;
@@ -23,6 +25,7 @@ export type InitialTripleStoreParams = {
 interface ITripleStoreConfig {
   api: INetwork;
   space: string;
+  ActionsStore: ActionsStore;
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
   initialTriples: TripleType[];
@@ -53,15 +56,18 @@ export class TripleStore implements ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
+  ActionsStore: ActionsStore;
 
   constructor({
     api,
     space,
     initialTriples,
+    ActionsStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
+    this.ActionsStore = ActionsStore;
     this.triples$ = observable(initialTriples);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
@@ -102,8 +108,13 @@ export class TripleStore implements ITripleStore {
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
-    // TODO: We may care about rendering triples from actions
-    this.triples$ = computed(() => networkData$.get().triples);
+    this.triples$ = computed(() => {
+      const { triples: networkTriples } = networkData$.get();
+      const actions = ActionsStore.actions$.get()[space];
+
+      // We want to merge any local actions with the network triples
+      return Triple.fromActions(space, actions, networkTriples);
+    });
   }
 
   setQuery = (query: string) => {
