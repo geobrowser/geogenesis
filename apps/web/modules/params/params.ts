@@ -1,6 +1,6 @@
 import { AppConfig, AppEnv, Config } from '../config';
-import { InitialTripleStoreParams } from '../stores/triple-store';
 import { FilterField, FilterState } from '../types';
+import { InitialTripleStoreParams } from '~/modules/triple';
 
 export const ENV_PARAM_NAME = 'env';
 

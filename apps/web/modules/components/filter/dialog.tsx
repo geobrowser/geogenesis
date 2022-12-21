@@ -6,7 +6,7 @@ import produce from 'immer';
 import React, { useState } from 'react';
 import { Filter } from '~/modules/design-system/icons/filter';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { initialFilterState } from '~/modules/stores/triple-store';
+import { initialFilterState } from '~/modules/triple';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
 import { Button } from '../../design-system/button';

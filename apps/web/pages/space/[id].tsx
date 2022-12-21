@@ -4,10 +4,9 @@ import { Triples } from '~/modules/components/triples';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { TripleStoreProvider } from '~/modules/triple/triple-store-provider';
 import { Triple } from '~/modules/types';
 import { Params } from '~/modules/params';
-import { DEFAULT_PAGE_SIZE } from '~/modules/stores/triple-store';
+import { DEFAULT_PAGE_SIZE, TripleStoreProvider } from '~/modules/triple';
 
 interface Props {
   spaceId: string;

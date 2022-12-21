@@ -9,7 +9,7 @@ describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialEntityNames={{}} initialTriples={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
@@ -20,7 +20,7 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialEntityNames={{}} initialTriples={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
@@ -30,13 +30,7 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <TriplesPage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialEntityNames={{}}
-          initialTriples={[makeStubTriple('Alice')]}
-        />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[makeStubTriple('Alice')]} />
       </Providers>
     );
 
@@ -49,7 +43,7 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialEntityNames={{}} initialTriples={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
@@ -65,7 +59,7 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialEntityNames={{}} initialTriples={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
