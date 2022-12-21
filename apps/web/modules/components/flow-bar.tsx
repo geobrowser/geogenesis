@@ -31,10 +31,11 @@ const MotionContainer = motion(Container);
 
 interface Props {
   actionsCount: number;
-  onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
+  spaceId: string;
+  onPublish: (spaceId: string, signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
 }
 
-export function FlowBar({ actionsCount, onPublish }: Props) {
+export function FlowBar({ actionsCount, onPublish, spaceId }: Props) {
   const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
@@ -45,7 +46,7 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
   const publish = async () => {
-    await onPublish(signer!, setReviewState);
+    await onPublish(spaceId, signer!, setReviewState);
     setReviewState('publish-complete');
     await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
   };

@@ -37,6 +37,8 @@ export function getChangeCount(actions: ActionType[]) {
       return acc;
     }
 
+    console.log(first, last);
+
     return acc + 1;
   }, 0);
 
@@ -60,7 +62,7 @@ function getFirstAndLastChanges(actions: ActionType[]) {
 
   // For each id, we need to find it's first instance and it's last instance. These might
   // be the same action, which is okay.
-  return [...allIds].reduce<Record<string, [ActionType | undefined, ActionType | undefined]>>((acc, id) => {
+  const result = [...allIds].reduce<Record<string, [ActionType | undefined, ActionType | undefined]>>((acc, id) => {
     const firstAction = actions.find(a => {
       switch (a.type) {
         case 'createTriple':
@@ -84,4 +86,8 @@ function getFirstAndLastChanges(actions: ActionType[]) {
     acc[id] = [firstAction, lastAction];
     return acc;
   }, {});
+
+  console.log('first and last actions', result);
+
+  return result;
 }

@@ -1,13 +1,13 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
+import Head from 'next/head';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
+import { Providers } from '~/modules/providers';
 
 import 'modern-normalize';
 import '../styles/styles.css';
-import Head from 'next/head';
-import { Providers } from '~/modules/providers';
 
 const globalStyles = css`
   html {

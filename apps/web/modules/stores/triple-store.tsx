@@ -1,20 +1,15 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
-import { Signer } from 'ethers';
 import produce from 'immer';
-import { Triple } from '../triple';
 import { INetwork } from '../services/network';
-import { Action, CreateTripleAction, FilterState, ReviewState, Triple as TripleType } from '../types';
+import { FilterState, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 interface ITripleStore {
-  actions$: Observable<Action[]>;
   triples$: ObservableComputed<TripleType[]>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
-  create(triples: TripleType[]): void;
-  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
 }
@@ -51,7 +46,6 @@ export function initialFilterState(): FilterState {
 
 export class TripleStore implements ITripleStore {
   private api: INetwork;
-  actions$: Observable<Action[]> = observable<Action[]>([]);
   triples$: ObservableComputed<TripleType[]> = observable([]);
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
@@ -108,51 +102,9 @@ export class TripleStore implements ITripleStore {
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
-    this.triples$ = computed(() => {
-      const { triples: networkTriples } = networkData$.get();
-
-      // We operate on the triples array in reverse so that we can `push` instead of `unshift`
-      // when creating new triples, which is significantly faster.
-      const triples: TripleType[] = [...networkTriples].reverse();
-
-      // If our actions have modified one of the network triples, we don't want to add that
-      // network triple to the triples array
-      this.actions$.get().forEach(action => {
-        switch (action.type) {
-          case 'createTriple':
-            triples.push(Triple.withId({ ...action, space: 's' }));
-            break;
-          case 'deleteTriple': {
-            const index = triples.findIndex(t => t.id === Triple.withId({ ...action, space: 's' }).id);
-            triples.splice(index, 1);
-            break;
-          }
-          case 'editTriple': {
-            const index = triples.findIndex(t => t.id === Triple.withId({ ...action.before, space: 's' }).id);
-            triples[index] = Triple.withId({ ...action.after, space: 's' });
-            break;
-          }
-        }
-      });
-
-      return triples.reverse();
-    });
+    // TODO: We may care about rendering triples from actions
+    this.triples$ = computed(() => networkData$.get().triples);
   }
-
-  create = (triples: TripleType[]) => {
-    const actions: CreateTripleAction[] = triples.map(triple => ({
-      ...triple,
-      type: 'createTriple',
-    }));
-
-    this.actions$.set([...this.actions$.get(), ...actions]);
-  };
-
-  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.space });
-    this.setQuery('');
-    this.actions$.set([]);
-  };
 
   setQuery = (query: string) => {
     this.setFilterState(

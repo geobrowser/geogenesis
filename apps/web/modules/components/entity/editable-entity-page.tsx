@@ -20,6 +20,7 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Action } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity } from '~/modules/entity';
+import { useActions } from '~/modules/stores/use-actions-store';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -67,7 +68,8 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, actions, update, create, publish } = useEntityTriples();
+  const { triples: localTriples, update, create } = useEntityTriples();
+  const { actions, publish } = useActions(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -75,7 +77,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
   const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
   const descriptionTriple = triples.find(
-    t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeId === 'Description'
+    t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeName === 'Description'
   );
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
@@ -104,6 +106,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   };
 
   const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    console.log('description triple', descriptionTriple);
+
     if (!descriptionTriple) {
       return create(
         Triple.withId({
@@ -131,7 +135,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   };
 
   const onCreateNewTriple = () => {
-    create(Triple.empty(id));
+    create(Triple.empty(space, id));
   };
 
   return (
@@ -180,7 +184,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         </Content>
       </EntityContainer>
 
-      <FlowBar actionsCount={Action.getChangeCount(actions)} onPublish={publish} />
+      <FlowBar actionsCount={Action.getChangeCount(actions)} spaceId={space} onPublish={publish} />
     </PageContainer>
   );
 }
