@@ -24,7 +24,7 @@ function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   };
 }
 
-function parseTypeQueryParameters(url: string): InitialEntityTableStoreParams {
+function parseEntityTableQueryParameters(url: string): InitialEntityTableStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -112,7 +112,7 @@ function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
 
 export const Params = {
   parseTripleQueryParameters,
-  parseTypeQueryParameters,
+  parseEntityTableQueryParameters,
   stringifyQueryParameters,
   getConfigFromUrl,
   ENV_PARAM_NAME,

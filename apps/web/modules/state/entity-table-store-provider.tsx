@@ -13,7 +13,7 @@ interface Props {
   space: string;
   children: React.ReactNode;
   initialRows: Row[];
-  initialType: Triple;
+  initialSelectedType: Triple;
   initialColumns: Column[];
   initialTypes: Triple[];
   config: AppConfig;
@@ -24,7 +24,7 @@ export function EntityTableStoreProvider({
   config,
   children,
   initialRows,
-  initialType,
+  initialSelectedType,
   initialColumns,
   initialTypes,
 }: Props) {
@@ -36,18 +36,18 @@ export function EntityTableStoreProvider({
   const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
-    const initialParams = Params.parseTypeQueryParameters(urlRef.current);
+    const initialParams = Params.parseEntityTableQueryParameters(urlRef.current);
     return new EntityTableStore({
       api: network,
       space,
       initialParams,
       initialRows,
-      initialType,
+      initialSelectedType,
       initialColumns,
       initialTypes,
       config,
     });
-  }, [network, space, initialRows, initialType, initialColumns, initialTypes, config]);
+  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, config]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

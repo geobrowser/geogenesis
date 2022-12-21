@@ -8,7 +8,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Entity } from '~/modules/models/Entity';
 import { Params } from '~/modules/params';
-import { Network } from '~/modules/services/network';
+import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { InitialEntityTableStoreParams } from '~/modules/state/entity-table-store';
 import { EntityTableStoreProvider } from '~/modules/state/entity-table-store-provider';
@@ -19,7 +19,7 @@ interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
-  initialType: Triple;
+  initialSelectedType: Triple;
   initialTypes: Triple[];
   initialColumns: Column[];
   initialRows: Row[];
@@ -31,7 +31,7 @@ export default function EntitiesPage({
   spaceName,
   spaceImage,
   initialColumns,
-  initialType,
+  initialSelectedType,
   initialRows,
   initialTypes,
   config,
@@ -51,7 +51,7 @@ export default function EntitiesPage({
         space={spaceId}
         config={config}
         initialRows={initialRows}
-        initialType={initialType}
+        initialSelectedType={initialSelectedType}
         initialColumns={initialColumns}
         initialTypes={initialTypes}
       >
@@ -68,7 +68,7 @@ export default function EntitiesPage({
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseTypeQueryParameters(context.resolvedUrl);
+  const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
@@ -79,8 +79,36 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
+  const initialTypes = await fetchSpaceTypeTriples(network, spaceId);
+
+  const initialSelectedType = (
+    initialParams.typeId ? initialTypes.find(t => t.entityId === initialParams.typeId) : initialTypes[1]
+  ) as Triple;
+
+  const { columns, rows } = await fetchEntityTableData({
+    typeEntityId: initialSelectedType.entityId,
+    spaceId,
+    params: initialParams,
+    config,
+  });
+
+  return {
+    props: {
+      config,
+      spaceId,
+      spaceName,
+      spaceImage,
+      initialSelectedType,
+      initialColumns: columns,
+      initialRows: rows,
+      initialTypes,
+    },
+  };
+};
+
+export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-  const types = await new Network(storage, config.subgraph).fetchTriples({
+  const { triples } = await network.fetchTriples({
     query: '',
     space: spaceId,
     skip: 0,
@@ -94,41 +122,18 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
-  console.log({ types });
-
-  /* Get the first type */
-  const initialType = types.triples[1];
-
-  const { columns, rows } = await fetchEntityTableData({
-    typeEntityId: initialType.entityId,
-    spaceId,
-    initialParams,
-    config,
-  });
-
-  return {
-    props: {
-      config,
-      spaceId,
-      spaceName,
-      spaceImage,
-      initialType,
-      initialColumns: columns,
-      initialRows: rows,
-      initialTypes: types.triples,
-    },
-  };
+  return triples;
 };
 
 export const fetchEntityTableData = async ({
   typeEntityId,
   spaceId,
-  initialParams,
+  params,
   config,
 }: {
   typeEntityId: string;
   spaceId: string;
-  initialParams: InitialEntityTableStoreParams;
+  params: InitialEntityTableStoreParams;
   config: AppConfig;
 }) => {
   const storage = new StorageClient(config.ipfs);
@@ -149,10 +154,10 @@ export const fetchEntityTableData = async ({
   /* To get our rows, first we get all of the entity IDs of the selected type */
   const rowEntityIds = (
     await new Network(storage, subgraph).fetchTriples({
-      query: initialParams.query,
+      query: params.query,
       space: spaceId,
       first: DEFAULT_PAGE_SIZE,
-      skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+      skip: params.pageNumber * DEFAULT_PAGE_SIZE,
       filter: [
         { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
         { field: 'linked-to', value: typeEntityId },

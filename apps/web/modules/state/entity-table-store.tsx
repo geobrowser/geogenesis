@@ -44,8 +44,8 @@ interface IEntityTableStoreConfig {
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
-  initialType: Triple;
-  initialTypes: TripleType[];
+  initialSelectedType: Triple;
+  initialTypes: Triple[];
   initialColumns: Column[];
   config: AppConfig;
 }
@@ -71,10 +71,11 @@ export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
   private config: AppConfig;
   actions$: Observable<Action[]> = observable<Action[]>([]);
-  rows$: ObservableComputed<Row[]> = observable([]);
+  rows$: ObservableComputed<Row[]>;
+  columns$: ObservableComputed<Column[]>;
+
   pageNumber$: Observable<number>;
   selectedType$: Observable<Triple>;
-  columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
@@ -86,7 +87,7 @@ export class EntityTableStore implements IEntityTableStore {
     api,
     space,
     initialRows,
-    initialType,
+    initialSelectedType,
     initialColumns,
     initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
@@ -97,7 +98,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.config = config;
 
     this.rows$ = observable(initialRows);
-    this.selectedType$ = observable(initialType);
+    this.selectedType$ = observable(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
     this.types$ = observable(initialTypes);
@@ -119,7 +120,7 @@ export class EntityTableStore implements IEntityTableStore {
           const { rows, columns } = await fetchEntityTableData({
             typeEntityId: entityId,
             spaceId: space,
-            initialParams,
+            params: initialParams,
             config: this.config,
           });
 
