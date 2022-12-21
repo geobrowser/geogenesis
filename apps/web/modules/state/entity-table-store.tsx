@@ -21,6 +21,7 @@ interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
+  selectedType$: Observable<Triple>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;

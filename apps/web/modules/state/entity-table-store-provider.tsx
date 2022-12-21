@@ -51,6 +51,8 @@ export function EntityTableStoreProvider({
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);
+  const selectedType = useSelector(store.selectedType$);
+  const typeId = selectedType ? selectedType.entityId : '';
 
   // Legendstate has a hard time inferring observable array contents
   const filterState = useSelector<FilterState>(store.filterState$);
@@ -60,12 +62,12 @@ export function EntityTableStoreProvider({
     replace.current(
       {
         pathname: basePath,
-        query: Params.stringifyQueryParameters({ query, pageNumber, filterState }),
+        query: Params.stringifyEntityTableParameters({ query, pageNumber, filterState, typeId }),
       },
       undefined,
       { shallow: true, scroll: false }
     );
-  }, [basePath, query, pageNumber, filterState]);
+  }, [basePath, query, pageNumber, filterState, typeId]);
 
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }

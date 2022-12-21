@@ -45,6 +45,22 @@ function parseEntityTableQueryParameters(url: string): InitialEntityTableStorePa
   };
 }
 
+function stringifyEntityTableParameters({
+  query,
+  pageNumber,
+  filterState,
+  typeId,
+}: InitialEntityTableStoreParams): string {
+  const params = new URLSearchParams({
+    ...(query !== '' && { query }),
+    ...(typeId !== '' && { typeId }),
+    ...(pageNumber !== 0 && { page: pageNumber.toString() }),
+    ...getAdvancedQueryParams(filterState),
+  });
+
+  return params.toString();
+}
+
 function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
@@ -114,6 +130,7 @@ export const Params = {
   parseTripleQueryParameters,
   parseEntityTableQueryParameters,
   stringifyQueryParameters,
+  stringifyEntityTableParameters,
   getConfigFromUrl,
   ENV_PARAM_NAME,
 };
