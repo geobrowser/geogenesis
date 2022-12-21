@@ -1,6 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { AppConfig } from '../config';
 import { Params } from '../params';
 import { useServices } from '../services';
 import { Column, FilterState, Row, Triple } from '../types';
@@ -15,9 +16,18 @@ interface Props {
   initialType: Triple;
   initialColumns: Column[];
   initialTypes: Triple[];
+  config: AppConfig;
 }
 
-export function TableStoreProvider({ space, children, initialRows, initialType, initialColumns, initialTypes }: Props) {
+export function TableStoreProvider({
+  space,
+  config,
+  children,
+  initialRows,
+  initialType,
+  initialColumns,
+  initialTypes,
+}: Props) {
   const { network } = useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
@@ -35,8 +45,9 @@ export function TableStoreProvider({ space, children, initialRows, initialType, 
       initialType,
       initialColumns,
       initialTypes,
+      config,
     });
-  }, [network, space, initialRows, initialType, initialColumns, initialTypes]);
+  }, [network, space, initialRows, initialType, initialColumns, initialTypes, config]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

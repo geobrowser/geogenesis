@@ -2,6 +2,7 @@ import { computed, observable, Observable, ObservableComputed } from '@legendapp
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { fetchEntityTableData } from '~/pages/space/[id]/entities';
+import { AppConfig } from '../config';
 import { INetwork } from '../services/network';
 import {
   Action,
@@ -46,6 +47,7 @@ interface ITableStoreConfig {
   initialType: Triple;
   initialTypes: TripleType[];
   initialColumns: Column[];
+  config: AppConfig;
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -67,6 +69,7 @@ export function initialFilterState(): FilterState {
 
 export class TableStore implements ITableStore {
   private api: INetwork;
+  private config: AppConfig;
   actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]> = observable([]);
   pageNumber$: Observable<number>;
@@ -88,8 +91,11 @@ export class TableStore implements ITableStore {
     initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
+    config,
   }: ITableStoreConfig) {
     this.api = api;
+    this.config = config;
+
     this.rows$ = observable(initialRows);
     this.type$ = observable(initialType);
     this.pageNumber$ = observable(initialParams.pageNumber);
@@ -105,25 +111,24 @@ export class TableStore implements ITableStore {
     });
 
     const networkData$ = makeOptionalComputed(
-      { triples: [], hasNextPage: false },
+      { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
-          fetchEntityTableData({
-            typeEntityId: initialParams.typeId,
+          const { entityId } = this.type$.get();
+
+          const { rows, columns } = await fetchEntityTableData({
+            typeEntityId: entityId,
             spaceId: space,
             initialParams,
-            network: this.api,
+            config: this.config,
           });
 
-          const { triples } = await this.api.fetchTriples({
-            query: this.query$.get(),
-            space: this.space,
-            skip: this.pageNumber$.get() * pageSize,
-            first: pageSize + 1,
-            filter: this.filterState$.get(),
+          console.log({
+            rows,
+            columns,
           });
 
-          return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
+          return { columns, rows: rows.slice(0, pageSize), hasNextPage: rows.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -131,14 +136,23 @@ export class TableStore implements ITableStore {
           }
 
           // TODO: Real error handling
-
-          return { triples: [], hasNextPage: false };
+          return { columns: [], rows: [], hasNextPage: false };
         }
       })
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
+
+    this.columns$ = computed(() => {
+      const { columns } = networkData$.get();
+      return columns;
+    });
+
+    this.rows$ = computed(() => {
+      const { rows } = networkData$.get();
+      return rows;
+    });
   }
 
   create = (triples: TripleType[]) => {

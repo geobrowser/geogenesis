@@ -30,9 +30,8 @@ export function Entities({ spaceId, initialColumns, initialRows }: Props) {
 
         <EntitiesTable
           space={spaceId}
-          rows={initialRows}
           columns={tableStore.columns.length === 0 ? initialColumns : tableStore.columns}
-          // triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
+          rows={tableStore.rows.length === 0 ? initialRows : tableStore.rows}
         />
 
         <Spacer height={12} />

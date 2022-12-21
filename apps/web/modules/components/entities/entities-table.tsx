@@ -81,7 +81,6 @@ const ChipCellContainer = styled.div({
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
-    const entityNames = table.options?.meta?.entityNames || {};
 
     const cellId = `${row.original.id}-${cell.column.id}`;
 
@@ -96,8 +95,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     useEffect(() => {
       setCellData(initialCellData);
     }, [initialCellData]);
-
-    console.log(cellData);
 
     if (!cellData) {
       return <div />;
