@@ -254,7 +254,7 @@ function EntityAttributes({
       }
     }
 
-    return remove([triple]);
+    return remove(triple);
   };
 
   const linkEntityAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {

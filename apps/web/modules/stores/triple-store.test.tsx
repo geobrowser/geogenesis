@@ -1,37 +1,31 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
-import { Triple } from '../triple';
 import { makeStubTriple, MockNetwork } from '../services/mock-network';
-import { OmitStrict, Triple as TripleType } from '../types';
 import { TripleStore } from './triple-store';
-
-const testBob: OmitStrict<TripleType, 'id'> = {
-  space: 's',
-  entityId: 'bob',
-  entityName: 'Bob',
-  attributeId: 'name',
-  attributeName: 'Bob',
-  value: {
-    type: 'string',
-    id: 's~bob',
-    value: 'Bob',
-  },
-};
+import { ActionsStore } from './actions-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
-    const store = new TripleStore({ api: new MockNetwork(), space: 's', initialTriples: [] });
+    const network = new MockNetwork();
+    const store = new TripleStore({
+      api: network,
+      space: 's',
+      initialTriples: [],
+      ActionsStore: new ActionsStore({ api: network }),
+    });
     expect(store.triples$.get()).toStrictEqual([]);
   });
 
   it('Computes triples from page size', async () => {
     const initialTriples = [makeStubTriple('Alice')];
+    const network = new MockNetwork({ triples: initialTriples });
 
     const store = new TripleStore({
-      api: new MockNetwork({ triples: initialTriples }),
+      api: network,
       pageSize: 1,
       space: 's',
       initialTriples: [],
+      ActionsStore: new ActionsStore({ api: network }),
     });
 
     await when(() => store.triples$.get().length > 0);
