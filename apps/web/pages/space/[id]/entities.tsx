@@ -76,10 +76,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
   const types = await new Network(storage, config.subgraph).fetchTriples({
-    query: initialParams.query,
+    query: '',
     space: spaceId,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    skip: 0,
+    first: 100,
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
       {
@@ -88,6 +88,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       },
     ],
   });
+
+  console.log({ types });
 
   /* Get the first type */
   const initialType = types.triples[1];
@@ -129,10 +131,10 @@ export const fetchEntityTableData = async ({
 
   /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
   const columnsTriples = await new Network(storage, subgraph).fetchTriples({
-    query: initialParams.query,
+    query: '',
     space: spaceId,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    first: 100,
+    skip: 0,
     filter: [
       { field: 'entity-id', value: typeEntityId },
       { field: 'attribute-id', value: SYSTEM_IDS.TYPE_ATTRIBUTES },
