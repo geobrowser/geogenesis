@@ -109,8 +109,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
                 value={value}
               />
             );
-          }
-          if (value.type === 'entity') {
+          } else if (value.type === 'entity') {
             return (
               <ChipCellContainer key={value.id}>
                 <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
