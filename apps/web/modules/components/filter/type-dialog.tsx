@@ -19,12 +19,12 @@ interface ContentProps {
   sideOffset?: number;
 }
 
-const StyledTrigger = styled.div(props => ({
+const StyledTrigger = styled.button(props => ({
   all: 'unset',
   ...props.theme.typography.button,
   color: props.theme.colors.text,
-  flex: 1,
-  display: 'inline-flex',
+  flex: 'none',
+  display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   borderRadius: props.theme.radius,
@@ -33,7 +33,7 @@ const StyledTrigger = styled.div(props => ({
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
   textWrap: 'nowrap',
   whiteSpace: 'pre',
-  width: 103,
+  width: 230,
 
   '&:hover': {
     boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,

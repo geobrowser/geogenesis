@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
@@ -19,15 +20,6 @@ const SearchIconContainer = styled.div(props => ({
   left: props.theme.space * 3,
   top: props.theme.space * 2.5,
   zIndex: 100,
-}));
-
-const FilterIconContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  backgroundColor: props.theme.colors.white,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderLeft: 'none',
-  color: props.theme.colors['grey-04'],
 }));
 
 const InputContainer = styled.div({
@@ -59,6 +51,7 @@ export function EntityInput() {
   const tableStore = useTables();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const showBasicFilter = tableStore.filterState.length === 1 && tableStore.filterState[0].field === 'entity-name';
+  const inputRect = useRect(inputContainerRef.current);
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     tableStore.setQuery(event.target.value);
@@ -72,7 +65,7 @@ export function EntityInput() {
   return (
     <InputContainer ref={inputContainerRef}>
       <TypeDialog
-        inputContainerWidth={578}
+        inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
         filterState={tableStore.filterState}
         setFilterState={tableStore.setFilterState}
       />
@@ -82,12 +75,7 @@ export function EntityInput() {
           <Search />
         </SearchIconContainer>
         {showBasicFilter ? (
-          <TriplesInputField
-            disabled={true}
-            placeholder="Search entities..."
-            value={tableStore.query}
-            onChange={onChange}
-          />
+          <TriplesInputField placeholder="Search entities..." value={tableStore.query} onChange={onChange} />
         ) : (
           <AdvancedFilters>
             {tableStore.filterState.map(filter => (
