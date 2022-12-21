@@ -1,8 +1,8 @@
 import { useSelector } from '@legendapp/state/react';
-import { useActionsStore } from './actions-store-provider';
+import { useActionsStoreContext } from './actions-store-provider';
 
 export function useActions(spaceId: string) {
-  const { actions$, publish } = useActionsStore();
+  const { actions$, publish } = useActionsStoreContext();
   const actions = useSelector(actions$);
 
   return {

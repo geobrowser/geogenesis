@@ -1,10 +1,10 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import produce from 'immer';
+import { ActionsStore } from '../action';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { FilterState, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
-import { ActionsStore } from './actions-store';
 
 interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;

@@ -7,7 +7,7 @@ import {
   DeleteTripleAction,
   EditTripleAction,
   ReviewState,
-  Triple as TripleType,
+  ITriple as TripleType,
 } from '../types';
 
 interface IActionsStore {

@@ -1,9 +1,9 @@
 import { Theme, ThemeProvider } from '@emotion/react';
+import { ActionsStoreProvider } from './action';
 import { colors } from './design-system/theme/colors';
 import { shadows } from './design-system/theme/shadows';
 import { typography } from './design-system/theme/typography';
 import { Services } from './services';
-import { ActionsStoreProvider } from './stores/actions-store-provider';
 import { WalletProvider } from './wallet';
 
 const theme: Theme = {
