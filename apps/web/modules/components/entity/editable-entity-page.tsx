@@ -106,8 +106,6 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   };
 
   const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    console.log('description triple', descriptionTriple);
-
     if (!descriptionTriple) {
       return create(
         Triple.withId({
@@ -267,8 +265,6 @@ function EntityAttributes({
         // If triples at the new id already exists we want the user to use the existing entry method
         return;
       }
-
-      console.log('triples to update', triplesToUpdate);
 
       triplesToUpdate.forEach(triple => {
         const newTriple = {

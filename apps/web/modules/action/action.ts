@@ -30,7 +30,6 @@ export function getChangeCount(actions: ActionType[]) {
     }
 
     if (first?.type === 'createTriple' && last?.type === 'deleteTriple') {
-      console.log('create -> delete');
       return acc;
     }
 
@@ -81,8 +80,6 @@ export function getFirstAndLastChanges(actions: ActionType[]) {
     acc[id] = [firstAction[0], lastAction[0]];
     return acc;
   }, {});
-
-  console.log('first and last actions', result);
 
   return result;
 }
