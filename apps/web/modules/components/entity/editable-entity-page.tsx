@@ -134,9 +134,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
     );
   };
 
-  const onCreateNewTriple = () => {
-    create(Triple.empty(space, id));
-  };
+  const onCreateNewTriple = () => create(Triple.empty(space, id));
 
   return (
     <PageContainer>
@@ -232,7 +230,9 @@ function EntityAttributes({
         {
           ...triple,
           value: {
-            ...(type === 'entity' ? { type: 'entity', id: '', name: '' } : { type: 'string', id: '', value: '' }),
+            ...(type === 'entity'
+              ? { type: 'entity', id: '', name: '' }
+              : { type: 'string', id: triple.value.id, value: '' }),
           },
         },
         triple
@@ -268,6 +268,8 @@ function EntityAttributes({
         return;
       }
 
+      console.log('triples to update', triplesToUpdate);
+
       triplesToUpdate.forEach(triple => {
         const newTriple = {
           ...triple,
@@ -302,20 +304,19 @@ function EntityAttributes({
       );
     }
 
-    create(
-      Triple.withId({
-        space: space,
-        entityId: entityId,
-        entityName: name,
-        attributeId: attributeId,
-        attributeName: groupedTriples[attributeId][0].attributeName,
-        value: {
-          type: 'entity',
-          id: linkedEntity.id,
-          name: linkedEntity.name,
-        },
-      })
-    );
+    create({
+      ...groupedTriples[attributeId][0],
+      space: space,
+      entityId: entityId,
+      entityName: name,
+      attributeId: attributeId,
+      attributeName: groupedTriples[attributeId][0].attributeName,
+      value: {
+        type: 'entity',
+        id: linkedEntity.id,
+        name: linkedEntity.name,
+      },
+    });
   };
 
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {

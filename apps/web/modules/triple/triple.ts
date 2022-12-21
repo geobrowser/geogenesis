@@ -42,21 +42,21 @@ export function fromActions(spaceId: string, actions: Action[] | undefined, trip
         // list doesn't reorder.
         const indexOfSiblingTriples = newTriples.findIndex(t => t.attributeId === action.attributeId);
         if (indexOfSiblingTriples === -1) {
-          newTriples.push(withId({ ...action, space: spaceId }));
+          newTriples.push(action);
           break;
         }
 
-        newTriples.splice(indexOfSiblingTriples, 0, withId({ ...action, space: spaceId }));
+        newTriples.splice(indexOfSiblingTriples, 0, action);
         break;
       }
       case 'deleteTriple': {
-        const index = newTriples.findIndex(t => t.id === withId({ ...action, space: spaceId }).id);
+        const index = newTriples.findIndex(t => t.id === action.id);
         newTriples.splice(index, 1);
         break;
       }
       case 'editTriple': {
-        const index = newTriples.findIndex(t => t.id === withId({ ...action.before, space: spaceId }).id);
-        newTriples[index] = withId({ ...action.after, space: spaceId });
+        const index = newTriples.findIndex(t => t.id === action.before.id);
+        newTriples[index] = action.after;
         break;
       }
     }
