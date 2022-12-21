@@ -1,6 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { fetchEntityTableData } from '~/pages/space/[id]/entities';
 import { INetwork } from '../services/network';
 import {
   Action,
@@ -107,6 +108,13 @@ export class TableStore implements ITableStore {
       { triples: [], hasNextPage: false },
       computed(async () => {
         try {
+          fetchEntityTableData({
+            typeEntityId: initialParams.typeId,
+            spaceId: space,
+            initialParams,
+            network: this.api,
+          });
+
           const { triples } = await this.api.fetchTriples({
             query: this.query$.get(),
             space: this.space,

@@ -7,7 +7,7 @@ import { SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Entity } from '~/modules/models/Entity';
 import { Params } from '~/modules/params';
-import { Network } from '~/modules/services/network';
+import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { InitialTableStoreParams } from '~/modules/state/table-store';
 import { TableStoreProvider } from '~/modules/state/table-store-provider';
@@ -117,7 +117,7 @@ export const fetchEntityTableData = async ({
   typeEntityId: string;
   spaceId: string;
   initialParams: InitialTableStoreParams;
-  network: Network;
+  network: INetwork;
 }) => {
   /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
   const columnsTriples = await network.fetchTriples({
@@ -158,11 +158,20 @@ export const fetchEntityTableData = async ({
     )
   );
 
+  const defaultColumns = [
+    {
+      name: 'Name',
+      id: SYSTEM_IDS.NAME,
+    },
+  ];
+
   /* ...and then we can build our initialColumns */
-  const columns = columnsTriples.triples.map(triple => ({
+  const schemaColumns = columnsTriples.triples.map(triple => ({
     name: Entity.entityName(triple) || triple.value.id,
     id: triple.value.id,
   })) as Column[];
+
+  const columns = [...defaultColumns, ...schemaColumns];
 
   /* Finally, we can build our initialRows */
   const rows = rowTriples.map(row => {
