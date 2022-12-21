@@ -429,7 +429,10 @@ function EntityAttributes({
                     },
                   ]}
                 />
-                <SquareButton icon="trash" onClick={() => remove(triples.filter(t => t.attributeId === attributeId))} />
+                <SquareButton
+                  icon="trash"
+                  onClick={() => triples.filter(t => t.attributeId === attributeId).forEach(t => remove(t))}
+                />
               </TripleActions>
             </GroupedAttributesList>
           </EntityAttributeContainer>

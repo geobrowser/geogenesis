@@ -13,7 +13,7 @@ import {
 interface IActionsStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
-  remove(triples: TripleType[]): void;
+  remove(triple: TripleType): void;
   publish(spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
 }
 
@@ -52,15 +52,15 @@ export class ActionsStore implements IActionsStore {
     this.addActions(triple.space, [action]);
   };
 
-  remove = (triples: TripleType[]) => {
-    const spaceId = triples[0]?.space;
+  remove = (triple: TripleType) => {
+    const spaceId = triple.space;
 
-    const actions: DeleteTripleAction[] = triples.map(triple => ({
+    const actions: DeleteTripleAction = {
       ...triple,
       type: 'deleteTriple',
-    }));
+    };
 
-    this.addActions(spaceId, actions);
+    this.addActions(spaceId, [actions]);
   };
 
   update = (triple: TripleType, oldTriple: TripleType) => {

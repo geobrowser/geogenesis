@@ -9,7 +9,7 @@ import { ActionsStore } from './actions-store';
 interface IEntityStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
-  remove(triples: TripleType[]): void;
+  remove(triple: TripleType): void;
 }
 
 const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
@@ -61,6 +61,6 @@ export class EntityStore implements IEntityStore {
   }
 
   create = (triple: TripleType) => this.ActionsStore.create(triple);
-  remove = (triples: TripleType[]) => this.ActionsStore.remove(triples);
+  remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 }
