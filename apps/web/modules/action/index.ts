@@ -1,5 +1,1 @@
-import { getChangeCount } from './action';
-
-export const Action = {
-  getChangeCount,
-};
+export * as Action from './action';

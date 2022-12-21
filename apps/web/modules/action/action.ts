@@ -39,7 +39,7 @@ export function getChangeCount(actions: ActionType[]) {
   return changeCount;
 }
 
-function getFirstAndLastChanges(actions: ActionType[]) {
+export function getFirstAndLastChanges(actions: ActionType[]) {
   const allIds = new Set(
     actions.flatMap(a => {
       switch (a.type) {
