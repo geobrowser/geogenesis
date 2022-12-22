@@ -47,8 +47,6 @@ export function FlowBar({ actionsCount, onPublish, spaceId }: Props) {
 
   const publish = async () => {
     await onPublish(spaceId, signer!, setReviewState);
-    setReviewState('publish-complete');
-    await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
   };
 
   return (

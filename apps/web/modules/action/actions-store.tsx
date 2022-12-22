@@ -1,8 +1,9 @@
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
+import { Action } from '.';
 import { INetwork } from '../services/network';
 import {
-  Action,
+  Action as ActionType,
   CreateTripleAction,
   DeleteTripleAction,
   EditTripleAction,
@@ -22,7 +23,7 @@ interface IActionsStoreConfig {
 }
 
 type SpaceId = string;
-type SpaceActions = Record<SpaceId, Action[]>;
+type SpaceActions = Record<SpaceId, ActionType[]>;
 
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
@@ -33,7 +34,7 @@ export class ActionsStore implements IActionsStore {
     this.actions$ = observable<SpaceActions>({});
   }
 
-  private addActions = (spaceId: string, actions: Action[]) => {
+  private addActions = (spaceId: string, actions: ActionType[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
     const newActions: SpaceActions = {
       ...prevActions,
@@ -82,19 +83,30 @@ export class ActionsStore implements IActionsStore {
   };
 
   publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    const spaceActions: Action[] = this.actions$.get()[spaceId];
+    const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     if (!spaceActions) return;
 
-    await this.api.publish({
-      actions: spaceActions,
-      signer,
-      onChangePublishState,
-      space: spaceId,
-    });
+    console.log('squashed changes', Action.squashChanges(spaceActions));
+
+    try {
+      await this.api.publish({
+        actions: Action.squashChanges(spaceActions),
+        signer,
+        onChangePublishState,
+        space: spaceId,
+      });
+    } catch (e) {
+      console.error(e);
+      onChangePublishState('idle');
+      return;
+    }
 
     this.actions$.set({
       ...this.actions$.get(),
       [spaceId]: [],
     });
+
+    onChangePublishState('publish-complete');
+    await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }

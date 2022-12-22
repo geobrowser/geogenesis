@@ -1,4 +1,4 @@
-import { Action as ActionType } from '~/modules/types';
+import { Action, Action as ActionType } from '~/modules/types';
 
 // For each id we find, we need to traverse the list to find the first and last actions associated with that id
 // Then we need to check the first and last actions and compare to see if they've changed.
@@ -39,7 +39,7 @@ export function getChangeCount(actions: ActionType[]) {
   return changeCount;
 }
 
-export function getFirstAndLastChanges(actions: ActionType[]) {
+function getFirstAndLastChanges(actions: ActionType[]) {
   const allIds = new Set(
     actions.flatMap(a => {
       switch (a.type) {
@@ -81,5 +81,32 @@ export function getFirstAndLastChanges(actions: ActionType[]) {
     return acc;
   }, {});
 
+  console.log('first and last', result);
   return result;
+}
+
+/**
+ * Reduce the number of local actions only to the necessary before/after actions. This reduces
+ * IPFS upload time for large edits and indexer time for the subgraph.
+ *
+ * For most actions we can just return the "After" action since that's all the subgraph needs
+ * to update the triple.
+ */
+export function squashChanges(actions: Action[]) {
+  return Object.values(getFirstAndLastChanges(actions))
+    .map(changeTuple => {
+      // In this case we're fine just returning the after action since it will include
+      // the final state of the triple.
+      if (changeTuple[0].type === 'createTriple' && changeTuple[1].type === 'editTriple') {
+        return changeTuple[1].after;
+      }
+
+      // This doesn't need to go to the subgraph at all.
+      if (changeTuple[0].type === 'createTriple' && changeTuple[1].type === 'deleteTriple') {
+        return null;
+      }
+
+      return changeTuple[1];
+    })
+    .flatMap(changeTuple => (changeTuple ? changeTuple : []));
 }
