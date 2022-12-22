@@ -118,10 +118,10 @@ export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) 
     skip: 0,
     first: 100,
     filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
       {
         field: 'linked-to',
-        value: SYSTEM_IDS.TYPE_VALUE,
+        value: SYSTEM_IDS.SCHEMA_TYPE,
       },
     ],
   });
@@ -149,7 +149,7 @@ export const fetchEntityTableData = async ({
     skip: 0,
     filter: [
       { field: 'entity-id', value: params.typeId },
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPE_ATTRIBUTES },
+      { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
     ],
   });
 
@@ -161,7 +161,7 @@ export const fetchEntityTableData = async ({
       first: DEFAULT_PAGE_SIZE,
       skip: params.pageNumber * DEFAULT_PAGE_SIZE,
       filter: [
-        { field: 'attribute-id', value: SYSTEM_IDS.TYPE },
+        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
         { field: 'linked-to', value: params.typeId },
       ],
     })
