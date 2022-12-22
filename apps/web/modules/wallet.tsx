@@ -9,21 +9,19 @@ import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
-// const LOCAL_CHAIN: Chain = {
-//   id: Number(configOptions.development.chainId),
-//   name: 'Geo Genesis Dev', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: {
-//       http: [configOptions.development.rpc],
-//     },
-//   },
-// };
+const LOCAL_CHAIN: Chain = {
+  id: Number(configOptions.development.chainId),
+  name: 'Geo Genesis Dev', // Human-readable name
+  network: 'ethereum', // Internal network name
+  nativeCurrency: {
+    name: 'Ethereum',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: configOptions.development.rpc,
+  },
+};
 
 // const STAGING_CHAIN: Chain = {
 //   id: Number(configOptions.staging.chainId),
@@ -67,7 +65,10 @@ const DEFAULT_CHAIN: Chain = {
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains([DEFAULT_CHAIN, TESTNET_CHAIN], [publicProvider()]);
+const { chains, provider, webSocketProvider } = configureChains(
+  [LOCAL_CHAIN, DEFAULT_CHAIN, TESTNET_CHAIN],
+  [publicProvider()]
+);
 
 const { connectors } = getDefaultWallets({
   appName: 'Geo Genesis',
