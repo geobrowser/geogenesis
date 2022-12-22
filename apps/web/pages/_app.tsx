@@ -6,11 +6,11 @@ import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
 import { FlowBar } from '~/modules/components/flow-bar';
+import { useActionsStore } from '~/modules/action';
+import { useRouter } from 'next/router';
 
 import 'modern-normalize';
 import '../styles/styles.css';
-import { useActionsStore } from '~/modules/action';
-import { useRouter } from 'next/router';
 
 const globalStyles = css`
   html {
