@@ -28,6 +28,21 @@ export function empty(spaceId: string, entityId: string): Triple {
   };
 }
 
+/**
+ * This functions acts as documentation to denote why we don't change the id of a triple
+ * locally when changes are made.
+ *
+ * Right now if you change the contents of a triple locally -- e.g., you change the Attribute
+ * or the Value of a relation -- we don't update the Triple ID locally. This is to make it easy to
+ * track how triples have changed locally over time for use in change counts, diffing, and
+ * squashing local actions before publishing them.
+ *
+ * Whenever the triple gets published to the network, the subgraph will generate a new ID for the triple.
+ */
+export function ensureStableId(triple: Triple): Triple {
+  return triple;
+}
+
 export function fromActions(spaceId: string, actions: Action[] | undefined, triples: Triple[]) {
   const newTriples: Triple[] = [...triples].reverse();
   const newActions = actions ?? [];
@@ -42,7 +57,7 @@ export function fromActions(spaceId: string, actions: Action[] | undefined, trip
         // list doesn't reorder.
         const indexOfSiblingTriples = newTriples.findIndex(t => t.attributeId === action.attributeId);
         if (indexOfSiblingTriples === -1) {
-          newTriples.push(action);
+          newTriples.push(ensureStableId(action));
           break;
         }
 
@@ -56,7 +71,7 @@ export function fromActions(spaceId: string, actions: Action[] | undefined, trip
       }
       case 'editTriple': {
         const index = newTriples.findIndex(t => t.id === action.before.id);
-        newTriples[index] = action.after;
+        newTriples[index] = ensureStableId(action.after);
         break;
       }
     }
