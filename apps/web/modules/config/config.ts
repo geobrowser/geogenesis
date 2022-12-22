@@ -9,9 +9,9 @@ export type AppConfig = {
   subgraph: string;
 };
 
-const DEFAULT_ENV: AppEnv = 'production';
+export const DEFAULT_ENV: AppEnv = 'production';
 
-const options: Record<AppEnv, AppConfig> = {
+export const options: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
     rpc: 'http://localhost:8545',
@@ -38,7 +38,7 @@ const options: Record<AppEnv, AppConfig> = {
   },
 };
 
-function getConfig(chainId: string) {
+export function getConfig(chainId: string) {
   const config = Object.values(options).find(options => options.chainId === chainId);
 
   if (!config) {
@@ -48,9 +48,3 @@ function getConfig(chainId: string) {
 
   return config;
 }
-
-export const Config = {
-  DEFAULT_ENV,
-  options,
-  getConfig,
-};
