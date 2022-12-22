@@ -15,7 +15,7 @@ import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
-import { ChipCellContainer, EmptyTableText, Table, TableHead, TableRow } from './table/styles';
+import { ChipCellContainer, EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
 
 const Container = styled.div(props => ({
   padding: 0,
@@ -125,9 +125,9 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <TableHead width={header.column.getSize()} key={header.id}>
+                <TableHeader width={header.column.getSize()} key={header.id}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
+                </TableHeader>
               ))}
             </tr>
           ))}

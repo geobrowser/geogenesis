@@ -25,7 +25,7 @@ export const Table = styled.table(props => ({
   backgroundColor: props.theme.colors.white,
 }));
 
-export const TableHead = styled.th<{ width: number }>(props => ({
+export const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
   textAlign: 'left',
