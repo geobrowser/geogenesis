@@ -5,7 +5,6 @@ import React from 'react';
 const StyledLink = styled.a<{ isActive: boolean }>(({ theme, isActive }) => ({
   ...theme.typography.largeTitle,
   color: isActive ? theme.colors.text : theme.colors['grey-04'],
-  paddingRight: `${theme.space * 4}px`,
   cursor: 'pointer',
   outline: 'none',
   ':hover': {

@@ -25,6 +25,13 @@ const NavbarContainer = styled.div({
   width: '100%',
 });
 
+const TabLinksContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  flexDirection: 'row',
+  gap: props.theme.space * 4,
+}));
+
 export const SpaceActions = ({ spaceId }: Props) => {
   const { isEditor, isAdmin } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -76,13 +83,13 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
 
   return (
     <NavbarContainer>
-      <div>
+      <TabLinksContainer>
         {tabs.map(tab => (
           <TabLink key={tab.name} href={tab.href} isActive={tab.selected}>
             {tab.name}
           </TabLink>
         ))}
-      </div>
+      </TabLinksContainer>
       <SpaceActions spaceId={spaceId} />
     </NavbarContainer>
   );
