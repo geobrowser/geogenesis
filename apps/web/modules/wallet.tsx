@@ -10,7 +10,7 @@ import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
 const LOCAL_CHAIN: Chain = {
-  id: Number(configOptions.development.chainId),
+  id: Number(Config.options.development.chainId),
   name: 'Geo Genesis Dev', // Human-readable name
   network: 'ethereum', // Internal network name
   nativeCurrency: {
@@ -19,7 +19,7 @@ const LOCAL_CHAIN: Chain = {
     decimals: 18,
   },
   rpcUrls: {
-    default: configOptions.development.rpc,
+    default: Config.options.development.rpc,
   },
 };
 
