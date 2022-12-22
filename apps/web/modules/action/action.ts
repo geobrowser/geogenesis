@@ -56,7 +56,7 @@ function getFirstAndLastChanges(actions: ActionType[]) {
 
   // For each id, we need to find it's first instance and it's last instance. These might
   // be the same action, which is okay.
-  const result = [...allIds].reduce<Record<string, [ActionType, ActionType]>>((acc, id) => {
+  return [...allIds].reduce<Record<string, [ActionType, ActionType]>>((acc, id) => {
     const firstAction = actions.filter(a => {
       switch (a.type) {
         case 'createTriple':
@@ -80,9 +80,6 @@ function getFirstAndLastChanges(actions: ActionType[]) {
     acc[id] = [firstAction[0], lastAction[0]];
     return acc;
   }, {});
-
-  console.log('first and last', result);
-  return result;
 }
 
 /**

@@ -101,7 +101,7 @@ interface ReviewProps {
 function Review({ actions, onNext }: ReviewProps) {
   const actionsCount = Action.getChangeCount(actions);
   const entitiesCount = Object.keys(
-    groupBy(actions, action => {
+    groupBy(Action.squashChanges(actions), action => {
       if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
       return action.after.entityId;
     })
