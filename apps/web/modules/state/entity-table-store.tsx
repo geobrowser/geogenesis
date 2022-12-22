@@ -1,7 +1,6 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { fetchEntityTableData } from '~/pages/space/[id]/entities';
 import { AppConfig } from '../config';
 import { INetwork } from '../services/network';
 import {
@@ -125,7 +124,7 @@ export class EntityTableStore implements IEntityTableStore {
             typeId: entityId,
           };
 
-          const { rows, columns } = await fetchEntityTableData({
+          const { rows, columns } = await this.api.fetchEntityTableData({
             spaceId: space,
             params,
             config: this.config,
