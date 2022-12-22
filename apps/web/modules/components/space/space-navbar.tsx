@@ -25,11 +25,38 @@ const NavbarContainer = styled.div({
   width: '100%',
 });
 
-export const SpaceNavbar = ({ spaceId }: Props) => {
-  const { route, query } = useRouter();
-
+export const SpaceActions = ({ spaceId }: Props) => {
   const { isEditor, isAdmin } = useAccessControl(spaceId);
   const { editable } = useEditable();
+
+  return (
+    <Actions>
+      {(isEditor || isAdmin) && editable && (
+        <NavbarContainer>
+          {isAdmin && (
+            <Link href={`/space/${spaceId}/access-control`}>
+              <Button variant="secondary">Devvy Admin</Button>
+            </Link>
+          )}
+          {isAdmin && isEditor && <Spacer width={8} />}
+          {isEditor && (
+            <>
+              <Spacer width={12} />
+              <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
+                <a>
+                  <Button icon="create">New entity</Button>
+                </a>
+              </Link>
+            </>
+          )}
+        </NavbarContainer>
+      )}
+    </Actions>
+  );
+};
+
+export const SpaceNavbar = ({ spaceId }: Props) => {
+  const { route, query } = useRouter();
 
   const tabEntitiesSelected = !route.includes('/triples');
   const tabTriplesSelected = route.includes('/triples');
@@ -56,29 +83,7 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
           </TabLink>
         ))}
       </div>
-
-      <Actions>
-        {(isEditor || isAdmin) && editable && (
-          <NavbarContainer>
-            {isAdmin && (
-              <Link href={`/space/${spaceId}/access-control`}>
-                <Button variant="secondary">Devvy Admin</Button>
-              </Link>
-            )}
-            {isAdmin && isEditor && <Spacer width={8} />}
-            {isEditor && (
-              <>
-                <Spacer width={12} />
-                <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-                  <a>
-                    <Button icon="create">New entity</Button>
-                  </a>
-                </Link>
-              </>
-            )}
-          </NavbarContainer>
-        )}
-      </Actions>
+      <SpaceActions spaceId={spaceId} />
     </NavbarContainer>
   );
 };
