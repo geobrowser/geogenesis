@@ -93,7 +93,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     return (
       <Entities>
         {cellData.triples.map(({ value, attributeId, entityId, entityName }) => {
-          if (attributeId === 'name') {
+          if (cellData.columnId === 'name') {
             const value = entityName ?? entityId;
             return (
               <CellContent
