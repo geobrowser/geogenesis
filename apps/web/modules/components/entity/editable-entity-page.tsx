@@ -10,13 +10,11 @@ import { ID } from '~/modules/id';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
-import { FlowBar } from '../flow-bar';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Action } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
@@ -68,7 +66,7 @@ interface Props {
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
   const { triples: localTriples, update, create } = useEntityStore();
-  const { actions, publish } = useActionsStore(space);
+  const { actions } = useActionsStore(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -178,8 +176,6 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           </AddTripleContainer>
         </Content>
       </EntityContainer>
-
-      <FlowBar actions={actions} spaceId={space} onPublish={publish} />
     </PageContainer>
   );
 }

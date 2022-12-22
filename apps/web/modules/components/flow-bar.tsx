@@ -33,7 +33,7 @@ const MotionContainer = motion(Container);
 
 interface Props {
   actions: ActionType[];
-  spaceId: string;
+  spaceId?: string;
   onPublish: (spaceId: string, signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
 }
 
@@ -50,7 +50,9 @@ export function FlowBar({ actions, onPublish, spaceId }: Props) {
   const actionsCount = Action.getChangeCount(actions);
 
   const publish = async () => {
-    await onPublish(spaceId, signer!, setReviewState);
+    if (!spaceId || !signer) return;
+
+    await onPublish(spaceId, signer, setReviewState);
   };
 
   return (
