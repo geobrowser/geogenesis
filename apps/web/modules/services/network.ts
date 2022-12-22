@@ -309,19 +309,19 @@ export class Network implements INetwork {
     const subgraph = config.subgraph;
 
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
-    const columnsTriples = await new Network(storage, subgraph).fetchTriples({
-      query: '',
-      space: spaceId,
-      first: 100,
-      skip: 0,
-      filter: [
-        { field: 'entity-id', value: params.typeId },
-        { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
-      ],
-    });
-
     /* To get our rows, first we get all of the entity IDs of the selected type */
-    const rowEntityIds = (
+
+    const [columnsTriples, rowEntities] = await Promise.all([
+      await new Network(storage, subgraph).fetchTriples({
+        query: '',
+        space: spaceId,
+        first: 100,
+        skip: 0,
+        filter: [
+          { field: 'entity-id', value: params.typeId },
+          { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
+        ],
+      }),
       await new Network(storage, subgraph).fetchTriples({
         query: params.query,
         space: spaceId,
@@ -331,10 +331,11 @@ export class Network implements INetwork {
           { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
           { field: 'linked-to', value: params.typeId },
         ],
-      })
-    ).triples.map(triple => triple.entityId);
+      }),
+    ]);
 
-    /* Then we then fetch all triples associated with those entity IDs */
+    /* Then we then fetch all triples associated with those row entity IDs */
+    const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
     const rowTriples = await Promise.all(
       rowEntityIds.map(entityId =>
         new Network(storage, subgraph).fetchTriples({
