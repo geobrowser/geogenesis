@@ -86,8 +86,6 @@ export class ActionsStore implements IActionsStore {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     if (!spaceActions) return;
 
-    console.log('squashed changes', Action.squashChanges(spaceActions));
-
     try {
       await this.api.publish({
         actions: Action.squashChanges(spaceActions),
