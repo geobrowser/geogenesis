@@ -179,7 +179,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         </Content>
       </EntityContainer>
 
-      <FlowBar actionsCount={Action.getChangeCount(actions)} spaceId={space} onPublish={publish} />
+      <FlowBar actions={actions} spaceId={space} onPublish={publish} />
     </PageContainer>
   );
 }

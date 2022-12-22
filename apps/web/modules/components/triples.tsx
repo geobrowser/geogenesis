@@ -205,7 +205,7 @@ export function Triples({ spaceId, initialTriples, spaceImage, spaceName = ZERO_
         </PageNumberContainer>
       </motion.div>
 
-      <FlowBar actionsCount={Action.getChangeCount(actions)} spaceId={spaceId} onPublish={publish} />
+      <FlowBar actions={actions} spaceId={spaceId} onPublish={publish} />
     </PageContainer>
   );
 }
