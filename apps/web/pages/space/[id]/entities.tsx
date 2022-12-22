@@ -78,13 +78,28 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const initialTypes = await fetchSpaceTypeTriples(network, spaceId);
 
-  const initialSelectedType = (
-    initialParams.typeId ? initialTypes.find(t => t.entityId === initialParams.typeId) : initialTypes[0]
-  ) as Triple;
+  const notFoundType: Triple = {
+    entityId: 'not-found-type',
+    entityName: 'No Types Found',
+    id: '',
+    space: '',
+    attributeId: '',
+    attributeName: '',
+    value: {
+      type: 'string',
+      value: '',
+      id: '',
+    },
+  };
+
+  const initialSelectedType =
+    initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || notFoundType;
+
+  const typeId = initialSelectedType.entityId;
 
   const params = {
     ...initialParams,
-    typeId: initialSelectedType.entityId,
+    typeId,
   };
 
   const { columns, rows } = await network.fetchEntityTableData({
