@@ -29,7 +29,9 @@ function parseEntityTableQueryParameters(url: string): InitialEntityTableStorePa
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
   const typeId = params.get('typeId') || '';
-  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
+  const activeAdvancedFilterKeys = [...params.keys()].filter(
+    key => key !== 'query' && key !== 'page' && key !== 'typeId'
+  );
 
   const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
     const value = params.get(key);
