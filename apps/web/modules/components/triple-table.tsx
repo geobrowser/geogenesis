@@ -1,3 +1,4 @@
+import styled from '@emotion/styled';
 import {
   ColumnDef,
   createColumnHelper,
@@ -14,7 +15,14 @@ import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
-import { ChipCellContainer, Container, EmptyTableText, SpaceHeader, Table, TableRow } from './table/styles';
+import { ChipCellContainer, EmptyTableText, Table, TableHead, TableRow } from './table/styles';
+
+const Container = styled.div(props => ({
+  padding: 0,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderRadius: props.theme.radius,
+  overflow: 'hidden',
+}));
 
 const columnHelper = createColumnHelper<Triple>();
 
@@ -117,9 +125,9 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <SpaceHeader width={header.column.getSize()} key={header.id}>
+                <TableHead width={header.column.getSize()} key={header.id}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                </SpaceHeader>
+                </TableHead>
               ))}
             </tr>
           ))}

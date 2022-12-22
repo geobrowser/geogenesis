@@ -7,11 +7,15 @@ import { TabLink } from '~/modules/design-system/tab-link';
 import { useAccessControl } from '~/modules/state/use-access-control';
 import { useEditable } from '~/modules/state/use-editable';
 import { NavUtils } from '~/modules/utils';
-import { Actions } from '../table/styles';
 
 interface Props {
   spaceId: string;
 }
+
+const Actions = styled.div({
+  display: 'flex',
+  alignItems: 'center',
+});
 
 const NavbarContainer = styled.div({
   display: 'flex',

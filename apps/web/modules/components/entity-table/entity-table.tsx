@@ -15,7 +15,7 @@ import { Cell, Column, Row } from '../../types';
 import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
 import { CellContent } from '../table/cell-content';
-import { EmptyTableText } from '../table/styles';
+import { ChipCellContainer, EmptyTableText } from '../table/styles';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -60,11 +60,6 @@ const Container = styled.div(props => ({
   borderRadius: props.theme.radius,
   overflow: 'hidden',
 }));
-
-// Negative margin so table row height matches a single line of text
-const ChipCellContainer = styled.div({
-  margin: '-1px 0',
-});
 
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',
