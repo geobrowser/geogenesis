@@ -8,7 +8,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { Chip } from '../../design-system/chip';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
@@ -67,32 +67,21 @@ const Entities = styled.div(({ theme }) => ({
   gap: theme.space * 3,
 }));
 
-// Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
 
     const cellId = `${row.original.id}-${cell.column.id}`;
 
-    const initialCellData = getValue<Cell>();
-
-    // We need to keep and update the state of the cell normally
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [cellData, setCellData] = useState<Cell>(initialCellData);
-
-    // If the initialValue is changed external, sync it up with our state
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => {
-      setCellData(initialCellData);
-    }, [initialCellData]);
+    const cellData = getValue<Cell>();
 
     if (!cellData) {
-      return <div />;
+      return null;
     }
 
     return (
       <Entities>
-        {cellData.triples.map(({ value, attributeId, entityId, entityName }) => {
+        {cellData.triples.map(({ value, entityId, entityName }) => {
           if (cellData.columnId === 'name') {
             const value = entityName ?? entityId;
             return (
