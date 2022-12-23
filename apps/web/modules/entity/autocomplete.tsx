@@ -16,6 +16,7 @@ class EntityAutocomplete {
       computed(async () => {
         this.abortController.abort();
         this.abortController = new AbortController();
+
         return await api.fetchEntities(this.query$.get(), this.abortController);
       })
     );
