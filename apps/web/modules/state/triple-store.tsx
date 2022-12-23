@@ -59,6 +59,7 @@ export class TripleStore implements ITripleStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
+  abortController: AbortController = new AbortController();
 
   constructor({
     api,
@@ -83,12 +84,16 @@ export class TripleStore implements ITripleStore {
       { triples: [], hasNextPage: false },
       computed(async () => {
         try {
+          this.abortController.abort();
+          this.abortController = new AbortController();
+
           const { triples } = await this.api.fetchTriples({
             query: this.query$.get(),
             space: this.space,
             skip: this.pageNumber$.get() * pageSize,
             first: pageSize + 1,
             filter: this.filterState$.get(),
+            abortController: this.abortController,
           });
 
           return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
