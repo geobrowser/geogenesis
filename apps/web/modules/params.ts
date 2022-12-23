@@ -55,7 +55,7 @@ function stringifyEntityTableParameters({
 }: InitialEntityTableStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
-    ...(typeId !== '' && { typeId }),
+    ...(typeId && { typeId }),
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
     ...getAdvancedQueryParams(filterState),
   });
