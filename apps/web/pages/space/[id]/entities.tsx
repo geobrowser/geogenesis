@@ -16,7 +16,7 @@ interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
-  initialSelectedType: Triple;
+  initialSelectedType: Triple | null;
   initialTypes: Triple[];
   initialColumns: Column[];
   initialRows: Row[];
@@ -76,26 +76,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const initialTypes = await fetchSpaceTypeTriples(network, spaceId);
+  const initialTypes = (await fetchSpaceTypeTriples(network, spaceId)) || [];
 
-  const notFoundType: Triple = {
-    entityId: 'not-found-type',
-    entityName: 'No Types Found',
-    id: '',
-    space: '',
-    attributeId: '',
-    attributeName: '',
-    value: {
-      type: 'string',
-      value: '',
-      id: '',
-    },
-  };
+  const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
 
-  const initialSelectedType =
-    initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || notFoundType;
-
-  const typeId = initialSelectedType.entityId;
+  const typeId = initialSelectedType?.entityId;
 
   const params = {
     ...initialParams,

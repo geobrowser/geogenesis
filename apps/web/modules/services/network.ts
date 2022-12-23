@@ -69,8 +69,8 @@ type FetchTriplesResult = { triples: Triple[] };
 
 interface FetchEntityTableDataParams {
   spaceId: string;
-  params: InitialEntityTableStoreParams;
   config: AppConfig;
+  params: InitialEntityTableStoreParams;
 }
 
 export interface INetwork {
@@ -300,9 +300,12 @@ export class Network implements INetwork {
     const storage = new StorageClient(config.ipfs);
     const subgraph = config.subgraph;
 
+    if (!params.typeId) {
+      return { columns: [], rows: [] };
+    }
+
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
     /* To get our rows, first we get all of the entity IDs of the selected type */
-
     const [columnsTriples, rowEntities] = await Promise.all([
       await new Network(storage, subgraph).fetchTriples({
         query: '',

@@ -95,7 +95,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledTrigger>
-          {entityTableStore.type.entityName} <Spacer width={8} />
+          {entityTableStore.selectedType?.entityName || 'No Types Found'} <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </StyledTrigger>
       </PopoverPrimitive.Trigger>

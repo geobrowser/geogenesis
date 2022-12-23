@@ -20,7 +20,7 @@ interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
-  selectedType$: Observable<Triple>;
+  selectedType$: Observable<Triple | null>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -35,7 +35,7 @@ export type InitialEntityTableStoreParams = {
   query: string;
   pageNumber: number;
   filterState: FilterState;
-  typeId: string;
+  typeId: string | null;
 };
 
 interface IEntityTableStoreConfig {
@@ -44,7 +44,7 @@ interface IEntityTableStoreConfig {
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
-  initialSelectedType: Triple;
+  initialSelectedType: Triple | null;
   initialTypes: Triple[];
   initialColumns: Column[];
   config: AppConfig;
@@ -75,7 +75,7 @@ export class EntityTableStore implements IEntityTableStore {
   columns$: ObservableComputed<Column[]>;
 
   pageNumber$: Observable<number>;
-  selectedType$: Observable<Triple>;
+  selectedType$: Observable<Triple | null>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
@@ -115,13 +115,13 @@ export class EntityTableStore implements IEntityTableStore {
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
-          const { entityId } = this.selectedType$.get();
+          const selectedType = this.selectedType$.get();
 
           const params = {
             query: this.query$.get(),
             pageNumber: this.pageNumber$.get(),
             filterState: this.filterState$.get(),
-            typeId: entityId,
+            typeId: selectedType?.entityId || null,
           };
 
           const { rows, columns } = await this.api.fetchEntityTableData({

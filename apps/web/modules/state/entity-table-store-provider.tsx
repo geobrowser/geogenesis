@@ -13,7 +13,7 @@ interface Props {
   space: string;
   children: React.ReactNode;
   initialRows: Row[];
-  initialSelectedType: Triple;
+  initialSelectedType: Triple | null;
   initialColumns: Column[];
   initialTypes: Triple[];
   config: AppConfig;
