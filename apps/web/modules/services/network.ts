@@ -51,6 +51,7 @@ export type FetchTriplesOptions = {
   skip: number;
   first: number;
   filter: FilterState;
+  abortController?: AbortController;
 };
 
 export type PublishOptions = {
@@ -72,8 +73,6 @@ export interface INetwork {
 const UPLOAD_CHUNK_SIZE = 2000;
 
 export class Network implements INetwork {
-  triplesAbortController = new AbortController();
-
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
   publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
@@ -101,10 +100,7 @@ export class Network implements INetwork {
     await addEntries(contract, cids);
   };
 
-  fetchTriples = async ({ space, query, skip, first, filter }: FetchTriplesOptions) => {
-    this.triplesAbortController.abort();
-    this.triplesAbortController = new AbortController();
-
+  fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -130,7 +126,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: this.triplesAbortController.signal,
+      signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
           triples(where: {${where}}, skip: ${skip}, first: ${first}) {

@@ -50,8 +50,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
+  const network = new Network(storage, config.subgraph);
+
   const [entity, related] = await Promise.all([
-    new Network(storage, config.subgraph).fetchTriples({
+    network.fetchTriples({
       space,
       query: '',
       skip: 0,
@@ -59,7 +61,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'entity-id', value: entityId }],
     }),
 
-    new Network(storage, config.subgraph).fetchTriples({
+    network.fetchTriples({
       space,
       query: '',
       skip: 0,
@@ -70,7 +72,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const relatedEntities = await Promise.all(
     related.triples.map(triple =>
-      new Network(storage, config.subgraph).fetchTriples({
+      network.fetchTriples({
         space,
         query: '',
         skip: 0,
