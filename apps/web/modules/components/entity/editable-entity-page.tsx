@@ -6,7 +6,6 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { ID } from '~/modules/id';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
@@ -15,9 +14,9 @@ import { NumberField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Triple } from '~/modules/triple';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
+import { useEditEvents } from './edit-events';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -65,8 +64,19 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create } = useEntityStore();
+  const { triples: localTriples, update, create, remove } = useEntityStore();
   const { actions } = useActionsStore(space);
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId: space,
+    },
+    api: {
+      create,
+      update,
+      remove,
+    },
+  });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -80,56 +90,27 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   const name = Entity.name(triples) ?? serverName;
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (!nameTriple) {
-      return create(
-        Triple.withId({
-          space,
-          entityId: id,
-          entityName: e.target.value,
-          attributeId: 'name',
-          attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: e.target.value },
-        })
-      );
-    }
-
-    update(
-      {
-        ...nameTriple,
-        value: { ...nameTriple.value, type: 'string', value: e.target.value },
+    send({
+      type: 'EDIT_ENTITY_NAME',
+      payload: {
+        name: e.target.value,
+        triple: nameTriple,
       },
-      nameTriple
-    );
+    });
   };
 
   const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (!descriptionTriple) {
-      return create(
-        Triple.withId({
-          space,
-          entityId: id,
-          attributeId: 'Description',
-          attributeName: 'Description',
-          entityName: name,
-          value: {
-            id: ID.createValueId(),
-            type: 'string',
-            value: e.target.value,
-          },
-        })
-      );
-    }
-
-    update(
-      {
-        ...descriptionTriple,
-        value: { ...descriptionTriple.value, type: 'string', value: e.target.value },
+    send({
+      type: 'EDIT_ENTITY_DESCRIPTION',
+      payload: {
+        name,
+        description: e.target.value,
+        triple: descriptionTriple,
       },
-      descriptionTriple
-    );
+    });
   };
 
-  const onCreateNewTriple = () => create(Triple.empty(space, id));
+  const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   return (
     <PageContainer>
@@ -166,7 +147,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} space={space} triples={triples} name={name} />
+              <EntityAttributes entityId={id} triples={triples} name={name} send={send} />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -205,107 +186,61 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 
 function EntityAttributes({
   entityId,
-  space,
   triples,
   name,
+  send,
 }: {
   entityId: string;
-  space: Props['space'];
   triples: Props['triples'];
+  send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
-  const { update, remove, create } = useEntityStore();
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
-    triples.forEach(triple => {
-      update(
-        {
-          ...triple,
-          value: {
-            ...(type === 'entity'
-              ? { type: 'entity', id: '', name: '' }
-              : { type: 'string', id: triple.value.id, value: '' }),
-          },
-        },
-        triple
-      );
+    send({
+      type: 'CHANGE_TRIPLE_TYPE',
+      payload: {
+        type,
+        triples,
+      },
     });
   };
 
   const removeOrResetEntityTriple = (triple: TripleType) => {
-    if (triple.value.type === 'entity') {
-      // When we remove the last linked entity, we just want to set the value to empty
-      // instead of completely deleting the last triple.
-      // TODO: Set it to entity type instead of string
-      if (groupedTriples[triple.attributeId].length === 1) {
-        return update(
-          {
-            ...triple,
-            value: { ...triple.value, type: 'entity', id: '' },
-          },
-          triple
-        );
-      }
-    }
-
-    return remove(triple);
+    send({
+      type: 'REMOVE_ENTITY',
+      payload: {
+        triple,
+        isLastEntity: groupedTriples[triple.attributeId].length === 1,
+      },
+    });
   };
 
-  const linkEntityAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
-    const triplesToUpdate = groupedTriples[oldAttributeId];
-
-    if (triplesToUpdate.length > 0) {
-      if (groupedTriples[attribute.id]?.length > 0) {
-        // If triples at the new id already exists we want the user to use the existing entry method
-        return;
-      }
-
-      triplesToUpdate.forEach(triple => {
-        const newTriple = {
-          ...triple,
-          attributeId: attribute.id,
-          attributeName: attribute.name,
-        };
-
-        update(newTriple, triple);
-      });
-    }
-  };
-
-  const addEntityRelationToValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
-    // If it's an empty triple value
-    if (
-      groupedTriples[attributeId]?.length === 1 &&
-      groupedTriples[attributeId][0].value.type === 'entity' &&
-      !groupedTriples[attributeId][0].value.id
-    ) {
-      return update(
-        {
-          ...groupedTriples[attributeId][0],
-          value: {
-            ...groupedTriples[attributeId][0].value,
-            type: 'entity',
-            id: linkedEntity.id,
-            name: linkedEntity.name,
-          },
-          attributeName: groupedTriples[attributeId][0].attributeName,
+  const linkAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
+    send({
+      type: 'LINK_ATTRIBUTE',
+      payload: {
+        triplesByAttributeId: groupedTriples,
+        oldAttribute: {
+          id: oldAttributeId,
         },
-        groupedTriples[attributeId][0]
-      );
-    }
+        newAttribute: attribute,
+      },
+    });
+  };
 
-    create({
-      ...groupedTriples[attributeId][0],
-      space: space,
-      entityId: entityId,
-      entityName: name,
-      attributeId: attributeId,
-      attributeName: groupedTriples[attributeId][0].attributeName,
-      value: {
-        type: 'entity',
-        id: linkedEntity.id,
-        name: linkedEntity.name,
+  const addEntityValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
+    // If it's an empty triple value
+    send({
+      type: 'ADD_ENTITY_VALUE',
+      payload: {
+        triplesByAttributeId: groupedTriples,
+        attribute: {
+          id: attributeId,
+        },
+        linkedEntity,
+        entityName: name,
       },
     });
   };
@@ -318,15 +253,7 @@ function EntityAttributes({
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onChange={e =>
-              update(
-                {
-                  ...triple,
-                  value: { ...triple.value, type: 'string', value: e.target.value },
-                },
-                triple
-              )
-            }
+            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             value={triple.value.value}
           />
         );
@@ -335,15 +262,7 @@ function EntityAttributes({
           <NumberField
             key={triple.id}
             placeholder="Add value..."
-            onBlur={e =>
-              update(
-                {
-                  ...triple,
-                  value: { ...triple.value, type: 'string', value: e.target.value },
-                },
-                triple
-              )
-            }
+            onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             initialValue={triple.value.value}
           />
         );
@@ -353,7 +272,7 @@ function EntityAttributes({
             <EntityTextAutocomplete
               key={`entity-${attributeId}-${triple.id}`}
               placeholder="Add value..."
-              onDone={result => addEntityRelationToValue(attributeId, result)}
+              onDone={result => addEntityValue(attributeId, result)}
             />
           );
         }
@@ -380,7 +299,7 @@ function EntityAttributes({
             {attributeId === '' ? (
               <EntityTextAutocomplete
                 placeholder="Add attribute..."
-                onDone={result => linkEntityAttribute(attributeId, result)}
+                onDone={result => linkAttribute(attributeId, result)}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -394,7 +313,7 @@ function EntityAttributes({
               */}
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
               {isEntityGroup && !isEmptyEntity && (
-                <EntityAutocompleteDialog onDone={entity => addEntityRelationToValue(attributeId, entity)} />
+                <EntityAutocompleteDialog onDone={entity => addEntityValue(attributeId, entity)} />
               )}
               <TripleActions>
                 <TripleTypeDropdown
@@ -426,7 +345,11 @@ function EntityAttributes({
                 />
                 <SquareButton
                   icon="trash"
-                  onClick={() => triples.filter(t => t.attributeId === attributeId).forEach(t => remove(t))}
+                  onClick={() =>
+                    triples
+                      .filter(t => t.attributeId === attributeId)
+                      .forEach(t => send({ type: 'REMOVE_TRIPLE', payload: { triple: t } }))
+                  }
                 />
               </TripleActions>
             </GroupedAttributesList>
