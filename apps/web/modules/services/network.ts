@@ -65,7 +65,7 @@ type FetchTriplesResult = { triples: Triple[] };
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchEntities: (name: string) => Promise<{ id: string; name: string | null }[]>;
+  fetchEntities: (name: string, abortController?: AbortController) => Promise<{ id: string; name: string | null }[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -73,7 +73,6 @@ const UPLOAD_CHUNK_SIZE = 2000;
 
 export class Network implements INetwork {
   triplesAbortController = new AbortController();
-  entitiesAbortController = new AbortController();
 
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
@@ -181,10 +180,7 @@ export class Network implements INetwork {
     return { triples };
   };
 
-  fetchEntities = async (name: string) => {
-    this.entitiesAbortController.abort();
-    this.entitiesAbortController = new AbortController();
-
+  fetchEntities = async (name: string, abortController?: AbortController) => {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
@@ -193,7 +189,7 @@ export class Network implements INetwork {
       headers: {
         'Content-Type': 'application/json',
       },
-      signal: this.entitiesAbortController.signal,
+      signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
           startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {

@@ -8,11 +8,16 @@ import { makeOptionalComputed } from '~/modules/utils';
 class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<{ id: string; name: string | null }[]>;
+  abortController: AbortController = new AbortController();
 
   constructor({ api }: { api: INetwork }) {
     this.results$ = makeOptionalComputed(
       [],
-      computed(async () => await api.fetchEntities(this.query$.get()))
+      computed(async () => {
+        this.abortController.abort();
+        this.abortController = new AbortController();
+        return await api.fetchEntities(this.query$.get(), this.abortController);
+      })
     );
   }
 
