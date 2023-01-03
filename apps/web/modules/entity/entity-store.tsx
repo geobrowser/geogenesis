@@ -19,7 +19,7 @@ const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleT
       entityId,
       entityName: '',
       attributeName: 'Types',
-      attributeId: SYSTEM_IDS.TYPE,
+      attributeId: SYSTEM_IDS.TYPES,
       value: {
         id: '',
         type: 'entity',
