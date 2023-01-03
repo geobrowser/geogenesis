@@ -5,6 +5,7 @@ import { Triple } from '../triple';
 import { INetwork } from '../services/network';
 import { Triple as TripleType } from '../types';
 import { ActionsStore } from '../action';
+import { A } from '@mobily/ts-belt';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -44,8 +45,7 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
-    const initialDefaultTriples =
-      initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
+    const initialDefaultTriples = A.isEmpty(initialTriples) ? createInitialDefaultTriples(spaceId, id) : initialTriples;
 
     this.api = api;
     this.triples$ = observable(initialDefaultTriples);

@@ -1,4 +1,5 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { A } from '@mobily/ts-belt';
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { AppConfig } from '../config';
@@ -103,7 +104,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.columns$ = observable(initialColumns);
     this.types$ = observable(initialTypes);
     this.filterState$ = observable<FilterState>(
-      initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
+      A.isEmpty(initialParams.filterState) ? initialFilterState() : initialParams.filterState
     );
     this.space = space;
     this.query$ = computed(() => {
@@ -205,7 +206,7 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   setFilterState = (filter: FilterState) => {
-    const newState = filter.length === 0 ? initialFilterState() : filter;
+    const newState = A.isEmpty(filter) ? initialFilterState() : filter;
     this.setPageNumber(0);
     this.filterState$.set(newState);
   };

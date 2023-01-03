@@ -1,3 +1,4 @@
+import { A } from '@mobily/ts-belt';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/triple';
@@ -28,8 +29,8 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
 
       <EntityTable
         space={spaceId}
-        columns={entityTableStore.columns.length === 0 ? initialColumns : entityTableStore.columns}
-        rows={entityTableStore.rows.length === 0 ? initialRows : entityTableStore.rows}
+        columns={A.isEmpty(entityTableStore.columns) ? initialColumns : entityTableStore.columns}
+        rows={A.isEmpty(entityTableStore.rows) ? initialRows : entityTableStore.rows}
       />
 
       <Spacer height={12} />

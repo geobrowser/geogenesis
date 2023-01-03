@@ -1,6 +1,7 @@
 import { AppConfig, AppEnv, Config } from '../config';
 import { FilterField, FilterState } from '../types';
 import { InitialTripleStoreParams, InitialEntityTableStoreParams } from '~/modules/triple';
+import { A } from '@mobily/ts-belt';
 
 export const ENV_PARAM_NAME = 'env';
 
@@ -73,7 +74,7 @@ export function stringifyQueryParameters({ query, pageNumber, filterState }: Ini
 }
 
 export function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | object {
-  if (filterState.length === 0) {
+  if (A.isEmpty(filterState)) {
     return {};
   }
 

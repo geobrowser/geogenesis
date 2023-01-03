@@ -26,6 +26,7 @@ importers:
       '@geogenesis/contracts': workspace:*
       '@legendapp/state': ^0.20.0
       '@mailchimp/mailchimp_marketing': ^3.0.80
+      '@mobily/ts-belt': 4.0.0-rc.2
       '@next/bundle-analyzer': ^12.3.0
       '@radix-ui/react-dialog': ^1.0.2
       '@radix-ui/react-dropdown-menu': ^2.0.1
@@ -86,6 +87,7 @@ importers:
       '@geogenesis/contracts': link:../../packages/contracts
       '@legendapp/state': 0.20.5_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
+      '@mobily/ts-belt': 4.0.0-rc.2
       '@radix-ui/react-dialog': 1.0.2_rj7ozvcq3uehdlnj3cbwzbi5ce
       '@radix-ui/react-dropdown-menu': 2.0.1_rj7ozvcq3uehdlnj3cbwzbi5ce
       '@radix-ui/react-popover': 1.0.2_rj7ozvcq3uehdlnj3cbwzbi5ce
@@ -1912,6 +1914,11 @@ packages:
 
   /@metamask/safe-event-emitter/2.0.0:
     resolution: {integrity: sha512-/kSXhY692qiV1MXu6EeOZvg5nECLclxNXcKCxJ3cXQgYuRymRHpdx/t7JXfsK+JLjwA1e1c1/SBrlQYpusC29Q==}
+    dev: false
+
+  /@mobily/ts-belt/4.0.0-rc.2:
+    resolution: {integrity: sha512-chtffHO0EvI02zwrKKIlQcgWyKtwpo+/vhtEIF0yYgP3EFzjxllm8WOVl0G7u6sONLFi8rmK42x9FTtomC7QyQ==}
+    engines: {node: '>= 10.*'}
     dev: false
 
   /@motionone/animation/10.14.0:

@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { A } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -153,7 +154,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.length === 0 && (
+          {A.isEmpty(table.getRowModel().rows) && (
             <tr>
               <EmptyTableText>No results found</EmptyTableText>
             </tr>

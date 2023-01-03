@@ -1,4 +1,5 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { A } from '@mobily/ts-belt';
 import produce from 'immer';
 import { ActionsStore } from '../action';
 import { INetwork } from '../services/network';
@@ -72,7 +73,7 @@ export class TripleStore implements ITripleStore {
     this.triples$ = observable(initialTriples);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
-      initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
+      A.isEmpty(initialParams.filterState) ? initialFilterState() : initialParams.filterState
     );
     this.space = space;
     this.query$ = computed(() => {
@@ -151,7 +152,7 @@ export class TripleStore implements ITripleStore {
   };
 
   setFilterState = (filter: FilterState) => {
-    const newState = filter.length === 0 ? initialFilterState() : filter;
+    const newState = A.isEmpty(filter) ? initialFilterState() : filter;
     this.setPageNumber(0);
     this.filterState$.set(newState);
   };

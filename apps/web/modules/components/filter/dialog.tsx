@@ -1,5 +1,6 @@
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
+import { A } from '@mobily/ts-belt';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -161,7 +162,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               <Button
                 icon="create"
                 variant="secondary"
-                disabled={getFilterOptions(filterState).length === 0}
+                disabled={A.isEmpty(getFilterOptions(filterState))}
                 onClick={() => {
                   const defaultOption = getFilterOptions(filterState)[0];
 

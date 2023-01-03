@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { A } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -133,7 +134,7 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.length === 0 && (
+          {A.isEmpty(table.getRowModel().rows) && (
             <tr style={{ textAlign: 'center' }}>
               <td />
               <EmptyTableText>No results found</EmptyTableText>

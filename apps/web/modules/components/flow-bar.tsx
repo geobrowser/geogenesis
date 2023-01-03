@@ -11,8 +11,8 @@ import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { Action as ActionType, ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
-import { groupBy } from '../utils';
 import { Action } from '../action';
+import { A, D, pipe } from '@mobily/ts-belt';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -102,12 +102,16 @@ interface ReviewProps {
 
 function Review({ actions, onNext }: ReviewProps) {
   const actionsCount = Action.getChangeCount(actions);
-  const entitiesCount = Object.keys(
-    groupBy(Action.squashChanges(actions), action => {
+  const entitiesCount = pipe(
+    actions,
+    Action.squashChanges,
+    A.groupBy(action => {
       if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
       return action.after.entityId;
-    })
-  ).length;
+    }),
+    D.keys,
+    A.length
+  );
 
   return (
     <>

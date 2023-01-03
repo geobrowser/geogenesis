@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { A, D, pipe } from '@mobily/ts-belt';
 import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -14,7 +15,7 @@ import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
-import { groupBy, NavUtils, partition } from '~/modules/utils';
+import { NavUtils } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
 import { LinkedEntityGroup } from './types';
 
@@ -103,7 +104,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities }:
       </Text>
 
       <Entities>
-        {Object.entries(linkedEntities).length === 0 ? (
+        {D.isEmpty(linkedEntities) ? (
           <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
         ) : (
           <LayoutGroup>
@@ -155,7 +156,7 @@ function EntityAttributes({
   triples: Props['triples'];
   space: Props['space'];
 }) {
-  const groupedTriples = groupBy(triples, t => t.attributeId);
+  const groupedTriples = A.groupBy(triples, t => t.attributeId);
 
   return (
     <>
@@ -260,7 +261,7 @@ function LinkedEntityCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const [linkedTriples, unlinkedTriples] = partition(
+  const [linkedTriples, unlinkedTriples] = A.partition(
     entityGroup.triples,
     t => t.value.type === 'entity' && t.value.id === originalEntityId
   );

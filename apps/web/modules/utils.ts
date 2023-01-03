@@ -38,28 +38,3 @@ export function getFilesFromFileList(fileList: FileList): File[] {
   }
   return files;
 }
-
-export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
-  const result: { [key in PropertyKey]: T[] } = {};
-
-  values.forEach(value => {
-    const key = projection(value);
-
-    if (key in result) {
-      result[key].push(value);
-    } else {
-      result[key] = [value];
-    }
-  });
-
-  return result;
-}
-
-export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
-  return array.reduce<[T[], T[]]>(
-    ([pass, fail], item) => {
-      return predicate(item) ? [[...pass, item], fail] : [pass, [...fail, item]];
-    },
-    [[], []]
-  );
-}

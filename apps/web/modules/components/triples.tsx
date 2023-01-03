@@ -1,3 +1,4 @@
+import { A } from '@mobily/ts-belt';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -67,10 +68,7 @@ export function Triples({ spaceId, initialTriples, spaceName = ZERO_WIDTH_SPACE 
 
         <Spacer height={12} />
 
-        <TripleTable
-          space={spaceId}
-          triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
-        />
+        <TripleTable space={spaceId} triples={A.isEmpty(tripleStore.triples) ? initialTriples : tripleStore.triples} />
 
         <Spacer height={12} />
 

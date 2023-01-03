@@ -66,7 +66,7 @@ const DEFAULT_CHAIN: Chain = {
 };
 
 const { chains, provider, webSocketProvider } = configureChains(
-  [DEFAULT_CHAIN, TESTNET_CHAIN, LOCAL_CHAIN],
+  [TESTNET_CHAIN, DEFAULT_CHAIN, LOCAL_CHAIN],
   [publicProvider()]
 );
 

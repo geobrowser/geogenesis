@@ -27,7 +27,7 @@ export type EditEvent =
       type: 'CHANGE_TRIPLE_TYPE';
       payload: {
         type: 'string' | 'entity';
-        triples: TripleType[];
+        triples: readonly TripleType[];
       };
     }
   | {
@@ -40,7 +40,7 @@ export type EditEvent =
   | {
       type: 'LINK_ATTRIBUTE';
       payload: {
-        triplesByAttributeId: Record<string, TripleType[]>;
+        triplesByAttributeId: Record<string, readonly TripleType[]>;
         oldAttribute: {
           id: string;
         };
@@ -53,7 +53,7 @@ export type EditEvent =
   | {
       type: 'ADD_ENTITY_VALUE';
       payload: {
-        triplesByAttributeId: Record<string, TripleType[]>;
+        triplesByAttributeId: Record<string, readonly TripleType[]>;
         attribute: {
           id: string;
         };

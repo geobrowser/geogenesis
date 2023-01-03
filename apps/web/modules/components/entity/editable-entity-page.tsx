@@ -7,7 +7,6 @@ import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Triple as TripleType } from '~/modules/types';
-import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { NumberField, StringField } from './editable-fields';
@@ -17,6 +16,7 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
+import { A, B, D, F, pipe } from '@mobily/ts-belt';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -80,7 +80,13 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
+  const triples = pipe(
+    A.isEmpty(localTriples) && A.isEmpty(actions),
+    B.ifElse(
+      () => serverTriples,
+      () => localTriples
+    )
+  );
 
   const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
   const descriptionTriple = triples.find(
@@ -195,9 +201,9 @@ function EntityAttributes({
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
-  const groupedTriples = groupBy(triples, t => t.attributeId);
+  const groupedTriples = A.groupBy(triples, t => t.attributeId);
 
-  const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
+  const onChangeTripleType = (type: 'string' | 'entity', triples: readonly TripleType[]) => {
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
