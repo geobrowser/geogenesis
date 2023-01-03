@@ -12,7 +12,7 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
-import { Entity } from '~/modules/models/Entity';
+import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';

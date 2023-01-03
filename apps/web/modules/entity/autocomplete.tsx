@@ -1,14 +1,14 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { useEffect, useMemo } from 'react';
-import { useServices } from '~/modules/services';
+import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 
 class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<{ id: string; name: string | null }[]>;
-  abortController = new AbortController();
+  abortController: AbortController = new AbortController();
 
   constructor({ api }: { api: INetwork }) {
     this.results$ = makeOptionalComputed(
@@ -28,7 +28,7 @@ class EntityAutocomplete {
 }
 
 export function useAutocomplete() {
-  const { network } = useServices();
+  const { network } = Services.useServices();
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({ api: network });

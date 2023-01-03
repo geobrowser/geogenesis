@@ -2,8 +2,8 @@ import { Space, Space__factory } from '@geogenesis/contracts';
 import { useRouter } from 'next/router';
 import { FormEvent } from 'react';
 import { useSigner } from 'wagmi';
-import { useAccessControl } from '~/modules/state/use-access-control';
-import { useSpaces } from '~/modules/state/use-spaces';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 
 type RoleType = 'editor' | 'admin' | 'editorController';
 

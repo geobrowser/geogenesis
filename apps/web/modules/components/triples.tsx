@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
-import { useTriples } from '~/modules/state/use-triples';
+import { useTriples } from '~/modules/triple/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
 import { Triple } from '../types';
 // import { getFilesFromFileList } from '../utils';

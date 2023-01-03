@@ -9,8 +9,10 @@ import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
-import { ReviewState } from '../types';
+import { Action as ActionType, ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
+import { groupBy } from '../utils';
+import { Action } from '../action';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -30,11 +32,12 @@ const Container = styled.div(props => ({
 const MotionContainer = motion(Container);
 
 interface Props {
-  actionsCount: number;
-  onPublish: (signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
+  actions: ActionType[];
+  spaceId?: string;
+  onPublish: (spaceId: string, signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
 }
 
-export function FlowBar({ actionsCount, onPublish }: Props) {
+export function FlowBar({ actions, onPublish, spaceId }: Props) {
   const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
@@ -44,10 +47,12 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
   const showToast =
     reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
 
+  const actionsCount = Action.getChangeCount(actions);
+
   const publish = async () => {
-    await onPublish(signer!, setReviewState);
-    setReviewState('publish-complete');
-    await new Promise(() => setTimeout(() => setReviewState('idle'), 3000)); // want to show the "complete" state for 1s
+    if (!spaceId || !signer) return;
+
+    await onPublish(spaceId, signer, setReviewState);
   };
 
   return (
@@ -64,7 +69,7 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
               key="action-bar"
             >
               {reviewState === 'idle' && (
-                <Review actionsCount={actionsCount} onBack={() => setReviewState('idle')} onNext={publish} />
+                <Review actions={actions} onBack={() => setReviewState('idle')} onNext={publish} />
               )}
             </MotionContainer>
           )}
@@ -91,17 +96,25 @@ export function FlowBar({ actionsCount, onPublish }: Props) {
 
 interface ReviewProps {
   onBack: () => void;
-  actionsCount: number;
+  actions: ActionType[];
   onNext: () => void;
 }
 
-function Review({ actionsCount, onNext }: ReviewProps) {
+function Review({ actions, onNext }: ReviewProps) {
+  const actionsCount = Action.getChangeCount(actions);
+  const entitiesCount = Object.keys(
+    groupBy(Action.squashChanges(actions), action => {
+      if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
+      return action.after.entityId;
+    })
+  ).length;
+
   return (
     <>
       <Trash color="grey-04" />
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
-        {actionsCount} {pluralize('change', actionsCount)}
+        {actionsCount} {pluralize('change', actionsCount)} across {entitiesCount} {pluralize('entity', entitiesCount)}
       </Text>
 
       <Spacer width={16} />

@@ -1,13 +1,16 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
+import Head from 'next/head';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
+import { Providers } from '~/modules/providers';
+import { FlowBar } from '~/modules/components/flow-bar';
+import { useActionsStore } from '~/modules/action';
+import { useRouter } from 'next/router';
 
 import 'modern-normalize';
 import '../styles/styles.css';
-import Head from 'next/head';
-import { Providers } from '~/modules/services/providers';
 
 const globalStyles = css`
   html {
@@ -44,7 +47,27 @@ function MyApp({ Component, pageProps }: AppProps) {
       <Layout>
         <Component {...pageProps} />
       </Layout>
+      <GlobalFlowBar />
     </Providers>
+  );
+}
+
+const FlowbarContainer = styled.div({
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+});
+
+function GlobalFlowBar() {
+  const router = useRouter();
+  const { id: spaceId } = router.query as { id: string | undefined };
+  const { actions, publish } = useActionsStore(spaceId);
+
+  return (
+    <FlowbarContainer>
+      <FlowBar actions={actions} onPublish={publish} spaceId={spaceId} />
+    </FlowbarContainer>
   );
 }
 

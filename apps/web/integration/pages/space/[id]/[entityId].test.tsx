@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { makeStubTriple } from '~/modules/services/mock-network';
-import { Providers } from '~/modules/services/providers';
+import { Providers } from '~/modules/providers';
 import { Triple } from '~/modules/types';
 import EntityPage from '~/pages/space/[id]/[entityId]';
 

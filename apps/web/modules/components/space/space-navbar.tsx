@@ -1,11 +1,11 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
 import { TabLink } from '~/modules/design-system/tab-link';
-import { useAccessControl } from '~/modules/state/use-access-control';
-import { useEditable } from '~/modules/state/use-editable';
+import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 
 interface Props {

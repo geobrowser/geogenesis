@@ -1,7 +1,7 @@
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { useEntityTable } from '~/modules/triple';
 // import { getFilesFromFileList } from '../utils';
-import { useEntityTable } from '~/modules/state/use-entity-tables';
 // import { importCSVFile } from '~/modules/services/import';
 import { Column, Row } from '../../types';
 import { PageContainer, PageNumberContainer } from '../table/styles';
