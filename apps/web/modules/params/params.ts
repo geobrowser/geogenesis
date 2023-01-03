@@ -1,7 +1,7 @@
 import { AppConfig, AppEnv, Config } from '../config';
 import { FilterField, FilterState } from '../types';
 import { InitialTripleStoreParams, InitialEntityTableStoreParams } from '~/modules/triple';
-import { A } from '@mobily/ts-belt';
+import { A, O, pipe } from '@mobily/ts-belt';
 
 export const ENV_PARAM_NAME = 'env';
 
@@ -9,13 +9,15 @@ export function parseTripleQueryParameters(url: string): InitialTripleStoreParam
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
-  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
-
-  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-    const value = params.get(key);
-    if (!value) return acc;
-    return [...acc, { field: key as FilterField, value }];
-  }, []);
+  const filterStateResult = pipe(
+    [...params.keys()],
+    A.filter(key => key !== 'query' && key !== 'page' && key !== 'typeId'),
+    A.reduce([] as FilterState, (acc, key) => {
+      const value = params.get(key);
+      if (!value) return acc;
+      return [...acc, { field: key as FilterField, value }];
+    })
+  );
 
   return {
     query,
@@ -29,15 +31,15 @@ export function parseEntityTableQueryParameters(url: string): InitialEntityTable
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
   const typeId = params.get('typeId') || '';
-  const activeAdvancedFilterKeys = [...params.keys()].filter(
-    key => key !== 'query' && key !== 'page' && key !== 'typeId'
+  const filterStateResult = pipe(
+    [...params.keys()],
+    A.filter(key => key !== 'query' && key !== 'page' && key !== 'typeId'),
+    A.reduce([] as FilterState, (acc, key) => {
+      const value = params.get(key);
+      if (!value) return acc;
+      return [...acc, { field: key as FilterField, value }];
+    })
   );
-
-  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-    const value = params.get(key);
-    if (!value) return acc;
-    return [...acc, { field: key as FilterField, value }];
-  }, []);
 
   return {
     query,
@@ -114,7 +116,7 @@ export function getAdvancedQueryParams(filterState: FilterState): Record<FilterF
  * @param cookie -- The cookie value for the environment from the `ENV_PARAM_NAME` cookie name.
  * @returns AppConfig
  */
-export function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
+export function getConfigFromUrl(url: string, cookie: O.Option<string>): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
   const env: AppEnv = params.get('env') as AppEnv;
 
