@@ -11,7 +11,7 @@ export function parseTripleQueryParameters(url: string): InitialTripleStoreParam
   const pageNumber = Number(params.get('page') || 0);
   const filterStateResult = pipe(
     [...params.keys()],
-    A.filter(key => key !== 'query' && key !== 'page' && key !== 'typeId'),
+    A.filter(key => key !== 'query' && key !== 'page'),
     A.reduce([] as FilterState, (acc, key) => {
       const value = params.get(key);
       if (!value) return acc;
