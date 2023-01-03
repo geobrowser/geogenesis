@@ -270,7 +270,6 @@ export const StyledLabel = styled(StyledButton)(props => ({
 
 const StyledSmallButton = styled(StyledButton)<{ borderColor?: string }>(({ variant, theme, borderColor }) => {
   const colors = getButtonColors(variant, false, theme);
-  console.log('borderColor', colors.borderColor);
 
   return {
     alignItems: 'center',
