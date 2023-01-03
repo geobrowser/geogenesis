@@ -1,4 +1,3 @@
-import { A, D, F, N, O, pipe } from '@mobily/ts-belt';
 import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
@@ -193,34 +192,13 @@ const listener =
         const { newAttribute, oldAttribute, triplesByAttributeId } = event.payload;
         const triplesToUpdate = triplesByAttributeId[oldAttribute.id];
 
-        const hasTriplesAtNewAttributeId = pipe(
-          triplesByAttributeId,
-          O.fromNullable,
-          O.match(
-            triplesById =>
-              pipe(
-                triplesById,
-                D.get(newAttribute.id),
-                O.map(triples => triples.length > 0)
-              ),
-            () => false
-          )
-        );
+        if (triplesToUpdate.length > 0) {
+          if (triplesByAttributeId[newAttribute.id]?.length > 0) {
+            // If triples at the new id already exists we want the user to use the existing entry method
+            return;
+          }
 
-        // If triples at the new id already exists we want the user to use the existing entry method
-        if (hasTriplesAtNewAttributeId) {
-          return;
-        }
-
-        const hasTriplesToUpdate = pipe(
-          triplesToUpdate,
-          O.fromNullable,
-          O.map(triples => triples.length > 0),
-          O.getWithDefault(false)
-        );
-
-        if (hasTriplesToUpdate) {
-          triplesToUpdate?.forEach(triple => {
+          triplesToUpdate.forEach(triple => {
             const newTriple = Triple.ensureStableId({
               ...triple,
               attributeId: newAttribute.id,
@@ -236,53 +214,33 @@ const listener =
       case 'ADD_ENTITY_VALUE': {
         const { triplesByAttributeId, attribute, linkedEntity, entityName } = event.payload;
 
-        const triplesAtAttributeId = D.get(triplesByAttributeId, attribute.id);
-        const hasSingleTripleAtAttributeId = pipe(
-          triplesAtAttributeId,
-          O.match(
-            triples => triples.length === 1,
-            () => false
-          )
-        );
-
-        const firstValueAtAttributeId = pipe(
-          triplesAtAttributeId,
-          O.match(
-            triples => A.get(triples as TripleType[], 0),
-            () => undefined
-          )
-        );
-
-        // There may be a single "empty" triple in the relation value. If this empty triple exists we want to update it
-        // instead of creating a new triple.
         if (
-          hasSingleTripleAtAttributeId &&
-          firstValueAtAttributeId?.value.type === 'entity' &&
-          !firstValueAtAttributeId?.value.id
+          triplesByAttributeId[attribute.id]?.length === 1 &&
+          triplesByAttributeId[attribute.id][0].value.type === 'entity' &&
+          !triplesByAttributeId[attribute.id][0].value.id
         ) {
           return update(
             Triple.ensureStableId({
-              ...firstValueAtAttributeId,
+              ...triplesByAttributeId[attribute.id][0],
               value: {
-                ...firstValueAtAttributeId.value,
+                ...triplesByAttributeId[attribute.id][0].value,
                 type: 'entity',
                 id: linkedEntity.id,
                 name: linkedEntity.name,
               },
-              attributeName: firstValueAtAttributeId.attributeName,
+              attributeName: triplesByAttributeId[attribute.id][0].attributeName,
             }),
-            firstValueAtAttributeId
+            triplesByAttributeId[attribute.id][0]
           );
         }
 
-        // If there's no empty value then we should create a new one.
         return create(
           Triple.withId({
             space: context.spaceId,
             entityId: context.entityId,
             entityName: entityName,
             attributeId: attribute.id,
-            attributeName: triplesByAttributeId[attribute.id]?.[0]?.attributeName ?? '',
+            attributeName: triplesByAttributeId[attribute.id][0].attributeName,
             value: {
               type: 'entity',
               id: linkedEntity.id,

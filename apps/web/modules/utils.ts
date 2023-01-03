@@ -1,6 +1,4 @@
 import { computed, ObservableComputed } from '@legendapp/state';
-import { A, F, O, pipe } from '@mobily/ts-belt';
-import { FilterState } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -33,23 +31,10 @@ export const NavUtils = {
   toCreateEntity: (spaceId: string) => `/space/${spaceId}/create-entity`,
 };
 
-export function isOnlyEntityNameFilter(filter: FilterState): boolean {
-  const onlyOneFilter = pipe(filter, A.length, F.equals(1));
-  const filterIsEntityName = pipe(
-    filter,
-    A.head,
-    O.map(filter => filter.field),
-    O.filter(value => value === 'entity-name'),
-    O.isSome
-  );
-
-  return onlyOneFilter && filterIsEntityName;
-}
-
 export function getFilesFromFileList(fileList: FileList): File[] {
   const files: File[] = [];
-  for (const file of fileList) {
-    files.push(file);
+  for (let i = 0; i < fileList.length; i++) {
+    files.push(fileList[i]);
   }
   return files;
 }

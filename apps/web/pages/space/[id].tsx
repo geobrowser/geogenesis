@@ -4,7 +4,7 @@ import Head from 'next/head';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceActions } from '~/modules/components/space/space-navbar';
 import { Triples } from '~/modules/components/triples';
-import { ENV_PARAM_NAME, SYSTEM_IDS } from '~/modules/constants';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Triple } from '~/modules/types';
@@ -55,7 +55,7 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
   const initialParams = Params.parseTripleQueryParameters(context.resolvedUrl);
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[ENV_PARAM_NAME]);
+  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);

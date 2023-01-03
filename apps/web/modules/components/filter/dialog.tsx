@@ -167,7 +167,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                   const defaultOption = getFilterOptions(filterState)[0];
 
                   const newFilterState = produce(filterState, draft => {
-                    draft.push({ field: defaultOption?.value ?? 'entity-name', value: '' });
+                    draft.push({ field: defaultOption.value, value: '' });
                   });
 
                   setFilterState(newFilterState);

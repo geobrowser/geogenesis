@@ -1,9 +1,7 @@
 import styled from '@emotion/styled';
-import { A, B, F, N, O, pipe } from '@mobily/ts-belt';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
 import { useEntityTable } from '~/modules/triple';
-import { isOnlyEntityNameFilter } from '~/modules/utils';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
@@ -52,8 +50,8 @@ const AdvancedFilters = styled.div(props => ({
 export function EntityInput() {
   const entityTableStore = useEntityTable();
   const inputContainerRef = useRef<HTMLDivElement>(null);
-
-  const showBasicFilter = isOnlyEntityNameFilter(entityTableStore.filterState);
+  const showBasicFilter =
+    entityTableStore.filterState.length === 1 && entityTableStore.filterState[0].field === 'entity-name';
   const inputRect = useRect(inputContainerRef.current);
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {

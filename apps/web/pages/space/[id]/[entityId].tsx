@@ -12,7 +12,6 @@ import { EntityStoreProvider } from '~/modules/entity/entity-store-provider';
 import { useEffect } from 'react';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Entity } from '~/modules/entity';
-import { ENV_PARAM_NAME } from '~/modules/constants';
 
 interface Props {
   triples: Triple[];
@@ -48,7 +47,7 @@ export default function EntityPage(props: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[ENV_PARAM_NAME]);
+  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
   const network = new Network(storage, config.subgraph);
@@ -87,15 +86,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     .flatMap(entity => entity.triples)
     .reduce((acc, triple) => {
       if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
-
-      const oldTriples = acc[triple.entityId]?.triples;
-      acc[triple.entityId] = {
-        ...acc[triple.entityId],
-        id: triple.entityId,
-        name: triple.entityName,
-        triples: oldTriples ? [...oldTriples, triple] : [triple],
-      };
-
+      acc[triple.entityId].id = triple.entityId;
+      acc[triple.entityId].name = triple.entityName;
+      acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
       return acc;
     }, {} as Record<string, LinkedEntityGroup>);
 

@@ -77,7 +77,7 @@ function getFirstAndLastChanges(actions: ActionType[]) {
       }
     });
 
-    acc[id] = [firstAction[0]!, lastAction[0]!];
+    acc[id] = [firstAction[0], lastAction[0]];
     return acc;
   }, {});
 }

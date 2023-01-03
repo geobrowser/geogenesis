@@ -16,7 +16,7 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
-import { A, B, pipe } from '@mobily/ts-belt';
+import { A, B, D, F, pipe } from '@mobily/ts-belt';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -218,7 +218,7 @@ function EntityAttributes({
       type: 'REMOVE_ENTITY',
       payload: {
         triple,
-        isLastEntity: groupedTriples[triple.attributeId]?.length === 1,
+        isLastEntity: groupedTriples[triple.attributeId].length === 1,
       },
     });
   };

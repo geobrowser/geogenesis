@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { Cookie } from './modules/cookie';
-import { ENV_PARAM_NAME } from './modules/constants';
+import { Params } from './modules/params';
 
 // export const config = {
 //   matcher: ['/', '/spaces', '/blog/:path*'],
@@ -18,6 +18,6 @@ export function middleware(request: NextRequest) {
 
   const env = Cookie.getEnv(request.url);
   const response = NextResponse.next();
-  if (env) response.cookies.set(ENV_PARAM_NAME, env);
+  if (env) response.cookies.set(Params.ENV_PARAM_NAME, env);
   return response;
 }

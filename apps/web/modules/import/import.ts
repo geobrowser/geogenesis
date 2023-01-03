@@ -73,13 +73,13 @@ export function eavRowsToTriples(
       // If the attribute is name we want to set the value to the name itself and not the mapped id
       // This is due to how we import references on other datasheets by name instead of id.
       value in entityIdMap && mappedAttributeId !== 'name'
-        ? { type: 'entity', id: entityIdMap[value] ?? '', name: '' }
+        ? { type: 'entity', id: entityIdMap[value], name: '' }
         : { type: 'string', id: createId(value), value };
 
     return Triple.withId({
       space,
-      entityId: mappedEntityId ?? '',
-      attributeId: mappedAttributeId ?? '',
+      entityId: mappedEntityId,
+      attributeId: mappedAttributeId,
       value: mappedValue,
       attributeName: '',
       entityName: '',
@@ -854,14 +854,8 @@ export function convertLegacyHealthData(
 
     // Add reference to section
     return [
-      // eslint-disable-next-line
-      // @ts-ignore
       ...factRows.map((factRow): EavRow => [factRow.ID_content, 'section', titleRow.ID_content]),
-      // eslint-disable-next-line
-      // @ts-ignore
       [titleRow.ID_content, 'type', 'section'],
-      // eslint-disable-next-line
-      // @ts-ignore
       [titleRow.ID_content, 'name', titleRow.Content],
     ];
   });
@@ -1149,8 +1143,6 @@ function chunkBy<T>(values: T[], belongInSameGroup: (a: T, b: T) => boolean): T[
     const prev = values[i - 1];
     const next = values[i];
 
-    // eslint-disable-next-line
-    // @ts-ignore
     if (!belongInSameGroup(prev, next)) {
       result.push(values.slice(start, i));
       start = i;

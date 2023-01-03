@@ -102,10 +102,10 @@ function getComponentRoute({
   spaceImages,
   pageName,
 }: GetComponentRouteConfig): ComponentRoute {
-  const component = components[index] ?? '';
+  const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
-  const componentName = component?.split('?')?.[0] ?? '';
+  const componentName = component.split('?')?.[0];
 
   switch (components[1]) {
     case 'space':
