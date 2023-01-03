@@ -270,6 +270,7 @@ export const StyledLabel = styled(StyledButton)(props => ({
 
 const StyledSmallButton = styled(StyledButton)<{ borderColor?: string }>(({ variant, theme, borderColor }) => {
   const colors = getButtonColors(variant, false, theme);
+  console.log('borderColor', colors.borderColor);
 
   return {
     alignItems: 'center',
@@ -283,11 +284,11 @@ const StyledSmallButton = styled(StyledButton)<{ borderColor?: string }>(({ vari
     color: colors.color,
 
     ':hover': {
-      boxShadow: `inset 0 0 0 1px ${borderColor || colors.borderColor}`,
+      boxShadow: `inset 0 0 0 1px ${borderColor || colors.borderColorHover}`,
     },
 
     ':focus': {
-      boxShadow: `inset 0 0 0 2px ${borderColor || colors.borderColor}`,
+      boxShadow: `inset 0 0 0 2px ${borderColor || colors.borderColorFocus}`,
       outline: 'none',
     },
   };
