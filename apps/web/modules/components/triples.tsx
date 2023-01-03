@@ -67,10 +67,7 @@ export function Triples({ spaceId, initialTriples, spaceName = ZERO_WIDTH_SPACE 
 
         <Spacer height={12} />
 
-        <TripleTable
-          space={spaceId}
-          triples={tripleStore.triples.length === 0 ? initialTriples : tripleStore.triples}
-        />
+        <TripleTable space={spaceId} triples={tripleStore.hydrated ? tripleStore.triples : initialTriples} />
 
         <Spacer height={12} />
 

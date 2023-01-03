@@ -28,8 +28,8 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
 
       <EntityTable
         space={spaceId}
-        columns={entityTableStore.columns.length === 0 ? initialColumns : entityTableStore.columns}
-        rows={entityTableStore.rows.length === 0 ? initialRows : entityTableStore.rows}
+        columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}
+        rows={entityTableStore.hydrated ? entityTableStore.rows : initialRows}
       />
 
       <Spacer height={12} />
