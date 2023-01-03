@@ -1,7 +1,6 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { AppConfig } from '../config';
 import { Params } from '../params';
 import { Services } from '../services';
 import { Column, FilterState, Row, Triple } from '../types';
@@ -16,12 +15,10 @@ interface Props {
   initialSelectedType: Triple | null;
   initialColumns: Column[];
   initialTypes: Triple[];
-  config: AppConfig;
 }
 
 export function EntityTableStoreProvider({
   space,
-  config,
   children,
   initialRows,
   initialSelectedType,
@@ -45,9 +42,8 @@ export function EntityTableStoreProvider({
       initialSelectedType,
       initialColumns,
       initialTypes,
-      config,
     });
-  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, config]);
+  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

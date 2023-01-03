@@ -2,7 +2,6 @@ import { computed, observable, Observable, ObservableComputed } from '@legendapp
 import { A } from '@mobily/ts-belt';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { AppConfig } from '../config';
 import { INetwork } from '../services/network';
 import {
   Action,
@@ -25,6 +24,7 @@ interface IEntityTableStore {
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
+  hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: TripleType[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
@@ -48,7 +48,6 @@ interface IEntityTableStoreConfig {
   initialSelectedType: Triple | null;
   initialTypes: Triple[];
   initialColumns: Column[];
-  config: AppConfig;
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -70,11 +69,10 @@ export function initialFilterState(): FilterState {
 
 export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
-  private config: AppConfig;
   actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
-
+  hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<Triple | null>;
   types$: ObservableComputed<TripleType[]>;
@@ -83,6 +81,7 @@ export class EntityTableStore implements IEntityTableStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
+  abortController: AbortController = new AbortController();
 
   constructor({
     api,
@@ -93,11 +92,9 @@ export class EntityTableStore implements IEntityTableStore {
     initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
-    config,
   }: IEntityTableStoreConfig) {
     this.api = api;
-    this.config = config;
-
+    this.hydrated$ = observable(false);
     this.rows$ = observable(initialRows);
     this.selectedType$ = observable(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
@@ -116,6 +113,9 @@ export class EntityTableStore implements IEntityTableStore {
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
+          this.abortController.abort();
+          this.abortController = new AbortController();
+
           const selectedType = this.selectedType$.get();
 
           const params = {
@@ -128,9 +128,10 @@ export class EntityTableStore implements IEntityTableStore {
           const { rows, columns } = await this.api.fetchEntityTableData({
             spaceId: space,
             params,
-            config: this.config,
+            abortController: this.abortController,
           });
 
+          this.hydrated$.set(true);
           return { columns, rows: rows.slice(0, pageSize), hasNextPage: rows.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {

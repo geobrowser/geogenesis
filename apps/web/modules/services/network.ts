@@ -1,12 +1,11 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { AppConfig } from '../config';
 import { SYSTEM_IDS } from '../constants';
 import { Entity } from '../entity';
 import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../triple';
 import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Triple, Value } from '../types';
-import { IStorageClient, StorageClient } from './storage';
+import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -69,8 +68,8 @@ type FetchTriplesResult = { triples: Triple[] };
 
 interface FetchEntityTableDataParams {
   spaceId: string;
-  config: AppConfig;
   params: InitialEntityTableStoreParams;
+  abortController?: AbortController;
 }
 
 export interface INetwork {
@@ -294,11 +293,8 @@ export class Network implements INetwork {
     return spaces;
   };
 
-  fetchEntityTableData = async ({ spaceId, params, config }: FetchEntityTableDataParams) => {
+  fetchEntityTableData = async ({ spaceId, params, abortController }: FetchEntityTableDataParams) => {
     /* TODO: Explore moving this method into another layer of the codebase responsible for both data querying and transformation  */
-
-    const storage = new StorageClient(config.ipfs);
-    const subgraph = config.subgraph;
 
     if (!params.typeId) {
       return { columns: [], rows: [] };
@@ -307,9 +303,10 @@ export class Network implements INetwork {
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
     /* To get our rows, first we get all of the entity IDs of the selected type */
     const [columnsTriples, rowEntities] = await Promise.all([
-      await new Network(storage, subgraph).fetchTriples({
+      await this.fetchTriples({
         query: '',
         space: spaceId,
+        abortController,
         first: 100,
         skip: 0,
         filter: [
@@ -317,9 +314,10 @@ export class Network implements INetwork {
           { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
         ],
       }),
-      await new Network(storage, subgraph).fetchTriples({
+      await this.fetchTriples({
         query: params.query,
         space: spaceId,
+        abortController,
         first: DEFAULT_PAGE_SIZE,
         skip: params.pageNumber * DEFAULT_PAGE_SIZE,
         filter: [
@@ -333,9 +331,10 @@ export class Network implements INetwork {
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
     const rowTriples = await Promise.all(
       rowEntityIds.map(entityId =>
-        new Network(storage, subgraph).fetchTriples({
-          space: spaceId,
+        this.fetchTriples({
           query: '',
+          space: spaceId,
+          abortController,
           skip: 0,
           first: 100,
           filter: [{ field: 'entity-id', value: entityId }],
