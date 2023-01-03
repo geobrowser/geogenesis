@@ -1,8 +1,12 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { Account, Action, FilterField, FilterState, ReviewState, Space, Triple, Value } from '../types';
-import { IStorageClient } from './storage';
+import { AppConfig } from '../config';
+import { SYSTEM_IDS } from '../constants';
+import { Entity } from '../models/Entity';
+import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../state/entity-table-store';
+import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Triple, Value } from '../types';
+import { IStorageClient, StorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -63,7 +67,14 @@ export type PublishOptions = {
 
 type FetchTriplesResult = { triples: Triple[] };
 
+interface FetchEntityTableDataParams {
+  spaceId: string;
+  config: AppConfig;
+  params: InitialEntityTableStoreParams;
+}
+
 export interface INetwork {
+  fetchEntityTableData: (options: FetchEntityTableDataParams) => Promise<{ rows: Row[]; columns: Column[] }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchEntities: (name: string, abortController?: AbortController) => Promise<{ id: string; name: string | null }[]>;
@@ -281,6 +292,102 @@ export class Network implements INetwork {
     });
 
     return spaces;
+  };
+
+  fetchEntityTableData = async ({ spaceId, params, config }: FetchEntityTableDataParams) => {
+    /* TODO: Explore moving this method into another layer of the codebase responsible for both data querying and transformation  */
+
+    const storage = new StorageClient(config.ipfs);
+    const subgraph = config.subgraph;
+
+    if (!params.typeId) {
+      return { columns: [], rows: [] };
+    }
+
+    /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
+    /* To get our rows, first we get all of the entity IDs of the selected type */
+    const [columnsTriples, rowEntities] = await Promise.all([
+      await new Network(storage, subgraph).fetchTriples({
+        query: '',
+        space: spaceId,
+        first: 100,
+        skip: 0,
+        filter: [
+          { field: 'entity-id', value: params.typeId },
+          { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
+        ],
+      }),
+      await new Network(storage, subgraph).fetchTriples({
+        query: params.query,
+        space: spaceId,
+        first: DEFAULT_PAGE_SIZE,
+        skip: params.pageNumber * DEFAULT_PAGE_SIZE,
+        filter: [
+          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+          { field: 'linked-to', value: params.typeId },
+        ],
+      }),
+    ]);
+
+    /* Then we then fetch all triples associated with those row entity IDs */
+    const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
+    const rowTriples = await Promise.all(
+      rowEntityIds.map(entityId =>
+        new Network(storage, subgraph).fetchTriples({
+          space: spaceId,
+          query: '',
+          skip: 0,
+          first: 100,
+          filter: [{ field: 'entity-id', value: entityId }],
+        })
+      )
+    );
+
+    /* Name and Type are the default columns... */
+    const defaultColumns = [
+      {
+        name: 'Name',
+        id: SYSTEM_IDS.NAME,
+      },
+      {
+        name: 'Type',
+        id: SYSTEM_IDS.TYPES,
+      },
+    ];
+
+    /* ...and then we can format our user-defined schemaColumns */
+    const schemaColumns = columnsTriples.triples.map(triple => ({
+      name: Entity.entityName(triple) || triple.value.id,
+      id: triple.value.id,
+    })) as Column[];
+
+    const columns = [...defaultColumns, ...schemaColumns];
+
+    /* Finally, we can build our initialRows */
+    const rows = rowTriples.map(row => {
+      return row.triples.reduce((acc, triple) => {
+        const column = columns.find(column => column.id === triple.attributeId);
+
+        /* If the column doesn't exist, we don't want to add it to the row */
+        if (!column) {
+          return acc;
+        }
+
+        /* Multiple triples are allowed to be displayed in a single column */
+        return {
+          ...acc,
+          [column.id]: {
+            columnId: column.id,
+            triples: [...(acc[column.id]?.triples ?? []), triple],
+          },
+        };
+      }, {} as Row);
+    });
+
+    return {
+      columns,
+      rows,
+    };
   };
 }
 

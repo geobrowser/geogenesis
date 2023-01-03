@@ -1,10 +1,10 @@
 import { AppConfig, AppEnv, Config } from '../config';
 import { FilterField, FilterState } from '../types';
-import { InitialTripleStoreParams } from '~/modules/triple';
+import { InitialTripleStoreParams, InitialEntityTableStoreParams } from '~/modules/triple';
 
 export const ENV_PARAM_NAME = 'env';
 
-export function parseQueryParameters(url: string): InitialTripleStoreParams {
+export function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -23,6 +23,45 @@ export function parseQueryParameters(url: string): InitialTripleStoreParams {
   };
 }
 
+export function parseEntityTableQueryParameters(url: string): InitialEntityTableStoreParams {
+  const params = new URLSearchParams(url.split('?')[1]);
+  const query = params.get('query') || '';
+  const pageNumber = Number(params.get('page') || 0);
+  const typeId = params.get('typeId') || '';
+  const activeAdvancedFilterKeys = [...params.keys()].filter(
+    key => key !== 'query' && key !== 'page' && key !== 'typeId'
+  );
+
+  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
+    const value = params.get(key);
+    if (!value) return acc;
+    return [...acc, { field: key as FilterField, value }];
+  }, []);
+
+  return {
+    query,
+    pageNumber,
+    typeId,
+    filterState: filterStateResult,
+  };
+}
+
+export function stringifyEntityTableParameters({
+  query,
+  pageNumber,
+  filterState,
+  typeId,
+}: InitialEntityTableStoreParams): string {
+  const params = new URLSearchParams({
+    ...(query !== '' && { query }),
+    ...(typeId && { typeId }),
+    ...(pageNumber !== 0 && { page: pageNumber.toString() }),
+    ...getAdvancedQueryParams(filterState),
+  });
+
+  return params.toString();
+}
+
 export function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
@@ -33,7 +72,7 @@ export function stringifyQueryParameters({ query, pageNumber, filterState }: Ini
   return params.toString();
 }
 
-function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | object {
+export function getAdvancedQueryParams(filterState: FilterState): Record<FilterField, string> | object {
   if (filterState.length === 0) {
     return {};
   }

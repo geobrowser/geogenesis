@@ -38,7 +38,7 @@ const ResultListContainer = styled.div(props => ({
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
 }));
 
-const ResultList = styled.ul({
+export const ResultList = styled.ul({
   listStyle: 'none',
   display: 'flex',
   flexDirection: 'column',
@@ -52,7 +52,7 @@ const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
 
-const ResultItem = styled.li(props => ({
+export const ResultItem = styled.li(props => ({
   all: 'unset',
   ...props.theme.typography.metadataMedium,
   padding: props.theme.space * 2.5,

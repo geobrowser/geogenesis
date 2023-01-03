@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Config } from '../config';
-import { parseQueryParameters, getConfigFromUrl, stringifyQueryParameters } from './params';
+import { getConfigFromUrl, stringifyQueryParameters, parseTripleQueryParameters } from './params';
 
 describe('TripleStore params', () => {
   it('Parses triple store params from url', () => {
-    const params = parseQueryParameters(
+    const params = parseTripleQueryParameters(
       'https://banana.com/?query=banana&page=1&attribute-id=banana&entity-id=banana&linked-to=banana&attribute-name=banana&value=banana'
     );
 
@@ -22,7 +22,7 @@ describe('TripleStore params', () => {
   });
 
   it('Parses triple store params from url with no query', () => {
-    const params = parseQueryParameters('https://banana.com/');
+    const params = parseTripleQueryParameters('https://banana.com/');
     expect(params).toEqual({
       query: '',
       pageNumber: 0,

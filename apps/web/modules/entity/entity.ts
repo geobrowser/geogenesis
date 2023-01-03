@@ -14,3 +14,11 @@ export function name(triples: Triple[]) {
   const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
   return nameValue?.type === 'string' ? nameValue.value : null;
 }
+
+export function entityName(triple: Triple) {
+  return triple?.value?.type === 'string'
+    ? triple.value.value
+    : triple?.value?.type === 'entity'
+    ? triple.value.name
+    : null;
+}
