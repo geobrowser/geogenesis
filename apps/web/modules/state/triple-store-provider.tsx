@@ -23,7 +23,8 @@ export function TripleStoreProvider({ space, children, initialTriples }: Props) 
   const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
-    const initialParams = Params.parseQueryParameters(urlRef.current);
+    const initialParams = Params.parseTripleQueryParameters(urlRef.current);
+
     return new TripleStore({ api: network, space, initialParams, initialTriples });
   }, [network, space, initialTriples]);
 

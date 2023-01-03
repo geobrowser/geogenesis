@@ -4,7 +4,7 @@ import { Params } from './params';
 
 describe('TripleStore params', () => {
   it('Parses triple store params from url', () => {
-    const params = Params.parseQueryParameters(
+    const params = Params.parseTripleQueryParameters(
       'https://banana.com/?query=banana&page=1&attribute-id=banana&entity-id=banana&linked-to=banana&attribute-name=banana&value=banana'
     );
 
@@ -22,7 +22,7 @@ describe('TripleStore params', () => {
   });
 
   it('Parses triple store params from url with no query', () => {
-    const params = Params.parseQueryParameters('https://banana.com/');
+    const params = Params.parseTripleQueryParameters('https://banana.com/');
     expect(params).toEqual({
       query: '',
       pageNumber: 0,

@@ -1,10 +1,10 @@
-import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { SpaceHeader } from '~/modules/components/space/space-header';
-import { SpaceActions } from '~/modules/components/space/space-navbar';
+import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Triples } from '~/modules/components/triples';
 import { SYSTEM_IDS } from '~/modules/constants';
+import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
@@ -19,18 +19,6 @@ interface Props {
   initialTriples: Triple[];
 }
 
-const NavbarContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  width: '100%',
-});
-
-const ActionsContainer = styled.div({
-  flex: 'none',
-});
-
 export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples }: Props) {
   return (
     <div>
@@ -39,12 +27,10 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
 
-      <NavbarContainer>
-        <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
-        <ActionsContainer>
-          <SpaceActions spaceId={spaceId} />
-        </ActionsContainer>
-      </NavbarContainer>
+      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
+
+      <Spacer height={34} />
+      <SpaceNavbar spaceId={spaceId} />
 
       <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
         <Triples spaceId={spaceId} spaceName={spaceName} initialTriples={initialTriples} />

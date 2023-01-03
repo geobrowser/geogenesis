@@ -36,6 +36,10 @@ export class MockNetwork implements INetwork {
     };
   };
 
+  fetchEntityTableData = async () => {
+    return { rows: [], columns: [] };
+  };
+
   fetchSpaces = async () => {
     return [];
   };

@@ -1,5 +1,4 @@
-import { computed, ObservableComputed } from '@legendapp/state';
-import { Observable, observable } from '@legendapp/state';
+import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../models/Triple';
@@ -30,7 +29,7 @@ const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleT
       entityId,
       entityName: '',
       attributeName: 'Types',
-      attributeId: SYSTEM_IDS.TYPE,
+      attributeId: SYSTEM_IDS.TYPES,
       value: {
         id: '',
         type: 'entity',

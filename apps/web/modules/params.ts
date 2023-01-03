@@ -1,10 +1,11 @@
 import { AppConfig, AppEnv, configOptions, DEFAULT_ENV, getConfig } from './config';
+import { InitialEntityTableStoreParams } from './state/entity-table-store';
 import { InitialTripleStoreParams } from './state/triple-store';
 import { FilterField, FilterState } from './types';
 
 const ENV_PARAM_NAME = 'env';
 
-function parseQueryParameters(url: string): InitialTripleStoreParams {
+function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -21,6 +22,45 @@ function parseQueryParameters(url: string): InitialTripleStoreParams {
     pageNumber,
     filterState: filterStateResult,
   };
+}
+
+function parseEntityTableQueryParameters(url: string): InitialEntityTableStoreParams {
+  const params = new URLSearchParams(url.split('?')[1]);
+  const query = params.get('query') || '';
+  const pageNumber = Number(params.get('page') || 0);
+  const typeId = params.get('typeId') || '';
+  const activeAdvancedFilterKeys = [...params.keys()].filter(
+    key => key !== 'query' && key !== 'page' && key !== 'typeId'
+  );
+
+  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
+    const value = params.get(key);
+    if (!value) return acc;
+    return [...acc, { field: key as FilterField, value }];
+  }, []);
+
+  return {
+    query,
+    pageNumber,
+    typeId,
+    filterState: filterStateResult,
+  };
+}
+
+function stringifyEntityTableParameters({
+  query,
+  pageNumber,
+  filterState,
+  typeId,
+}: InitialEntityTableStoreParams): string {
+  const params = new URLSearchParams({
+    ...(query !== '' && { query }),
+    ...(typeId && { typeId }),
+    ...(pageNumber !== 0 && { page: pageNumber.toString() }),
+    ...getAdvancedQueryParams(filterState),
+  });
+
+  return params.toString();
 }
 
 function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
@@ -89,8 +129,10 @@ function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
 }
 
 export const Params = {
-  parseQueryParameters,
+  parseTripleQueryParameters,
+  parseEntityTableQueryParameters,
   stringifyQueryParameters,
+  stringifyEntityTableParameters,
   getConfigFromUrl,
   ENV_PARAM_NAME,
 };

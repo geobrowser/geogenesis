@@ -6,7 +6,6 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  RowData,
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
@@ -16,16 +15,14 @@ import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
+import { ChipCellContainer, EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
 
-// We declare a new function that we will define and pass into the useTable hook.
-// See: https://tanstack.com/table/v8/docs/examples/react/editable-data
-declare module '@tanstack/react-table' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface TableMeta<TData extends RowData> {
-    space: string;
-    expandedCells: Record<string, boolean>;
-  }
-}
+const Container = styled.div(props => ({
+  padding: 0,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderRadius: props.theme.radius,
+  overflow: 'hidden',
+}));
 
 const columnHelper = createColumnHelper<Triple>();
 
@@ -49,41 +46,6 @@ const columns = [
     size: COLUMN_SIZE,
   }),
 ];
-
-const Table = styled.table(props => ({
-  width: '100%',
-  borderStyle: 'hidden',
-  borderCollapse: 'collapse',
-  backgroundColor: props.theme.colors.white,
-}));
-
-const TableHeader = styled.th<{ width: number }>(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: props.theme.space * 2.5,
-  textAlign: 'left',
-  width: props.width,
-}));
-
-const TableRow = styled.tr(props => ({
-  ':hover': {
-    backgroundColor: props.theme.colors.bg,
-  },
-}));
-
-// Using a container to wrap the table to make styling borders around
-// the table easier. Otherwise we need to do some pseudoselector shenanigans
-// or use box-shadow instead of border.
-const Container = styled.div(props => ({
-  padding: 0,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: props.theme.radius,
-  overflow: 'hidden',
-}));
-
-// Negative margin so table row height matches a single line of text
-const ChipCellContainer = styled.div({
-  margin: '-1px 0',
-});
 
 // Give our default column cell renderer editing superpowers!
 const defaultColumn: Partial<ColumnDef<Triple>> = {
@@ -128,11 +90,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
     }
   },
 };
-
-const EmptyTableText = styled.td(props => ({
-  ...props.theme.typography.tableCell,
-  padding: props.theme.space * 2.5,
-}));
 
 interface Props {
   triples: Triple[];
