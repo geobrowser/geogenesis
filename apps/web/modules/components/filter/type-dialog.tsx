@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { useEntityTable } from '~/modules/state/use-entity-tables';
+import { useEntityTable } from '~/modules/triple';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';

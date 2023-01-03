@@ -5,3 +5,4 @@ export type { InitialTripleStoreParams } from './triple-store';
 export { EntityTableStoreProvider, useEntityTableStore } from './entity-table-store-provider';
 export { EntityTableStore } from './entity-table-store';
 export type { InitialEntityTableStoreParams } from './entity-table-store';
+export { useEntityTable } from './use-entity-tables';

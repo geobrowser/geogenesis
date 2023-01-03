@@ -8,8 +8,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { DEFAULT_PAGE_SIZE } from '~/modules/state/triple-store';
-import { TripleStoreProvider } from '~/modules/state/triple-store-provider';
+import { DEFAULT_PAGE_SIZE, TripleStoreProvider } from '~/modules/triple';
 import { Triple } from '~/modules/types';
 
 interface Props {

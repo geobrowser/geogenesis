@@ -3,8 +3,8 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { AppConfig } from '../config';
 import { SYSTEM_IDS } from '../constants';
-import { Entity } from '../models/Entity';
-import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../state/entity-table-store';
+import { Entity } from '../entity';
+import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../triple';
 import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Triple, Value } from '../types';
 import { IStorageClient, StorageClient } from './storage';
 
