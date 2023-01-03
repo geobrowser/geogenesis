@@ -31,7 +31,6 @@ export default function EntitiesPage({
   initialSelectedType,
   initialRows,
   initialTypes,
-  config,
 }: Props) {
   return (
     <div>
@@ -46,7 +45,6 @@ export default function EntitiesPage({
 
       <EntityTableStoreProvider
         space={spaceId}
-        config={config}
         initialRows={initialRows}
         initialSelectedType={initialSelectedType}
         initialColumns={initialColumns}
@@ -90,7 +88,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const { columns, rows } = await network.fetchEntityTableData({
     spaceId,
     params,
-    config,
   });
 
   return {
