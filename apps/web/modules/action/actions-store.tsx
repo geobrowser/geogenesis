@@ -1,4 +1,5 @@
 import { Observable, observable } from '@legendapp/state';
+import { O } from '@mobily/ts-belt';
 import { Signer } from 'ethers';
 import { Action } from '.';
 import { INetwork } from '../services/network';
@@ -83,8 +84,8 @@ export class ActionsStore implements IActionsStore {
   };
 
   publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    if (!spaceActions) return;
+    const spaceActions: O.Option<ActionType[]> = this.actions$.get()[spaceId];
+    if (O.isNone(spaceActions)) return;
 
     try {
       await this.api.publish({

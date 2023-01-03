@@ -4,7 +4,7 @@ import { EntityTableContainer } from '~/modules/components/entity-table/entity-t
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { AppConfig } from '~/modules/config';
-import { SYSTEM_IDS } from '~/modules/constants';
+import { ENV_PARAM_NAME, SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
@@ -66,7 +66,7 @@ export default function EntitiesPage({
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
   const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
+  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
   const network = new Network(storage, config.subgraph);
@@ -80,7 +80,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
 
-  const typeId = initialSelectedType?.entityId;
+  const typeId = initialSelectedType?.entityId ?? null;
 
   const params = {
     ...initialParams,

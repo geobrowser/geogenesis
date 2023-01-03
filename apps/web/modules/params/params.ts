@@ -2,8 +2,7 @@ import { AppConfig, AppEnv, Config } from '../config';
 import { FilterField, FilterState } from '../types';
 import { InitialTripleStoreParams, InitialEntityTableStoreParams } from '~/modules/triple';
 import { A } from '@mobily/ts-belt';
-
-export const ENV_PARAM_NAME = 'env';
+import { isOnlyEntityNameFilter } from '../utils';
 
 export function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
@@ -80,7 +79,7 @@ export function getAdvancedQueryParams(filterState: FilterState): Record<FilterF
 
   // We currently encode the entity-name filter into the base query=x param. If the only
   // advanced filter is entity-name, we can skip it.
-  if (filterState.length === 1 && filterState[0].field === 'entity-name') {
+  if (isOnlyEntityNameFilter(filterState)) {
     return {};
   }
 

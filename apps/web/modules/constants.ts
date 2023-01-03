@@ -27,4 +27,6 @@ export const PLACEHOLDER_IMAGES = {
   Values: 'https://images.unsplash.com/photo-1637008336770-b95d637fd5fa',
 };
 
+export const ENV_PARAM_NAME = 'env';
+
 export const HACKY_COPY_FILL_CLASS_NAME = 'hacky-copy-fill';

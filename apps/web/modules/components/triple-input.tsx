@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { A, F, O, pipe } from '@mobily/ts-belt';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
 import { IconButton } from '../design-system/button';
@@ -8,6 +9,7 @@ import { Input } from '../design-system/input';
 import { Spacer } from '../design-system/spacer';
 import { useTriples } from '../triple/use-triples';
 import { FilterClause } from '../types';
+import { isOnlyEntityNameFilter } from '../utils';
 import { FilterDialog } from './filter/dialog';
 
 const SearchIconContainer = styled.div(props => ({
@@ -88,7 +90,8 @@ export function TripleInput({ showPredefinedQueries, onShowPredefinedQueriesChan
   const tripleStore = useTriples();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
-  const showBasicFilter = tripleStore.filterState.length === 1 && tripleStore.filterState[0].field === 'entity-name';
+
+  const showBasicFilter = isOnlyEntityNameFilter(tripleStore.filterState);
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     tripleStore.setQuery(event.target.value);

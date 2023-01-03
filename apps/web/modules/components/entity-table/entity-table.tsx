@@ -169,7 +169,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
                 return (
                   <TableCell
                     isExpandable={isExpandable}
-                    isExpanded={expandedCells[cellId]}
+                    isExpanded={expandedCells[cellId] ?? false}
                     width={cell.column.getSize()}
                     key={cell.id}
                     toggleExpanded={() =>
