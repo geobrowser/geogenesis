@@ -8,6 +8,8 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   };
 }
 
+// New, empty triples should generate unique triple IDs so they are distinguishable from
+// other newly created triples locally.
 export function empty(spaceId: string, entityId: string): Triple {
   const emptyTriple: OmitStrict<Triple, 'id'> = {
     entityId: entityId,
