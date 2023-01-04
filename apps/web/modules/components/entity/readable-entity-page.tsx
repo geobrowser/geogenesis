@@ -160,7 +160,7 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <EntityAttributeContainer key={`${entityId}--${attributeId}-${index}`}>
+        <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
           <Text as="p" variant="bodySemibold">
             {triples[0].attributeName || attributeId}
           </Text>
@@ -171,13 +171,13 @@ function EntityAttributes({
             */}
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
-                <div key={`entity-${triple.id}`} style={{ marginTop: 4 }}>
+                <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>
                   <Chip href={NavUtils.toEntity(space, triple.value.id)}>{triple.value.name || triple.value.id}</Chip>
                 </div>
               ) : (
-                <>
-                  <Text as="p">{triple.value.value}</Text>
-                </>
+                <Text key={`string-${triple.value.id}`} as="p">
+                  {triple.value.value}
+                </Text>
               )
             )}
           </GroupedAttributes>
