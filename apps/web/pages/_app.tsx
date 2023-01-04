@@ -8,6 +8,7 @@ import { Providers } from '~/modules/providers';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { useActionsStore } from '~/modules/action';
 import { useRouter } from 'next/router';
+import { Analytics } from '@vercel/analytics/react';
 
 import 'modern-normalize';
 import '../styles/styles.css';
@@ -46,6 +47,7 @@ function MyApp({ Component, pageProps }: AppProps) {
       <Navbar />
       <Layout>
         <Component {...pageProps} />
+        <Analytics />
       </Layout>
       <GlobalFlowBar />
     </Providers>

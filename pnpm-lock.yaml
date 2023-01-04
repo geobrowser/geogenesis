@@ -49,6 +49,7 @@ importers:
       '@types/uuid': ^8.3.4
       '@typescript-eslint/eslint-plugin': ^5.46.0
       '@typescript-eslint/parser': ^5.46.0
+      '@vercel/analytics': ^0.1.6
       '@vitejs/plugin-react': ^2.1.0
       '@vitest/ui': ^0.25.6
       eslint: ^8.15.0
@@ -94,6 +95,7 @@ importers:
       '@rainbow-me/rainbowkit': 0.8.0_dmbcdlqcfyfl4fpk2a4e7xljky
       '@tanstack/query-core': 4.3.8
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
+      '@vercel/analytics': 0.1.6_react@18.2.0
       ethers: 5.7.2
       framer-motion: 7.6.1_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
@@ -3762,6 +3764,14 @@ packages:
       '@vanilla-extract/css': ^1.0.0
     dependencies:
       '@vanilla-extract/css': 1.9.1
+    dev: false
+
+  /@vercel/analytics/0.1.6_react@18.2.0:
+    resolution: {integrity: sha512-zNd5pj3iDvq8IMBQHa1YRcIteiw6ZiPB8AsONHd8ieFXlNpLqhXfIYnf4WvTfZ7S1NSJ++mIM14aJnNac/VMXQ==}
+    peerDependencies:
+      react: ^16.8||^17||^18
+    dependencies:
+      react: 18.2.0
     dev: false
 
   /@vitejs/plugin-react/2.1.0_vite@3.1.8:
