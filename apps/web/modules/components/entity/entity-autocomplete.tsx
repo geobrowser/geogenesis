@@ -4,6 +4,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
+import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { Text } from '~/modules/design-system/text';
@@ -59,18 +60,29 @@ const ResultsList = styled.ul({
   overflowY: 'auto',
 });
 
-const Result = styled.button(props => ({
+const Result = styled.button<{ existsOnEntity: boolean }>(props => ({
   all: 'unset',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
   padding: `${props.theme.space * 2}px`,
 
   '&:hover': {
     backgroundColor: props.theme.colors['grey-01'],
+    ...(!props.existsOnEntity && {
+      cursor: 'pointer',
+    }),
   },
 
   '&:focus': {
     outline: 'none',
     backgroundColor: props.theme.colors['grey-01'],
   },
+
+  ...(props.existsOnEntity && {
+    backgroundColor: props.theme.colors['grey-01'],
+    cursor: 'not-allowed',
+  }),
 }));
 
 const AddEntityButton = styled(SquareButton)({
@@ -83,12 +95,14 @@ const AutocompleteInput = styled(Input)(props => ({
 }));
 
 interface Props {
+  entityValueIds: string[];
   onDone: (result: { id: string; name: string | null }) => void;
 }
 
-export function EntityAutocompleteDialog({ onDone }: Props) {
+export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
   const autocomplete = useAutocomplete();
   const theme = useTheme();
+  const entityItemIdsSet = new Set(entityValueIds);
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -122,10 +136,17 @@ export function EntityAutocompleteDialog({ onDone }: Props) {
             <ResultsList>
               {autocomplete.query.length > 0
                 ? autocomplete.results.map(result => (
-                    <Result key={result.id} onClick={() => onDone(result)}>
+                    <Result
+                      key={result.id}
+                      onClick={() => {
+                        if (!entityItemIdsSet.has(result.id)) onDone(result);
+                      }}
+                      existsOnEntity={entityItemIdsSet.has(result.id)}
+                    >
                       <Text as="li" variant="metadataMedium" ellipsize>
                         {result.name ?? result.id}
                       </Text>
+                      {entityItemIdsSet.has(result.id) && <CheckCircleSmall color="grey-04" />}
                     </Result>
                   ))
                 : null}
