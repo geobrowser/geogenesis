@@ -1,22 +1,22 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { useActionsStore } from '~/modules/action';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
-import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
+import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { Entity, useEntityStore } from '~/modules/entity';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
-import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
-import { NumberField, StringField } from './editable-fields';
-import { TripleTypeDropdown } from './triple-type-dropdown';
-import { SYSTEM_IDS } from '~/modules/constants';
-import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Entity, useEntityStore } from '~/modules/entity';
-import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
+import { NumberField, StringField } from './editable-fields';
+import { EntityAutocompleteDialog } from './entity-autocomplete';
+import { EntityTextAutocomplete } from './entity-text-autocomplete';
+import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -251,13 +251,15 @@ function EntityAttributes({
     switch (triple.value.type) {
       case 'string':
         return (
-          <StringField
-            key={triple.id}
-            variant="body"
-            placeholder="Add value..."
-            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
-            value={triple.value.value}
-          />
+          <div>
+            <StringField
+              key={triple.id}
+              variant="body"
+              placeholder="Add value..."
+              onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+              value={triple.value.value}
+            />
+          </div>
         );
       case 'number':
         return (
