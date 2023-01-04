@@ -9,23 +9,17 @@ export function useAccessControl(space: string) {
   const { address } = useHydratedAccount();
   const { admins, editors, editorControllers } = useSpaces();
 
+  if (!address || !hydrated) {
+    return {
+      isAdmin: false,
+      isEditorController: false,
+      isEditor: false,
+    };
+  }
+
   return {
-    isAdmin: true,
-    isEditor: true,
-    isEditorController: true,
+    isAdmin: (admins[space] || []).includes(address),
+    isEditorController: (editorControllers[space] || []).includes(address),
+    isEditor: (editors[space] || []).includes(address),
   };
-
-  // if (!address || !hydrated) {
-  //   return {
-  //     isAdmin: false,
-  //     isEditorController: false,
-  //     isEditor: false,
-  //   };
-  // }
-
-  // return {
-  //   isAdmin: (admins[space] || []).includes(address),
-  //   isEditorController: (editorControllers[space] || []).includes(address),
-  //   isEditor: (editors[space] || []).includes(address),
-  // };
 }
