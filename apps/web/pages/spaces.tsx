@@ -41,7 +41,7 @@ interface Props {
 }
 
 export default function Spaces({ spaces }: Props) {
-  return <div>Hello world</div>
+  return <div>Hello world</div>;
   // const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
   // const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
@@ -83,8 +83,8 @@ export default function Spaces({ spaces }: Props) {
 
   //       <Email />
   //     </Column>
-    </div>
-  );
+  // </div>
+  // );
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
