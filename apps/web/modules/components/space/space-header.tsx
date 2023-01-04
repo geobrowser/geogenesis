@@ -50,14 +50,14 @@ export function SpaceHeader({ spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props)
     <SpaceHeaderContainer>
       <SpaceInfo>
         <SpaceImageContainer>
-          <Image
+          {/* <Image
             objectFit="cover"
             layout="fill"
             width={theme.space * 14}
             height={theme.space * 14}
             src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
             alt={`Cover image for ${spaceName}`}
-          />
+          /> */}
         </SpaceImageContainer>
 
         <Text flex="0 0 auto" variant="mainPage" as="h1">

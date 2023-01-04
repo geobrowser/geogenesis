@@ -82,7 +82,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
 
         {image && (
           <CoverImageContainer>
-            <CoverImage objectFit="cover" priority layout="fill" src={image} alt={`Cover image for ${name}`} />
+            {/* <CoverImage objectFit="cover" priority layout="fill" src={image} alt={`Cover image for ${name}`} /> */}
           </CoverImageContainer>
         )}
       </GridCell>
