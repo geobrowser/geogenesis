@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { useEffect, useRef } from 'react';
+import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
 
@@ -52,25 +53,36 @@ const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
 
-export const ResultItem = styled.li(props => ({
+export const ResultItem = styled.li<{ existsOnEntity: boolean }>(props => ({
   all: 'unset',
-  ...props.theme.typography.metadataMedium,
   padding: props.theme.space * 2.5,
-  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
 
   '&:hover': {
     backgroundColor: props.theme.colors['grey-01'],
+    ...(!props.existsOnEntity && {
+      cursor: 'pointer',
+    }),
   },
+
+  ...(props.existsOnEntity && {
+    backgroundColor: props.theme.colors['grey-01'],
+    cursor: 'not-allowed',
+  }),
 }));
 
 interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null }) => void;
+  itemIds: string[];
 }
 
-export function EntityTextAutocomplete({ placeholder, onDone }: Props) {
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) {
   const { query, results, onQueryChange } = useAutocomplete();
   const containerRef = useRef<HTMLDivElement>(null);
+  const itemIdsSet = new Set(itemIds);
 
   useEffect(() => {
     document.addEventListener('click', e => {
@@ -97,8 +109,15 @@ export function EntityTextAutocomplete({ placeholder, onDone }: Props) {
           </ResultListHeader>
           <ResultList>
             {results.map(result => (
-              <ResultItem onClick={() => onDone(result)} key={result.id}>
-                {result.name}
+              <ResultItem
+                onClick={() => {
+                  if (!itemIdsSet.has(result.id)) onDone(result);
+                }}
+                key={result.id}
+                existsOnEntity={itemIdsSet.has(result.id)}
+              >
+                <Text variant="metadataMedium">{result.name}</Text>
+                {itemIdsSet.has(result.id) && <CheckCircleSmall color="grey-04" />}
               </ResultItem>
             ))}
           </ResultList>

@@ -196,6 +196,8 @@ function EntityAttributes({
   name: string;
 }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
+  const attributeIds = Object.keys(groupedTriples);
+  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -273,6 +275,7 @@ function EntityAttributes({
               key={`entity-${attributeId}-${triple.id}`}
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
+              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
             />
           );
         }
@@ -300,6 +303,7 @@ function EntityAttributes({
               <EntityTextAutocomplete
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
+                itemIds={attributeIds}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -307,14 +311,16 @@ function EntityAttributes({
               </Text>
             )}
             <GroupedAttributesList>
-              {/* 
-                Have to do some janky layout stuff instead of being able to just use gap since we want different
-                height between the attribute name and the attribute value for entities vs strings
-              */}
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
+
+              {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
-                <EntityAutocompleteDialog onDone={entity => addEntityValue(attributeId, entity)} />
+                <EntityAutocompleteDialog
+                  onDone={entity => addEntityValue(attributeId, entity)}
+                  entityValueIds={entityValueTriples.map(t => t.value.id)}
+                />
               )}
+
               <TripleActions>
                 <TripleTypeDropdown
                   value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
