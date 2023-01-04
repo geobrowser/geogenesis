@@ -1,11 +1,13 @@
 import { useAccount } from 'wagmi';
 import { useHydrated } from '../hooks/use-hydrated';
+// import { useHydratedAccount } from '../hooks/use-hydrated-account';
 import { useSpaces } from '../spaces/use-spaces';
 
 export function useAccessControl(space: string) {
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();
+  // const { address } = useHydratedAccount();
   const { address } = useAccount();
   const { admins, editors, editorControllers } = useSpaces();
 
@@ -16,6 +18,12 @@ export function useAccessControl(space: string) {
       isEditor: false,
     };
   }
+
+  // return {
+  //   isAdmin: true,
+  //   isEditorController: true,
+  //   isEditor: true,
+  // };
 
   return {
     isAdmin: (admins[space] || []).includes(address),

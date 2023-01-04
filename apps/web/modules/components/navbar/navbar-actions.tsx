@@ -8,6 +8,7 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useEditable } from '~/modules/stores/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
+// import { useHydratedAccount } from '~/modules/hooks/use-hydrated-account';
 import { useAccount } from 'wagmi';
 
 type ColorOption = ColorName;
@@ -39,6 +40,7 @@ interface Props {
 
 export function NavbarActions({ spaceId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
+  // const { address } = useHydratedAccount();
   const { address } = useAccount();
   const { setEditable, editable } = useEditable();
   const [value, setValue] = useState<DropdownOptionValue>('browse-mode');
