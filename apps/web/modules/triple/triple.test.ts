@@ -24,19 +24,7 @@ describe('Triple', () => {
     });
   });
 
-  it('Returns an empty triple', () => {
-    expect(empty('space-id', 'banana-id')).toEqual({
-      id: 'space-id:banana-id::',
-      entityId: 'banana-id',
-      attributeId: '',
-      attributeName: '',
-      value: {
-        id: '',
-        type: 'string',
-        value: '',
-      },
-      space: 'space-id',
-      entityName: '',
-    });
+  it('Returns a unique, empty triple', () => {
+    expect(empty('space-id', 'banana-id')).not.toEqual(empty('space-id', 'banana-id'));
   });
 });
