@@ -16,7 +16,8 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
-import { A, B, D, F, pipe } from '@mobily/ts-belt';
+import { A, B, pipe } from '@mobily/ts-belt';
+import { EntityAutocompleteResult } from '~/modules/entity/autocomplete';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -223,7 +224,7 @@ function EntityAttributes({
     });
   };
 
-  const linkAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
+  const linkAttribute = (oldAttributeId: string, attribute: EntityAutocompleteResult) => {
     send({
       type: 'LINK_ATTRIBUTE',
       payload: {
@@ -236,7 +237,7 @@ function EntityAttributes({
     });
   };
 
-  const addEntityValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
+  const addEntityValue = (attributeId: string, linkedEntity: EntityAutocompleteResult) => {
     // If it's an empty triple value
     send({
       type: 'ADD_ENTITY_VALUE',

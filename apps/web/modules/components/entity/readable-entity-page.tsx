@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { A, D, pipe } from '@mobily/ts-belt';
+import { A, D } from '@mobily/ts-belt';
 import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
