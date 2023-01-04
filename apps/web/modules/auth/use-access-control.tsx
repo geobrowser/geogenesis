@@ -5,21 +5,21 @@ import { useSpaces } from '../spaces/use-spaces';
 export function useAccessControl(space: string) {
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
-  const hydrated = useHydrated();
+  // const hydrated = useHydrated();
   const { address } = useHydratedAccount();
   const { admins, editors, editorControllers } = useSpaces();
 
-  if (!address || !hydrated) {
-    return {
-      isAdmin: false,
-      isEditorController: false,
-      isEditor: false,
-    };
-  }
+  // if (!address || !hydrated) {
+  //   return {
+  //     isAdmin: false,
+  //     isEditorController: false,
+  //     isEditor: false,
+  //   };
+  // }
 
   return {
-    isAdmin: (admins[space] || []).includes(address),
-    isEditorController: (editorControllers[space] || []).includes(address),
-    isEditor: (editors[space] || []).includes(address),
+    isAdmin: (admins[space] || []).includes(address ?? ''),
+    isEditorController: (editorControllers[space] || []).includes(address ?? ''),
+    isEditor: (editors[space] || []).includes(address ?? ''),
   };
 }
