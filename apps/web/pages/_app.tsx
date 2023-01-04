@@ -2,7 +2,7 @@
 // import styled from '@emotion/styled';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
-// import { Navbar } from '~/modules/components/navbar/navbar';
+import { Navbar } from '~/modules/components/navbar/navbar';
 // import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
 // import { FlowBar } from '~/modules/components/flow-bar';
@@ -44,7 +44,7 @@ function MyApp({ Component, pageProps }: AppProps) {
         <title>Geo Genesis</title>
       </Head>
       {/* <Global styles={globalStyles} /> */}
-      {/* <Navbar /> */}
+      <Navbar />
       {/* <Layout> */}
       <Component {...pageProps} />
       {/* <Analytics /> */}
