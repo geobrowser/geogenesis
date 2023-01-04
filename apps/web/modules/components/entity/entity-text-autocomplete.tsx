@@ -53,7 +53,7 @@ const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
 
-export const ResultItem = styled.li<{ existsOnEntity: boolean }>(props => ({
+export const ResultItem = styled.li<{ existsOnEntity?: boolean }>(props => ({
   all: 'unset',
   padding: props.theme.space * 2.5,
   display: 'flex',
