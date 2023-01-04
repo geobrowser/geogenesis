@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import { useActionsStore } from '~/modules/action';
-import { useEntityStore } from '~/modules/entity';
+import { Entity, useEntityStore } from '~/modules/entity';
 import { groupBy } from '~/modules/utils';
 import { ChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
@@ -41,26 +41,15 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actions.length === 0 ? cell.triples : localTriples;
 
-  // const description = Entity.description(triples);
-  // const name = Entity.name(triples) ?? serverName;
+  const entityName = Entity.name(triples) || '';
 
   const attributeId = cell.columnId;
   const groupedTriples = groupBy(triples, t => t.attributeId);
-  const cellTriples = groupedTriples[attributeId];
+
+  const cellTriples = groupedTriples[attributeId] || [];
   const isEmptyEntity = cellTriples.length === 1 && cellTriples[0].value.type === 'entity' && !cellTriples[0].value.id;
-  // const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
   const isEntityGroup = cellTriples.find(t => t.value.type === 'entity');
-
-  const onChangeTriple = (type: 'string' | 'entity', triples: Triple[]) => {
-    send({
-      type: 'CHANGE_TRIPLE_TYPE',
-      payload: {
-        type,
-        triples,
-      },
-    });
-  };
 
   const removeOrResetEntityTriple = (triple: Triple) => {
     send({
@@ -68,19 +57,6 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
       payload: {
         triple,
         isLastEntity: groupedTriples[triple.attributeId].length === 1,
-      },
-    });
-  };
-
-  const linkAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
-    send({
-      type: 'LINK_ATTRIBUTE',
-      payload: {
-        triplesByAttributeId: groupedTriples,
-        oldAttribute: {
-          id: oldAttributeId,
-        },
-        newAttribute: attribute,
       },
     });
   };
@@ -95,8 +71,7 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
           id: attributeId,
         },
         linkedEntity,
-        // entityName: name,
-        entityName: '',
+        entityName,
       },
     });
   };
@@ -148,7 +123,7 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
 
   return (
     <Entities>
-      {cellTriples.map(triple => tripleToEditableField(triple.attributeId, triple, isEmptyEntity))}
+      {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
 
       {isEntityGroup && !isEmptyEntity && (
         <EntityAutocompleteDialog
