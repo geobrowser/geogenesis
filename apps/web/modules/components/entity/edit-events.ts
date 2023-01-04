@@ -173,16 +173,17 @@ const listener =
         const { triple, isLastEntity } = event.payload;
 
         if (triple.value.type === 'entity') {
-          // When we remove the last linked entity, we just want to set the value to empty
-          // instead of completely deleting the last triple.
+          // When we remove the last linked entity, we just want to create a new, empty triple.
+          // This is so we can keep the Attribute field available for the user to add a new entity
+          // if they want to replace the one they just deleted.
           if (isLastEntity) {
-            return update(
-              Triple.ensureStableId({
-                ...triple,
-                value: { ...triple.value, type: 'entity', id: '' },
-              }),
-              triple
-            );
+            create({
+              ...Triple.empty(triple.space, triple.entityId),
+              entityName: triple.entityName,
+              attributeId: triple.attributeId,
+              attributeName: triple.attributeName,
+              value: { id: '', type: 'entity', name: '' },
+            });
           }
         }
 
