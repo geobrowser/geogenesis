@@ -172,6 +172,7 @@ const listener =
       case 'REMOVE_ENTITY': {
         const { triple, isLastEntity } = event.payload;
 
+        console.log('REMOVE_ENTITY', triple, isLastEntity);
         if (triple.value.type === 'entity') {
           // When we remove the last linked entity, we just want to set the value to empty
           // instead of completely deleting the last triple.

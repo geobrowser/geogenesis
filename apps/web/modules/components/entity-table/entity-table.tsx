@@ -152,8 +152,6 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               .filter(Boolean);
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
-            console.log(initialTriples);
-
             return (
               <EntityStoreProvider key={row.id} id={entityId} spaceId={space} initialTriples={initialTriples}>
                 <TableRow>

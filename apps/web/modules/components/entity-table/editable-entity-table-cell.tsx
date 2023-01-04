@@ -6,6 +6,7 @@ import { ChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { useEditEvents } from '../entity/edit-events';
 import { NumberField, StringField } from '../entity/editable-fields';
+import { EntityAutocompleteDialog } from '../entity/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/entity-text-autocomplete';
 
 const Entities = styled.div(({ theme }) => ({
@@ -43,10 +44,13 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
   // const description = Entity.description(triples);
   // const name = Entity.name(triples) ?? serverName;
 
+  const attributeId = cell.columnId;
   const groupedTriples = groupBy(triples, t => t.attributeId);
-  const isEmptyEntity = triples.length === 0;
+  const cellTriples = groupedTriples[attributeId];
+  const isEmptyEntity = cellTriples.length === 1 && cellTriples[0].value.type === 'entity' && !cellTriples[0].value.id;
   // const attributeIds = Object.keys(groupedTriples);
-  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
+  const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
+  const isEntityGroup = cellTriples.find(t => t.value.type === 'entity');
 
   const onChangeTriple = (type: 'string' | 'entity', triples: Triple[]) => {
     send({
@@ -142,5 +146,16 @@ export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
     }
   };
 
-  return <Entities>{triples.map(triple => tripleToEditableField(cell.columnId, triple, isEmptyEntity))}</Entities>;
+  return (
+    <Entities>
+      {cellTriples.map(triple => tripleToEditableField(triple.attributeId, triple, isEmptyEntity))}
+
+      {isEntityGroup && !isEmptyEntity && (
+        <EntityAutocompleteDialog
+          onDone={entity => addEntityValue(attributeId, entity)}
+          entityValueIds={entityValueTriples.map(t => t.value.id)}
+        />
+      )}
+    </Entities>
+  );
 };
