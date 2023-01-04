@@ -28,6 +28,7 @@
     "@rainbow-me/rainbowkit": "^0.8.0",
     "@tanstack/query-core": "4.3.8",
     "@tanstack/react-table": "^8.5.13",
+    "@vercel/analytics": "^0.1.6",
     "ethers": "^5.6.6",
     "framer-motion": "^7.5.3",
     "immer": "^9.0.16",
