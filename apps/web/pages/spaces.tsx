@@ -1,8 +1,6 @@
 import styled from '@emotion/styled';
-import { ethers } from 'ethers';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
@@ -14,6 +12,7 @@ import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
+import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 
 const Column = styled.div({
   display: 'flex',
@@ -37,16 +36,12 @@ const TextContainer = styled.div({
   maxWidth: 830,
 });
 
-const SpacesLayoutPlaceholder = styled.div({
-  height: 295,
-});
-
 interface Props {
   spaces: Space[];
 }
 
 export default function Spaces({ spaces }: Props) {
-  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? ethers.constants.AddressZero;
+  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
@@ -60,18 +55,14 @@ export default function Spaces({ spaces }: Props) {
         <Spacer height={40} />
 
         <Grid>
-          {spaces.length !== 0 ? (
-            spaces
-              .filter(space => isAdmin || isEditor || !space.isRootSpace)
-              .map(space => {
-                const name = space.attributes.name;
-                const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+          {spaces
+            .filter(space => isAdmin || isEditor || !space.isRootSpace)
+            .map(space => {
+              const name = space.attributes.name;
+              const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-                return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-              })
-          ) : (
-            <SpacesLayoutPlaceholder />
-          )}
+              return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+            })}
         </Grid>
 
         <Spacer height={100} />

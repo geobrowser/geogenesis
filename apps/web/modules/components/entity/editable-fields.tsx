@@ -32,23 +32,25 @@ interface StringFieldProps {
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // useEffect(() => {
-  //   if (ref.current) {
-  //     ref.current.style.height = 'auto';
-  //     ref.current.style.height = ref.current.scrollHeight + 'px';
-  //   }
-  // });
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
+    }
+  });
 
-  // const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-  //   if (ref.current) {
-  //     ref.current.style.height = 'auto';
-  //     ref.current.style.height = ref.current.scrollHeight + 'px';
-  //   }
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
+    }
 
-  //   props.onChange(e);
-  // };
+    props.onChange(e);
+  };
 
-  return <Textarea {...props} ref={ref} rows={1} variant={variant} color={color} value={props.value} />;
+  return (
+    <Textarea {...props} ref={ref} rows={1} onChange={onChange} variant={variant} color={color} value={props.value} />
+  );
 }
 
 const NumberInput = styled.input(props => ({
