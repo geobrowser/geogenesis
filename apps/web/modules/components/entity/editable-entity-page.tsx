@@ -272,7 +272,7 @@ function EntityAttributes({
         if (isEmptyEntity) {
           return (
             <EntityTextAutocomplete
-              key={`entity-${attributeId}-${triple.id}`}
+              key={`entity-${attributeId}-${triple.value.id}`}
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
               itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
@@ -281,7 +281,7 @@ function EntityAttributes({
         }
 
         return (
-          <div key={`entity-${triple.id}`}>
+          <div key={`entity-${triple.value.id}`}>
             <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
               {triple.value.name || triple.value.id}
             </ChipButton>
