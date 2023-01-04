@@ -14,7 +14,7 @@ export function empty(spaceId: string, entityId: string): Triple {
     attributeId: '',
     attributeName: '',
     value: {
-      id: '',
+      id: ID.createValueId(),
       type: 'string',
       value: '',
     },
