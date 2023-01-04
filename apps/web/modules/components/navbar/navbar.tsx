@@ -11,8 +11,11 @@ import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { NavbarActions } from './navbar-actions';
+// import { NavbarActions } from './navbar-actions';
 import { ExternalLink } from '../external-link';
+// import dynamic from 'next/dynamic';
+
+// const NavbarActions = dynamic(() => import('./navbar-actions'), { ssr: false });
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -173,7 +176,7 @@ export function Navbar() {
       <Row>
         <DiscordLink />
         <Spacer width={16} />
-        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
+        {/* <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} /> */}
       </Row>
     </Header>
   );
