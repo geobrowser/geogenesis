@@ -28,7 +28,7 @@ export function useEntityStoreContext() {
   const value = useContext(EntityStoreContext);
 
   if (!value) {
-    throw new Error(`Missing TripleStoreProvider`);
+    throw new Error(`Missing EntityStoreProvider`);
   }
 
   return value;
