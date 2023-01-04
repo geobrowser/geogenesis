@@ -341,6 +341,10 @@ export class Network implements INetwork {
         })
       )
     );
+    const rowTriplesWithEntityIds = rowTriples.map(({ triples }, index) => ({
+      entityId: rowEntityIds[index],
+      triples,
+    }));
 
     /* Name and Type are the default columns... */
     const defaultColumns = [
@@ -363,8 +367,8 @@ export class Network implements INetwork {
     const columns = [...defaultColumns, ...schemaColumns];
 
     /* Finally, we can build our initialRows */
-    const rows = rowTriples.map(row => {
-      return row.triples.reduce((acc, triple) => {
+    const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
+      return triples.reduce((acc, triple) => {
         const column = columns.find(column => column.id === triple.attributeId);
 
         /* If the column doesn't exist, we don't want to add it to the row */
@@ -377,6 +381,7 @@ export class Network implements INetwork {
           ...acc,
           [column.id]: {
             columnId: column.id,
+            entityId,
             triples: [...(acc[column.id]?.triples ?? []), triple],
           },
         };
