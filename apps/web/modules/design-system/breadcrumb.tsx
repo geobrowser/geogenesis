@@ -56,7 +56,7 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
         {img && (
           <>
             <ImageContainer>
-              {/* <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" /> */}
+              <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
             </ImageContainer>
             <Spacer width={8} />
           </>

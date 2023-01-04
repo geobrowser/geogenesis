@@ -13,6 +13,7 @@ import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
 import { NavbarActions } from './navbar-actions';
 import { ExternalLink } from '../external-link';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -129,10 +130,12 @@ export function Navbar() {
   const { spaces } = useSpaces();
   const { pageName } = usePageName();
 
+  const hydrated = useHydrated();
+
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
-  return (
+  return hydrated ? (
     <Header>
       <NavigationItemsContainer>
         <Link href="/" passHref>
@@ -176,7 +179,7 @@ export function Navbar() {
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </Row>
     </Header>
-  );
+  ) : null;
 }
 
 const DiscordLinkContainer = styled(Row)(({ theme }) => ({
