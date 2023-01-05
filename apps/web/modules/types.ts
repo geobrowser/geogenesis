@@ -60,17 +60,21 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple;
-export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple;
+export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple & Publishable;
+export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple & Publishable;
 
 export type EditTripleAction = {
   type: 'editTriple';
   before: DeleteTripleAction;
   after: CreateTripleAction;
-};
+} & Publishable;
 
 type Identifiable = {
   id: string;
+};
+
+type Publishable = {
+  hasBeenPublished?: boolean;
 };
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;

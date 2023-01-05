@@ -35,9 +35,10 @@ interface Props {
   actions: ActionType[];
   spaceId?: string;
   onPublish: (spaceId: string, signer: Signer, setReviewState: (newState: ReviewState) => void) => void;
+  onClear: (spaceId: string) => void;
 }
 
-export function FlowBar({ actions, onPublish, spaceId }: Props) {
+export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
   const { data: signer } = useSigner();
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
 
@@ -55,6 +56,11 @@ export function FlowBar({ actions, onPublish, spaceId }: Props) {
     await onPublish(spaceId, signer, setReviewState);
   };
 
+  const clear = () => {
+    if (!spaceId) return;
+    onClear(spaceId);
+  };
+
   return (
     <AnimatePresence>
       {/* We let the toast persist during the publish-complete state before it switches to idle state */}
@@ -69,7 +75,7 @@ export function FlowBar({ actions, onPublish, spaceId }: Props) {
               key="action-bar"
             >
               {reviewState === 'idle' && (
-                <Review actions={actions} onBack={() => setReviewState('idle')} onNext={publish} />
+                <Review actions={actions} onBack={() => setReviewState('idle')} onNext={publish} onClear={clear} />
               )}
             </MotionContainer>
           )}
@@ -98,9 +104,15 @@ interface ReviewProps {
   onBack: () => void;
   actions: ActionType[];
   onNext: () => void;
+  onClear: () => void;
 }
 
-function Review({ actions, onNext }: ReviewProps) {
+const TrashButton = styled.button({
+  all: 'unset',
+  cursor: 'pointer',
+});
+
+function Review({ actions, onNext, onClear }: ReviewProps) {
   const actionsCount = Action.getChangeCount(actions);
   const entitiesCount = Object.keys(
     groupBy(Action.squashChanges(actions), action => {
@@ -111,7 +123,9 @@ function Review({ actions, onNext }: ReviewProps) {
 
   return (
     <>
-      <Trash color="grey-04" />
+      <TrashButton onClick={onClear}>
+        <Trash color="grey-04" />
+      </TrashButton>
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
         {actionsCount} {pluralize('change', actionsCount)} across {entitiesCount} {pluralize('entity', entitiesCount)}

@@ -82,13 +82,20 @@ export class ActionsStore implements IActionsStore {
     this.addActions(spaceId, [action]);
   };
 
+  clear = (spaceId: string) => {
+    this.actions$.set({
+      ...this.actions$.get(),
+      [spaceId]: [],
+    });
+  };
+
   publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     if (!spaceActions) return;
 
     try {
       await this.api.publish({
-        actions: Action.squashChanges(spaceActions),
+        actions: Action.squashChanges(Action.unpublishedChanges(spaceActions)),
         signer,
         onChangePublishState,
         space: spaceId,
@@ -99,9 +106,14 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
+    const publishedActions = spaceActions.map(a => ({
+      ...a,
+      hasBeenPublished: true,
+    }));
+
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: [],
+      [spaceId]: publishedActions,
     });
 
     onChangePublishState('publish-complete');

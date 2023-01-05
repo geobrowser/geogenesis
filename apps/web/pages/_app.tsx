@@ -6,7 +6,7 @@ import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
 import { FlowBar } from '~/modules/components/flow-bar';
-import { useActionsStore } from '~/modules/action';
+import { Action, useActionsStore } from '~/modules/action';
 import { useRouter } from 'next/router';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -64,11 +64,11 @@ const FlowbarContainer = styled.div({
 function GlobalFlowBar() {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string | undefined };
-  const { actions, publish } = useActionsStore(spaceId);
+  const { actions, publish, clear } = useActionsStore(spaceId);
 
   return (
     <FlowbarContainer>
-      <FlowBar actions={actions} onPublish={publish} spaceId={spaceId} />
+      <FlowBar actions={Action.unpublishedChanges(actions)} onClear={clear} onPublish={publish} spaceId={spaceId} />
     </FlowbarContainer>
   );
 }

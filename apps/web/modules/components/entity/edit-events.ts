@@ -89,6 +89,7 @@ interface ListenerConfig {
   context: {
     spaceId: string;
     entityId: string;
+    entityName: string;
   };
 }
 
@@ -149,7 +150,7 @@ const listener =
         );
       }
       case 'CREATE_NEW_TRIPLE':
-        return create(Triple.empty(context.spaceId, context.entityId));
+        return create({ ...Triple.empty(context.spaceId, context.entityId), entityName: context.entityName });
       case 'REMOVE_TRIPLE':
         return remove(event.payload.triple);
       case 'CHANGE_TRIPLE_TYPE': {

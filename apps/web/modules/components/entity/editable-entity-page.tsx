@@ -66,17 +66,6 @@ interface Props {
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { actions } = useActionsStore(space);
-  const send = useEditEvents({
-    context: {
-      entityId: id,
-      spaceId: space,
-    },
-    api: {
-      create,
-      update,
-      remove,
-    },
-  });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -88,6 +77,19 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   );
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId: space,
+      entityName: name,
+    },
+    api: {
+      create,
+      update,
+      remove,
+    },
+  });
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     send({
