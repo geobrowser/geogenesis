@@ -18,16 +18,16 @@ const Entities = styled.div(({ theme }) => ({
 interface Props {
   cell: Cell;
   space: string;
-  isExpanded: boolean;
+  entityId: string;
 }
 
-export const EditableEntityTableCell = ({ cell, space, isExpanded }: Props) => {
+export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { actions } = useActionsStore(space);
 
   const send = useEditEvents({
     context: {
-      entityId: cell.entityId,
+      entityId,
       spaceId: space,
     },
     api: {

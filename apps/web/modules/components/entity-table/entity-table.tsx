@@ -86,7 +86,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const showEditableCell = isEditor && editable;
 
     if (showEditableCell) {
-      return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} isExpanded={isExpanded} />;
+      return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} />;
     } else if (cellData) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
