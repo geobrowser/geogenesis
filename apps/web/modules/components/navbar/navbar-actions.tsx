@@ -37,7 +37,7 @@ interface Props {
   spaceId: string;
 }
 
-export function NavbarActions({ spaceId }: Props) {
+export default function NavbarActions({ spaceId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { address } = useHydratedAccount();
   const { setEditable, editable } = useEditable();
