@@ -17,6 +17,7 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
+import { motion } from 'framer-motion';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -136,7 +137,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={9} />
+        <Spacer height={13} />
 
         <StringField
           variant="body"
@@ -153,7 +154,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={12} />
+        <Spacer height={16} />
 
         <EntityActionGroup>
           <CopyIdButton id={id} />
@@ -194,11 +195,13 @@ const TripleActions = styled.div(props => ({
   right: 0,
 }));
 
-const GroupedAttributesList = styled.div(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.space,
-  flexWrap: 'wrap',
+const GroupedAttributesList = styled.div<{ isEntityGroup: boolean }>(({ theme, isEntityGroup }) => ({
+  ...(isEntityGroup && {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.space,
+  }),
 }));
 
 function EntityAttributes({
@@ -298,11 +301,9 @@ function EntityAttributes({
         }
 
         return (
-          <div key={`entity-${triple.value.id}`}>
-            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
-              {triple.value.name || triple.value.id}
-            </ChipButton>
-          </div>
+          <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
+            {triple.value.name || triple.value.id}
+          </ChipButton>
         );
     }
   };
@@ -328,7 +329,7 @@ function EntityAttributes({
               </Text>
             )}
             {isEntityGroup && <Spacer height={4} />}
-            <GroupedAttributesList>
+            <GroupedAttributesList isEntityGroup={Boolean(isEntityGroup)}>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
 
               {/* This is the + button next to attribute ids with existing entity values */}
