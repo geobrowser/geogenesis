@@ -44,9 +44,11 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
   const entityName = Entity.name(triples) || '';
 
   const attributeId = cell.columnId;
+
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const cellTriples = groupedTriples[attributeId] || [];
+
   const isEmptyEntity = cellTriples.length === 1 && cellTriples[0].value.type === 'entity' && !cellTriples[0].value.id;
   const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
   const isEntityGroup = cellTriples.find(t => t.value.type === 'entity');
@@ -124,7 +126,6 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
   return (
     <Entities>
       {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
-
       {isEntityGroup && !isEmptyEntity && (
         <EntityAutocompleteDialog
           onDone={entity => addEntityValue(attributeId, entity)}

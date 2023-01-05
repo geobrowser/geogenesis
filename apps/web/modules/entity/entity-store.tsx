@@ -52,10 +52,17 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      const actions = ActionsStore.actions$.get()[spaceId];
+      const actions = ActionsStore.actions$.get()[spaceId] || [];
 
+      const entitySpecificActions = actions.filter(a => {
+        const isCreate = a.type === 'createTriple' && a.entityId === id;
+        const isDelete = a.type === 'deleteTriple' && a.entityId === id;
+        const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+
+        return isCreate || isDelete || isRemove;
+      });
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, actions, initialDefaultTriples).filter(t => t.entityId === id);
+      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
     });
   }
 
