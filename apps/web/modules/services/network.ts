@@ -3,8 +3,19 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
 import { Entity } from '../entity';
-import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../triple';
-import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Triple, Value } from '../types';
+import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
+import {
+  Account,
+  Action,
+  Column,
+  FilterField,
+  FilterState,
+  ReviewState,
+  Row,
+  Space,
+  Triple as TripleType,
+  Value,
+} from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -64,7 +75,7 @@ export type PublishOptions = {
   onChangePublishState: (newState: ReviewState) => void;
 };
 
-type FetchTriplesResult = { triples: Triple[] };
+type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchEntityTableDataParams {
   spaceId: string;
@@ -171,7 +182,7 @@ export class Network implements INetwork {
 
     const triples = json.data.triples
       .filter(triple => !triple.isProtected)
-      .map((networkTriple): Triple => {
+      .map((networkTriple): TripleType => {
         return {
           id: networkTriple.id,
           entityId: networkTriple.entity.id,
@@ -341,6 +352,10 @@ export class Network implements INetwork {
         })
       )
     );
+    const rowTriplesWithEntityIds = rowTriples.map(({ triples }, index) => ({
+      entityId: rowEntityIds[index],
+      triples,
+    }));
 
     /* Name and Type are the default columns... */
     const defaultColumns = [
@@ -363,22 +378,21 @@ export class Network implements INetwork {
     const columns = [...defaultColumns, ...schemaColumns];
 
     /* Finally, we can build our initialRows */
-    const rows = rowTriples.map(row => {
-      return row.triples.reduce((acc, triple) => {
-        const column = columns.find(column => column.id === triple.attributeId);
+    const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
+      return columns.reduce((acc, column) => {
+        const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
+        const defaultTriple = { ...Triple.empty(spaceId, entityId), attributeId: column.id };
+        const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
 
-        /* If the column doesn't exist, we don't want to add it to the row */
-        if (!column) {
-          return acc;
-        }
+        const cell = {
+          columnId: column.id,
+          entityId,
+          triples: cellTriples,
+        };
 
-        /* Multiple triples are allowed to be displayed in a single column */
         return {
           ...acc,
-          [column.id]: {
-            columnId: column.id,
-            triples: [...(acc[column.id]?.triples ?? []), triple],
-          },
+          [column.id]: cell,
         };
       }, {} as Row);
     });
