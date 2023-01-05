@@ -107,3 +107,7 @@ export function squashChanges(actions: Action[]) {
     })
     .flatMap(changeTuple => (changeTuple ? changeTuple : []));
 }
+
+export function unpublishedChanges(actions: Action[]) {
+  return actions.filter(a => !a.hasBeenPublished);
+}

@@ -88,7 +88,7 @@ export class ActionsStore implements IActionsStore {
 
     try {
       await this.api.publish({
-        actions: Action.squashChanges(spaceActions),
+        actions: Action.squashChanges(Action.unpublishedChanges(spaceActions)),
         signer,
         onChangePublishState,
         space: spaceId,
@@ -99,9 +99,14 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
+    const publishedActions = spaceActions.map(a => ({
+      ...a,
+      hasBeenPublished: true,
+    }));
+
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: [],
+      [spaceId]: publishedActions,
     });
 
     onChangePublishState('publish-complete');
