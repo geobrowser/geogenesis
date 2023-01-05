@@ -1,7 +1,7 @@
 import { describe, expect } from 'vitest';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Action as ActionType, EditTripleAction } from '~/modules/types';
-import { getChangeCount, squashChanges } from './action';
+import { getChangeCount, squashChanges, unpublishedChanges } from './action';
 
 // Count should be 3
 const basicActions: ActionType[] = [
@@ -207,5 +207,31 @@ describe('Action squashing', () => {
 
     const squashed = squashChanges(actions);
     expect(squashed).toEqual([actions[2]]);
+  });
+});
+
+const publishedAndUnpublishedActions: ActionType[] = [
+  {
+    type: 'createTriple',
+    ...makeStubTriple('Alice'),
+  },
+  {
+    type: 'editTriple',
+    before: {
+      type: 'deleteTriple',
+      ...makeStubTriple('Alice'),
+    },
+    after: {
+      type: 'createTriple',
+      ...makeStubTriple('Alice'),
+      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
+    },
+    hasBeenPublished: true,
+  },
+];
+
+describe('Published actions', () => {
+  it('Returns actions that have not been published', () => {
+    expect(unpublishedChanges(publishedAndUnpublishedActions)).toEqual([publishedAndUnpublishedActions[0]]);
   });
 });
