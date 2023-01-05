@@ -4,7 +4,18 @@ import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
 import { Entity } from '../entity';
 import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
-import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Value } from '../types';
+import {
+  Account,
+  Action,
+  Column,
+  FilterField,
+  FilterState,
+  ReviewState,
+  Row,
+  Space,
+  Triple as TripleType,
+  Value,
+} from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -64,7 +75,7 @@ export type PublishOptions = {
   onChangePublishState: (newState: ReviewState) => void;
 };
 
-type FetchTriplesResult = { triples: Triple[] };
+type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchEntityTableDataParams {
   spaceId: string;
@@ -171,7 +182,7 @@ export class Network implements INetwork {
 
     const triples = json.data.triples
       .filter(triple => !triple.isProtected)
-      .map((networkTriple): Triple => {
+      .map((networkTriple): TripleType => {
         return {
           id: networkTriple.id,
           entityId: networkTriple.entity.id,
