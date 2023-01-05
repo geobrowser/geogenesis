@@ -1,23 +1,19 @@
 import styled from '@emotion/styled';
-// import Link from 'next/link';
-// import { useRouter } from 'next/router';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 // import { useSpaces } from '~/modules/spaces/use-spaces';
-// import { intersperse, titleCase } from '~/modules/utils';
-// import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '~/modules/constants';
-// import { Breadcrumb } from '~/modules/design-system/breadcrumb';
-// import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { intersperse, titleCase } from '~/modules/utils';
+import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '~/modules/constants';
+import { Breadcrumb } from '~/modules/design-system/breadcrumb';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Discord } from '~/modules/design-system/icons/discord';
-// import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
+import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
-// import { usePageName } from '~/modules/stores/use-page-name';
-// import { Dictionary } from '~/modules/types';
+import { usePageName } from '~/modules/stores/use-page-name';
+import { Dictionary, Space } from '~/modules/types';
 import { ExternalLink } from '../external-link';
-import dynamic from 'next/dynamic';
 import { useHydrated } from '~/modules/hooks/use-hydrated';
-
-const NavbarActions = dynamic(() => import('./navbar-actions'), {
-  ssr: false,
-});
+import { NavbarActions } from './navbar-actions';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -47,102 +43,102 @@ const Header = styled.header(({ theme }) => ({
   paddingRight: theme.space * 6,
 }));
 
-// const BreadcrumbsContainer = styled.div(props => ({
-//   display: 'flex',
-//   alignItems: 'center',
-//   gap: props.theme.space * 2,
-//   overflow: 'hidden',
-// }));
+const BreadcrumbsContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space * 2,
+  overflow: 'hidden',
+}));
 
-// const NavigationItemsContainer = styled.div(props => ({
-//   display: 'flex',
-//   alignItems: 'center',
-//   overflow: 'hidden',
-//   maxWidth: '40%',
-//   gap: props.theme.space * 8,
+const NavigationItemsContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  overflow: 'hidden',
+  maxWidth: '40%',
+  gap: props.theme.space * 8,
 
-//   'a:last-child': {
-//     overflow: 'hidden',
-//     // To make the text container slightly smaller than parent container so the ellipsis renders
-//     maxWidth: '99%',
-//   },
+  'a:last-child': {
+    overflow: 'hidden',
+    // To make the text container slightly smaller than parent container so the ellipsis renders
+    maxWidth: '99%',
+  },
 
-//   '@media (max-width: 768px)': {
-//     maxWidth: '100%',
-//     gap: props.theme.space * 4,
+  '@media (max-width: 768px)': {
+    maxWidth: '100%',
+    gap: props.theme.space * 4,
 
-//     'a:nth-of-type(3)': {
-//       display: 'none',
-//     },
+    'a:nth-of-type(3)': {
+      display: 'none',
+    },
 
-//     'span:nth-of-type(2)': {
-//       display: 'none',
-//     },
-//   },
-// }));
+    'span:nth-of-type(2)': {
+      display: 'none',
+    },
+  },
+}));
 
 const Row = styled.div({
   display: 'flex',
   alignItems: 'center',
 });
 
-// type GetComponentRouteConfig = {
-//   components: string[];
-//   index: number;
-//   spaceNames: Dictionary<string, string>;
-//   spaceImages: Dictionary<string, string>;
-//   pageName: string;
-// };
+type GetComponentRouteConfig = {
+  components: string[];
+  index: number;
+  spaceNames: Dictionary<string, string>;
+  spaceImages: Dictionary<string, string>;
+  pageName: string;
+};
 
-// type ComponentRoute = {
-//   title: string;
-//   path: string;
-//   img: string | null;
-// };
+type ComponentRoute = {
+  title: string;
+  path: string;
+  img: string | null;
+};
 
-// function getComponentRoute({
-//   components,
-//   index,
-//   spaceNames,
-//   spaceImages,
-//   pageName,
-// }: GetComponentRouteConfig): ComponentRoute {
-//   const component = components[index];
-//   const path = components.slice(0, index + 1).join('/');
+function getComponentRoute({
+  components,
+  index,
+  spaceNames,
+  spaceImages,
+  pageName,
+}: GetComponentRouteConfig): ComponentRoute {
+  const component = components[index];
+  const path = components.slice(0, index + 1).join('/');
 
-//   const componentName = component.split('?')?.[0];
+  const componentName = component.split('?')?.[0];
 
-//   switch (components[1]) {
-//     case 'space':
-//       switch (index) {
-//         case 1:
-//           return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
-//         case 2:
-//           return { path, title: spaceNames[componentName] ?? ZERO_WIDTH_SPACE, img: spaceImages[componentName] ?? '' };
-//         case 3:
-//           return { path, title: pageName || titleCase(componentName), img: '/facts.svg' };
-//       }
-//   }
+  switch (components[1]) {
+    case 'space':
+      switch (index) {
+        case 1:
+          return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
+        case 2:
+          return { path, title: spaceNames[componentName] ?? ZERO_WIDTH_SPACE, img: spaceImages[componentName] ?? '' };
+        case 3:
+          return { path, title: pageName || titleCase(componentName), img: '/facts.svg' };
+      }
+  }
 
-//   return { path, title: titleCase(component), img: '/spaces.png' };
-// }
+  return { path, title: titleCase(component), img: '/spaces.png' };
+}
+
+// HACK FOR NOW
+const spaces: Space[] = [];
 
 export function Navbar() {
-  // const router = useRouter();
-  // const asPath = router.asPath;
-  // const components = asPath.split('/');
+  const router = useRouter();
+  const asPath = router.asPath;
+  const components = asPath.split('/');
   // const { spaces } = useSpaces();
-  // const { pageName } = usePageName();
-  const hydrated = useHydrated();
+  const { pageName } = usePageName();
 
-  if (!hydrated) return null;
-
-  // const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
-  // const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
+  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
+  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
   return (
     <Header>
-      {/* <NavigationItemsContainer>
+      <NavigationItemsContainer>
         <Link href="/" passHref>
           <a>
             <GeoLogoLarge />
@@ -176,13 +172,12 @@ export function Navbar() {
             }
           )}
         </BreadcrumbsContainer>
-      </NavigationItemsContainer> */}
+      </NavigationItemsContainer>
 
       <Row>
         <DiscordLink />
         <Spacer width={16} />
-        {/* <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} /> */}
-        <NavbarActions spaceId="" />
+        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </Row>
     </Header>
   );
