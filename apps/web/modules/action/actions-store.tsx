@@ -82,6 +82,13 @@ export class ActionsStore implements IActionsStore {
     this.addActions(spaceId, [action]);
   };
 
+  clear = (spaceId: string) => {
+    this.actions$.set({
+      ...this.actions$.get(),
+      [spaceId]: [],
+    });
+  };
+
   publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     if (!spaceActions) return;

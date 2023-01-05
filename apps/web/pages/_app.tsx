@@ -64,11 +64,11 @@ const FlowbarContainer = styled.div({
 function GlobalFlowBar() {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string | undefined };
-  const { actions, publish } = useActionsStore(spaceId);
+  const { actions, publish, clear } = useActionsStore(spaceId);
 
   return (
     <FlowbarContainer>
-      <FlowBar actions={Action.unpublishedChanges(actions)} onPublish={publish} spaceId={spaceId} />
+      <FlowBar actions={Action.unpublishedChanges(actions)} onClear={clear} onPublish={publish} spaceId={spaceId} />
     </FlowbarContainer>
   );
 }

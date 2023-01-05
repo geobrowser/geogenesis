@@ -8,18 +8,20 @@ import { useActionsStoreContext } from './actions-store-provider';
  * on a dev route or the root /spaces page.
  */
 export function useActionsStore(spaceId?: string) {
-  const { actions$, publish } = useActionsStoreContext();
+  const { actions$, publish, clear } = useActionsStoreContext();
   const actions = useSelector(actions$);
 
   if (!spaceId) {
     return {
       actions: [],
       publish,
+      clear,
     };
   }
 
   return {
     actions: actions[spaceId] ?? [],
     publish,
+    clear,
   };
 }
