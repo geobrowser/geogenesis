@@ -368,25 +368,23 @@ export class Network implements INetwork {
 
     /* Finally, we can build our initialRows */
     const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
-      return triples.reduce((acc, triple) => {
-        const column = columns.find(column => column.id === triple.attributeId);
+      return columns.reduce((acc, column) => {
+        const cellTriples = triples.filter(triple => triple.attributeId === column.id);
 
-        /* If the column doesn't exist, we don't want to add it to the row */
-        if (!column) {
-          return acc;
-        }
+        const cell = {
+          columnId: column.id,
+          entityId,
+          triples: cellTriples,
+        };
 
-        /* Multiple triples are allowed to be displayed in a single column */
         return {
           ...acc,
-          [column.id]: {
-            columnId: column.id,
-            entityId,
-            triples: [...(acc[column.id]?.triples ?? []), triple],
-          },
+          [column.id]: cell,
         };
       }, {} as Row);
     });
+
+    console.log(rows);
 
     return {
       columns,
