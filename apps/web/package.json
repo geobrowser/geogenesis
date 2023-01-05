@@ -25,7 +25,6 @@
     "@radix-ui/react-popover": "^1.0.2",
     "@radix-ui/react-select": "^1.1.1",
     "@radix-ui/react-use-rect": "^1.0.0",
-    "@rainbow-me/rainbowkit": "^0.8.0",
     "@tanstack/query-core": "4.3.8",
     "@tanstack/react-table": "^8.5.13",
     "@vercel/analytics": "^0.1.6",

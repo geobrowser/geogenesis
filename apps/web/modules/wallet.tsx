@@ -6,7 +6,6 @@ import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
-
 import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
 
 // const LOCAL_CHAIN: Chain = {
@@ -19,21 +18,9 @@ import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectk
 //     decimals: 18,
 //   },
 //   rpcUrls: {
-//     default: Config.options.development.rpc,
-//   },
-// };
-
-// const STAGING_CHAIN: Chain = {
-//   id: Number(options.staging.chainId),
-//   name: 'Geo Genesis Staging', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: options.staging.rpc,
+//     default: {
+//       http: [Config.options.development.rpc]
+//     }
 //   },
 // };
 
@@ -71,11 +58,6 @@ const DEFAULT_CHAIN: Chain = {
 
 const { chains, provider, webSocketProvider } = configureChains([DEFAULT_CHAIN, TESTNET_CHAIN], [publicProvider()]);
 
-// const { connectors } = getDefaultWallets({
-//   appName: 'Geo Genesis',
-//   chains,
-// });
-
 const wagmiClient = createClient({
   ...getDefaultClient({
     appName: 'Geo Genesis',
@@ -107,15 +89,15 @@ const StyledConnectButton = styled.button(props => ({
 }));
 
 export function GeoConnectButton() {
-  // There's currently no mechanisms in connectkit to handle disconnecting
-  // through their APIs. It uses wagmi internally so we can escape-hatch
-  // into wagmi-land to disconnect.
+  // There's currently no mechanisms in connectkit to handle disconnecting their APIs.
+  // It uses wagmi internally so we can escape-hatch into wagmi-land to disconnect.
   const { disconnect } = useDisconnect();
 
   return (
     <ConnectKitButton.Custom>
       {({ show, isConnected }) => {
         return (
+          // We're using an anonymous function for disconnect to appease the TS gods.
           <StyledConnectButton onClick={isConnected ? () => disconnect() : show}>
             {isConnected ? <Unlink /> : <Link />}
             <Spacer width={8} />
