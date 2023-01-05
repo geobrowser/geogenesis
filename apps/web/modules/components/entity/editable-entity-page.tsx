@@ -17,8 +17,7 @@ import { EntityTextAutocomplete } from './entity-text-autocomplete';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { motion } from 'framer-motion';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -57,8 +56,6 @@ const EntityActionGroup = styled.div({
 const AddTripleContainer = styled.div(({ theme }) => ({
   padding: theme.space * 4,
 }));
-
-const MotionAddTripleButton = motion(Button);
 
 interface Props {
   triples: TripleType[];
