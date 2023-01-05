@@ -128,7 +128,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           onChange={onNameChange}
         />
 
-        <Spacer height={16} />
+        <Spacer height={9} />
+
         <StringField
           variant="body"
           placeholder="Add a description..."
@@ -136,7 +137,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           onChange={onDescriptionChange}
         />
 
-        <Spacer height={16} />
+        <Spacer height={12} />
 
         <EntityActionGroup>
           <CopyIdButton id={id} />

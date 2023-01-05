@@ -79,5 +79,5 @@ export function fromActions(spaceId: string, actions: Action[] | undefined, trip
     }
   });
 
-  return newTriples;
+  return newTriples.reverse();
 }
