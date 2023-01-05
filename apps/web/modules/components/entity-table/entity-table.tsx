@@ -60,13 +60,6 @@ const Container = styled.div(props => ({
   padding: 0,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
-  overflow: 'hidden',
-}));
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
 }));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
