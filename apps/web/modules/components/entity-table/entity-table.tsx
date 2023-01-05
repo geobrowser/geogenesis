@@ -75,6 +75,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = !!table.options?.meta?.expandedCells[cellId];
 
+    const entityId = Object.values(row.original)[0].entityId;
     const cellData = getValue<Cell>();
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -84,15 +85,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const showEditableCell = isEditor && editable;
 
-    if (!cellData) {
+    if (showEditableCell) {
+      return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} isExpanded={isExpanded} />;
+    } else if (cellData) {
+      return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
+    } else {
       return null;
     }
-
-    return showEditableCell ? (
-      <EditableEntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />
-    ) : (
-      <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />
-    );
   },
 };
 
