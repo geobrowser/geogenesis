@@ -212,7 +212,6 @@ function EntityAttributes({
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
-  console.log('rendering entity attributes', triples);
   const groupedTriples = groupBy(triples, t => t.attributeId);
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');

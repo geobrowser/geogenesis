@@ -397,8 +397,6 @@ export class Network implements INetwork {
       }, {} as Row);
     });
 
-    console.log(rows);
-
     return {
       columns,
       rows,
