@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-// import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';

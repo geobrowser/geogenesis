@@ -1,7 +1,5 @@
 import styled from '@emotion/styled';
-import '@rainbow-me/rainbowkit/styles.css';
-import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
-import { polygon, polygonMumbai } from 'wagmi/chains';
+import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
 import { publicProvider } from 'wagmi/providers/public';
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
@@ -109,11 +107,16 @@ const StyledConnectButton = styled.button(props => ({
 }));
 
 export function GeoConnectButton() {
+  // There's currently no mechanisms in connectkit to handle disconnecting
+  // through their APIs. It uses wagmi internally so we can escape-hatch
+  // into wagmi-land to disconnect.
+  const { disconnect } = useDisconnect();
+
   return (
     <ConnectKitButton.Custom>
-      {({ show, hide, isConnected }) => {
+      {({ show, isConnected }) => {
         return (
-          <StyledConnectButton onClick={isConnected ? hide : show}>
+          <StyledConnectButton onClick={isConnected ? () => disconnect() : show}>
             {isConnected ? <Unlink /> : <Link />}
             <Spacer width={8} />
             <Text color="ctaPrimary" variant="button">
