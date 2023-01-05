@@ -9,13 +9,15 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
-import { Chip } from '../../design-system/chip';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { EntityStoreProvider } from '~/modules/entity';
+import { useEditable } from '~/modules/stores/use-editable';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
-import { NavUtils } from '../../utils';
 import { TableCell } from '../table/cell';
-import { CellContent } from '../table/cell-content';
-import { ChipCellContainer, EmptyTableText } from '../table/styles';
+import { EmptyTableText } from '../table/styles';
+import { EditableEntityTableCell } from './editable-entity-table-cell';
+import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -58,55 +60,31 @@ const Container = styled.div(props => ({
   padding: 0,
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
-  overflow: 'hidden',
-}));
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
 }));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
-
     const cellId = `${row.original.id}-${cell.column.id}`;
+    const isExpanded = !!table.options?.meta?.expandedCells[cellId];
 
+    const entityId = Object.values(row.original)[0].entityId;
     const cellData = getValue<Cell>();
 
-    if (!cellData) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { isEditor } = useAccessControl(space);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { editable } = useEditable();
+
+    const showEditableCell = isEditor && editable;
+
+    if (showEditableCell) {
+      return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} />;
+    } else if (cellData) {
+      return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
+    } else {
       return null;
     }
-
-    return (
-      <Entities>
-        {cellData.triples.map(({ value, entityId, entityName }) => {
-          if (cellData.columnId === 'name') {
-            const value = entityName ?? entityId;
-            return (
-              <CellContent
-                key={value}
-                isEntity
-                href={NavUtils.toEntity(space, entityId)}
-                isExpanded={table.options?.meta?.expandedCells[cellId]}
-                value={value}
-              />
-            );
-          } else if (value.type === 'entity') {
-            return (
-              <ChipCellContainer key={value.id}>
-                <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
-              </ChipCellContainer>
-            );
-          } else {
-            return (
-              <CellContent key={value.id} isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />
-            );
-          }
-        })}
-      </Entities>
-    );
   },
 };
 
@@ -158,32 +136,43 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               <EmptyTableText>No results found</EmptyTableText>
             </tr>
           )}
-          {table.getRowModel().rows.map(row => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map(cell => {
-                const cellId = `${row.original.id}-${cell.column.id}`;
-                const firstTriple = cell.getValue<Cell>()?.triples[0];
-                const isExpandable = firstTriple && firstTriple.value.type === 'string';
+          {table.getRowModel().rows.map(row => {
+            const cells = row.getVisibleCells();
+            const initialTriples = cells
+              .map(cell => cell.getValue<Cell>()?.triples)
+              .flat()
+              .filter(Boolean);
+            const entityId = cells[0].getValue<Cell>()?.entityId;
 
-                return (
-                  <TableCell
-                    isExpandable={isExpandable}
-                    isExpanded={expandedCells[cellId]}
-                    width={cell.column.getSize()}
-                    key={cell.id}
-                    toggleExpanded={() =>
-                      setExpandedCells(prev => ({
-                        ...prev,
-                        [cellId]: !prev[cellId],
-                      }))
-                    }
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
+            return (
+              <EntityStoreProvider key={row.id} id={entityId} spaceId={space} initialTriples={initialTriples}>
+                <TableRow>
+                  {cells.map(cell => {
+                    const cellId = `${row.original.id}-${cell.column.id}`;
+                    const firstTriple = cell.getValue<Cell>()?.triples[0];
+                    const isExpandable = firstTriple && firstTriple.value.type === 'string';
+
+                    return (
+                      <TableCell
+                        isExpandable={isExpandable}
+                        isExpanded={expandedCells[cellId]}
+                        width={cell.column.getSize()}
+                        key={cell.id}
+                        toggleExpanded={() =>
+                          setExpandedCells(prev => ({
+                            ...prev,
+                            [cellId]: !prev[cellId],
+                          }))
+                        }
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              </EntityStoreProvider>
+            );
+          })}
         </tbody>
       </Table>
     </Container>

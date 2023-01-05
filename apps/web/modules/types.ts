@@ -82,6 +82,7 @@ export interface Column {
 
 export interface Cell {
   columnId: string;
+  entityId: string;
   triples: Triple[];
 }
 

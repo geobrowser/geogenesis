@@ -1,23 +1,22 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { useActionsStore } from '~/modules/action';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
-import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
+import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { Entity, useEntityStore } from '~/modules/entity';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
-import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
-import { NumberField, StringField } from './editable-fields';
-import { TripleTypeDropdown } from './triple-type-dropdown';
-import { SYSTEM_IDS } from '~/modules/constants';
-import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Entity, useEntityStore } from '~/modules/entity';
-import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
-import { motion } from 'framer-motion';
+import { NumberField, StringField } from './editable-fields';
+import { EntityAutocompleteDialog } from './entity-autocomplete';
+import { EntityTextAutocomplete } from './entity-text-autocomplete';
+import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -137,7 +136,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={13} />
+        <Spacer height={9} />
 
         <StringField
           variant="body"
@@ -154,7 +153,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={16} />
+        <Spacer height={12} />
 
         <EntityActionGroup>
           <CopyIdButton id={id} />
@@ -195,13 +194,11 @@ const TripleActions = styled.div(props => ({
   right: 0,
 }));
 
-const GroupedAttributesList = styled.div<{ isEntityGroup: boolean }>(({ theme, isEntityGroup }) => ({
-  ...(isEntityGroup && {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: theme.space,
-  }),
+const GroupedAttributesList = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.space,
+  flexWrap: 'wrap',
 }));
 
 function EntityAttributes({
@@ -301,9 +298,11 @@ function EntityAttributes({
         }
 
         return (
-          <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
-            {triple.value.name || triple.value.id}
-          </ChipButton>
+          <div key={`entity-${triple.value.id}`}>
+            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
+              {triple.value.name || triple.value.id}
+            </ChipButton>
+          </div>
         );
     }
   };
@@ -329,7 +328,7 @@ function EntityAttributes({
               </Text>
             )}
             {isEntityGroup && <Spacer height={4} />}
-            <GroupedAttributesList isEntityGroup={Boolean(isEntityGroup)}>
+            <GroupedAttributesList>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
 
               {/* This is the + button next to attribute ids with existing entity values */}

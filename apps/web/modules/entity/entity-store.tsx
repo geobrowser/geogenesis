@@ -1,10 +1,9 @@
-import { computed, ObservableComputed } from '@legendapp/state';
-import { observable } from '@legendapp/state';
-import { SYSTEM_IDS } from '../constants';
-import { Triple } from '../triple';
-import { INetwork } from '../services/network';
-import { Triple as TripleType } from '../types';
+import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { ActionsStore } from '../action';
+import { SYSTEM_IDS } from '../constants';
+import { INetwork } from '../services/network';
+import { Triple } from '../triple';
+import { Triple as TripleType } from '../types';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -53,10 +52,17 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      const actions = ActionsStore.actions$.get()[spaceId];
+      const actions = ActionsStore.actions$.get()[spaceId] || [];
 
+      const entitySpecificActions = actions.filter(a => {
+        const isCreate = a.type === 'createTriple' && a.entityId === id;
+        const isDelete = a.type === 'deleteTriple' && a.entityId === id;
+        const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+
+        return isCreate || isDelete || isRemove;
+      });
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, actions, initialDefaultTriples);
+      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
     });
   }
 
