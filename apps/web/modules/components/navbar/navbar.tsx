@@ -11,8 +11,8 @@ import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
+import { ExternalLink } from '../external-link';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
