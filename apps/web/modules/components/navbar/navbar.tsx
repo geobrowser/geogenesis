@@ -13,6 +13,7 @@ import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
 import { ExternalLink } from '../external-link';
 import dynamic from 'next/dynamic';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 const NavbarActions = dynamic(() => import('./navbar-actions'), {
   ssr: false,
@@ -132,6 +133,9 @@ export function Navbar() {
   const components = asPath.split('/');
   const { spaces } = useSpaces();
   const { pageName } = usePageName();
+  const hydrated = useHydrated();
+
+  if (!hydrated) return null;
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
