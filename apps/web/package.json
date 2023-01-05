@@ -29,7 +29,8 @@
     "@tanstack/query-core": "4.3.8",
     "@tanstack/react-table": "^8.5.13",
     "@vercel/analytics": "^0.1.6",
-    "ethers": "^5.6.6",
+    "connectkit": "^1.1.1",
+    "ethers": "^5.7.2",
     "framer-motion": "^7.5.3",
     "immer": "^9.0.16",
     "modern-normalize": "^1.1.0",
@@ -42,7 +43,7 @@
     "react-query": "^3.39.2",
     "react-use-measure": "^2.1.1",
     "undici": "^5.10.0",
-    "wagmi": "^0.8.0"
+    "wagmi": "^0.10.4"
   },
   "devDependencies": {
     "@babel/core": "^7.19.0",

@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
-import { ConnectButton, getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { Chain, configureChains, createClient, WagmiConfig } from 'wagmi';
+import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
@@ -9,19 +9,21 @@ import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
-const LOCAL_CHAIN: Chain = {
-  id: Number(Config.options.development.chainId),
-  name: 'Geo Genesis Dev', // Human-readable name
-  network: 'ethereum', // Internal network name
-  nativeCurrency: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: Config.options.development.rpc,
-  },
-};
+import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
+
+// const LOCAL_CHAIN: Chain = {
+//   id: Number(Config.options.development.chainId),
+//   name: 'Geo Genesis Dev', // Human-readable name
+//   network: 'ethereum', // Internal network name
+//   nativeCurrency: {
+//     name: 'Ethereum',
+//     symbol: 'ETH',
+//     decimals: 18,
+//   },
+//   rpcUrls: {
+//     default: Config.options.development.rpc,
+//   },
+// };
 
 // const STAGING_CHAIN: Chain = {
 //   id: Number(options.staging.chainId),
@@ -47,7 +49,9 @@ const TESTNET_CHAIN: Chain = {
     decimals: 18,
   },
   rpcUrls: {
-    default: Config.options.testnet.rpc,
+    default: {
+      http: [Config.options.testnet.rpc],
+    },
   },
 };
 
@@ -61,31 +65,33 @@ const DEFAULT_CHAIN: Chain = {
     decimals: 18,
   },
   rpcUrls: {
-    default: Config.options.production.rpc,
+    default: {
+      http: [Config.options.production.rpc],
+    },
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains(
-  [DEFAULT_CHAIN, TESTNET_CHAIN, LOCAL_CHAIN],
-  [publicProvider()]
-);
+const { chains, provider, webSocketProvider } = configureChains([DEFAULT_CHAIN, TESTNET_CHAIN], [publicProvider()]);
 
-const { connectors } = getDefaultWallets({
-  appName: 'Geo Genesis',
-  chains,
-});
+// const { connectors } = getDefaultWallets({
+//   appName: 'Geo Genesis',
+//   chains,
+// });
 
-export const wagmiClient = createClient({
-  autoConnect: true,
-  connectors,
-  provider,
-  webSocketProvider,
+const wagmiClient = createClient({
+  ...getDefaultClient({
+    appName: 'Geo Genesis',
+    chains,
+    webSocketProvider,
+    provider,
+    autoConnect: true,
+  }),
 });
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <WagmiConfig client={wagmiClient}>
-      <RainbowKitProvider chains={chains}>{children}</RainbowKitProvider>
+      <ConnectKitProvider>{children}</ConnectKitProvider>
     </WagmiConfig>
   );
 }
@@ -104,18 +110,18 @@ const StyledConnectButton = styled.button(props => ({
 
 export function GeoConnectButton() {
   return (
-    <ConnectButton.Custom>
-      {({ openAccountModal, openConnectModal, account }) => {
+    <ConnectKitButton.Custom>
+      {({ show, hide, isConnected }) => {
         return (
-          <StyledConnectButton onClick={account ? openAccountModal : openConnectModal}>
-            {account ? <Unlink /> : <Link />}
+          <StyledConnectButton onClick={isConnected ? hide : show}>
+            {isConnected ? <Unlink /> : <Link />}
             <Spacer width={8} />
             <Text color="ctaPrimary" variant="button">
-              {account ? 'Disconnect wallet' : 'Connect wallet'}
+              {isConnected ? 'Disconnect wallet' : 'Connect wallet'}
             </Text>
           </StyledConnectButton>
         );
       }}
-    </ConnectButton.Custom>
+    </ConnectKitButton.Custom>
   );
 }
