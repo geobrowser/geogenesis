@@ -269,15 +269,13 @@ function EntityAttributes({
     switch (triple.value.type) {
       case 'string':
         return (
-          <div>
-            <StringField
-              key={triple.id}
-              variant="body"
-              placeholder="Add value..."
-              onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
-              value={triple.value.value}
-            />
-          </div>
+          <StringField
+            key={triple.id}
+            variant="body"
+            placeholder="Add value..."
+            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            value={triple.value.value}
+          />
         );
       case 'number':
         return (
