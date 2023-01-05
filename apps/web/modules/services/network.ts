@@ -3,8 +3,8 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '../constants';
 import { Entity } from '../entity';
-import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams } from '../triple';
-import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Triple, Value } from '../types';
+import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
+import { Account, Action, Column, FilterField, FilterState, ReviewState, Row, Space, Value } from '../types';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -369,7 +369,9 @@ export class Network implements INetwork {
     /* Finally, we can build our initialRows */
     const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
       return columns.reduce((acc, column) => {
-        const cellTriples = triples.filter(triple => triple.attributeId === column.id);
+        const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
+        const defaultTriple = { ...Triple.empty(spaceId, entityId), attributeId: column.id };
+        const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
 
         const cell = {
           columnId: column.id,
