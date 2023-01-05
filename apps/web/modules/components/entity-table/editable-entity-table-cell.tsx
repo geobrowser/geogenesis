@@ -53,6 +53,8 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
   const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
   const isEntityGroup = cellTriples.find(t => t.value.type === 'entity');
 
+  const isNameCell = cell.columnId === 'name';
+
   const removeOrResetEntityTriple = (triple: Triple) => {
     send({
       type: 'REMOVE_ENTITY',
@@ -120,6 +122,17 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
         );
     }
   };
+
+  if (isNameCell) {
+    return (
+      <StringField
+        color="text"
+        placeholder="Entity name..."
+        value={entityName}
+        onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
+      />
+    );
+  }
 
   return (
     <Entities>

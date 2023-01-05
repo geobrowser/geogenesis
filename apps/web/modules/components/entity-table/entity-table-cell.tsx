@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { Entity } from '~/modules/entity';
 import { Chip } from '../../design-system/chip';
 import { Cell } from '../../types';
 import { NavUtils } from '../../utils';
@@ -18,30 +19,35 @@ interface Props {
 }
 
 export const EntityTableCell = ({ cell, space, isExpanded }: Props) => {
-  return (
-    <Entities>
-      {cell.triples.map(({ value, entityId, entityName }) => {
-        if (cell.columnId === 'name') {
-          const value = entityName ?? entityId;
-          return (
-            <CellContent
-              key={value}
-              isEntity
-              href={NavUtils.toEntity(space, entityId)}
-              isExpanded={isExpanded}
-              value={value}
-            />
-          );
-        } else if (value.type === 'entity') {
-          return (
-            <ChipCellContainer key={value.id}>
-              <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
-            </ChipCellContainer>
-          );
-        } else {
-          return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
-        }
-      })}
-    </Entities>
-  );
+  const isNameCell = cell.columnId === 'name';
+
+  if (isNameCell) {
+    const entityId = cell.triples[0].entityId;
+    const value = Entity.name(cell.triples) ?? entityId;
+
+    return (
+      <CellContent
+        key={value}
+        isEntity
+        href={NavUtils.toEntity(space, entityId)}
+        isExpanded={isExpanded}
+        value={value}
+      />
+    );
+  } else
+    return (
+      <Entities>
+        {cell.triples.map(({ value }) => {
+          if (value.type === 'entity') {
+            return (
+              <ChipCellContainer key={value.id}>
+                <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
+              </ChipCellContainer>
+            );
+          } else {
+            return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
+          }
+        })}
+      </Entities>
+    );
 };
