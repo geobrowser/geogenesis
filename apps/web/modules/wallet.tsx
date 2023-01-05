@@ -89,8 +89,9 @@ const StyledConnectButton = styled.button(props => ({
 }));
 
 export function GeoConnectButton() {
-  // There's currently no mechanisms in connectkit to handle disconnecting their APIs.
-  // It uses wagmi internally so we can escape-hatch into wagmi-land to disconnect.
+  // There's currently no mechanisms in connectkit to handle disconnecting their APIs
+  // without going through the modal. It uses wagmi internally so we can escape-hatch
+  // into wagmi-land to disconnect.
   const { disconnect } = useDisconnect();
 
   return (

@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-// import { useSpaces } from '~/modules/spaces/use-spaces';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { intersperse, titleCase } from '~/modules/utils';
 import { SYSTEM_IDS, ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
@@ -10,9 +10,8 @@ import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
 import { usePageName } from '~/modules/stores/use-page-name';
-import { Dictionary, Space } from '~/modules/types';
+import { Dictionary } from '~/modules/types';
 import { ExternalLink } from '../external-link';
-import { useHydrated } from '~/modules/hooks/use-hydrated';
 import { NavbarActions } from './navbar-actions';
 
 const Header = styled.header(({ theme }) => ({
@@ -123,14 +122,11 @@ function getComponentRoute({
   return { path, title: titleCase(component), img: '/spaces.png' };
 }
 
-// HACK FOR NOW
-const spaces: Space[] = [];
-
 export function Navbar() {
   const router = useRouter();
   const asPath = router.asPath;
   const components = asPath.split('/');
-  // const { spaces } = useSpaces();
+  const { spaces } = useSpaces();
   const { pageName } = usePageName();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
