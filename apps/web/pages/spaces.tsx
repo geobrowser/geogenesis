@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Card } from '~/modules/design-system/card';
@@ -10,25 +11,23 @@ import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
-
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 
 const Column = styled.div({
   display: 'flex',
   flexDirection: 'column',
 });
 
-const Grid = styled.div({
+const Grid = styled.div(props => ({
   display: 'flex',
   justifyItems: 'space-between',
   flexWrap: 'wrap',
-  gap: 16,
+  gap: props.theme.space * 4,
 
   '@media (max-width: 1200px)': {
     alignItems: 'center',
   },
-});
+}));
 
 const TextContainer = styled.div({
   alignSelf: 'center',
