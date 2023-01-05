@@ -128,7 +128,16 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           onChange={onNameChange}
         />
 
-        <Spacer height={16} />
+        {/* 
+          StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
+          textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
+          of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
+          readable entity page visually align.
+
+          You'll notice that this Spacer in readable-entity-page will have a larger value.
+        */}
+        <Spacer height={9} />
+
         <StringField
           variant="body"
           placeholder="Add a description..."
@@ -136,7 +145,15 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
           onChange={onDescriptionChange}
         />
 
-        <Spacer height={16} />
+        {/* 
+          StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
+          textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
+          of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
+          readable entity page visually align.
+
+          You'll notice that this Spacer in readable-entity-page will have a larger value.
+        */}
+        <Spacer height={12} />
 
         <EntityActionGroup>
           <CopyIdButton id={id} />
@@ -310,6 +327,7 @@ function EntityAttributes({
                 {attributeName || attributeId}
               </Text>
             )}
+            {isEntityGroup && <Spacer height={4} />}
             <GroupedAttributesList>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
 
