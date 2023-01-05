@@ -29,6 +29,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
     context: {
       entityId,
       spaceId: space,
+      entityName: Entity.name(localTriples) ?? '',
     },
     api: {
       create,
