@@ -172,7 +172,6 @@ const listener =
       case 'REMOVE_ENTITY': {
         const { triple, isLastEntity } = event.payload;
 
-        console.log('REMOVE_ENTITY', triple, isLastEntity);
         if (triple.value.type === 'entity') {
           // When we remove the last linked entity, we just want to create a new, empty triple.
           // This is so we can keep the Attribute field available for the user to add a new entity
