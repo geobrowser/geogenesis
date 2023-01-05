@@ -15,6 +15,7 @@ const QueryInput = styled.input(props => ({
   height: '100%',
   padding: 0,
   margin: 0,
+  backgroundColor: 'transparent',
 
   '&::placeholder': {
     color: props.theme.colors['grey-02'],
