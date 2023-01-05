@@ -35,6 +35,7 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
   // Manually keep the height of the textarea in sync with its content.
   useEffect(() => {
     if (ref.current) {
+      ref.current.style.height = 'auto';
       ref.current.style.height = ref.current.scrollHeight + 'px';
     }
   });
