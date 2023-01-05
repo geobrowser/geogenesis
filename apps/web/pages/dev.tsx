@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { ConnectKitButton } from 'connectkit';
 import Link from 'next/link';
 import { Input } from '~/modules/design-system/input';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -58,7 +59,7 @@ export default function Dev() {
         <a>Spaces</a>
       </Link>
 
-      {/* <ConnectButton /> */}
+      <ConnectKitButton />
 
       <VerticalBox>
         <HorizontalBox>
