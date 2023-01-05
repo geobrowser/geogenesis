@@ -41,8 +41,8 @@ interface Props {
 }
 
 export default function Spaces({ spaces }: Props) {
-  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
-  const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
+  // const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
+  // const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
 
   return (
     <div>
@@ -56,7 +56,7 @@ export default function Spaces({ spaces }: Props) {
 
         <Grid>
           {spaces
-            .filter(space => isAdmin || isEditor || !space.isRootSpace)
+            .filter(space => !space.isRootSpace)
             .map(space => {
               const name = space.attributes.name;
               const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
