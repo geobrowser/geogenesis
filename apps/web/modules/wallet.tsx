@@ -1,12 +1,13 @@
 import styled from '@emotion/styled';
 import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
+import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
+import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
-import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Config.options.development.chainId),
@@ -25,14 +26,7 @@ import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectk
 // };
 
 const TESTNET_CHAIN: Chain = {
-  id: Number(Config.options.testnet.chainId),
-  name: 'Polygon Mumbai', // Human-readable name
-  network: 'mumbai', // Internal network name
-  nativeCurrency: {
-    name: 'Polygon Mumbai',
-    symbol: 'MATIC',
-    decimals: 18,
-  },
+  ...polygonMumbai,
   rpcUrls: {
     default: {
       http: [Config.options.testnet.rpc],
@@ -41,14 +35,7 @@ const TESTNET_CHAIN: Chain = {
 };
 
 const DEFAULT_CHAIN: Chain = {
-  id: Number(Config.options.production.chainId),
-  name: 'Polygon', // Human-readable name
-  network: 'polygon', // Internal network name
-  nativeCurrency: {
-    name: 'Polygon Mumbai',
-    symbol: 'MATIC',
-    decimals: 18,
-  },
+  ...polygon,
   rpcUrls: {
     default: {
       http: [Config.options.production.rpc],
