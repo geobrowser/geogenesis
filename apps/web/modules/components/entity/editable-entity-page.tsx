@@ -310,6 +310,7 @@ function EntityAttributes({
                 {attributeName || attributeId}
               </Text>
             )}
+            {isEntityGroup && <Spacer height={4} />}
             <GroupedAttributesList>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
 
