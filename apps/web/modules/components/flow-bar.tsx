@@ -56,6 +56,11 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
     await onPublish(spaceId, signer, setReviewState);
   };
 
+  const clear = () => {
+    if (!spaceId) return;
+    onClear(spaceId);
+  };
+
   return (
     <AnimatePresence>
       {/* We let the toast persist during the publish-complete state before it switches to idle state */}
@@ -70,12 +75,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
               key="action-bar"
             >
               {reviewState === 'idle' && (
-                <Review
-                  actions={actions}
-                  onBack={() => setReviewState('idle')}
-                  onNext={publish}
-                  onClear={() => onClear(spaceId)}
-                />
+                <Review actions={actions} onBack={() => setReviewState('idle')} onNext={publish} onClear={clear} />
               )}
             </MotionContainer>
           )}
