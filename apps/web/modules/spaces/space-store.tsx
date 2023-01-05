@@ -18,7 +18,13 @@ export class SpaceStore {
 
     this.spaces$ = makeOptionalComputed(
       [],
-      computed(() => this.api.fetchSpaces())
+      computed(async () => {
+        try {
+          return await this.api.fetchSpaces();
+        } catch (e) {
+          return [];
+        }
+      })
     );
 
     this.admins$ = makeOptionalComputed(

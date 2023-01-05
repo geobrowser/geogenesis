@@ -32,6 +32,7 @@ interface StringFieldProps {
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Manually keep the height of the textarea in sync with its content.
   useEffect(() => {
     if (ref.current) {
       ref.current.style.height = 'auto';
@@ -39,17 +40,16 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
     }
   });
 
-  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-      ref.current.style.height = ref.current.scrollHeight + 'px';
-    }
-
-    props.onChange(e);
-  };
-
   return (
-    <Textarea {...props} ref={ref} rows={1} onChange={onChange} variant={variant} color={color} value={props.value} />
+    <Textarea
+      {...props}
+      ref={ref}
+      rows={1}
+      onChange={props.onChange}
+      variant={variant}
+      color={color}
+      value={props.value}
+    />
   );
 }
 
