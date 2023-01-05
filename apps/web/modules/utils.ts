@@ -15,7 +15,7 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
 }
 
 export function upperFirst(string: string): string {
-  return string.slice(0, 1).toLocaleUpperCase() + string.slice(1);
+  return string.slice(0, 1).toUpperCase() + string.slice(1);
 }
 
 export function titleCase(string: string): string {
