@@ -6,8 +6,8 @@ import { ChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { useEditEvents } from '../entity/edit-events';
 import { NumberField, StringField } from '../entity/editable-fields';
-import { EntityAutocompleteDialog } from '../entity/entity-autocomplete';
-import { EntityTextAutocomplete } from '../entity/entity-text-autocomplete';
+import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',

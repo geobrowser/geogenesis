@@ -4,11 +4,11 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
-import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
-import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { Entity } from '~/modules/types';
+import { ResultContent, ResultsList } from './results-list';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -48,43 +48,6 @@ const SearchIconContainer = styled.div(props => ({
   zIndex: 100,
 }));
 
-const ResultsList = styled.ul({
-  listStyle: 'none',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
-  margin: 0,
-  padding: 0,
-
-  maxHeight: 340,
-  overflowY: 'auto',
-});
-
-const Result = styled.button<{ existsOnEntity: boolean }>(props => ({
-  all: 'unset',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${props.theme.space * 2}px`,
-
-  '&:hover': {
-    backgroundColor: props.theme.colors['grey-01'],
-    ...(!props.existsOnEntity && {
-      cursor: 'pointer',
-    }),
-  },
-
-  '&:focus': {
-    outline: 'none',
-    backgroundColor: props.theme.colors['grey-01'],
-  },
-
-  ...(props.existsOnEntity && {
-    backgroundColor: props.theme.colors['grey-01'],
-    cursor: 'not-allowed',
-  }),
-}));
-
 const AddEntityButton = styled(SquareButton)({
   width: 23,
   height: 23,
@@ -96,7 +59,7 @@ const AutocompleteInput = styled(Input)(props => ({
 
 interface Props {
   entityValueIds: string[];
-  onDone: (result: { id: string; name: string | null }) => void;
+  onDone: (result: Entity) => void;
 }
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
@@ -136,18 +99,14 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
             <ResultsList>
               {autocomplete.query.length > 0
                 ? autocomplete.results.map(result => (
-                    <Result
+                    <ResultContent
                       key={result.id}
                       onClick={() => {
                         if (!entityItemIdsSet.has(result.id)) onDone(result);
                       }}
-                      existsOnEntity={entityItemIdsSet.has(result.id)}
-                    >
-                      <Text as="li" variant="metadataMedium" ellipsize>
-                        {result.name ?? result.id}
-                      </Text>
-                      {entityItemIdsSet.has(result.id) && <CheckCircleSmall color="grey-04" />}
-                    </Result>
+                      alreadySelected={entityItemIdsSet.has(result.id)}
+                      result={result}
+                    />
                   ))
                 : null}
             </ResultsList>

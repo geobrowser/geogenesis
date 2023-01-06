@@ -4,10 +4,11 @@ import { useEffect, useMemo } from 'react';
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
+import { Entity } from '../types';
 
 class EntityAutocomplete {
   query$ = observable('');
-  results$: ObservableComputed<{ id: string; name: string | null }[]>;
+  results$: ObservableComputed<Entity[]>;
   abortController: AbortController = new AbortController();
 
   constructor({ api }: { api: INetwork }) {

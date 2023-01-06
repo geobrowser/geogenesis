@@ -8,6 +8,7 @@ import {
   Account,
   Action,
   Column,
+  Entity as EntityType,
   FilterField,
   FilterState,
   ReviewState,
@@ -35,6 +36,15 @@ export type NetworkTriple = NetworkValue & {
   attribute: { id: string; name: string | null };
   valueId: string;
   isProtected: boolean;
+};
+
+export type NetworkEntity = EntityType & {
+  entityOf: ({
+    attribute: {
+      id: string;
+      name: string | null;
+    };
+  } & NetworkValue)[];
 };
 
 export function extractValue(networkTriple: NetworkTriple): Value {
@@ -87,7 +97,7 @@ export interface INetwork {
   fetchEntityTableData: (options: FetchEntityTableDataParams) => Promise<{ rows: Row[]; columns: Column[] }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchEntities: (name: string, abortController?: AbortController) => Promise<{ id: string; name: string | null }[]>;
+  fetchEntities: (name: string, abortController?: AbortController) => Promise<EntityType[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -212,10 +222,34 @@ export class Network implements INetwork {
           startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
             id,
             name
+            entityOf {
+              stringValue
+              valueType
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+            }
           }
           containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
             id,
-            name
+            name,
+            entityOf {
+              stringValue
+              valueType
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+            }
           }
         }`,
       }),
@@ -223,14 +257,29 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        startEntities: { name: string | null; id: string }[];
-        containEntities: { name: string | null; id: string }[];
+        startEntities: NetworkEntity[];
+        containEntities: NetworkEntity[];
       };
     } = await response.json();
 
     const { startEntities, containEntities } = json.data;
 
-    return sortSearchResultsByRelevance(startEntities, containEntities);
+    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+    const sortedResultsWithDescription: EntityType[] = sortedResults.map(result => {
+      const description = result.entityOf
+        .filter(entityOf => entityOf.attribute.name === SYSTEM_IDS.DESCRIPTION_SCALAR)
+        .flatMap(entityOf => (entityOf.valueType === 'STRING' ? entityOf.stringValue : []))
+        .pop();
+
+      const types = result.entityOf
+        .filter(entityOf => entityOf.attribute.id === SYSTEM_IDS.TYPES)
+        .flatMap(entityOf => (entityOf.valueType === 'ENTITY' ? entityOf.entityValue.name : []))
+        .flatMap(name => (name ? name : []));
+
+      return { ...result, description: description ?? null, types };
+    });
+
+    return sortedResultsWithDescription;
   };
 
   fetchSpaces = async () => {
@@ -420,10 +469,7 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(
-  startEntities: { id: string; name: string | null }[],
-  containEntities: { id: string; name: string | null }[]
-) {
+function sortSearchResultsByRelevance(startEntities: NetworkEntity[], containEntities: NetworkEntity[]) {
   const startEntityIds = startEntities.map(entity => entity.id);
 
   const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
