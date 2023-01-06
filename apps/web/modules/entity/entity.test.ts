@@ -19,6 +19,22 @@ const triplesWithSystemDescriptionAttribute: Triple[] = [
   },
 ];
 
+const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
+    attributeName: 'Description',
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'banana',
+    },
+    space: 'spaceId',
+    entityName: 'banana',
+  },
+];
+
 const triplesWithNonSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
@@ -65,6 +81,10 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
 describe('Entity description helpers', () => {
   it('Parses description from triples where description attribute is the the expected system Description', () => {
     expect(description(triplesWithSystemDescriptionAttribute)).toBe('banana');
+  });
+
+  it('Parses description from triples where description is the expected system Description and value is a reference to another Entity', () => {
+    expect(description(triplesWithSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
   });
 
   it('Parses description from triples where description is not the expected system Description', () => {
