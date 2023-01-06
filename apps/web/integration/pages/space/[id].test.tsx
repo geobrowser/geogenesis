@@ -2,13 +2,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
-import TriplesPage from '~/pages/space/[id]';
+import SpacePage from '~/pages/space/[id]';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <TriplesPage
+        <SpacePage
           spaceId="1"
           spaceName="Banana"
           spaceImage={null}
@@ -27,7 +27,7 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <TriplesPage
+        <SpacePage
           spaceId="1"
           spaceName="Banana"
           spaceImage={null}
@@ -45,7 +45,7 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <TriplesPage
+        <SpacePage
           spaceId="1"
           spaceName="Banana"
           spaceImage={null}
@@ -74,7 +74,7 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <TriplesPage
+        <SpacePage
           spaceId="1"
           spaceName="Banana"
           spaceImage={null}
