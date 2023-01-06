@@ -75,7 +75,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   const descriptionTriple = triples.find(
     t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeName === 'Description'
   );
-  const description = Entity.description(triples);
+  const description = Entity.stringOrEntityDescriptionValue(triples);
   const name = Entity.name(triples) ?? serverName;
 
   const send = useEditEvents({

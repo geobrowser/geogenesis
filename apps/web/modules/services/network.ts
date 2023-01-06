@@ -223,6 +223,9 @@ export class Network implements INetwork {
             id,
             name
             entityOf {
+              space {
+                id
+              }
               stringValue
               valueType
               entityValue {
@@ -239,6 +242,9 @@ export class Network implements INetwork {
             id,
             name,
             entityOf {
+              space {
+                id
+              }
               stringValue
               valueType
               entityValue {
@@ -266,17 +272,11 @@ export class Network implements INetwork {
 
     const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
     const sortedResultsWithDescription: EntityType[] = sortedResults.map(result => {
-      const description = result.entityOf
-        .filter(entityOf => entityOf.attribute.name === SYSTEM_IDS.DESCRIPTION_SCALAR)
-        .flatMap(entityOf => (entityOf.valueType === 'STRING' ? entityOf.stringValue : []))
-        .pop();
-
-      const types = result.entityOf
-        .filter(entityOf => entityOf.attribute.id === SYSTEM_IDS.TYPES)
-        .flatMap(entityOf => (entityOf.valueType === 'ENTITY' ? entityOf.entityValue.name : []))
-        .flatMap(name => (name ? name : []));
-
-      return { ...result, description: description ?? null, types };
+      return {
+        ...result,
+        description: Entity.networkStringDescriptionValue(result.entityOf) ?? null,
+        types: Entity.networkTypeNames(result.entityOf),
+      };
     });
 
     return sortedResultsWithDescription;

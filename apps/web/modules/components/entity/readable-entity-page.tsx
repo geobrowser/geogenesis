@@ -58,7 +58,7 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples, id, name, space, linkedEntities }: Props) {
-  const description = Entity.description(triples);
+  const description = Entity.stringOrEntityDescriptionValue(triples);
 
   return (
     <div>
@@ -265,7 +265,7 @@ function LinkedEntityCard({
     t => t.value.type === 'entity' && t.value.id === originalEntityId
   );
 
-  const description = Entity.description(entityGroup.triples);
+  const description = Entity.stringOrEntityDescriptionValue(entityGroup.triples);
 
   const shouldMaximizeContent = Boolean(isExpanded || description || linkedTriples.length > 0);
 
