@@ -1,22 +1,22 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { useActionsStore } from '~/modules/action';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
-import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
+import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { Entity, useEntityStore } from '~/modules/entity';
 import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
-import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
-import { NumberField, StringField } from './editable-fields';
-import { TripleTypeDropdown } from './triple-type-dropdown';
-import { SYSTEM_IDS } from '~/modules/constants';
-import { EntityTextAutocomplete } from './entity-text-autocomplete';
-import { Entity, useEntityStore } from '~/modules/entity';
-import { useActionsStore } from '~/modules/action';
 import { useEditEvents } from './edit-events';
+import { NumberField, StringField } from './editable-fields';
+import { EntityAutocompleteDialog } from './entity-autocomplete';
+import { EntityTextAutocomplete } from './entity-text-autocomplete';
+import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
   display: 'flex',
@@ -65,7 +65,9 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples, attributes }: Props) {
-  const { triples: localTriples, update, create, remove } = useEntityStore();
+  const { triples: localTriples, typeAttributes, update, create, remove } = useEntityStore();
+
+  console.log({ typeAttributes });
   const { actions } = useActionsStore(space);
   const send = useEditEvents({
     context: {
@@ -81,7 +83,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
+  const triples =
+    localTriples.length === 0 && actions.length === 0 ? serverTriples : [...localTriples, ...typeAttributes];
 
   const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
   const descriptionTriple = triples.find(
@@ -310,23 +313,13 @@ function EntityAttributes({
     }
   };
 
-  console.log('grouped triples', groupedTriples);
+  // const typeIDs = groupedTriples.type.flatMap(t => (t.value.type === 'entity' ? t.value.id : []));
 
-  const typeIDs = groupedTriples.type.flatMap(t => (t.value.type === 'entity' ? t.value.id : []));
-
-  const typeAttributes = attributes.filter(attribute => typeIDs.includes(attribute.entityId));
-  const groupedAttributes = groupBy(typeAttributes, t => t.attributeId);
-
-  console.log('typeIDs', typeIDs);
-  console.log('attributes', attributes);
-  console.log('typeAttributes', typeAttributes);
+  // const typeAttributes = attributes.filter(attribute => typeIDs.includes(attribute.entityId));
 
   return (
     <>
-      {Object.entries({
-        ...groupedTriples,
-        ...groupedAttributes,
-      }).map(([attributeId, triples], index) => {
+      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(t => t.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;

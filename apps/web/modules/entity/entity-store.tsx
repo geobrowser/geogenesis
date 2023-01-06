@@ -1,10 +1,10 @@
-import { computed, ObservableComputed } from '@legendapp/state';
-import { observable } from '@legendapp/state';
-import { SYSTEM_IDS } from '../constants';
-import { Triple } from '../triple';
-import { INetwork } from '../services/network';
-import { Triple as TripleType } from '../types';
+import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { ActionsStore } from '../action';
+import { SYSTEM_IDS } from '../constants';
+import { INetwork } from '../services/network';
+import { Triple } from '../triple';
+import { Triple as TripleType } from '../types';
+import { makeOptionalComputed } from '../utils';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -41,6 +41,8 @@ export class EntityStore implements IEntityStore {
   private api: INetwork;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
+  typeTriples$: ObservableComputed<TripleType[]> = observable([]);
+  typeAttributes$: ObservableComputed<TripleType[]> = observable([]);
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
@@ -58,6 +60,38 @@ export class EntityStore implements IEntityStore {
       // We want to merge any local actions with the network triples
       return Triple.fromActions(spaceId, actions, initialDefaultTriples);
     });
+
+    this.typeTriples$ = computed(() => {
+      return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
+    });
+
+    this.typeAttributes$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        const attributes = await Promise.all(
+          this.typeTriples$.get().map(triple => {
+            return this.api.fetchTriples({
+              query: '',
+              space: spaceId,
+              first: 100,
+              skip: 0,
+              filter: [
+                {
+                  field: 'entity-id',
+                  value: triple.value.id,
+                },
+                {
+                  field: 'attribute-id',
+                  value: SYSTEM_IDS.ATTRIBUTES,
+                },
+              ],
+            });
+          })
+        );
+
+        return attributes.map(attribute => attribute.triples).flat();
+      })
+    );
   }
 
   create = (triple: TripleType) => this.ActionsStore.create(triple);
