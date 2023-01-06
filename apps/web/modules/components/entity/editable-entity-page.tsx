@@ -310,20 +310,23 @@ function EntityAttributes({
     }
   };
 
-  //@ts-ignore
-  // type inference being stupid
-  const entityTypes = groupedTriples.type.filter(t => t.value.type === 'entity').map(t => t.value.name);
+  console.log('grouped triples', groupedTriples);
 
-  const requiredAttributes = attributes
-    .filter(t => entityTypes.includes(t.entityName) && t.value.type === 'entity')
-    .filter((value, index, self) => self.indexOf(value) === index);
+  const typeIDs = groupedTriples.type.flatMap(t => (t.value.type === 'entity' ? t.value.id : []));
 
-  console.log('Entity Types: ', entityTypes);
-  console.log('Required Attributes: ', requiredAttributes);
+  const typeAttributes = attributes.filter(attribute => typeIDs.includes(attribute.entityId));
+  const groupedAttributes = groupBy(typeAttributes, t => t.attributeId);
+
+  console.log('typeIDs', typeIDs);
+  console.log('attributes', attributes);
+  console.log('typeAttributes', typeAttributes);
 
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
+      {Object.entries({
+        ...groupedTriples,
+        ...groupedAttributes,
+      }).map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(t => t.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
@@ -344,7 +347,6 @@ function EntityAttributes({
             {isEntityGroup && <Spacer height={4} />}
             <GroupedAttributesList>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
-
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
@@ -394,18 +396,16 @@ function EntityAttributes({
           </EntityAttributeContainer>
         );
       })}
-      {entityTypes.length > 0 &&
-        requiredAttributes.map((entityType, index) => (
-          <EntityAttributeContainer key={`new-attribute-${entityType}-${index}`}>
+      {/* {typeIDs.length > 0 &&
+        typeAttributes.map((attributeName, index) => (
+          <EntityAttributeContainer key={`new-attribute-${attributeName}-${index}`}>
             <EntityTextAutocomplete
-              // @ts-ignore
-              // we are filtering out any non-entity attributes so this should be fine
-              placeholder={entityType.value.name}
+              placeholder={attributeName || ''}
               onDone={result => linkAttribute('', result)}
               itemIds={attributeIds}
             />
           </EntityAttributeContainer>
-        ))}
+        ))} */}
     </>
   );
 }
