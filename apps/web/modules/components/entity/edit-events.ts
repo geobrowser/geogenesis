@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
@@ -129,8 +130,8 @@ const listener =
             Triple.withId({
               space: context.spaceId,
               entityId: context.entityId,
-              attributeId: 'Description',
-              attributeName: 'Description',
+              attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
+              attributeName: SYSTEM_IDS.DESCRIPTION_SCALAR,
               entityName: name,
               value: {
                 id: ID.createValueId(),

@@ -14,7 +14,8 @@ import { Triple } from '../types';
  */
 export function description(triples: Triple[]) {
   const descriptionTriple = triples.find(
-    triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION_SCALAR || triple.attributeName === 'Description'
+    triple =>
+      triple.attributeId === SYSTEM_IDS.DESCRIPTION_SCALAR || triple.attributeName === SYSTEM_IDS.DESCRIPTION_SCALAR
   );
 
   return descriptionTriple?.value?.type === 'string' ? descriptionTriple.value.value : null;
@@ -31,6 +32,10 @@ export function types(triples: Triple[]) {
     .flatMap(name => (name ? name : []));
 }
 
+/**
+ * This function traverses through all the triples associated with an entity and attempts
+ * to find the name of the entity. If it finds the name it returns it, otherwise it returns null.
+ */
 export function name(triples: Triple[]) {
   const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
   return nameValue?.type === 'string' ? nameValue.value : null;
