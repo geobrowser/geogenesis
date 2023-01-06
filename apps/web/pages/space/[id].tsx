@@ -1,83 +1,124 @@
-import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
-import { SpaceActions } from '~/modules/components/space/space-navbar';
-import { Triples } from '~/modules/components/triples';
+import { SpaceNavbar } from '~/modules/components/space/space-navbar';
+import { AppConfig } from '~/modules/config';
 import { SYSTEM_IDS } from '~/modules/constants';
-import { Network } from '~/modules/services/network';
-import { StorageClient } from '~/modules/services/storage';
-import { Triple } from '~/modules/types';
+import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
-import { DEFAULT_PAGE_SIZE, TripleStoreProvider } from '~/modules/triple';
+import { INetwork, Network } from '~/modules/services/network';
+import { StorageClient } from '~/modules/services/storage';
+import { EntityTableStoreProvider } from '~/modules/triple';
+import { Column, Row, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
-  initialTriples: Triple[];
+  initialSelectedType: Triple | null;
+  initialTypes: Triple[];
+  initialColumns: Column[];
+  initialRows: Row[];
+  config: AppConfig;
 }
 
-const NavbarContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  width: '100%',
-});
-
-const ActionsContainer = styled.div({
-  flex: 'none',
-});
-
-export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples }: Props) {
+export default function EntitiesPage({
+  spaceId,
+  spaceName,
+  spaceImage,
+  initialColumns,
+  initialSelectedType,
+  initialRows,
+  initialTypes,
+}: Props) {
   return (
     <div>
       <Head>
         <title>{spaceName ?? spaceId}</title>
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
+      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
 
-      <NavbarContainer>
-        <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
-        <ActionsContainer>
-          <SpaceActions spaceId={spaceId} />
-        </ActionsContainer>
-      </NavbarContainer>
+      <Spacer height={34} />
+      <SpaceNavbar spaceId={spaceId} />
 
-      <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
-        <Triples spaceId={spaceId} spaceName={spaceName} initialTriples={initialTriples} />
-      </TripleStoreProvider>
+      <EntityTableStoreProvider
+        space={spaceId}
+        initialRows={initialRows}
+        initialSelectedType={initialSelectedType}
+        initialColumns={initialColumns}
+        initialTypes={initialTypes}
+      >
+        <EntityTableContainer
+          spaceId={spaceId}
+          spaceName={spaceName}
+          initialColumns={initialColumns}
+          initialRows={initialRows}
+        />
+      </EntityTableStoreProvider>
     </div>
   );
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseTripleQueryParameters(context.resolvedUrl);
+  const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-
   const storage = new StorageClient(config.ipfs);
+
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
-  const triples = await network.fetchTriples({
-    query: initialParams.query,
-    space: spaceId,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    filter: initialParams.filterState,
+
+  const initialTypes = (await fetchSpaceTypeTriples(network, spaceId)) || [];
+
+  const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
+
+  const typeId = initialSelectedType?.entityId;
+
+  const params = {
+    ...initialParams,
+    typeId,
+  };
+
+  const { columns, rows } = await network.fetchEntityTableData({
+    spaceId,
+    params,
   });
 
   return {
     props: {
+      config,
       spaceId,
       spaceName,
       spaceImage,
-      initialTriples: triples.triples,
+      initialSelectedType,
+      initialColumns: columns,
+      initialRows: rows,
+      initialTypes,
     },
   };
+};
+
+export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
+  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
+  const { triples } = await network.fetchTriples({
+    query: '',
+    space: spaceId,
+    skip: 0,
+    first: 100,
+    filter: [
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+      {
+        field: 'linked-to',
+        value: SYSTEM_IDS.SCHEMA_TYPE,
+      },
+    ],
+  });
+
+  return triples;
 };
