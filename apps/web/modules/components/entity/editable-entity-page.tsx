@@ -58,14 +58,14 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
-  placeholderTriples: TripleType[];
+  schemaTriples: TripleType[];
   id: string;
   name: string;
   space: string;
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create, remove, placeholderTriples } = useEntityStore();
+  const { triples: localTriples, update, create, remove, schemaTriples } = useEntityStore();
 
   const { actions } = useActionsStore(space);
 
@@ -168,13 +168,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes
-                entityId={id}
-                triples={triples}
-                placeholderTriples={placeholderTriples}
-                name={name}
-                send={send}
-              />
+              <EntityAttributes entityId={id} triples={triples} schemaTriples={schemaTriples} name={name} send={send} />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -214,21 +208,19 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
-  placeholderTriples,
+  schemaTriples,
   name,
   send,
 }: {
   entityId: string;
   triples: Props['triples'];
-  placeholderTriples: Props['placeholderTriples'];
+  schemaTriples: Props['schemaTriples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
-  const unusedPlaceholderTriples = placeholderTriples.filter(
-    t => !triples.some(t2 => t2.attributeId === t.attributeId)
-  );
+  const unusedschemaTriples = schemaTriples.filter(t => !triples.some(t2 => t2.attributeId === t.attributeId));
 
-  const displayedTriples = [...triples, ...unusedPlaceholderTriples];
+  const displayedTriples = [...triples, ...unusedschemaTriples];
   const groupedTriples = groupBy(displayedTriples, t => t.attributeId);
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
