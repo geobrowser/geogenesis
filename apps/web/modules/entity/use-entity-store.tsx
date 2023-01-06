@@ -2,13 +2,13 @@ import { useSelector } from '@legendapp/state/react';
 import { useEntityStoreContext } from './entity-store-provider';
 
 export function useEntityStore() {
-  const { create, triples$, typeAttributes$, update, remove } = useEntityStoreContext();
+  const { create, triples$, placeholderTriples$, update, remove } = useEntityStoreContext();
   const triples = useSelector(triples$);
-  const typeAttributes = useSelector(typeAttributes$);
+  const placeholderTriples = useSelector(placeholderTriples$);
 
   return {
     triples,
-    typeAttributes,
+    placeholderTriples,
     create,
     update,
     remove,

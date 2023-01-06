@@ -34,6 +34,7 @@ export type Triple = {
   attributeName: string | null;
   value: Value;
   space: string;
+  placeholder?: boolean;
 };
 
 export type Space = {

@@ -58,15 +58,15 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
+  placeholderTriples: TripleType[];
   id: string;
   name: string;
   space: string;
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create, remove, typeAttributes } = useEntityStore();
+  const { triples: localTriples, update, create, remove, placeholderTriples } = useEntityStore();
 
-  console.log(typeAttributes);
   const { actions } = useActionsStore(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
@@ -168,7 +168,13 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} name={name} send={send} />
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                placeholderTriples={placeholderTriples}
+                name={name}
+                send={send}
+              />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -208,15 +214,22 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
+  placeholderTriples,
   name,
   send,
 }: {
   entityId: string;
   triples: Props['triples'];
+  placeholderTriples: Props['placeholderTriples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
-  const groupedTriples = groupBy(triples, t => t.attributeId);
+  const unusedPlaceholderTriples = placeholderTriples.filter(
+    t => !triples.some(t2 => t2.attributeId === t.attributeId)
+  );
+
+  const displayedTriples = [...triples, ...unusedPlaceholderTriples];
+  const groupedTriples = groupBy(displayedTriples, t => t.attributeId);
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
@@ -268,6 +281,26 @@ function EntityAttributes({
     });
   };
 
+  const updateValue = (triple: TripleType, value: string) => {
+    if (triple.placeholder) {
+      send({
+        type: 'UPDATE_VALUE_FROM_PLACEHOLDER',
+        payload: {
+          triple,
+          value,
+        },
+      });
+    } else {
+      send({
+        type: 'UPDATE_VALUE',
+        payload: {
+          triple,
+          value,
+        },
+      });
+    }
+  };
+
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
@@ -276,7 +309,7 @@ function EntityAttributes({
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
         );
@@ -285,7 +318,7 @@ function EntityAttributes({
           <NumberField
             key={triple.id}
             placeholder="Add value..."
-            onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            onBlur={e => updateValue(triple, e.target.value)}
             initialValue={triple.value.value}
           />
         );

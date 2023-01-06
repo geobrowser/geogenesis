@@ -72,6 +72,13 @@ export type EditEvent =
       };
     }
   | {
+      type: 'UPDATE_VALUE_FROM_PLACEHOLDER';
+      payload: {
+        value: string;
+        triple: TripleType;
+      };
+    }
+  | {
       type: 'REMOVE_TRIPLE';
       payload: {
         triple: TripleType;
@@ -96,6 +103,8 @@ interface ListenerConfig {
 const listener =
   ({ api: { create, update, remove }, context }: ListenerConfig) =>
   (event: EditEvent) => {
+    console.log(event);
+
     switch (event.type) {
       case 'EDIT_ENTITY_NAME': {
         const { name, triple } = event.payload;
@@ -250,6 +259,16 @@ const listener =
             },
           })
         );
+      }
+      case 'UPDATE_VALUE_FROM_PLACEHOLDER': {
+        const { value, triple } = event.payload;
+        return create({
+          ...Triple.empty(context.spaceId, context.entityId),
+          entityName: context.entityName,
+          attributeId: triple.attributeId,
+          attributeName: triple.attributeName,
+          value: { ...triple.value, type: 'string', value },
+        });
       }
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;

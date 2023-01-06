@@ -1,4 +1,5 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
+import { Entity } from '.';
 import { ActionsStore } from '../action';
 import { SYSTEM_IDS } from '../constants';
 import { INetwork } from '../services/network';
@@ -42,7 +43,7 @@ export class EntityStore implements IEntityStore {
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]> = observable([]);
-  typeAttributes$: ObservableComputed<TripleType[]> = observable([]);
+  placeholderTriples$: ObservableComputed<TripleType[]> = observable([]);
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
@@ -55,23 +56,32 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      const actions = ActionsStore.actions$.get()[spaceId];
+      const actions = ActionsStore.actions$.get()[spaceId] || [];
 
+      const entitySpecificActions = actions.filter(a => {
+        const isCreate = a.type === 'createTriple' && a.entityId === id;
+        const isDelete = a.type === 'deleteTriple' && a.entityId === id;
+        const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+
+        return isCreate || isDelete || isRemove;
+      });
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, actions, initialDefaultTriples);
+      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
     });
 
     this.typeTriples$ = computed(() => {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
     });
 
-    this.typeAttributes$ = makeOptionalComputed(
+    this.placeholderTriples$ = makeOptionalComputed(
       [],
       computed(async () => {
         const typeTriples = this.typeTriples$.get();
 
-        console.log('typeTriples', typeTriples);
-        if (typeTriples.length === 0) {
+        const noTypeTriples = typeTriples.length === 0;
+        const defaultTypeTriples = typeTriples[0].value.id === '';
+
+        if (noTypeTriples || defaultTypeTriples) {
           return [];
         }
 
@@ -96,7 +106,15 @@ export class EntityStore implements IEntityStore {
           })
         );
 
-        return attributes.map(attribute => attribute.triples).flat();
+        return attributes
+          .map(attribute => attribute.triples)
+          .flat()
+          .map(triple => ({
+            ...Triple.empty(spaceId, id),
+            attributeId: triple.value.id,
+            attributeName: Entity.entityName(triple), // Should we be grabbing all of the related triples for the attribute to see if it has a name triple?
+            placeholder: true,
+          }));
       })
     );
   }
