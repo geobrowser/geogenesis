@@ -2,6 +2,9 @@ import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../types';
 
 /**
+ * This function traverses through all the triples of an Entity and attempts to find the
+ * description of the entity.
+ *
  * We assume that the Description triple's attribute for an Entity will match the expected
  * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_SCALAR. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
@@ -34,7 +37,7 @@ export function types(triples: Triple[]): string[] {
 
 /**
  * This function traverses through all the triples associated with an entity and attempts
- * to find the name of the entity. If it finds the name it returns it, otherwise it returns null.
+ * to find the name of the entity.
  */
 export function name(triples: Triple[]): string | null {
   const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
