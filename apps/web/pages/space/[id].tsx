@@ -4,7 +4,6 @@ import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
-import { AppConfig } from '~/modules/config';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
@@ -21,7 +20,6 @@ interface Props {
   initialTypes: Triple[];
   initialColumns: Column[];
   initialRows: Row[];
-  config: AppConfig;
 }
 
 export default function EntitiesPage({
@@ -95,7 +93,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   return {
     props: {
-      config,
       spaceId,
       spaceName,
       spaceImage,
