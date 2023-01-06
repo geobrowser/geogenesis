@@ -2,9 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { SYSTEM_IDS } from '../constants';
 import { NetworkEntity } from '../services/network';
 import { Triple } from '../types';
-import { networkStringDescriptionValue, stringOrEntityDescriptionValue } from './entity';
+import { networkStringDescriptionValue, description } from './entity';
 
-const triplesWithScalarDescription: Triple[] = [
+const triplesWithSystemDescriptionAttribute: Triple[] = [
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
+    attributeName: 'Description',
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'banana',
+    },
+    space: 'spaceId',
+    entityName: 'banana',
+  },
+];
+
+const triplesWithNonSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
@@ -20,7 +36,7 @@ const triplesWithScalarDescription: Triple[] = [
   },
 ];
 
-const triplesWithEntityDescription: Triple[] = [
+const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
@@ -86,12 +102,16 @@ const networkTriplesWithDescriptionAsEntityValue: NetworkEntity['entityOf'] = [
  * some other entity.
  */
 describe('Entity description helpers', () => {
-  it('Parses description from triples where description is an stringValue', () => {
-    expect(stringOrEntityDescriptionValue(triplesWithScalarDescription)).toBe('banana');
+  it('Parses description from triples where description attribute is the the expected system Description', () => {
+    expect(description(triplesWithSystemDescriptionAttribute)).toBe('banana');
   });
 
-  it('Parses description from triples where description is an stringValue', () => {
-    expect(stringOrEntityDescriptionValue(triplesWithEntityDescription)).toBe('banana');
+  it('Parses description from triples where description is not the expected system Description', () => {
+    expect(description(triplesWithNonSystemDescriptionAttribute)).toBe('banana');
+  });
+
+  it('Parses description from triples where description is not the expected system Description and value is a reference to another Entity', () => {
+    expect(description(triplesWithNonSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
   });
 
   it('Parses description from network GeoEntity where description attribute is not the expected system Description', () => {
@@ -103,6 +123,6 @@ describe('Entity description helpers', () => {
   });
 
   it('Returns undefined from network GeoEntity where description value is a reference to another Entity', () => {
-    expect(networkStringDescriptionValue(networkTriplesWithDescriptionAsEntityValue)).toBe(undefined);
+    expect(networkStringDescriptionValue(networkTriplesWithDescriptionAsEntityValue)).toBe(null);
   });
 });

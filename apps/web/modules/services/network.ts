@@ -15,8 +15,9 @@ import {
   Row,
   Space,
   Triple as TripleType,
-  Value,
+  Value as ValueType,
 } from '../types';
+import { Value } from '../value';
 import { IStorageClient } from './storage';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -47,7 +48,7 @@ export type NetworkEntity = EntityType & {
   } & NetworkValue)[];
 };
 
-export function extractValue(networkTriple: NetworkTriple): Value {
+export function extractValue(networkTriple: NetworkTriple): ValueType {
   switch (networkTriple.valueType) {
     case 'STRING':
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
@@ -420,7 +421,7 @@ export class Network implements INetwork {
 
     /* ...and then we can format our user-defined schemaColumns */
     const schemaColumns = columnsTriples.triples.map(triple => ({
-      name: Entity.entityValueName(triple) || triple.value.id,
+      name: Value.entityName(triple) || triple.value.id,
       id: triple.value.id,
     })) as Column[];
 

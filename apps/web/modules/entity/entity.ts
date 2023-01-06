@@ -8,33 +8,34 @@ import { Triple } from '../types';
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
- * as _any_ attribute whose name is "Description."
+ * as any attribute whose name is "Description."
  *
- * We currently don't handle description triples whose value is an EntityValue that references
- * some other entity.
+ * We currently only handle description triples whose value is a StringValue. If the value
+ * is an EntityValue we assume it's not valid and don't attempt to parse it to render in the UI.
  */
-export function stringOrEntityDescriptionValue(triples: Triple[]) {
-  const descriptionTriple = triples.find(triple => triple.attributeName === 'Description');
-  return descriptionTriple?.value?.type === 'string'
-    ? descriptionTriple.value.value
-    : descriptionTriple?.value?.type === 'entity'
-    ? descriptionTriple.value.name
-    : null;
+export function description(triples: Triple[]) {
+  const descriptionTriple = triples.find(
+    triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION_SCALAR || triple.attributeName === 'Description'
+  );
+
+  return descriptionTriple?.value?.type === 'string' ? descriptionTriple.value.value : null;
 }
 
 export function networkStringDescriptionValue(triples: NetworkEntity['entityOf']) {
-  return triples
-    .filter(
-      entityOf =>
-        // HACK: Right now we're checking for both expected Description attribute ID and
-        // any attributes that have the "Description" name. Ideally all attributes reference
-        // the expected Description ID, but right now there are many different Description
-        // entities that might be referenced by an Entity.
-        entityOf.attribute.id === SYSTEM_IDS.DESCRIPTION_SCALAR ||
-        entityOf.attribute.name === SYSTEM_IDS.DESCRIPTION_SCALAR
-    )
-    .flatMap(entityOf => (entityOf.valueType === 'STRING' ? entityOf.stringValue : []))
-    .pop();
+  return (
+    triples
+      .filter(
+        entityOf =>
+          // HACK: Right now we're checking for both expected Description attribute ID and
+          // any attributes that have the "Description" name. Ideally all attributes reference
+          // the expected Description ID, but right now there are many different Description
+          // entities that might be referenced by an Entity.
+          entityOf.attribute.id === SYSTEM_IDS.DESCRIPTION_SCALAR ||
+          entityOf.attribute.name === SYSTEM_IDS.DESCRIPTION_SCALAR
+      )
+      .flatMap(entityOf => (entityOf.valueType === 'STRING' ? entityOf.stringValue : []))
+      .pop() ?? null
+  );
 }
 
 /** --------------------------------------------------------------------------------------- **/
@@ -49,12 +50,4 @@ export function networkTypeNames(triples: NetworkEntity['entityOf']) {
 export function name(triples: Triple[]) {
   const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
   return nameValue?.type === 'string' ? nameValue.value : null;
-}
-
-export function entityValueName(triple: Triple) {
-  return triple?.value?.type === 'string'
-    ? triple.value.value
-    : triple?.value?.type === 'entity'
-    ? triple.value.name
-    : null;
 }
