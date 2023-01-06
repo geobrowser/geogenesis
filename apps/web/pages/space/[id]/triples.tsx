@@ -1,5 +1,6 @@
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Triples } from '~/modules/components/triples';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTriples }: Props) {
+  useLogRocket(spaceId);
   return (
     <div>
       <Head>

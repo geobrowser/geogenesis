@@ -1,6 +1,8 @@
 import styled from '@emotion/styled';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { useLogRocket } from '~/modules/analytics/use-logrocket';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '~/modules/constants';
@@ -11,7 +13,6 @@ import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
-import { useAccessControl } from '~/modules/auth/use-access-control';
 
 const Column = styled.div({
   display: 'flex',
@@ -42,6 +43,7 @@ interface Props {
 export default function Spaces({ spaces }: Props) {
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
   const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
+  useLogRocket(rootSpaceId);
 
   return (
     <div>
