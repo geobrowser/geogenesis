@@ -15,60 +15,10 @@ import {
   Row,
   Space,
   Triple as TripleType,
-  Value as ValueType,
 } from '../types';
 import { Value } from '../value';
+import { fromNetworkTriple, getActionFromChangeStatus, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
-
-type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
-
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
-
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
-
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
-
-/**
- * Triple type returned by GraphQL
- */
-export type NetworkTriple = NetworkValue & {
-  id: string;
-  entity: { id: string; name: string | null };
-  attribute: { id: string; name: string | null };
-  valueId: string;
-  isProtected: boolean;
-};
-
-export type NetworkEntity = EntityType & {
-  entityOf: ({
-    attribute: {
-      id: string;
-      name: string | null;
-    };
-  } & NetworkValue)[];
-};
-
-export function extractValue(networkTriple: NetworkTriple): ValueType {
-  switch (networkTriple.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
-    case 'NUMBER':
-      return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY':
-      return { type: 'entity', id: networkTriple.entityValue.id, name: networkTriple.entityValue.name };
-  }
-}
-
-function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
 
 export type FetchTriplesOptions = {
   query: string;
@@ -180,6 +130,9 @@ export class Network implements INetwork {
             valueType
             valueId
             isProtected
+            space {
+              id
+            }
           }
         }`,
       }),
@@ -191,19 +144,7 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const triples = json.data.triples
-      .filter(triple => !triple.isProtected)
-      .map((networkTriple): TripleType => {
-        return {
-          id: networkTriple.id,
-          entityId: networkTriple.entity.id,
-          entityName: networkTriple.entity.name,
-          attributeId: networkTriple.attribute.id,
-          attributeName: networkTriple.attribute.name,
-          value: extractValue(networkTriple),
-          space,
-        };
-      });
+    const triples = json.data.triples.filter(triple => !triple.isProtected).map(fromNetworkTriple);
 
     return { triples };
   };
@@ -224,16 +165,23 @@ export class Network implements INetwork {
             id,
             name
             entityOf {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
               space {
                 id
               }
-              stringValue
-              valueType
               entityValue {
                 id
                 name
               }
               attribute {
+                id
+                name
+              }
+              entity {
                 id
                 name
               }
@@ -243,16 +191,23 @@ export class Network implements INetwork {
             id,
             name,
             entityOf {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
               space {
                 id
               }
-              stringValue
-              valueType
               entityValue {
                 id
                 name
               }
               attribute {
+                id
+                name
+              }
+              entity {
                 id
                 name
               }
@@ -273,10 +228,12 @@ export class Network implements INetwork {
 
     const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
     const sortedResultsWithDescription: EntityType[] = sortedResults.map(result => {
+      const triples = result.entityOf.map(fromNetworkTriple);
+
       return {
         ...result,
-        description: Entity.networkStringDescriptionValue(result.entityOf) ?? null,
-        types: Entity.networkTypeNames(result.entityOf),
+        description: Entity.description(triples),
+        types: Entity.types(triples),
       };
     });
 

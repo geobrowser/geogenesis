@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '../constants';
-import { NetworkEntity } from '../services/network';
 import { Triple } from '../types';
 
 /**
@@ -21,29 +20,16 @@ export function description(triples: Triple[]) {
   return descriptionTriple?.value?.type === 'string' ? descriptionTriple.value.value : null;
 }
 
-export function networkStringDescriptionValue(triples: NetworkEntity['entityOf']) {
-  return (
-    triples
-      .filter(
-        entityOf =>
-          // HACK: Right now we're checking for both expected Description attribute ID and
-          // any attributes that have the "Description" name. Ideally all attributes reference
-          // the expected Description ID, but right now there are many different Description
-          // entities that might be referenced by an Entity.
-          entityOf.attribute.id === SYSTEM_IDS.DESCRIPTION_SCALAR ||
-          entityOf.attribute.name === SYSTEM_IDS.DESCRIPTION_SCALAR
-      )
-      .flatMap(entityOf => (entityOf.valueType === 'STRING' ? entityOf.stringValue : []))
-      .pop() ?? null
-  );
-}
-
 /** --------------------------------------------------------------------------------------- **/
 
-export function networkTypeNames(triples: NetworkEntity['entityOf']) {
+/**
+ * This function traverses through all the triples of SYSTEM_ID.TYPES and returns an array
+ * of of their names if they have one. If they don't have one we filter it from the array.
+ */
+export function types(triples: Triple[]) {
   return triples
-    .filter(entityOf => entityOf.attribute.id === SYSTEM_IDS.TYPES)
-    .flatMap(entityOf => (entityOf.valueType === 'ENTITY' ? entityOf.entityValue.name : []))
+    .filter(entityOf => entityOf.attributeId === SYSTEM_IDS.TYPES)
+    .flatMap(entityOf => (entityOf.value.type === 'entity' ? entityOf.value.name : []))
     .flatMap(name => (name ? name : []));
 }
 
