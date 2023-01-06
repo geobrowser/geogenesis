@@ -27,8 +27,8 @@ const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
     attributeName: 'Description',
     value: {
       id: 'valueId',
-      type: 'string',
-      value: 'banana',
+      type: 'entity',
+      name: 'banana',
     },
     space: 'spaceId',
     entityName: 'banana',
