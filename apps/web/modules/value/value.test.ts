@@ -49,8 +49,11 @@ describe('Value helpers', () => {
     expect(entityName(entityValueTriple)).toBe('banana');
   });
 
+  it('Value.entityName should return null if the EntityValue is empty', () => {
+    expect(entityName(entityValueTripleWithNoEntity)).toBe(null);
+  });
+
   it('Value.entityName should return null if it is not an EntityValue or the EntityValue is empty', () => {
     expect(entityName(stringValueTriple)).toBe(null);
-    expect(entityName(entityValueTripleWithNoEntity)).toBe(null);
   });
 });
