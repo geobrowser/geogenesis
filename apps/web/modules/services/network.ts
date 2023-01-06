@@ -363,10 +363,6 @@ export class Network implements INetwork {
         name: 'Name',
         id: SYSTEM_IDS.NAME,
       },
-      {
-        name: 'Type',
-        id: SYSTEM_IDS.TYPES,
-      },
     ];
 
     /* ...and then we can format our user-defined schemaColumns */
