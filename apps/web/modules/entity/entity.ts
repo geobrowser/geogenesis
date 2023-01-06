@@ -20,8 +20,6 @@ export function description(triples: Triple[]) {
   return descriptionTriple?.value?.type === 'string' ? descriptionTriple.value.value : null;
 }
 
-/** --------------------------------------------------------------------------------------- **/
-
 /**
  * This function traverses through all the triples of SYSTEM_ID.TYPES and returns an array
  * of of their names if they have one. If they don't have one we filter it from the array.
