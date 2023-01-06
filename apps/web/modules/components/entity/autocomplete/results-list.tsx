@@ -85,8 +85,8 @@ export function ResultContent({ onClick, result, alreadySelected }: Props) {
         <Text as="li" variant="metadataMedium" ellipsize>
           {result.name ?? result.id}
         </Text>
+        {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
-      {alreadySelected && <CheckCircleSmall color="grey-04" />}
       {(result.description || result.types.length > 0) && (
         <>
           <Spacer height={6} />
