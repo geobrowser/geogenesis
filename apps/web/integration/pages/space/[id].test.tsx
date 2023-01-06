@@ -1,15 +1,22 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { makeStubTriple } from '~/modules/services/mock-network';
+import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
-import TriplesPage from '~/pages/space/[id]';
+import SpacePage from '~/pages/space/[id]';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <SpacePage
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTypes={[]}
+          initialColumns={[]}
+          initialRows={[]}
+          initialSelectedType={null}
+        />
       </Providers>
     );
 
@@ -20,7 +27,15 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <SpacePage
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTypes={[]}
+          initialColumns={[]}
+          initialRows={[]}
+          initialSelectedType={null}
+        />
       </Providers>
     );
 
@@ -30,7 +45,23 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[makeStubTriple('Alice')]} />
+        <SpacePage
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTypes={[]}
+          initialColumns={[{ id: '1', name: 'Alice' }]}
+          initialRows={[
+            {
+              '1': {
+                columnId: '1',
+                entityId: '1',
+                triples: [],
+              },
+            },
+          ]}
+          initialSelectedType={null}
+        />
       </Providers>
     );
 
@@ -38,35 +69,27 @@ describe('Space page', () => {
     expect(screen.getAllByText('Alice')).toBeTruthy();
   });
 
-  it('Should toggle predefined queries', async () => {
-    userEvent.setup();
-
-    render(
-      <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
-      </Providers>
-    );
-
-    expect(screen.getByText('Preset Banana queries')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /predefined-queries-button/i }));
-
-    expect(screen.queryByText('Preset Banana queries')).not.toBeInTheDocument();
-  });
-
   it('Should toggle advanced filters queries', async () => {
     userEvent.setup();
 
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <SpacePage
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTypes={[]}
+          initialColumns={[]}
+          initialRows={[]}
+          initialSelectedType={null}
+        />
       </Providers>
     );
 
-    expect(screen.getByRole('button', { name: /advanced-filter-button/i })).toBeInTheDocument();
-    expect(screen.queryByText('Entity contains')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /type-filter-dropdown/i })).toBeInTheDocument();
+    expect(screen.queryByText('All types')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /advanced-filter-button/i }));
-    expect(screen.getByText('Entity contains')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /type-filter-dropdown/i }));
+    expect(screen.getByText('All types')).toBeInTheDocument();
   });
 });

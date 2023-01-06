@@ -21,7 +21,7 @@ import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[]) => {
+const formatColumns = (columns: Column[] = []) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map(column =>
