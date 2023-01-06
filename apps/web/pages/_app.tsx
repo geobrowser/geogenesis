@@ -1,8 +1,6 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
 import { Analytics } from '@vercel/analytics/react';
-import LogRocket from 'logrocket';
-import setupLogRocketReact from 'logrocket-react';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -37,15 +35,6 @@ const Layout = styled.main(props => ({
     padding: `${props.theme.space * 10}px 2ch 4ch 2ch`,
   },
 }));
-
-const isClient = typeof window !== 'undefined';
-const isProduction = process.env.NODE_ENV === 'production';
-
-if (isClient && isProduction) {
-  console.log('LogRocket init');
-  LogRocket.init('geo/geo-web-app');
-  setupLogRocketReact(LogRocket);
-}
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
