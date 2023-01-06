@@ -64,7 +64,9 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create, remove } = useEntityStore();
+  const { triples: localTriples, update, create, remove, typeAttributes } = useEntityStore();
+
+  console.log(typeAttributes);
   const { actions } = useActionsStore(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
