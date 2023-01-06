@@ -420,7 +420,7 @@ export class Network implements INetwork {
 
     /* ...and then we can format our user-defined schemaColumns */
     const schemaColumns = columnsTriples.triples.map(triple => ({
-      name: Entity.entityName(triple) || triple.value.id,
+      name: Entity.entityValueName(triple) || triple.value.id,
       id: triple.value.id,
     })) as Column[];
 

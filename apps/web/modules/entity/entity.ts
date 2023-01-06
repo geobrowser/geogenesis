@@ -2,6 +2,17 @@ import { SYSTEM_IDS } from '../constants';
 import { NetworkEntity } from '../services/network';
 import { Triple } from '../types';
 
+/**
+ * We assume that the Description triple's attribute for an Entity will match the expected
+ * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_SCALAR. However, anybody can
+ * set up a triple that references _any_ attribute whose name is "Description."
+ *
+ * We currently handle this in the UI by checking the system ID for Description as well
+ * as _any_ attribute whose name is "Description."
+ *
+ * We currently don't handle description triples whose value is an EntityValue that references
+ * some other entity.
+ */
 export function stringOrEntityDescriptionValue(triples: Triple[]) {
   const descriptionTriple = triples.find(triple => triple.attributeName === 'Description');
   return descriptionTriple?.value?.type === 'string'
@@ -26,6 +37,8 @@ export function networkStringDescriptionValue(triples: NetworkEntity['entityOf']
     .pop();
 }
 
+/** --------------------------------------------------------------------------------------- **/
+
 export function networkTypeNames(triples: NetworkEntity['entityOf']) {
   return triples
     .filter(entityOf => entityOf.attribute.id === SYSTEM_IDS.TYPES)
@@ -38,7 +51,7 @@ export function name(triples: Triple[]) {
   return nameValue?.type === 'string' ? nameValue.value : null;
 }
 
-export function entityName(triple: Triple) {
+export function entityValueName(triple: Triple) {
   return triple?.value?.type === 'string'
     ? triple.value.value
     : triple?.value?.type === 'entity'
