@@ -227,7 +227,7 @@ export class Network implements INetwork {
     const { startEntities, containEntities } = json.data;
 
     const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
-    const sortedResultsWithDescription: EntityType[] = sortedResults.map(result => {
+    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
       const triples = result.entityOf.map(fromNetworkTriple);
 
       return {
@@ -237,7 +237,7 @@ export class Network implements INetwork {
       };
     });
 
-    return sortedResultsWithDescription;
+    return sortedResultsWithTypesAndDescription;
   };
 
   fetchSpaces = async () => {
