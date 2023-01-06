@@ -1,6 +1,6 @@
 import { describe, expect } from 'vitest';
 import { Triple } from '../types';
-import { entityName } from './value';
+import { nameOfEntityValue } from './value';
 
 const entityValueTriple: Triple = {
   id: '',
@@ -46,14 +46,14 @@ const stringValueTriple: Triple = {
 
 describe('Value helpers', () => {
   it('Value.entityName should return the name of an EntityValue', () => {
-    expect(entityName(entityValueTriple)).toBe('banana');
+    expect(nameOfEntityValue(entityValueTriple)).toBe('banana');
   });
 
   it('Value.entityName should return null if the EntityValue is empty', () => {
-    expect(entityName(entityValueTripleWithNoEntity)).toBe(null);
+    expect(nameOfEntityValue(entityValueTripleWithNoEntity)).toBe(null);
   });
 
   it('Value.entityName should return null if it is not an EntityValue or the EntityValue is empty', () => {
-    expect(entityName(stringValueTriple)).toBe(null);
+    expect(nameOfEntityValue(stringValueTriple)).toBe(null);
   });
 });
