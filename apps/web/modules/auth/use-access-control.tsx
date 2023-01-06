@@ -1,3 +1,4 @@
+import LogRocket from 'logrocket';
 import { useAccount } from 'wagmi';
 import { useHydrated } from '../hooks/use-hydrated';
 import { useSpaces } from '../spaces/use-spaces';
@@ -8,6 +9,11 @@ export function useAccessControl(space: string) {
   const hydrated = useHydrated();
   const { address } = useAccount();
   const { admins, editors, editorControllers } = useSpaces();
+
+  // Identify the user in LogRocket by their wallet address.
+  if (address) {
+    LogRocket.identify(address);
+  }
 
   if (!address || !hydrated) {
     return {

@@ -1,14 +1,16 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
+import { Analytics } from '@vercel/analytics/react';
+import LogRocket from 'logrocket';
+import setupLogRocketReact from 'logrocket-react';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { Action, useActionsStore } from '~/modules/action';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
-import { FlowBar } from '~/modules/components/flow-bar';
-import { Action, useActionsStore } from '~/modules/action';
-import { useRouter } from 'next/router';
-import { Analytics } from '@vercel/analytics/react';
 
 import 'modern-normalize';
 import '../styles/styles.css';
@@ -35,6 +37,15 @@ const Layout = styled.main(props => ({
     padding: `${props.theme.space * 10}px 2ch 4ch 2ch`,
   },
 }));
+
+const isClient = typeof window !== 'undefined';
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (isClient) {
+  console.log('LogRocket init');
+  LogRocket.init('geo/geo-web-app');
+  setupLogRocketReact(LogRocket);
+}
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
