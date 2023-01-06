@@ -58,12 +58,13 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
+  attributes: TripleType[];
   id: string;
   name: string;
   space: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
+export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples, attributes }: Props) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { actions } = useActionsStore(space);
 
@@ -166,7 +167,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} name={name} send={send} />
+              <EntityAttributes entityId={id} triples={triples} attributes={attributes} name={name} send={send} />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -206,11 +207,13 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
+  attributes,
   name,
   send,
 }: {
   entityId: string;
   triples: Props['triples'];
+  attributes: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
@@ -309,9 +312,23 @@ function EntityAttributes({
     }
   };
 
+  console.log('grouped triples', groupedTriples);
+
+  const typeIDs = groupedTriples.type.flatMap(t => (t.value.type === 'entity' ? t.value.id : []));
+
+  const typeAttributes = attributes.filter(attribute => typeIDs.includes(attribute.entityId));
+  const groupedAttributes = groupBy(typeAttributes, t => t.attributeId);
+
+  console.log('typeIDs', typeIDs);
+  console.log('attributes', attributes);
+  console.log('typeAttributes', typeAttributes);
+
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
+      {Object.entries({
+        ...groupedTriples,
+        ...groupedAttributes,
+      }).map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(t => t.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
@@ -332,7 +349,6 @@ function EntityAttributes({
             {isEntityGroup && <Spacer height={4} />}
             <GroupedAttributesList>
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
-
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
@@ -382,6 +398,16 @@ function EntityAttributes({
           </EntityAttributeContainer>
         );
       })}
+      {/* {typeIDs.length > 0 &&
+        typeAttributes.map((attributeName, index) => (
+          <EntityAttributeContainer key={`new-attribute-${attributeName}-${index}`}>
+            <EntityTextAutocomplete
+              placeholder={attributeName || ''}
+              onDone={result => linkAttribute('', result)}
+              itemIds={attributeIds}
+            />
+          </EntityAttributeContainer>
+        ))} */}
     </>
   );
 }
