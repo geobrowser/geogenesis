@@ -79,19 +79,19 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
  * some other entity.
  */
 describe('Entity description helpers', () => {
-  it('Parses description from triples where description attribute is the the expected system Description', () => {
+  it('Entity.description should parse description from triples where description attribute is the the expected system Description', () => {
     expect(description(triplesWithSystemDescriptionAttribute)).toBe('banana');
   });
 
-  it('Parses description from triples where description is the expected system Description and value is a reference to another Entity', () => {
+  it('Entity.description should parse description from triples where description is the expected system Description and value is a reference to another Entity', () => {
     expect(description(triplesWithSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
   });
 
-  it('Parses description from triples where description is not the expected system Description', () => {
+  it('Entity.description should parse description from triples where description is not the expected system Description', () => {
     expect(description(triplesWithNonSystemDescriptionAttribute)).toBe('banana');
   });
 
-  it('Parses description from triples where description is not the expected system Description and value is a reference to another Entity', () => {
+  it('Entity.description should parse description from triples where description is not the expected system Description and value is a reference to another Entity', () => {
     expect(description(triplesWithNonSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
   });
 });
