@@ -40,10 +40,16 @@ export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => (
   }),
 }));
 
+const ResultText = styled(Text)(props => ({
+  // HACK: Increase line-height a bit to avoid clipping descenders
+  lineHeight: props.theme.typography.input.lineHeight,
+}));
+
 const ResultHeader = styled.div({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  lineHeight: '1rem',
 });
 
 const ResultDisambiguationTypesContainer = styled.div(props => ({
@@ -82,14 +88,14 @@ export function ResultContent({ onClick, result, alreadySelected }: Props) {
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
       <ResultHeader>
-        <Text as="li" variant="metadataMedium" ellipsize>
+        <ResultText as="li" variant="metadataMedium" ellipsize>
           {result.name ?? result.id}
-        </Text>
+        </ResultText>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
       {(result.description || result.types.length > 0) && (
         <>
-          <Spacer height={6} />
+          <Spacer height={4} />
           <ResultDisambiguation result={result} />
         </>
       )}

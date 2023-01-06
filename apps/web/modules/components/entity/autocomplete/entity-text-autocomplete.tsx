@@ -45,26 +45,6 @@ const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
 
-export const ResultItem = styled.li<{ existsOnEntity?: boolean }>(props => ({
-  all: 'unset',
-  padding: props.theme.space * 2.5,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-
-  '&:hover': {
-    backgroundColor: props.theme.colors['grey-01'],
-    ...(!props.existsOnEntity && {
-      cursor: 'pointer',
-    }),
-  },
-
-  ...(props.existsOnEntity && {
-    backgroundColor: props.theme.colors['grey-01'],
-    cursor: 'not-allowed',
-  }),
-}));
-
 interface Props {
   placeholder?: string;
   onDone: (result: Entity) => void;
@@ -88,12 +68,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) 
 
   return (
     <Container>
-      <QueryInput
-        placeholder={placeholder}
-        defaultValue={'banana'}
-        value={query}
-        onChange={e => onQueryChange(e.target.value)}
-      />
+      <QueryInput placeholder={placeholder} value={query} onChange={e => onQueryChange(e.target.value)} />
       {query && (
         <ResultListContainer ref={containerRef}>
           <ResultListHeader>
