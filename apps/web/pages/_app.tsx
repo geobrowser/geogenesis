@@ -41,7 +41,7 @@ const Layout = styled.main(props => ({
 const isClient = typeof window !== 'undefined';
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (isClient) {
+if (isClient && isProduction) {
   console.log('LogRocket init');
   LogRocket.init('geo/geo-web-app');
   setupLogRocketReact(LogRocket);
