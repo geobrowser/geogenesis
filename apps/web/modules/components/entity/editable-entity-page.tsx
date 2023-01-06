@@ -6,7 +6,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { Triple, Triple as TripleType } from '~/modules/types';
+import { Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
@@ -58,7 +58,7 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
-  attributes: Triple[];
+  attributes: TripleType[];
   id: string;
   name: string;
   space: string;
@@ -211,7 +211,7 @@ function EntityAttributes({
 }: {
   entityId: string;
   triples: Props['triples'];
-  attributes: Triple[];
+  attributes: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
