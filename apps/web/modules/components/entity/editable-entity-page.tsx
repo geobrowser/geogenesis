@@ -6,7 +6,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { Triple as TripleType } from '~/modules/types';
+import { Triple, Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { CopyIdButton } from './copy-id';
@@ -58,12 +58,13 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
+  attributes: Triple[];
   id: string;
   name: string;
   space: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
+export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples, attributes }: Props) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { actions } = useActionsStore(space);
   const send = useEditEvents({
@@ -164,7 +165,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} name={name} send={send} />
+              <EntityAttributes entityId={id} triples={triples} attributes={attributes} name={name} send={send} />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -204,11 +205,13 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
+  attributes,
   name,
   send,
 }: {
   entityId: string;
   triples: Props['triples'];
+  attributes: Triple[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
 }) {
@@ -307,6 +310,17 @@ function EntityAttributes({
     }
   };
 
+  //@ts-ignore
+  // type inference being stupid
+  const entityTypes = groupedTriples.type.filter(t => t.value.type === 'entity').map(t => t.value.name);
+
+  const requiredAttributes = attributes
+    .filter(t => entityTypes.includes(t.entityName) && t.value.type === 'entity')
+    .filter((value, index, self) => self.indexOf(value) === index);
+
+  console.log('Entity Types: ', entityTypes);
+  console.log('Required Attributes: ', requiredAttributes);
+
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
@@ -380,6 +394,18 @@ function EntityAttributes({
           </EntityAttributeContainer>
         );
       })}
+      {entityTypes.length > 0 &&
+        requiredAttributes.map((entityType, index) => (
+          <EntityAttributeContainer key={`new-attribute-${entityType}-${index}`}>
+            <EntityTextAutocomplete
+              // @ts-ignore
+              // we are filtering out any non-entity attributes so this should be fine
+              placeholder={entityType.value.name}
+              onDone={result => linkAttribute('', result)}
+              itemIds={attributeIds}
+            />
+          </EntityAttributeContainer>
+        ))}
     </>
   );
 }
