@@ -43,7 +43,7 @@ export class EntityStore implements IEntityStore {
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]> = observable([]);
-  placeholderTriples$: ObservableComputed<TripleType[]> = observable([]);
+  schemaTriples$: ObservableComputed<TripleType[]> = observable([]);
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
@@ -73,7 +73,7 @@ export class EntityStore implements IEntityStore {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
     });
 
-    this.placeholderTriples$ = makeOptionalComputed(
+    this.schemaTriples$ = makeOptionalComputed(
       [],
       computed(async () => {
         const typeTriples = this.typeTriples$.get();
