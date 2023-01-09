@@ -4,7 +4,8 @@ type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
 type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
 
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } | undefined };
+// Right now we can end up with a null entityValue until we handle triple validation on the subgraph
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
 
@@ -33,11 +34,8 @@ export function extractValue(networkTriple: NetworkTriple): Value {
     case 'ENTITY': {
       return {
         type: 'entity',
-        // TODO(baiirun): fix types
-        // These fallback cases should never happen because we are filtering network triples with
-        // empty entity values before it gets to this point.
-        id: networkTriple?.entityValue?.id ?? '',
-        name: networkTriple?.entityValue?.name ?? null,
+        id: networkTriple.entityValue.id,
+        name: networkTriple.entityValue.name,
       };
     }
   }
@@ -72,6 +70,9 @@ function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple): boolean {
 export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
   return networkTriples
     .map(networkTriple => {
+      // There's an edge-case bug where the entityValue can be null even though it should be an object.
+      // Right now we're not doing any triple validation, but once we do we will no longer be indexing
+      // empty triples.
       if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
         return null;
       }
