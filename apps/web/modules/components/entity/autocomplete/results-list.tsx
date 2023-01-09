@@ -60,9 +60,8 @@ const ResultDisambiguationTypesContainer = styled.div(props => ({
 
 function ResultDisambiguation({ result, results }: { result: Entity; results: Entity[] }) {
   const duplicateNameTriples = results.filter(r => r.name === result.name && !r.id === !result.id);
-  const isDuplicateNameAndTypes = duplicateNameTriples.filter(duplicate =>
-    duplicate.types.every(type => result.types.includes(type))
-  );
+  const isDuplicateNameAndTypes =
+    duplicateNameTriples.filter(duplicate => duplicate.types.every(type => result.types.includes(type))).length > 0;
 
   if (isDuplicateNameAndTypes) {
     return <Text variant="footnote">{result.description}</Text>;
