@@ -357,6 +357,28 @@ export class Network implements INetwork {
       }),
     ]);
 
+    /* Then we fetch all of the Value type for each column */
+    const columnsSchema = await Promise.all(
+      columnsTriples.triples.map(triple => {
+        return this.fetchTriples({
+          query: '',
+          space: spaceId,
+          first: 100,
+          skip: 0,
+          filter: [
+            {
+              field: 'entity-id',
+              value: triple.value.id,
+            },
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.VALUE_TYPE,
+            },
+          ],
+        });
+      })
+    );
+
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
     const rowTriples = await Promise.all(
@@ -376,7 +398,7 @@ export class Network implements INetwork {
       triples,
     }));
 
-    /* Name and Type are the default columns... */
+    /* Name is the default column... */
     const defaultColumns = [
       {
         name: 'Name',
@@ -396,7 +418,15 @@ export class Network implements INetwork {
     const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-        const defaultTriple = { ...Triple.empty(spaceId, entityId), attributeId: column.id };
+        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0].entityId === column.id);
+
+        const columnValueType = columnTypeTriple?.triples[0].value.id;
+
+        const defaultTriple = {
+          ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),
+          attributeId: column.id,
+        };
+
         const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
 
         const cell = {

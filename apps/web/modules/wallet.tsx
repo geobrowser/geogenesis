@@ -1,8 +1,8 @@
 import styled from '@emotion/styled';
+import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
 import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
-import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';

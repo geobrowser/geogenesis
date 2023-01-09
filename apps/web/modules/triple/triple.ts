@@ -1,5 +1,7 @@
+import { SYSTEM_IDS } from '../constants';
 import { ID } from '../id';
-import { Action, OmitStrict, Triple } from '../types';
+import { Action, EntityValue, NumberValue, OmitStrict, StringValue, Triple, TripleValueType, Value } from '../types';
+import { valueTypes } from '../value-types';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -8,18 +10,41 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   };
 }
 
+export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId = SYSTEM_IDS.TEXT): Triple {
+  const type = (valueTypes[valueTypeId] || 'string') as TripleValueType;
+
+  return {
+    ...empty(spaceId, entityId, type),
+    placeholder: true,
+  };
+}
+
 // New, empty triples should generate unique triple IDs so they are distinguishable from
 // other newly created triples locally.
-export function empty(spaceId: string, entityId: string): Triple {
+export function empty(spaceId: string, entityId: string, type: TripleValueType = 'string'): Triple {
+  const tripleValue: Record<TripleValueType, Value> = {
+    string: {
+      id: ID.createValueId(),
+      type: 'string',
+      value: '',
+    } as StringValue,
+    entity: {
+      id: '',
+      type: 'entity',
+      name: '',
+    } as EntityValue,
+    number: {
+      id: ID.createValueId(),
+      type: 'number',
+      value: '',
+    } as NumberValue,
+  };
+
   const emptyTriple: OmitStrict<Triple, 'id'> = {
     entityId: entityId,
     attributeId: '',
     attributeName: '',
-    value: {
-      id: ID.createValueId(),
-      type: 'string',
-      value: '',
-    },
+    value: tripleValue[type],
     space: spaceId,
     entityName: '',
   };
