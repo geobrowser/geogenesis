@@ -58,7 +58,15 @@ const ResultDisambiguationTypesContainer = styled.div(props => ({
   gap: props.theme.space,
 }));
 
-function ResultDisambiguation({ result }: { result: Entity }) {
+function ResultDisambiguation({ result, results }: { result: Entity; results: Entity[] }) {
+  const duplicateNameTriples = results.filter(r => r.name === result.name && !r.id === !result.id);
+  const isDuplicateNameAndTypes =
+    duplicateNameTriples.filter(duplicate => duplicate.types.every(type => result.types.includes(type))).length > 0;
+
+  if (isDuplicateNameAndTypes) {
+    return <Text variant="footnote">{result.description}</Text>;
+  }
+
   if (result.types.length > 0) {
     return (
       <ResultDisambiguationTypesContainer>
@@ -81,10 +89,11 @@ function ResultDisambiguation({ result }: { result: Entity }) {
 interface Props {
   onClick: () => void;
   result: Entity;
+  results: Entity[];
   alreadySelected?: boolean;
 }
 
-export function ResultContent({ onClick, result, alreadySelected }: Props) {
+export function ResultContent({ onClick, result, alreadySelected, results }: Props) {
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
       <ResultHeader>
@@ -96,7 +105,7 @@ export function ResultContent({ onClick, result, alreadySelected }: Props) {
       {(result.description || result.types.length > 0) && (
         <>
           <Spacer height={4} />
-          <ResultDisambiguation result={result} />
+          <ResultDisambiguation result={result} results={results} />
         </>
       )}
     </ResultItem>

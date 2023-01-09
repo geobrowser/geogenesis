@@ -107,6 +107,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
                       }}
                       alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
+                      results={autocomplete.results}
                     />
                   ))
                 : null}

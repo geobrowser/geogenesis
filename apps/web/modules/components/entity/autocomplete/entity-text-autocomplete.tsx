@@ -83,6 +83,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
                   if (!itemIdsSet.has(result.id)) onDone(result);
                 }}
                 alreadySelected={itemIdsSet.has(result.id)}
+                results={results}
                 result={result}
               />
             ))}
