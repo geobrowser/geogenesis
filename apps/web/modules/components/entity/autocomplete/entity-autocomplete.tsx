@@ -60,10 +60,11 @@ const AutocompleteInput = styled(Input)(props => ({
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
+  spaceId: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
-  const autocomplete = useAutocomplete();
+export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
+  const autocomplete = useAutocomplete(spaceId);
   const theme = useTheme();
   const entityItemIdsSet = new Set(entityValueIds);
 

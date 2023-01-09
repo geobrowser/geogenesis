@@ -166,7 +166,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} name={name} send={send} />
+              <EntityAttributes entityId={id} triples={triples} name={name} send={send} spaceId={space} />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -208,11 +208,13 @@ function EntityAttributes({
   triples,
   name,
   send,
+  spaceId,
 }: {
   entityId: string;
   triples: Props['triples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
+  spaceId: string;
 }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
   const attributeIds = Object.keys(groupedTriples);
@@ -295,6 +297,7 @@ function EntityAttributes({
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
               itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+              spaceId={spaceId}
             />
           );
         }
@@ -323,6 +326,7 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
+                spaceId={spaceId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -338,6 +342,7 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(t => t.value.id)}
+                  spaceId={spaceId}
                 />
               )}
 

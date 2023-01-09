@@ -11,7 +11,7 @@ class EntityAutocomplete {
   results$: ObservableComputed<Entity[]>;
   abortController: AbortController = new AbortController();
 
-  constructor({ api }: { api: INetwork }) {
+  constructor({ api, spaceId }: { api: INetwork; spaceId: string }) {
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -19,7 +19,7 @@ class EntityAutocomplete {
         this.abortController = new AbortController();
 
         try {
-          return await api.fetchEntities(this.query$.get(), this.abortController);
+          return await api.fetchEntities(this.query$.get(), spaceId, this.abortController);
         } catch (e) {
           return [];
         }
@@ -32,12 +32,12 @@ class EntityAutocomplete {
   };
 }
 
-export function useAutocomplete() {
+export function useAutocomplete(spaceId: string) {
   const { network } = Services.useServices();
 
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network });
-  }, [network]);
+    return new EntityAutocomplete({ api: network, spaceId });
+  }, [network, spaceId]);
 
   useEffect(() => {
     return () => {

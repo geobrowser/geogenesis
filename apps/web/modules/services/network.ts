@@ -48,7 +48,7 @@ export interface INetwork {
   fetchEntityTableData: (options: FetchEntityTableDataParams) => Promise<{ rows: Row[]; columns: Column[] }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchEntities: (name: string, abortController?: AbortController) => Promise<EntityType[]>;
+  fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -149,7 +149,7 @@ export class Network implements INetwork {
     return { triples };
   };
 
-  fetchEntities = async (name: string, abortController?: AbortController) => {
+  fetchEntities = async (name: string, space: string, abortController?: AbortController) => {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
@@ -227,13 +227,14 @@ export class Network implements INetwork {
     const { startEntities, containEntities } = json.data;
 
     const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+
     const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
       const triples = result.entityOf.map(fromNetworkTriple);
 
       return {
         ...result,
         description: Entity.description(triples),
-        types: Entity.types(triples),
+        types: Entity.types(triples, space),
       };
     });
 
@@ -428,6 +429,7 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
 };
 
 function sortSearchResultsByRelevance(startEntities: NetworkEntity[], containEntities: NetworkEntity[]) {
+  // TODO: This is where it's breaking
   const startEntityIds = startEntities.map(entity => entity.id);
 
   const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));

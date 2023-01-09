@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../types';
+import { groupBy } from '../utils';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -27,11 +28,33 @@ export function description(triples: Triple[]): string | null {
 /**
  * This function traverses through all the triples whose attributeId is SYSTEM_ID.TYPES and returns
  * an array of of their names if they have one. If they don't have one we filter it from the array.
+ *
+ * There is an edge-case where an Entity can have Triples assigned to it from multiple Spaces. If
+ * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
+ * only show the Type from the current space.
  */
-export function types(triples: Triple[]): string[] {
-  return triples
-    .filter(entityOf => entityOf.attributeId === SYSTEM_IDS.TYPES)
-    .flatMap(entityOf => (entityOf.value.type === 'entity' ? entityOf.value.name : []))
+export function types(triples: Triple[], currentSpace: string): string[] {
+  const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
+
+  const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
+
+  return Object.entries(groupedTypeTriples)
+    .flatMap(([, triples]) => {
+      if (triples.length === 1) {
+        return triples.flatMap(triple => (triple.value.type === 'entity' ? triple.value.name : []));
+      }
+
+      // There are some system level Entities that have Triples from multiple Spaces. We only
+      // want to show the Triples/Types from the current Space if there are multiple Types
+      // with the same name assigned to this Entity.
+      if (triples.length > 1) {
+        return triples
+          .filter(triple => triple.space === currentSpace)
+          .flatMap(triple => (triple.value.type === 'entity' ? triple.value.name : []));
+      }
+
+      return [];
+    })
     .flatMap(name => (name ? name : []));
 }
 

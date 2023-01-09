@@ -49,10 +49,11 @@ interface Props {
   placeholder?: string;
   onDone: (result: Entity) => void;
   itemIds: string[];
+  spaceId: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) {
-  const { query, results, onQueryChange } = useAutocomplete();
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }: Props) {
+  const { query, results, onQueryChange } = useAutocomplete(spaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 

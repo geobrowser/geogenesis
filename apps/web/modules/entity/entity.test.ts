@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SYSTEM_IDS } from '../constants';
 import { Triple } from '../types';
-import { description } from './entity';
+import { description, types } from './entity';
 
 const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
@@ -93,5 +93,74 @@ describe('Entity description helpers', () => {
 
   it('Entity.description should parse description from triples where description is not the expected system Description and value is a reference to another Entity', () => {
     expect(description(triplesWithNonSystemDescriptionAttributeAndValueIsEntity)).toBe(null);
+  });
+});
+
+const triplesWithMultipleTypesFromSameSpace: Triple[] = [
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: 'type',
+    attributeName: 'Types',
+    value: {
+      id: 'valueId',
+      type: 'entity',
+      name: 'banana',
+    },
+    space: 'spaceId',
+    entityName: 'apple',
+  },
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: 'type',
+    attributeName: 'Types',
+    value: {
+      id: 'valueId',
+      type: 'entity',
+      name: 'orange',
+    },
+    space: 'spaceId',
+    entityName: 'apple',
+  },
+];
+
+const triplesWithConflictingTypesFromDifferentSpaces: Triple[] = [
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: 'type',
+    attributeName: 'Types',
+    value: {
+      id: 'valueId',
+      type: 'entity',
+      name: 'banana',
+    },
+    space: 'spaceId',
+    entityName: 'apple',
+  },
+  {
+    id: '',
+    entityId: 'entityId',
+    attributeId: 'type',
+    attributeName: 'Types',
+    value: {
+      id: 'valueId',
+      type: 'entity',
+      name: 'banana',
+    },
+    space: 'spaceId-2',
+    entityName: 'apple',
+  },
+];
+
+describe('Entity types helpers', () => {
+  it('Entity.types should parse types from triples assigned to Entity', () => {
+    expect(types(triplesWithMultipleTypesFromSameSpace, 'spaceId')).toEqual(['banana', 'orange']);
+  });
+
+  // See the comment in entity.ts for more details on when this happens
+  it('Entity.types should parse only the types from the current space', () => {
+    expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual(['banana']);
   });
 });
