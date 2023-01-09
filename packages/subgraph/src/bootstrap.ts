@@ -11,6 +11,10 @@ import { handleAction, handleCreateTripleAction } from './actions'
 const ATTRIBUTES_ID = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 const SCHEMA_TYPE_ID = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
+const VALUE_TYPE_ID = '9f262759-0eb4-4348-8321-c32f7f7b2ef5'
+const RELATION_ID = '62155c3d-e48f-4b8a-981b-865d605217ce'
+const TEXT_ID = '40455aba-2436-480a-b1a0-ba801729ea75'
+
 export function bootstrap(space: string, createdAtBlock: BigInt): void {
   log.debug(`Bootstrapping space ${space}!`, [])
 
@@ -20,6 +24,9 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
   handleAction(new CreateEntityAction('space'), space, createdAtBlock)
   handleAction(new CreateEntityAction(ATTRIBUTES_ID), space, createdAtBlock)
   handleAction(new CreateEntityAction(SCHEMA_TYPE_ID), space, createdAtBlock)
+  handleAction(new CreateEntityAction(VALUE_TYPE_ID), space, createdAtBlock)
+  handleAction(new CreateEntityAction(RELATION_ID), space, createdAtBlock)
+  handleAction(new CreateEntityAction(TEXT_ID), space, createdAtBlock)
 
   handleCreateTripleAction({
     fact: new CreateTripleAction(
@@ -88,6 +95,39 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
   })
 
   handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      VALUE_TYPE_ID,
+      'name',
+      new StringValue('value-type', 'Value type')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      RELATION_ID,
+      'name',
+      new StringValue('relation', 'Relation')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      TEXT_ID,
+      'name',
+      new StringValue('text', 'Text')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
     fact: new CreateTripleAction('name', 'type', new EntityValue('attribute')),
     space,
     isProtected: true,
@@ -124,6 +164,39 @@ export function bootstrap(space: string, createdAtBlock: BigInt): void {
       SCHEMA_TYPE_ID,
       'type',
       new EntityValue('attribute')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      VALUE_TYPE_ID,
+      'type',
+      new EntityValue('attribute')
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      RELATION_ID,
+      'type',
+      new EntityValue(SCHEMA_TYPE_ID)
+    ),
+    space,
+    isProtected: true,
+    createdAtBlock,
+  })
+
+  handleCreateTripleAction({
+    fact: new CreateTripleAction(
+      TEXT_ID,
+      'type',
+      new EntityValue(SCHEMA_TYPE_ID)
     ),
     space,
     isProtected: true,
