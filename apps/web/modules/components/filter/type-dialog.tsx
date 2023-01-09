@@ -10,7 +10,7 @@ import { useEntityTable } from '~/modules/triple';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
-import { ResultItem, ResultList } from '../entity/entity-text-autocomplete';
+import { ResultItem, ResultsList } from '../entity/autocomplete/results-list';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -126,13 +126,13 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             />
             <Spacer height={12} />
 
-            <ResultList>
+            <ResultsList>
               {filteredTypes.map(type => (
                 <ResultItem onClick={() => handleSelect(type)} key={type.id}>
                   {type.entityName}
                 </ResultItem>
               ))}
-            </ResultList>
+            </ResultsList>
           </MotionContent>
         ) : null}
       </AnimatePresence>

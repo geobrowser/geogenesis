@@ -6,8 +6,8 @@ import { ChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { useEditEvents } from '../entity/edit-events';
 import { NumberField, StringField } from '../entity/editable-fields';
-import { EntityAutocompleteDialog } from '../entity/entity-autocomplete';
-import { EntityTextAutocomplete } from '../entity/entity-text-autocomplete';
+import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',
@@ -106,6 +106,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
         if (isEmptyEntity) {
           return (
             <EntityTextAutocomplete
+              spaceId={space}
               key={`entity-${attributeId}-${triple.value.id}`}
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
@@ -140,6 +141,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
       {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
       {isEntityGroup && !isEmptyEntity && (
         <EntityAutocompleteDialog
+          spaceId={space}
           onDone={entity => addEntityValue(attributeId, entity)}
           entityValueIds={entityValueTriples.map(t => t.value.id)}
         />

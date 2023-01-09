@@ -82,6 +82,13 @@ type Publishable = {
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
 
+export type Entity = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  types: string[];
+};
+
 export interface Column {
   id: string;
   name: string;

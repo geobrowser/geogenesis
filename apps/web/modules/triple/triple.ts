@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '../constants';
 import { ID } from '../id';
 import { Action, EntityValue, NumberValue, OmitStrict, StringValue, Triple, TripleValueType, Value } from '../types';
 import { valueTypes } from '../value-types';
@@ -9,7 +10,7 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   };
 }
 
-export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId: string): Triple {
+export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId = SYSTEM_IDS.TEXT): Triple {
   const type = (valueTypes[valueTypeId] || 'string') as TripleValueType;
 
   return {
