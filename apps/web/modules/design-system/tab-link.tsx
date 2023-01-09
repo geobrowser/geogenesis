@@ -3,7 +3,7 @@ import Link from 'next/link';
 import React from 'react';
 
 const StyledLink = styled.a<{ isActive: boolean }>(({ theme, isActive }) => ({
-  ...theme.typography.largeTitle,
+  ...theme.typography.mediumTitle,
   color: isActive ? theme.colors.text : theme.colors['grey-04'],
   cursor: 'pointer',
   outline: 'none',
