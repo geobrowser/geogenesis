@@ -6,6 +6,8 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
+export type TripleValueType = 'number' | 'string' | 'entity';
+
 export type NumberValue = {
   type: 'number';
   id: string;
@@ -34,6 +36,7 @@ export type Triple = {
   attributeName: string | null;
   value: Value;
   space: string;
+  placeholder?: boolean;
 };
 
 export type Space = {

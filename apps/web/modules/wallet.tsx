@@ -1,29 +1,29 @@
 import styled from '@emotion/styled';
+import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
 import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
-import { ConnectKitProvider, ConnectKitButton, getDefaultClient } from 'connectkit';
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
-// const LOCAL_CHAIN: Chain = {
-//   id: Number(Config.options.development.chainId),
-//   name: 'Geo Genesis Dev', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: {
-//       http: [Config.options.development.rpc]
-//     }
-//   },
-// };
+const LOCAL_CHAIN: Chain = {
+  id: Number(Config.options.development.chainId),
+  name: 'Geo Genesis Dev', // Human-readable name
+  network: 'ethereum', // Internal network name
+  nativeCurrency: {
+    name: 'Ethereum',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: [Config.options.development.rpc],
+    },
+  },
+};
 
 const TESTNET_CHAIN: Chain = {
   ...polygonMumbai,
@@ -43,7 +43,10 @@ const DEFAULT_CHAIN: Chain = {
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains([DEFAULT_CHAIN, TESTNET_CHAIN], [publicProvider()]);
+const { chains, provider, webSocketProvider } = configureChains(
+  [LOCAL_CHAIN, DEFAULT_CHAIN, TESTNET_CHAIN],
+  [publicProvider()]
+);
 
 const wagmiClient = createClient({
   ...getDefaultClient({

@@ -17,6 +17,14 @@ export const SYSTEM_IDS = {
 
   /* Example Usage: Person -> TYPES -> SCHEMA_TYPE */
   SCHEMA_TYPE: 'd7ab4092-0ab5-441e-88c3-5c27952de773',
+
+  VALUE_TYPE: 'e6eb4528-cb4d-4583-8efb-1791f698b8f8',
+
+  /* Example Usage: City -> VALUE_TYPE -> RELATION */
+  RELATION: '1fe3b500-3f78-4405-8a57-28c36b06bd99',
+
+  /* Example Usage: Address -> VALUE_TYPE -> TEXT */
+  TEXT: '0390a8a6-b48d-4d66-a3f1-e515ea8fe71e',
 };
 
 export const ZERO_WIDTH_SPACE = '\u200b';
