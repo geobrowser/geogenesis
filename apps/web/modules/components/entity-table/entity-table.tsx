@@ -70,6 +70,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const entityId = Object.values(row.original)[0].entityId;
     const cellData = getValue<Cell>();
+    const isPlaceholder = cellData.triples[0]?.placeholder;
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { isEditor } = useAccessControl(space);
@@ -80,7 +81,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (showEditableCell) {
       return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} />;
-    } else if (cellData) {
+    } else if (cellData && !isPlaceholder) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
       return null;

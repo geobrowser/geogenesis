@@ -12,39 +12,6 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
 export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId: string): Triple {
   const type = (valueTypes[valueTypeId] || 'string') as TripleValueType;
 
-  const tripleValue: Record<TripleValueType, Value> = {
-    string: {
-      id: '',
-      type: 'string',
-      value: '',
-    } as StringValue,
-    entity: {
-      id: '',
-      type: 'entity',
-      name: '',
-    } as EntityValue,
-    number: {
-      id: '',
-      type: 'number',
-      value: '',
-    } as NumberValue,
-  };
-
-  const emptyTriple: OmitStrict<Triple, 'id'> = {
-    entityId: entityId,
-    attributeId: '',
-    attributeName: '',
-    value: tripleValue[type],
-    space: spaceId,
-    entityName: '',
-    placeholder: true,
-  };
-
-  return {
-    ...emptyTriple,
-    id: ID.createTripleId(emptyTriple),
-  };
-
   return {
     ...empty(spaceId, entityId, type),
     placeholder: true,
@@ -61,7 +28,7 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
       value: '',
     } as StringValue,
     entity: {
-      id: ID.createValueId(),
+      id: '',
       type: 'entity',
       name: '',
     } as EntityValue,
