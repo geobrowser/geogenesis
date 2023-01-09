@@ -30,8 +30,16 @@ export function extractValue(networkTriple: NetworkTriple): Value {
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY':
-      return { type: 'entity', id: networkTriple.entityValue.id, name: networkTriple.entityValue.name };
+    case 'ENTITY': {
+      return {
+        type: 'entity',
+        // TODO(baiirun): fix types
+        // These fallback cases should never happen because we are filtering network triples with
+        // empty entity values before it gets to this point.
+        id: networkTriple?.entityValue?.id ?? '',
+        name: networkTriple?.entityValue?.name ?? null,
+      };
+    }
   }
 }
 
@@ -46,14 +54,37 @@ export function getActionFromChangeStatus(action: Action) {
   }
 }
 
-export function fromNetworkTriple(networkTriple: NetworkTriple): Triple {
-  return {
-    id: networkTriple.id,
-    entityId: networkTriple.entity.id,
-    entityName: networkTriple.entity.name,
-    attributeId: networkTriple.attribute.id,
-    attributeName: networkTriple.attribute.name,
-    value: extractValue(networkTriple),
-    space: networkTriple.space.id,
-  };
+function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
+  switch (networkTriple.valueType) {
+    case 'STRING':
+      return !networkTriple.stringValue;
+    case 'NUMBER':
+      return !networkTriple.numberValue;
+    case 'ENTITY':
+      return !networkTriple.entityValue;
+  }
+}
+
+function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple): boolean {
+  return !networkTriple.attribute || !networkTriple.attribute.id;
+}
+
+export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
+  return networkTriples
+    .map(networkTriple => {
+      if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
+        return null;
+      }
+
+      return {
+        id: networkTriple.id,
+        entityId: networkTriple.entity.id,
+        entityName: networkTriple.entity.name,
+        attributeId: networkTriple.attribute.id,
+        attributeName: networkTriple.attribute.name,
+        value: extractValue(networkTriple),
+        space: networkTriple.space.id,
+      };
+    })
+    .flatMap(triple => (triple ? [triple] : []));
 }

@@ -1,14 +1,14 @@
 import { css, Global } from '@emotion/react';
 import styled from '@emotion/styled';
+import { Analytics } from '@vercel/analytics/react';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { Action, useActionsStore } from '~/modules/action';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
-import { FlowBar } from '~/modules/components/flow-bar';
-import { Action, useActionsStore } from '~/modules/action';
-import { useRouter } from 'next/router';
-import { Analytics } from '@vercel/analytics/react';
 
 import 'modern-normalize';
 import '../styles/styles.css';

@@ -71,7 +71,7 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
   const tabs = [
     {
       name: 'Entities',
-      href: `/space/${spaceId}/entities`,
+      href: `/space/${spaceId}`,
       selected: tabEntitiesSelected,
     },
     {

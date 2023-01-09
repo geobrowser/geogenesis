@@ -17,8 +17,38 @@ import {
   Triple as TripleType,
 } from '../types';
 import { Value } from '../value';
-import { fromNetworkTriple, getActionFromChangeStatus, NetworkEntity, NetworkTriple } from './network-local-mapping';
+import { fromNetworkTriples, NetworkEntity } from './network-local-mapping';
 import { IStorageClient } from './storage';
+
+type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
+
+type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
+
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } | undefined };
+
+type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
+
+/**
+ * Triple type returned by GraphQL
+ */
+export type NetworkTriple = NetworkValue & {
+  id: string;
+  entity: { id: string; name: string | null };
+  attribute: { id: string; name: string | null };
+  valueId: string;
+  isProtected: boolean;
+} & Space;
+
+function getActionFromChangeStatus(action: Action) {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return [action];
+
+    case 'editTriple':
+      return [action.before, action.after];
+  }
+}
 
 export type FetchTriplesOptions = {
   query: string;
@@ -144,7 +174,7 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const triples = json.data.triples.filter(triple => !triple.isProtected).map(fromNetworkTriple);
+    const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
 
     return { triples };
   };
@@ -229,7 +259,7 @@ export class Network implements INetwork {
     const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
 
     const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
-      const triples = result.entityOf.map(fromNetworkTriple);
+      const triples = fromNetworkTriples(result.entityOf);
 
       return {
         ...result,
@@ -370,10 +400,6 @@ export class Network implements INetwork {
       {
         name: 'Name',
         id: SYSTEM_IDS.NAME,
-      },
-      {
-        name: 'Type',
-        id: SYSTEM_IDS.TYPES,
       },
     ];
 
