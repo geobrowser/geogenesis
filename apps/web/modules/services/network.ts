@@ -17,27 +17,8 @@ import {
   Triple as TripleType,
 } from '../types';
 import { Value } from '../value';
-import { fromNetworkTriples, NetworkEntity } from './network-local-mapping';
+import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
-
-type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
-
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
-
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } | undefined };
-
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
-
-/**
- * Triple type returned by GraphQL
- */
-export type NetworkTriple = NetworkValue & {
-  id: string;
-  entity: { id: string; name: string | null };
-  attribute: { id: string; name: string | null };
-  valueId: string;
-  isProtected: boolean;
-} & Space;
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {

@@ -4,7 +4,7 @@ type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
 type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
 
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } | undefined };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
 
