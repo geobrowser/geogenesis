@@ -6,6 +6,8 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
+export type ValueType = 'number' | 'string' | 'entity';
+
 export type NumberValue = {
   type: 'number';
   id: string;

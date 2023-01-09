@@ -11,9 +11,9 @@ import { handleAction, handleCreateTripleAction } from './actions'
 const ATTRIBUTES_ID = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 const SCHEMA_TYPE_ID = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
-const VALUE_TYPE_ID = 'e6eb4528-cb4d-4583-8efb-1791f698b8f8'
-const RELATION_ID = '1fe3b500-3f78-4405-8a57-28c36b06bd99'
-const TEXT_ID = '0390a8a6-b48d-4d66-a3f1-e515ea8fe71e'
+const VALUE_TYPE_ID = '9f262759-0eb4-4348-8321-c32f7f7b2ef5'
+const RELATION_ID = '62155c3d-e48f-4b8a-981b-865d605217ce'
+const TEXT_ID = '40455aba-2436-480a-b1a0-ba801729ea75'
 
 export function bootstrap(space: string, createdAtBlock: BigInt): void {
   log.debug(`Bootstrapping space ${space}!`, [])

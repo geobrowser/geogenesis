@@ -6,6 +6,7 @@ import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
+import { valueTypeSchema } from '../value-types';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -106,15 +107,46 @@ export class EntityStore implements IEntityStore {
           })
         );
 
-        return attributes
-          .map(attribute => attribute.triples)
-          .flat()
-          .map(triple => ({
+        const attributeTriples = attributes.map(attribute => attribute.triples).flat();
+
+        const attributeTypes = await Promise.all(
+          attributeTriples.map(attribute => {
+            return this.api.fetchTriples({
+              query: '',
+              space: spaceId,
+              first: 100,
+              skip: 0,
+              filter: [
+                {
+                  field: 'entity-id',
+                  value: attribute.value.id,
+                },
+                {
+                  field: 'attribute-id',
+                  value: SYSTEM_IDS.VALUE_TYPE,
+                },
+              ],
+            });
+          })
+        );
+
+        console.log(attributeTypes);
+
+        return attributeTriples.map((triple, i) => {
+          const schemaType = valueTypeSchema[attributeTypes[i].triples[0].value.id] || 'string';
+
+          return {
             ...Triple.empty(spaceId, id),
             attributeId: triple.value.id,
-            attributeName: Entity.entityName(triple), // Should we be grabbing all of the related triples for the attribute to see if it has a name triple?
+            attributeName: Entity.entityName(triple),
             placeholder: true,
-          }));
+            value: {
+              id: '',
+              type: schemaType,
+              name: '',
+            },
+          };
+        });
       })
     );
   }
