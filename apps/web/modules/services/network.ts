@@ -46,6 +46,9 @@ export function extractValue(networkTriple: NetworkTriple): Value {
     case 'ENTITY': {
       return {
         type: 'entity',
+        // TODO(baiirun): fix types
+        // These fallback cases should never happen because we are filtering network triples with
+        // empty entity values before it gets to this point.
         id: networkTriple?.entityValue?.id ?? '',
         name: networkTriple?.entityValue?.name ?? null,
       };
