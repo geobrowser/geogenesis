@@ -418,8 +418,9 @@ export class Network implements INetwork {
     const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0]?.entityId === column.id);
 
+        /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
+        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0]?.entityId === column.id);
         const columnValueType = columnTypeTriple?.triples[0].value.id;
 
         const defaultTriple = {
