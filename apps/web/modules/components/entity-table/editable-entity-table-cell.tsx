@@ -106,6 +106,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
         if (isEmptyEntity) {
           return (
             <EntityTextAutocomplete
+              spaceId={space}
               key={`entity-${attributeId}-${triple.value.id}`}
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
@@ -140,6 +141,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
       {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
       {isEntityGroup && !isEmptyEntity && (
         <EntityAutocompleteDialog
+          spaceId={space}
           onDone={entity => addEntityValue(attributeId, entity)}
           entityValueIds={entityValueTriples.map(t => t.value.id)}
         />
