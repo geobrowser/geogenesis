@@ -15,7 +15,10 @@ const VALUE_TYPE_ID = 'e6eb4528-cb4d-4583-8efb-1791f698b8f8'
 const RELATION_ID = '1fe3b500-3f78-4405-8a57-28c36b06bd99'
 const TEXT_ID = '0390a8a6-b48d-4d66-a3f1-e515ea8fe71e'
 
-export function bootstrap(space: string, createdAtBlock: BigInt): void {
+export function bootstrapRootSpaceCoreTypes(
+  space: string,
+  createdAtBlock: BigInt
+): void {
   log.debug(`Bootstrapping space ${space}!`, [])
 
   handleAction(new CreateEntityAction('type'), space, createdAtBlock)

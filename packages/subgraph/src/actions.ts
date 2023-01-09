@@ -13,7 +13,6 @@ import {
 } from '@graphprotocol/graph-ts'
 import { GeoEntity, Space, Triple } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
-import { bootstrap } from './bootstrap'
 import { createTripleId } from './id'
 
 export function handleSpaceAdded(
@@ -40,7 +39,6 @@ export function handleSpaceAdded(
   space.save()
 
   SpaceDataSource.create(Address.fromBytes(Address.fromHexString(spaceAddress)))
-  bootstrap(space.id, createdAtBlock)
 }
 
 class HandleCreateTripleActionOptions {
