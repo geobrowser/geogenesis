@@ -10,8 +10,10 @@ import {
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
+import { SYSTEM_IDS } from '~/modules/constants';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
+import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
@@ -96,6 +98,7 @@ interface Props {
 
 export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
+  const { editable } = useEditable();
 
   const table = useReactTable({
     data: rows,
@@ -154,6 +157,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
 
                     return (
                       <TableCell
+                        isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                        href={NavUtils.toEntity(space, entityId)}
                         isExpandable={isExpandable}
                         isExpanded={expandedCells[cellId]}
                         width={cell.column.getSize()}

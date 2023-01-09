@@ -13,6 +13,7 @@ import { Filter } from './icons/filter';
 import { Preset } from './icons/preset';
 import { Publish } from './icons/publish';
 import { Relation } from './icons/relation';
+import { RightArrowLongSmall } from './icons/right-arrow-long-small';
 import { Text } from './icons/text';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
@@ -137,7 +138,8 @@ type Icon =
   | 'copy'
   | 'preset'
   | 'relation'
-  | 'text';
+  | 'text'
+  | 'rightArrowLongSmall';
 
 const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   create: (color?: ColorName) => <Create color={color} />,
@@ -155,6 +157,7 @@ const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   preset: (color?: ColorName) => <Preset color={color} />,
   relation: (color?: ColorName) => <Relation color={color} />,
   text: (color?: ColorName) => <Text color={color} />,
+  rightArrowLongSmall: (color?: ColorName) => <RightArrowLongSmall color={color} />,
 };
 
 interface Props {
