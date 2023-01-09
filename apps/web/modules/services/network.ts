@@ -22,7 +22,7 @@ type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
 type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
 
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
+type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } | undefined };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
 
@@ -43,9 +43,29 @@ export function extractValue(networkTriple: NetworkTriple): Value {
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY':
-      return { type: 'entity', id: networkTriple.entityValue.id, name: networkTriple.entityValue.name };
+    case 'ENTITY': {
+      return {
+        type: 'entity',
+        id: networkTriple?.entityValue?.id ?? '',
+        name: networkTriple?.entityValue?.name ?? null,
+      };
+    }
   }
+}
+
+function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
+  switch (networkTriple.valueType) {
+    case 'STRING':
+      return !networkTriple.stringValue;
+    case 'NUMBER':
+      return !networkTriple.numberValue;
+    case 'ENTITY':
+      return !networkTriple.entityValue;
+  }
+}
+
+function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple): boolean {
+  return !networkTriple.attribute || !networkTriple.attribute.id;
 }
 
 function getActionFromChangeStatus(action: Action) {
@@ -182,7 +202,11 @@ export class Network implements INetwork {
 
     const triples = json.data.triples
       .filter(triple => !triple.isProtected)
-      .map((networkTriple): TripleType => {
+      .map((networkTriple): TripleType | null => {
+        if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
+          return null;
+        }
+
         return {
           id: networkTriple.id,
           entityId: networkTriple.entity.id,
@@ -192,7 +216,8 @@ export class Network implements INetwork {
           value: extractValue(networkTriple),
           space,
         };
-      });
+      })
+      .flatMap(triple => (triple ? triple : []));
 
     return { triples };
   };
