@@ -427,7 +427,6 @@ export class Network implements INetwork {
           attributeId: column.id,
         };
 
-        console.log(defaultTriple);
         const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
 
         const cell = {
