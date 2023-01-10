@@ -74,6 +74,9 @@ export function nameTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
+/**
+ * This function takes an array of triples and maps them to an array of Entity types.
+ */
 export function entitiesFromTriples(triples: TripleType[]): Entity[] {
   return pipe(
     triples,
@@ -97,6 +100,11 @@ export function entitiesFromTriples(triples: TripleType[]): Entity[] {
   );
 }
 
+/**
+ * This function merges local triple actions with entities from the network. This is useful
+ * if you have a collection of Entities from the network and want to display any updates
+ * that were made to them during local editing.
+ */
 export function mergeActionsWithNetworkEntities(
   actions: Record<string, Action[]>,
   networkEntities: Entity[]
