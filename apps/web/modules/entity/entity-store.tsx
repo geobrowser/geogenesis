@@ -1,4 +1,4 @@
-import { computed, observable, ObservableComputed } from '@legendapp/state';
+import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { Entity } from '.';
 import { ActionsStore } from '../action';
 import { SYSTEM_IDS } from '../constants';
@@ -44,6 +44,7 @@ export class EntityStore implements IEntityStore {
   triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]> = observable([]);
   schemaTriples$: ObservableComputed<TripleType[]> = observable([]);
+  deletedSchemaIds$: Observable<String[]> = observable<String[]>([]);
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
@@ -106,9 +107,11 @@ export class EntityStore implements IEntityStore {
           })
         );
 
+        const deletedSchemaIds = this.deletedSchemaIds$.get();
+
         return attributes
-          .map(attribute => attribute.triples)
-          .flat()
+          .flatMap(attribute => attribute.triples)
+          .filter(triple => !deletedSchemaIds.includes(triple.attributeId))
           .map(triple => ({
             ...Triple.empty(spaceId, id),
             attributeId: triple.value.id,
@@ -118,6 +121,13 @@ export class EntityStore implements IEntityStore {
       })
     );
   }
+
+  deleteSchemaId = (id: string) => {
+    const deletedSchemaIds = this.deletedSchemaIds$.get();
+    if (!deletedSchemaIds.includes(id)) {
+      this.deletedSchemaIds$.set([...deletedSchemaIds, id]);
+    }
+  };
 
   create = (triple: TripleType) => this.ActionsStore.create(triple);
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
