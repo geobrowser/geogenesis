@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { A, N, pipe } from '@mobily/ts-belt';
+import { A, pipe } from '@mobily/ts-belt';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
