@@ -44,7 +44,7 @@ export class EntityStore implements IEntityStore {
   triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]> = observable([]);
   schemaTriples$: ObservableComputed<TripleType[]> = observable([]);
-  deletedSchemaIds$: Observable<String[]> = observable<String[]>([]);
+  hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
@@ -107,11 +107,11 @@ export class EntityStore implements IEntityStore {
           })
         );
 
-        const deletedSchemaIds = this.deletedSchemaIds$.get();
+        const hiddenSchemaIds = this.hiddenSchemaIds$.get();
 
         return attributes
           .flatMap(attribute => attribute.triples)
-          .filter(triple => !deletedSchemaIds.includes(triple.attributeId))
+          .filter(triple => !hiddenSchemaIds.includes(triple.attributeId))
           .map(triple => ({
             ...Triple.empty(spaceId, id),
             attributeId: triple.value.id,
@@ -122,10 +122,10 @@ export class EntityStore implements IEntityStore {
     );
   }
 
-  deleteSchemaId = (id: string) => {
-    const deletedSchemaIds = this.deletedSchemaIds$.get();
-    if (!deletedSchemaIds.includes(id)) {
-      this.deletedSchemaIds$.set([...deletedSchemaIds, id]);
+  hideSchema = (id: string) => {
+    const hiddenSchemaIds = this.hiddenSchemaIds$.get();
+    if (!hiddenSchemaIds.includes(id)) {
+      this.hiddenSchemaIds$.set([...hiddenSchemaIds, id]);
     }
   };
 

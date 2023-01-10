@@ -2,11 +2,10 @@ import { useSelector } from '@legendapp/state/react';
 import { useEntityStoreContext } from './entity-store-provider';
 
 export function useEntityStore() {
-  const { create, triples$, schemaTriples$, update, remove, deleteSchemaId, deletedSchemaIds$ } =
-    useEntityStoreContext();
+  const { create, triples$, schemaTriples$, update, remove, hideSchema, hiddenSchemaIds$ } = useEntityStoreContext();
   const triples = useSelector(triples$);
   const schemaTriples = useSelector(schemaTriples$);
-  const deletedSchemaIds = useSelector(deletedSchemaIds$);
+  const hiddenSchemaIds = useSelector(hiddenSchemaIds$);
 
   return {
     triples,
@@ -14,7 +13,7 @@ export function useEntityStore() {
     create,
     update,
     remove,
-    deleteSchemaId,
-    deletedSchemaIds,
+    hideSchema,
+    hiddenSchemaIds,
   };
 }

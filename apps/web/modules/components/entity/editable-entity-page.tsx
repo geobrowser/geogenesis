@@ -72,8 +72,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
     create,
     remove,
     schemaTriples,
-    deleteSchemaId,
-    deletedSchemaIds,
+    hideSchema,
+    hiddenSchemaIds,
   } = useEntityStore();
 
   const { actions } = useActionsStore(space);
@@ -183,8 +183,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
                 schemaTriples={schemaTriples}
                 name={name}
                 send={send}
-                deleteSchemaId={deleteSchemaId}
-                deletedSchemaIds={deletedSchemaIds}
+                hideSchema={hideSchema}
+                hiddenSchemaIds={hiddenSchemaIds}
               />
             </Attributes>
           ) : null}
@@ -228,38 +228,33 @@ function EntityAttributes({
   schemaTriples,
   name,
   send,
-  deleteSchemaId,
-  deletedSchemaIds,
+  hideSchema,
+  hiddenSchemaIds,
 }: {
   entityId: string;
   triples: Props['triples'];
   schemaTriples: Props['schemaTriples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
-  deleteSchemaId: (id: string) => void;
-  deletedSchemaIds: (String | undefined)[];
+  hideSchema: (id: string) => void;
+  hiddenSchemaIds: (string | undefined)[];
 }) {
-  //@goose Filtering this out here because I can't figure out why the compute isn't updating when deletedSchemaIds changes
-  const filteredTriples = [...triples, ...schemaTriples].filter(t => !deletedSchemaIds.includes(t.attributeId));
+  const filteredSchemaTriples = schemaTriples.filter(t => !hiddenSchemaIds.includes(t.attributeId));
+
+  const filteredTriples = [...triples, ...filteredSchemaTriples];
   const groupedTriples = groupBy(filteredTriples, t => t.attributeId);
+
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
-  const orderedGroupedTriples = Object.entries(groupedTriples).sort((a, b) => {
-    const [attributeIdA, triplesA] = a;
-    const [attributeIdB, triplesB] = b;
-    const attributeA = triplesA[0].attributeName || '';
-    const attributeB = triplesB[0].attributeName || '';
-
+  const orderedGroupedTriples = Object.entries(groupedTriples).sort(([attributeIdA], [attributeIdB]) => {
     if (attributeIdA === SYSTEM_IDS.NAME) return -1;
     if (attributeIdB === SYSTEM_IDS.NAME) return 1;
     if (attributeIdA === SYSTEM_IDS.DESCRIPTION) return -1;
     if (attributeIdB === SYSTEM_IDS.DESCRIPTION) return 1;
     if (attributeIdA === SYSTEM_IDS.TYPES) return -1;
     if (attributeIdB === SYSTEM_IDS.TYPES) return 1;
-    if (attributeA < attributeB) return -1;
-    if (attributeA > attributeB) return 1;
-    return 0;
+    return -1;
   });
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
@@ -311,6 +306,7 @@ function EntityAttributes({
   };
 
   const updateValueFromPlaceholder = (triple: TripleType, value: string) => {
+    hideSchema(triple.attributeId);
     send({
       type: 'UPDATE_VALUE_FROM_PLACEHOLDER',
       payload: {
@@ -390,9 +386,6 @@ function EntityAttributes({
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
 
-        console.log('TRIPLES PER GROUP', triples);
-        debugger;
-
         return (
           <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
             {attributeId === '' ? (
@@ -452,7 +445,7 @@ function EntityAttributes({
                   icon="trash"
                   onClick={
                     isPlaceholder
-                      ? () => deleteSchemaId(attributeId)
+                      ? () => hideSchema(attributeId)
                       : () =>
                           triples
                             .filter(t => t.attributeId === attributeId)

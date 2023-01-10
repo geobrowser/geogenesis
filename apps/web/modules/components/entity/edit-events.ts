@@ -261,22 +261,23 @@ const listener =
 
         case 'UPDATE_VALUE_FROM_PLACEHOLDER': {
           const { value, triple } = event.payload;
-          // const updatedTriple:TripleType = {
-          //   ...triple,
-          //   placeholder: false,
-          //   value: { ...triple.value, type: 'string', value: value }
-          // };
-          // update(updatedTriple, triple);
-          // remove(triple)
-          create({
-            ...Triple.empty(context.spaceId, context.entityId),
-            entityName: context.entityName,
-            attributeId: triple.attributeId,
-            attributeName: triple.attributeName,
-            placeholder: false,
-            value: { ...triple.value, type: 'string', value },
-          });
+          
+          return create(
+            Triple.withId({
+              space: context.spaceId,
+              entityId: context.entityId,
+              entityName: triple.entityName,
+              attributeId: triple.attributeId,
+              attributeName: triple.attributeName,
+              value: {
+                type: 'string',
+                id: triple.value.id,
+                value: value,
+              },
+            })
+          );
         }
+        
         case 'UPDATE_VALUE': {
           const { value, triple } = event.payload;
           update(
