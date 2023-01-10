@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
-import { Entity, Triple } from '../types';
+import { Triple } from '../triple';
+import { Action, Entity, Triple as TripleType } from '../types';
 import { groupBy } from '../utils';
 
 /**
@@ -17,12 +18,12 @@ import { groupBy } from '../utils';
  * We currently only handle description triples whose value is a StringValue. If the value
  * is an EntityValue we assume it's not valid and don't attempt to parse it to render in the UI.
  */
-export function description(triples: Triple[]): string | null {
+export function description(triples: TripleType[]): string | null {
   const triple = descriptionTriple(triples);
   return triple?.value.type === 'string' ? triple.value.value : null;
 }
 
-export function descriptionTriple(triples: Triple[]): Triple | undefined {
+export function descriptionTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(
     triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION || triple.attributeName === SYSTEM_IDS.DESCRIPTION
   );
@@ -36,7 +37,7 @@ export function descriptionTriple(triples: Triple[]): Triple | undefined {
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: Triple[], currentSpace: string): string[] {
+export function types(triples: TripleType[], currentSpace: string): string[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
@@ -64,16 +65,16 @@ export function types(triples: Triple[], currentSpace: string): string[] {
  * This function traverses through all the triples associated with an entity and attempts
  * to find the name of the entity.
  */
-export function name(triples: Triple[]): string | null {
+export function name(triples: TripleType[]): string | null {
   const triple = nameTriple(triples);
   return triple?.value.type === 'string' ? triple?.value.value : null;
 }
 
-export function nameTriple(triples: Triple[]): Triple | undefined {
+export function nameTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
-export function entitiesFromTriples(triples: Triple[]): Entity[] {
+export function entitiesFromTriples(triples: TripleType[]): Entity[] {
   return pipe(
     triples,
     A.groupBy(triple => triple.entityId),
@@ -83,7 +84,7 @@ export function entitiesFromTriples(triples: Triple[]): Entity[] {
       // We can do array operations like .concat or .slice to close the triples
       // array to a mutable version, but casting is cheaper performance-wise as
       // entitiesFromTriples may be used in performance-heavy situations.
-      const mutableTriples = triples as unknown as Triple[];
+      const mutableTriples = triples as unknown as TripleType[];
 
       return {
         id: entityId,
@@ -93,5 +94,34 @@ export function entitiesFromTriples(triples: Triple[]): Entity[] {
         triples: mutableTriples,
       };
     })
+  );
+}
+
+export function mergeActionsWithNetworkEntities(
+  actions: Record<string, Action[]>,
+  networkEntities: Entity[]
+): Entity[] {
+  return pipe(
+    actions,
+    D.values,
+    A.flat,
+    // We need to merge the local actions with the network triple in order to correctly
+    // display any description or type metadata in the search results list.
+    actions => {
+      const entityIds = actions.map(a => {
+        switch (a.type) {
+          case 'createTriple':
+          case 'deleteTriple':
+            return a.entityId;
+          case 'editTriple':
+            return a.after.entityId;
+        }
+      });
+
+      const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
+      const triplesForNetworkEntity = networkEntity?.triples ?? [];
+      return Triple.fromActions(actions, triplesForNetworkEntity);
+    },
+    entitiesFromTriples
   );
 }

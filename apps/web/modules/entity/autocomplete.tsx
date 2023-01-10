@@ -1,14 +1,13 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import { A, D, G, pipe, S } from '@mobily/ts-belt';
+import { A, G, pipe, S } from '@mobily/ts-belt';
 import { useEffect, useMemo } from 'react';
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Entity } from '.';
-import { Action, ActionsStore, useActionsStoreContext } from '../action';
-import { Triple } from '../triple';
-import { Action as ActionType, Entity as EntityType } from '../types';
+import { ActionsStore, useActionsStoreContext } from '../action';
+import { Entity as EntityType } from '../types';
 
 interface EntityAutocompleteOptions {
   api: INetwork;
@@ -31,29 +30,9 @@ class EntityAutocomplete {
         try {
           const networkEntities = await api.fetchEntities(this.query$.get(), spaceId, this.abortController);
 
-          // const allActions = pipe();
           const localEntities = pipe(
             ActionsStore.actions$.get(),
-            D.values,
-            A.flat,
-            // We need to merge the local actions with the network triple in order to correctly
-            // display any description or type metadata in the search results list.
-            actions => {
-              const entityIds = actions.map(a => {
-                switch (a.type) {
-                  case 'createTriple':
-                  case 'deleteTriple':
-                    return a.entityId;
-                  case 'editTriple':
-                    return a.after.entityId;
-                }
-              });
-
-              const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
-              const triplesForNetworkEntity = networkEntity?.triples ?? [];
-              return Triple.fromActions(actions, triplesForNetworkEntity);
-            },
-            Entity.entitiesFromTriples,
+            actionsBySpace => Entity.mergeActionsWithNetworkEntities(actionsBySpace, networkEntities),
             A.filter(e => G.isString(e.name) && S.startsWith(S.toLowerCase(e.name), S.toLowerCase(this.query$.get())))
           );
 
