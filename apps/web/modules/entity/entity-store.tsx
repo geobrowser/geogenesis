@@ -80,7 +80,7 @@ export class EntityStore implements IEntityStore {
         const typeTriples = this.typeTriples$.get();
 
         const noTypeTriples = typeTriples.length === 0;
-        const defaultTypeTriples = typeTriples[0].value.id === '';
+        const defaultTypeTriples = typeTriples[0]?.value.id === '';
 
         if (noTypeTriples || defaultTypeTriples) {
           return [];
@@ -107,17 +107,39 @@ export class EntityStore implements IEntityStore {
           })
         );
 
-        const hiddenSchemaIds = this.hiddenSchemaIds$.get();
+        const attributeTriples = attributes.flatMap(attribute => attribute.triples);
 
-        return attributes
-          .flatMap(attribute => attribute.triples)
-          .filter(triple => !hiddenSchemaIds.includes(triple.attributeId))
-          .map(triple => ({
-            ...Triple.empty(spaceId, id),
-            attributeId: triple.value.id,
-            attributeName: Value.nameOfEntityValue(triple), // Should we be grabbing all of the related triples for the attribute to see if it has a name triple?
-            placeholder: true,
-          }));
+        const valueTypes = await Promise.all(
+          attributeTriples.map(attribute => {
+            return this.api.fetchTriples({
+              query: '',
+              space: spaceId,
+              first: 100,
+              skip: 0,
+              filter: [
+                {
+                  field: 'entity-id',
+                  value: attribute.value.id,
+                },
+                {
+                  field: 'attribute-id',
+                  value: SYSTEM_IDS.VALUE_TYPE,
+                },
+              ],
+            });
+          })
+        );
+
+        const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
+
+        return attributeTriples.map((attribute, index) => {
+          const valueType = valueTypeTriples[index]?.value.id;
+          return {
+            ...Triple.emptyPlaceholder(spaceId, id, valueType),
+            attributeId: attribute.value.id,
+            attributeName: Value.nameOfEntityValue(attribute),
+          };
+        });
       })
     );
   }

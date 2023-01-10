@@ -305,6 +305,11 @@ function EntityAttributes({
     });
   };
 
+  const addEntityValueFromPlaceholder = (entity: TripleType, linkedEntity: EntityType) => {
+    // If it's an empty triple value
+    linkAttribute('', entity);
+  };
+
   const updateValueFromPlaceholder = (triple: TripleType, value: string) => {
     hideSchema(triple.attributeId);
     send({
@@ -357,6 +362,17 @@ function EntityAttributes({
           />
         );
       case 'entity':
+        if (triple.placeholder) {
+          return (
+            <EntityTextAutocomplete
+              key={`entity-${attributeId}-${triple.value.id}`}
+              placeholder="Add value..."
+              onDone={result => addEntityValueFromPlaceholder(triple, result)}
+              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+              spaceId={spaceId}
+            />
+          );
+        }
         if (isEmptyEntity) {
           return (
             <EntityTextAutocomplete
