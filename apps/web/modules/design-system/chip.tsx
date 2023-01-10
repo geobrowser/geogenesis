@@ -46,19 +46,29 @@ const StyledChipButton = styled(StyledChip)(props => ({
   gap: props.theme.space,
 }));
 
+const StyledLink = styled.a(({ theme }) => ({
+  color: 'currentcolor',
+  ':hover': {
+    textDecoration: 'underline',
+  },
+}));
+
 interface ChipButtonProps {
   onClick: () => void;
   children: React.ReactNode;
   icon?: Icon;
+  href: string;
 }
 
-export function ChipButton({ onClick, children, icon }: ChipButtonProps) {
+export function ChipButton({ onClick, children, icon, href }: ChipButtonProps) {
   return (
-    <StyledChipButton as="button" onClick={onClick} role="button">
-      {children}
+    <StyledChipButton as="button" role="button">
+      <Link href={href} passHref>
+        <StyledLink>{children}</StyledLink>
+      </Link>
       {icon === 'check-close' ? (
         // Wrapper div to prevent the icon from being scaled by flexbox
-        <div>
+        <div onClick={onClick}>
           <CheckCloseSmall />
         </div>
       ) : null}

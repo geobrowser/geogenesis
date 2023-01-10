@@ -9,12 +9,12 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Entity as EntityType, Triple as TripleType } from '~/modules/types';
-import { groupBy } from '~/modules/utils';
+import { groupBy, NavUtils } from '~/modules/utils';
+import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { NumberField, StringField } from './editable-fields';
-import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
-import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -301,7 +301,11 @@ function EntityAttributes({
 
         return (
           <div key={`entity-${triple.value.id}`}>
-            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
+            <ChipButton
+              href={NavUtils.toEntity(spaceId, triple.value.id)}
+              icon="check-close"
+              onClick={() => removeOrResetEntityTriple(triple)}
+            >
               {triple.value.name || triple.value.id}
             </ChipButton>
           </div>
