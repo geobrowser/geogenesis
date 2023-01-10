@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { A, pipe } from '@mobily/ts-belt';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -59,15 +60,24 @@ const ResultDisambiguationTypesContainer = styled.div(props => ({
 }));
 
 function ResultDisambiguation({ result, results }: { result: Entity; results: Entity[] }) {
-  const duplicateNameTriples = results.filter(r => r.name === result.name && !r.id === !result.id);
-  const isDuplicateNameAndTypes =
-    duplicateNameTriples.filter(duplicate => duplicate.types.every(type => result.types.includes(type))).length > 0;
+  const resultTypes = new Set(result.types);
 
-  if (isDuplicateNameAndTypes) {
+  const isDuplicateNameAndTypes = pipe(
+    results,
+    // Remove the current result from the list of results
+    A.filter(r => r.name === result.name && r.id !== result.id),
+    // If any of the remaining results have the exact same collection of types
+    // as the current result, then we have a duplicate
+    A.filter(duplicate => duplicate.types.every(type => resultTypes.has(type))),
+    A.length,
+    length => length > 0
+  );
+
+  if (isDuplicateNameAndTypes && result.description) {
     return <Text variant="footnote">{result.description}</Text>;
   }
 
-  if (result.types.length > 0) {
+  if (!A.isEmpty(result.types)) {
     return (
       <ResultDisambiguationTypesContainer>
         {result.types.map((type, index) => (
