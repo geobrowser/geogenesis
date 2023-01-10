@@ -24,6 +24,7 @@ importers:
       '@emotion/styled': ^11.10.4
       '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:*
+      '@geogenesis/ids': workspace:*
       '@legendapp/state': ^0.20.0
       '@mailchimp/mailchimp_marketing': ^3.0.80
       '@mobily/ts-belt': ^4.0.0-rc.2
@@ -90,6 +91,7 @@ importers:
       '@emotion/styled': 11.10.4_2x444vlcug5ivaeavo4vxooctq
       '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
+      '@geogenesis/ids': link:../../packages/ids
       '@legendapp/state': 0.20.5_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
       '@mobily/ts-belt': 4.0.0-rc.5
@@ -341,6 +343,22 @@ importers:
       ts-node: 10.9.1_laqv367ntbladgchwutjrnj4ky
       typescript: 4.6.4
 
+  packages/ids:
+    specifiers:
+      '@types/node': ^17.0.31
+      as-base64: ^0.2.0
+      assemblyscript: ^0.20.6
+      rimraf: ^3.0.2
+      ts-node: ^10.7.0
+      typescript: 4.6.4
+    devDependencies:
+      '@types/node': 17.0.45
+      as-base64: 0.2.0
+      assemblyscript: 0.20.19
+      rimraf: 3.0.2
+      ts-node: 10.9.1_laqv367ntbladgchwutjrnj4ky
+      typescript: 4.6.4
+
   packages/integration:
     specifiers:
       '@tsconfig/node16': ^1.0.3
@@ -363,6 +381,7 @@ importers:
       '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:^0.1.0
       '@geogenesis/data-uri': workspace:*
+      '@geogenesis/ids': workspace:*
       '@graphprotocol/graph-cli': ^0.33.1
       '@graphprotocol/graph-ts': ^0.27.0
       as-base64: ^0.2.0
@@ -379,6 +398,7 @@ importers:
       '@geogenesis/action-schema': link:../action-schema
       '@geogenesis/contracts': link:../contracts
       '@geogenesis/data-uri': link:../data-uri
+      '@geogenesis/ids': link:../ids
       '@graphprotocol/graph-cli': 0.33.1
       '@graphprotocol/graph-ts': 0.27.0
       rimraf: 3.0.2
@@ -5030,7 +5050,7 @@ packages:
   /axios/0.21.4:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
     transitivePeerDependencies:
       - debug
     dev: false
@@ -6558,7 +6578,7 @@ packages:
     resolution: {integrity: sha512-Rd3se6QB+sO1TwqZjscQrurpEPIfO0/yYnSin6Q/rD3mOutHvUrCAhJub3r90uNb+SESBuE0QYoB90YdfatsRg==}
 
   /concat-map/0.0.1:
-    resolution: {integrity: sha1-2Klr13/Wjfd5OnMDajug1UBdR3s=}
+    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
   /concat-stream/1.6.2:
     resolution: {integrity: sha512-27HBghJxjiZtIk3Ycvn/4kbJk/1uZuJFfuPEns6LaEvpvG1f0hTea8lilrouyo9mVc2GWdcEZ8OLoGmSADlrCw==}
@@ -9571,16 +9591,6 @@ packages:
     resolution: {integrity: sha512-rDjbZUKpN8OYhB0IE/vY/I8UWO/602IIJEU/76Tv4LvYnwHCk0BCsvz4eRr9n+FQcri7L5cyaXOo0+/Kh4HisA==}
     dev: true
 
-  /follow-redirects/1.15.1:
-    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
-    dev: false
-
   /follow-redirects/1.15.1_debug@4.3.1:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
@@ -9603,7 +9613,6 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.4
-    dev: true
 
   /for-each/0.3.3:
     resolution: {integrity: sha512-jqYfLp7mo9vIyQf8ykW2v7A+2N4QjeCeI5+Dz9XraiO1ign81wjiH7Fb9vSOWvQfNtmSa4H2RoQTrrXivdUZmw==}

@@ -4,8 +4,39 @@ import {
   EntityValue,
   StringValue,
 } from '@geogenesis/action-schema/assembly'
+import { SYSTEM_IDS } from '@geogenesis/ids/dist'
 import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
+
+const {
+  TYPES,
+  ATTRIBUTES,
+  SCHEMA_TYPE,
+  VALUE_TYPE,
+  RELATION,
+  TEXT,
+  IMAGE_ATTRIBUTE,
+  DESCRIPTION,
+  DESCRIPTION_SCALAR,
+  NAME,
+  SPACE,
+  ATTRIBUTE,
+} = SYSTEM_IDS
+
+const entities = [
+  TYPES,
+  ATTRIBUTES,
+  SCHEMA_TYPE,
+  VALUE_TYPE,
+  RELATION,
+  TEXT,
+  IMAGE_ATTRIBUTE,
+  DESCRIPTION,
+  DESCRIPTION_SCALAR,
+  NAME,
+  SPACE,
+  ATTRIBUTE,
+]
 
 /* TODO: Unify apps/web/modules/constants.ts and this file for blessed UUIDs*/
 const ATTRIBUTES_ID = '01412f83-8189-4ab1-8365-65c7fd358cc1'
@@ -20,6 +51,10 @@ export function bootstrapRootSpaceCoreTypes(
   createdAtBlock: BigInt
 ): void {
   log.debug(`Bootstrapping space ${space}!`, [])
+
+  entities.forEach((entity) => {
+    handleAction(new CreateEntityAction(entity), space, createdAtBlock)
+  })
 
   handleAction(new CreateEntityAction('type'), space, createdAtBlock)
   handleAction(new CreateEntityAction('name'), space, createdAtBlock)
