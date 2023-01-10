@@ -1,13 +1,13 @@
 import styled from '@emotion/styled';
 import { useActionsStore } from '~/modules/action';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { groupBy } from '~/modules/utils';
+import { groupBy, NavUtils } from '~/modules/utils';
 import { ChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
-import { useEditEvents } from '../entity/edit-events';
-import { NumberField, StringField } from '../entity/editable-fields';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
+import { useEditEvents } from '../entity/edit-events';
+import { NumberField, StringField } from '../entity/editable-fields';
 
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',
@@ -117,8 +117,12 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
 
         return (
           <div key={`entity-${triple.value.id}`}>
-            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
-              {triple.value.name || triple.value.id}
+            <ChipButton
+              href={NavUtils.toEntity(space, triple.value.id)}
+              icon="check-close"
+              onClick={() => removeOrResetEntityTriple(triple)}
+            >
+              <a>{triple.value.name || triple.value.id}</a>
             </ChipButton>
           </div>
         );
