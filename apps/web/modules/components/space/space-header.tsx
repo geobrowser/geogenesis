@@ -1,4 +1,3 @@
-import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import Image from 'next/image';
 import { Text } from '~/modules/design-system/text';
