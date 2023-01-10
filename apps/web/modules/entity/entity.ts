@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '../types';
 import { groupBy } from '../utils';
 
@@ -7,7 +7,7 @@ import { groupBy } from '../utils';
  * description of the entity.
  *
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_SCALAR. However, anybody can
+ * system Description attribute ID at SYSTEM_IDS.DESCRIPTION. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -23,8 +23,7 @@ export function description(triples: Triple[]): string | null {
 
 export function descriptionTriple(triples: Triple[]): Triple | undefined {
   return triples.find(
-    triple =>
-      triple.attributeId === SYSTEM_IDS.DESCRIPTION_SCALAR || triple.attributeName === SYSTEM_IDS.DESCRIPTION_SCALAR
+    triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION || triple.attributeName === SYSTEM_IDS.DESCRIPTION
   );
 }
 

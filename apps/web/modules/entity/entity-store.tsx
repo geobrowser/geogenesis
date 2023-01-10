@@ -1,6 +1,6 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { ActionsStore } from '../action';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';

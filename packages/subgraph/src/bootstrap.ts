@@ -5,9 +5,38 @@ import {
   StringValue,
 } from '@geogenesis/action-schema/assembly'
 import { BigInt, log } from '@graphprotocol/graph-ts'
+import {
+  ATTRIBUTE,
+  ATTRIBUTES,
+  DESCRIPTION,
+  DESCRIPTION,
+  IMAGE_ATTRIBUTE,
+  NAME,
+  RELATION,
+  SCHEMA_TYPE,
+  SPACE,
+  TEXT,
+  TYPES,
+  VALUE_TYPE,
+  // Have to drill into system-ids because assemblyscript doesn't support object literals or globbed module exports
+} from '@geogenesis/ids/system-ids'
 import { handleAction, handleCreateTripleAction } from './actions'
 
-/* TODO: Unify apps/web/modules/constants.ts and this file for blessed UUIDs*/
+const entities: string[] = [
+  TYPES,
+  ATTRIBUTES,
+  SCHEMA_TYPE,
+  VALUE_TYPE,
+  RELATION,
+  TEXT,
+  IMAGE_ATTRIBUTE,
+  DESCRIPTION,
+  DESCRIPTION,
+  NAME,
+  SPACE,
+  ATTRIBUTE,
+]
+
 const ATTRIBUTES_ID = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 const SCHEMA_TYPE_ID = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
@@ -20,6 +49,10 @@ export function bootstrapRootSpaceCoreTypes(
   createdAtBlock: BigInt
 ): void {
   log.debug(`Bootstrapping space ${space}!`, [])
+
+  for (let i = 0; i < entities.length; i++) {
+    handleAction(new CreateEntityAction(entities[i]), space, createdAtBlock)
+  }
 
   handleAction(new CreateEntityAction('type'), space, createdAtBlock)
   handleAction(new CreateEntityAction('name'), space, createdAtBlock)
