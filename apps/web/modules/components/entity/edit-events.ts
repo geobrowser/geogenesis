@@ -130,8 +130,8 @@ const listener =
             Triple.withId({
               space: context.spaceId,
               entityId: context.entityId,
-              attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
-              attributeName: SYSTEM_IDS.DESCRIPTION_SCALAR,
+              attributeId: SYSTEM_IDS.DESCRIPTION,
+              attributeName: SYSTEM_IDS.DESCRIPTION,
               entityName: name,
               value: {
                 id: ID.createValueId(),

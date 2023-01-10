@@ -1,6 +1,5 @@
 export const IMAGE_ATTRIBUTE = '457a27af-7b0b-485c-ac07-aa37756adafa'
-export const DESCRIPTION = 'be5564ac-3953-4127-800a-9f9f22f2c610'
-export const DESCRIPTION_SCALAR = 'Description'
+export const DESCRIPTION = 'Description'
 export const NAME = 'name'
 export const SPACE = 'space'
 export const ATTRIBUTE = 'attribute'
