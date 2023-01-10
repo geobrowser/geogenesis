@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import Link from 'next/link';
 import React from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 
@@ -16,35 +17,49 @@ const Relative = styled.div({
   position: 'relative',
 });
 
-const Absolute = styled.div({
+const Absolute = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space,
   top: 0,
   right: 0,
   position: 'absolute',
   zIndex: 10,
-});
+}));
 
 interface Props {
+  href?: string;
   children: React.ReactNode;
   width: number;
   isExpandable?: boolean;
+  isLinkable?: boolean;
   isExpanded: boolean;
   toggleExpanded: () => void;
 }
 
-export function TableCell({ children, width, isExpandable, toggleExpanded, isExpanded }: Props) {
+export function TableCell({ children, width, isExpandable, isLinkable, href, toggleExpanded, isExpanded }: Props) {
   const [isHovered, setIsHovered] = React.useState(false);
 
   return (
     <StyledTableCell onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} width={width}>
       <Relative>
         {children}
-        {isHovered && isExpandable && (
+        {isHovered && (
           <Absolute>
-            <SquareButton
-              onClick={() => toggleExpanded()}
-              icon={isExpanded ? 'contractSmall' : 'expandSmall'}
-              variant="secondary"
-            />
+            {isExpandable && (
+              <SquareButton
+                onClick={() => toggleExpanded()}
+                icon={isExpanded ? 'contractSmall' : 'expandSmall'}
+                variant="secondary"
+              />
+            )}
+            {isLinkable && href && (
+              <Link href={href} passHref>
+                <a>
+                  <SquareButton icon="rightArrowLongSmall" variant="secondary" />
+                </a>
+              </Link>
+            )}
           </Absolute>
         )}
       </Relative>

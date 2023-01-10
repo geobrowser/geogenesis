@@ -25,13 +25,20 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     },
     "@geogenesis/action-schema#codegen": {
       "dependsOn": ["@geogenesis/assemblyscript-json-schema#build"]
     },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+    },
+    "@geogenesis/subgraph#build": {
+      "dependsOn": [
+        "@geogenesis/ids#build",
+        "@geogenesis/contracts#codegen",
+        "@geogenesis/subgraph#codegen"
+      ]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],

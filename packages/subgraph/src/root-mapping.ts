@@ -8,6 +8,7 @@ import {
 import { addRole, removeRole } from './access-control'
 import { handleSpaceAdded } from './actions'
 import { addEntry } from './add-entry'
+import { bootstrapRootSpaceCoreTypes } from './bootstrap'
 import { getChecksumAddress } from './get-checksum-address'
 
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
@@ -54,6 +55,7 @@ export function handleRoleRevoked(event: RoleRevoked): void {
 function bootstrapRootSpace(address: string, createdAtBlock: BigInt): void {
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
+    bootstrapRootSpaceCoreTypes(address, createdAtBlock)
     handleSpaceAdded(address, true, createdAtBlock, null)
   }
 }

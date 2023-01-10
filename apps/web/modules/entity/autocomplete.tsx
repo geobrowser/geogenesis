@@ -4,20 +4,25 @@ import { useEffect, useMemo } from 'react';
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
+import { Entity } from '../types';
 
 class EntityAutocomplete {
   query$ = observable('');
-  results$: ObservableComputed<{ id: string; name: string | null }[]>;
+  results$: ObservableComputed<Entity[]>;
   abortController: AbortController = new AbortController();
 
-  constructor({ api }: { api: INetwork }) {
+  constructor({ api, spaceId }: { api: INetwork; spaceId: string }) {
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
         this.abortController.abort();
         this.abortController = new AbortController();
 
-        return await api.fetchEntities(this.query$.get(), this.abortController);
+        try {
+          return await api.fetchEntities(this.query$.get(), spaceId, this.abortController);
+        } catch (e) {
+          return [];
+        }
       })
     );
   }
@@ -27,12 +32,12 @@ class EntityAutocomplete {
   };
 }
 
-export function useAutocomplete() {
+export function useAutocomplete(spaceId: string) {
   const { network } = Services.useServices();
 
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network });
-  }, [network]);
+    return new EntityAutocomplete({ api: network, spaceId });
+  }, [network, spaceId]);
 
   useEffect(() => {
     return () => {

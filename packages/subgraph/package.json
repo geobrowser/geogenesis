@@ -28,6 +28,7 @@
     "@geogenesis/contracts": "workspace:^0.1.0",
     "@geogenesis/data-uri": "workspace:*",
     "@geogenesis/action-schema": "workspace:*",
+    "@geogenesis/ids": "workspace:*",
     "@graphprotocol/graph-cli": "^0.33.1",
     "@graphprotocol/graph-ts": "^0.27.0",
     "rimraf": "^3.0.2"

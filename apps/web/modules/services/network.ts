@@ -1,52 +1,24 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '../entity';
 import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
 import {
   Account,
   Action,
   Column,
+  Entity as EntityType,
   FilterField,
   FilterState,
   ReviewState,
   Row,
   Space,
   Triple as TripleType,
-  Value,
 } from '../types';
+import { Value } from '../value';
+import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
-
-type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
-
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
-
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
-
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
-
-/**
- * Triple type returned by GraphQL
- */
-export type NetworkTriple = NetworkValue & {
-  id: string;
-  entity: { id: string; name: string | null };
-  attribute: { id: string; name: string | null };
-  valueId: string;
-  isProtected: boolean;
-};
-
-export function extractValue(networkTriple: NetworkTriple): Value {
-  switch (networkTriple.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
-    case 'NUMBER':
-      return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY':
-      return { type: 'entity', id: networkTriple.entityValue.id, name: networkTriple.entityValue.name };
-  }
-}
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -87,7 +59,7 @@ export interface INetwork {
   fetchEntityTableData: (options: FetchEntityTableDataParams) => Promise<{ rows: Row[]; columns: Column[] }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchEntities: (name: string, abortController?: AbortController) => Promise<{ id: string; name: string | null }[]>;
+  fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -169,6 +141,9 @@ export class Network implements INetwork {
             valueType
             valueId
             isProtected
+            space {
+              id
+            }
           }
         }`,
       }),
@@ -180,24 +155,12 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const triples = json.data.triples
-      .filter(triple => !triple.isProtected)
-      .map((networkTriple): TripleType => {
-        return {
-          id: networkTriple.id,
-          entityId: networkTriple.entity.id,
-          entityName: networkTriple.entity.name,
-          attributeId: networkTriple.attribute.id,
-          attributeName: networkTriple.attribute.name,
-          value: extractValue(networkTriple),
-          space,
-        };
-      });
+    const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
 
     return { triples };
   };
 
-  fetchEntities = async (name: string, abortController?: AbortController) => {
+  fetchEntities = async (name: string, space: string, abortController?: AbortController) => {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
@@ -212,10 +175,54 @@ export class Network implements INetwork {
           startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
             id,
             name
+            entityOf {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
+              space {
+                id
+              }
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+            }
           }
           containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
             id,
-            name
+            name,
+            entityOf {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
+              space {
+                id
+              }
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+            }
           }
         }`,
       }),
@@ -223,14 +230,26 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        startEntities: { name: string | null; id: string }[];
-        containEntities: { name: string | null; id: string }[];
+        startEntities: NetworkEntity[];
+        containEntities: NetworkEntity[];
       };
     } = await response.json();
 
     const { startEntities, containEntities } = json.data;
 
-    return sortSearchResultsByRelevance(startEntities, containEntities);
+    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+
+    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+      const triples = fromNetworkTriples(result.entityOf);
+
+      return {
+        ...result,
+        description: Entity.description(triples),
+        types: Entity.types(triples, space),
+      };
+    });
+
+    return sortedResultsWithTypesAndDescription;
   };
 
   fetchSpaces = async () => {
@@ -338,6 +357,28 @@ export class Network implements INetwork {
       }),
     ]);
 
+    /* Then we fetch all of the Value type for each column */
+    const columnsSchema = await Promise.all(
+      columnsTriples.triples.map(triple => {
+        return this.fetchTriples({
+          query: '',
+          space: spaceId,
+          first: 100,
+          skip: 0,
+          filter: [
+            {
+              field: 'entity-id',
+              value: triple.value.id,
+            },
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.VALUE_TYPE,
+            },
+          ],
+        });
+      })
+    );
+
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
     const rowTriples = await Promise.all(
@@ -357,21 +398,17 @@ export class Network implements INetwork {
       triples,
     }));
 
-    /* Name and Type are the default columns... */
+    /* Name is the default column... */
     const defaultColumns = [
       {
         name: 'Name',
         id: SYSTEM_IDS.NAME,
       },
-      {
-        name: 'Type',
-        id: SYSTEM_IDS.TYPES,
-      },
     ];
 
     /* ...and then we can format our user-defined schemaColumns */
     const schemaColumns = columnsTriples.triples.map(triple => ({
-      name: Entity.entityName(triple) || triple.value.id,
+      name: Value.nameOfEntityValue(triple) || triple.value.id,
       id: triple.value.id,
     })) as Column[];
 
@@ -381,7 +418,16 @@ export class Network implements INetwork {
     const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-        const defaultTriple = { ...Triple.empty(spaceId, entityId), attributeId: column.id };
+
+        /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
+        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0]?.entityId === column.id);
+        const columnValueType = columnTypeTriple?.triples[0].value.id;
+
+        const defaultTriple = {
+          ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),
+          attributeId: column.id,
+        };
+
         const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
 
         const cell = {
@@ -420,10 +466,8 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(
-  startEntities: { id: string; name: string | null }[],
-  containEntities: { id: string; name: string | null }[]
-) {
+function sortSearchResultsByRelevance(startEntities: NetworkEntity[], containEntities: NetworkEntity[]) {
+  // TODO: This is where it's breaking
   const startEntityIds = startEntities.map(entity => entity.id);
 
   const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));

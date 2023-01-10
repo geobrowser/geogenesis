@@ -20,20 +20,6 @@ const scalarDescriptionTriple: Triple = {
   },
 };
 
-const linkedDescriptionTriple: Triple = {
-  id: '1',
-  entityId: '1',
-  space: '1',
-  attributeId: 'Description',
-  attributeName: 'Description',
-  entityName: 'Banana',
-  value: {
-    id: '1',
-    type: 'entity',
-    name: 'Description of a Banana',
-  },
-};
-
 const genericAttribute: Triple = {
   id: '1',
   entityId: '1',
@@ -57,16 +43,6 @@ describe('Entity page', () => {
     );
 
     expect(screen.getByText('Banana')).toBeInTheDocument();
-  });
-
-  it('Renders entity description from description that is an entity type', () => {
-    render(
-      <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[linkedDescriptionTriple]} linkedEntities={{}} />
-      </Providers>
-    );
-
-    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
   it('Renders entity description from description that is a string type', () => {
@@ -135,28 +111,6 @@ describe('Entity page', () => {
     );
 
     expect(screen.getByText('Apple')).toBeInTheDocument();
-  });
-
-  it('Renders linked entity description if it exists', () => {
-    render(
-      <Providers>
-        <EntityPage
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[]}
-          linkedEntities={{
-            '2': {
-              triples: [linkedDescriptionTriple],
-              name: 'Apple',
-              id: '2',
-            },
-          }}
-        />
-      </Providers>
-    );
-
-    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
   it('Does not render linked entity description if empty', () => {

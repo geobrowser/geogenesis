@@ -70,8 +70,9 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         );
       }
       case 'attributeId': {
-        const attributeId = cellData as string;
-        const value = triple.attributeName ?? attributeId;
+        const attributeName = cellData as string;
+        const value = attributeName ?? triple.attributeId;
+
         return <CellContent value={value} />;
       }
       case 'value': {

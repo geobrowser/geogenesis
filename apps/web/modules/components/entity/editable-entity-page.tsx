@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
-import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
 import { Relation } from '~/modules/design-system/icons/relation';
@@ -9,14 +9,13 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Triple as TripleType } from '~/modules/types';
+import { Entity as EntityType, Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
+import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { NumberField, PlaceholderField, StringField } from './editable-fields';
-import { EntityAutocompleteDialog } from './entity-autocomplete';
-import { EntityTextAutocomplete } from './entity-text-autocomplete';
-
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -82,10 +81,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
 
-  const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-  const descriptionTriple = triples.find(
-    t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeName === 'Description'
-  );
+  const nameTriple = Entity.nameTriple(triples);
+  const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
 
@@ -180,6 +177,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
               <EntityAttributes
                 entityId={id}
                 triples={triples}
+                spaceId={space}
                 schemaTriples={schemaTriples}
                 name={name}
                 send={send}
@@ -225,8 +223,9 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
-  schemaTriples,
+  schemaTriples = [],
   name,
+  spaceId,
   send,
   hideSchema,
   hiddenSchemaIds,
@@ -236,6 +235,7 @@ function EntityAttributes({
   schemaTriples: Props['schemaTriples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
+  spaceId: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: (string | undefined)[];
 }) {
@@ -277,7 +277,7 @@ function EntityAttributes({
     });
   };
 
-  const linkAttribute = (oldAttributeId: string, attribute: { id: string; name: string | null }) => {
+  const linkAttribute = (oldAttributeId: string, attribute: EntityType) => {
     send({
       type: 'LINK_ATTRIBUTE',
       payload: {
@@ -290,7 +290,7 @@ function EntityAttributes({
     });
   };
 
-  const addEntityValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
+  const addEntityValue = (attributeId: string, linkedEntity: EntityType) => {
     // If it's an empty triple value
     send({
       type: 'ADD_ENTITY_VALUE',
@@ -364,6 +364,7 @@ function EntityAttributes({
               placeholder="Add value..."
               onDone={result => addEntityValue(attributeId, result)}
               itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+              spaceId={spaceId}
             />
           );
         }
@@ -393,6 +394,7 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
+                spaceId={spaceId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -408,6 +410,7 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(t => t.value.id)}
+                  spaceId={spaceId}
                 />
               )}
 

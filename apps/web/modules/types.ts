@@ -6,6 +6,8 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
+export type TripleValueType = 'number' | 'string' | 'entity';
+
 export type NumberValue = {
   type: 'number';
   id: string;
@@ -79,6 +81,13 @@ type Publishable = {
 };
 
 export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
+
+export type Entity = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  types: string[];
+};
 
 export interface Column {
   id: string;

@@ -4,7 +4,7 @@ import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Triples } from '~/modules/components/triples';
-import { SYSTEM_IDS } from '~/modules/constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';

@@ -1,8 +1,9 @@
 import styled from '@emotion/styled';
 import { useEffect, useRef } from 'react';
-import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { Entity } from '~/modules/types';
+import { ResultContent, ResultsList } from './results-list';
 
 const Container = styled.div({
   position: 'relative',
@@ -40,48 +41,19 @@ const ResultListContainer = styled.div(props => ({
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
 }));
 
-export const ResultList = styled.ul({
-  listStyle: 'none',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
-  margin: 0,
-  padding: 0,
-  overflowY: 'auto',
-});
-
 const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
 
-export const ResultItem = styled.li<{ existsOnEntity?: boolean }>(props => ({
-  all: 'unset',
-  padding: props.theme.space * 2.5,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-
-  '&:hover': {
-    backgroundColor: props.theme.colors['grey-01'],
-    ...(!props.existsOnEntity && {
-      cursor: 'pointer',
-    }),
-  },
-
-  ...(props.existsOnEntity && {
-    backgroundColor: props.theme.colors['grey-01'],
-    cursor: 'not-allowed',
-  }),
-}));
-
 interface Props {
   placeholder?: string;
-  onDone: (result: { id: string; name: string | null }) => void;
+  onDone: (result: Entity) => void;
   itemIds: string[];
+  spaceId: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) {
-  const { query, results, onQueryChange } = useAutocomplete();
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }: Props) {
+  const { query, results, onQueryChange } = useAutocomplete(spaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
 
@@ -97,31 +69,25 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) 
 
   return (
     <Container>
-      <QueryInput
-        placeholder={placeholder}
-        defaultValue={'banana'}
-        value={query}
-        onChange={e => onQueryChange(e.target.value)}
-      />
+      <QueryInput placeholder={placeholder} value={query} onChange={e => onQueryChange(e.target.value)} />
       {query && (
         <ResultListContainer ref={containerRef}>
           <ResultListHeader>
             <Text variant="smallButton">Add a relation</Text>
           </ResultListHeader>
-          <ResultList>
+          <ResultsList>
             {results.map(result => (
-              <ResultItem
+              <ResultContent
+                key={result.id}
                 onClick={() => {
                   if (!itemIdsSet.has(result.id)) onDone(result);
                 }}
-                key={result.id}
-                existsOnEntity={itemIdsSet.has(result.id)}
-              >
-                <Text variant="metadataMedium">{result.name}</Text>
-                {itemIdsSet.has(result.id) && <CheckCircleSmall color="grey-04" />}
-              </ResultItem>
+                alreadySelected={itemIdsSet.has(result.id)}
+                results={results}
+                result={result}
+              />
             ))}
-          </ResultList>
+          </ResultsList>
         </ResultListContainer>
       )}
     </Container>

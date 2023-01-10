@@ -1,11 +1,11 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
-import { Entity } from '.';
 import { ActionsStore } from '../action';
-import { SYSTEM_IDS } from '../constants';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
+import { Value } from '../value';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -115,7 +115,7 @@ export class EntityStore implements IEntityStore {
           .map(triple => ({
             ...Triple.empty(spaceId, id),
             attributeId: triple.value.id,
-            attributeName: Entity.entityName(triple), // Should we be grabbing all of the related triples for the attribute to see if it has a name triple?
+            attributeName: Value.nameOfEntityValue(triple), // Should we be grabbing all of the related triples for the attribute to see if it has a name triple?
             placeholder: true,
           }));
       })

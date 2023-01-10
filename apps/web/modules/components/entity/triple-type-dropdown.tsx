@@ -35,7 +35,7 @@ const StyledContent = styled(DropdownPrimitive.Content)(props => ({
   backgroundColor: 'white',
   borderRadius: 6,
   border: `1px solid ${props.theme.colors['grey-02']}`,
-  width: 155,
+  width: 160,
   zIndex: 10,
 }));
 
@@ -50,21 +50,18 @@ const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => i
   isLast: boolean;
 }>(props => ({
   all: 'unset',
+  ...props.theme.typography.button,
   display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
+  justifyContent: 'space-between',
+  alignItems: 'center',
   padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  backgroundColor: props.theme.colors.white,
   color: props.theme.colors['grey-04'],
+
   userSelect: 'none',
 
   ...(!props.isLast && {
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
   }),
-
-  '&:hover': {
-    color: props.theme.colors.text,
-  },
 
   '&[data-highlighted]': {
     cursor: 'pointer',

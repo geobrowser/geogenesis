@@ -11,6 +11,9 @@ const StyledChip = styled.a(props => ({
   backgroundColor: props.theme.colors.white,
   textDecoration: 'none',
 
+  // We want to avoid large amounts of text in a chip being centered.
+  textAlign: 'left',
+
   '&:hover, &:focus': {
     cursor: 'pointer',
     color: props.theme.colors.ctaPrimary,
@@ -37,6 +40,9 @@ type Icon = 'check-close';
 const StyledChipButton = styled(StyledChip)(props => ({
   display: 'flex',
   alignItems: 'center',
+
+  // We want to avoid large amounts of text in a chip being centered.
+  textAlign: 'left',
   gap: props.theme.space,
 }));
 
@@ -50,7 +56,12 @@ export function ChipButton({ onClick, children, icon }: ChipButtonProps) {
   return (
     <StyledChipButton as="button" onClick={onClick} role="button">
       {children}
-      {icon === 'check-close' ? <CheckCloseSmall /> : null}
+      {icon === 'check-close' ? (
+        // Wrapper div to prevent the icon from being scaled by flexbox
+        <div>
+          <CheckCloseSmall />
+        </div>
+      ) : null}
     </StyledChipButton>
   );
 }
