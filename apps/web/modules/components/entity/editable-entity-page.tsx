@@ -1,7 +1,6 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
-import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { ChipButton } from '~/modules/design-system/chip';
 import { Relation } from '~/modules/design-system/icons/relation';
@@ -71,10 +70,8 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
 
-  const nameTriple = triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-  const descriptionTriple = triples.find(
-    t => t.attributeId === SYSTEM_IDS.DESCRIPTION || t.attributeName === SYSTEM_IDS.DESCRIPTION
-  );
+  const nameTriple = Entity.nameTriple(triples);
+  const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
 

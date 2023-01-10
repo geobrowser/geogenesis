@@ -17,12 +17,15 @@ import { groupBy } from '../utils';
  * is an EntityValue we assume it's not valid and don't attempt to parse it to render in the UI.
  */
 export function description(triples: Triple[]): string | null {
-  const descriptionTriple = triples.find(
+  const triple = descriptionTriple(triples);
+  return triple?.value.type === 'string' ? triple.value.value : null;
+}
+
+export function descriptionTriple(triples: Triple[]): Triple | undefined {
+  return triples.find(
     triple =>
       triple.attributeId === SYSTEM_IDS.DESCRIPTION_SCALAR || triple.attributeName === SYSTEM_IDS.DESCRIPTION_SCALAR
   );
-
-  return descriptionTriple?.value?.type === 'string' ? descriptionTriple.value.value : null;
 }
 
 /**
@@ -63,6 +66,10 @@ export function types(triples: Triple[], currentSpace: string): string[] {
  * to find the name of the entity.
  */
 export function name(triples: Triple[]): string | null {
-  const nameValue = triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME)?.value;
-  return nameValue?.type === 'string' ? nameValue.value : null;
+  const triple = nameTriple(triples);
+  return triple?.value.type === 'string' ? triple?.value.value : null;
+}
+
+export function nameTriple(triples: Triple[]): Triple | undefined {
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }

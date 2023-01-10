@@ -20,20 +20,6 @@ const scalarDescriptionTriple: Triple = {
   },
 };
 
-const linkedDescriptionTriple: Triple = {
-  id: '1',
-  entityId: '1',
-  space: '1',
-  attributeId: 'Description',
-  attributeName: 'Description',
-  entityName: 'Banana',
-  value: {
-    id: '1',
-    type: 'entity',
-    name: 'Description of a Banana',
-  },
-};
-
 const genericAttribute: Triple = {
   id: '1',
   entityId: '1',
