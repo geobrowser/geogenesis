@@ -4,38 +4,23 @@ import {
   EntityValue,
   StringValue,
 } from '@geogenesis/action-schema/assembly'
-import { SYSTEM_IDS } from '@geogenesis/ids/dist'
 import { BigInt, log } from '@graphprotocol/graph-ts'
+import { SYSTEM_IDS } from '@geogenesis/ids'
 import { handleAction, handleCreateTripleAction } from './actions'
 
-const {
-  TYPES,
-  ATTRIBUTES,
-  SCHEMA_TYPE,
-  VALUE_TYPE,
-  RELATION,
-  TEXT,
-  IMAGE_ATTRIBUTE,
-  DESCRIPTION,
-  DESCRIPTION_SCALAR,
-  NAME,
-  SPACE,
-  ATTRIBUTE,
-} = SYSTEM_IDS
-
 const entities = [
-  TYPES,
-  ATTRIBUTES,
-  SCHEMA_TYPE,
-  VALUE_TYPE,
-  RELATION,
-  TEXT,
-  IMAGE_ATTRIBUTE,
-  DESCRIPTION,
-  DESCRIPTION_SCALAR,
-  NAME,
-  SPACE,
-  ATTRIBUTE,
+  SYSTEM_IDS.TYPES,
+  SYSTEM_IDS.ATTRIBUTES,
+  SYSTEM_IDS.SCHEMA_TYPE,
+  SYSTEM_IDS.VALUE_TYPE,
+  SYSTEM_IDS.RELATION,
+  SYSTEM_IDS.TEXT,
+  SYSTEM_IDS.IMAGE_ATTRIBUTE,
+  SYSTEM_IDS.DESCRIPTION,
+  SYSTEM_IDS.DESCRIPTION_SCALAR,
+  SYSTEM_IDS.NAME,
+  SYSTEM_IDS.SPACE,
+  SYSTEM_IDS.ATTRIBUTE,
 ]
 
 /* TODO: Unify apps/web/modules/constants.ts and this file for blessed UUIDs*/

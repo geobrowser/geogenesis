@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids/dist';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { TripleValueType } from './types';
 
 export const valueTypes: Record<string, TripleValueType> = {

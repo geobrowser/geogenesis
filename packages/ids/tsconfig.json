@@ -1,0 +1,14 @@
+{
+  "extends": "@tsconfig/node18/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true,
+    "strictNullChecks": true,
+    "resolveJsonModule": true,
+    "outDir": "dist",
+    "declaration": true,
+    "lib": ["dom"],
+    "esModuleInterop": true
+  },
+  "exclude": ["node_modules", "dist", "tsconfig.json"]
+}

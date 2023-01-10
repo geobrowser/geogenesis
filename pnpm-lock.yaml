@@ -345,19 +345,16 @@ importers:
 
   packages/ids:
     specifiers:
-      '@types/node': ^17.0.31
-      as-base64: ^0.2.0
-      assemblyscript: ^0.20.6
+      '@tsconfig/node18': ^1.0.1
+      '@types/node': ^18.7.15
       rimraf: ^3.0.2
-      ts-node: ^10.7.0
-      typescript: 4.6.4
+      typescript: ^4.8.2
+    dependencies:
+      '@tsconfig/node18': 1.0.1
     devDependencies:
-      '@types/node': 17.0.45
-      as-base64: 0.2.0
-      assemblyscript: 0.20.19
+      '@types/node': 18.7.18
       rimraf: 3.0.2
-      ts-node: 10.9.1_laqv367ntbladgchwutjrnj4ky
-      typescript: 4.6.4
+      typescript: 4.8.4
 
   packages/integration:
     specifiers:
@@ -3231,6 +3228,10 @@ packages:
 
   /@tsconfig/node16/1.0.3:
     resolution: {integrity: sha512-yOlFc+7UtL/89t2ZhjPvvB/DeAr3r+Dq58IgzsFkOAvVC6NMJXmCGjbptdXdR9qsX7pKcTL+s87FtYREi2dEEQ==}
+
+  /@tsconfig/node18/1.0.1:
+    resolution: {integrity: sha512-sNFeK6X2ATlhlvzyH4kKYQlfHXE2f2/wxtB9ClvYXevWpmwkUT7VaSrjIN9E76Qebz8qP5JOJJ9jD3QoD/Z9TA==}
+    dev: false
 
   /@typechain/ethers-v5/10.1.0_hbbrqft7buq47se7amxz2vqkvi:
     resolution: {integrity: sha512-3LIb+eUpV3mNCrjUKT5oqp8PBsZYSnVrkfk6pY/ZM0boRs2mKxjFZ7bktx42vfDye8PPz3NxtW4DL5NsNsFqlg==}
@@ -6578,7 +6579,7 @@ packages:
     resolution: {integrity: sha512-Rd3se6QB+sO1TwqZjscQrurpEPIfO0/yYnSin6Q/rD3mOutHvUrCAhJub3r90uNb+SESBuE0QYoB90YdfatsRg==}
 
   /concat-map/0.0.1:
-    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
+    resolution: {integrity: sha1-2Klr13/Wjfd5OnMDajug1UBdR3s=}
 
   /concat-stream/1.6.2:
     resolution: {integrity: sha512-27HBghJxjiZtIk3Ycvn/4kbJk/1uZuJFfuPEns6LaEvpvG1f0hTea8lilrouyo9mVc2GWdcEZ8OLoGmSADlrCw==}
