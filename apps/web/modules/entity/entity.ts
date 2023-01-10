@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '../types';
 import { groupBy } from '../utils';
 

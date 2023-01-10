@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ID } from '../id';
 import { Action, EntityValue, NumberValue, OmitStrict, StringValue, Triple, TripleValueType, Value } from '../types';
 import { valueTypes } from '../value-types';

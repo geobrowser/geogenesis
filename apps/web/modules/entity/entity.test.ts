@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '../types';
 import { description, descriptionTriple, name, nameTriple, types } from './entity';
 
