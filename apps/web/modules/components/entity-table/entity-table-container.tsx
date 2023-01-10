@@ -1,8 +1,6 @@
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/triple';
-// import { getFilesFromFileList } from '../utils';
-// import { importCSVFile } from '~/modules/services/import';
 import { Column, Row } from '../../types';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';

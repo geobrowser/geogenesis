@@ -1,7 +1,5 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { useState } from 'react';
-import { j } from 'vitest/dist/index-ea17aa0c';
 import { useActionsStore } from '~/modules/action';
 import { SYSTEM_IDS } from '~/modules/constants';
 import { Button, SquareButton } from '~/modules/design-system/button';
@@ -18,6 +16,7 @@ import { useEditEvents } from './edit-events';
 import { NumberField, PlaceholderField, StringField } from './editable-fields';
 import { EntityAutocompleteDialog } from './entity-autocomplete';
 import { EntityTextAutocomplete } from './entity-text-autocomplete';
+
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -67,7 +66,15 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create, remove, schemaTriples } = useEntityStore();
+  const {
+    triples: localTriples,
+    update,
+    create,
+    remove,
+    schemaTriples,
+    deleteSchemaId,
+    deletedSchemaIds,
+  } = useEntityStore();
 
   const { actions } = useActionsStore(space);
 
@@ -170,7 +177,15 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} schemaTriples={schemaTriples} name={name} send={send} />
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                schemaTriples={schemaTriples}
+                name={name}
+                send={send}
+                deleteSchemaId={deleteSchemaId}
+                deletedSchemaIds={deletedSchemaIds}
+              />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -213,22 +228,20 @@ function EntityAttributes({
   schemaTriples,
   name,
   send,
+  deleteSchemaId,
+  deletedSchemaIds,
 }: {
   entityId: string;
   triples: Props['triples'];
   schemaTriples: Props['schemaTriples'];
   send: ReturnType<typeof useEditEvents>;
   name: string;
+  deleteSchemaId: (id: string) => void;
+  deletedSchemaIds: (String | undefined)[];
 }) {
-  const [deletedPlaceholders, setDeletedPlaceholders] = useState<string[]>([]);
-
-  const unusedSchemaTriples = schemaTriples.filter(t => !triples.some(t2 => t2.attributeId === t.attributeId));
-
-  const displayedTriples = [...triples, ...unusedSchemaTriples].filter(({ attributeId }) => {
-    return !deletedPlaceholders.includes(attributeId);
-  });
-
-  const groupedTriples = groupBy(displayedTriples, t => t.attributeId);
+  //@goose Filtering this out here because I can't figure out why the compute isn't updating when deletedSchemaIds changes
+  const filteredTriples = [...triples, ...schemaTriples].filter(t => !deletedSchemaIds.includes(t.attributeId));
+  const groupedTriples = groupBy(filteredTriples, t => t.attributeId);
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
@@ -297,24 +310,24 @@ function EntityAttributes({
     });
   };
 
+  const updateValueFromPlaceholder = (triple: TripleType, value: string) => {
+    send({
+      type: 'UPDATE_VALUE_FROM_PLACEHOLDER',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
   const updateValue = (triple: TripleType, value: string) => {
-    if (triple.placeholder) {
-      send({
-        type: 'UPDATE_VALUE_FROM_PLACEHOLDER',
-        payload: {
-          triple,
-          value,
-        },
-      });
-    } else {
-      send({
-        type: 'UPDATE_VALUE',
-        payload: {
-          triple,
-          value,
-        },
-      });
-    }
+    send({
+      type: 'UPDATE_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
   };
 
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
@@ -324,14 +337,16 @@ function EntityAttributes({
           <PlaceholderField
             key={triple.id}
             variant="body"
-            placeholder="Add value..."
-            onBlur={e => updateValue(triple, e.target.value)}
+            placeholder="Placeholder value..."
+            onBlur={e => {
+              updateValueFromPlaceholder({ ...triple }, e.target.value);
+            }}
           />
         ) : (
           <StringField
             key={triple.id}
             variant="body"
-            placeholder="Add value..."
+            placeholder="String value!"
             onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
@@ -374,6 +389,9 @@ function EntityAttributes({
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
+
+        console.log('TRIPLES PER GROUP', triples);
+        debugger;
 
         return (
           <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
@@ -432,12 +450,13 @@ function EntityAttributes({
                 )}
                 <SquareButton
                   icon="trash"
-                  onClick={() =>
+                  onClick={
                     isPlaceholder
-                      ? setDeletedPlaceholders([...deletedPlaceholders, attributeId])
-                      : triples
-                          .filter(t => t.attributeId === attributeId)
-                          .forEach(t => send({ type: 'REMOVE_TRIPLE', payload: { triple: t } }))
+                      ? () => deleteSchemaId(attributeId)
+                      : () =>
+                          triples
+                            .filter(t => t.attributeId === attributeId)
+                            .forEach(t => send({ type: 'REMOVE_TRIPLE', payload: { triple: t } }))
                   }
                 />
               </TripleActions>
