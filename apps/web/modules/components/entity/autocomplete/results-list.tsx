@@ -64,7 +64,7 @@ function ResultDisambiguation({ result, results }: { result: Entity; results: En
 
   const isDuplicateNameAndTypes = pipe(
     results,
-    A.filter(r => r.name === result.name && r.id === result.id),
+    A.filter(r => r.name === result.name && r.id !== result.id),
     A.filter(duplicate => duplicate.types.every(type => resultTypes.has(type))),
     A.length,
     length => length > 0
