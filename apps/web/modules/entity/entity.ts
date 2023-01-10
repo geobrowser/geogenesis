@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Triple } from '../types';
+import { A, D, pipe } from '@mobily/ts-belt';
+import { Entity, Triple } from '../types';
 import { groupBy } from '../utils';
 
 /**
@@ -37,7 +38,6 @@ export function descriptionTriple(triples: Triple[]): Triple | undefined {
  */
 export function types(triples: Triple[], currentSpace: string): string[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
-
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
   return Object.entries(groupedTypeTriples)
@@ -71,4 +71,18 @@ export function name(triples: Triple[]): string | null {
 
 export function nameTriple(triples: Triple[]): Triple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
+}
+
+export function entitiesFromTriples(triples: Triple[]): Entity[] {
+  return pipe(
+    triples,
+    A.groupBy(triple => triple.entityId),
+    D.toPairs,
+    A.map(([entityId, triples]) => ({
+      id: entityId,
+      name: name(triples),
+      description: description(triples),
+      types: types(triples, triples[0]?.space),
+    }))
+  );
 }
