@@ -70,7 +70,7 @@ export function ensureStableId(triple: Triple): Triple {
   return triple;
 }
 
-export function fromActions(spaceId: string, actions: Action[] | undefined, triples: Triple[]) {
+export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
   const newTriples: Triple[] = [...triples].reverse();
   const newActions = actions ?? [];
 

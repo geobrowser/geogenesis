@@ -8,7 +8,7 @@ import { makeOptionalComputed } from '~/modules/utils';
 import { Entity } from '.';
 import { Action, ActionsStore, useActionsStoreContext } from '../action';
 import { Triple } from '../triple';
-import { Entity as EntityType } from '../types';
+import { Action as ActionType, Entity as EntityType } from '../types';
 
 interface EntityAutocompleteOptions {
   api: INetwork;
@@ -31,17 +31,36 @@ class EntityAutocomplete {
         try {
           const networkEntities = await api.fetchEntities(this.query$.get(), spaceId, this.abortController);
 
+          // const allActions = pipe();
           const localEntities = pipe(
             ActionsStore.actions$.get(),
             D.values,
             A.flat,
-            actions => Triple.fromActions(spaceId, actions, []),
+            // We need to merge the local actions with the network triple in order to correctly
+            // display any description or type metadata in the search results list.
+            actions => {
+              const entityIds = actions.map(a => {
+                switch (a.type) {
+                  case 'createTriple':
+                  case 'deleteTriple':
+                    return a.entityId;
+                  case 'editTriple':
+                    return a.after.entityId;
+                }
+              });
+
+              const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
+              const triplesForNetworkEntity = networkEntity?.triples ?? [];
+              return Triple.fromActions(actions, triplesForNetworkEntity);
+            },
             Entity.entitiesFromTriples,
             A.filter(e => G.isString(e.name) && S.startsWith(S.toLowerCase(e.name), S.toLowerCase(this.query$.get())))
           );
 
-          // TODO: Dedupe
-          return [...localEntities, ...networkEntities];
+          // We want to favor the local version of an entity if it exists on the network already.
+          const localEntityIds = new Set(localEntities.map(e => e.id));
+
+          return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
         } catch (e) {
           return [];
         }

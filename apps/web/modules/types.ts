@@ -87,6 +87,7 @@ export type Entity = {
   name: string | null;
   description: string | null;
   types: string[];
+  triples: Triple[];
 };
 
 export interface Column {

@@ -246,6 +246,7 @@ export class Network implements INetwork {
         ...result,
         description: Entity.description(triples),
         types: Entity.types(triples, space),
+        triples,
       };
     });
 
