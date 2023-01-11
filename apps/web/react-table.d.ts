@@ -7,5 +7,7 @@ declare module '@tanstack/react-table' {
   export interface TableMeta<TData extends RowData> {
     space: string;
     expandedCells: Record<string, boolean>;
+    editable: boolean;
+    isEditor: boolean;
   }
 }

@@ -8,7 +8,6 @@ export const EmptyTableText = styled.td(props => ({
 export const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
 });
 
 export const PageNumberContainer = styled.div({

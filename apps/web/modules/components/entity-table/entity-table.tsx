@@ -30,7 +30,7 @@ const formatColumns = (columns: Column[] = []) => {
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => <Text variant="smallTitle">{column.name}</Text>,
-      size: columnSize,
+      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
     })
   );
 };
@@ -46,7 +46,7 @@ const SpaceHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
   textAlign: 'left',
-  width: props.width,
+  minWidth: props.width,
 }));
 
 const TableRow = styled.tr(props => ({
@@ -55,29 +55,25 @@ const TableRow = styled.tr(props => ({
   },
 }));
 
-// Using a container to wrap the table to make styling borders around
-// the table easier. Otherwise we need to do some pseudoselector shenanigans
-// or use box-shadow instead of border.
-const Container = styled.div(props => ({
-  padding: 0,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: props.theme.radius,
-}));
+const Container = styled.div({
+  overflowX: 'hidden',
+
+  '@media(max-width: 900px)': {
+    overflowX: 'scroll',
+  },
+});
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = !!table.options?.meta?.expandedCells[cellId];
+    const editable = table.options.meta?.editable;
+    const isEditor = table.options.meta?.isEditor;
 
     const entityId = Object.values(row.original)[0].entityId;
     const cellData = getValue<Cell>();
     const isPlaceholder = cellData.triples[0]?.placeholder;
-
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { isEditor } = useAccessControl(space);
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { editable } = useEditable();
 
     const showEditableCell = isEditor && editable;
 
@@ -100,6 +96,7 @@ interface Props {
 export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
+  const { isEditor } = useAccessControl(space);
 
   const table = useReactTable({
     data: rows,
@@ -117,6 +114,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
     meta: {
       expandedCells,
       space,
+      editable,
+      isEditor,
     },
   });
 

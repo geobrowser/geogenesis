@@ -116,6 +116,8 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
     meta: {
       expandedCells,
       space,
+      isEditor: false,
+      editable: false,
     },
   });
 
