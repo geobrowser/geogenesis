@@ -232,6 +232,7 @@ const listener =
                 name: linkedEntity.name,
               },
               attributeName: triplesByAttributeId[attribute.id][0].attributeName,
+              entityName: entityName,
             }),
             triplesByAttributeId[attribute.id][0]
           );
