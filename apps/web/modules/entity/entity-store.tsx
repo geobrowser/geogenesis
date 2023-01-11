@@ -1,10 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
+import { A } from '@mobily/ts-belt';
 import { ActionsStore } from '../action';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';
-import { arrayEquals } from '../utils';
 import { Value } from '../value';
 
 interface IEntityStore {
@@ -86,7 +86,7 @@ export class EntityStore implements IEntityStore {
       const typeIds = this.typeIds$.get();
       const previous = e.previous as string[];
 
-      if (!arrayEquals(previous, typeIds)) {
+      if (!A.eq(previous, typeIds, (a, b) => a === b)) {
         this.setSchemaTriples(typeIds);
       }
 
