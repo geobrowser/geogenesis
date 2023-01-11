@@ -1,6 +1,6 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import { A, G, pipe, S } from '@mobily/ts-belt';
+import { A, G, pipe } from '@mobily/ts-belt';
 import { useEffect, useMemo } from 'react';
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
@@ -28,7 +28,9 @@ class EntityAutocomplete {
         this.abortController = new AbortController();
 
         try {
-          const networkEntities = await api.fetchEntities(this.query$.get(), spaceId, this.abortController);
+          const query = this.query$.get();
+
+          const networkEntities = await api.fetchEntities(query, spaceId, this.abortController);
           const localEntities = Entity.mergeActionsWithNetworkEntities(ActionsStore.actions$.get(), networkEntities);
 
           // We want to favor the local version of an entity if it exists on the network already.
@@ -37,7 +39,7 @@ class EntityAutocomplete {
 
           return pipe(
             mergedEntities,
-            A.filter(e => G.isString(e.name) && S.startsWith(S.toLowerCase(e.name), S.toLowerCase(this.query$.get())))
+            A.filter(e => G.isString(e.name) && e.name.toLowerCase().startsWith(query.toLowerCase()))
           );
         } catch (e) {
           return [];
