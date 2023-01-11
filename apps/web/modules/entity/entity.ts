@@ -84,7 +84,7 @@ export function entitiesFromTriples(triples: TripleType[]): Entity[] {
     D.toPairs,
     A.map(([entityId, triples]) => {
       // ts-belt returns readonly arrays from groupBy, so we need to coerce here.
-      // We can do array operations like .concat or .slice to close the triples
+      // We can do array operations like .concat or .slice to coerce the triples
       // array to a mutable version, but casting is cheaper performance-wise as
       // entitiesFromTriples may be used in performance-heavy situations.
       const mutableTriples = triples as unknown as TripleType[];
