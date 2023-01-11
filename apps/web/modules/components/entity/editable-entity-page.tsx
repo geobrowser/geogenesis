@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
@@ -246,38 +247,58 @@ function EntityAttributes({
   });
 
   const filteredTriples = [...triples, ...visibleSchemaTriples];
-  const groupedTriples = groupBy(filteredTriples, t => t.attributeId);
 
-  const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
   const schemaAttributeIds = schemaTriples.map(t => t.attributeId);
 
+  const sortedTriples = filteredTriples.sort((tripleA, tripleB) => {
+    /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
+
+    const { attributeId: attributeIdA } = tripleA;
+    const { attributeId: attributeIdB } = tripleB;
+
+    const aName = attributeIdA === SYSTEM_IDS.NAME;
+    const bName = attributeIdB === SYSTEM_IDS.NAME;
+    const aDescription = attributeIdA === SYSTEM_IDS.DESCRIPTION;
+    const bDescription = attributeIdB === SYSTEM_IDS.DESCRIPTION;
+    const aTypes = attributeIdA === SYSTEM_IDS.TYPES;
+    const bTypes = attributeIdB === SYSTEM_IDS.TYPES;
+
+    const aIndex = schemaAttributeIds.indexOf(attributeIdA);
+    const bIndex = schemaAttributeIds.indexOf(attributeIdB);
+
+    const aInSchema = schemaAttributeIds.includes(attributeIdA);
+    const bInSchema = schemaAttributeIds.includes(attributeIdB);
+
+    if (aName && !bName) return -1;
+    if (!aName && bName) return 1;
+
+    if (aDescription && !bDescription) return -1;
+    if (!aDescription && bDescription) return 1;
+
+    if (aTypes && !bTypes) return -1;
+    if (!aTypes && bTypes) return 1;
+
+    if (aInSchema && !bInSchema) {
+      return -1;
+    }
+
+    if (!aInSchema && bInSchema) {
+      return 1;
+    }
+
+    if (aInSchema && bInSchema) {
+      return aIndex - bIndex;
+    }
+
+    return 0;
+  });
+
+  const groupedTriples = groupBy(sortedTriples, t => t.attributeId);
+  const attributeIds = Object.keys(groupedTriples);
+
   const orderedGroupedTriples = Object.entries(groupedTriples);
-
-  // .sort(([attributeIdA], [attributeIdB]) => {
-  //   /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
-  //   const newATriple = !schemaAttributeIds.includes(attributeIdA);
-  //   const newBTriple = !schemaAttributeIds.includes(attributeIdB);
-
-  //   const placeholderAbove = schemaAttributeIds.indexOf(attributeIdA) > schemaAttributeIds.indexOf(attributeIdB);
-  //   const placeholderBelow = schemaAttributeIds.indexOf(attributeIdA) < schemaAttributeIds.indexOf(attributeIdB);
-
-  //   if (attributeIdA === SYSTEM_IDS.NAME) return -1;
-  //   if (attributeIdB === SYSTEM_IDS.NAME) return 1;
-  //   if (attributeIdA === SYSTEM_IDS.DESCRIPTION) return -1;
-  //   if (attributeIdB === SYSTEM_IDS.DESCRIPTION) return 1;
-  //   if (attributeIdA === SYSTEM_IDS.TYPES) return -1;
-  //   if (attributeIdB === SYSTEM_IDS.TYPES) return 1;
-
-  //   // if (newATriple) return 1;
-  //   // if (newBTriple) return -1;
-
-  //   // if (placeholderAbove) return 1;
-  //   // if (placeholderBelow) return -1;
-
-  //   return -1;
-  // });
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -300,7 +321,6 @@ function EntityAttributes({
   };
 
   const linkAttribute = (oldAttributeId: string, attribute: EntityType) => {
-    console.log({ oldAttributeId, attribute });
     send({
       type: 'LINK_ATTRIBUTE',
       payload: {

@@ -1,10 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
+import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { ActionsStore } from '../action';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';
-import { makeOptionalComputed } from '../utils';
+import { arrayEquals } from '../utils';
 import { Value } from '../value';
 
 interface IEntityStore {
@@ -40,10 +40,11 @@ interface IEntityStoreConfig {
 
 export class EntityStore implements IEntityStore {
   private api: INetwork;
+  id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
-  typeTriples$: ObservableComputed<TripleType[]> = observable([]);
-  schemaTriples$: ObservableComputed<TripleType[]> = observable([]);
+  typeIds$: ObservableComputed<string[]> = observable<string[]>([]);
+  schemaTriples$: Observable<TripleType[]> = observable([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
@@ -52,6 +53,7 @@ export class EntityStore implements IEntityStore {
     const initialDefaultTriples =
       initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
 
+    this.id = id;
     this.api = api;
     this.triples$ = observable(initialDefaultTriples);
     this.spaceId = spaceId;
@@ -71,87 +73,103 @@ export class EntityStore implements IEntityStore {
       return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
     });
 
-    this.typeTriples$ = computed(() => {
-      return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
+    /* In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to persist the Attribute field. 
+      Filtering out those entities here. */
+    this.typeIds$ = computed(() => {
+      return this.triples$
+        .get()
+        .filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '')
+        .map(t => t.value.id);
     });
 
-    this.schemaTriples$ = makeOptionalComputed(
-      [],
-      computed(async () => {
-        this.abortController.abort();
-        this.abortController = new AbortController();
+    observe<string[]>(e => {
+      const typeIds = this.typeIds$.get();
+      const previous = e.previous as string[];
 
-        try {
-          /* In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to persist the Attribute field. 
-        Filtering out those entities here. */
-          const typeTriples = this.typeTriples$.get().filter(triple => triple.value.id !== '');
+      if (!arrayEquals(previous, typeIds)) {
+        console.log('typeIds changed', typeIds);
+        this.setSchemaTriples(typeIds);
+      }
 
-          if (typeTriples.length === 0) {
-            return [];
-          }
-
-          const attributes = await Promise.all(
-            typeTriples.map(triple => {
-              return this.api.fetchTriples({
-                query: '',
-                space: spaceId,
-                first: 100,
-                abortController: this.abortController,
-                skip: 0,
-                filter: [
-                  {
-                    field: 'entity-id',
-                    value: triple.value.id,
-                  },
-                  {
-                    field: 'attribute-id',
-                    value: SYSTEM_IDS.ATTRIBUTES,
-                  },
-                ],
-              });
-            })
-          );
-
-          const attributeTriples = attributes.flatMap(attribute => attribute.triples);
-
-          const valueTypes = await Promise.all(
-            attributeTriples.map(attribute => {
-              return this.api.fetchTriples({
-                query: '',
-                space: spaceId,
-                first: 100,
-                skip: 0,
-                abortController: this.abortController,
-                filter: [
-                  {
-                    field: 'entity-id',
-                    value: attribute.value.id,
-                  },
-                  {
-                    field: 'attribute-id',
-                    value: SYSTEM_IDS.VALUE_TYPE,
-                  },
-                ],
-              });
-            })
-          );
-
-          const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
-
-          return attributeTriples.map((attribute, index) => {
-            const valueType = valueTypeTriples[index]?.value.id;
-            return {
-              ...Triple.emptyPlaceholder(spaceId, id, valueType),
-              attributeId: attribute.value.id,
-              attributeName: Value.nameOfEntityValue(attribute),
-            };
-          });
-        } catch (e) {
-          return [];
-        }
-      })
-    );
+      return typeIds;
+    });
   }
+
+  setSchemaTriples = async (typeIds: string[]) => {
+    this.abortController.abort();
+    this.abortController = new AbortController();
+
+    try {
+      if (typeIds.length === 0) {
+        this.schemaTriples$.set([]);
+      }
+
+      const attributes = await Promise.all(
+        typeIds.map(triple => {
+          return this.api.fetchTriples({
+            query: '',
+            space: this.spaceId,
+            first: 100,
+            abortController: this.abortController,
+            skip: 0,
+            filter: [
+              {
+                field: 'entity-id',
+                value: triple,
+              },
+              {
+                field: 'attribute-id',
+                value: SYSTEM_IDS.ATTRIBUTES,
+              },
+            ],
+          });
+        })
+      );
+
+      const attributeTriples = attributes.flatMap(attribute => attribute.triples);
+
+      const valueTypes = await Promise.all(
+        attributeTriples.map(attribute => {
+          return this.api.fetchTriples({
+            query: '',
+            space: this.spaceId,
+            first: 100,
+            skip: 0,
+            abortController: this.abortController,
+            filter: [
+              {
+                field: 'entity-id',
+                value: attribute.value.id,
+              },
+              {
+                field: 'attribute-id',
+                value: SYSTEM_IDS.VALUE_TYPE,
+              },
+            ],
+          });
+        })
+      );
+
+      const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
+
+      const schemaTriples = attributeTriples.map((attribute, index) => {
+        const valueType = valueTypeTriples[index]?.value.id;
+        return {
+          ...Triple.emptyPlaceholder(this.spaceId, this.id, valueType),
+          attributeId: attribute.value.id,
+          attributeName: Value.nameOfEntityValue(attribute),
+        };
+      });
+
+      this.schemaTriples$.set(schemaTriples);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return;
+      }
+
+      this.schemaTriples$.set([]);
+    }
+  };
 
   hideSchema = (id: string) => {
     const hiddenSchemaIds = this.hiddenSchemaIds$.get();
