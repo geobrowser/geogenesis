@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 import { Triple } from '../types';
 import { FetchTriplesOptions, INetwork } from './network';
@@ -13,6 +14,38 @@ export const makeStubTriple = (name: string): Triple => {
       type: 'string',
       value: name,
       id: `s~${name}`,
+    },
+    space: 's',
+  };
+};
+
+export const makeStubType = (name: string): Triple => {
+  return {
+    id: name,
+    entityId: name,
+    entityName: name,
+    attributeId: SYSTEM_IDS.TYPES,
+    attributeName: '',
+    value: {
+      type: 'string',
+      value: name,
+      id: SYSTEM_IDS.SCHEMA_TYPE,
+    },
+    space: 's',
+  };
+};
+
+export const makeStubTripleTyped = (triple: Triple, typeId: string): Triple => {
+  return {
+    id: `${triple.id}-typed`,
+    entityId: triple.id,
+    entityName: triple.entityName,
+    attributeId: SYSTEM_IDS.TYPES,
+    attributeName: '',
+    value: {
+      type: 'entity',
+      name: typeId,
+      id: typeId,
     },
     space: 's',
   };

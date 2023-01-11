@@ -13,7 +13,7 @@ interface IEntityStore {
   remove(triple: TripleType): void;
 }
 
-const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
+export const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
   return [
     Triple.withId({
       space: spaceId,
@@ -69,6 +69,7 @@ export class EntityStore implements IEntityStore {
 
         return isCreate || isDelete || isRemove;
       });
+
       // We want to merge any local actions with the network triples
       return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
     });
@@ -84,7 +85,7 @@ export class EntityStore implements IEntityStore {
 
     observe<string[]>(e => {
       const typeIds = this.typeIds$.get();
-      const previous = e.previous as string[];
+      const previous = e.previous || [];
 
       if (!A.eq(previous, typeIds, (a, b) => a === b)) {
         this.setSchemaTriples(typeIds);
