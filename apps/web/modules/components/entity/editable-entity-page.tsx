@@ -236,7 +236,7 @@ function EntityAttributes({
   name: string;
   spaceId: string;
   hideSchema: (id: string) => void;
-  hiddenSchemaIds: (string | undefined)[];
+  hiddenSchemaIds: string[];
 }) {
   const tripleAttributeIds = triples.map(t => t.attributeId);
 

@@ -43,8 +43,8 @@ export class EntityStore implements IEntityStore {
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
-  typeIds$: ObservableComputed<string[]> = observable<string[]>([]);
-  schemaTriples$: Observable<TripleType[]> = observable([]);
+  typeIds$: ObservableComputed<string[]>;
+  schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
@@ -87,7 +87,6 @@ export class EntityStore implements IEntityStore {
       const previous = e.previous as string[];
 
       if (!arrayEquals(previous, typeIds)) {
-        console.log('typeIds changed', typeIds);
         this.setSchemaTriples(typeIds);
       }
 
