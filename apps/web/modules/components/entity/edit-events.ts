@@ -73,9 +73,17 @@ export type EditEvent =
       };
     }
   | {
-      type: 'UPDATE_VALUE_FROM_PLACEHOLDER';
+      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER';
       payload: {
         value: string;
+        triple: TripleType;
+      };
+    }
+  | {
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER';
+      payload: {
+        entityId: string;
+        entityName: string;
         triple: TripleType;
       };
     }
@@ -202,6 +210,8 @@ const listener =
         const { newAttribute, oldAttribute, triplesByAttributeId } = event.payload;
         const triplesToUpdate = triplesByAttributeId[oldAttribute.id];
 
+        debugger;
+
         if (triplesToUpdate.length > 0) {
           if (triplesByAttributeId[newAttribute.id]?.length > 0) {
             // If triples at the new id already exists we want the user to use the existing entry method
@@ -259,7 +269,7 @@ const listener =
           })
         );
       }
-      case 'UPDATE_VALUE_FROM_PLACEHOLDER': {
+      case 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER': {
         const { value, triple } = event.payload;
 
         return create(
@@ -277,6 +287,26 @@ const listener =
           })
         );
       }
+
+      case 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER': {
+        const { entityId, entityName, triple } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: triple.entityName,
+            attributeId: triple.attributeId,
+            attributeName: triple.attributeName,
+            value: {
+              type: 'entity',
+              id: entityId,
+              name: entityName,
+            },
+          })
+        );
+      }
+
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
         update(

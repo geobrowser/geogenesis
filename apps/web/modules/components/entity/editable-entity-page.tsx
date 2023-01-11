@@ -239,9 +239,14 @@ function EntityAttributes({
   hideSchema: (id: string) => void;
   hiddenSchemaIds: (string | undefined)[];
 }) {
-  const filteredSchemaTriples = schemaTriples.filter(t => !hiddenSchemaIds.includes(t.attributeId));
+  const tripleIds = triples.map(t => t.id);
+  const visibleSchemaTriples = schemaTriples.filter(t => {
+    const notHidden = !hiddenSchemaIds.includes(t.attributeId);
+    const notInTriples = !tripleIds.includes(t.id);
+    return notHidden && notInTriples;
+  });
 
-  const filteredTriples = [...triples, ...filteredSchemaTriples];
+  const filteredTriples = [...triples, ...visibleSchemaTriples];
   const groupedTriples = groupBy(filteredTriples, t => t.attributeId);
 
   const attributeIds = Object.keys(groupedTriples);
@@ -278,6 +283,7 @@ function EntityAttributes({
   };
 
   const linkAttribute = (oldAttributeId: string, attribute: EntityType) => {
+    console.log({ oldAttributeId, attribute });
     send({
       type: 'LINK_ATTRIBUTE',
       payload: {
@@ -305,15 +311,20 @@ function EntityAttributes({
     });
   };
 
-  const addEntityValueFromPlaceholder = (entity: TripleType, linkedEntity: EntityType) => {
-    // If it's an empty triple value
-    linkAttribute('', entity);
+  const createEntityTripleFromPlaceholder = (triple: TripleType, linkedEntity: EntityType) => {
+    send({
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+      payload: {
+        triple,
+        entityId: linkedEntity.id,
+        entityName: linkedEntity.name || '',
+      },
+    });
   };
 
-  const updateValueFromPlaceholder = (triple: TripleType, value: string) => {
-    hideSchema(triple.attributeId);
+  const createStringTripleFromPlaceholder = (triple: TripleType, value: string) => {
     send({
-      type: 'UPDATE_VALUE_FROM_PLACEHOLDER',
+      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         triple,
         value,
@@ -340,7 +351,7 @@ function EntityAttributes({
             variant="body"
             placeholder="Placeholder value..."
             onBlur={e => {
-              updateValueFromPlaceholder({ ...triple }, e.target.value);
+              createStringTripleFromPlaceholder({ ...triple }, e.target.value);
             }}
           />
         ) : (
@@ -362,23 +373,16 @@ function EntityAttributes({
           />
         );
       case 'entity':
-        if (triple.placeholder) {
-          return (
-            <EntityTextAutocomplete
-              key={`entity-${attributeId}-${triple.value.id}`}
-              placeholder="Add value..."
-              onDone={result => addEntityValueFromPlaceholder(triple, result)}
-              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
-              spaceId={spaceId}
-            />
-          );
-        }
         if (isEmptyEntity) {
           return (
             <EntityTextAutocomplete
               key={`entity-${attributeId}-${triple.value.id}`}
               placeholder="Add value..."
-              onDone={result => addEntityValue(attributeId, result)}
+              onDone={result =>
+                triple.placeholder
+                  ? createEntityTripleFromPlaceholder(triple, result)
+                  : addEntityValue(attributeId, result)
+              }
               itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
               spaceId={spaceId}
             />
