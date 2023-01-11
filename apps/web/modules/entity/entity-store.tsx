@@ -46,6 +46,7 @@ export class EntityStore implements IEntityStore {
   schemaTriples$: ObservableComputed<TripleType[]> = observable([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
+  abortController: AbortController = new AbortController();
 
   constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
     const initialDefaultTriples =
@@ -77,69 +78,77 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = makeOptionalComputed(
       [],
       computed(async () => {
-        const typeTriples = this.typeTriples$.get();
+        this.abortController.abort();
+        this.abortController = new AbortController();
 
-        const noTypeTriples = typeTriples.length === 0;
-        const defaultTypeTriples = typeTriples[0]?.value.id === '';
+        try {
+          /* In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to persist the Attribute field. 
+        Filtering out those entities here. */
+          const typeTriples = this.typeTriples$.get().filter(triple => triple.value.id !== '');
 
-        if (noTypeTriples || defaultTypeTriples) {
+          if (typeTriples.length === 0) {
+            return [];
+          }
+
+          const attributes = await Promise.all(
+            typeTriples.map(triple => {
+              return this.api.fetchTriples({
+                query: '',
+                space: spaceId,
+                first: 100,
+                abortController: this.abortController,
+                skip: 0,
+                filter: [
+                  {
+                    field: 'entity-id',
+                    value: triple.value.id,
+                  },
+                  {
+                    field: 'attribute-id',
+                    value: SYSTEM_IDS.ATTRIBUTES,
+                  },
+                ],
+              });
+            })
+          );
+
+          const attributeTriples = attributes.flatMap(attribute => attribute.triples);
+
+          const valueTypes = await Promise.all(
+            attributeTriples.map(attribute => {
+              return this.api.fetchTriples({
+                query: '',
+                space: spaceId,
+                first: 100,
+                skip: 0,
+                abortController: this.abortController,
+                filter: [
+                  {
+                    field: 'entity-id',
+                    value: attribute.value.id,
+                  },
+                  {
+                    field: 'attribute-id',
+                    value: SYSTEM_IDS.VALUE_TYPE,
+                  },
+                ],
+              });
+            })
+          );
+
+          const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
+
+          return attributeTriples.map((attribute, index) => {
+            const valueType = valueTypeTriples[index]?.value.id;
+            return {
+              ...Triple.emptyPlaceholder(spaceId, id, valueType),
+              attributeId: attribute.value.id,
+              attributeName: Value.nameOfEntityValue(attribute),
+            };
+          });
+        } catch (e) {
           return [];
         }
-
-        const attributes = await Promise.all(
-          typeTriples.map(triple => {
-            return this.api.fetchTriples({
-              query: '',
-              space: spaceId,
-              first: 100,
-              skip: 0,
-              filter: [
-                {
-                  field: 'entity-id',
-                  value: triple.value.id,
-                },
-                {
-                  field: 'attribute-id',
-                  value: SYSTEM_IDS.ATTRIBUTES,
-                },
-              ],
-            });
-          })
-        );
-
-        const attributeTriples = attributes.flatMap(attribute => attribute.triples);
-
-        const valueTypes = await Promise.all(
-          attributeTriples.map(attribute => {
-            return this.api.fetchTriples({
-              query: '',
-              space: spaceId,
-              first: 100,
-              skip: 0,
-              filter: [
-                {
-                  field: 'entity-id',
-                  value: attribute.value.id,
-                },
-                {
-                  field: 'attribute-id',
-                  value: SYSTEM_IDS.VALUE_TYPE,
-                },
-              ],
-            });
-          })
-        );
-
-        const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
-
-        return attributeTriples.map((attribute, index) => {
-          const valueType = valueTypeTriples[index]?.value.id;
-          return {
-            ...Triple.emptyPlaceholder(spaceId, id, valueType),
-            attributeId: attribute.value.id,
-            attributeName: Value.nameOfEntityValue(attribute),
-          };
-        });
       })
     );
   }

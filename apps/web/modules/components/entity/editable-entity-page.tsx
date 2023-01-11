@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
@@ -58,7 +57,6 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
-  schemaTriples: TripleType[];
   id: string;
   name: string;
   space: string;
@@ -231,18 +229,19 @@ function EntityAttributes({
   hiddenSchemaIds,
 }: {
   entityId: string;
-  triples: Props['triples'];
-  schemaTriples: Props['schemaTriples'];
+  triples: TripleType[];
+  schemaTriples: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
   spaceId: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: (string | undefined)[];
 }) {
-  const tripleIds = triples.map(t => t.id);
+  const tripleAttributeIds = triples.map(t => t.attributeId);
+
   const visibleSchemaTriples = schemaTriples.filter(t => {
     const notHidden = !hiddenSchemaIds.includes(t.attributeId);
-    const notInTriples = !tripleIds.includes(t.id);
+    const notInTriples = !tripleAttributeIds.includes(t.attributeId);
     return notHidden && notInTriples;
   });
 
@@ -252,15 +251,33 @@ function EntityAttributes({
   const attributeIds = Object.keys(groupedTriples);
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
-  const orderedGroupedTriples = Object.entries(groupedTriples).sort(([attributeIdA], [attributeIdB]) => {
-    if (attributeIdA === SYSTEM_IDS.NAME) return -1;
-    if (attributeIdB === SYSTEM_IDS.NAME) return 1;
-    if (attributeIdA === SYSTEM_IDS.DESCRIPTION) return -1;
-    if (attributeIdB === SYSTEM_IDS.DESCRIPTION) return 1;
-    if (attributeIdA === SYSTEM_IDS.TYPES) return -1;
-    if (attributeIdB === SYSTEM_IDS.TYPES) return 1;
-    return -1;
-  });
+  const schemaAttributeIds = schemaTriples.map(t => t.attributeId);
+
+  const orderedGroupedTriples = Object.entries(groupedTriples);
+
+  // .sort(([attributeIdA], [attributeIdB]) => {
+  //   /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
+  //   const newATriple = !schemaAttributeIds.includes(attributeIdA);
+  //   const newBTriple = !schemaAttributeIds.includes(attributeIdB);
+
+  //   const placeholderAbove = schemaAttributeIds.indexOf(attributeIdA) > schemaAttributeIds.indexOf(attributeIdB);
+  //   const placeholderBelow = schemaAttributeIds.indexOf(attributeIdA) < schemaAttributeIds.indexOf(attributeIdB);
+
+  //   if (attributeIdA === SYSTEM_IDS.NAME) return -1;
+  //   if (attributeIdB === SYSTEM_IDS.NAME) return 1;
+  //   if (attributeIdA === SYSTEM_IDS.DESCRIPTION) return -1;
+  //   if (attributeIdB === SYSTEM_IDS.DESCRIPTION) return 1;
+  //   if (attributeIdA === SYSTEM_IDS.TYPES) return -1;
+  //   if (attributeIdB === SYSTEM_IDS.TYPES) return 1;
+
+  //   // if (newATriple) return 1;
+  //   // if (newBTriple) return -1;
+
+  //   // if (placeholderAbove) return 1;
+  //   // if (placeholderBelow) return -1;
+
+  //   return -1;
+  // });
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -349,7 +366,7 @@ function EntityAttributes({
           <PlaceholderField
             key={triple.id}
             variant="body"
-            placeholder="Placeholder value..."
+            placeholder="Add value..."
             onBlur={e => {
               createStringTripleFromPlaceholder({ ...triple }, e.target.value);
             }}
@@ -358,7 +375,7 @@ function EntityAttributes({
           <StringField
             key={triple.id}
             variant="body"
-            placeholder="String value!"
+            placeholder="Add value..."
             onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />

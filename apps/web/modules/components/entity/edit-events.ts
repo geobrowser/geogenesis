@@ -210,8 +210,6 @@ const listener =
         const { newAttribute, oldAttribute, triplesByAttributeId } = event.payload;
         const triplesToUpdate = triplesByAttributeId[oldAttribute.id];
 
-        debugger;
-
         if (triplesToUpdate.length > 0) {
           if (triplesByAttributeId[newAttribute.id]?.length > 0) {
             // If triples at the new id already exists we want the user to use the existing entry method
