@@ -240,9 +240,9 @@ function EntityAttributes({
 }) {
   const tripleAttributeIds = triples.map(t => t.attributeId);
 
-  const visibleSchemaTriples = schemaTriples.filter(t => {
-    const notHidden = !hiddenSchemaIds.includes(t.attributeId);
-    const notInTriples = !tripleAttributeIds.includes(t.attributeId);
+  const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
+    const notHidden = !hiddenSchemaIds.includes(schemaTriple.attributeId);
+    const notInTriples = !tripleAttributeIds.includes(schemaTriple.attributeId);
     return notHidden && notInTriples;
   });
 
@@ -250,7 +250,7 @@ function EntityAttributes({
 
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
-  const schemaAttributeIds = schemaTriples.map(t => t.attributeId);
+  const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
 
   const sortedTriples = filteredTriples.sort((tripleA, tripleB) => {
     /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
