@@ -238,7 +238,7 @@ function EntityAttributes({
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
 }) {
-  const tripleAttributeIds = triples.map(t => t.attributeId);
+  const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
   const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
     const notHidden = !hiddenSchemaIds.includes(schemaTriple.attributeId);
@@ -248,7 +248,7 @@ function EntityAttributes({
 
   const filteredTriples = [...triples, ...visibleSchemaTriples];
 
-  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
+  const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
 
   const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
 
@@ -295,7 +295,7 @@ function EntityAttributes({
     return 0;
   });
 
-  const groupedTriples = groupBy(sortedTriples, t => t.attributeId);
+  const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
 
   const orderedGroupedTriples = Object.entries(groupedTriples);
@@ -420,7 +420,9 @@ function EntityAttributes({
                   ? createEntityTripleFromPlaceholder(triple, result)
                   : addEntityValue(attributeId, result)
               }
-              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+              itemIds={entityValueTriples
+                .filter(triple => triple.attributeId === attributeId)
+                .map(triple => triple.value.id)}
               spaceId={spaceId}
             />
           );
@@ -439,7 +441,7 @@ function EntityAttributes({
   return (
     <>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
-        const isEntityGroup = triples.find(t => t.value.type === 'entity');
+        const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
@@ -466,7 +468,7 @@ function EntityAttributes({
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
-                  entityValueIds={entityValueTriples.map(t => t.value.id)}
+                  entityValueIds={entityValueTriples.map(triple => triple.value.id)}
                   spaceId={spaceId}
                 />
               )}
@@ -508,8 +510,8 @@ function EntityAttributes({
                       ? () => hideSchema(attributeId)
                       : () =>
                           triples
-                            .filter(t => t.attributeId === attributeId)
-                            .forEach(t => send({ type: 'REMOVE_TRIPLE', payload: { triple: t } }))
+                            .filter(triple => triple.attributeId === attributeId)
+                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }))
                   }
                 />
               </TripleActions>
