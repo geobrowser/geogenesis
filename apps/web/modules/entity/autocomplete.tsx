@@ -31,7 +31,7 @@ class EntityAutocomplete {
           const query = this.query$.get();
 
           const networkEntities = await api.fetchEntities(query, spaceId, this.abortController);
-          const localEntities = Entity.mergeActionsWithNetworkEntities(ActionsStore.actions$.get(), networkEntities);
+          const localEntities = Entity.mergeActionsWithEntities(ActionsStore.actions$.get(), networkEntities);
 
           // We want to favor the local version of an entity if it exists on the network already.
           const localEntityIds = new Set(localEntities.map(e => e.id));

@@ -105,10 +105,7 @@ export function entitiesFromTriples(triples: TripleType[]): Entity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithNetworkEntities(
-  actions: Record<string, Action[]>,
-  networkEntities: Entity[]
-): Entity[] {
+export function mergeActionsWithEntities(actions: Record<string, Action[]>, networkEntities: Entity[]): Entity[] {
   return pipe(
     actions,
     D.values,
