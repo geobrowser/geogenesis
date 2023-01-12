@@ -1,5 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
-import { Triple } from '../types';
+import { Triple } from '~/modules/types';
 import { useEntityStoreContext } from './entity-store-provider';
 
 export function useEntityStore() {
