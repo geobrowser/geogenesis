@@ -2,7 +2,10 @@ import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useRouter } from 'next/router';
 import React, { useState } from 'react';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { Button, SmallButton } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
@@ -64,22 +67,42 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   },
 }));
 
+const AddEntityContainer = styled.div(() => ({
+  display: "flex",
+  justifyContent: "space-between"
+}));
+
+interface CancelButtonProps {
+  onClick: () => void;
+}
+
+const CancelButton = styled(Text)<CancelButtonProps>(() => ({
+  color: "#3963FE",
+  cursor: "pointer"
+}));
+
 const MotionContent = motion(StyledContent);
 
 interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
   setFilterState: (filterState: FilterState) => void;
+  spaceId: string;
 }
 
 export function TypeDialog({ inputContainerWidth }: Props) {
   const theme = useTheme();
   const entityTableStore = useEntityTable();
+  const router = useRouter();
+  const { id: spaceId } = router.query as { id: string };
+  const { isEditor } = useAccessControl(spaceId)
 
   const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+
+  const [displayCreateType, setDisplayCreateType] = useState(false);
 
   const [filter, setFilter] = useState('');
 
@@ -89,6 +112,16 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   const handleSelect = (type: Triple) => {
     entityTableStore.setType(type);
     setOpen(false);
+  };
+
+  const handleCancel = () => {
+    setFilter('');
+    setDisplayCreateType(false);
+  }
+
+  const handleCreateType = () => {
+    console.log("We should be creating a new type");
+    setDisplayCreateType(true);
   };
 
   return (
@@ -116,7 +149,13 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             alignOffset={-(theme.space * 2) + 4}
             align={width > 768 ? 'end' : 'start'}
           >
-            <Text variant="button">All types</Text>
+            <AddEntityContainer>
+              <Text variant="button">All types</Text>
+              {filteredTypes.length >= 1 && !displayCreateType ?
+                <SmallButton variant="secondary" icon="createSmall" onClick={handleCreateType}>New Type</SmallButton> :
+                <CancelButton variant="button" onClick={handleCancel}>Cancel</CancelButton>
+              }
+            </AddEntityContainer>
             <Spacer height={12} />
             <Input
               value={filter}
@@ -127,11 +166,19 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             <Spacer height={12} />
 
             <ResultsList>
-              {filteredTypes.map(type => (
-                <ResultItem onClick={() => handleSelect(type)} key={type.id}>
-                  {type.entityName}
-                </ResultItem>
-              ))}
+              {filteredTypes.length >= 1 && !displayCreateType ?
+                filteredTypes.map(type => (
+                  <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                    {type.entityName}
+                  </ResultItem>
+                )) :
+                isEditor &&
+                <Button
+                  onClick={handleCreateType}
+                >
+                  Create Type
+                </Button>
+              }
             </ResultsList>
           </MotionContent>
         ) : null}
