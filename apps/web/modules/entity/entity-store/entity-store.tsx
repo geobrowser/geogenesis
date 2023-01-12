@@ -1,11 +1,11 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A } from '@mobily/ts-belt';
-import { ActionsStore } from '../action';
-import { INetwork } from '../services/network';
-import { Triple } from '../triple';
-import { Triple as TripleType } from '../types';
-import { Value } from '../value';
+import { ActionsStore } from '~/modules/action';
+import { INetwork } from '~/modules/services/network';
+import { Triple } from '~/modules/triple';
+import { Triple as TripleType } from '~/modules/types';
+import { Value } from '~/modules/value';
 
 interface IEntityStore {
   create(triple: TripleType): void;

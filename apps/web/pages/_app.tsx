@@ -16,6 +16,7 @@ import '../styles/styles.css';
 const globalStyles = css`
   html {
     overflow-y: overlay;
+    overflow-x: hidden;
   }
 
   body {

@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
+import { useState } from 'react';
 import { CheckCloseSmall } from '~/modules/design-system/icons/check-close-small';
 
 const StyledChip = styled.a(props => ({
@@ -22,6 +23,46 @@ const StyledChip = styled.a(props => ({
   },
 }));
 
+{
+  /* Wrapper to prevent the icon from being scaled by flexbox */
+}
+const StyledCheckCloseContainer = styled.button({
+  all: 'unset',
+  cursor: 'pointer',
+});
+
+const StyledDeletableChip = styled.a<{ isWarning: boolean }>(props => {
+  const chipHoverActiveStyles = props.isWarning
+    ? {}
+    : {
+        cursor: 'pointer',
+        color: props.theme.colors.ctaPrimary,
+        backgroundColor: props.theme.colors.ctaTertiary,
+        boxShadow: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
+      };
+
+  const closeButtonActiveStyles = props.isWarning ? {} : { opacity: 0.3 };
+
+  return {
+    ...props.theme.typography.metadataMedium,
+    borderRadius: props.theme.radius,
+    padding: `${props.theme.space}px ${props.theme.space * 2}px`,
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: props.theme.space,
+    // We want to avoid large amounts of text in a chip being centered.
+    textAlign: 'left',
+
+    backgroundColor: props.isWarning ? props.theme.colors['red-02'] : props.theme.colors.white,
+    color: props.isWarning ? props.theme.colors['red-01'] : props.theme.colors.text,
+    boxShadow: `inset 0 0 0 1px ${props.isWarning ? props.theme.colors['red-01'] : props.theme.colors.text}`,
+
+    '&:hover, &:focus': chipHoverActiveStyles,
+    [`&:hover ${StyledCheckCloseContainer}, &:focus ${StyledCheckCloseContainer}`]: closeButtonActiveStyles,
+  };
+});
+
 interface Props {
   href: string;
   children: React.ReactNode;
@@ -35,33 +76,30 @@ export function Chip({ href, children }: Props) {
   );
 }
 
-type Icon = 'check-close';
-
-const StyledChipButton = styled(StyledChip)(props => ({
-  display: 'flex',
-  alignItems: 'center',
-
-  // We want to avoid large amounts of text in a chip being centered.
-  textAlign: 'left',
-  gap: props.theme.space,
-}));
+const StyledLink = styled.a({
+  color: 'currentcolor',
+});
 
 interface ChipButtonProps {
   onClick: () => void;
   children: React.ReactNode;
-  icon?: Icon;
+  href: string;
 }
 
-export function ChipButton({ onClick, children, icon }: ChipButtonProps) {
+export function DeletableChipButton({ onClick, children, href }: ChipButtonProps) {
+  const [isWarning, setIsWarning] = useState(false);
   return (
-    <StyledChipButton as="button" onClick={onClick} role="button">
-      {children}
-      {icon === 'check-close' ? (
-        // Wrapper div to prevent the icon from being scaled by flexbox
-        <div>
-          <CheckCloseSmall />
-        </div>
-      ) : null}
-    </StyledChipButton>
+    <StyledDeletableChip as="button" role="button" isWarning={isWarning}>
+      <Link href={href} passHref>
+        <StyledLink>{children}</StyledLink>
+      </Link>
+      <StyledCheckCloseContainer
+        onClick={onClick}
+        onMouseOver={() => setIsWarning(true)}
+        onMouseOut={() => setIsWarning(false)}
+      >
+        <CheckCloseSmall />
+      </StyledCheckCloseContainer>
+    </StyledDeletableChip>
   );
 }

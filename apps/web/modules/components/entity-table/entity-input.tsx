@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
-import { useEntityTable } from '~/modules/triple';
+import { useEntityTable } from '~/modules/entity';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
@@ -12,22 +12,31 @@ import { TypeDialog } from '../filter/type-dialog';
 const SearchInputContainer = styled.div(props => ({
   position: 'relative',
   width: '100%',
-  marginLeft: props.theme.space * 4,
+
+  '@media (max-width: 640px)': {
+    marginLeft: 0,
+  },
 }));
 
 const SearchIconContainer = styled.div(props => ({
   position: 'absolute',
   left: props.theme.space * 3,
   top: props.theme.space * 2.5,
-  zIndex: 100,
+  zIndex: 10,
 }));
 
-const InputContainer = styled.div({
+const InputContainer = styled.div(props => ({
   overflow: 'hidden',
   display: 'flex',
   width: '100%',
   position: 'relative',
-});
+  gap: props.theme.space * 4,
+
+  '@media (max-width: 640px)': {
+    flexDirection: 'column',
+    gap: props.theme.space,
+  },
+}));
 
 const TriplesInputField = styled(Input)(props => ({
   width: '100%',
