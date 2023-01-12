@@ -12,6 +12,7 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
+import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple } from '~/modules/types';
 
 interface Props {
@@ -59,7 +60,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       space,
       query: '',
       skip: 0,
-      first: 100,
+      first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'entity-id', value: entityId }],
     }),
 
@@ -67,7 +68,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       space,
       query: '',
       skip: 0,
-      first: 100,
+      first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
   ]);
@@ -78,7 +79,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         space,
         query: '',
         skip: 0,
-        first: 100,
+        first: DEFAULT_PAGE_SIZE,
         filter: [{ field: 'entity-id', value: triple.entityId }],
       })
     )
