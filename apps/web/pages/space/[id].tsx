@@ -9,8 +9,9 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { EntityTableStoreProvider } from '~/modules/triple';
 import { Column, Row, Triple } from '~/modules/types';
+import { EntityTableStoreProvider } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 
 interface Props {
   spaceId: string;
@@ -83,6 +84,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const params = {
     ...initialParams,
+    first: DEFAULT_PAGE_SIZE,
+    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeId,
   };
 
@@ -110,7 +113,7 @@ export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) 
     query: '',
     space: spaceId,
     skip: 0,
-    first: 100,
+    first: DEFAULT_PAGE_SIZE,
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
       {

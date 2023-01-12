@@ -1,7 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { INetwork } from '../services/network';
+import { INetwork } from '../../services/network';
 import {
   Action,
   Column,
@@ -11,8 +11,9 @@ import {
   Row,
   Triple,
   Triple as TripleType,
-} from '../types';
-import { makeOptionalComputed } from '../utils';
+} from '../../types';
+import { makeOptionalComputed } from '../../utils';
+import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
 interface IEntityTableStore {
   actions$: Observable<Action[]>;
@@ -30,13 +31,6 @@ interface IEntityTableStore {
   setQuery(query: string): void;
   setPageNumber(page: number): void;
 }
-
-export type InitialEntityTableStoreParams = {
-  query: string;
-  pageNumber: number;
-  filterState: FilterState;
-  typeId: string | null;
-};
 
 interface IEntityTableStoreConfig {
   api: INetwork;
@@ -116,22 +110,25 @@ export class EntityTableStore implements IEntityTableStore {
           this.abortController = new AbortController();
 
           const selectedType = this.selectedType$.get();
+          const pageNumber = this.pageNumber$.get();
 
           const params = {
             query: this.query$.get(),
-            pageNumber: this.pageNumber$.get(),
+            pageNumber: pageNumber,
             filterState: this.filterState$.get(),
             typeId: selectedType?.entityId || null,
+            first: pageSize + 1,
+            skip: pageNumber * pageSize,
           };
 
-          const { rows, columns } = await this.api.fetchEntityTableData({
+          const { rows, columns, hasNextPage } = await this.api.fetchEntityTableData({
             spaceId: space,
             params,
             abortController: this.abortController,
           });
 
           this.hydrated$.set(true);
-          return { columns, rows: rows.slice(0, pageSize), hasNextPage: rows.length > pageSize };
+          return { columns, rows: rows.slice(0, pageSize), hasNextPage };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function
