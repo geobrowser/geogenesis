@@ -127,9 +127,6 @@ export class EntityTableStore implements IEntityTableStore {
             abortController: this.abortController,
           });
 
-          console.log('rows', rows.length);
-          console.log('lastRow', rows.slice(-1));
-
           this.hydrated$.set(true);
           return { columns, rows: rows.slice(0, pageSize), hasNextPage };
         } catch (e) {
