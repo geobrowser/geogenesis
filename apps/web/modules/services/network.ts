@@ -54,6 +54,7 @@ interface FetchEntityTableDataParams {
   params: InitialEntityTableStoreParams & {
     skip: number;
     first: number;
+    filterState: FilterState;
   };
   abortController?: AbortController;
 }
@@ -399,10 +400,19 @@ export class Network implements INetwork {
         })
       )
     );
-    const rowTriplesWithEntityIds = rowTriples.map(({ triples }, index) => ({
-      entityId: rowEntityIds[index],
-      triples,
+
+    const entities: EntityType[] = rowTriples.map(({ triples }, index) => ({
+      id: rowEntityIds[index],
+      name: Entity.name(triples),
+      description: Entity.description(triples),
+      types: Entity.types(triples, spaceId),
+
+      triples: triples,
     }));
+
+    // We have to client-side filter the triples as filtering Entities on the server
+    // based on triples doesn't really work with our current setup.
+    const filteredEntities = Entity.fromFilterState(params.filterState, entities);
 
     /* Name is the default column... */
     const defaultColumns = [
@@ -421,7 +431,7 @@ export class Network implements INetwork {
     const columns = [...defaultColumns, ...schemaColumns];
 
     /* Finally, we can build our initialRows */
-    const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
+    const rows = filteredEntities.map(({ triples, id }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
@@ -430,7 +440,7 @@ export class Network implements INetwork {
         const columnValueType = columnTypeTriple?.triples[0].value.id;
 
         const defaultTriple = {
-          ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),
+          ...Triple.emptyPlaceholder(spaceId, id, columnValueType),
           attributeId: column.id,
         };
 
@@ -438,7 +448,7 @@ export class Network implements INetwork {
 
         const cell = {
           columnId: column.id,
-          entityId,
+          entityId: id,
           triples: cellTriples,
         };
 

@@ -86,6 +86,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    filterState: initialParams.filterState,
     typeId,
   };
 

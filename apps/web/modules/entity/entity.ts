@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 import { Triple } from '../triple';
-import { Action, Entity, Triple as TripleType } from '../types';
+import { Action, Entity, FilterState, Triple as TripleType } from '../types';
 import { groupBy } from '../utils';
 
 /**
@@ -129,4 +129,37 @@ export function mergeActionsWithEntities(actions: Record<string, Action[]>, netw
     },
     entitiesFromTriples
   );
+}
+
+export function fromFilterState(filterState: FilterState, entities: Entity[]): Entity[] {
+  return entities.filter(entity => {
+    return filterState.every(({ field, value }) => {
+      switch (field) {
+        case 'attribute-id':
+          return entity.triples.some(t => t.attributeId === value);
+        case 'attribute-name':
+          return entity.triples.some(t => t.attributeName?.toLowerCase().includes(value.toLowerCase()));
+        case 'entity-id':
+          return entity.triples.some(t => t.entityId === value);
+        case 'entity-name':
+          return entity.triples.some(t => t.entityName?.toLowerCase().includes(value.toLowerCase()));
+        case 'linked-to':
+          return entity.triples.some(t => {
+            if (t.value.type !== 'entity') return false;
+            return t.value.id === value;
+          });
+        case 'value':
+          return entity.triples.some(t => {
+            switch (t.value.type) {
+              case 'string':
+                return t.value.value.toLowerCase().includes(value.toLowerCase());
+              case 'entity':
+                return t.value.name?.toLowerCase().includes(value.toLowerCase());
+              case 'number':
+                return t.value.value.toLowerCase().includes(value.toLowerCase());
+            }
+          });
+      }
+    });
+  });
 }
