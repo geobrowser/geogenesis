@@ -152,8 +152,12 @@ export class EntityStore implements IEntityStore {
 
       const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
 
+      console.log('attributeTriples', attributeTriples);
       const schemaTriples = attributeTriples.map((attribute, index) => {
         const valueType = valueTypeTriples[index]?.value.id;
+
+        console.log({ valueType, valueTypeTriples, index });
+
         return {
           ...Triple.emptyPlaceholder(this.spaceId, this.id, valueType),
           attributeId: attribute.value.id,

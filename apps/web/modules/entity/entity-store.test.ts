@@ -1,7 +1,7 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 import { ActionsStore } from '../action';
-import { makeStubTriple, makeStubTripleTyped, makeStubType, MockNetwork } from '../services/mock-network';
+import { makeStubTextAttribute, makeStubTripleWithType, MockNetwork } from '../services/mock-network';
 import { createInitialDefaultTriples, EntityStore } from './entity-store';
 
 describe('EntityStore', () => {
@@ -24,17 +24,15 @@ describe('EntityStore', () => {
     expect(store.typeIds$.get()).toStrictEqual([]);
   });
 
-  it('Computes type IDs from initial triples', async () => {
-    const aliceTriple = makeStubTriple('Alice');
-    const typeTriple = makeStubType('Person');
-    const aliceTypeTriple = makeStubTripleTyped(aliceTriple, typeTriple.entityId);
+  it('Returns type IDs', async () => {
+    const typeTriple = makeStubTripleWithType('SomeTypeId');
 
-    const initialEntityStoreTriples = [aliceTriple, aliceTypeTriple];
+    const initialEntityStoreTriples = [typeTriple];
 
     const network = new MockNetwork({ triples: [] });
 
     const store = new EntityStore({
-      id: aliceTriple.id,
+      id: 'e',
       api: network,
       spaceId: 's',
       initialTriples: initialEntityStoreTriples,
@@ -43,22 +41,20 @@ describe('EntityStore', () => {
 
     await when(() => store.triples$.get().length > 0 && store.typeIds$.get().length > 0);
 
+    console.log(store.typeIds$.get());
     expect(store.triples$.get()).toStrictEqual(initialEntityStoreTriples);
-    expect(store.typeIds$.get()).toStrictEqual(['Person']);
+    expect(store.typeIds$.get()).toStrictEqual(['SomeTypeId']);
   });
 
-  it('Default to string schemas for types', async () => {
-    const aliceTriple = makeStubTriple('Alice');
-    const typeTriple = makeStubType('Person');
-    const aliceTypeTriple = makeStubTripleTyped(aliceTriple, typeTriple.entityId);
+  it('Returns schema placeholders for text attributes', async () => {
+    const typeTriple = makeStubTripleWithType('SomeTypeId');
+    const textAttribute = makeStubTextAttribute('Nickname');
+    const initialEntityStoreTriples = [typeTriple];
 
-    const initialNetworkTriples = [aliceTriple, typeTriple, aliceTypeTriple];
-    const initialEntityStoreTriples = [aliceTriple, aliceTypeTriple];
-
-    const network = new MockNetwork({ triples: initialNetworkTriples });
+    const network = new MockNetwork({ triples: [textAttribute] });
 
     const store = new EntityStore({
-      id: aliceTriple.id,
+      id: 'e',
       api: network,
       spaceId: 's',
       initialTriples: initialEntityStoreTriples,
@@ -69,9 +65,8 @@ describe('EntityStore', () => {
       () => store.triples$.get().length > 0 && store.typeIds$.get().length > 0 && store.schemaTriples$.get().length > 0
     );
 
-    expect(store.triples$.get()).toStrictEqual(initialEntityStoreTriples);
-    expect(store.typeIds$.get()).toStrictEqual(['Person']);
     expect(store.schemaTriples$.get()).toHaveLength(1);
-    expect(store.schemaTriples$.get()[0]).toStrictEqual(3);
+    expect(store.schemaTriples$.get()[0].placeholder).toBeTruthy();
+    expect(store.schemaTriples$.get()[0].value.type).toStrictEqual('string');
   });
 });

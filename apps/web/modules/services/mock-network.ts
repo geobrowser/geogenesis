@@ -19,33 +19,49 @@ export const makeStubTriple = (name: string): Triple => {
   };
 };
 
-export const makeStubType = (name: string): Triple => {
+export const makeStubTripleWithType = (typeId: string): Triple => {
   return {
-    id: name,
-    entityId: name,
-    entityName: name,
+    id: `id~${typeId}`,
+    entityId: `entityId~${typeId}`,
+    entityName: `entityName~${typeId}`,
     attributeId: SYSTEM_IDS.TYPES,
-    attributeName: '',
+    attributeName: 'Types',
     value: {
-      type: 'string',
-      value: name,
-      id: SYSTEM_IDS.SCHEMA_TYPE,
+      type: 'entity',
+      name: `valueName~${typeId}`,
+      id: typeId,
     },
     space: 's',
   };
 };
 
-export const makeStubTripleTyped = (triple: Triple, typeId: string): Triple => {
+export const makeStubTextAttribute = (name: string): Triple => {
   return {
-    id: `${triple.id}-typed`,
-    entityId: triple.id,
-    entityName: triple.entityName,
-    attributeId: SYSTEM_IDS.TYPES,
-    attributeName: '',
+    id: name,
+    entityId: name,
+    entityName: name,
+    attributeId: SYSTEM_IDS.ATTRIBUTE,
+    attributeName: 'Types',
     value: {
       type: 'entity',
-      name: typeId,
-      id: typeId,
+      name: 'Text',
+      id: SYSTEM_IDS.TEXT,
+    },
+    space: 's',
+  };
+};
+
+export const makeStubRelationAttribute = (name: string): Triple => {
+  return {
+    id: name,
+    entityId: name,
+    entityName: name,
+    attributeId: SYSTEM_IDS.ATTRIBUTE,
+    attributeName: 'Types',
+    value: {
+      type: 'entity',
+      name: 'Text',
+      id: SYSTEM_IDS.RELATION,
     },
     space: 's',
   };
