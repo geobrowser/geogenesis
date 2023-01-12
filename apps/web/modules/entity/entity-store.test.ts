@@ -12,6 +12,7 @@ describe('EntityStore', () => {
       api: network,
       spaceId: 's',
       initialTriples: [],
+      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
     const defaultTriples = createInitialDefaultTriples('s', 'e');
@@ -36,12 +37,12 @@ describe('EntityStore', () => {
       api: network,
       spaceId: 's',
       initialTriples: initialEntityStoreTriples,
+      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
 
     await when(() => store.triples$.get().length > 0 && store.typeIds$.get().length > 0);
 
-    console.log(store.typeIds$.get());
     expect(store.triples$.get()).toStrictEqual(initialEntityStoreTriples);
     expect(store.typeIds$.get()).toStrictEqual(['SomeTypeId']);
   });
@@ -58,6 +59,7 @@ describe('EntityStore', () => {
       api: network,
       spaceId: 's',
       initialTriples: initialEntityStoreTriples,
+      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
 

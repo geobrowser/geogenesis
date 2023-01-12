@@ -16,6 +16,7 @@ import { Triple } from '~/modules/types';
 
 interface Props {
   triples: Triple[];
+  schemaTriples: Triple[];
   id: string;
   name: string;
   space: string;
@@ -40,7 +41,12 @@ export default function EntityPage(props: Props) {
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={props.space} initialTriples={props.triples}>
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.space}
+      initialTriples={props.triples}
+      initialSchemaTriples={props.schemaTriples}
+    >
       <Page {...props} />
     </EntityStoreProvider>
   );
@@ -97,6 +103,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   return {
     props: {
       triples: entity.triples,
+      schemaTriples: [] /* Todo: Fetch schema triples for entity if entity has a type */,
       id: entityId,
       name: Entity.name(entity.triples) ?? entityId,
       space,

@@ -35,6 +35,7 @@ interface IEntityStoreConfig {
   spaceId: string;
   id: string;
   initialTriples: TripleType[];
+  initialSchemaTriples: TripleType[];
   ActionsStore: ActionsStore;
 }
 
@@ -49,13 +50,14 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
 
-  constructor({ api, initialTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
+  constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
     const initialDefaultTriples =
       initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
 
     this.id = id;
     this.api = api;
     this.triples$ = observable(initialDefaultTriples);
+    this.schemaTriples$ = observable(initialSchemaTriples);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
@@ -152,11 +154,8 @@ export class EntityStore implements IEntityStore {
 
       const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
 
-      console.log('attributeTriples', attributeTriples);
       const schemaTriples = attributeTriples.map((attribute, index) => {
         const valueType = valueTypeTriples[index]?.value.id;
-
-        console.log({ valueType, valueTypeTriples, index });
 
         return {
           ...Triple.emptyPlaceholder(this.spaceId, this.id, valueType),
