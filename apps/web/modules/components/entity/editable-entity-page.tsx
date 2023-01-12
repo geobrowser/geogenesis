@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
-import { ChipButton } from '~/modules/design-system/chip';
+import { DeletableChipButton } from '~/modules/design-system/chip';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -301,13 +301,13 @@ function EntityAttributes({
 
         return (
           <div key={`entity-${triple.value.id}`}>
-            <ChipButton
+            <DeletableChipButton
               href={NavUtils.toEntity(spaceId, triple.value.id)}
               icon="check-close"
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               {triple.value.name || triple.value.id}
-            </ChipButton>
+            </DeletableChipButton>
           </div>
         );
     }

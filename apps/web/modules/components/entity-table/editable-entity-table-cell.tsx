@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import { useActionsStore } from '~/modules/action';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
-import { ChipButton } from '../../design-system/chip';
+import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
@@ -117,13 +117,13 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
 
         return (
           <div key={`entity-${triple.value.id}`}>
-            <ChipButton
+            <DeletableChipButton
               href={NavUtils.toEntity(space, triple.value.id)}
               icon="check-close"
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               <a>{triple.value.name || triple.value.id}</a>
-            </ChipButton>
+            </DeletableChipButton>
           </div>
         );
     }

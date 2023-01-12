@@ -21,6 +21,7 @@ export const colors = {
     divider: '#F0F0F0',
     orange: '#FFA134',
     green: '#2ACE9D',
-    red: '#FF523A',
+    'red-01': '#FF523A',
+    'red-02': '#FFEEEB',
   },
 } as const;
