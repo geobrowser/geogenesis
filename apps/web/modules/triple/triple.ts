@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ID } from '../id';
 import { Action, EntityValue, NumberValue, OmitStrict, StringValue, Triple, TripleValueType, Value } from '../types';
 import { valueTypes } from '../value-types';
@@ -70,7 +70,7 @@ export function ensureStableId(triple: Triple): Triple {
   return triple;
 }
 
-export function fromActions(spaceId: string, actions: Action[] | undefined, triples: Triple[]) {
+export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
   const newTriples: Triple[] = [...triples].reverse();
   const newActions = actions ?? [];
 
@@ -93,11 +93,20 @@ export function fromActions(spaceId: string, actions: Action[] | undefined, trip
       }
       case 'deleteTriple': {
         const index = newTriples.findIndex(t => t.id === action.id);
+        if (index === -1) {
+          return;
+        }
+
         newTriples.splice(index, 1);
         break;
       }
       case 'editTriple': {
         const index = newTriples.findIndex(t => t.id === action.before.id);
+        if (index === -1) {
+          newTriples.push(ensureStableId(action.after));
+          return;
+        }
+
         newTriples[index] = ensureStableId(action.after);
         break;
       }

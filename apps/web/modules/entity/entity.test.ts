@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_IDS } from '../constants';
-import { Triple } from '../types';
-import { description, descriptionTriple, name, nameTriple, types } from './entity';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Action, Entity, Triple } from '../types';
+import {
+  description,
+  descriptionTriple,
+  entitiesFromTriples,
+  mergeActionsWithEntities,
+  name,
+  nameTriple,
+  types,
+} from './entity';
 
 const triplesWithSystemDescriptionAttribute: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
+    attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: 'Description',
     value: {
       id: 'valueId',
@@ -23,7 +31,7 @@ const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
   {
     id: '',
     entityId: 'entityId',
-    attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
+    attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: 'Description',
     value: {
       id: 'valueId',
@@ -69,7 +77,7 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
 
 /**
  * We assume that the Description triple's attribute for an Entity will match the expected
- * system Description attribute ID at SYSTEM_IDS.DESCRIPTION_SCALAR. However, anybody can
+ * system Description attribute ID at SYSTEM_IDS.DESCRIPTION. However, anybody can
  * set up a triple that references _any_ attribute whose name is "Description."
  *
  * We currently handle this in the UI by checking the system ID for Description as well
@@ -241,4 +249,139 @@ describe('Entity types helpers', () => {
   it('Entity.types should parse only the types from the current space', () => {
     expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual(['banana']);
   });
+});
+
+const triplesFromMultipleEntities: Triple[] = [
+  {
+    id: 'entityId-1-name',
+    entityId: 'entityId-1',
+    attributeId: SYSTEM_IDS.NAME,
+    attributeName: 'Name',
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'entity-1',
+    },
+    space: 'spaceId',
+    entityName: 'entity-1',
+  },
+  {
+    id: 'entityId-1-description',
+    entityId: 'entityId-1',
+    attributeId: SYSTEM_IDS.DESCRIPTION,
+    attributeName: SYSTEM_IDS.DESCRIPTION,
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'banana description',
+    },
+    space: 'spaceId',
+    entityName: 'entity-1',
+  },
+  {
+    id: 'entityId-2-name',
+    entityId: 'entityId-2',
+    attributeId: SYSTEM_IDS.NAME,
+    attributeName: 'Name',
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'entity-2',
+    },
+    space: 'spaceId',
+    entityName: 'entity-2',
+  },
+  {
+    id: 'entityId-1-description',
+    entityId: 'entityId-2',
+    attributeId: SYSTEM_IDS.DESCRIPTION,
+    attributeName: SYSTEM_IDS.DESCRIPTION,
+    value: {
+      id: 'valueId',
+      type: 'string',
+      value: 'apple description',
+    },
+    space: 'spaceId',
+    entityName: 'entity-2',
+  },
+];
+
+it('Entity.entitiesFromTriples should map Triples to Entity', () => {
+  const entitiesResult: Entity[] = [
+    {
+      id: 'entityId-1',
+      name: 'entity-1',
+      description: 'banana description',
+      types: [],
+      triples: [triplesFromMultipleEntities[0], triplesFromMultipleEntities[1]],
+    },
+    {
+      id: 'entityId-2',
+      name: 'entity-2',
+      description: 'apple description',
+      types: [],
+      triples: [triplesFromMultipleEntities[2], triplesFromMultipleEntities[3]],
+    },
+  ];
+
+  expect(entitiesFromTriples(triplesFromMultipleEntities)).toEqual(entitiesResult);
+});
+
+const localActions: Record<string, Action[]> = {
+  spaceId: [
+    {
+      type: 'editTriple',
+      before: {
+        type: 'deleteTriple',
+        ...triplesFromMultipleEntities[0],
+      },
+      after: {
+        type: 'createTriple',
+        ...triplesFromMultipleEntities[0],
+        value: {
+          id: 'valueId',
+          type: 'string',
+          value: 'entity-1-changed',
+        },
+      },
+    },
+  ],
+};
+
+const networkEntities: Entity[] = [
+  {
+    id: 'entityId-1',
+    name: 'entity-1',
+    description: 'banana description',
+    types: [],
+    triples: [triplesFromMultipleEntities[0], triplesFromMultipleEntities[1]],
+  },
+];
+
+it('Entity.mergeActionsWithNetworkEntities should merge local actions with entities', () => {
+  expect(mergeActionsWithEntities(localActions, networkEntities)).toStrictEqual([
+    {
+      id: 'entityId-1',
+      name: 'entity-1-changed',
+      description: 'banana description',
+      types: [],
+      triples: [
+        {
+          type: 'createTriple',
+          id: 'entityId-1-name',
+          entityId: 'entityId-1',
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: {
+            id: 'valueId',
+            type: 'string',
+            value: 'entity-1-changed',
+          },
+          space: 'spaceId',
+          entityName: 'entity-1',
+        },
+        triplesFromMultipleEntities[1],
+      ],
+    },
+  ]);
 });

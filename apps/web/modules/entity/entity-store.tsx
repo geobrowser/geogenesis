@@ -1,6 +1,6 @@
 import { computed, observable, ObservableComputed } from '@legendapp/state';
 import { ActionsStore } from '../action';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { INetwork } from '../services/network';
 import { Triple } from '../triple';
 import { Triple as TripleType } from '../types';
@@ -62,7 +62,7 @@ export class EntityStore implements IEntityStore {
         return isCreate || isDelete || isRemove;
       });
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
+      return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
     });
   }
 

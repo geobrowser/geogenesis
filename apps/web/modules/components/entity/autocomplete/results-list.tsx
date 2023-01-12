@@ -59,6 +59,18 @@ const ResultDisambiguationTypesContainer = styled.div(props => ({
   gap: props.theme.space,
 }));
 
+/**
+ * Depending on the results from the Entity search we want to provide
+ * some metadata in order to disambiguate between entities that have the
+ * same name.
+ *
+ * 1. If there are multiple Entity results in the list with the same name, and they
+ *    have the same set of Types, then show a description for each result if
+ *    description exists.
+ * 2. If an Entity result has Types, show those
+ * 3. If an Entity result does not have Types, but does have a Description, show that
+ * 4. Show nothing
+ */
 function ResultDisambiguation({ result, results }: { result: Entity; results: Entity[] }) {
   const resultTypes = new Set(result.types);
 
@@ -112,7 +124,7 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
         </ResultText>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
-      {(result.description || result.types.length > 0) && (
+      {(result.description || !A.isEmpty(result.types)) && (
         <>
           <Spacer height={4} />
           <ResultDisambiguation result={result} results={results} />

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { SYSTEM_IDS } from '~/modules/constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
@@ -130,8 +130,8 @@ const listener =
             Triple.withId({
               space: context.spaceId,
               entityId: context.entityId,
-              attributeId: SYSTEM_IDS.DESCRIPTION_SCALAR,
-              attributeName: SYSTEM_IDS.DESCRIPTION_SCALAR,
+              attributeId: SYSTEM_IDS.DESCRIPTION,
+              attributeName: SYSTEM_IDS.DESCRIPTION,
               entityName: name,
               value: {
                 id: ID.createValueId(),
@@ -232,6 +232,7 @@ const listener =
                 name: linkedEntity.name,
               },
               attributeName: triplesByAttributeId[attribute.id][0].attributeName,
+              entityName: entityName,
             }),
             triplesByAttributeId[attribute.id][0]
           );

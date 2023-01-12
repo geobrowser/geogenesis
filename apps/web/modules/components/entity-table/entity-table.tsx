@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { SYSTEM_IDS } from '~/modules/constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';

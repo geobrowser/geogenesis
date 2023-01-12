@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { SYSTEM_IDS } from '../constants';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '../entity';
 import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
 import {
@@ -243,9 +243,11 @@ export class Network implements INetwork {
       const triples = fromNetworkTriples(result.entityOf);
 
       return {
-        ...result,
+        id: result.id,
+        name: result.name,
         description: Entity.description(triples),
         types: Entity.types(triples, space),
+        triples,
       };
     });
 
