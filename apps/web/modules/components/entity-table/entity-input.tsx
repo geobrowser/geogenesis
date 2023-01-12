@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
-import { useEntityTable } from '~/modules/triple';
+import { useEntityTable } from '~/modules/entity';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';

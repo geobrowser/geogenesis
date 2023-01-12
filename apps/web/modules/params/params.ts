@@ -1,6 +1,7 @@
-import { AppConfig, AppEnv, Config } from '../config';
-import { FilterField, FilterState } from '../types';
-import { InitialTripleStoreParams, InitialEntityTableStoreParams } from '~/modules/triple';
+import { AppConfig, AppEnv, Config } from '~/modules/config';
+import { FilterField, FilterState } from '~/modules/types';
+import { InitialTripleStoreParams } from '~/modules/triple';
+import { InitialEntityTableStoreParams } from '~/modules/entity';
 
 export const ENV_PARAM_NAME = 'env';
 

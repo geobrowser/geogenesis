@@ -3,7 +3,7 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '../entity';
-import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
+import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
 import {
   Account,
   Action,
@@ -19,6 +19,7 @@ import {
 import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
+import { InitialEntityTableStoreParams } from '../entity/entity-table-store';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -365,7 +366,7 @@ export class Network implements INetwork {
         return this.fetchTriples({
           query: '',
           space: spaceId,
-          first: 100,
+          first: DEFAULT_PAGE_SIZE,
           skip: 0,
           filter: [
             {
@@ -390,7 +391,7 @@ export class Network implements INetwork {
           space: spaceId,
           abortController,
           skip: 0,
-          first: 100,
+          first: DEFAULT_PAGE_SIZE,
           filter: [{ field: 'entity-id', value: entityId }],
         })
       )

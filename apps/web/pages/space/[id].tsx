@@ -9,8 +9,8 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { EntityTableStoreProvider } from '~/modules/triple';
 import { Column, Row, Triple } from '~/modules/types';
+import { EntityTableStoreProvider } from '~/modules/entity';
 
 interface Props {
   spaceId: string;

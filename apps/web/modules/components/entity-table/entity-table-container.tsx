@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { useEntityTable } from '~/modules/triple';
+import { useEntityTable } from '~/modules/entity';
 // import { getFilesFromFileList } from '../utils';
 // import { importCSVFile } from '~/modules/services/import';
 import { Column, Row } from '../../types';
