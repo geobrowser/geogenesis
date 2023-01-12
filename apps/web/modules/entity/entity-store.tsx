@@ -76,8 +76,10 @@ export class EntityStore implements IEntityStore {
       return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
     });
 
-    /* In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to persist the Attribute field. 
-      Filtering out those entities here. */
+    /* 
+    In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to 
+    persist the Attribute field. Filtering out those entities here. 
+    */
     this.typeIds$ = computed(() => {
       return this.triples$
         .get()
@@ -85,6 +87,11 @@ export class EntityStore implements IEntityStore {
         .map(t => t.value.id);
     });
 
+    /* 
+    Computed values in @legendapp/state will rerun for every change recursively up the tree.   
+    This is problematic when the computed value is expensive to compute or involves a network request.
+    To avoid this, we can use the observe function to only run the computation when the direct dependencies change.
+    */
     observe<string[]>(e => {
       const typeIds = this.typeIds$.get();
       const previous = e.previous || [];
