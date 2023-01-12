@@ -315,8 +315,6 @@ export class Network implements INetwork {
       }
     }`;
 
-    console.log('gql', gql);
-
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
