@@ -73,7 +73,7 @@ export class EntityStore implements IEntityStore {
       });
 
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
+      return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
     });
 
     /* In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to persist the Attribute field. 
