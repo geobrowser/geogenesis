@@ -2,19 +2,19 @@ import styled from '@emotion/styled';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
-import { ChipButton } from '~/modules/design-system/chip';
+import { DeletableChipButton } from '~/modules/design-system/chip';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Entity as EntityType, Triple as TripleType } from '~/modules/types';
-import { groupBy } from '~/modules/utils';
+import { groupBy, NavUtils } from '~/modules/utils';
+import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { NumberField, StringField } from './editable-fields';
-import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
-import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -301,9 +301,12 @@ function EntityAttributes({
 
         return (
           <div key={`entity-${triple.value.id}`}>
-            <ChipButton icon="check-close" onClick={() => removeOrResetEntityTriple(triple)}>
+            <DeletableChipButton
+              href={NavUtils.toEntity(spaceId, triple.value.id)}
+              onClick={() => removeOrResetEntityTriple(triple)}
+            >
               {triple.value.name || triple.value.id}
-            </ChipButton>
+            </DeletableChipButton>
           </div>
         );
     }
