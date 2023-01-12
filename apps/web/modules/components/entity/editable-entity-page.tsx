@@ -451,7 +451,7 @@ function EntityAttributes({
                           <div style={{ display: 'flex', alignItems: 'center' }}>
                             <TextIcon />
                             <Spacer width={8} />
-                            <Text variant="button">Text</Text>
+                            Text
                           </div>
                         ),
                         onClick: () => onChangeTripleType('string', triples),
@@ -462,7 +462,7 @@ function EntityAttributes({
                           <div style={{ display: 'flex', alignItems: 'center' }}>
                             <Relation />
                             <Spacer width={8} />
-                            <Text variant="button">Relation</Text>
+                            Relation
                           </div>
                         ),
                         onClick: () => onChangeTripleType('entity', triples),
