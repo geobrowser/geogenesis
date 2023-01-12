@@ -58,7 +58,7 @@ const TableRow = styled.tr(props => ({
 const Container = styled.div({
   overflowX: 'hidden',
 
-  '@media(max-width: 900px)': {
+  '@media(max-width: 1200px)': {
     overflowX: 'scroll',
   },
 });
