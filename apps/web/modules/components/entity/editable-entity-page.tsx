@@ -58,18 +58,25 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
+  schemaTriples: TripleType[];
   id: string;
   name: string;
   space: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
+export function EditableEntityPage({
+  id,
+  name: serverName,
+  space,
+  schemaTriples: serverSchemaTriples,
+  triples: serverTriples,
+}: Props) {
   const {
     triples: localTriples,
+    schemaTriples: localSchemaTriples,
     update,
     create,
     remove,
-    schemaTriples,
     hideSchema,
     hiddenSchemaIds,
   } = useEntityStore();
@@ -79,6 +86,7 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
+  const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
   const descriptionTriple = Entity.descriptionTriple(triples);
@@ -387,6 +395,7 @@ function EntityAttributes({
             key={triple.id}
             variant="body"
             placeholder="Add value..."
+            aria-label="placeholder-text-field"
             onBlur={e => {
               createStringTripleFromPlaceholder({ ...triple }, e.target.value);
             }}
@@ -412,19 +421,21 @@ function EntityAttributes({
       case 'entity':
         if (isEmptyEntity) {
           return (
-            <EntityTextAutocomplete
-              key={`entity-${attributeId}-${triple.value.id}`}
-              placeholder="Add value..."
-              onDone={result =>
-                triple.placeholder
-                  ? createEntityTripleFromPlaceholder(triple, result)
-                  : addEntityValue(attributeId, result)
-              }
-              itemIds={entityValueTriples
-                .filter(triple => triple.attributeId === attributeId)
-                .map(triple => triple.value.id)}
-              spaceId={spaceId}
-            />
+            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
+              <EntityTextAutocomplete
+                key={`entity-${attributeId}-${triple.value.id}`}
+                placeholder="Add value..."
+                onDone={result =>
+                  triple.placeholder
+                    ? createEntityTripleFromPlaceholder(triple, result)
+                    : addEntityValue(attributeId, result)
+                }
+                itemIds={entityValueTriples
+                  .filter(triple => triple.attributeId === attributeId)
+                  .map(triple => triple.value.id)}
+                spaceId={spaceId}
+              />
+            </div>
           );
         }
 
