@@ -62,7 +62,7 @@ export class EntityStore implements IEntityStore {
         return isCreate || isDelete || isRemove;
       });
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(spaceId, entitySpecificActions, initialDefaultTriples);
+      return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
     });
   }
 

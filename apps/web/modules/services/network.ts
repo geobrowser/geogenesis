@@ -243,9 +243,11 @@ export class Network implements INetwork {
       const triples = fromNetworkTriples(result.entityOf);
 
       return {
-        ...result,
+        id: result.id,
+        name: result.name,
         description: Entity.description(triples),
         types: Entity.types(triples, space),
+        triples,
       };
     });
 
