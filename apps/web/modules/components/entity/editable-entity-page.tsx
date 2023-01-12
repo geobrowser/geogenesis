@@ -303,7 +303,6 @@ function EntityAttributes({
           <div key={`entity-${triple.value.id}`}>
             <DeletableChipButton
               href={NavUtils.toEntity(spaceId, triple.value.id)}
-              icon="check-close"
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               {triple.value.name || triple.value.id}

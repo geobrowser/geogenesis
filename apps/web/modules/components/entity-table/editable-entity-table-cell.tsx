@@ -119,7 +119,6 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
           <div key={`entity-${triple.value.id}`}>
             <DeletableChipButton
               href={NavUtils.toEntity(space, triple.value.id)}
-              icon="check-close"
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               <a>{triple.value.name || triple.value.id}</a>
