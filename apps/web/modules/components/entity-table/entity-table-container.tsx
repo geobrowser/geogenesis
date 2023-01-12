@@ -1,14 +1,28 @@
 import styled from '@emotion/styled';
+import { useRect } from '@radix-ui/react-use-rect';
+import { useRef } from 'react';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/entity';
-// import { getFilesFromFileList } from '../utils';
-// import { importCSVFile } from '~/modules/services/import';
 import { Column, Row } from '../../types';
+import { TypeDialog } from '../filter/type-dialog';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
-import { EntityInput } from './entity-input';
+import { TableSearchInput } from '../table/table-search';
 import { EntityTable } from './entity-table';
+
+const EntitySearch = styled.div(props => ({
+  overflow: 'hidden',
+  display: 'flex',
+  width: '100%',
+  position: 'relative',
+  gap: props.theme.space * 4,
+
+  '@media (max-width: 640px)': {
+    flexDirection: 'column',
+    gap: props.theme.space,
+  },
+}));
 
 interface Props {
   spaceId: string;
@@ -29,12 +43,29 @@ const Container = styled.div(props => ({
 
 export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+  const inputRect = useRect(inputContainerRef.current);
 
   return (
     <PageContainer>
       <Spacer height={20} />
 
-      <EntityInput />
+      <EntitySearch ref={inputContainerRef}>
+        <TypeDialog
+          inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
+          filterState={entityTableStore.filterState}
+          setFilterState={entityTableStore.setFilterState}
+        />
+
+        <TableSearchInput
+          filterState={entityTableStore.filterState}
+          onFilterStateChange={entityTableStore.setFilterState}
+          onQueryChange={entityTableStore.setQuery}
+          query={entityTableStore.query}
+          inputContainerWidth={inputRect?.width}
+        />
+      </EntitySearch>
+
       <Spacer height={12} />
 
       <Container>

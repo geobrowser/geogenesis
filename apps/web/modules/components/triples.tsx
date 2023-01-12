@@ -1,26 +1,48 @@
+import styled from '@emotion/styled';
+import { useRect } from '@radix-ui/react-use-rect';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-// import { importCSVFile } from '~/modules/services/import';
 import { useTriples } from '~/modules/triple/use-triples';
 import { ZERO_WIDTH_SPACE } from '../constants';
+import { IconButton } from '../design-system/button';
 import { Triple } from '../types';
-// import { getFilesFromFileList } from '../utils';
 import { PREDEFINED_QUERIES } from './data/predefined-queries';
 import { PredefinedQueriesContainer } from './predefined-queries/container';
 import { PageContainer, PageNumberContainer } from './table/styles';
 import { NextButton, PageNumber, PreviousButton } from './table/table-pagination';
-import { TripleInput } from './triple-input';
+import { FilterIconContainer, TableSearchInput } from './table/table-search';
 import { TripleTable } from './triple-table';
 
-// const FileImport = styled.input({
-//   margin: '0',
-//   padding: '0',
-//   opacity: '0',
-//   position: 'absolute',
-//   inset: '0',
-// });
+const PresetIconContainer = styled(FilterIconContainer)<{ showPredefinedQueries: boolean }>(props => ({
+  cursor: 'pointer',
+  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
+  backgroundColor: props.showPredefinedQueries ? props.theme.colors['grey-01'] : props.theme.colors.white,
+  borderLeft: 'none',
+  transition: 'colors 0.15s ease-in-out',
+  color: props.theme.colors['grey-04'],
+
+  '&:hover': {
+    color: props.theme.colors.text,
+    backgroundColor: props.theme.colors['grey-01'],
+  },
+
+  button: {
+    padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+    color: props.showPredefinedQueries ? props.theme.colors.text : props.theme.colors['grey-04'],
+
+    '&:active': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
+    },
+
+    '&:focus': {
+      color: props.theme.colors.text,
+      outlineColor: props.theme.colors.ctaPrimary,
+    },
+  },
+}));
 
 interface Props {
   spaceId: string;
@@ -31,11 +53,8 @@ interface Props {
 export function Triples({ spaceId, initialTriples, spaceName = ZERO_WIDTH_SPACE }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
-
-  // const onImport = async (files: FileList) => {
-  //   const triples = await importCSVFile(getFilesFromFileList(files), spaceId);
-  //   tripleStore.create(triples);
-  // };
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+  const inputRect = useRect(inputContainerRef.current);
 
   return (
     <PageContainer>
@@ -59,10 +78,22 @@ export function Triples({ spaceId, initialTriples, spaceName = ZERO_WIDTH_SPACE 
         </>
       )}
 
-      <motion.div style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
-        <TripleInput
-          showPredefinedQueries={showPredefinedQueries}
-          onShowPredefinedQueriesChange={setShowPredefinedQueries}
+      <motion.div ref={inputContainerRef} style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
+        <TableSearchInput
+          query={tripleStore.query}
+          onQueryChange={tripleStore.setQuery}
+          onFilterStateChange={tripleStore.setFilterState}
+          filterState={tripleStore.filterState}
+          inputContainerWidth={inputRect?.width}
+          predefinedQueryTrigger={
+            <PresetIconContainer showPredefinedQueries={showPredefinedQueries}>
+              <IconButton
+                aria-label="predefined-queries-button"
+                onClick={() => setShowPredefinedQueries(!showPredefinedQueries)}
+                icon="preset"
+              />
+            </PresetIconContainer>
+          }
         />
 
         <Spacer height={12} />

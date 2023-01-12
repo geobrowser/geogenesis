@@ -114,7 +114,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             width={inputContainerWidth}
             sideOffset={theme.space * 2.5 + 2}
             alignOffset={-(theme.space * 2) + 4}
-            align={width > 768 ? 'end' : 'start'}
+            align="start"
           >
             <Text variant="button">All types</Text>
             <Spacer height={12} />

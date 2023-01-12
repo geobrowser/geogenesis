@@ -1,24 +1,20 @@
 import styled from '@emotion/styled';
-import { useEntityTable } from '~/modules/entity';
+import React from 'react';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
 import { Spacer } from '../../design-system/spacer';
-import { FilterClause } from '../../types';
+import { FilterClause, FilterState } from '../../types';
+import { FilterDialog } from '../filter/dialog';
 
-const SearchInputContainer = styled.div(props => ({
+export const InputContainer = styled.div({
+  overflow: 'hidden',
+  display: 'flex',
   position: 'relative',
   width: '100%',
-}));
+});
 
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 3,
-  top: props.theme.space * 2.5,
-  zIndex: 10,
-}));
-
-const TriplesInputField = styled(Input)(props => ({
+export const InputField = styled(Input)(props => ({
   width: '100%',
   borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
   paddingLeft: props.theme.space * 10,
@@ -36,42 +32,82 @@ const AdvancedFilters = styled.div(props => ({
   backgroundColor: props.theme.colors.white,
 }));
 
-export function EntityInput() {
-  const entityTableStore = useEntityTable();
+export const SearchIconContainer = styled.div(props => ({
+  position: 'absolute',
+  left: props.theme.space * 3,
+  top: props.theme.space * 2.5,
+  zIndex: 100,
+}));
 
-  const showBasicFilter =
-    entityTableStore.filterState.length === 1 && entityTableStore.filterState[0].field === 'entity-name';
+export const FilterIconContainer = styled.div<{ shouldRoundBorder?: boolean }>(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  backgroundColor: props.theme.colors.white,
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+  borderLeft: 'none',
+  color: props.theme.colors['grey-04'],
+
+  ...(props.shouldRoundBorder && {
+    borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
+    overflow: 'hidden',
+  }),
+}));
+
+interface Props {
+  filterState: FilterState;
+  onFilterStateChange: (filterState: FilterState) => void;
+  query: string;
+  onQueryChange: (query: string) => void;
+  predefinedQueryTrigger?: React.ReactNode;
+  inputContainerWidth?: number;
+}
+
+export function TableSearchInput({
+  filterState,
+  query,
+  onQueryChange,
+  onFilterStateChange,
+  predefinedQueryTrigger,
+  inputContainerWidth,
+}: Props) {
+  const showBasicFilter = filterState.length === 1 && filterState[0].field === 'entity-name';
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    entityTableStore.setQuery(event.target.value);
+    onQueryChange(event.target.value);
   };
 
   const onAdvancedFilterClick = (field: FilterClause['field']) => {
-    const filteredFilters = entityTableStore.filterState.filter(filter => filter.field !== field);
-    entityTableStore.setFilterState(filteredFilters);
+    const filteredFilters = filterState.filter(filter => filter.field !== field);
+    onFilterStateChange(filteredFilters);
   };
 
   return (
-    <div>
-      <SearchInputContainer>
-        <SearchIconContainer>
-          <Search />
-        </SearchIconContainer>
-        {showBasicFilter ? (
-          <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
-        ) : (
-          <AdvancedFilters>
-            {entityTableStore.filterState.map(filter => (
-              <AdvancedFilterPill
-                key={filter.field}
-                filterClause={filter}
-                onClick={() => onAdvancedFilterClick(filter.field)}
-              />
-            ))}
-          </AdvancedFilters>
-        )}
-      </SearchInputContainer>
-    </div>
+    <InputContainer>
+      <SearchIconContainer>
+        <Search />
+      </SearchIconContainer>
+      {showBasicFilter ? (
+        <InputField placeholder="Search facts..." value={query} onChange={onChange} />
+      ) : (
+        <AdvancedFilters>
+          {filterState.map(filter => (
+            <AdvancedFilterPill
+              key={filter.field}
+              filterClause={filter}
+              onClick={() => onAdvancedFilterClick(filter.field)}
+            />
+          ))}
+        </AdvancedFilters>
+      )}
+      <FilterIconContainer shouldRoundBorder={!predefinedQueryTrigger}>
+        <FilterDialog
+          inputContainerWidth={inputContainerWidth || 578}
+          filterState={filterState}
+          setFilterState={onFilterStateChange}
+        />
+      </FilterIconContainer>
+      {predefinedQueryTrigger && predefinedQueryTrigger}
+    </InputContainer>
   );
 }
 
