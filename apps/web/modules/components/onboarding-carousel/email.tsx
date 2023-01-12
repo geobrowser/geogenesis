@@ -181,7 +181,7 @@ export function Email() {
                   transition={{ duration: 0.1 }}
                   key="email-error-container"
                 >
-                  <Text variant="smallButton" color="red">
+                  <Text variant="smallButton" color="red-01">
                     {state.message}
                   </Text>
                 </MotionErrorContainer>
