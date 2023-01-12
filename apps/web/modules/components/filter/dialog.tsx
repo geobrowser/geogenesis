@@ -69,12 +69,6 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
   },
 }));
 
-interface Props {
-  inputContainerWidth: number;
-  filterState: FilterState;
-  setFilterState: (filterState: FilterState) => void;
-}
-
 const FIELD_LABELS: Record<FilterField, string> = {
   'entity-name': 'Entity contains',
   'attribute-name': 'Attribute contains',
@@ -95,12 +89,26 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
   );
 }
 
-export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
+interface Props {
+  inputContainerWidth: number;
+  filterState: FilterState;
+  setFilterState: (filterState: FilterState) => void;
+  limitedFilters: boolean;
+}
+
+export function FilterDialog({ inputContainerWidth, filterState, setFilterState, limitedFilters }: Props) {
   const theme = useTheme();
   const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+
+  // Right now there's limitations in how deep we can query nested children. If we're on the
+  // entities page we'll provide a limited set of filters for now.
+  const filterOptions = getFilterOptions(filterState);
+  const options = limitedFilters
+    ? filterOptions.filter(option => option.value === 'attribute-name' || option.value === 'value')
+    : filterOptions;
 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
@@ -133,7 +141,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                 <FilterInputGroup
                   label={index === 0 ? 'Where' : 'And'}
                   key={`filter-state-item-${index}`}
-                  options={getFilterOptions(filterState, filterClause)}
+                  options={options}
                   filterClause={filterClause}
                   onChange={newFilterClause => {
                     const newFilterState = produce(filterState, draft => {

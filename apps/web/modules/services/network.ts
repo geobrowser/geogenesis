@@ -259,6 +259,89 @@ export class Network implements INetwork {
     return sortedResultsWithTypesAndDescription;
   };
 
+  geoEntity = async ({ space, query, filter, abortController }: FetchTriplesOptions) => {
+    const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
+      FilterField,
+      string
+    >;
+
+    const rootWhere = [
+      query && `{name_contains_nocase: ${JSON.stringify(query)}}`,
+      fieldFilters['entity-id'] && `id: ${JSON.stringify(fieldFilters['entity-id'])}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const where = [
+      `space: ${JSON.stringify(space)}`,
+      // fieldFilters['attribute-name'] &&
+      //   `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
+      // fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+
+      // Until we have OR we can't search for name_contains OR value string contains
+      // fieldFilters.value && `stringValue_contains_nocase: ${JSON.stringify(fieldFilters.value)}`,
+      fieldFilters['linked-to'] && `valueId: ${JSON.stringify(fieldFilters['linked-to'])}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const gql = `query {
+      geoEntities(where: {${rootWhere} entityOf_: {${where}}}) {
+        id
+        name
+        entityOf {
+          id
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
+          entityValue {
+            id
+            name
+          }
+          numberValue
+          stringValue
+          valueType
+          valueId
+          isProtected
+          space {
+            id
+          }
+        }
+      }
+    }`;
+
+    console.log('gql', gql);
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: gql,
+      }),
+    });
+
+    try {
+      const json: {
+        data: {
+          geoEntities: NetworkEntity[];
+        };
+      } = await response.json();
+
+      return json.data.geoEntities;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  };
+
   fetchSpaces = async () => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -388,31 +471,33 @@ export class Network implements INetwork {
 
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
-    const rowTriples = await Promise.all(
+
+    const fetchedEntities = await Promise.all(
       rowEntityIds.map(entityId =>
-        this.fetchTriples({
+        this.geoEntity({
           query: '',
           space: spaceId,
           abortController,
           first: DEFAULT_PAGE_SIZE,
           skip: 0,
-          filter: [{ field: 'entity-id', value: entityId }],
+          filter: [...params.filterState, { field: 'entity-id', value: entityId }],
         })
       )
     );
 
-    const entities: EntityType[] = rowTriples.map(({ triples }, index) => ({
-      id: rowEntityIds[index],
-      name: Entity.name(triples),
-      description: Entity.description(triples),
-      types: Entity.types(triples, spaceId),
+    const flatEntities: NetworkEntity[] = fetchedEntities.flatMap(entity => entity);
 
-      triples: triples,
-    }));
+    const entities: EntityType[] = flatEntities.map(entity => {
+      const triples = fromNetworkTriples(entity.entityOf);
 
-    // We have to client-side filter the triples as filtering Entities on the server
-    // based on triples doesn't really work with our current setup.
-    const filteredEntities = Entity.fromFilterState(params.filterState, entities);
+      return {
+        id: entity.id,
+        name: entity.name,
+        description: Entity.description(triples),
+        types: Entity.types(triples, spaceId),
+        triples,
+      };
+    });
 
     /* Name is the default column... */
     const defaultColumns = [
@@ -431,7 +516,7 @@ export class Network implements INetwork {
     const columns = [...defaultColumns, ...schemaColumns];
 
     /* Finally, we can build our initialRows */
-    const rows = filteredEntities.map(({ triples, id }) => {
+    const rows = entities.map(({ triples, id }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 

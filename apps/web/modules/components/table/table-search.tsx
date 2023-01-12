@@ -104,6 +104,7 @@ export function TableSearchInput({
           inputContainerWidth={inputContainerWidth || 578}
           filterState={filterState}
           setFilterState={onFilterStateChange}
+          limitedFilters={!predefinedQueryTrigger}
         />
       </FilterIconContainer>
       {predefinedQueryTrigger && predefinedQueryTrigger}
