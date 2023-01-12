@@ -8,7 +8,6 @@ export const EmptyTableText = styled.td(props => ({
 export const PageContainer = styled.div({
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
 });
 
 export const PageNumberContainer = styled.div({
@@ -29,7 +28,7 @@ export const TableHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
   textAlign: 'left',
-  width: props.width,
+  minWidth: props.width,
 }));
 
 export const TableRow = styled.tr(props => ({

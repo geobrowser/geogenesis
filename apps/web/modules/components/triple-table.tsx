@@ -22,6 +22,10 @@ const Container = styled.div(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   borderRadius: props.theme.radius,
   overflow: 'hidden',
+
+  '@media(max-width: 1200px)': {
+    overflowX: 'scroll',
+  },
 }));
 
 const columnHelper = createColumnHelper<Triple>();
@@ -116,6 +120,8 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
     meta: {
       expandedCells,
       space,
+      isEditor: false,
+      editable: false,
     },
   });
 
