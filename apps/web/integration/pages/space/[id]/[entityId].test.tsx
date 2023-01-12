@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { makeStubTriple } from '~/modules/services/mock-network';
 import { Providers } from '~/modules/providers';
+import { makeStubTriple } from '~/modules/services/mock-network';
 import { Triple } from '~/modules/types';
 import EntityPage from '~/pages/space/[id]/[entityId]';
 
@@ -38,7 +38,7 @@ describe('Entity page', () => {
   it('Renders page name', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -48,7 +48,14 @@ describe('Entity page', () => {
   it('Renders entity description from description that is a string type', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[scalarDescriptionTriple]} linkedEntities={{}} />
+        <EntityPage
+          id="1"
+          name="Banana"
+          space="1"
+          triples={[scalarDescriptionTriple]}
+          schemaTriples={[]}
+          linkedEntities={{}}
+        />
       </Providers>
     );
 
@@ -58,7 +65,14 @@ describe('Entity page', () => {
   it('Renders entity triples', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[genericAttribute]} linkedEntities={{}} />
+        <EntityPage
+          id="1"
+          name="Banana"
+          space="1"
+          triples={[genericAttribute]}
+          schemaTriples={[]}
+          linkedEntities={{}}
+        />
       </Providers>
     );
 
@@ -73,6 +87,7 @@ describe('Entity page', () => {
           name="Banana"
           space="1"
           triples={[{ ...genericAttribute, attributeName: null }]}
+          schemaTriples={[]}
           linkedEntities={{}}
         />
       </Providers>
@@ -84,7 +99,7 @@ describe('Entity page', () => {
   it('Renders empty linked entities', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -99,6 +114,7 @@ describe('Entity page', () => {
           name="Banana"
           space="1"
           triples={[]}
+          schemaTriples={[]}
           linkedEntities={{
             '1': {
               triples: [scalarDescriptionTriple],
@@ -121,6 +137,7 @@ describe('Entity page', () => {
           name="Banana"
           space="1"
           triples={[]}
+          schemaTriples={[]}
           linkedEntities={{
             '1': {
               triples: [],
@@ -145,6 +162,7 @@ describe('Entity page', () => {
           name="Banana"
           space="1"
           triples={[]}
+          schemaTriples={[]}
           linkedEntities={{
             '1': {
               triples: [makeStubTriple('Alice'), makeStubTriple('Bob')],
@@ -174,6 +192,7 @@ describe('Entity page', () => {
           name="Banana"
           space="1"
           triples={[]}
+          schemaTriples={[]}
           linkedEntities={{
             '2': {
               triples: [

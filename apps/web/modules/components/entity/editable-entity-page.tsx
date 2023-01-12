@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import Head from 'next/head';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
@@ -10,11 +11,11 @@ import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Entity as EntityType, Triple as TripleType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
-import { CopyIdButton } from './copy-id';
-import { useEditEvents } from './edit-events';
-import { NumberField, StringField } from './editable-fields';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
+import { CopyIdButton } from './copy-id';
+import { useEditEvents } from './edit-events';
+import { NumberField, PlaceholderField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -57,18 +58,35 @@ const AddTripleContainer = styled.div(({ theme }) => ({
 
 interface Props {
   triples: TripleType[];
+  schemaTriples: TripleType[];
   id: string;
   name: string;
   space: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, space, triples: serverTriples }: Props) {
-  const { triples: localTriples, update, create, remove } = useEntityStore();
+export function EditableEntityPage({
+  id,
+  name: serverName,
+  space,
+  schemaTriples: serverSchemaTriples,
+  triples: serverTriples,
+}: Props) {
+  const {
+    triples: localTriples,
+    schemaTriples: localSchemaTriples,
+    update,
+    create,
+    remove,
+    hideSchema,
+    hiddenSchemaIds,
+  } = useEntityStore();
+
   const { actions } = useActionsStore(space);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
+  const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
   const descriptionTriple = Entity.descriptionTriple(triples);
@@ -163,7 +181,16 @@ export function EditableEntityPage({ id, name: serverName, space, triples: serve
         <Content>
           {triples.length > 0 ? (
             <Attributes>
-              <EntityAttributes entityId={id} triples={triples} name={name} send={send} spaceId={space} />
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                spaceId={space}
+                schemaTriples={schemaTriples}
+                name={name}
+                send={send}
+                hideSchema={hideSchema}
+                hiddenSchemaIds={hiddenSchemaIds}
+              />
             </Attributes>
           ) : null}
           <AddTripleContainer>
@@ -203,19 +230,83 @@ const GroupedAttributesList = styled.div(({ theme }) => ({
 function EntityAttributes({
   entityId,
   triples,
+  schemaTriples = [],
   name,
-  send,
   spaceId,
+  send,
+  hideSchema,
+  hiddenSchemaIds,
 }: {
   entityId: string;
-  triples: Props['triples'];
+  triples: TripleType[];
+  schemaTriples: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
   spaceId: string;
+  hideSchema: (id: string) => void;
+  hiddenSchemaIds: string[];
 }) {
-  const groupedTriples = groupBy(triples, t => t.attributeId);
+  const tripleAttributeIds = triples.map(triple => triple.attributeId);
+
+  const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
+    const notHidden = !hiddenSchemaIds.includes(schemaTriple.attributeId);
+    const notInTriples = !tripleAttributeIds.includes(schemaTriple.attributeId);
+    return notHidden && notInTriples;
+  });
+
+  const filteredTriples = [...triples, ...visibleSchemaTriples];
+
+  const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
+
+  const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
+
+  const sortedTriples = filteredTriples.sort((tripleA, tripleB) => {
+    /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
+
+    const { attributeId: attributeIdA } = tripleA;
+    const { attributeId: attributeIdB } = tripleB;
+
+    const aName = attributeIdA === SYSTEM_IDS.NAME;
+    const bName = attributeIdB === SYSTEM_IDS.NAME;
+    const aDescription = attributeIdA === SYSTEM_IDS.DESCRIPTION;
+    const bDescription = attributeIdB === SYSTEM_IDS.DESCRIPTION;
+    const aTypes = attributeIdA === SYSTEM_IDS.TYPES;
+    const bTypes = attributeIdB === SYSTEM_IDS.TYPES;
+
+    const aIndex = schemaAttributeIds.indexOf(attributeIdA);
+    const bIndex = schemaAttributeIds.indexOf(attributeIdB);
+
+    const aInSchema = schemaAttributeIds.includes(attributeIdA);
+    const bInSchema = schemaAttributeIds.includes(attributeIdB);
+
+    if (aName && !bName) return -1;
+    if (!aName && bName) return 1;
+
+    if (aDescription && !bDescription) return -1;
+    if (!aDescription && bDescription) return 1;
+
+    if (aTypes && !bTypes) return -1;
+    if (!aTypes && bTypes) return 1;
+
+    if (aInSchema && !bInSchema) {
+      return -1;
+    }
+
+    if (!aInSchema && bInSchema) {
+      return 1;
+    }
+
+    if (aInSchema && bInSchema) {
+      return aIndex - bIndex;
+    }
+
+    return 0;
+  });
+
+  const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
-  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
+
+  const orderedGroupedTriples = Object.entries(groupedTriples);
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -265,15 +356,56 @@ function EntityAttributes({
     });
   };
 
+  const createEntityTripleFromPlaceholder = (triple: TripleType, linkedEntity: EntityType) => {
+    send({
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+      payload: {
+        triple,
+        entityId: linkedEntity.id,
+        entityName: linkedEntity.name || '',
+      },
+    });
+  };
+
+  const createStringTripleFromPlaceholder = (triple: TripleType, value: string) => {
+    send({
+      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
+  const updateValue = (triple: TripleType, value: string) => {
+    send({
+      type: 'UPDATE_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
-        return (
+        return triple.placeholder ? (
+          <PlaceholderField
+            key={triple.id}
+            variant="body"
+            placeholder="Add value..."
+            aria-label="placeholder-text-field"
+            onBlur={e => {
+              createStringTripleFromPlaceholder({ ...triple }, e.target.value);
+            }}
+          />
+        ) : (
           <StringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
         );
@@ -282,20 +414,28 @@ function EntityAttributes({
           <NumberField
             key={triple.id}
             placeholder="Add value..."
-            onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            onBlur={e => updateValue(triple, e.target.value)}
             initialValue={triple.value.value}
           />
         );
       case 'entity':
         if (isEmptyEntity) {
           return (
-            <EntityTextAutocomplete
-              key={`entity-${attributeId}-${triple.value.id}`}
-              placeholder="Add value..."
-              onDone={result => addEntityValue(attributeId, result)}
-              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
-              spaceId={spaceId}
-            />
+            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
+              <EntityTextAutocomplete
+                key={`entity-${attributeId}-${triple.value.id}`}
+                placeholder="Add value..."
+                onDone={result =>
+                  triple.placeholder
+                    ? createEntityTripleFromPlaceholder(triple, result)
+                    : addEntityValue(attributeId, result)
+                }
+                itemIds={entityValueTriples
+                  .filter(triple => triple.attributeId === attributeId)
+                  .map(triple => triple.value.id)}
+                spaceId={spaceId}
+              />
+            </div>
           );
         }
 
@@ -311,10 +451,11 @@ function EntityAttributes({
 
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
-        const isEntityGroup = triples.find(t => t.value.type === 'entity');
+      {orderedGroupedTriples.map(([attributeId, triples], index) => {
+        const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
+        const isPlaceholder = triples[0].placeholder;
 
         return (
           <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
@@ -338,45 +479,50 @@ function EntityAttributes({
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
-                  entityValueIds={entityValueTriples.map(t => t.value.id)}
+                  entityValueIds={entityValueTriples.map(triple => triple.value.id)}
                   spaceId={spaceId}
                 />
               )}
 
               <TripleActions>
-                <TripleTypeDropdown
-                  value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
-                  options={[
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <TextIcon />
-                          <Spacer width={8} />
-                          Text
-                        </div>
-                      ),
-                      onClick: () => onChangeTripleType('string', triples),
-                      disabled: !isEntityGroup,
-                    },
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <Relation />
-                          <Spacer width={8} />
-                          Relation
-                        </div>
-                      ),
-                      onClick: () => onChangeTripleType('entity', triples),
-                      disabled: Boolean(isEntityGroup),
-                    },
-                  ]}
-                />
+                {!isPlaceholder && (
+                  <TripleTypeDropdown
+                    value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
+                    options={[
+                      {
+                        label: (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <TextIcon />
+                            <Spacer width={8} />
+                            <Text variant="button">Text</Text>
+                          </div>
+                        ),
+                        onClick: () => onChangeTripleType('string', triples),
+                        disabled: !isEntityGroup,
+                      },
+                      {
+                        label: (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <Relation />
+                            <Spacer width={8} />
+                            <Text variant="button">Relation</Text>
+                          </div>
+                        ),
+                        onClick: () => onChangeTripleType('entity', triples),
+                        disabled: Boolean(isEntityGroup),
+                      },
+                    ]}
+                  />
+                )}
                 <SquareButton
                   icon="trash"
-                  onClick={() =>
-                    triples
-                      .filter(t => t.attributeId === attributeId)
-                      .forEach(t => send({ type: 'REMOVE_TRIPLE', payload: { triple: t } }))
+                  onClick={
+                    isPlaceholder
+                      ? () => hideSchema(attributeId)
+                      : () =>
+                          triples
+                            .filter(triple => triple.attributeId === attributeId)
+                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }))
                   }
                 />
               </TripleActions>

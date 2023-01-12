@@ -4,11 +4,9 @@ import {
   EntityValue,
   StringValue,
 } from '@geogenesis/action-schema/assembly'
-import { BigInt, log } from '@graphprotocol/graph-ts'
 import {
   ATTRIBUTE,
   ATTRIBUTES,
-  DESCRIPTION,
   DESCRIPTION,
   IMAGE_ATTRIBUTE,
   NAME,
@@ -18,8 +16,8 @@ import {
   TEXT,
   TYPES,
   VALUE_TYPE,
-  // Have to drill into system-ids because assemblyscript doesn't support object literals or globbed module exports
 } from '@geogenesis/ids/system-ids'
+import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
 
 const entities: string[] = [
