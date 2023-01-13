@@ -108,7 +108,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 50,
       },
     },
     meta: {

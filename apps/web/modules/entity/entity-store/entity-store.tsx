@@ -30,6 +30,8 @@ export const createInitialDefaultTriples = (spaceId: string, entityId: string): 
   ];
 };
 
+const DEFAULT_PAGE_SIZE = 100;
+
 interface IEntityStoreConfig {
   api: INetwork;
   spaceId: string;
@@ -114,7 +116,7 @@ export class EntityStore implements IEntityStore {
         typeTriples.map(triple => {
           return this.api.fetchTriples({
             query: '',
-            first: 100,
+            first: DEFAULT_PAGE_SIZE,
             abortController: this.abortController,
             skip: 0,
             filter: [
@@ -137,7 +139,7 @@ export class EntityStore implements IEntityStore {
         attributeTriples.map(attribute => {
           return this.api.fetchTriples({
             query: '',
-            first: 100,
+            first: DEFAULT_PAGE_SIZE,
             skip: 0,
             abortController: this.abortController,
             filter: [
