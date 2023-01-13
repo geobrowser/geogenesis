@@ -4,11 +4,9 @@ import {
   EntityValue,
   StringValue,
 } from '@geogenesis/action-schema/assembly'
-import { BigInt, log } from '@graphprotocol/graph-ts'
 import {
   ATTRIBUTE,
   ATTRIBUTES,
-  DESCRIPTION,
   DESCRIPTION,
   IMAGE_ATTRIBUTE,
   NAME,
@@ -18,8 +16,8 @@ import {
   TEXT,
   TYPES,
   VALUE_TYPE,
-  // Have to drill into system-ids because assemblyscript doesn't support object literals or globbed module exports
 } from '@geogenesis/ids/system-ids'
+import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
 
 const entities: string[] = [
@@ -37,205 +35,121 @@ const entities: string[] = [
   ATTRIBUTE,
 ]
 
-const ATTRIBUTES_ID = '01412f83-8189-4ab1-8365-65c7fd358cc1'
-const SCHEMA_TYPE_ID = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
+class Tuple<T, U> {
+  _0: T
+  _1: U
+}
 
-const VALUE_TYPE_ID = 'e6eb4528-cb4d-4583-8efb-1791f698b8f8'
-const RELATION_ID = '1fe3b500-3f78-4405-8a57-28c36b06bd99'
-const TEXT_ID = '0390a8a6-b48d-4d66-a3f1-e515ea8fe71e'
+const names: Tuple<string, StringValue>[] = [
+  { _0: TYPES, _1: new StringValue(TYPES, 'Types') },
+  { _0: NAME, _1: new StringValue(NAME, 'Name') },
+  { _0: ATTRIBUTE, _1: new StringValue(ATTRIBUTE, 'Attribute') },
+  { _0: SPACE, _1: new StringValue(SPACE, 'Space') },
+  { _0: ATTRIBUTES, _1: new StringValue(ATTRIBUTES, 'Attributes') },
+  { _0: SCHEMA_TYPE, _1: new StringValue(SCHEMA_TYPE, 'Type') },
+  { _0: VALUE_TYPE, _1: new StringValue(VALUE_TYPE, 'Value type') },
+  { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
+  { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
+  { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
+  { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
+]
+
+/* Multi-dimensional array of [EntityId, ValueType] */
+const attributes: Tuple<string, string>[] = [
+  { _0: TYPES, _1: RELATION },
+  { _0: ATTRIBUTES, _1: RELATION },
+  { _0: SCHEMA_TYPE, _1: RELATION },
+  { _0: VALUE_TYPE, _1: RELATION },
+  { _0: IMAGE_ATTRIBUTE, _1: TEXT },
+  { _0: DESCRIPTION, _1: TEXT },
+  { _0: NAME, _1: TEXT },
+  { _0: SPACE, _1: TEXT },
+]
+
+/* Multi-dimensional array of [TypeId, [Attributes]] */
+const types: Tuple<string, string[]>[] = [
+  { _0: TEXT, _1: [] },
+  { _0: RELATION, _1: [] },
+  { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
+  { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
+]
 
 export function bootstrapRootSpaceCoreTypes(
   space: string,
   createdAtBlock: BigInt
 ): void {
-  log.debug(`Bootstrapping space ${space}!`, [])
+  log.debug(`Bootstrapping root space ${space}!`, [])
 
+  /* Create all of our entities */
   for (let i = 0; i < entities.length; i++) {
     handleAction(new CreateEntityAction(entities[i]), space, createdAtBlock)
   }
 
-  handleAction(new CreateEntityAction('type'), space, createdAtBlock)
-  handleAction(new CreateEntityAction('name'), space, createdAtBlock)
-  handleAction(new CreateEntityAction('attribute'), space, createdAtBlock)
-  handleAction(new CreateEntityAction('space'), space, createdAtBlock)
-  handleAction(new CreateEntityAction(ATTRIBUTES_ID), space, createdAtBlock)
-  handleAction(new CreateEntityAction(SCHEMA_TYPE_ID), space, createdAtBlock)
-  handleAction(new CreateEntityAction(VALUE_TYPE_ID), space, createdAtBlock)
-  handleAction(new CreateEntityAction(RELATION_ID), space, createdAtBlock)
-  handleAction(new CreateEntityAction(TEXT_ID), space, createdAtBlock)
+  /* Name all of our entities */
+  for (let i = 0; i < names.length; i++) {
+    handleCreateTripleAction({
+      fact: new CreateTripleAction(
+        names[i]._0 as string,
+        NAME,
+        names[i]._1 as StringValue
+      ),
+      space,
+      isProtected: false,
+      createdAtBlock,
+    })
+  }
 
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      'type',
-      'name',
-      new StringValue('type', 'Types')
-    ),
-    space,
-    isProtected: false,
-    createdAtBlock,
-  })
+  /* Create our attributes of type "attribute" */
+  for (let i = 0; i < attributes.length; i++) {
+    handleCreateTripleAction({
+      fact: new CreateTripleAction(
+        attributes[i]._0 as string,
+        TYPES,
+        new EntityValue(ATTRIBUTE)
+      ),
+      space,
+      isProtected: false,
+      createdAtBlock,
+    })
 
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      'name',
-      'name',
-      new StringValue('name', 'Name')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
+    /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
+    handleCreateTripleAction({
+      fact: new CreateTripleAction(
+        attributes[i]._0 as string,
+        VALUE_TYPE,
+        new EntityValue(attributes[i]._1 as string)
+      ),
+      space,
+      isProtected: false,
+      createdAtBlock,
+    })
+  }
 
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      'attribute',
-      'name',
-      new StringValue('attribute', 'Attribute')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
+  /* Create our types of type "type" */
+  for (let i = 0; i < types.length; i++) {
+    handleCreateTripleAction({
+      fact: new CreateTripleAction(
+        types[i]._0 as string,
+        TYPES,
+        new EntityValue(SCHEMA_TYPE)
+      ),
+      space,
+      isProtected: false,
+      createdAtBlock,
+    })
 
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      'space',
-      'name',
-      new StringValue('space', 'Space')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      ATTRIBUTES_ID,
-      'name',
-      new StringValue('attributes', 'Attributes')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      SCHEMA_TYPE_ID,
-      'name',
-      new StringValue('schema-type', 'Type')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      VALUE_TYPE_ID,
-      'name',
-      new StringValue('value-type', 'Value type')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      RELATION_ID,
-      'name',
-      new StringValue('relation', 'Relation')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      TEXT_ID,
-      'name',
-      new StringValue('text', 'Text')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction('name', 'type', new EntityValue('attribute')),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction('type', 'type', new EntityValue('attribute')),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction('space', 'type', new EntityValue('attribute')),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      ATTRIBUTES_ID,
-      'type',
-      new EntityValue('attribute')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      SCHEMA_TYPE_ID,
-      'type',
-      new EntityValue('attribute')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      VALUE_TYPE_ID,
-      'type',
-      new EntityValue('attribute')
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      RELATION_ID,
-      'type',
-      new EntityValue(SCHEMA_TYPE_ID)
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
-
-  handleCreateTripleAction({
-    fact: new CreateTripleAction(
-      TEXT_ID,
-      'type',
-      new EntityValue(SCHEMA_TYPE_ID)
-    ),
-    space,
-    isProtected: true,
-    createdAtBlock,
-  })
+    /* Each type can have a set of attributes */
+    for (let j = 0; j < types[i]._1.length; j++) {
+      handleCreateTripleAction({
+        fact: new CreateTripleAction(
+          types[i]._0 as string,
+          ATTRIBUTES,
+          new EntityValue(types[i]._1[j] as string)
+        ),
+        space,
+        isProtected: false,
+        createdAtBlock,
+      })
+    }
+  }
 }
