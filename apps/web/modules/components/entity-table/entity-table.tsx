@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   ColumnDef,
   createColumnHelper,
@@ -10,7 +11,6 @@ import {
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
@@ -148,7 +148,13 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <EntityStoreProvider key={row.id} id={entityId} spaceId={space} initialTriples={initialTriples}>
+              <EntityStoreProvider
+                key={row.id}
+                id={entityId}
+                spaceId={space}
+                initialSchemaTriples={[]}
+                initialTriples={initialTriples}
+              >
                 <TableRow>
                   {cells.map(cell => {
                     const cellId = `${row.original.id}-${cell.column.id}`;

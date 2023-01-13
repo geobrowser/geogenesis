@@ -58,7 +58,6 @@ const names: Tuple<string, StringValue>[] = [
 const attributes: Tuple<string, string>[] = [
   { _0: TYPES, _1: RELATION },
   { _0: ATTRIBUTES, _1: RELATION },
-  { _0: SCHEMA_TYPE, _1: RELATION },
   { _0: VALUE_TYPE, _1: RELATION },
   { _0: IMAGE_ATTRIBUTE, _1: TEXT },
   { _0: DESCRIPTION, _1: TEXT },

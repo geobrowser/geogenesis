@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
-import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
 import {
@@ -33,7 +33,7 @@ function getActionFromChangeStatus(action: Action) {
 
 export type FetchTriplesOptions = {
   query: string;
-  space: string;
+  space?: string;
   skip: number;
   first: number;
   filter: FilterState;
@@ -105,7 +105,7 @@ export class Network implements INetwork {
     >;
 
     const where = [
-      `space: ${JSON.stringify(space)}`,
+      space && `space: ${JSON.stringify(space)}`,
       query && `entity_: {name_contains_nocase: ${JSON.stringify(query)}}`,
       fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
