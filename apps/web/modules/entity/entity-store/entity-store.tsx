@@ -44,7 +44,7 @@ export class EntityStore implements IEntityStore {
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
-  typeIds$: ObservableComputed<string[]>;
+  typeTriples$: ObservableComputed<TripleType[]>;
   schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
@@ -80,11 +80,8 @@ export class EntityStore implements IEntityStore {
     In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to 
     persist the Attribute field. Filtering out those entities here. 
     */
-    this.typeIds$ = computed(() => {
-      return this.triples$
-        .get()
-        .filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '')
-        .map(t => t.value.id);
+    this.typeTriples$ = computed(() => {
+      return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
     });
 
     /* 
@@ -92,39 +89,38 @@ export class EntityStore implements IEntityStore {
     This is problematic when the computed value is expensive to compute or involves a network request.
     To avoid this, we can use the observe function to only run the computation when the direct dependencies change.
     */
-    observe<string[]>(e => {
-      const typeIds = this.typeIds$.get();
+    observe<TripleType[]>(e => {
+      const typeTriples = this.typeTriples$.get();
       const previous = e.previous || [];
 
-      if (!A.eq(previous, typeIds, (a, b) => a === b)) {
-        this.setSchemaTriples(typeIds);
+      if (!A.eq(previous, typeTriples, (a, b) => a.id === b.id)) {
+        this.setSchemaTriples(typeTriples);
       }
 
-      return typeIds;
+      return typeTriples;
     });
   }
 
-  setSchemaTriples = async (typeIds: string[]) => {
+  setSchemaTriples = async (typeTriples: TripleType[]) => {
     this.abortController.abort();
     this.abortController = new AbortController();
 
     try {
-      if (typeIds.length === 0) {
+      if (typeTriples.length === 0) {
         this.schemaTriples$.set([]);
       }
 
       const attributes = await Promise.all(
-        typeIds.map(triple => {
+        typeTriples.map(triple => {
           return this.api.fetchTriples({
             query: '',
-            space: this.spaceId,
             first: 100,
             abortController: this.abortController,
             skip: 0,
             filter: [
               {
                 field: 'entity-id',
-                value: triple,
+                value: triple.value.id,
               },
               {
                 field: 'attribute-id',
@@ -141,7 +137,6 @@ export class EntityStore implements IEntityStore {
         attributeTriples.map(attribute => {
           return this.api.fetchTriples({
             query: '',
-            space: this.spaceId,
             first: 100,
             skip: 0,
             abortController: this.abortController,
