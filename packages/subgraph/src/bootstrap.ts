@@ -35,38 +35,44 @@ const entities: string[] = [
   ATTRIBUTE,
 ]
 
-const names: [string, StringValue][] = [
-  [TYPES, new StringValue(TYPES, 'Types')],
-  [NAME, new StringValue(NAME, 'Name')],
-  [ATTRIBUTE, new StringValue(ATTRIBUTE, 'Attribute')],
-  [SPACE, new StringValue(SPACE, 'Space')],
-  [ATTRIBUTES, new StringValue(ATTRIBUTES, 'Attributes')],
-  [SCHEMA_TYPE, new StringValue(SCHEMA_TYPE, 'Type')],
-  [VALUE_TYPE, new StringValue(VALUE_TYPE, 'Value type')],
-  [RELATION, new StringValue(RELATION, 'Relation')],
-  [TEXT, new StringValue(TEXT, 'Text')],
-  [IMAGE_ATTRIBUTE, new StringValue(IMAGE_ATTRIBUTE, 'Image')],
-  [DESCRIPTION, new StringValue(DESCRIPTION, 'Description')],
+class Tuple<T, U> {
+  _0: T;
+  _1: U
+}
+
+
+const names: Tuple<string, StringValue>[]  = [
+  {_0: TYPES,_1: new StringValue(TYPES, 'Types')},
+  {_0: NAME,_1: new StringValue(NAME, 'Name')},
+  {_0: ATTRIBUTE,_1: new StringValue(ATTRIBUTE, 'Attribute')},
+  {_0: SPACE,_1: new StringValue(SPACE, 'Space')},
+  {_0: ATTRIBUTES,_1: new StringValue(ATTRIBUTES, 'Attributes')},
+  {_0: SCHEMA_TYPE,_1: new StringValue(SCHEMA_TYPE, 'Type')},
+  {_0: VALUE_TYPE,_1: new StringValue(VALUE_TYPE, 'Value type')},
+  {_0: RELATION,_1: new StringValue(RELATION, 'Relation')},
+  {_0: TEXT,_1: new StringValue(TEXT, 'Text')},
+  {_0: IMAGE_ATTRIBUTE,_1: new StringValue(IMAGE_ATTRIBUTE, 'Image')},
+  {_0: DESCRIPTION,_1: new StringValue(DESCRIPTION, 'Description')},
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
-const attributes: [string, string][] = [
-  [TYPES, RELATION],
-  [ATTRIBUTES, RELATION],
-  [SCHEMA_TYPE, RELATION],
-  [VALUE_TYPE, RELATION],
-  [IMAGE_ATTRIBUTE, TEXT],
-  [DESCRIPTION, TEXT],
-  [NAME, TEXT],
-  [SPACE, TEXT],
+const attributes: Tuple<string, string>[] = [
+  {_0:TYPES,_1:RELATION},
+  {_0:ATTRIBUTES,_1:RELATION},
+  {_0:SCHEMA_TYPE,_1:RELATION},
+  {_0:VALUE_TYPE,_1:RELATION},
+  {_0:IMAGE_ATTRIBUTE,_1:TEXT},
+  {_0:DESCRIPTION,_1:TEXT},
+  {_0:NAME,_1:TEXT},
+  {_0:SPACE,_1:TEXT},
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
-const types: [string, string[]][] = [
-  [TEXT, []],
-  [RELATION, []],
-  [ATTRIBUTE, [VALUE_TYPE]],
-  [SCHEMA_TYPE, [ATTRIBUTES]],
+const types: Tuple<string, string[]>[] = [
+  {_0: TEXT, _1: []},
+  {_0: RELATION, _1: []},
+  {_0: ATTRIBUTE, _1: [VALUE_TYPE]},
+  {_0: SCHEMA_TYPE, _1: [ATTRIBUTES]},
 ]
 
 export function bootstrapRootSpaceCoreTypes(
@@ -84,9 +90,9 @@ export function bootstrapRootSpaceCoreTypes(
   for (let i = 0; i < names.length; i++) {
     handleCreateTripleAction({
       fact: new CreateTripleAction(
-        names[i][0] as string,
+        names[i]._0 as string,
         NAME,
-        names[i][1] as StringValue
+        names[i]._1 as StringValue
       ),
       space,
       isProtected: false,
@@ -98,7 +104,7 @@ export function bootstrapRootSpaceCoreTypes(
   for (let i = 0; i < attributes.length; i++) {
     handleCreateTripleAction({
       fact: new CreateTripleAction(
-        attributes[i][0] as string,
+        attributes[i]._0 as string,
         TYPES,
         new EntityValue(ATTRIBUTE)
       ),
@@ -110,9 +116,9 @@ export function bootstrapRootSpaceCoreTypes(
     /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
     handleCreateTripleAction({
       fact: new CreateTripleAction(
-        attributes[i][0] as string,
+        attributes[i]._0 as string,
         VALUE_TYPE,
-        new EntityValue(attributes[i][1] as string)
+        new EntityValue(attributes[i]._1 as string)
       ),
       space,
       isProtected: false,
@@ -124,7 +130,7 @@ export function bootstrapRootSpaceCoreTypes(
   for (let i = 0; i < types.length; i++) {
     handleCreateTripleAction({
       fact: new CreateTripleAction(
-        types[i][0] as string,
+        types[i]._0 as string,
         TYPES,
         new EntityValue(SCHEMA_TYPE)
       ),
@@ -134,12 +140,12 @@ export function bootstrapRootSpaceCoreTypes(
     })
 
     /* Each type can have a set of attributes */
-    for (let j = 0; j < types[i][1].length; j++) {
+    for (let j = 0; j < types[i]._1.length; j++) {
       handleCreateTripleAction({
         fact: new CreateTripleAction(
-          types[i][0] as string,
+          types[i]._0 as string,
           ATTRIBUTES,
-          new EntityValue(types[i][1][j] as string)
+          new EntityValue(types[i]._1[j] as string)
         ),
         space,
         isProtected: false,
