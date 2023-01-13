@@ -36,10 +36,9 @@ const entities: string[] = [
 ]
 
 class Tuple<T, U> {
-  _0: T;
+  _0: T
   _1: U
 }
-
 
 const names: Tuple<string, StringValue>[] = [
   { _0: TYPES, _1: new StringValue(TYPES, 'Types') },
