@@ -22,10 +22,10 @@ describe('EntityStore', () => {
     expect(triples).toHaveLength(1);
     expect(triples[0]).toStrictEqual(defaultTriples[0]);
     expect(store.schemaTriples$.get()).toStrictEqual([]);
-    expect(store.typeIds$.get()).toStrictEqual([]);
+    expect(store.typeTriples$.get()).toStrictEqual([]);
   });
 
-  it('Returns type IDs', async () => {
+  it('Returns type triples', async () => {
     const typeTriple = makeStubTripleWithType('SomeTypeId');
 
     const initialEntityStoreTriples = [typeTriple];
@@ -41,10 +41,10 @@ describe('EntityStore', () => {
       ActionsStore: new ActionsStore({ api: network }),
     });
 
-    await when(() => store.triples$.get().length > 0 && store.typeIds$.get().length > 0);
+    await when(() => store.triples$.get().length > 0 && store.typeTriples$.get().length > 0);
 
     expect(store.triples$.get()).toStrictEqual(initialEntityStoreTriples);
-    expect(store.typeIds$.get()).toStrictEqual(['SomeTypeId']);
+    expect(store.typeTriples$.get()[0]).toStrictEqual(typeTriple);
   });
 
   it('Returns schema placeholders for text attributes', async () => {
@@ -64,7 +64,8 @@ describe('EntityStore', () => {
     });
 
     await when(
-      () => store.triples$.get().length > 0 && store.typeIds$.get().length > 0 && store.schemaTriples$.get().length > 0
+      () =>
+        store.triples$.get().length > 0 && store.typeTriples$.get().length > 0 && store.schemaTriples$.get().length > 0
     );
 
     expect(store.schemaTriples$.get()).toHaveLength(1);
