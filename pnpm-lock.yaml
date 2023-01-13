@@ -25,7 +25,7 @@ importers:
       '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:*
       '@geogenesis/ids': workspace:*
-      '@legendapp/state': ^0.20.0
+      '@legendapp/state': ^0.23.2
       '@mailchimp/mailchimp_marketing': ^3.0.80
       '@mobily/ts-belt': ^4.0.0-rc.2
       '@next/bundle-analyzer': ^12.3.0
@@ -92,7 +92,7 @@ importers:
       '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
       '@geogenesis/ids': link:../../packages/ids
-      '@legendapp/state': 0.20.5_react@18.2.0
+      '@legendapp/state': 0.23.2_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
       '@mobily/ts-belt': 4.0.0-rc.5
       '@radix-ui/react-dialog': 1.0.2_rj7ozvcq3uehdlnj3cbwzbi5ce
@@ -1926,13 +1926,16 @@ packages:
     resolution: {integrity: sha512-TQ21IjcZOw/scqypaVFY3jHVqI7X7Hta3qN/us6FvTol3AY06UmrhhXGww0E9xHmAbdX241ddwXEiMBSQZFr9g==}
     dev: false
 
-  /@legendapp/state/0.20.5_react@18.2.0:
-    resolution: {integrity: sha512-FpWmpf/Yox/liD7ashBehluzImYvIUUvKtuQjXa76ly8wn/4CQx0Mpa35DO97CUvYMDby6XYXF5eyTWLnQgu5A==}
+  /@legendapp/state/0.23.2_react@18.2.0:
+    resolution: {integrity: sha512-GKJqAOe5eLuDDiAAbXCV5Wf88w7Br4k15g50nOc70m0451LsyxRTmOv7ALFhnhZpD05AHD9CVJSC/90epHJc6Q==}
     peerDependencies:
+      '@tanstack/react-query': ^4.14.6
       react: '>=16.8'
       react-native: '>=0.61'
       react-native-mmkv: ^2
     peerDependenciesMeta:
+      '@tanstack/react-query':
+        optional: true
       react:
         optional: true
       react-native:
@@ -5051,7 +5054,7 @@ packages:
   /axios/0.21.4:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
     dependencies:
-      follow-redirects: 1.15.1_debug@4.3.4
+      follow-redirects: 1.15.1
     transitivePeerDependencies:
       - debug
     dev: false
@@ -9592,6 +9595,16 @@ packages:
     resolution: {integrity: sha512-rDjbZUKpN8OYhB0IE/vY/I8UWO/602IIJEU/76Tv4LvYnwHCk0BCsvz4eRr9n+FQcri7L5cyaXOo0+/Kh4HisA==}
     dev: true
 
+  /follow-redirects/1.15.1:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dev: false
+
   /follow-redirects/1.15.1_debug@4.3.1:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
@@ -9614,6 +9627,7 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.4
+    dev: true
 
   /for-each/0.3.3:
     resolution: {integrity: sha512-jqYfLp7mo9vIyQf8ykW2v7A+2N4QjeCeI5+Dz9XraiO1ign81wjiH7Fb9vSOWvQfNtmSa4H2RoQTrrXivdUZmw==}

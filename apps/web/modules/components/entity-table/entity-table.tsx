@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Memo } from '@legendapp/state/react';
 import {
   ColumnDef,
   createColumnHelper,
