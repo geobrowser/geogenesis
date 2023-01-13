@@ -1,9 +1,9 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { Params } from '../params';
-import { Services } from '../services';
-import { Column, FilterState, Row, Triple } from '../types';
+import { Params } from '../../params';
+import { Services } from '../../services';
+import { Column, FilterState, Row, Triple } from '../../types';
 import { EntityTableStore } from './entity-table-store';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);

@@ -8,8 +8,8 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button, SmallButton } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
+import { useEntityTable } from '~/modules/entity';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { useEntityTable } from '~/modules/triple';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
@@ -57,7 +57,7 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
   boxShadow: props.theme.shadows.dropdown,
-  zIndex: 1,
+  zIndex: 100,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
 

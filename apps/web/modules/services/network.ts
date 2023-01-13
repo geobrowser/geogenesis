@@ -2,8 +2,8 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Entity } from '../entity';
-import { DEFAULT_PAGE_SIZE, InitialEntityTableStoreParams, Triple } from '../triple';
+import { Entity, InitialEntityTableStoreParams } from '../entity';
+import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
 import {
   Account,
   Action,
@@ -51,12 +51,17 @@ type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchEntityTableDataParams {
   spaceId: string;
-  params: InitialEntityTableStoreParams;
+  params: InitialEntityTableStoreParams & {
+    skip: number;
+    first: number;
+  };
   abortController?: AbortController;
 }
 
 export interface INetwork {
-  fetchEntityTableData: (options: FetchEntityTableDataParams) => Promise<{ rows: Row[]; columns: Column[] }>;
+  fetchEntityTableData: (
+    options: FetchEntityTableDataParams
+  ) => Promise<{ rows: Row[]; columns: Column[]; hasNextPage: boolean }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
@@ -156,7 +161,6 @@ export class Network implements INetwork {
     } = await response.json();
 
     const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
-
     return { triples };
   };
 
@@ -243,9 +247,11 @@ export class Network implements INetwork {
       const triples = fromNetworkTriples(result.entityOf);
 
       return {
-        ...result,
+        id: result.id,
+        name: result.name,
         description: Entity.description(triples),
         types: Entity.types(triples, space),
+        triples,
       };
     });
 
@@ -327,7 +333,7 @@ export class Network implements INetwork {
     /* TODO: Explore moving this method into another layer of the codebase responsible for both data querying and transformation  */
 
     if (!params.typeId) {
-      return { columns: [], rows: [] };
+      return { columns: [], rows: [], hasNextPage: false };
     }
 
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
@@ -337,7 +343,7 @@ export class Network implements INetwork {
         query: '',
         space: spaceId,
         abortController,
-        first: 100,
+        first: DEFAULT_PAGE_SIZE,
         skip: 0,
         filter: [
           { field: 'entity-id', value: params.typeId },
@@ -348,8 +354,8 @@ export class Network implements INetwork {
         query: params.query,
         space: spaceId,
         abortController,
-        first: DEFAULT_PAGE_SIZE,
-        skip: params.pageNumber * DEFAULT_PAGE_SIZE,
+        first: params.first,
+        skip: params.skip,
         filter: [
           { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
           { field: 'linked-to', value: params.typeId },
@@ -363,7 +369,7 @@ export class Network implements INetwork {
         return this.fetchTriples({
           query: '',
           space: spaceId,
-          first: 100,
+          first: DEFAULT_PAGE_SIZE,
           skip: 0,
           filter: [
             {
@@ -387,8 +393,8 @@ export class Network implements INetwork {
           query: '',
           space: spaceId,
           abortController,
+          first: DEFAULT_PAGE_SIZE,
           skip: 0,
-          first: 100,
           filter: [{ field: 'entity-id', value: entityId }],
         })
       )
@@ -446,6 +452,7 @@ export class Network implements INetwork {
     return {
       columns,
       rows,
+      hasNextPage: rowEntityIds.length > DEFAULT_PAGE_SIZE,
     };
   };
 }
