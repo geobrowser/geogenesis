@@ -87,7 +87,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
         return (
           <StringField
             key={triple.id}
-            variant="body"
+            variant="tableCell"
             placeholder="Add value..."
             onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             value={triple.value.value}

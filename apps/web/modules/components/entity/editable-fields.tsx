@@ -24,7 +24,7 @@ const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'vari
 interface StringFieldProps {
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body';
+  variant?: 'mainPage' | 'body' | 'tableCell';
   color?: 'text' | 'grey-04';
   value?: string;
 }
