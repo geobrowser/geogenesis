@@ -276,6 +276,7 @@ function EntityAttributes({
   };
 
   const removeOrResetEntityTriple = (triple: TripleType) => {
+    hideSchema(triple.attributeId);
     send({
       type: 'REMOVE_ENTITY',
       payload: {
@@ -479,10 +480,12 @@ function EntityAttributes({
                   onClick={
                     isPlaceholder
                       ? () => hideSchema(attributeId)
-                      : () =>
+                      : () => {
+                          hideSchema(attributeId);
                           triples
                             .filter(triple => triple.attributeId === attributeId)
-                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }))
+                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
+                        }
                   }
                 />
               </TripleActions>
