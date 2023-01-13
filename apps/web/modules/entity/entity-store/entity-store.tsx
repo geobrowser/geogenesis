@@ -93,7 +93,7 @@ export class EntityStore implements IEntityStore {
       const typeTriples = this.typeTriples$.get();
       const previous = e.previous || [];
 
-      if (!A.eq(previous, typeTriples, (a, b) => a.id === b.id)) {
+      if (!A.eq(previous, typeTriples, (a, b) => a.value.id === b.value.id)) {
         this.setSchemaTriples(typeTriples);
       }
 
