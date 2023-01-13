@@ -275,8 +275,7 @@ export class Network implements INetwork {
     const where = [
       `space: ${JSON.stringify(space)}`,
       // fieldFilters['attribute-name'] &&
-      //   `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
-      // fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+      fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
 
       // Until we have OR we can't search for name_contains OR value string contains
       // fieldFilters.value && `stringValue_contains_nocase: ${JSON.stringify(fieldFilters.value)}`,

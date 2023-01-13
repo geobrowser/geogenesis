@@ -103,13 +103,6 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState,
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  // Right now there's limitations in how deep we can query nested children. If we're on the
-  // entities page we'll provide a limited set of filters for now.
-  const filterOptions = getFilterOptions(filterState);
-  const options = limitedFilters
-    ? filterOptions.filter(option => option.value === 'attribute-name' || option.value === 'value')
-    : filterOptions;
-
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
@@ -141,7 +134,15 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState,
                 <FilterInputGroup
                   label={index === 0 ? 'Where' : 'And'}
                   key={`filter-state-item-${index}`}
-                  options={options}
+                  options={
+                    // Right now there's limitations in how nested we can query name-based filters on entities.
+                    // For now we'll just provide a basic advanced querying mechanism.
+                    limitedFilters
+                      ? getFilterOptions(filterState, filterClause).filter(
+                          option => option.value !== 'attribute-name' && option.value !== 'value'
+                        )
+                      : getFilterOptions(filterState, filterClause)
+                  }
                   filterClause={filterClause}
                   onChange={newFilterClause => {
                     const newFilterState = produce(filterState, draft => {

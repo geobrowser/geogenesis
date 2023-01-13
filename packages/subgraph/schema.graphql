@@ -68,7 +68,7 @@ An edge within the knowledge graph.
 Triples are 3-tuples of (entity, attribute, value).
 """
 type Triple @entity {
-  id: ID! # TODO: namespace ids with space id
+  id: ID!
   entity: GeoEntity!
   attribute: GeoEntity!
   valueType: ValueType!

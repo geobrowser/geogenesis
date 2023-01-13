@@ -79,6 +79,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (showEditableCell) {
       return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} />;
+      return (
+        <input defaultValue="Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book." />
+      );
     } else if (cellData && !isPlaceholder) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
@@ -108,7 +111,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 100,
+        pageSize: 25,
       },
     },
     meta: {
