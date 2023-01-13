@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
@@ -69,6 +69,21 @@ export type EditEvent =
       type: 'UPDATE_VALUE';
       payload: {
         value: string;
+        triple: TripleType;
+      };
+    }
+  | {
+      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER';
+      payload: {
+        value: string;
+        triple: TripleType;
+      };
+    }
+  | {
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER';
+      payload: {
+        entityId: string;
+        entityName: string;
         triple: TripleType;
       };
     }
@@ -253,6 +268,44 @@ const listener =
           })
         );
       }
+      case 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER': {
+        const { value, triple } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: triple.entityName,
+            attributeId: triple.attributeId,
+            attributeName: triple.attributeName,
+            value: {
+              type: 'string',
+              id: triple.value.id,
+              value: value,
+            },
+          })
+        );
+      }
+
+      case 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER': {
+        const { entityId, entityName, triple } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: triple.entityName,
+            attributeId: triple.attributeId,
+            attributeName: triple.attributeName,
+            value: {
+              type: 'entity',
+              id: entityId,
+              name: entityName,
+            },
+          })
+        );
+      }
+
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
         update(

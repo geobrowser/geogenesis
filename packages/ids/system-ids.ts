@@ -16,10 +16,10 @@ export const ATTRIBUTES = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 /* Example Usage: Person -> TYPES -> SCHEMA_TYPE */
 export const SCHEMA_TYPE = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
-export const VALUE_TYPE = 'e6eb4528-cb4d-4583-8efb-1791f698b8f8'
+export const VALUE_TYPE = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8'
 
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
-export const RELATION = '1fe3b500-3f78-4405-8a57-28c36b06bd99'
+export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
-export const TEXT = '0390a8a6-b48d-4d66-a3f1-e515ea8fe71e'
+export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'

@@ -21,12 +21,23 @@ const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'vari
   },
 }));
 
-interface StringFieldProps {
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+interface PlaceholderFieldProps {
+  onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body';
   color?: 'text' | 'grey-04';
+}
+
+interface StringFieldProps {
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  variant?: 'mainPage' | 'body' | 'tableCell';
+  color?: 'text' | 'grey-04';
   value?: string;
+}
+
+export function PlaceholderField({ variant = 'body', color = 'text', onBlur, ...props }: PlaceholderFieldProps) {
+  return <Textarea {...props} rows={1} onBlur={onBlur} variant={variant} color={color} />;
 }
 
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
