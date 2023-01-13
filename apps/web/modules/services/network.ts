@@ -4,6 +4,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
+import { DEFAULT_PAGE_SIZE as DEFAULT_PAGE_SIZE_ENTITY_TABLE } from '../entity';
 import {
   Account,
   Action,
@@ -452,7 +453,7 @@ export class Network implements INetwork {
     return {
       columns,
       rows,
-      hasNextPage: rowEntityIds.length > DEFAULT_PAGE_SIZE,
+      hasNextPage: rowEntityIds.length > DEFAULT_PAGE_SIZE_ENTITY_TABLE,
     };
   };
 }
