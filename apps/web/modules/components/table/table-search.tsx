@@ -166,7 +166,9 @@ function AdvancedFilterPill({ filterClause, onClick }: AdvancedFilterPillprops) 
     <AdvancedFilterPillContainer onClick={onClick}>
       {label} {value}
       <Spacer width={8} />
-      <CheckCloseSmall />
+      <div>
+        <CheckCloseSmall />
+      </div>
     </AdvancedFilterPillContainer>
   );
 }
