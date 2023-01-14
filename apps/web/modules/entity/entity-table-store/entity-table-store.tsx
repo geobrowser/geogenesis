@@ -1,17 +1,11 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { SYSTEM_IDS } from '~/../../packages/ids';
+import { ActionsStore } from '~/modules/action';
+import { Triple } from '~/modules/triple';
 import { INetwork } from '../../services/network';
-import {
-  Action,
-  Column,
-  CreateTripleAction,
-  FilterState,
-  ReviewState,
-  Row,
-  Triple,
-  Triple as TripleType,
-} from '../../types';
+import { Action, Column, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -20,7 +14,7 @@ interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
-  selectedType$: Observable<Triple | null>;
+  selectedType$: Observable<TripleType | null>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -38,9 +32,10 @@ interface IEntityTableStoreConfig {
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
+  initialSelectedType: TripleType | null;
+  initialTypes: TripleType[];
   initialColumns: Column[];
+  ActionsStore: ActionsStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -67,7 +62,7 @@ export class EntityTableStore implements IEntityTableStore {
   columns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
-  selectedType$: Observable<Triple | null>;
+  selectedType$: Observable<TripleType | null>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
@@ -75,6 +70,7 @@ export class EntityTableStore implements IEntityTableStore {
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
   abortController: AbortController = new AbortController();
+  ActionsStore: ActionsStore;
 
   constructor({
     api,
@@ -85,6 +81,7 @@ export class EntityTableStore implements IEntityTableStore {
     initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
+    ActionsStore,
   }: IEntityTableStoreConfig) {
     this.api = api;
     this.hydrated$ = observable(false);
@@ -92,7 +89,24 @@ export class EntityTableStore implements IEntityTableStore {
     this.selectedType$ = observable(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
-    this.types$ = observable(initialTypes);
+    this.ActionsStore = ActionsStore;
+    this.types$ = computed(() => {
+      console.log('ACTIONS YO', ActionsStore.actions$.get());
+      const globalActions = ActionsStore.actions$.get()[space] || [];
+      const actions = globalActions.filter(a => {
+        const isCreate =
+          a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+        const isDelete =
+          a.type === 'deleteTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+        const isRemove =
+          a.type === 'editTriple' &&
+          a.before.attributeId === SYSTEM_IDS.TYPES &&
+          a.before.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+
+        return isCreate || isDelete || isRemove;
+      });
+      return Triple.fromActions(actions, initialTypes);
+    });
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
@@ -187,7 +201,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.pageNumber$.set(pageNumber);
   };
 
-  setType = (type: Triple) => {
+  setType = (type: TripleType) => {
     this.selectedType$.set(type);
   };
 

@@ -1,6 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { useActionsStoreContext } from '~/modules/action';
 import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, FilterState, Row, Triple } from '../../types';
@@ -31,6 +32,7 @@ export function EntityTableStoreProvider({
   const urlRef = useRef(router.asPath);
 
   const basePath = router.asPath.split('?')[0];
+  const ActionsStore = useActionsStoreContext();
 
   const store = useMemo(() => {
     const initialParams = Params.parseEntityTableQueryParameters(urlRef.current);
@@ -42,6 +44,7 @@ export function EntityTableStoreProvider({
       initialSelectedType,
       initialColumns,
       initialTypes,
+      ActionsStore,
     });
   }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes]);
 

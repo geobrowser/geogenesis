@@ -32,7 +32,7 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
     <PageContainer>
       <Spacer height={20} />
 
-      <EntityInput />
+      <EntityInput spaceId={spaceId} />
       <Spacer height={12} />
 
       <Container>

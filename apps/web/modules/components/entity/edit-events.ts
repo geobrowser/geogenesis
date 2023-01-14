@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType } from '~/modules/types';
+import { Triple as TripleType, TripleValueType } from '~/modules/types';
 
 export type EditEvent =
   | {
@@ -91,6 +91,12 @@ export type EditEvent =
       type: 'REMOVE_TRIPLE';
       payload: {
         triple: TripleType;
+      };
+    }
+  | {
+      type: 'CREATE_TYPE';
+      payload: {
+        value: string;
       };
     };
 
@@ -308,13 +314,50 @@ const listener =
 
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
-        update(
+        return update(
           {
             ...triple,
             value: { ...triple.value, type: 'string', value },
           },
           triple
         );
+      }
+      case 'CREATE_TYPE': {
+        const { value } = event.payload;
+        console.log('ENTITY NAME SHOULD BE: ', value);
+        const triple = {
+          ...Triple.empty(context.spaceId, context.entityId, 'entity'),
+          entityName: value,
+          entityId: ID.createEntityId(),
+          space: context.spaceId,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          // value: {
+          //   id: SYSTEM_IDS.SCHEMA_TYPE,
+          //   type: 'entity',
+          //   name: 'Type',
+          // },
+        };
+        triple.value = {
+          id: SYSTEM_IDS.SCHEMA_TYPE,
+          type: 'entity',
+          name: 'Type',
+        };
+        console.log('TRIPLE: ', triple);
+        return create(triple);
+        // const triple = Triple.withId({
+        //   entityName: value,
+        //   entityId: ID.createEntityId(),
+        //   space: context.spaceId,
+        //   attributeId: SYSTEM_IDS.TYPES,
+        //   attributeName: 'Types',
+        //   value: {
+        //     id: SYSTEM_IDS.SCHEMA_TYPE,
+        //     type: 'entity',
+        //     name: 'Type',
+        //   },
+        // });
+        // return create(triple);
       }
     }
   };

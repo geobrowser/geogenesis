@@ -1,7 +1,8 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
-import { useRef } from 'react';
-import { useEntityTable } from '~/modules/entity';
+import { useMemo, useRef } from 'react';
+import { EntityStoreProvider, useEntityTable } from '~/modules/entity';
+import { ID } from '~/modules/id';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
 import { Input } from '../../design-system/input';
@@ -56,7 +57,11 @@ const AdvancedFilters = styled.div(props => ({
   backgroundColor: props.theme.colors.white,
 }));
 
-export function EntityInput() {
+interface Props {
+  spaceId: string;
+}
+
+export function EntityInput({ spaceId }: Props) {
   const entityTableStore = useEntityTable();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const showBasicFilter =
@@ -72,32 +77,37 @@ export function EntityInput() {
     entityTableStore.setFilterState(filteredFilters);
   };
 
+  const newId = useMemo(() => ID.createEntityId(), []);
+
   return (
     <InputContainer ref={inputContainerRef}>
-      <TypeDialog
-        inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
-        filterState={entityTableStore.filterState}
-        setFilterState={entityTableStore.setFilterState}
-      />
+      <EntityStoreProvider id={newId} spaceId={spaceId} initialTriples={[]} initialSchemaTriples={[]}>
+        <TypeDialog
+          inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
+          filterState={entityTableStore.filterState}
+          setFilterState={entityTableStore.setFilterState}
+          spaceId={spaceId}
+        />
 
-      <SearchInputContainer>
-        <SearchIconContainer>
-          <Search />
-        </SearchIconContainer>
-        {showBasicFilter ? (
-          <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
-        ) : (
-          <AdvancedFilters>
-            {entityTableStore.filterState.map(filter => (
-              <AdvancedFilterPill
-                key={filter.field}
-                filterClause={filter}
-                onClick={() => onAdvancedFilterClick(filter.field)}
-              />
-            ))}
-          </AdvancedFilters>
-        )}
-      </SearchInputContainer>
+        <SearchInputContainer>
+          <SearchIconContainer>
+            <Search />
+          </SearchIconContainer>
+          {showBasicFilter ? (
+            <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
+          ) : (
+            <AdvancedFilters>
+              {entityTableStore.filterState.map(filter => (
+                <AdvancedFilterPill
+                  key={filter.field}
+                  filterClause={filter}
+                  onClick={() => onAdvancedFilterClick(filter.field)}
+                />
+              ))}
+            </AdvancedFilters>
+          )}
+        </SearchInputContainer>
+      </EntityStoreProvider>
     </InputContainer>
   );
 }

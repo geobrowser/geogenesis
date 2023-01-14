@@ -4,16 +4,20 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/router';
 import React, { useState } from 'react';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button, SmallButton } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
-import { useEntityTable } from '~/modules/entity';
+import { EntityStore, EntityStoreProvider, useEntityStore, useEntityTable } from '~/modules/entity';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
+import { createTripleWithId } from '~/modules/id/create-id';
+import { Triple as TripleClass } from '~/modules/triple';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultItem, ResultsList } from '../entity/autocomplete/results-list';
+import { useEditEvents } from '../entity/edit-events';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -68,8 +72,8 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
 }));
 
 const AddEntityContainer = styled.div(() => ({
-  display: "flex",
-  justifyContent: "space-between"
+  display: 'flex',
+  justifyContent: 'space-between',
 }));
 
 interface CancelButtonProps {
@@ -77,8 +81,8 @@ interface CancelButtonProps {
 }
 
 const CancelButton = styled(Text)<CancelButtonProps>(() => ({
-  color: "#3963FE",
-  cursor: "pointer"
+  color: '#3963FE',
+  cursor: 'pointer',
 }));
 
 const MotionContent = motion(StyledContent);
@@ -90,12 +94,23 @@ interface Props {
   spaceId: string;
 }
 
-export function TypeDialog({ inputContainerWidth }: Props) {
+export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const theme = useTheme();
   const entityTableStore = useEntityTable();
-  const router = useRouter();
-  const { id: spaceId } = router.query as { id: string };
-  const { isEditor } = useAccessControl(spaceId)
+  const { create, update, remove, id } = useEntityStore();
+  const { isEditor } = useAccessControl(spaceId);
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId: spaceId,
+      entityName: '',
+    },
+    api: {
+      create,
+      update,
+      remove,
+    },
+  });
 
   const { width } = useWindowSize();
 
@@ -106,7 +121,9 @@ export function TypeDialog({ inputContainerWidth }: Props) {
 
   const [filter, setFilter] = useState('');
 
-  const types = entityTableStore.types || [];
+  console.log(entityTableStore.types);
+  const types = entityTableStore.types.filter(triple => triple.entityName) || [];
+  console.log(types);
   const filteredTypes = types.filter(type => (type.entityName || '').toLowerCase().includes(filter.toLowerCase()));
 
   const handleSelect = (type: Triple) => {
@@ -117,11 +134,17 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   const handleCancel = () => {
     setFilter('');
     setDisplayCreateType(false);
-  }
+  };
 
   const handleCreateType = () => {
-    console.log("We should be creating a new type");
-    setDisplayCreateType(true);
+    send({
+      type: 'CREATE_TYPE',
+      payload: {
+        value: filter,
+      },
+    });
+    // setFilter('');
+    setDisplayCreateType(false);
   };
 
   return (
@@ -151,10 +174,15 @@ export function TypeDialog({ inputContainerWidth }: Props) {
           >
             <AddEntityContainer>
               <Text variant="button">All types</Text>
-              {filteredTypes.length >= 1 && !displayCreateType ?
-                <SmallButton variant="secondary" icon="createSmall" onClick={handleCreateType}>New Type</SmallButton> :
-                <CancelButton variant="button" onClick={handleCancel}>Cancel</CancelButton>
-              }
+              {filteredTypes.length >= 1 && !displayCreateType ? (
+                <SmallButton variant="secondary" icon="createSmall" onClick={handleCreateType}>
+                  New Type
+                </SmallButton>
+              ) : (
+                <CancelButton variant="button" onClick={handleCancel}>
+                  Cancel
+                </CancelButton>
+              )}
             </AddEntityContainer>
             <Spacer height={12} />
             <Input
@@ -166,19 +194,13 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             <Spacer height={12} />
 
             <ResultsList>
-              {filteredTypes.length >= 1 && !displayCreateType ?
-                filteredTypes.map(type => (
-                  <ResultItem onClick={() => handleSelect(type)} key={type.id}>
-                    {type.entityName}
-                  </ResultItem>
-                )) :
-                isEditor &&
-                <Button
-                  onClick={handleCreateType}
-                >
-                  Create Type
-                </Button>
-              }
+              {!displayCreateType && filteredTypes.length >= 1
+                ? filteredTypes.map(type => (
+                    <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                      {type.entityName}
+                    </ResultItem>
+                  ))
+                : isEditor && <Button onClick={handleCreateType}>Create Type</Button>}
             </ResultsList>
           </MotionContent>
         ) : null}
