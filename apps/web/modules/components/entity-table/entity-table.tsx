@@ -156,7 +156,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
                 initialSchemaTriples={[]}
                 initialTriples={initialTriples}
               >
-                <TableRow>
+                <tr className="hover:bg-slate-50">
                   {cells.map(cell => {
                     const cellId = `${row.original.id}-${cell.column.id}`;
                     const firstTriple = cell.getValue<Cell>()?.triples[0];

@@ -1,4 +1,5 @@
 import styled from '@emotion/styled';
+import { memo } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
@@ -19,11 +20,16 @@ interface Props {
   cell: Cell;
   space: string;
   entityId: string;
+  hasActions: boolean;
 }
 
-export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
+export const EditableEntityTableCell = memo(function EditableEntityTableCell({
+  cell,
+  space,
+  entityId,
+  hasActions,
+}: Props) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
-  const { actions } = useActionsStore(space);
 
   const send = useEditEvents({
     context: {
@@ -40,7 +46,7 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && actions.length === 0 ? cell.triples : localTriples;
+  const triples = localTriples.length === 0 && hasActions ? cell.triples : localTriples;
 
   const entityName = Entity.name(triples) || '';
 
@@ -151,4 +157,4 @@ export const EditableEntityTableCell = ({ cell, space, entityId }: Props) => {
       )}
     </Entities>
   );
-};
+});
