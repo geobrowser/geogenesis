@@ -19,7 +19,7 @@
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
-    "@legendapp/state": "^0.20.0",
+    "@legendapp/state": "^0.23.2",
     "@mailchimp/mailchimp_marketing": "^3.0.80",
     "@mobily/ts-belt": "^4.0.0-rc.2",
     "@radix-ui/react-dialog": "^1.0.2",
