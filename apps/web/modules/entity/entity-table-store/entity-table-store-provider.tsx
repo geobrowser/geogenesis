@@ -1,6 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { useActionsStoreContext } from '~/modules/action';
 import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, FilterState, Row, Triple } from '../../types';
@@ -27,6 +28,7 @@ export function EntityTableStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
+  const ActionStore = useActionsStoreContext();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -42,8 +44,9 @@ export function EntityTableStoreProvider({
       initialSelectedType,
       initialColumns,
       initialTypes,
+      ActionStore,
     });
-  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes]);
+  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, ActionStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

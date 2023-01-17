@@ -1,6 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { ActionsStore } from '~/modules/action';
 import { INetwork } from '../../services/network';
 import {
   Action,
@@ -41,6 +42,7 @@ interface IEntityTableStoreConfig {
   initialSelectedType: Triple | null;
   initialTypes: Triple[];
   initialColumns: Column[];
+  ActionStore: ActionsStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -83,6 +85,7 @@ export class EntityTableStore implements IEntityTableStore {
     initialSelectedType,
     initialColumns,
     initialTypes,
+    ActionStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
@@ -124,6 +127,7 @@ export class EntityTableStore implements IEntityTableStore {
           const { rows, columns, hasNextPage } = await this.api.fetchEntityTableData({
             spaceId: space,
             params,
+            actions: ActionStore.actions$.get()[space],
             abortController: this.abortController,
           });
 

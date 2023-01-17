@@ -56,6 +56,7 @@ interface FetchEntityTableDataParams {
     skip: number;
     first: number;
   };
+  actions: Action[];
   abortController?: AbortController;
 }
 
@@ -330,7 +331,7 @@ export class Network implements INetwork {
     return spaces;
   };
 
-  fetchEntityTableData = async ({ spaceId, params, abortController }: FetchEntityTableDataParams) => {
+  fetchEntityTableData = async ({ spaceId, params, actions, abortController }: FetchEntityTableDataParams) => {
     /* TODO: Explore moving this method into another layer of the codebase responsible for both data querying and transformation  */
 
     if (!params.typeId) {
@@ -400,10 +401,16 @@ export class Network implements INetwork {
         })
       )
     );
-    const rowTriplesWithEntityIds = rowTriples.map(({ triples }, index) => ({
-      entityId: rowEntityIds[index],
-      triples,
-    }));
+
+    const networkEntities = Entity.entitiesFromTriples(rowTriples.flatMap(triple => triple.triples));
+
+    const localEntities = Entity.mergeActionsWithEntities(
+      { space: actions },
+      Entity.entitiesFromTriples(rowTriples.flatMap(triple => triple.triples))
+    );
+
+    const localEntityIds = new Set(localEntities.map(e => e.id));
+    const mergedEntities = [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
 
     /* Name is the default column... */
     const defaultColumns = [
@@ -422,7 +429,7 @@ export class Network implements INetwork {
     const columns = [...defaultColumns, ...schemaColumns];
 
     /* Finally, we can build our initialRows */
-    const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
+    const rows = mergedEntities.map(({ triples, id }) => {
       return columns.reduce((acc, column) => {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
@@ -431,7 +438,7 @@ export class Network implements INetwork {
         const columnValueType = columnTypeTriple?.triples[0].value.id;
 
         const defaultTriple = {
-          ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),
+          ...Triple.emptyPlaceholder(spaceId, id, columnValueType),
           attributeId: column.id,
         };
 
@@ -439,7 +446,7 @@ export class Network implements INetwork {
 
         const cell = {
           columnId: column.id,
-          entityId,
+          entityId: id,
           triples: cellTriples,
         };
 

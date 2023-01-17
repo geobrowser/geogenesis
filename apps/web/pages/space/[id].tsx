@@ -91,6 +91,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const { columns, rows } = await network.fetchEntityTableData({
     spaceId,
     params,
+    actions: [],
   });
 
   return {
