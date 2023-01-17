@@ -117,6 +117,7 @@ export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
 }
 
 export function withLocalNames(actions: Action[], triples: Triple[]) {
+  // TODO: We need to make it work with create triple too?
   const newEntityNames = actions
     .flatMap(a => (a.type === 'editTriple' ? [a.after] : []))
     .flatMap(e => (e ? [e] : []))
@@ -124,8 +125,6 @@ export function withLocalNames(actions: Action[], triples: Triple[]) {
       if (entity.entityName) acc[entity.entityId] = entity.entityName;
       return acc;
     }, {} as Record<string, string>);
-
-  if (Object.keys(newEntityNames).length > 0) console.log({ newEntityNames });
 
   return triples.map(triple => {
     // The triple is part of the entity whose name changed
@@ -143,9 +142,6 @@ export function withLocalNames(actions: Action[], triples: Triple[]) {
         attributeName: newEntityNames[triple.attributeId],
       };
     }
-
-    if (triple.value.id === '2ca07701-4e0e-4ad3-a19b-4980e0994d6e') console.log('match');
-    if (triple.value.id in newEntityNames) console.log('match', triple.value.id, newEntityNames[triple.value.id]);
 
     // The triple has a an entity value whose name changed
     if (triple.value.id in newEntityNames) {
