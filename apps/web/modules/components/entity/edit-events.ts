@@ -128,7 +128,7 @@ const listener =
               space: context.spaceId,
               entityId: context.entityId,
               entityName: name,
-              attributeId: 'name',
+              attributeId: SYSTEM_IDS.NAME,
               attributeName: 'Name',
               value: { id: ID.createValueId(), type: 'string', value: name },
             })
@@ -138,6 +138,7 @@ const listener =
         return update(
           Triple.ensureStableId({
             ...triple,
+            entityName: name,
             value: { ...triple.value, type: 'string', value: name },
           }),
           triple
@@ -314,6 +315,18 @@ const listener =
 
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
+
+        if (triple.attributeId === SYSTEM_IDS.NAME) {
+          return update(
+            {
+              ...triple,
+              entityName: value,
+              value: { ...triple.value, type: 'string', value },
+            },
+            triple
+          );
+        }
+
         return update(
           {
             ...triple,

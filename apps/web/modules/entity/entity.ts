@@ -125,7 +125,8 @@ export function mergeActionsWithEntities(actions: Record<string, Action[]>, netw
 
       const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
       const triplesForNetworkEntity = networkEntity?.triples ?? [];
-      return Triple.fromActions(actions, triplesForNetworkEntity);
+      const updatedTriples = Triple.fromActions(actions, triplesForNetworkEntity);
+      return Triple.withLocalNames(actions, updatedTriples);
     },
     entitiesFromTriples
   );
