@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Memo } from '@legendapp/state/react';
 import { A } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -14,6 +13,7 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
+import { Plus } from '~/modules/design-system/icons/plus';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
@@ -43,6 +43,42 @@ const Table = styled.table(props => ({
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
   backgroundColor: props.theme.colors.white,
+  position: 'relative',
+  borderRadius: props.theme.radius,
+}));
+
+const TableHead = styled.thead({
+  position: 'relative',
+});
+
+const StyledIconButton = styled.button(props => ({
+  all: 'unset',
+  backgroundColor: props.theme.colors['grey-01'],
+  color: props.theme.colors['grey-04'],
+  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  transition: 'colors 0.15s ease-in-out',
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  bottom: 2,
+  zIndex: 1,
+  borderTopRightRadius: props.theme.radius,
+
+  '&:hover': {
+    cursor: 'pointer',
+    backgroundColor: props.theme.colors['grey-01'],
+    color: props.theme.colors.text,
+  },
+
+  '&:active': {
+    color: props.theme.colors.text,
+    outlineColor: props.theme.colors.ctaPrimary,
+  },
+
+  '&:focus': {
+    color: props.theme.colors.text,
+    outlineColor: props.theme.colors.ctaPrimary,
+  },
 }));
 
 const SpaceHeader = styled.th<{ width: number }>(props => ({
@@ -129,7 +165,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   return (
     <Container>
       <Table cellSpacing={0} cellPadding={0}>
-        <thead>
+        <TableHead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
@@ -139,7 +175,14 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               ))}
             </tr>
           ))}
-        </thead>
+          <tr>
+            <th>
+              <StyledIconButton>
+                <Plus />
+              </StyledIconButton>
+            </th>
+          </tr>
+        </TableHead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
