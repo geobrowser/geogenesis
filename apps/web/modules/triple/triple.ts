@@ -1,6 +1,17 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A, pipe } from '@mobily/ts-belt';
+import { Action } from '../action';
 import { ID } from '../id';
-import { Action, EntityValue, NumberValue, OmitStrict, StringValue, Triple, TripleValueType, Value } from '../types';
+import {
+  Action as ActionType,
+  EntityValue,
+  NumberValue,
+  OmitStrict,
+  StringValue,
+  Triple,
+  TripleValueType,
+  Value,
+} from '../types';
 import { valueTypes } from '../value-types';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
@@ -70,7 +81,7 @@ export function ensureStableId(triple: Triple): Triple {
   return triple;
 }
 
-export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
+export function fromActions(actions: ActionType[] | undefined, triples: Triple[]) {
   const newTriples: Triple[] = [...triples].reverse();
   const newActions = actions ?? [];
 
@@ -116,17 +127,22 @@ export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
   return newTriples.reverse();
 }
 
-export function withLocalNames(actions: Action[], triples: Triple[]) {
-  // TODO: We need to make it work with create triple too?
-  const newEntityNames = actions
-    .flatMap(a => (a.type === 'editTriple' ? [a.after] : []))
-    .flatMap(e => (e ? [e] : []))
-    .reduce((acc, entity) => {
+/**
+ * This function applies locally changed entity names to all triples being rendered.
+ */
+export function withLocalNames(actions: ActionType[], triples: Triple[]) {
+  const newEntityNames = pipe(
+    actions,
+    Action.squashChanges,
+    A.flatMap(a => (a.type === 'editTriple' ? [a.after] : [])),
+    A.reduce({} as Record<string, string>, (acc, entity) => {
       if (entity.entityName) acc[entity.entityId] = entity.entityName;
       return acc;
-    }, {} as Record<string, string>);
+    })
+  );
 
-  return triples.map(triple => {
+  // TODO: We need to make it work with create triple too?
+  return A.map(triples, triple => {
     // The triple is part of the entity whose name changed
     if (triple.entityId in newEntityNames) {
       return {
@@ -145,6 +161,7 @@ export function withLocalNames(actions: Action[], triples: Triple[]) {
 
     // The triple has a an entity value whose name changed
     if (triple.value.id in newEntityNames) {
+      console.log(triple.value.id, 'is in newEntityNames');
       return {
         ...triple,
         value: {
