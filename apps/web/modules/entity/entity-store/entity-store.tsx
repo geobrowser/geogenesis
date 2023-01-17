@@ -45,7 +45,7 @@ export class EntityStore implements IEntityStore {
   private api: INetwork;
   id: string;
   spaceId: string;
-  triples$: Observable<TripleType[]>;
+  triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]>;
   schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
@@ -63,30 +63,19 @@ export class EntityStore implements IEntityStore {
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
-    const relatedActions$ = computed(() => {
+    this.triples$ = computed(() => {
       const actions = ActionsStore.actions$.get()[spaceId] || [];
-      // console.log('relatedActions$ running');
 
-      return actions.filter(a => {
+      const entitySpecificActions = actions.filter(a => {
         const isCreate = a.type === 'createTriple' && a.entityId === id;
         const isDelete = a.type === 'deleteTriple' && a.entityId === id;
         const isRemove = a.type === 'editTriple' && a.before.entityId === id;
 
         return isCreate || isDelete || isRemove;
       });
-    });
-
-    observe<TripleType[]>(e => {
-      const actions = relatedActions$.get();
-
-      console.log('running computed');
-
-      if (A.eq(e.previous ?? [], this.triples$.get(), (a, b) => a.id === b.id)) {
-        return;
-      }
 
       // We want to merge any local actions with the network triples
-      this.triples$.set(Triple.fromActions(actions, initialDefaultTriples));
+      return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
     });
 
     /* 
