@@ -18,12 +18,6 @@ export function useAccessControl(space: string) {
   }
 
   return {
-    isAdmin: true,
-    isEditor: true,
-    isEditorController: true,
-  };
-
-  return {
     isAdmin: (admins[space] || []).includes(address),
     isEditorController: (editorControllers[space] || []).includes(address),
     isEditor: (editors[space] || []).includes(address),
