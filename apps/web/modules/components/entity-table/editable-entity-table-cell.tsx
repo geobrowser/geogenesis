@@ -46,7 +46,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && hasActions ? cell.triples : localTriples;
+  const triples = localTriples.length === 0 && !hasActions ? cell.triples : localTriples;
 
   const entityName = Entity.name(triples) || '';
 
@@ -93,7 +93,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         return (
           <StringField
             key={triple.id}
-            variant="tableCell"
+            variant="body"
             placeholder="Add value..."
             onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             value={triple.value.value}
