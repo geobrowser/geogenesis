@@ -1,5 +1,7 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Memo } from '@legendapp/state/react';
+import { A } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -10,6 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
+import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
@@ -75,10 +78,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const cellData = getValue<Cell>();
     const isPlaceholder = cellData.triples[0]?.placeholder;
 
+    const { actions } = useActionsStore(space);
+
     const showEditableCell = isEditor && editable;
 
     if (showEditableCell) {
-      return <EditableEntityTableCell entityId={entityId} cell={cellData} space={space} />;
+      return (
+        <EditableEntityTableCell hasActions={A.isNotEmpty(actions)} entityId={entityId} cell={cellData} space={space} />
+      );
     } else if (cellData && !isPlaceholder) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
