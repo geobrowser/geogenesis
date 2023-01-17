@@ -74,6 +74,13 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
 const AddEntityContainer = styled.div(() => ({
   display: 'flex',
   justifyContent: 'space-between',
+  order: -1,
+  // @goose - this is a hack to get the input box focused when the popover opens, we are setting internal components flex order to -1
+}));
+
+const AddTypeContainer = styled.div(() => ({
+  display: 'flex',
+  flexDirection: 'column',
 }));
 
 interface CancelButtonProps {
@@ -121,10 +128,10 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
 
   const [filter, setFilter] = useState('');
 
-  console.log(entityTableStore.types);
-  const types = entityTableStore.types.filter(triple => triple.entityName) || [];
-  console.log(types);
+  const { types } = entityTableStore;
   const filteredTypes = types.filter(type => (type.entityName || '').toLowerCase().includes(filter.toLowerCase()));
+
+  const searchMode = filteredTypes.length >= 1 && !displayCreateType;
 
   const handleSelect = (type: Triple) => {
     entityTableStore.setType(type);
@@ -143,7 +150,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
         value: filter,
       },
     });
-    // setFilter('');
+    setFilter('');
     setDisplayCreateType(false);
   };
 
@@ -172,36 +179,38 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
             alignOffset={-(theme.space * 2) + 4}
             align={width > 768 ? 'end' : 'start'}
           >
-            <AddEntityContainer>
-              <Text variant="button">All types</Text>
-              {filteredTypes.length >= 1 && !displayCreateType ? (
-                <SmallButton variant="secondary" icon="createSmall" onClick={handleCreateType}>
-                  New Type
-                </SmallButton>
-              ) : (
-                <CancelButton variant="button" onClick={handleCancel}>
-                  Cancel
-                </CancelButton>
-              )}
-            </AddEntityContainer>
-            <Spacer height={12} />
-            <Input
-              value={filter}
-              onChange={e => {
-                setFilter(e.target.value);
-              }}
-            />
-            <Spacer height={12} />
+            <AddTypeContainer>
+              <Spacer height={12} />
+              <Input
+                value={filter}
+                onChange={e => {
+                  setFilter(e.target.value);
+                }}
+              />
+              <AddEntityContainer>
+                <Text variant="button">All types</Text>
+                {searchMode ? (
+                  <SmallButton variant="secondary" icon="createSmall" onClick={handleCreateType}>
+                    New Type
+                  </SmallButton>
+                ) : (
+                  <CancelButton variant="button" onClick={handleCancel}>
+                    Cancel
+                  </CancelButton>
+                )}
+              </AddEntityContainer>
+              <Spacer height={12} />
 
-            <ResultsList>
-              {!displayCreateType && filteredTypes.length >= 1
-                ? filteredTypes.map(type => (
-                    <ResultItem onClick={() => handleSelect(type)} key={type.id}>
-                      {type.entityName}
-                    </ResultItem>
-                  ))
-                : isEditor && <Button onClick={handleCreateType}>Create Type</Button>}
-            </ResultsList>
+              <ResultsList>
+                {searchMode
+                  ? filteredTypes.map(type => (
+                      <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                        {type.entityName}
+                      </ResultItem>
+                    ))
+                  : isEditor && <Button onClick={handleCreateType}>Create Type</Button>}
+              </ResultsList>
+            </AddTypeContainer>
           </MotionContent>
         ) : null}
       </AnimatePresence>

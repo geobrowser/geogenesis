@@ -324,40 +324,29 @@ const listener =
       }
       case 'CREATE_TYPE': {
         const { value } = event.payload;
-        console.log('ENTITY NAME SHOULD BE: ', value);
-        const triple = {
-          ...Triple.empty(context.spaceId, context.entityId, 'entity'),
-          entityName: value,
-          entityId: ID.createEntityId(),
+        const entityId = ID.createEntityId();
+        const nameTriple = Triple.withId({
           space: context.spaceId,
+          entityId: entityId,
+          entityName: value,
+          attributeId: 'name',
+          attributeName: 'Name',
+          value: { id: SYSTEM_IDS.NAME, type: 'string', value },
+        });
+        const typeTriple = {
+          ...Triple.empty(context.spaceId, entityId, 'entity'),
+          entityId,
+          entityName: value,
           attributeId: SYSTEM_IDS.TYPES,
           attributeName: 'Types',
-          // value: {
-          //   id: SYSTEM_IDS.SCHEMA_TYPE,
-          //   type: 'entity',
-          //   name: 'Type',
-          // },
-        };
-        triple.value = {
-          id: SYSTEM_IDS.SCHEMA_TYPE,
-          type: 'entity',
-          name: 'Type',
-        };
-        console.log('TRIPLE: ', triple);
-        return create(triple);
-        // const triple = Triple.withId({
-        //   entityName: value,
-        //   entityId: ID.createEntityId(),
-        //   space: context.spaceId,
-        //   attributeId: SYSTEM_IDS.TYPES,
-        //   attributeName: 'Types',
-        //   value: {
-        //     id: SYSTEM_IDS.SCHEMA_TYPE,
-        //     type: 'entity',
-        //     name: 'Type',
-        //   },
-        // });
-        // return create(triple);
+          value: {
+            id: SYSTEM_IDS.SCHEMA_TYPE,
+            type: 'entity',
+            name: 'Type',
+          },
+        } as TripleType;
+        create(nameTriple);
+        return create(typeTriple);
       }
     }
   };
