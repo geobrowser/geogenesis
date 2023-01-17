@@ -105,7 +105,8 @@ export class EntityTableStore implements IEntityTableStore {
 
         return isCreate || isDelete || isRemove;
       });
-      return Triple.fromActions(actions, initialTypes);
+      const triplesFromActions = Triple.fromActions(actions, initialTypes);
+      return Triple.withLocalNames(globalActions, triplesFromActions);
     });
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
