@@ -115,3 +115,49 @@ export function fromActions(actions: Action[] | undefined, triples: Triple[]) {
 
   return newTriples.reverse();
 }
+
+export function withLocalNames(actions: Action[], triples: Triple[]) {
+  const newEntityNames = actions
+    .flatMap(a => (a.type === 'editTriple' ? [a.after] : []))
+    .flatMap(e => (e ? [e] : []))
+    .reduce((acc, entity) => {
+      if (entity.entityName) acc[entity.entityId] = entity.entityName;
+      return acc;
+    }, {} as Record<string, string>);
+
+  if (Object.keys(newEntityNames).length > 0) console.log({ newEntityNames });
+
+  return triples.map(triple => {
+    // The triple is part of the entity whose name changed
+    if (triple.entityId in newEntityNames) {
+      return {
+        ...triple,
+        entityName: newEntityNames[triple.entityId],
+      };
+    }
+
+    // The triple has an attribute whose name changed
+    if (triple.attributeId in newEntityNames) {
+      return {
+        ...triple,
+        attributeName: newEntityNames[triple.attributeId],
+      };
+    }
+
+    if (triple.value.id === '2ca07701-4e0e-4ad3-a19b-4980e0994d6e') console.log('match');
+    if (triple.value.id in newEntityNames) console.log('match', triple.value.id, newEntityNames[triple.value.id]);
+
+    // The triple has a an entity value whose name changed
+    if (triple.value.id in newEntityNames) {
+      return {
+        ...triple,
+        value: {
+          ...triple.value,
+          name: newEntityNames[triple.value.id],
+        },
+      };
+    }
+
+    return triple;
+  });
+}

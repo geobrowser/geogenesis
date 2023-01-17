@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
-import { A } from '@mobily/ts-belt';
+import { A, pipe } from '@mobily/ts-belt';
 import { ActionsStore } from '~/modules/action';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
@@ -64,18 +64,20 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      const actions = ActionsStore.actions$.get()[spaceId] || [];
+      const spaceActions = ActionsStore.actions$.get()[spaceId] || [];
 
-      const entitySpecificActions = actions.filter(a => {
-        const isCreate = a.type === 'createTriple' && a.entityId === id;
-        const isDelete = a.type === 'deleteTriple' && a.entityId === id;
-        const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+      return pipe(
+        spaceActions,
+        A.filter(a => {
+          const isCreate = a.type === 'createTriple' && a.entityId === id;
+          const isDelete = a.type === 'deleteTriple' && a.entityId === id;
+          const isRemove = a.type === 'editTriple' && a.before.entityId === id;
 
-        return isCreate || isDelete || isRemove;
-      });
-
-      // We want to merge any local actions with the network triples
-      return Triple.fromActions(entitySpecificActions, initialDefaultTriples);
+          return isCreate || isDelete || isRemove;
+        }),
+        actions => Triple.fromActions(actions, initialDefaultTriples),
+        triples => Triple.withLocalNames(spaceActions, triples)
+      );
     });
 
     /* 
