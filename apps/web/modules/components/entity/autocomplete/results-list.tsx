@@ -3,6 +3,7 @@ import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { Spacer } from '~/modules/design-system/spacer';
 import { Tag } from '~/modules/design-system/tag';
 import { Text } from '~/modules/design-system/text';
 import { Entity, Space } from '~/modules/types';
@@ -65,12 +66,8 @@ interface Props {
 const BreadcrumbsContainer = styled.div(props => ({
   display: 'flex',
   alignItems: 'center',
-  gap: props.theme.space * 2,
+  gap: props.theme.space * 1.5,
   overflow: 'hidden',
-  marginTop: props.theme.space,
-}));
-
-const DescriptionContainer = styled.div(props => ({
   marginTop: props.theme.space,
 }));
 
@@ -116,9 +113,10 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
         </BreadcrumbsContainer>
       )}
       {result.description && (
-        <DescriptionContainer>
+        <>
+          <Spacer height={4} />
           <Text variant="footnote">{result.description}</Text>
-        </DescriptionContainer>
+        </>
       )}
     </ResultItem>
   );
