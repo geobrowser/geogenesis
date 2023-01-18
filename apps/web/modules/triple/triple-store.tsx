@@ -9,7 +9,6 @@ import { makeOptionalComputed } from '../utils';
 interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;
   pageNumber$: Observable<number>;
-  hydrated$: Observable<boolean>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
@@ -29,7 +28,6 @@ interface ITripleStoreConfig {
   ActionsStore: ActionsStore;
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
-  initialTriples: TripleType[];
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -55,7 +53,6 @@ export class TripleStore implements ITripleStore {
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
-  hydrated$: Observable<boolean> = observable(false);
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
   ActionsStore: ActionsStore;
@@ -64,14 +61,12 @@ export class TripleStore implements ITripleStore {
   constructor({
     api,
     space,
-    initialTriples,
     ActionsStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
     this.ActionsStore = ActionsStore;
-    this.triples$ = observable(initialTriples);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
@@ -98,7 +93,6 @@ export class TripleStore implements ITripleStore {
             abortController: this.abortController,
           });
 
-          this.hydrated$.set(true);
           return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {

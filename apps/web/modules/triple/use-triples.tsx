@@ -14,7 +14,6 @@ export const useTriples = () => {
     hasPreviousPage$,
     hasNextPage$,
     filterState$,
-    hydrated$,
     setFilterState,
   } = useTripleStoreContext();
   const triples = useSelector(triples$);
@@ -22,7 +21,6 @@ export const useTriples = () => {
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const hasNextPage = useSelector(hasNextPage$);
   const query = useSelector(query$);
-  const hydrated = useSelector(hydrated$);
   const filterState = useSelector<FilterState>(filterState$);
 
   return {
@@ -32,7 +30,6 @@ export const useTriples = () => {
     setPageNumber,
     setNextPage,
     setPreviousPage,
-    hydrated,
     pageNumber,
     hasPreviousPage,
     hasNextPage,

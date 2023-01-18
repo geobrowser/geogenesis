@@ -155,13 +155,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <EntityStoreProvider
-                key={row.id}
-                id={entityId}
-                spaceId={space}
-                initialSchemaTriples={[]}
-                initialTriples={initialTriples}
-              >
+              <EntityStoreProvider key={row.id} id={entityId} spaceId={space}>
                 <TableRow>
                   {cells.map(cell => {
                     const cellId = `${row.original.id}-${cell.column.id}`;

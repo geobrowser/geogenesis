@@ -11,10 +11,9 @@ import { TripleTable } from './triple-table';
 
 interface Props {
   spaceId: string;
-  initialTriples: Triple[];
 }
 
-export function Triples({ spaceId, initialTriples }: Props) {
+export function Triples({ spaceId }: Props) {
   const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
 
@@ -27,7 +26,7 @@ export function Triples({ spaceId, initialTriples }: Props) {
 
         <Spacer height={12} />
 
-        <TripleTable space={spaceId} triples={tripleStore.hydrated ? tripleStore.triples : initialTriples} />
+        <TripleTable space={spaceId} triples={tripleStore.triples} />
 
         <Spacer height={12} />
 

@@ -12,10 +12,9 @@ const TripleStoreContext = createContext<TripleStore | undefined>(undefined);
 interface Props {
   space: string;
   children: React.ReactNode;
-  initialTriples: Triple[];
 }
 
-export function TripleStoreProvider({ space, children, initialTriples }: Props) {
+export function TripleStoreProvider({ space, children }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
   const router = useRouter();
@@ -26,8 +25,8 @@ export function TripleStoreProvider({ space, children, initialTriples }: Props) 
 
   const store = useMemo(() => {
     const initialParams = Params.parseTripleQueryParameters(urlRef.current);
-    return new TripleStore({ api: network, space, initialParams, initialTriples, ActionsStore });
-  }, [network, space, initialTriples, ActionsStore]);
+    return new TripleStore({ api: network, space, initialParams, ActionsStore });
+  }, [network, space, ActionsStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);
