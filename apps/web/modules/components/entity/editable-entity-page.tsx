@@ -179,20 +179,18 @@ export function EditableEntityPage({
         <Spacer height={8} />
 
         <Content>
-          {triples.length > 0 ? (
-            <Attributes>
-              <EntityAttributes
-                entityId={id}
-                triples={triples}
-                spaceId={space}
-                schemaTriples={schemaTriples}
-                name={name}
-                send={send}
-                hideSchema={hideSchema}
-                hiddenSchemaIds={hiddenSchemaIds}
-              />
-            </Attributes>
-          ) : null}
+          <Attributes>
+            <EntityAttributes
+              entityId={id}
+              triples={triples}
+              spaceId={space}
+              schemaTriples={schemaTriples}
+              name={name}
+              send={send}
+              hideSchema={hideSchema}
+              hiddenSchemaIds={hiddenSchemaIds}
+            />
+          </Attributes>
           <AddTripleContainer>
             <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
               Add triple

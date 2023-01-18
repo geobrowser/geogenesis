@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType, TripleValueType } from '~/modules/types';
+import { EntityValue, StringValue, Triple as TripleType } from '~/modules/types';
 
 export type EditEvent =
   | {
@@ -344,11 +344,11 @@ const listener =
           entityName: value,
           attributeId: 'name',
           attributeName: 'Name',
-          value: { id: SYSTEM_IDS.NAME, type: 'string', value },
+          value: { id: SYSTEM_IDS.NAME, type: 'string', value } as StringValue,
         });
-        const typeTriple = {
-          ...Triple.empty(context.spaceId, entityId, 'entity'),
-          entityId,
+        const typeTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: entityId,
           entityName: value,
           attributeId: SYSTEM_IDS.TYPES,
           attributeName: 'Types',
@@ -356,8 +356,8 @@ const listener =
             id: SYSTEM_IDS.SCHEMA_TYPE,
             type: 'entity',
             name: 'Type',
-          },
-        } as TripleType;
+          } as EntityValue,
+        });
         create(nameTriple);
         return create(typeTriple);
       }

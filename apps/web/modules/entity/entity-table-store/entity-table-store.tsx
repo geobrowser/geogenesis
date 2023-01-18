@@ -91,7 +91,6 @@ export class EntityTableStore implements IEntityTableStore {
     this.columns$ = observable(initialColumns);
     this.ActionsStore = ActionsStore;
     this.types$ = computed(() => {
-      console.log('ACTIONS YO', ActionsStore.actions$.get());
       const globalActions = ActionsStore.actions$.get()[space] || [];
       const actions = globalActions.filter(a => {
         const isCreate =
