@@ -1,12 +1,12 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useRef } from 'react';
+import { CheckCloseSmall } from '~/modules/design-system/icons/check-close-small';
+import { Search } from '~/modules/design-system/icons/search';
+import { Input } from '~/modules/design-system/input';
+import { Spacer } from '~/modules/design-system/spacer';
 import { useEntityTable } from '~/modules/entity';
-import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
-import { Search } from '../../design-system/icons/search';
-import { Input } from '../../design-system/input';
-import { Spacer } from '../../design-system/spacer';
-import { FilterClause } from '../../types';
+import { FilterClause } from '~/modules/types';
 import { TypeDialog } from '../filter/type-dialog';
 
 const SearchInputContainer = styled.div(props => ({

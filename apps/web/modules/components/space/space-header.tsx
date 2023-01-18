@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import Image from 'next/image';
 import { Text } from '~/modules/design-system/text';
 // import { importCSVFile } from '~/modules/services/import';
-import { ZERO_WIDTH_SPACE } from '../../constants';
+import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 // import { getFilesFromFileList } from '../utils';
 
 const SpaceImageContainer = styled.div(props => ({

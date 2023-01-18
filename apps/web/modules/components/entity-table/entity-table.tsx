@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Memo } from '@legendapp/state/react';
 import { A } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -14,11 +13,11 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
+import { Text } from '~/modules/design-system/text';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
+import { Cell, Column, Row } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
-import { Text } from '../../design-system/text';
-import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { EditableEntityTableCell } from './editable-entity-table-cell';

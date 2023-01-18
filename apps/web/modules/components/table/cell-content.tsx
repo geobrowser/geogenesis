@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import Link from 'next/link';
-import { Text } from '../../design-system/text';
-import { Truncate } from '../../design-system/truncate';
+import { Text } from '~/modules/design-system/text';
+import { Truncate } from '~/modules/design-system/truncate';
 
 const StyledLink = styled.a(({ theme }) => ({
   ...theme.typography.tableCell,

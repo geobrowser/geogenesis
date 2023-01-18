@@ -1,10 +1,9 @@
 import styled from '@emotion/styled';
 import { memo } from 'react';
-import { useActionsStore } from '~/modules/action';
+import { DeletableChipButton } from '~/modules/design-system/chip';
 import { Entity, useEntityStore } from '~/modules/entity';
+import { Cell, Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
-import { DeletableChipButton } from '../../design-system/chip';
-import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';

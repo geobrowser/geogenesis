@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from 'react';
-import { useActionsStoreContext } from '../../action';
-import { Services } from '../../services';
-import { Triple } from '../../types';
+import { useActionsStoreContext } from '~/modules/action';
+import { Services } from '~/modules/services';
+import { Triple } from '~/modules/types';
 import { EntityStore } from './entity-store';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);

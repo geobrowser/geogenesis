@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/entity';
-import { Column, Row } from '../../types';
+import { Column, Row } from '~/modules/types';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';

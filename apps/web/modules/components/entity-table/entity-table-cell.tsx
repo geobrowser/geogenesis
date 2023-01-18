@@ -1,8 +1,8 @@
 import styled from '@emotion/styled';
+import { LinkableChip } from '~/modules/design-system/chip';
 import { Entity } from '~/modules/entity';
-import { LinkableChip } from '../../design-system/chip';
-import { Cell } from '../../types';
-import { NavUtils } from '../../utils';
+import { Cell } from '~/modules/types';
+import { NavUtils } from '~/modules/utils';
 import { CellContent } from '../table/cell-content';
 import { ChipCellContainer } from '../table/styles';
 

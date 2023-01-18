@@ -1,7 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { INetwork } from '../../services/network';
+import { INetwork } from '~/modules/services/network';
 import {
   Action,
   Column,
@@ -11,8 +11,8 @@ import {
   Row,
   Triple,
   Triple as TripleType,
-} from '../../types';
-import { makeOptionalComputed } from '../../utils';
+} from '~/modules/types';
+import { makeOptionalComputed } from '~/modules/utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
 interface IEntityTableStore {

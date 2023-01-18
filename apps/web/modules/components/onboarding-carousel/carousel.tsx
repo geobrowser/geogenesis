@@ -1,15 +1,15 @@
 import styled from '@emotion/styled';
-import React, { useRef, useState } from 'react';
-import { RightArrowLong } from '../../design-system/icons/right-arrow-long';
-import { Spacer } from '../../design-system/spacer';
-import { Text } from '../../design-system/text';
 import { useRect } from '@radix-ui/react-use-rect';
 import { motion } from 'framer-motion';
+import React, { useRef, useState } from 'react';
+import { CaretUp } from '~/modules/design-system/icons/caret-up';
+import { RightArrowLong } from '~/modules/design-system/icons/right-arrow-long';
+import { Select } from '~/modules/design-system/select';
+import { Spacer } from '~/modules/design-system/spacer';
+import { TabButton } from '~/modules/design-system/tab-button';
+import { Text } from '~/modules/design-system/text';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
-import { Select } from '~/modules/design-system/select';
-import { TabButton } from '~/modules/design-system/tab-button';
-import { CaretUp } from '~/modules/design-system/icons/caret-up';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;

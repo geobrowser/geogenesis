@@ -1,5 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
-import { FilterState } from '../../types';
+import { FilterState } from '~/modules/types';
 import { useEntityTableStore } from './entity-table-store-provider';
 
 export const useEntityTable = () => {

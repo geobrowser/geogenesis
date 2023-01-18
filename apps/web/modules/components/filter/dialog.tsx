@@ -4,14 +4,14 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
 import React, { useState } from 'react';
+import { Button } from '~/modules/design-system/button';
 import { Filter } from '~/modules/design-system/icons/filter';
+import { Spacer } from '~/modules/design-system/spacer';
+import { Text } from '~/modules/design-system/text';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { initialFilterState } from '~/modules/triple';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
-import { Button } from '../../design-system/button';
-import { Spacer } from '../../design-system/spacer';
-import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
 
 interface ContentProps {
