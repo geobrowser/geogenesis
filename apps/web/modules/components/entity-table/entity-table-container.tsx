@@ -13,6 +13,7 @@ interface Props {
   spaceName?: string;
   initialRows: Row[];
   initialColumns: Column[];
+  initialSelectedType: string | null;
 }
 
 // Using a container to wrap the table to make styling borders around
@@ -25,7 +26,7 @@ const Container = styled.div(props => ({
   overflow: 'hidden',
 }));
 
-export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
+export function EntityTableContainer({ spaceId, initialColumns, initialRows, initialSelectedType }: Props) {
   const entityTableStore = useEntityTable();
 
   return (
@@ -38,6 +39,7 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
       <Container>
         <EntityTable
           space={spaceId}
+          selectedType={initialSelectedType || entityTableStore.selectedType}
           columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}
           rows={entityTableStore.hydrated ? entityTableStore.rows : initialRows}
         />

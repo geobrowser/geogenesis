@@ -2,9 +2,8 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { Entity, InitialEntityTableStoreParams } from '../entity';
+import { DEFAULT_PAGE_SIZE as DEFAULT_PAGE_SIZE_ENTITY_TABLE, Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
-import { DEFAULT_PAGE_SIZE as DEFAULT_PAGE_SIZE_ENTITY_TABLE } from '../entity';
 import {
   Account,
   Action,
@@ -339,7 +338,7 @@ export class Network implements INetwork {
 
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
     /* To get our rows, first we get all of the entity IDs of the selected type */
-    const [columnsTriples, rowEntities] = await Promise.all([
+    const [attributeTriples, rowEntities] = await Promise.all([
       await this.fetchTriples({
         query: '',
         space: spaceId,
@@ -364,9 +363,9 @@ export class Network implements INetwork {
       }),
     ]);
 
-    /* Then we fetch all of the Value type for each column */
+    /* Columns require additional data like NAME, VALUE_TYPE, MULTIPLE_ALLOWED, etc... */
     const columnsSchema = await Promise.all(
-      columnsTriples.triples.map(triple => {
+      attributeTriples.triples.map(triple => {
         return this.fetchTriples({
           query: '',
           space: spaceId,
@@ -376,10 +375,6 @@ export class Network implements INetwork {
             {
               field: 'entity-id',
               value: triple.value.id,
-            },
-            {
-              field: 'attribute-id',
-              value: SYSTEM_IDS.VALUE_TYPE,
             },
           ],
         });
@@ -410,13 +405,15 @@ export class Network implements INetwork {
       {
         name: 'Name',
         id: SYSTEM_IDS.NAME,
+        triples: [],
       },
-    ];
+    ] as Column[];
 
     /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns = columnsTriples.triples.map(triple => ({
+    const schemaColumns = attributeTriples.triples.map((triple, i) => ({
       name: Value.nameOfEntityValue(triple) || triple.value.id,
       id: triple.value.id,
+      triples: columnsSchema[i].triples,
     })) as Column[];
 
     const columns = [...defaultColumns, ...schemaColumns];
@@ -427,8 +424,8 @@ export class Network implements INetwork {
         const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
         /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
-        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0]?.entityId === column.id);
-        const columnValueType = columnTypeTriple?.triples[0].value.id;
+        const columnValueTypeTriple = column.triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+        const columnValueType = columnValueTypeTriple?.value.id;
 
         const defaultTriple = {
           ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),

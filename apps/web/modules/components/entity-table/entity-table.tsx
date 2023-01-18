@@ -13,7 +13,6 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Plus } from '~/modules/design-system/icons/plus';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
@@ -21,22 +20,10 @@ import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
+import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
+import { EditableEntityTableColumn } from './editable-entity-table-column';
 import { EntityTableCell } from './entity-table-cell';
-
-const columnHelper = createColumnHelper<Row>();
-
-const formatColumns = (columns: Column[] = []) => {
-  const columnSize = 1200 / columns.length;
-
-  return columns.map(column =>
-    columnHelper.accessor(row => row[column.id], {
-      id: column.id,
-      header: () => <Text variant="smallTitle">{column.name}</Text>,
-      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
-    })
-  );
-};
 
 const Table = styled.table(props => ({
   width: '100%',
@@ -50,36 +37,6 @@ const Table = styled.table(props => ({
 const TableHead = styled.thead({
   position: 'relative',
 });
-
-const StyledIconButton = styled.button(props => ({
-  all: 'unset',
-  backgroundColor: props.theme.colors['grey-01'],
-  color: props.theme.colors['grey-04'],
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
-  transition: 'colors 0.15s ease-in-out',
-  position: 'absolute',
-  right: 0,
-  top: 0,
-  bottom: 2,
-  zIndex: 1,
-  borderTopRightRadius: props.theme.radius,
-
-  '&:hover': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors['grey-01'],
-    color: props.theme.colors.text,
-  },
-
-  '&:active': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-
-  '&:focus': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-}));
 
 const SpaceHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
@@ -102,6 +59,35 @@ const Container = styled.div({
   },
 });
 
+const columnHelper = createColumnHelper<Row>();
+
+const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: string) => {
+  const columnSize = 1200 / columns.length;
+
+  return columns.map(column =>
+    columnHelper.accessor(row => row[column.id], {
+      id: column.id,
+      header: () => {
+        const { actions } = useActionsStore(space);
+
+        return isEditMode ? (
+          <EntityStoreProvider spaceId={space} id={column.id} initialTriples={column.triples} initialSchemaTriples={[]}>
+            <EditableEntityTableColumn
+              column={column}
+              entityId={column.id}
+              hasActions={A.isNotEmpty(actions)}
+              space={space}
+            />
+          </EntityStoreProvider>
+        ) : (
+          <Text variant="smallTitle">{column.name}</Text>
+        );
+      },
+      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
+    })
+  );
+};
+
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
@@ -116,9 +102,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const { actions } = useActionsStore(space);
 
-    const showEditableCell = isEditor && editable;
+    const isEditMode = isEditor && editable;
 
-    if (showEditableCell) {
+    if (isEditMode) {
       return (
         <EditableEntityTableCell hasActions={A.isNotEmpty(actions)} entityId={entityId} cell={cellData} space={space} />
       );
@@ -132,18 +118,21 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
+  selectedType: string | null;
   columns: Column[];
   rows: Row[];
 }
 
-export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
+export const EntityTable = memo(function EntityTable({ rows, space, columns, selectedType }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
 
+  const isEditMode = isEditor && editable;
+
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns),
+    columns: formatColumns(columns, isEditMode, space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -175,13 +164,15 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               ))}
             </tr>
           ))}
-          <tr>
-            <th>
-              <StyledIconButton>
-                <Plus />
-              </StyledIconButton>
-            </th>
-          </tr>
+          {isEditMode && (
+            <tr>
+              <th>
+                <EntityStoreProvider id={selectedT} spaceId={space} initialSchemaTriples={[]} initialTriples={[]}>
+                  <AddNewColumn />
+                </EntityStoreProvider>
+              </th>
+            </tr>
+          )}
         </TableHead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
