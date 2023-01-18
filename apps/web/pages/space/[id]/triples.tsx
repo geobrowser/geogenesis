@@ -34,7 +34,7 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
       <SpaceNavbar spaceId={spaceId} />
 
       <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
-        <Triples spaceId={spaceId} spaceName={spaceName} initialTriples={initialTriples} />
+        <Triples spaceId={spaceId} initialTriples={initialTriples} />
       </TripleStoreProvider>
     </div>
   );
