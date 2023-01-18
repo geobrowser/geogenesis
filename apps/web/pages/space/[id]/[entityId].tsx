@@ -1,13 +1,10 @@
 import { GetServerSideProps } from 'next';
-import Head from 'next/head';
-import { useEffect } from 'react';
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
-import { usePageName } from '~/modules/stores/use-page-name';
 
 interface Props {
   id: string;
