@@ -5,7 +5,7 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 import { useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
-import { Chip } from '~/modules/design-system/chip';
+import { LinkableChip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
@@ -137,7 +137,9 @@ function EntityAttribute({ triple, space }: { triple: Triple; space: string }) {
       {triple.value.type === 'entity' ? (
         <>
           <Spacer height={4} />
-          <Chip href={NavUtils.toEntity(space, triple.value.id)}>{triple.value.name || triple.value.id}</Chip>
+          <LinkableChip href={NavUtils.toEntity(space, triple.value.id)}>
+            {triple.value.name || triple.value.id}
+          </LinkableChip>
         </>
       ) : (
         <Text as="p">{triple.value.value}</Text>
@@ -172,7 +174,9 @@ function EntityAttributes({
             {triples.map(triple =>
               triple.value.type === 'entity' ? (
                 <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>
-                  <Chip href={NavUtils.toEntity(space, triple.value.id)}>{triple.value.name || triple.value.id}</Chip>
+                  <LinkableChip href={NavUtils.toEntity(space, triple.value.id)}>
+                    {triple.value.name || triple.value.id}
+                  </LinkableChip>
                 </div>
               ) : (
                 <Text key={`string-${triple.value.id}`} as="p">

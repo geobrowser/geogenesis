@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
-import { Chip } from '../design-system/chip';
+import { LinkableChip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
@@ -85,7 +85,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         if (value.type === 'entity') {
           return (
             <ChipCellContainer>
-              <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
+              <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>
             </ChipCellContainer>
           );
         }

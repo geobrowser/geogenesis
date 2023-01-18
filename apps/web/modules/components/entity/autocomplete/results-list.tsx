@@ -3,7 +3,7 @@ import { A, pipe } from '@mobily/ts-belt';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
-import { Chip } from '~/modules/design-system/chip';
+import { LabelChip } from '~/modules/design-system/chip';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -158,10 +158,8 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
             <ChevronDownSmall color="grey-03" />
           </span>
         )}
-        {result.types.map((type, index) => (
-          <Chip key={type} href="">
-            {type}
-          </Chip>
+        {result.types.map(type => (
+          <LabelChip key={type}>{type}</LabelChip>
         ))}
       </BreadcrumbsContainer>
       {(result.description || !A.isEmpty(result.types)) && (
