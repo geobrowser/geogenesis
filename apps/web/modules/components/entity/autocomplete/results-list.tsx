@@ -68,7 +68,6 @@ const BreadcrumbsContainer = styled.div(props => ({
   alignItems: 'center',
   gap: props.theme.space * 1.5,
   overflow: 'hidden',
-  marginTop: props.theme.space,
 }));
 
 const TagsContainer = styled.div(props => ({
@@ -96,21 +95,24 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
       </ResultHeader>
 
       {showBreadcrumbs && (
-        <BreadcrumbsContainer>
-          {spaceName && <Breadcrumb img={spaceImg}>{spaceName}</Breadcrumb>}
-          {showBreadcrumbChevron && (
-            <span style={{ rotate: '270deg' }}>
-              <ChevronDownSmall color="grey-04" />
-            </span>
-          )}
-          {result.types.length > 0 && (
-            <TagsContainer>
-              {result.types.map(type => (
-                <Tag key={type}>{type}</Tag>
-              ))}
-            </TagsContainer>
-          )}
-        </BreadcrumbsContainer>
+        <>
+          <Spacer height={4} />
+          <BreadcrumbsContainer>
+            {spaceName && <Breadcrumb img={spaceImg}>{spaceName}</Breadcrumb>}
+            {showBreadcrumbChevron && (
+              <span style={{ rotate: '270deg' }}>
+                <ChevronDownSmall color="grey-04" />
+              </span>
+            )}
+            {result.types.length > 0 && (
+              <TagsContainer>
+                {result.types.map(type => (
+                  <Tag key={type}>{type}</Tag>
+                ))}
+              </TagsContainer>
+            )}
+          </BreadcrumbsContainer>
+        </>
       )}
       {result.description && (
         <>
