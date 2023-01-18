@@ -5,6 +5,7 @@ import { ActionsStore } from '~/modules/action';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
+import { makeOptionalComputed } from '~/modules/utils';
 import { Value } from '~/modules/value';
 
 interface IEntityStore {
@@ -36,8 +37,6 @@ interface IEntityStoreConfig {
   api: INetwork;
   spaceId: string;
   id: string;
-  initialTriples: TripleType[];
-  initialSchemaTriples: TripleType[];
   ActionsStore: ActionsStore;
 }
 
@@ -52,33 +51,46 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
 
-  constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
-    const initialDefaultTriples =
-      initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
-
+  constructor({ api, spaceId, id, ActionsStore }: IEntityStoreConfig) {
     this.id = id;
     this.api = api;
-    this.triples$ = observable(initialDefaultTriples);
-    this.schemaTriples$ = observable(initialSchemaTriples);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
-    this.triples$ = computed(() => {
-      const spaceActions = ActionsStore.actions$.get()[spaceId] || [];
+    const serverTriples$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        const serverTriples = await this.api.fetchTriples({
+          space: spaceId,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: this.id }],
+        });
 
-      return pipe(
-        spaceActions,
-        A.filter(a => {
-          const isCreate = a.type === 'createTriple' && a.entityId === id;
-          const isDelete = a.type === 'deleteTriple' && a.entityId === id;
-          const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+        return serverTriples.triples;
+      })
+    );
 
-          return isCreate || isDelete || isRemove;
-        }),
-        actions => Triple.fromActions(actions, initialDefaultTriples),
-        triples => Triple.withLocalNames(spaceActions, triples)
-      );
-    });
+    this.triples$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        const spaceActions = ActionsStore.actions$.get()[spaceId] || [];
+
+        return pipe(
+          spaceActions,
+          A.filter(a => {
+            const isCreate = a.type === 'createTriple' && a.entityId === id;
+            const isDelete = a.type === 'deleteTriple' && a.entityId === id;
+            const isRemove = a.type === 'editTriple' && a.before.entityId === id;
+
+            return isCreate || isDelete || isRemove;
+          }),
+          actions => Triple.fromActions(actions, serverTriples$.get()),
+          triples => Triple.withLocalNames(spaceActions, triples)
+        );
+      })
+    );
 
     /* 
     In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to 

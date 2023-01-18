@@ -12,7 +12,7 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
-import { Entity } from '~/modules/entity';
+import { Entity, useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
@@ -50,14 +50,14 @@ const EntityActionGroup = styled.div({
 });
 
 interface Props {
-  triples: Triple[];
   id: string;
   name: string;
   space: string;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ triples, id, name, space, linkedEntities }: Props) {
+export function ReadableEntityPage({ id, name, space, linkedEntities }: Props) {
+  const { triples } = useEntityStore();
   const description = Entity.description(triples);
 
   return (
@@ -152,7 +152,7 @@ function EntityAttributes({
   space,
 }: {
   entityId: string;
-  triples: Props['triples'];
+  triples: Triple[];
   space: Props['space'];
 }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
