@@ -1,6 +1,6 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { render, screen } from '@testing-library/react';
 import { describe } from 'vitest';
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Providers } from '~/modules/providers';
 import { Space } from '~/modules/types';
 import { ResultContent } from './results-list';

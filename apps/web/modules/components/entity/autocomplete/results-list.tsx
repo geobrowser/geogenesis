@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
