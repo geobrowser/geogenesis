@@ -2,8 +2,7 @@ import styled from '@emotion/styled';
 import { memo } from 'react';
 import { Plus } from '~/modules/design-system/icons/plus';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Triple } from '~/modules/triple';
-import { Column, StringValue } from '~/modules/types';
+import { Column } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 
 const StyledIconButton = styled.button(props => ({
@@ -59,14 +58,8 @@ export const AddNewColumn = memo(function AddNewColumn({ column, space, entityId
     },
   });
 
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && !hasActions ? column.triples : localTriples;
-  const nameTriple = Entity.nameTriple(triples) || Triple.empty(space, entityId);
-  const { value } = nameTriple.value as StringValue;
-
   return (
-    <StyledIconButton>
+    <StyledIconButton onClick={() => send()}>
       <Plus />
     </StyledIconButton>
   );

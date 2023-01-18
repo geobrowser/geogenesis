@@ -17,7 +17,7 @@ import { EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
-import { Cell, Column, Row } from '../../types';
+import { Cell, Column, Row, Triple } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { AddNewColumn } from './add-new-column';
@@ -118,7 +118,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  selectedType: string | null;
+  selectedType: Triple | null;
   columns: Column[];
   rows: Row[];
 }
@@ -164,10 +164,15 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns, sel
               ))}
             </tr>
           ))}
-          {isEditMode && (
+          {isEditMode && selectedType && (
             <tr>
               <th>
-                <EntityStoreProvider id={selectedT} spaceId={space} initialSchemaTriples={[]} initialTriples={[]}>
+                <EntityStoreProvider
+                  id={selectedType.entityId}
+                  spaceId={space}
+                  initialSchemaTriples={[]}
+                  initialTriples={[]}
+                >
                   <AddNewColumn />
                 </EntityStoreProvider>
               </th>
