@@ -118,10 +118,11 @@ export class TripleStore implements ITripleStore {
 
     this.triples$ = computed(() => {
       const { triples: networkTriples } = networkData$.get();
-      const actions = ActionsStore.actions$.get()[space];
+      const actions = ActionsStore.actions$.get()[space] ?? [];
 
       // We want to merge any local actions with the network triples
-      return Triple.fromActions(actions, networkTriples);
+      const updatedTriples = Triple.fromActions(actions, networkTriples);
+      return Triple.withLocalNames(actions, updatedTriples);
     });
   }
 
