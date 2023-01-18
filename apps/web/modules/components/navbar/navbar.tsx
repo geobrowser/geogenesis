@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { Breadcrumb } from '~/modules/design-system/breadcrumb';
+import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
@@ -148,7 +148,7 @@ export function Navbar() {
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <Breadcrumb
+                <LinkableBreadcrumb
                   isNested={index < components.length - 1}
                   shouldTruncate={index === 3}
                   key={index}
@@ -156,7 +156,7 @@ export function Navbar() {
                   img={img}
                 >
                   {title}
-                </Breadcrumb>
+                </LinkableBreadcrumb>
               );
             }),
             ({ index }) => {

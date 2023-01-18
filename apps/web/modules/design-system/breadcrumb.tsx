@@ -49,7 +49,7 @@ interface Props {
   shouldTruncate?: boolean;
 }
 
-export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Props) {
+export function LinkableBreadcrumb({ children, href, img, isNested, shouldTruncate }: Props) {
   return (
     <Link href={href} passHref>
       <BreadcrumbLink title={children}>

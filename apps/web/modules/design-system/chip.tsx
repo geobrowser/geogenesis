@@ -23,15 +23,6 @@ const StyledChip = styled.a(props => ({
   },
 }));
 
-const StyledLabelChip = styled.span(props => ({
-  ...props.theme.typography.smallButton,
-  borderRadius: props.theme.radius,
-  padding: `${props.theme.space / 2}px ${props.theme.space}px`,
-  display: 'inline-block',
-  backgroundColor: props.theme.colors['grey-02'],
-  textDecoration: 'none',
-}));
-
 /* Wrapper to prevent the icon from being scaled by flexbox */
 const StyledCheckCloseContainer = styled.button({
   all: 'unset',
@@ -73,14 +64,6 @@ const StyledDeletableChip = styled.a<{ isWarning: boolean }>(props => {
 interface LinkableChipProps {
   href: string;
   children: React.ReactNode;
-}
-
-interface ChipProps {
-  children: React.ReactNode;
-}
-
-export function LabelChip({ children }: ChipProps) {
-  return <StyledLabelChip>{children}</StyledLabelChip>;
 }
 
 export function LinkableChip({ href, children }: LinkableChipProps) {

@@ -2,11 +2,11 @@ import styled from '@emotion/styled';
 import { A, pipe } from '@mobily/ts-belt';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { Breadcrumb } from '~/modules/design-system/breadcrumb';
-import { LabelChip } from '~/modules/design-system/chip';
+import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Spacer } from '~/modules/design-system/spacer';
+import { Tag } from '~/modules/design-system/tag';
 import { Text } from '~/modules/design-system/text';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
@@ -149,9 +149,9 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
 
       <BreadcrumbsContainer>
         {spaceName && (
-          <Breadcrumb isNested={false} href={spaceHref} img={spaceImg}>
+          <LinkableBreadcrumb isNested={false} href={spaceHref} img={spaceImg}>
             {spaceName}
-          </Breadcrumb>
+          </LinkableBreadcrumb>
         )}
         {showBreadcrumbChevron && (
           <span style={{ rotate: '270deg' }}>
@@ -159,7 +159,7 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
           </span>
         )}
         {result.types.map(type => (
-          <LabelChip key={type}>{type}</LabelChip>
+          <Tag key={type}>{type}</Tag>
         ))}
       </BreadcrumbsContainer>
       {(result.description || !A.isEmpty(result.types)) && (
