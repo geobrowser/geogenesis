@@ -7,6 +7,7 @@ import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 
@@ -67,6 +68,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
   const autocomplete = useAutocomplete(spaceId);
   const theme = useTheme();
   const entityItemIdsSet = new Set(entityValueIds);
+  const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -107,7 +109,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
                       }}
                       alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
-                      results={autocomplete.results}
+                      spaces={spaces}
                     />
                   ))
                 : null}

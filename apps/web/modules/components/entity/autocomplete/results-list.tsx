@@ -1,16 +1,12 @@
 import styled from '@emotion/styled';
 import { A, pipe } from '@mobily/ts-belt';
 import { SYSTEM_IDS } from '~/../../packages/ids';
-import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
+import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { Spacer } from '~/modules/design-system/spacer';
 import { Tag } from '~/modules/design-system/tag';
 import { Text } from '~/modules/design-system/text';
-import { useSpaces } from '~/modules/spaces/use-spaces';
-import { Entity } from '~/modules/types';
-import { NavUtils } from '~/modules/utils';
+import { Entity, Space } from '~/modules/types';
 
 export const ResultsList = styled.ul({
   listStyle: 'none',
@@ -118,8 +114,8 @@ function ResultDisambiguation({ result, results }: { result: Entity; results: En
 interface Props {
   onClick: () => void;
   result: Entity;
-  results: Entity[];
   alreadySelected?: boolean;
+  spaces: Space[];
 }
 
 const BreadcrumbsContainer = styled.div(props => ({
@@ -130,14 +126,24 @@ const BreadcrumbsContainer = styled.div(props => ({
   marginTop: props.theme.space,
 }));
 
-export function ResultContent({ onClick, result, alreadySelected, results }: Props) {
-  const { spaces } = useSpaces();
-  const space = spaces.find(space => space.id === result.nameTripleSpace);
-  const spaceHref = NavUtils.toSpace(space?.id ?? '');
-  const spaceImg = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? ZERO_WIDTH_SPACE;
+const DescriptionContainer = styled.div(props => ({
+  marginTop: props.theme.space,
+}));
 
+const TagsContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space * 1.5,
+}));
+
+export function ResultContent({ onClick, result, alreadySelected, spaces }: Props) {
+  const space = spaces.find(space => space.id === result.nameTripleSpace);
+  const spaceImg = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+  const spaceName = space?.attributes[SYSTEM_IDS.NAME];
+
+  const showBreadcrumbs = spaceName || result.types.length > 0;
   const showBreadcrumbChevron = spaceName && result.types.length > 0;
+
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
       <ResultHeader>
@@ -147,26 +153,27 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
 
-      <BreadcrumbsContainer>
-        {spaceName && (
-          <LinkableBreadcrumb isNested={false} href={spaceHref} img={spaceImg}>
-            {spaceName}
-          </LinkableBreadcrumb>
-        )}
-        {showBreadcrumbChevron && (
-          <span style={{ rotate: '270deg' }}>
-            <ChevronDownSmall color="grey-03" />
-          </span>
-        )}
-        {result.types.map(type => (
-          <Tag key={type}>{type}</Tag>
-        ))}
-      </BreadcrumbsContainer>
-      {(result.description || !A.isEmpty(result.types)) && (
-        <>
-          <Spacer height={4} />
-          <ResultDisambiguation result={result} results={results} />
-        </>
+      {showBreadcrumbs && (
+        <BreadcrumbsContainer>
+          {spaceName && <Breadcrumb img={spaceImg}>{spaceName}</Breadcrumb>}
+          {showBreadcrumbChevron && (
+            <span style={{ rotate: '270deg' }}>
+              <ChevronDownSmall color="grey-04" />
+            </span>
+          )}
+          {result.types.length > 0 && (
+            <TagsContainer>
+              {result.types.map(type => (
+                <Tag key={type}>{type}</Tag>
+              ))}
+            </TagsContainer>
+          )}
+        </BreadcrumbsContainer>
+      )}
+      {result.description && (
+        <DescriptionContainer>
+          <Text variant="footnote">{result.description}</Text>
+        </DescriptionContainer>
       )}
     </ResultItem>
   );
