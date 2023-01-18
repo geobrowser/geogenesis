@@ -88,6 +88,7 @@ export type Entity = {
   description: string | null;
   types: string[];
   triples: Triple[];
+  nameTripleSpace?: string;
 };
 
 export interface Column {

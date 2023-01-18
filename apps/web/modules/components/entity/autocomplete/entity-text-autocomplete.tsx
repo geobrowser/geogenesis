@@ -2,6 +2,7 @@ import styled from '@emotion/styled';
 import { useEffect, useRef } from 'react';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 
@@ -56,6 +57,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
   const { query, results, onQueryChange } = useAutocomplete(spaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
+  const { spaces } = useSpaces();
 
   useEffect(() => {
     document.addEventListener('click', e => {
@@ -82,8 +84,8 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
                 onClick={() => {
                   if (!itemIdsSet.has(result.id)) onDone(result);
                 }}
+                spaces={spaces}
                 alreadySelected={itemIdsSet.has(result.id)}
-                results={results}
                 result={result}
               />
             ))}

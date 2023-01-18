@@ -23,6 +23,15 @@ const BreadcrumbLink = styled.a(props => ({
   },
 }));
 
+const BasicBreadcrumbContainer = styled.span(props => ({
+  textDecoration: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  cursor: 'pointer',
+  padding: '1px 0', // creates space above the image and text to make focus state look better
+  whiteSpace: 'nowrap',
+}));
+
 const ImageContainer = styled.div(props => ({
   // this is required for next/image
   // https://nextjs.org/docs/api-reference/next/image#fill
@@ -30,6 +39,16 @@ const ImageContainer = styled.div(props => ({
   overflow: 'hidden',
   width: props.theme.space * 4,
   height: props.theme.space * 4,
+  borderRadius: props.theme.radius / 1.5,
+}));
+
+const SmallImageContainer = styled.div(props => ({
+  // this is required for next/image
+  // https://nextjs.org/docs/api-reference/next/image#fill
+  position: 'relative',
+  overflow: 'hidden',
+  width: props.theme.space * 3,
+  height: props.theme.space * 3,
   borderRadius: props.theme.radius / 1.5,
 }));
 
@@ -41,7 +60,7 @@ const Truncate = styled.div<{ shouldTruncate?: boolean }>(props => ({
   }),
 }));
 
-interface Props {
+interface LinkableBreadcrumbProps {
   href: string;
   children: string;
   isNested: boolean;
@@ -49,7 +68,7 @@ interface Props {
   shouldTruncate?: boolean;
 }
 
-export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Props) {
+export function LinkableBreadcrumb({ children, href, img, isNested, shouldTruncate }: LinkableBreadcrumbProps) {
   return (
     <Link href={href} passHref>
       <BreadcrumbLink title={children}>
@@ -68,5 +87,28 @@ export function Breadcrumb({ children, href, img, isNested, shouldTruncate }: Pr
         </Truncate>
       </BreadcrumbLink>
     </Link>
+  );
+}
+
+interface BreadcrumbProps {
+  children: string;
+  img: string | null;
+}
+
+export function Breadcrumb({ children, img }: BreadcrumbProps) {
+  return (
+    <BasicBreadcrumbContainer>
+      {img && (
+        <>
+          <SmallImageContainer>
+            <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
+          </SmallImageContainer>
+          <Spacer width={4} />
+        </>
+      )}
+      <Text variant="tag" color={'text'}>
+        {children}
+      </Text>
+    </BasicBreadcrumbContainer>
   );
 }
