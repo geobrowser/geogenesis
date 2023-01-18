@@ -1,9 +1,16 @@
 import styled from '@emotion/styled';
 import { A, pipe } from '@mobily/ts-belt';
+import { SYSTEM_IDS } from '~/../../packages/ids';
+import { ZERO_WIDTH_SPACE } from '~/modules/constants';
+import { Breadcrumb } from '~/modules/design-system/breadcrumb';
+import { Chip } from '~/modules/design-system/chip';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
+import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
+import { NavUtils } from '~/modules/utils';
 
 export const ResultsList = styled.ul({
   listStyle: 'none',
@@ -115,7 +122,22 @@ interface Props {
   alreadySelected?: boolean;
 }
 
+const BreadcrumbsContainer = styled.div(props => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: props.theme.space * 2,
+  overflow: 'hidden',
+  marginTop: props.theme.space,
+}));
+
 export function ResultContent({ onClick, result, alreadySelected, results }: Props) {
+  const { spaces } = useSpaces();
+  const space = spaces.find(space => space.id === result.nameTripleSpace);
+  const spaceHref = NavUtils.toSpace(space?.id ?? '');
+  const spaceImg = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? ZERO_WIDTH_SPACE;
+
+  const showBreadcrumbChevron = spaceName && result.types.length > 0;
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
       <ResultHeader>
@@ -124,6 +146,24 @@ export function ResultContent({ onClick, result, alreadySelected, results }: Pro
         </ResultText>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
+
+      <BreadcrumbsContainer>
+        {spaceName && (
+          <Breadcrumb isNested={false} href={spaceHref} img={spaceImg}>
+            {spaceName}
+          </Breadcrumb>
+        )}
+        {showBreadcrumbChevron && (
+          <span style={{ rotate: '270deg' }}>
+            <ChevronDownSmall color="grey-03" />
+          </span>
+        )}
+        {result.types.map((type, index) => (
+          <Chip key={type} href="">
+            {type}
+          </Chip>
+        ))}
+      </BreadcrumbsContainer>
       {(result.description || !A.isEmpty(result.types)) && (
         <>
           <Spacer height={4} />
