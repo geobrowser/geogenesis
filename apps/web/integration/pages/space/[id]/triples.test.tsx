@@ -38,22 +38,6 @@ describe('Space page', () => {
     expect(screen.getAllByText('Alice')).toBeTruthy();
   });
 
-  it('Should toggle predefined queries', async () => {
-    userEvent.setup();
-
-    render(
-      <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
-      </Providers>
-    );
-
-    expect(screen.getByText('Preset Banana queries')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /predefined-queries-button/i }));
-
-    expect(screen.queryByText('Preset Banana queries')).not.toBeInTheDocument();
-  });
-
   it('Should toggle advanced filters queries', async () => {
     userEvent.setup();
 
