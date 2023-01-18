@@ -8,15 +8,7 @@ describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <SpacePage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialTypes={[]}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
-        />
+        <SpacePage spaceId="1" spaceName="Banana" spaceImage={null} />
       </Providers>
     );
 
@@ -27,15 +19,7 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <SpacePage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialTypes={[]}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
-        />
+        <SpacePage spaceId="1" spaceName="Banana" spaceImage={null} />
       </Providers>
     );
 
@@ -45,23 +29,7 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <SpacePage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialTypes={[]}
-          initialColumns={[{ id: '1', name: 'Alice' }]}
-          initialRows={[
-            {
-              '1': {
-                columnId: '1',
-                entityId: '1',
-                triples: [],
-              },
-            },
-          ]}
-          initialSelectedType={null}
-        />
+        <SpacePage spaceId="1" spaceName="Banana" spaceImage={null} />
       </Providers>
     );
 
@@ -74,15 +42,7 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <SpacePage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialTypes={[]}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
-        />
+        <SpacePage spaceId="1" spaceName="Banana" spaceImage={null} />
       </Providers>
     );
 

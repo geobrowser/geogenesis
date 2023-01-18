@@ -1,6 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { INetwork } from '../../services/network';
 import {
   Action,
@@ -24,7 +25,6 @@ interface IEntityTableStore {
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
-  hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   create(triples: TripleType[]): void;
   publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
@@ -37,10 +37,6 @@ interface IEntityTableStoreConfig {
   space: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
-  initialRows: Row[];
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
-  initialColumns: Column[];
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -65,7 +61,6 @@ export class EntityTableStore implements IEntityTableStore {
   actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
-  hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<Triple | null>;
   types$: ObservableComputed<TripleType[]>;
@@ -79,20 +74,15 @@ export class EntityTableStore implements IEntityTableStore {
   constructor({
     api,
     space,
-    initialRows,
-    initialSelectedType,
-    initialColumns,
-    initialTypes,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
     this.api = api;
-    this.hydrated$ = observable(false);
-    this.rows$ = observable(initialRows);
-    this.selectedType$ = observable(initialSelectedType);
+    this.rows$ = observable([]);
     this.pageNumber$ = observable(initialParams.pageNumber);
-    this.columns$ = observable(initialColumns);
-    this.types$ = observable(initialTypes);
+    this.selectedType$ = observable<Triple | null>(null);
+    this.columns$ = observable([]);
+    this.types$ = observable([]);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
@@ -101,6 +91,33 @@ export class EntityTableStore implements IEntityTableStore {
       const filterState = this.filterState$.get();
       return filterState.find(f => f.field === 'entity-name')?.value || '';
     });
+
+    this.types$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        const initialTypes = await this.api.fetchTriples({
+          query: '',
+          space: this.space,
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [
+            { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+            {
+              field: 'linked-to',
+              value: SYSTEM_IDS.SCHEMA_TYPE,
+            },
+          ],
+        });
+
+        const initialTypeTriples = initialTypes.triples;
+
+        this.selectedType$.set(
+          initialTypeTriples.find(t => t.entityId === initialParams.typeId) || initialTypeTriples[0] || null
+        );
+
+        return initialTypeTriples;
+      })
+    );
 
     const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
@@ -124,11 +141,11 @@ export class EntityTableStore implements IEntityTableStore {
           const { rows, columns, hasNextPage } = await this.api.fetchEntityTableData({
             spaceId: space,
             params,
+            // actions: [],
             abortController: this.abortController,
           });
 
-          this.hydrated$.set(true);
-          return { columns, rows: rows.slice(0, pageSize), hasNextPage };
+          return { columns, rows, hasNextPage };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function

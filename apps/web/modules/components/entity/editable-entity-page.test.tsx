@@ -12,16 +12,8 @@ describe('Editable Entity Page', () => {
 
     render(
       <Providers>
-        <EntityStoreProvider id={'1'} spaceId={'1'} initialTriples={[]} initialSchemaTriples={[]}>
-          <EditableEntityPage
-            id="1"
-            name="Banana"
-            space="1"
-            triples={[]}
-            schemaTriples={[
-              { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
-            ]}
-          />
+        <EntityStoreProvider id={'1'} spaceId={'1'}>
+          <EditableEntityPage id="1" space="1" />
         </EntityStoreProvider>
       </Providers>
     );
@@ -35,26 +27,8 @@ describe('Editable Entity Page', () => {
 
     render(
       <Providers>
-        <EntityStoreProvider id={'1'} spaceId={'1'} initialTriples={[]} initialSchemaTriples={[]}>
-          <EditableEntityPage
-            id="1"
-            name="Banana"
-            space="1"
-            triples={[]}
-            schemaTriples={[
-              {
-                ...makeStubTriple('Schema'),
-                attributeName: 'Schema',
-                attributeId: 'Schema',
-                value: {
-                  type: 'entity',
-                  name: '',
-                  id: '',
-                },
-                placeholder: true,
-              },
-            ]}
-          />
+        <EntityStoreProvider id={'1'} spaceId={'1'}>
+          <EditableEntityPage id="1" space="1" />
         </EntityStoreProvider>
       </Providers>
     );

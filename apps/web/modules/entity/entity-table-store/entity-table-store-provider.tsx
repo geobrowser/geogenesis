@@ -11,20 +11,9 @@ const EntityTableStoreContext = createContext<EntityTableStore | undefined>(unde
 interface Props {
   space: string;
   children: React.ReactNode;
-  initialRows: Row[];
-  initialSelectedType: Triple | null;
-  initialColumns: Column[];
-  initialTypes: Triple[];
 }
 
-export function EntityTableStoreProvider({
-  space,
-  children,
-  initialRows,
-  initialSelectedType,
-  initialColumns,
-  initialTypes,
-}: Props) {
+export function EntityTableStoreProvider({ space, children }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
   const replace = useRef(router.replace);
@@ -38,12 +27,8 @@ export function EntityTableStoreProvider({
       api: network,
       space,
       initialParams,
-      initialRows,
-      initialSelectedType,
-      initialColumns,
-      initialTypes,
     });
-  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes]);
+  }, [network, space]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

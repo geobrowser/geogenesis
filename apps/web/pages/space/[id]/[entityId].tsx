@@ -17,7 +17,6 @@ export default function EntityPage(props: Props) {
   useLogRocket(props.space);
 
   const renderEditablePage = isEditor && editable;
-  // const renderEditablePage = true;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
@@ -35,7 +34,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     props: {
       id: entityId,
       space,
-      key: entityId,
     },
   };
 };

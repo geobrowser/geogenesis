@@ -2,7 +2,6 @@ import styled from '@emotion/styled';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/entity';
-import { Column, Row } from '../../types';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';
@@ -11,8 +10,6 @@ import { EntityTable } from './entity-table';
 interface Props {
   spaceId: string;
   spaceName?: string;
-  initialRows: Row[];
-  initialColumns: Column[];
 }
 
 // Using a container to wrap the table to make styling borders around
@@ -25,7 +22,7 @@ const Container = styled.div(props => ({
   overflow: 'hidden',
 }));
 
-export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
+export function EntityTableContainer({ spaceId }: Props) {
   const entityTableStore = useEntityTable();
 
   return (
@@ -36,11 +33,7 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
       <Spacer height={12} />
 
       <Container>
-        <EntityTable
-          space={spaceId}
-          columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}
-          rows={entityTableStore.hydrated ? entityTableStore.rows : initialRows}
-        />
+        <EntityTable space={spaceId} columns={entityTableStore.columns} rows={entityTableStore.rows} />
       </Container>
 
       <Spacer height={12} />

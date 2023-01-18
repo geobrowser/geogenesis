@@ -11,8 +11,6 @@ describe('EntityStore', () => {
       id: 'e',
       api: network,
       spaceId: 's',
-      initialTriples: [],
-      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
     const defaultTriples = createInitialDefaultTriples('s', 'e');
@@ -36,8 +34,6 @@ describe('EntityStore', () => {
       id: 'e',
       api: network,
       spaceId: 's',
-      initialTriples: initialEntityStoreTriples,
-      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
 
@@ -58,8 +54,6 @@ describe('EntityStore', () => {
       id: 'e',
       api: network,
       spaceId: 's',
-      initialTriples: initialEntityStoreTriples,
-      initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
 

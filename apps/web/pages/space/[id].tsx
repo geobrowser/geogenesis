@@ -7,30 +7,17 @@ import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
-import { INetwork, Network } from '~/modules/services/network';
+import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Row, Triple } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider } from '~/modules/entity';
+import { EntityTableStoreProvider } from '~/modules/entity';
 
 interface Props {
   spaceId: string;
   spaceName?: string;
   spaceImage: string | null;
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
-  initialColumns: Column[];
-  initialRows: Row[];
 }
 
-export default function EntitiesPage({
-  spaceId,
-  spaceName,
-  spaceImage,
-  initialColumns,
-  initialSelectedType,
-  initialRows,
-  initialTypes,
-}: Props) {
+export default function EntitiesPage({ spaceId, spaceName, spaceImage }: Props) {
   useLogRocket(spaceId);
 
   return (
@@ -44,19 +31,8 @@ export default function EntitiesPage({
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <EntityTableStoreProvider
-        space={spaceId}
-        initialRows={initialRows}
-        initialSelectedType={initialSelectedType}
-        initialColumns={initialColumns}
-        initialTypes={initialTypes}
-      >
-        <EntityTableContainer
-          spaceId={spaceId}
-          spaceName={spaceName}
-          initialColumns={initialColumns}
-          initialRows={initialRows}
-        />
+      <EntityTableStoreProvider space={spaceId}>
+        <EntityTableContainer spaceId={spaceId} spaceName={spaceName} />
       </EntityTableStoreProvider>
     </div>
   );
@@ -64,7 +40,6 @@ export default function EntitiesPage({
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.params?.id as string;
-  const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
@@ -75,52 +50,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const initialTypes = (await fetchSpaceTypeTriples(network, spaceId)) || [];
-
-  const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
-
-  const typeId = initialSelectedType?.entityId;
-
-  const params = {
-    ...initialParams,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeId,
-  };
-
-  const { columns, rows } = await network.fetchEntityTableData({
-    spaceId,
-    params,
-  });
-
   return {
     props: {
       spaceId,
       spaceName,
       spaceImage,
-      initialSelectedType,
-      initialColumns: columns,
-      initialRows: rows,
-      initialTypes,
     },
   };
-};
-
-export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-  const { triples } = await network.fetchTriples({
-    query: '',
-    space: spaceId,
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      {
-        field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
-      },
-    ],
-  });
-
-  return triples;
 };
