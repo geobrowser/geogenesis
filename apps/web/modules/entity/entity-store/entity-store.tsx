@@ -2,11 +2,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 import { ActionsStore } from '~/modules/action';
+import { LinkedEntityGroup } from '~/modules/components/entity/types';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Value } from '~/modules/value';
+import { Entity } from '..';
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -44,9 +46,11 @@ export class EntityStore implements IEntityStore {
   private api: INetwork;
   id: string;
   spaceId: string;
+  name$: ObservableComputed<string>;
   triples$: ObservableComputed<TripleType[]>;
   typeTriples$: ObservableComputed<TripleType[]>;
   schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
+  linkedEntities$: ObservableComputed<Record<string, LinkedEntityGroup>>;
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
@@ -56,6 +60,51 @@ export class EntityStore implements IEntityStore {
     this.api = api;
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
+
+    this.linkedEntities$ = makeOptionalComputed(
+      {},
+      computed(async () => {
+        const [entity, related] = await Promise.all([
+          this.api.fetchTriples({
+            space: spaceId,
+            query: '',
+            skip: 0,
+            first: DEFAULT_PAGE_SIZE,
+            filter: [{ field: 'entity-id', value: this.id }],
+          }),
+
+          this.api.fetchTriples({
+            space: spaceId,
+            query: '',
+            skip: 0,
+            first: DEFAULT_PAGE_SIZE,
+            filter: [{ field: 'linked-to', value: this.id }],
+          }),
+        ]);
+
+        const relatedEntities = await Promise.all(
+          related.triples.map(triple =>
+            this.api.fetchTriples({
+              space: spaceId,
+              query: '',
+              skip: 0,
+              first: DEFAULT_PAGE_SIZE,
+              filter: [{ field: 'entity-id', value: triple.entityId }],
+            })
+          )
+        );
+
+        return relatedEntities
+          .flatMap(entity => entity.triples)
+          .reduce((acc, triple) => {
+            if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
+            acc[triple.entityId].id = triple.entityId;
+            acc[triple.entityId].name = triple.entityName;
+            acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
+            return acc;
+          }, {} as Record<string, LinkedEntityGroup>);
+      })
+    );
 
     const serverTriples$ = makeOptionalComputed(
       [],
@@ -91,6 +140,8 @@ export class EntityStore implements IEntityStore {
         );
       })
     );
+
+    this.name$ = computed(() => Entity.name(this.triples$.get()) ?? '');
 
     /* 
     In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to 

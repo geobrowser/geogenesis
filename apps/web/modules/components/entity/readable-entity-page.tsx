@@ -3,7 +3,7 @@ import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
 import pluralize from 'pluralize';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
 import { Chip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
@@ -13,6 +13,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity, useEntityStore } from '~/modules/entity';
+import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
@@ -51,14 +52,20 @@ const EntityActionGroup = styled.div({
 
 interface Props {
   id: string;
-  name: string;
   space: string;
-  linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ id, name, space, linkedEntities }: Props) {
-  const { triples } = useEntityStore();
+export function ReadableEntityPage({ id, space }: Props) {
+  const { setPageName } = usePageName();
+  const { triples, linkedEntities, name } = useEntityStore();
   const description = Entity.description(triples);
+
+  // This is a janky way to set the name in the navbar until we have nested layouts
+  // and the navbar can query the name itself in a nice way.
+  useEffect(() => {
+    setPageName(name);
+    return () => setPageName('');
+  }, [name]);
 
   return (
     <div>
