@@ -23,3 +23,6 @@ export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
+
+/* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
+export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
