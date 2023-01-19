@@ -125,7 +125,7 @@ export class EntityTableStore implements IEntityTableStore {
             skip: pageNumber * pageSize,
           };
 
-          const { columns: serverColumns, columnsSchema } = await this.api.columns({
+          const { columns: serverColumns } = await this.api.columns({
             spaceId: space,
             params,
             abortController: this.abortController,
@@ -135,7 +135,6 @@ export class EntityTableStore implements IEntityTableStore {
             spaceId: space,
             params,
             columns: serverColumns,
-            columnsSchema,
             abortController: this.abortController,
           });
 
@@ -145,7 +144,7 @@ export class EntityTableStore implements IEntityTableStore {
           // Row.fromActions that replaces the list of rows in place
           // We need to do the same for columns :thinking:
 
-          const { rows, hasNextPage } = fromColumnsAndRows(space, serverRows, serverColumns, columnsSchema);
+          const { rows, hasNextPage } = fromColumnsAndRows(space, serverRows, serverColumns);
 
           this.hydrated$.set(true);
           return { columns: serverColumns, rows: rows.slice(0, pageSize), hasNextPage };

@@ -15,7 +15,6 @@ import {
   Space,
   Triple as TripleType,
 } from '../types';
-import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
 
@@ -59,7 +58,6 @@ interface FetchColumnsOptions {
 
 interface FetchColumnsResult {
   columns: Column[];
-  columnsSchema: TripleType[][];
 }
 
 interface FetchRowsOptions {
@@ -69,7 +67,6 @@ interface FetchRowsOptions {
     first: number;
   };
   columns: Column[];
-  columnsSchema: TripleType[][];
   abortController?: AbortController;
 }
 
@@ -386,7 +383,7 @@ export class Network implements INetwork {
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
     if (!params.typeId) {
-      return { columns: [], columnsSchema: [] };
+      return { columns: [] };
     }
 
     const columnsTriples = await this.fetchTriples({
@@ -401,8 +398,8 @@ export class Network implements INetwork {
       ],
     });
 
-    /* Then we fetch all of the Value type for each column */
-    const columnsSchema = await Promise.all(
+    /* Then we fetch all of the associated triples for each column */
+    const relatedColumnTriples = await Promise.all(
       columnsTriples.triples.map(triple => {
         return this.fetchTriples({
           query: '',
@@ -422,18 +419,18 @@ export class Network implements INetwork {
     /* Name is the default column... */
     const defaultColumns = [
       {
-        name: 'Name',
         id: SYSTEM_IDS.NAME,
+        triples: [],
       },
-    ];
+    ] as Column[];
 
     /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns = columnsTriples.triples.map(triple => ({
-      name: Value.nameOfEntityValue(triple) || triple.value.id,
+    const schemaColumns = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
+      triples: relatedColumnTriples[i].triples,
     })) as Column[];
 
-    return { columns: [...defaultColumns, ...schemaColumns], columnsSchema: columnsSchema.map(cs => cs.triples) };
+    return { columns: [...defaultColumns, ...schemaColumns] };
   };
 }
 

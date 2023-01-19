@@ -3,12 +3,7 @@ import { Triple } from '~/modules/triple';
 import { Column, Row, Triple as TripleType } from '~/modules/types';
 import { DEFAULT_PAGE_SIZE, Entity } from '..';
 
-export function fromColumnsAndRows(
-  spaceId: string,
-  rows: TripleType[][],
-  columns: Column[],
-  columnsSchema: TripleType[][]
-) {
+export function fromColumnsAndRows(spaceId: string, rows: TripleType[][], columns: Column[]) {
   const rowTriplesWithEntityIds = Entity.entitiesFromTriples(rows.flatMap(r => r));
 
   /* Finally, we can build our initialRows */
@@ -17,9 +12,7 @@ export function fromColumnsAndRows(
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
       /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
-      const columnValueTypeTriple = columnsSchema
-        .flat()
-        .find(triple => triple.entityId === column.id && triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+      const columnValueTypeTriple = column.triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
       const columnValueType = columnValueTypeTriple?.value.id;
 
       const defaultTriple = {

@@ -13,14 +13,13 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row, Triple } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
-import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
 import { EditableEntityTableColumn } from './editable-entity-table-column';
 import { EntityTableCell } from './entity-table-cell';
@@ -69,8 +68,9 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
       id: column.id,
       header: () => {
         const { actions } = useActionsStore(space);
+        const isNameColumn = column.id === SYSTEM_IDS.NAME;
 
-        return isEditMode ? (
+        return isEditMode && !isNameColumn ? (
           <EntityStoreProvider spaceId={space} id={column.id} initialTriples={column.triples} initialSchemaTriples={[]}>
             <EditableEntityTableColumn
               column={column}
@@ -80,7 +80,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
             />
           </EntityStoreProvider>
         ) : (
-          <Text variant="smallTitle">{column.name}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );
       },
       size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
@@ -164,20 +164,6 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns, sel
               ))}
             </tr>
           ))}
-          {isEditMode && selectedType && (
-            <tr>
-              <th>
-                <EntityStoreProvider
-                  id={selectedType.entityId}
-                  spaceId={space}
-                  initialSchemaTriples={[]}
-                  initialTriples={[]}
-                >
-                  <AddNewColumn />
-                </EntityStoreProvider>
-              </th>
-            </tr>
-          )}
         </TableHead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
