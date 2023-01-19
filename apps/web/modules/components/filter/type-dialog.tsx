@@ -4,6 +4,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useEntityTable } from '~/modules/entity';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
@@ -50,10 +51,9 @@ const StyledTrigger = styled.button(props => ({
 
 const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   borderRadius: props.theme.radius,
-  padding: props.theme.space * 3,
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.dropdown,
+  boxShadow: props.theme.shadows.button,
   zIndex: 100,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
@@ -65,6 +65,28 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
 }));
 
 const MotionContent = motion(StyledContent);
+
+const SearchContainer = styled.div(props => ({
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  padding: props.theme.space * 2,
+}));
+
+const SearchInput = styled(Input)(props => ({
+  paddingLeft: props.theme.space * 9,
+}));
+
+const SearchIconContainer = styled.div(props => ({
+  position: 'absolute',
+  left: props.theme.space * 5,
+  top: props.theme.space * 4.5,
+  zIndex: 10,
+}));
+
+const TypeText = styled(Text)(props => ({
+  padding: props.theme.space * 2,
+}));
 
 interface Props {
   inputContainerWidth: number;
@@ -95,7 +117,8 @@ export function TypeDialog({ inputContainerWidth }: Props) {
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledTrigger aria-label="type-filter-dropdown">
-          {entityTableStore.selectedType?.entityName || 'No Types Found'} <Spacer width={8} />
+          {entityTableStore.selectedType?.entityName || 'No Types Found'}
+          <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </StyledTrigger>
       </PopoverPrimitive.Trigger>
@@ -116,15 +139,16 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             alignOffset={-(theme.space * 2) + 4}
             align={width > 768 ? 'end' : 'start'}
           >
-            <Text variant="button">All types</Text>
-            <Spacer height={12} />
-            <Input
-              value={filter}
-              onChange={e => {
-                setFilter(e.target.value);
-              }}
-            />
-            <Spacer height={12} />
+            <SearchContainer>
+              <SearchIconContainer>
+                <Search />
+              </SearchIconContainer>
+              <SearchInput value={filter} onChange={e => setFilter(e.target.value)} />
+            </SearchContainer>
+
+            <TypeText variant="smallButton">All types</TypeText>
+
+            <Spacer height={8} />
 
             <ResultsList>
               {filteredTypes.map(type => (
