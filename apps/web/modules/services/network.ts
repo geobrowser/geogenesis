@@ -169,8 +169,6 @@ export class Network implements INetwork {
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
 
-    const spaces = await this.fetchSpaces();
-
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -179,35 +177,9 @@ export class Network implements INetwork {
       signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
-          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
+          entitySearch(text: "${name}:*") {
             id,
             name
-            entityOf {
-              id
-              stringValue
-              valueId
-              valueType
-              numberValue
-              space {
-                id
-              }
-              entityValue {
-                id
-                name
-              }
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-            }
-          }
-          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
-            id,
-            name,
             entityOf {
               id
               stringValue
@@ -237,16 +209,13 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        startEntities: NetworkEntity[];
-        containEntities: NetworkEntity[];
+        entitySearch: NetworkEntity[];
       };
     } = await response.json();
 
-    const { startEntities, containEntities } = json.data;
+    const { entitySearch } = json.data;
 
-    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
-
-    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+    const sortedResultsWithTypesAndDescription: EntityType[] = entitySearch.map(result => {
       const triples = fromNetworkTriples(result.entityOf);
       const nameTriple = Entity.nameTriple(triples);
 
@@ -460,34 +429,6 @@ export class Network implements INetwork {
       hasNextPage: rowEntityIds.length > DEFAULT_PAGE_SIZE_ENTITY_TABLE,
     };
   };
-}
-
-const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
-  if (a === null && b === null) {
-    return 0;
-  }
-  if (a === null) {
-    return 1;
-  }
-  if (b === null) {
-    return -1;
-  }
-  if (a.length === b.length) {
-    return a.localeCompare(b);
-  }
-  return a.length - b.length;
-};
-
-function sortSearchResultsByRelevance(startEntities: NetworkEntity[], containEntities: NetworkEntity[]) {
-  // TODO: This is where it's breaking
-  const startEntityIds = startEntities.map(entity => entity.id);
-
-  const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-  const secondaryResults = containEntities
-    .filter(entity => !startEntityIds.includes(entity.id))
-    .sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-
-  return [...primaryResults, ...secondaryResults];
 }
 
 async function findEvents(tx: ContractTransaction, name: string): Promise<Event[]> {

@@ -25,6 +25,8 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
+      PGDATA: '/var/lib/postgresql/data'
+      POSTGRES_INITDB_ARGS: '-E UTF8 --locale=C'
   graph-node:
     build:
       context: .
@@ -51,7 +53,7 @@ services:
       GRAPH_ETH_CALL_FULL_LOG: true
       GRAPH_EXPERIMENTAL_SUBGRAPH_VERSION_SWITCHING_MODE: synced
       GRAPH_ALLOW_NON_DETERMINISTIC_IPFS: true
-      GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: false
+      GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: true
       GRAPH_MAX_GAS_PER_HANDLER: 1_000_000_000_000_000
     healthcheck:
       test: curl http://localhost:8030
