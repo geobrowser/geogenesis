@@ -129,7 +129,6 @@ export function TypeDialog({ inputContainerWidth }: Props) {
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            avoidCollisions={true}
             width={inputContainerWidth}
             sideOffset={theme.space * 2}
             align="start"
