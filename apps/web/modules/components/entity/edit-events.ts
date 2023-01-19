@@ -307,36 +307,6 @@ const listener =
         );
       }
 
-      case 'CREATE_COLUMN_FROM_ENTITY_TABLE': {
-        const { typeEntityId } = event.payload;
-
-        const newAttributeTriple = Triple.withId({
-          space: context.spaceId,
-          entityId: context.entityId,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Type',
-          entityName: '',
-          value: {
-            id: SYSTEM_IDS.ATTRIBUTE,
-            type: 'entity',
-            name: '',
-          },
-        });
-
-        const linkTypeToAttributeTriple = Triple.withId({
-          space: context.spaceId,
-          entityId: context.entityId,
-          entityName: '',
-          attributeId: SYSTEM_IDS.ATTRIBUTES,
-          attributeName: 'Attributes',
-          value: {
-            type: 'entity',
-            id: entityId,
-            name: entityName,
-          },
-        });
-      }
-
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
 
