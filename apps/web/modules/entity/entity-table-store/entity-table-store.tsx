@@ -15,6 +15,7 @@ import {
 } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
+import { fromColumnsAndRows } from './Table';
 
 interface IEntityTableStore {
   actions$: Observable<Action[]>;
@@ -124,15 +125,30 @@ export class EntityTableStore implements IEntityTableStore {
             skip: pageNumber * pageSize,
           };
 
-          const { rows, columns, hasNextPage } = await this.api.fetchEntityTableData({
+          const { columns: serverColumns, columnsSchema } = await this.api.columns({
             spaceId: space,
             params,
-            actions: ActionStore.actions$.get()[space],
             abortController: this.abortController,
           });
 
+          const { rows: serverRows } = await this.api.rows({
+            spaceId: space,
+            params,
+            columns: serverColumns,
+            columnsSchema,
+            abortController: this.abortController,
+          });
+
+          // Triple.fromAction
+          // Entity.fromTriples
+          // Row.fromEntity
+          // Row.fromActions that replaces the list of rows in place
+          // We need to do the same for columns :thinking:
+
+          const { rows, hasNextPage } = fromColumnsAndRows(space, serverRows, serverColumns, columnsSchema);
+
           this.hydrated$.set(true);
-          return { columns, rows: rows.slice(0, pageSize), hasNextPage };
+          return { columns: serverColumns, rows: rows.slice(0, pageSize), hasNextPage };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function

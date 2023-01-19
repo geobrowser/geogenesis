@@ -6,3 +6,4 @@ export { EntityTableStoreProvider, useEntityTableStore } from './entity-table-st
 export { EntityTableStore, DEFAULT_INITIAL_PARAMS, DEFAULT_PAGE_SIZE } from './entity-table-store/entity-table-store';
 export type { InitialEntityTableStoreParams } from './entity-table-store/entity-table-store-params';
 export { useEntityTable } from './entity-table-store/use-entity-tables';
+export * as EntityTable from './entity-table-store/Table';

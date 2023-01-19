@@ -10,7 +10,7 @@ import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Triple } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modules/entity';
 
 interface Props {
   spaceId: string;
@@ -88,11 +88,19 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     typeId,
   };
 
-  const { columns, rows } = await network.fetchEntityTableData({
+  const { columns, columnsSchema } = await network.columns({
     spaceId,
     params,
-    actions: [],
   });
+
+  const { rows: serverRows } = await network.rows({
+    spaceId,
+    params,
+    columns,
+    columnsSchema,
+  });
+
+  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns, columnsSchema);
 
   return {
     props: {
