@@ -7,7 +7,6 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useEntityTable } from '~/modules/entity';
-import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { FilterState, Triple } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
@@ -98,11 +97,8 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   const theme = useTheme();
   const entityTableStore = useEntityTable();
 
-  const { width } = useWindowSize();
-
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
-
   const [filter, setFilter] = useState('');
 
   const types = entityTableStore.types || [];
@@ -114,7 +110,7 @@ export function TypeDialog({ inputContainerWidth }: Props) {
   };
 
   return (
-    <PopoverPrimitive.Root onOpenChange={setOpen}>
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledTrigger aria-label="type-filter-dropdown">
           {entityTableStore.selectedType?.entityName || 'No Types Found'}
@@ -135,9 +131,8 @@ export function TypeDialog({ inputContainerWidth }: Props) {
             }}
             avoidCollisions={true}
             width={inputContainerWidth}
-            sideOffset={theme.space * 2.5 + 2}
-            alignOffset={-(theme.space * 2) + 4}
-            align={width > 768 ? 'end' : 'start'}
+            sideOffset={theme.space * 2}
+            align="start"
           >
             <SearchContainer>
               <SearchIconContainer>
