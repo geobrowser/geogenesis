@@ -284,6 +284,7 @@ export class Network implements INetwork {
               id
             }
             entity {
+              id
               entityOf {
                 id
                 stringValue
@@ -306,6 +307,7 @@ export class Network implements INetwork {
           editors: Account[];
           editorControllers: Account[];
           entity?: {
+            id: string;
             entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
           };
         }[];
@@ -327,6 +329,7 @@ export class Network implements INetwork {
         admins: space.admins.map(account => account.id),
         editorControllers: space.editorControllers.map(account => account.id),
         editors: space.editors.map(account => account.id),
+        entityId: space.entity?.id || '',
         attributes,
       };
     });
