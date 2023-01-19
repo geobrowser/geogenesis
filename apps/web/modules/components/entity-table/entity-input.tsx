@@ -40,7 +40,7 @@ const InputContainer = styled.div(props => ({
 
 const TriplesInputField = styled(Input)(props => ({
   width: '100%',
-  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
+  borderRadius: props.theme.radius,
   paddingLeft: props.theme.space * 10,
 }));
 

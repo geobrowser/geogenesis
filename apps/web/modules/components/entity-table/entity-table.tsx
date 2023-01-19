@@ -33,7 +33,7 @@ const formatColumns = (columns: Column[] = []) => {
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => <Text variant="smallTitle">{column.name}</Text>,
-      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
+      size: columnSize < 300 ? 300 : columnSize,
     })
   );
 };
@@ -50,6 +50,10 @@ const SpaceHeader = styled.th<{ width: number }>(props => ({
   padding: props.theme.space * 2.5,
   textAlign: 'left',
   minWidth: props.width,
+
+  '@media (max-width: 768px)': {
+    minWidth: 300,
+  },
 }));
 
 const TableRow = styled.tr(props => ({
@@ -60,11 +64,7 @@ const TableRow = styled.tr(props => ({
 
 const Container = styled.div(props => ({
   borderRadius: props.theme.radius,
-  overflowX: 'hidden',
-
-  '@media(max-width: 1200px)': {
-    overflowX: 'scroll',
-  },
+  overflowX: 'scroll',
 }));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
