@@ -52,7 +52,6 @@ export default function EntitiesPage({
         initialTypes={initialTypes}
       >
         <EntityTableContainer
-          initialSelectedType={initialSelectedType}
           spaceId={spaceId}
           spaceName={spaceName}
           initialColumns={initialColumns}

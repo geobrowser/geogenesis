@@ -17,7 +17,7 @@ import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
-import { Cell, Column, Row, Triple } from '../../types';
+import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
@@ -118,12 +118,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  selectedType: Triple | null;
   columns: Column[];
   rows: Row[];
 }
 
-export const EntityTable = memo(function EntityTable({ rows, space, columns, selectedType }: Props) {
+export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
