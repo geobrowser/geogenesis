@@ -58,13 +58,14 @@ const TableRow = styled.tr(props => ({
   },
 }));
 
-const Container = styled.div({
+const Container = styled.div(props => ({
+  borderRadius: props.theme.radius,
   overflowX: 'hidden',
 
   '@media(max-width: 1200px)': {
     overflowX: 'scroll',
   },
-});
+}));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
