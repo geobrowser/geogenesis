@@ -8,10 +8,11 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
+import { Dialog } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { intersperse, titleCase } from '~/modules/utils';
+import { intersperse, NavUtils, titleCase } from '~/modules/utils';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
 
@@ -172,6 +173,14 @@ export function Navbar() {
       </NavigationItemsContainer>
 
       <Row>
+        <Dialog
+          onDone={result => {
+            if (!result?.nameTripleSpace) return;
+
+            router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
+          }}
+          spaceId={components?.[2]?.split('?')[0] ?? ''}
+        />
         <DiscordLink />
         <Spacer width={16} />
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
