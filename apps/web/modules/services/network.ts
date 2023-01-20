@@ -417,18 +417,18 @@ export class Network implements INetwork {
     );
 
     /* Name is the default column... */
-    const defaultColumns = [
+    const defaultColumns: Column[] = [
       {
         id: SYSTEM_IDS.NAME,
         triples: [],
       },
-    ] as Column[];
+    ];
 
     /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns = columnsTriples.triples.map((triple, i) => ({
+    const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
       triples: relatedColumnTriples[i].triples,
-    })) as Column[];
+    }));
 
     return { columns: [...defaultColumns, ...schemaColumns] };
   };
