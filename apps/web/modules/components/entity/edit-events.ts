@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { EntityValue, StringValue, Triple as TripleType } from '~/modules/types';
+import { Triple as TripleType } from '~/modules/types';
 
 export type EditEvent =
   | {
