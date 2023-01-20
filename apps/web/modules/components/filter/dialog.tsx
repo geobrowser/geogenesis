@@ -26,7 +26,7 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   padding: props.theme.space * 3,
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.dropdown,
+  boxShadow: props.theme.shadows.button,
   zIndex: 1,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
@@ -51,6 +51,8 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
   color: props.theme.colors['grey-04'],
   padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
   transition: 'colors 0.15s ease-in-out',
+  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
+  borderLeft: 'none',
 
   '&:hover': {
     cursor: 'pointer',

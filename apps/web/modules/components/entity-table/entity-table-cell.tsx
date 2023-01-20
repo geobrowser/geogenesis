@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import { Entity } from '~/modules/entity';
-import { Chip } from '../../design-system/chip';
+import { LinkableChip } from '../../design-system/chip';
 import { Cell } from '../../types';
 import { NavUtils } from '../../utils';
 import { CellContent } from '../table/cell-content';
@@ -41,7 +41,7 @@ export const EntityTableCell = ({ cell, space, isExpanded }: Props) => {
           if (value.type === 'entity') {
             return (
               <ChipCellContainer key={value.id}>
-                <Chip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</Chip>
+                <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>
               </ChipCellContainer>
             );
           } else {

@@ -8,6 +8,7 @@ import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useEntityTable } from '~/modules/entity';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
@@ -56,10 +57,9 @@ const StyledTrigger = styled.button(props => ({
 
 const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   borderRadius: props.theme.radius,
-  padding: props.theme.space * 3,
   width: `calc(${props.width}px / 2)`,
   backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.dropdown,
+  boxShadow: props.theme.shadows.button,
   zIndex: 100,
 
   border: `1px solid ${props.theme.colors['grey-02']}`,
@@ -93,6 +93,28 @@ const CancelButton = styled(Text)<CancelButtonProps>(() => ({
 
 const MotionContent = motion(StyledContent);
 
+const SearchContainer = styled.div(props => ({
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  padding: props.theme.space * 2,
+}));
+
+const SearchInput = styled(Input)(props => ({
+  paddingLeft: props.theme.space * 9,
+}));
+
+const SearchIconContainer = styled.div(props => ({
+  position: 'absolute',
+  left: props.theme.space * 5,
+  top: props.theme.space * 4.5,
+  zIndex: 10,
+}));
+
+const TypeText = styled(Text)(props => ({
+  padding: props.theme.space * 2,
+}));
+
 interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
@@ -105,8 +127,6 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const entityTableStore = useEntityTable();
   const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
-
-  const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -159,10 +179,11 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   };
 
   return (
-    <PopoverPrimitive.Root onOpenChange={setOpen}>
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <StyledTrigger aria-label="type-filter-dropdown">
-          {entityTableStore.selectedType?.entityName || 'No Types Found'} <Spacer width={8} />
+          {entityTableStore.selectedType?.entityName || 'No Types Found'}
+          <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </StyledTrigger>
       </PopoverPrimitive.Trigger>
@@ -177,11 +198,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            avoidCollisions={true}
             width={inputContainerWidth}
-            sideOffset={theme.space * 2.5 + 2}
-            alignOffset={-(theme.space * 2) + 4}
-            align={width > 768 ? 'end' : 'start'}
+            sideOffset={theme.space * 2}
+            align="start"
           >
             <AddTypeContainer>
               <Spacer height={12} />
