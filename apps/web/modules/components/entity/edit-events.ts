@@ -92,12 +92,6 @@ export type EditEvent =
       payload: {
         triple: TripleType;
       };
-    }
-  | {
-      type: 'CREATE_TYPE';
-      payload: {
-        value: string;
-      };
     };
 
 interface EditApi {
@@ -334,32 +328,6 @@ const listener =
           },
           triple
         );
-      }
-      case 'CREATE_TYPE': {
-        const { value } = event.payload;
-        const entityId = ID.createEntityId();
-        const nameTriple = Triple.withId({
-          space: context.spaceId,
-          entityId: entityId,
-          entityName: value,
-          attributeId: 'name',
-          attributeName: 'Name',
-          value: { id: SYSTEM_IDS.NAME, type: 'string', value } as StringValue,
-        });
-        const typeTriple = Triple.withId({
-          space: context.spaceId,
-          entityId: entityId,
-          entityName: value,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
-          value: {
-            id: SYSTEM_IDS.SCHEMA_TYPE,
-            type: 'entity',
-            name: 'Type',
-          } as EntityValue,
-        });
-        create(nameTriple);
-        return create(typeTriple);
       }
     }
   };

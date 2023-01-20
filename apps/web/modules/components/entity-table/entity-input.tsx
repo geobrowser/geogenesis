@@ -81,33 +81,31 @@ export function EntityInput({ spaceId }: Props) {
 
   return (
     <InputContainer ref={inputContainerRef}>
-      <EntityStoreProvider id={newId} spaceId={spaceId} initialTriples={[]} initialSchemaTriples={[]}>
-        <TypeDialog
-          inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
-          filterState={entityTableStore.filterState}
-          setFilterState={entityTableStore.setFilterState}
-          spaceId={spaceId}
-        />
+      <TypeDialog
+        inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
+        filterState={entityTableStore.filterState}
+        setFilterState={entityTableStore.setFilterState}
+        spaceId={spaceId}
+      />
 
-        <SearchInputContainer>
-          <SearchIconContainer>
-            <Search />
-          </SearchIconContainer>
-          {showBasicFilter ? (
-            <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
-          ) : (
-            <AdvancedFilters>
-              {entityTableStore.filterState.map(filter => (
-                <AdvancedFilterPill
-                  key={filter.field}
-                  filterClause={filter}
-                  onClick={() => onAdvancedFilterClick(filter.field)}
-                />
-              ))}
-            </AdvancedFilters>
-          )}
-        </SearchInputContainer>
-      </EntityStoreProvider>
+      <SearchInputContainer>
+        <SearchIconContainer>
+          <Search />
+        </SearchIconContainer>
+        {showBasicFilter ? (
+          <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
+        ) : (
+          <AdvancedFilters>
+            {entityTableStore.filterState.map(filter => (
+              <AdvancedFilterPill
+                key={filter.field}
+                filterClause={filter}
+                onClick={() => onAdvancedFilterClick(filter.field)}
+              />
+            ))}
+          </AdvancedFilters>
+        )}
+      </SearchInputContainer>
     </InputContainer>
   );
 }
