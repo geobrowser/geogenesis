@@ -71,7 +71,7 @@ export function useAutocomplete(spaceId: string) {
   const query = useSelector(autocomplete.query$);
 
   return {
-    results,
+    results: query ? results : [],
     query,
     onQueryChange: autocomplete.onQueryChange,
   };
