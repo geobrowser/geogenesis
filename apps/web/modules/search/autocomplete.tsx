@@ -61,12 +61,6 @@ export function useAutocomplete(spaceId: string) {
     return new EntityAutocomplete({ api: network, spaceId, ActionsStore });
   }, [network, spaceId, ActionsStore]);
 
-  useEffect(() => {
-    return () => {
-      autocomplete.query$.set('');
-    };
-  }, [autocomplete]);
-
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);
 
