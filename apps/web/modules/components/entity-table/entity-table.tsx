@@ -13,13 +13,14 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
+import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
 import { EditableEntityTableColumn } from './editable-entity-table-column';
 import { EntityTableCell } from './entity-table-cell';
@@ -127,6 +128,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
+  const { selectedType } = useEntityTable();
 
   const isEditMode = isEditor && editable;
 
@@ -164,6 +166,20 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               ))}
             </tr>
           ))}
+          {isEditMode && selectedType && (
+            <tr>
+              <th>
+                <EntityStoreProvider
+                  id={selectedType.entityId}
+                  spaceId={space}
+                  initialSchemaTriples={[]}
+                  initialTriples={[]}
+                >
+                  <AddNewColumn />
+                </EntityStoreProvider>
+              </th>
+            </tr>
+          )}
         </TableHead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (

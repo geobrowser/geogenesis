@@ -307,6 +307,24 @@ const listener =
         );
       }
 
+      case 'ADD_NEW_COLUMN': {
+        const { value, triple, selectedTypeId } = event.payload;
+
+        const newTriple = Triple.empty(context.spaceId, selectedTypeId);
+
+        return create({
+          ...selectedTypeId
+          space: context.spaceId,
+          entityId: selectedType,
+          entityName: triple.entityName,
+          attributeId: SYSTEM_IDS.ATTRIBUTES,
+          attributeName: 'Attributes',
+          value: {
+            value: value,
+          },
+        });
+      }
+
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
 

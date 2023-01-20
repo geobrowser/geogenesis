@@ -59,7 +59,7 @@ export const AddNewColumn = memo(function AddNewColumn({ column, space, entityId
   });
 
   return (
-    <StyledIconButton onClick={() => send()}>
+    <StyledIconButton onClick={() => send('')}>
       <Plus />
     </StyledIconButton>
   );
