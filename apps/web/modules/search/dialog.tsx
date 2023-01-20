@@ -7,6 +7,8 @@ import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from '../components/entity/autocomplete/results-list';
 import { Command } from 'cmdk';
 import { A } from '@mobily/ts-belt';
+import { motion } from 'framer-motion';
+import { ResizableContainer } from '../design-system/resizable-container';
 
 const SearchIconContainer = styled.div(props => ({
   position: 'absolute',
@@ -34,10 +36,11 @@ const SearchDialog = styled(Command.Dialog)(props => ({
   left: '33%',
   width: '100%',
   maxWidth: 434,
-  background: props.theme.colors.white,
+  backgroundColor: props.theme.colors.white,
   borderRadius: props.theme.radius,
   overflow: 'hidden',
   border: `1px solid ${props.theme.colors['grey-02']}`,
+  boxShadow: props.theme.shadows.dropdown,
 }));
 
 const ResultItem = styled(Command.Item)(props => ({
@@ -53,6 +56,8 @@ const InputContainer = styled.div<{ shouldShowBorder?: boolean }>(props => ({
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
   }),
 }));
+
+const AnimatedResultsItem = motion(ResultItem);
 
 export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
   const autocomplete = useAutocomplete(spaceId);
@@ -70,21 +75,29 @@ export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
           placeholder="Search for an entity..."
         />
       </InputContainer>
-      <ResultsList>
-        {autocomplete.isEmpty && <Command.Empty>No results found for {autocomplete.query}</Command.Empty>}
-        {autocomplete.results.map(result => (
-          <ResultItem key={result.id} onSelect={() => onDone(result)}>
-            <ResultContent
-              onClick={() => {
-                // The on-click is being handled by the ResultItem here. This is so we can
-                // have the keyboard navigation work as expected with the cmdk lib.
-              }}
-              result={result}
-              spaces={spaces}
-            />
-          </ResultItem>
-        ))}
-      </ResultsList>
+      <ResizableContainer duration={0.15}>
+        <ResultsList>
+          {autocomplete.isEmpty && <Command.Empty>No results found for {autocomplete.query}</Command.Empty>}
+          {autocomplete.results.map((result, i) => (
+            <AnimatedResultsItem
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.02 * i }}
+              key={result.id}
+              onSelect={() => onDone(result)}
+            >
+              <ResultContent
+                onClick={() => {
+                  // The on-click is being handled by the ResultItem here. This is so we can
+                  // have the keyboard navigation work as expected with the cmdk lib.
+                }}
+                result={result}
+                spaces={spaces}
+              />
+            </AnimatedResultsItem>
+          ))}
+        </ResultsList>
+      </ResizableContainer>
     </SearchDialog>
   );
 }
