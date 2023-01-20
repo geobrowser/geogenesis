@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
-import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';

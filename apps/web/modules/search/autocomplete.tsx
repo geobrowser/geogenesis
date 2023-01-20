@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
-import { Entity } from '.';
+import { Entity } from '../entity';
 import { ActionsStore, useActionsStoreContext } from '../action';
 import { Entity as EntityType } from '../types';
 
