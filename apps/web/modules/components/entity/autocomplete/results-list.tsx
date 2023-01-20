@@ -6,6 +6,7 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Spacer } from '~/modules/design-system/spacer';
 import { Tag } from '~/modules/design-system/tag';
 import { Text } from '~/modules/design-system/text';
+import { Truncate } from '~/modules/design-system/truncate';
 import { Entity, Space } from '~/modules/types';
 
 export const ResultsList = styled.ul({
@@ -117,7 +118,9 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
       {result.description && (
         <>
           <Spacer height={4} />
-          <Text variant="footnote">{result.description}</Text>
+          <Truncate maxLines={3} shouldTruncate variantLineHeight="footnote">
+            <Text variant="footnote">{result.description}</Text>
+          </Truncate>
         </>
       )}
     </ResultItem>
