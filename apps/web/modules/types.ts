@@ -46,6 +46,7 @@ export type Space = {
   editorControllers: string[];
   admins: string[];
   attributes: Dictionary<string, string>;
+  entityId: string;
 };
 
 export type Account = {
@@ -88,6 +89,7 @@ export type Entity = {
   description: string | null;
   types: string[];
   triples: Triple[];
+  nameTripleSpace?: string;
 };
 
 export interface Column {

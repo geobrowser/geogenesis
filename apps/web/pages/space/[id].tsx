@@ -75,9 +75,26 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const initialTypes = (await fetchSpaceTypeTriples(network, spaceId)) || [];
+  const [initialTypes, defaultTypeTriples] = await Promise.all([
+    fetchSpaceTypeTriples(network, spaceId),
+    network.fetchTriples({
+      query: '',
+      skip: 0,
+      first: DEFAULT_PAGE_SIZE,
+      filter: [
+        { field: 'entity-id', value: space?.entityId ?? '' },
+        {
+          field: 'attribute-id',
+          value: SYSTEM_IDS.DEFAULT_TYPE,
+        },
+      ],
+    }),
+  ]);
 
-  const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
+  const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
+
+  const initialSelectedType =
+    initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
   const typeId = initialSelectedType?.entityId;
 

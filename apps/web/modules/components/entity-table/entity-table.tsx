@@ -42,6 +42,10 @@ const SpaceHeader = styled.th<{ width: number }>(props => ({
   padding: props.theme.space * 2.5,
   textAlign: 'left',
   minWidth: props.width,
+
+  '@media (max-width: 768px)': {
+    minWidth: 300,
+  },
 }));
 
 const TableRow = styled.tr(props => ({
@@ -50,13 +54,10 @@ const TableRow = styled.tr(props => ({
   },
 }));
 
-const Container = styled.div({
-  overflowX: 'hidden',
-
-  '@media(max-width: 1200px)': {
-    overflowX: 'scroll',
-  },
-});
+const Container = styled.div(props => ({
+  borderRadius: props.theme.radius,
+  overflowX: 'scroll',
+}));
 
 const columnHelper = createColumnHelper<Row>();
 
