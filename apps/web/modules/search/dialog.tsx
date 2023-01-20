@@ -1,59 +1,19 @@
-import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
-import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from '../components/entity/autocomplete/results-list';
-import { ResizableContainer } from '../design-system/resizable-container';
-
-interface ContentProps {
-  children: React.ReactNode;
-  alignOffset?: number;
-  sideOffset?: number;
-}
-
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  display: 'flex',
-  flexDirection: 'column',
-  borderRadius: props.theme.radius,
-  backgroundColor: props.theme.colors.white,
-  zIndex: 1,
-  width: 384,
-  overflow: 'hidden',
-  height: '100%',
-
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-
-  '@media (max-width: 768px)': {
-    margin: '0 auto',
-    width: '98vw',
-  },
-}));
-
-const MotionContent = motion(StyledContent);
-
-const InputContainer = styled.div(props => ({
-  position: 'relative',
-  margin: `${props.theme.space * 2}px`,
-}));
+import { Command } from 'cmdk';
+import { A } from '@mobily/ts-belt';
 
 const SearchIconContainer = styled.div(props => ({
   position: 'absolute',
-  left: props.theme.space * 3,
-  top: props.theme.space * 2.5,
+  left: props.theme.space * 5,
+  top: props.theme.space * 4.5,
   zIndex: 100,
 }));
-
-const AddEntityButton = styled(SquareButton)({
-  width: 23,
-  height: 23,
-});
 
 const AutocompleteInput = styled(Input)(props => ({
   paddingLeft: props.theme.space * 9,
@@ -62,18 +22,75 @@ const AutocompleteInput = styled(Input)(props => ({
 interface Props {
   onDone: (result: Entity) => void;
   spaceId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function Dialog({ onDone, spaceId }: Props) {
+const SearchDialog = styled(Command.Dialog)(props => ({
+  position: 'fixed',
+  display: 'flex',
+  flexDirection: 'column',
+  top: '25%',
+  left: '33%',
+  width: '100%',
+  maxWidth: 434,
+  background: props.theme.colors.white,
+  borderRadius: props.theme.radius,
+  overflow: 'hidden',
+  border: `1px solid ${props.theme.colors['grey-02']}`,
+}));
+
+const ResultItem = styled(Command.Item)(props => ({
+  "&[aria-selected='true']": {
+    backgroundColor: props.theme.colors['grey-01'],
+  },
+}));
+
+const InputContainer = styled.div<{ shouldShowBorder?: boolean }>(props => ({
+  position: 'relative',
+  padding: props.theme.space * 2,
+  ...(props.shouldShowBorder && {
+    borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
+  }),
+}));
+
+export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
   const autocomplete = useAutocomplete(spaceId);
-  const theme = useTheme();
   const { spaces } = useSpaces();
 
-  // Using a controlled state to enable exit animations with framer-motion
-  const [open, setOpen] = useState(false);
-
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    <SearchDialog open={open} onOpenChange={onOpenChange} label="Entity search">
+      <InputContainer shouldShowBorder={A.isNotEmpty(autocomplete.results)}>
+        <SearchIconContainer>
+          <Search />
+        </SearchIconContainer>
+        <AutocompleteInput
+          value={autocomplete.query}
+          onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
+          placeholder="Search for an entity..."
+        />
+      </InputContainer>
+      <ResultsList>
+        {autocomplete.isEmpty && <Command.Empty>No results found for {autocomplete.query}</Command.Empty>}
+        {autocomplete.results.map(result => (
+          <ResultItem key={result.id} onSelect={() => onDone(result)}>
+            <ResultContent
+              onClick={() => {
+                // The on-click is being handled by the ResultItem here. This is so we can
+                // have the keyboard navigation work as expected with the cmdk lib.
+              }}
+              result={result}
+              spaces={spaces}
+            />
+          </ResultItem>
+        ))}
+      </ResultsList>
+    </SearchDialog>
+  );
+}
+
+{
+  /* <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <AddEntityButton as="span" icon="search" />
       </PopoverPrimitive.Trigger>
@@ -118,6 +135,5 @@ export function Dialog({ onDone, spaceId }: Props) {
           </MotionContent>
         ) : null}
       </AnimatePresence>
-    </PopoverPrimitive.Root>
-  );
+    </PopoverPrimitive.Root> */
 }

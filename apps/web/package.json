@@ -30,6 +30,7 @@
     "@tanstack/query-core": "4.3.8",
     "@tanstack/react-table": "^8.5.13",
     "@vercel/analytics": "^0.1.6",
+    "cmdk": "^0.1.21",
     "connectkit": "^1.1.1",
     "ethers": "^5.7.2",
     "framer-motion": "^7.5.3",

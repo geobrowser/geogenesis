@@ -9,7 +9,9 @@ import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
-
+import { useEffect, useState } from 'react';
+import { Dialog } from '~/modules/search';
+import { NavUtils } from '~/modules/utils';
 import 'modern-normalize';
 import '../styles/styles.css';
 
@@ -38,20 +40,50 @@ const Layout = styled.main(props => ({
 }));
 
 function MyApp({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+
+  // Using a controlled state to enable exit animations with framer-motion
+  const [open, setOpen] = useState(false);
+
+  // Toggle the menu when ⌘K is pressed
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === '/' && e.metaKey) {
+        setOpen(open => !open);
+      }
+    };
+
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
+
   return (
-    <Providers>
-      <Head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Geo Genesis</title>
-      </Head>
-      <Global styles={globalStyles} />
-      <Navbar />
-      <Layout>
-        <Component {...pageProps} />
-        <Analytics />
-      </Layout>
-      <GlobalFlowBar />
-    </Providers>
+    <div style={{ position: 'relative' }}>
+      <Providers>
+        <Head>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Geo Genesis</title>
+        </Head>
+        <Global styles={globalStyles} />
+        <Navbar onSearchClick={() => setOpen(true)} />
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+          onDone={result => {
+            if (!result?.nameTripleSpace) return;
+
+            router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
+            setOpen(false);
+          }}
+          spaceId=""
+        />
+        <Layout>
+          <Component {...pageProps} />
+          <Analytics />
+        </Layout>
+        <GlobalFlowBar />
+      </Providers>
+    </div>
   );
 }
 
