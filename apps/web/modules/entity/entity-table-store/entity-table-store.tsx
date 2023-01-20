@@ -1,6 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import produce from 'immer';
+import { ActionsStore } from '~/modules/action';
 import { INetwork } from '../../services/network';
 import {
   Action,
@@ -14,6 +15,7 @@ import {
 } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
+import { fromColumnsAndRows } from './Table';
 
 interface IEntityTableStore {
   actions$: Observable<Action[]>;
@@ -41,6 +43,7 @@ interface IEntityTableStoreConfig {
   initialSelectedType: Triple | null;
   initialTypes: Triple[];
   initialColumns: Column[];
+  ActionStore: ActionsStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -83,6 +86,7 @@ export class EntityTableStore implements IEntityTableStore {
     initialSelectedType,
     initialColumns,
     initialTypes,
+    ActionStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
@@ -121,14 +125,29 @@ export class EntityTableStore implements IEntityTableStore {
             skip: pageNumber * pageSize,
           };
 
-          const { rows, columns, hasNextPage } = await this.api.fetchEntityTableData({
+          const { columns: serverColumns } = await this.api.columns({
             spaceId: space,
             params,
             abortController: this.abortController,
           });
 
+          const { rows: serverRows } = await this.api.rows({
+            spaceId: space,
+            params,
+            columns: serverColumns,
+            abortController: this.abortController,
+          });
+
+          // Triple.fromAction
+          // Entity.fromTriples
+          // Row.fromEntity
+          // Row.fromActions that replaces the list of rows in place
+          // We need to do the same for columns :thinking:
+
+          const { rows, hasNextPage } = fromColumnsAndRows(space, serverRows, serverColumns);
+
           this.hydrated$.set(true);
-          return { columns, rows: rows.slice(0, pageSize), hasNextPage };
+          return { columns: serverColumns, rows: rows.slice(0, pageSize), hasNextPage };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function

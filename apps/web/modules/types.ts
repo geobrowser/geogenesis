@@ -94,7 +94,7 @@ export type Entity = {
 
 export interface Column {
   id: string;
-  name: string;
+  triples: Triple[];
 }
 
 export interface Cell {
