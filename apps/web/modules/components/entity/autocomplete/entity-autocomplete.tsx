@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
@@ -99,21 +100,23 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
               </SearchIconContainer>
               <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.target.value)} />
             </InputContainer>
-            <ResultsList>
-              {autocomplete.query.length > 0
-                ? autocomplete.results.map(result => (
-                    <ResultContent
-                      key={result.id}
-                      onClick={() => {
-                        if (!entityItemIdsSet.has(result.id)) onDone(result);
-                      }}
-                      alreadySelected={entityItemIdsSet.has(result.id)}
-                      result={result}
-                      spaces={spaces}
-                    />
-                  ))
-                : null}
-            </ResultsList>
+            <ResizableContainer duration={0.125}>
+              <ResultsList>
+                {autocomplete.query.length > 0
+                  ? autocomplete.results.map(result => (
+                      <ResultContent
+                        key={result.id}
+                        onClick={() => {
+                          if (!entityItemIdsSet.has(result.id)) onDone(result);
+                        }}
+                        alreadySelected={entityItemIdsSet.has(result.id)}
+                        result={result}
+                        spaces={spaces}
+                      />
+                    ))
+                  : null}
+              </ResultsList>
+            </ResizableContainer>
           </MotionContent>
         ) : null}
       </AnimatePresence>

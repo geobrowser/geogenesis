@@ -10,6 +10,7 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from '../components/entity/autocomplete/results-list';
+import { ResizableContainer } from '../design-system/resizable-container';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -97,21 +98,23 @@ export function Dialog({ onDone, spaceId }: Props) {
               </SearchIconContainer>
               <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.target.value)} />
             </InputContainer>
-            <ResultsList>
-              {autocomplete.query.length > 0
-                ? autocomplete.results.map(result => (
-                    <ResultContent
-                      key={result.id}
-                      onClick={() => {
-                        onDone(result);
-                        setOpen(false);
-                      }}
-                      result={result}
-                      spaces={spaces}
-                    />
-                  ))
-                : null}
-            </ResultsList>
+            <ResizableContainer duration={0.125}>
+              <ResultsList>
+                {autocomplete.query.length > 0
+                  ? autocomplete.results.map(result => (
+                      <ResultContent
+                        key={result.id}
+                        onClick={() => {
+                          onDone(result);
+                          setOpen(false);
+                        }}
+                        result={result}
+                        spaces={spaces}
+                      />
+                    ))
+                  : null}
+              </ResultsList>
+            </ResizableContainer>
           </MotionContent>
         ) : null}
       </AnimatePresence>

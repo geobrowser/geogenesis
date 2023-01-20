@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { useEffect, useRef } from 'react';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
@@ -77,19 +78,21 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
           <ResultListHeader>
             <Text variant="smallButton">Add a relation</Text>
           </ResultListHeader>
-          <ResultsList>
-            {results.map(result => (
-              <ResultContent
-                key={result.id}
-                onClick={() => {
-                  if (!itemIdsSet.has(result.id)) onDone(result);
-                }}
-                spaces={spaces}
-                alreadySelected={itemIdsSet.has(result.id)}
-                result={result}
-              />
-            ))}
-          </ResultsList>
+          <ResizableContainer duration={0.125}>
+            <ResultsList>
+              {results.map(result => (
+                <ResultContent
+                  key={result.id}
+                  onClick={() => {
+                    if (!itemIdsSet.has(result.id)) onDone(result);
+                  }}
+                  spaces={spaces}
+                  alreadySelected={itemIdsSet.has(result.id)}
+                  result={result}
+                />
+              ))}
+            </ResultsList>
+          </ResizableContainer>
         </ResultListContainer>
       )}
     </Container>
