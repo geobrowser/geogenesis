@@ -175,7 +175,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
                   initialSchemaTriples={[]}
                   initialTriples={[]}
                 >
-                  <AddNewColumn />
+                  <AddNewColumn space={space} selectedType={selectedType} />
                 </EntityStoreProvider>
               </th>
             </tr>

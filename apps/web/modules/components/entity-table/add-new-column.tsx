@@ -1,8 +1,8 @@
 import styled from '@emotion/styled';
 import { memo } from 'react';
 import { Plus } from '~/modules/design-system/icons/plus';
-import { Entity, useEntityStore } from '~/modules/entity';
-import { Column } from '~/modules/types';
+import { useEntityStore } from '~/modules/entity';
+import { Triple } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 
 const StyledIconButton = styled.button(props => ({
@@ -36,20 +36,18 @@ const StyledIconButton = styled.button(props => ({
 }));
 
 interface Props {
-  column: Column;
+  selectedType: Triple;
   space: string;
-  entityId: string;
-  hasActions: boolean;
 }
 
-export const AddNewColumn = memo(function AddNewColumn({ column, space, entityId }: Props) {
+export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: Props) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
 
   const send = useEditEvents({
     context: {
-      entityId,
+      entityId: selectedType.entityId,
       spaceId: space,
-      entityName: Entity.name(localTriples) ?? '',
+      entityName: selectedType.entityName || '',
     },
     api: {
       create,
@@ -59,7 +57,7 @@ export const AddNewColumn = memo(function AddNewColumn({ column, space, entityId
   });
 
   return (
-    <StyledIconButton onClick={() => send('')}>
+    <StyledIconButton onClick={() => send({ type: 'ADD_NEW_COLUMN' })}>
       <Plus />
     </StyledIconButton>
   );

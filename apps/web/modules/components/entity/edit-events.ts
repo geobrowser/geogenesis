@@ -66,6 +66,9 @@ export type EditEvent =
       };
     }
   | {
+      type: 'ADD_NEW_COLUMN';
+    }
+  | {
       type: 'UPDATE_VALUE';
       payload: {
         value: string;
@@ -308,21 +311,26 @@ const listener =
       }
 
       case 'ADD_NEW_COLUMN': {
-        const { value, triple, selectedTypeId } = event.payload;
-
-        const newTriple = Triple.empty(context.spaceId, selectedTypeId);
-
-        return create({
-          ...selectedTypeId
+        const newAttributeTriple = Triple.withId({
           space: context.spaceId,
-          entityId: selectedType,
-          entityName: triple.entityName,
-          attributeId: SYSTEM_IDS.ATTRIBUTES,
-          attributeName: 'Attributes',
-          value: {
-            value: value,
-          },
+          entityId: ID.createEntityId(),
+          entityName: 'New Column',
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Type',
+          value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
         });
+
+        const newTypeTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: context.entityId,
+          entityName: context.entityName,
+          attributeId: SYSTEM_IDS.ATTRIBUTES,
+          attributeName: 'Type',
+          value: { id: newAttributeTriple.entityId, type: 'entity', name: 'New Column' },
+        });
+
+        create(newAttributeTriple);
+        return create(newTypeTriple);
       }
 
       case 'UPDATE_VALUE': {

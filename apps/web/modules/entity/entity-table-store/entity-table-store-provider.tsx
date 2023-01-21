@@ -28,7 +28,7 @@ export function EntityTableStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
-  const ActionStore = useActionsStoreContext();
+  const ActionsStore = useActionsStoreContext();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -44,9 +44,9 @@ export function EntityTableStoreProvider({
       initialSelectedType,
       initialColumns,
       initialTypes,
-      ActionStore,
+      ActionsStore,
     });
-  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, ActionStore]);
+  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, ActionsStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

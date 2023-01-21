@@ -1,13 +1,10 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
-import { A, pipe } from '@mobily/ts-belt';
 import { Signer } from 'ethers';
 import produce from 'immer';
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import { ActionsStore } from '~/modules/action';
-import { Triple } from '~/modules/triple';
 import { INetwork } from '../../services/network';
 import { Action, Column, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../../types';
-import { groupBy, makeOptionalComputed } from '../../utils';
+import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { fromColumnsAndRows } from './Table';
 
@@ -161,28 +158,7 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      const spaceActions = ActionsStore.actions$.get()[space] || [];
-      const selectedType = this.selectedType$.get();
-
-      if (!selectedType) {
-        return columns;
-      }
-
-      const newColumns = pipe(
-        spaceActions,
-        A.filter(a => {
-          const isCreate =
-            a.type === 'createTriple' && a.entityId === selectedType && a.attributeId === SYSTEM_IDS.ATTRIBUTES;
-          return isCreate;
-        }),
-        actions => Triple.fromActions(actions, []),
-        triples => Triple.withLocalNames(spaceActions, triples),
-        triples => groupBy(triples, t => t.attributeId)
-      );
-
-      console.log('newColumns', newColumns);
-
-      return [...columns];
+      return columns;
     });
 
     this.rows$ = computed(() => {
