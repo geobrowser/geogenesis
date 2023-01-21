@@ -1,8 +1,7 @@
 import styled from '@emotion/styled';
 import { memo } from 'react';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Triple } from '~/modules/triple';
-import { Column, StringValue } from '~/modules/types';
+import { Column } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 import { StringField } from '../entity/editable-fields';
 
@@ -43,16 +42,16 @@ export const EditableEntityTableColumn = memo(function EditableEntityTableColumn
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && !hasActions ? column.triples : localTriples;
-  const nameTriple = Entity.nameTriple(triples) || Triple.empty(space, entityId);
-  const { value } = nameTriple.value as StringValue;
+  const name = Entity.name(triples) ?? '';
+  const nameTriple = Entity.nameTriple(triples);
 
   return (
     <Entities>
       <StringField
         variant="body"
         placeholder="Column name..."
-        onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple: nameTriple, value: e.target.value } })}
-        value={value}
+        onChange={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}
+        value={name}
       />
     </Entities>
   );
