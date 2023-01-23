@@ -97,14 +97,6 @@ export class MockNetwork implements INetwork {
     return [];
   };
 
-  columns = async () => {
-    return { columns: [] };
-  };
-
-  rows = async () => {
-    return { rows: [] };
-  };
-
   publish = async () => {
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     await new Promise(() => {});

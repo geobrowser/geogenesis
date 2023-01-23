@@ -2,8 +2,8 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
-import { Entity, InitialEntityTableStoreParams } from '../entity';
-import { DEFAULT_PAGE_SIZE } from '../triple';
+import { DEFAULT_PAGE_SIZE as DEFAULT_PAGE_SIZE_ENTITY_TABLE, Entity, InitialEntityTableStoreParams } from '../entity';
+import { DEFAULT_PAGE_SIZE, Triple } from '../triple';
 import {
   Account,
   Action,
@@ -12,9 +12,11 @@ import {
   FilterField,
   FilterState,
   ReviewState,
+  Row,
   Space,
   Triple as TripleType,
 } from '../types';
+import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
 
@@ -47,39 +49,22 @@ export type PublishOptions = {
 
 type FetchTriplesResult = { triples: TripleType[] };
 
-interface FetchColumnsOptions {
+interface FetchEntityTableDataParams {
   spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
     first: number;
   };
   abortController?: AbortController;
-}
-
-interface FetchColumnsResult {
-  columns: Column[];
-}
-
-interface FetchRowsOptions {
-  spaceId: string;
-  params: InitialEntityTableStoreParams & {
-    skip: number;
-    first: number;
-  };
-  columns: Column[];
-  abortController?: AbortController;
-}
-
-interface FetchRowsResult {
-  rows: TripleType[][];
 }
 
 export interface INetwork {
+  fetchEntityTableData: (
+    options: FetchEntityTableDataParams
+  ) => Promise<{ rows: Row[]; columns: Column[]; hasNextPage: boolean }>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
-  columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
-  rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
 }
 
@@ -352,24 +337,61 @@ export class Network implements INetwork {
     return spaces;
   };
 
-  rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
+  fetchEntityTableData = async ({ spaceId, params, abortController }: FetchEntityTableDataParams) => {
+    /* TODO: Explore moving this method into another layer of the codebase responsible for both data querying and transformation  */
+
     if (!params.typeId) {
-      return { rows: [] };
+      return { columns: [], rows: [], hasNextPage: false };
     }
 
     /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
     /* To get our rows, first we get all of the entity IDs of the selected type */
-    const rowEntities = await this.fetchTriples({
-      query: params.query,
-      space: spaceId,
-      abortController,
-      first: params.first,
-      skip: params.skip,
-      filter: [
-        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-        { field: 'linked-to', value: params.typeId },
-      ],
-    });
+    const [columnsTriples, rowEntities] = await Promise.all([
+      await this.fetchTriples({
+        query: '',
+        space: spaceId,
+        abortController,
+        first: DEFAULT_PAGE_SIZE,
+        skip: 0,
+        filter: [
+          { field: 'entity-id', value: params.typeId },
+          { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
+        ],
+      }),
+      await this.fetchTriples({
+        query: params.query,
+        space: spaceId,
+        abortController,
+        first: params.first,
+        skip: params.skip,
+        filter: [
+          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+          { field: 'linked-to', value: params.typeId },
+        ],
+      }),
+    ]);
+
+    /* Then we fetch all of the Value type for each column */
+    const columnsSchema = await Promise.all(
+      columnsTriples.triples.map(triple => {
+        return this.fetchTriples({
+          query: '',
+          space: spaceId,
+          first: DEFAULT_PAGE_SIZE,
+          skip: 0,
+          filter: [
+            {
+              field: 'entity-id',
+              value: triple.value.id,
+            },
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.VALUE_TYPE,
+            },
+          ],
+        });
+      })
+    );
 
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
@@ -385,60 +407,61 @@ export class Network implements INetwork {
         })
       )
     );
-
-    return { rows: rowTriples.map(r => r.triples) };
-  };
-
-  columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
-    if (!params.typeId) {
-      return { columns: [] };
-    }
-
-    const columnsTriples = await this.fetchTriples({
-      query: '',
-      space: spaceId,
-      abortController,
-      first: DEFAULT_PAGE_SIZE,
-      skip: 0,
-      filter: [
-        { field: 'entity-id', value: params.typeId },
-        { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
-      ],
-    });
-
-    /* Then we fetch all of the associated triples for each column */
-    const relatedColumnTriples = await Promise.all(
-      columnsTriples.triples.map(triple => {
-        return this.fetchTriples({
-          query: '',
-          space: spaceId,
-          first: DEFAULT_PAGE_SIZE,
-          skip: 0,
-          filter: [
-            {
-              field: 'entity-id',
-              value: triple.value.id,
-            },
-          ],
-        });
-      })
-    );
+    const rowTriplesWithEntityIds = rowTriples.map(({ triples }, index) => ({
+      entityId: rowEntityIds[index],
+      triples,
+    }));
 
     /* Name is the default column... */
-    const defaultColumns: Column[] = [
+    const defaultColumns = [
       {
+        name: 'Name',
         id: SYSTEM_IDS.NAME,
-        triples: [],
       },
     ];
 
     /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
+    const schemaColumns = columnsTriples.triples.map(triple => ({
+      name: Value.nameOfEntityValue(triple) || triple.value.id,
       id: triple.value.id,
-      triples: relatedColumnTriples[i].triples,
-    }));
+    })) as Column[];
 
-    return { columns: [...defaultColumns, ...schemaColumns] };
+    const columns = [...defaultColumns, ...schemaColumns];
+
+    /* Finally, we can build our initialRows */
+    const rows = rowTriplesWithEntityIds.map(({ triples, entityId }) => {
+      return columns.reduce((acc, column) => {
+        const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
+
+        /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
+        const columnTypeTriple = columnsSchema.find(({ triples }) => triples[0]?.entityId === column.id);
+        const columnValueType = columnTypeTriple?.triples[0].value.id;
+
+        const defaultTriple = {
+          ...Triple.emptyPlaceholder(spaceId, entityId, columnValueType),
+          attributeId: column.id,
+        };
+
+        const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
+
+        const cell = {
+          columnId: column.id,
+          entityId,
+          triples: cellTriples,
+        };
+
+        return {
+          ...acc,
+          [column.id]: cell,
+        };
+      }, {} as Row);
+    });
+
+    return {
+      columns,
+      rows,
+      hasNextPage: rowEntityIds.length > DEFAULT_PAGE_SIZE_ENTITY_TABLE,
+    };
   };
 }
 

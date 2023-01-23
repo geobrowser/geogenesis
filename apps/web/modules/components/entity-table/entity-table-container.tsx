@@ -27,6 +27,7 @@ const Container = styled.div(props => ({
 
 export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
+
   return (
     <PageContainer>
       <Spacer height={20} />

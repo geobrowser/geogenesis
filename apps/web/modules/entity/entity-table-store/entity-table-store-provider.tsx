@@ -1,7 +1,6 @@
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { useActionsStoreContext } from '~/modules/action';
 import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, FilterState, Row, Triple } from '../../types';
@@ -28,7 +27,6 @@ export function EntityTableStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
-  const ActionStore = useActionsStoreContext();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -44,9 +42,8 @@ export function EntityTableStoreProvider({
       initialSelectedType,
       initialColumns,
       initialTypes,
-      ActionStore,
     });
-  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes, ActionStore]);
+  }, [network, space, initialRows, initialSelectedType, initialColumns, initialTypes]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);
@@ -75,7 +72,7 @@ export function useEntityTableStore() {
   const value = useContext(EntityTableStoreContext);
 
   if (!value) {
-    throw new Error(`Missing EntityTableStoreProvider`);
+    throw new Error(`Missing TripleStoreProvider`);
   }
 
   return value;
