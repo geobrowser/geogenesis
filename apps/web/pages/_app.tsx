@@ -39,6 +39,10 @@ const Layout = styled.main(props => ({
   },
 }));
 
+const Relative = styled.div({
+  position: 'relative',
+});
+
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
 
@@ -64,7 +68,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   }, []);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <Relative>
       <Providers>
         <Head>
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -89,7 +93,7 @@ function MyApp({ Component, pageProps }: AppProps) {
         </Layout>
         <GlobalFlowBar />
       </Providers>
-    </div>
+    </Relative>
   );
 }
 
