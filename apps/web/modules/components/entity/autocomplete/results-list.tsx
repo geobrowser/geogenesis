@@ -27,6 +27,7 @@ export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => (
   all: 'unset',
   display: 'flex',
   flexDirection: 'column',
+  width: '100%',
   padding: `${props.theme.space * 2}px`,
 
   '&:hover': {
