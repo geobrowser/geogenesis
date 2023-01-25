@@ -60,7 +60,7 @@ function MyApp({ Component, pageProps }: AppProps) {
       // Toggle edit mode when ⌘ + e is pressed
       {
         key: 'e',
-        callback: () => setEditable(editable ? false : true),
+        callback: () => setEditable(!editable),
       },
     ],
     [editable, open]
