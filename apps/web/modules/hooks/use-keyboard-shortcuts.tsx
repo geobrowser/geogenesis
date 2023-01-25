@@ -12,7 +12,6 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[], deps: any[]) {
     const down = (e: KeyboardEvent) => {
       // MacOS
       if (e.metaKey && shortcutMap.has(e.key)) {
-        console.log(e.key);
         shortcutMap.get(e.key)?.();
       }
 
