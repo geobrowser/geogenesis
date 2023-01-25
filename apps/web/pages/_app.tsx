@@ -14,6 +14,8 @@ import { Dialog } from '~/modules/search';
 import { NavUtils } from '~/modules/utils';
 import 'modern-normalize';
 import '../styles/styles.css';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { useEditable } from '~/modules/stores/use-editable';
 
 const globalStyles = css`
   html {
@@ -45,27 +47,24 @@ const Relative = styled.div({
 
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
-
-  // Using a controlled state to enable exit animations with framer-motion
+  const { setEditable, editable } = useEditable();
   const [open, setOpen] = useState(false);
 
-  // Toggle the menu when ⌘ + / is pressed
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      // MacOS
-      if (e.key === '/' && e.metaKey) {
-        setOpen(open => !open);
-      }
-
-      // Windows
-      if (e.key === '/' && e.ctrlKey) {
-        setOpen(open => !open);
-      }
-    };
-
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, []);
+  useKeyboardShortcuts(
+    [
+      // Toggle the menu when ⌘ + / is pressed
+      {
+        key: '/',
+        callback: () => setOpen(open => !open),
+      },
+      // Toggle edit mode when ⌘ + e is pressed
+      {
+        key: 'e',
+        callback: () => setEditable(editable ? false : true),
+      },
+    ],
+    [editable, open]
+  );
 
   return (
     <Relative>
