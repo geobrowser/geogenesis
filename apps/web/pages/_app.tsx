@@ -14,10 +14,10 @@ import { Dialog } from '~/modules/search';
 import { NavUtils } from '~/modules/utils';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useEditable } from '~/modules/stores/use-editable';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 
 import 'modern-normalize';
 import '../styles/styles.css';
-import { useAccessControl } from '~/modules/auth/use-access-control';
 
 const globalStyles = css`
   html {
