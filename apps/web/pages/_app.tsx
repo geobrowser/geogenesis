@@ -45,10 +45,16 @@ function MyApp({ Component, pageProps }: AppProps) {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  // Toggle the menu when ⌘K is pressed
+  // Toggle the menu when ⌘ + / is pressed
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      // MacOS
       if (e.key === '/' && e.metaKey) {
+        setOpen(open => !open);
+      }
+
+      // Windows
+      if (e.key === '/' && e.ctrlKey) {
         setOpen(open => !open);
       }
     };
