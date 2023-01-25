@@ -40,7 +40,7 @@ export const SpaceActions = ({ spaceId }: Props) => {
     <Actions>
       {(isEditor || isAdmin) && editable && (
         <NavbarContainer>
-          {isEditorController && (
+          {(isEditorController || isAdmin) && (
             <Link href={`/space/${spaceId}/access-control`}>
               <Button variant="secondary">Devvy Admin</Button>
             </Link>
