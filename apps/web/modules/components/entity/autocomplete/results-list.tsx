@@ -1,11 +1,13 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Command } from 'cmdk';
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Tag } from '~/modules/design-system/tag';
 import { Text } from '~/modules/design-system/text';
+import { Truncate } from '~/modules/design-system/truncate';
 import { Entity, Space } from '~/modules/types';
 
 export const ResultsList = styled.ul({
@@ -17,6 +19,7 @@ export const ResultsList = styled.ul({
   padding: 0,
 
   maxHeight: 340,
+  overflowX: 'hidden',
   overflowY: 'auto',
 });
 
@@ -24,6 +27,7 @@ export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => (
   all: 'unset',
   display: 'flex',
   flexDirection: 'column',
+  width: '100%',
   padding: `${props.theme.space * 2}px`,
 
   '&:hover': {
@@ -42,6 +46,10 @@ export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => (
     backgroundColor: props.theme.colors['grey-01'],
     cursor: 'not-allowed',
   }),
+
+  "&[aria-selected='true']": {
+    backgroundColor: props.theme.colors['grey-02'],
+  },
 }));
 
 const ResultText = styled(Text)(props => ({
@@ -117,7 +125,9 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
       {result.description && (
         <>
           <Spacer height={4} />
-          <Text variant="footnote">{result.description}</Text>
+          <Truncate maxLines={3} shouldTruncate variantLineHeight="footnote">
+            <Text variant="footnote">{result.description}</Text>
+          </Truncate>
         </>
       )}
     </ResultItem>
