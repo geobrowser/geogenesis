@@ -102,19 +102,17 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
             </InputContainer>
             <ResizableContainer duration={0.125}>
               <ResultsList>
-                {autocomplete.query.length > 0
-                  ? autocomplete.results.map(result => (
-                      <ResultContent
-                        key={result.id}
-                        onClick={() => {
-                          if (!entityItemIdsSet.has(result.id)) onDone(result);
-                        }}
-                        alreadySelected={entityItemIdsSet.has(result.id)}
-                        result={result}
-                        spaces={spaces}
-                      />
-                    ))
-                  : null}
+                {autocomplete.results.map(result => (
+                  <ResultContent
+                    key={result.id}
+                    onClick={() => {
+                      if (!entityItemIdsSet.has(result.id)) onDone(result);
+                    }}
+                    alreadySelected={entityItemIdsSet.has(result.id)}
+                    result={result}
+                    spaces={spaces}
+                  />
+                ))}
               </ResultsList>
             </ResizableContainer>
           </MotionContent>
