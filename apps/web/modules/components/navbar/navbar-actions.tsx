@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import React, { useState } from 'react';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Edit } from '~/modules/design-system/icons/edit';
 import { Eye } from '~/modules/design-system/icons/eye';
@@ -19,6 +18,7 @@ const LabelRow = styled.div<{ color: ColorOption }>(props => ({
 }));
 
 type DropdownOptionValue = 'browse-mode' | 'edit-mode' | 'connect-wallet';
+
 type DropdownOption = {
   label: React.ReactNode;
   sublabel?: string;
@@ -41,12 +41,11 @@ export function NavbarActions({ spaceId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { address } = useAccount();
   const { setEditable, editable } = useEditable();
-  const [value, setValue] = useState<DropdownOptionValue>('browse-mode');
 
   const options: DropdownOption[] = [
     {
       label: (
-        <LabelRow color={value === 'browse-mode' ? 'text' : 'grey-04'}>
+        <LabelRow color={!editable ? 'text' : 'grey-04'}>
           <Eye />
           <Spacer width={8} />
           Browse mode
@@ -56,12 +55,11 @@ export function NavbarActions({ spaceId }: Props) {
       disabled: false,
       onClick: () => {
         setEditable(false);
-        setValue('browse-mode');
       },
     },
     {
       label: (
-        <LabelRow color={value === 'edit-mode' ? 'text' : 'grey-04'}>
+        <LabelRow color={editable ? 'text' : 'grey-04'}>
           <Edit />
           <Spacer width={8} />
           Edit mode
@@ -72,7 +70,6 @@ export function NavbarActions({ spaceId }: Props) {
       disabled: !isEditor,
       onClick: () => {
         if (isEditor) setEditable(true);
-        setValue('edit-mode');
       },
     },
     {
