@@ -9,13 +9,15 @@ import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { Providers } from '~/modules/providers';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Dialog } from '~/modules/search';
 import { NavUtils } from '~/modules/utils';
-import 'modern-normalize';
-import '../styles/styles.css';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useEditable } from '~/modules/stores/use-editable';
+
+import 'modern-normalize';
+import '../styles/styles.css';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 
 const globalStyles = css`
   html {
@@ -45,9 +47,26 @@ const Relative = styled.div({
   position: 'relative',
 });
 
-function MyApp({ Component, pageProps }: AppProps) {
+function Root(props: AppProps) {
+  return (
+    <Relative>
+      <Providers>
+        <Head>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Geo Genesis</title>
+        </Head>
+        <Global styles={globalStyles} />
+        <App {...props} />
+      </Providers>
+    </Relative>
+  );
+}
+
+function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  const { id: spaceId } = router.query as { id: string | undefined };
   const { setEditable, editable } = useEditable();
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
 
   useKeyboardShortcuts(
@@ -60,39 +79,34 @@ function MyApp({ Component, pageProps }: AppProps) {
       // Toggle edit mode when ⌘ + e is pressed
       {
         key: 'e',
-        callback: () => setEditable(!editable),
+        callback: () => {
+          if (isEditor || isAdmin || isEditorController) setEditable(!editable);
+        },
       },
     ],
-    [editable, open]
+    [editable, open, isEditor]
   );
 
   return (
-    <Relative>
-      <Providers>
-        <Head>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Geo Genesis</title>
-        </Head>
-        <Global styles={globalStyles} />
-        <Navbar onSearchClick={() => setOpen(true)} />
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
-          onDone={result => {
-            if (!result?.nameTripleSpace) return;
+    <>
+      <Navbar onSearchClick={() => setOpen(true)} />
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        onDone={result => {
+          if (!result?.nameTripleSpace) return;
 
-            router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
-            setOpen(false);
-          }}
-          spaceId=""
-        />
-        <Layout>
-          <Component {...pageProps} />
-          <Analytics />
-        </Layout>
-        <GlobalFlowBar />
-      </Providers>
-    </Relative>
+          router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
+          setOpen(false);
+        }}
+        spaceId=""
+      />
+      <Layout>
+        <Component {...pageProps} />
+        <Analytics />
+      </Layout>
+      <GlobalFlowBar spaceId={spaceId ?? ''} />
+    </>
   );
 }
 
@@ -103,9 +117,7 @@ const FlowbarContainer = styled.div({
   alignItems: 'center',
 });
 
-function GlobalFlowBar() {
-  const router = useRouter();
-  const { id: spaceId } = router.query as { id: string | undefined };
+function GlobalFlowBar({ spaceId }: { spaceId: string }) {
   const { actions, publish, clear } = useActionsStore(spaceId);
 
   return (
@@ -115,4 +127,4 @@ function GlobalFlowBar() {
   );
 }
 
-export default MyApp;
+export default Root;

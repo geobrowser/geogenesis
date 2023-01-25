@@ -38,7 +38,7 @@ export const SpaceActions = ({ spaceId }: Props) => {
 
   return (
     <Actions>
-      {(isEditor || isAdmin) && editable && (
+      {(isEditor || isAdmin || isEditorController) && editable && (
         <NavbarContainer>
           {(isEditorController || isAdmin) && (
             <Link href={`/space/${spaceId}/access-control`}>
