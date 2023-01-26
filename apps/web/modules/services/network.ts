@@ -74,7 +74,7 @@ interface FetchRowsOptions {
 }
 
 interface FetchRowsResult {
-  rows: TripleType[][];
+  rows: TripleType[];
 }
 
 export interface INetwork {
@@ -381,7 +381,7 @@ export class Network implements INetwork {
       )
     );
 
-    return { rows: rowTriples.map(r => r.triples) };
+    return { rows: rowTriples.flatMap(r => r.triples) };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {

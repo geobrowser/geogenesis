@@ -2,17 +2,10 @@ import { computed, observable, Observable, ObservableComputed } from '@legendapp
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { ActionsStore } from '~/modules/action';
+import { Triple } from '~/modules/triple';
+import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import {
-  Action,
-  Column,
-  CreateTripleAction,
-  FilterState,
-  ReviewState,
-  Row,
-  Triple,
-  Triple as TripleType,
-} from '../../types';
+import { Action, Column, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { fromColumnsAndRows } from './Table';
@@ -22,7 +15,7 @@ interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
-  selectedType$: Observable<Triple | null>;
+  selectedType$: Observable<TripleType | null>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -40,8 +33,8 @@ interface IEntityTableStoreConfig {
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
+  initialSelectedType: TripleType | null;
+  initialTypes: TripleType[];
   initialColumns: Column[];
   ActionStore: ActionsStore;
 }
@@ -70,7 +63,7 @@ export class EntityTableStore implements IEntityTableStore {
   columns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
-  selectedType$: Observable<Triple | null>;
+  selectedType$: Observable<TripleType | null>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
   filterState$: Observable<FilterState>;
@@ -139,13 +132,27 @@ export class EntityTableStore implements IEntityTableStore {
             abortController: this.abortController,
           });
 
-          // Triple.fromAction
-          // Entity.fromTriples
-          // Row.fromEntity
-          // Row.fromActions that replaces the list of rows in place
           // We need to do the same for columns :thinking:
+          // TODO: Merge local triples and server triples
+          const spaceTriples = ActionStore.actions$.get()[space];
+          const localEntities = Entity.mergeActionsWithEntities(
+            ActionStore.actions$.get(),
+            Entity.entitiesFromTriples(serverRows)
+          );
 
-          const { rows, hasNextPage } = fromColumnsAndRows(space, serverRows, serverColumns, columnsSchema);
+          const localEntitiesIds = new Set(localEntities.map(e => e.id));
+
+          // const localEntities = Entity.entitiesFromTriples(localTriples);
+
+          // console.log('localEntities', localEntities);
+          // console.log('serverRows', serverRows);
+
+          const { rows, hasNextPage } = EntityTable.fromColumnsAndRows(
+            space,
+            [...localEntities.flatMap(e => e.triples), ...serverRows.filter(sr => !localEntitiesIds.has(sr.id))],
+            serverColumns,
+            columnsSchema
+          );
 
           this.hydrated$.set(true);
           return { columns: serverColumns, rows: rows.slice(0, pageSize), hasNextPage };
@@ -207,7 +214,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.pageNumber$.set(pageNumber);
   };
 
-  setType = (type: Triple) => {
+  setType = (type: TripleType) => {
     this.selectedType$.set(type);
   };
 

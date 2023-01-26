@@ -4,11 +4,11 @@ import { DEFAULT_PAGE_SIZE, Entity } from '..';
 
 export function fromColumnsAndRows(
   spaceId: string,
-  rows: TripleType[][],
+  rows: TripleType[],
   columns: Column[],
   columnsSchema: TripleType[][]
 ) {
-  const rowTriplesWithEntityIds = Entity.entitiesFromTriples(rows.flatMap(r => r));
+  const rowTriplesWithEntityIds = Entity.entitiesFromTriples(rows);
 
   /* Finally, we can build our initialRows */
   const aggregatedRows = rowTriplesWithEntityIds.map(({ triples, id }) => {
