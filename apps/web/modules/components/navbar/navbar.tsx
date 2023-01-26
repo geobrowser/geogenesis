@@ -1,19 +1,21 @@
 import styled from '@emotion/styled';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useSpaces } from '~/modules/spaces/use-spaces';
-import { intersperse, titleCase } from '~/modules/utils';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { Breadcrumb } from '~/modules/design-system/breadcrumb';
+import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
+import { IconButton } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
+import { Dialog } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { NavbarActions } from './navbar-actions';
+import { intersperse, NavUtils, titleCase } from '~/modules/utils';
 import { ExternalLink } from '../external-link';
+import { NavbarActions } from './navbar-actions';
 
 const Header = styled.header(({ theme }) => ({
   width: '100%',
@@ -123,7 +125,11 @@ function getComponentRoute({
   return { path, title: titleCase(component), img: '/spaces.png' };
 }
 
-export function Navbar() {
+interface Props {
+  onSearchClick: () => void;
+}
+
+export function Navbar({ onSearchClick }: Props) {
   const router = useRouter();
   const asPath = router.asPath;
   const components = asPath.split('/');
@@ -148,7 +154,7 @@ export function Navbar() {
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <Breadcrumb
+                <LinkableBreadcrumb
                   isNested={index < components.length - 1}
                   shouldTruncate={index === 3}
                   key={index}
@@ -156,7 +162,7 @@ export function Navbar() {
                   img={img}
                 >
                   {title}
-                </Breadcrumb>
+                </LinkableBreadcrumb>
               );
             }),
             ({ index }) => {
@@ -172,6 +178,8 @@ export function Navbar() {
       </NavigationItemsContainer>
 
       <Row>
+        <IconButton onClick={onSearchClick} icon="search" />
+        <Spacer width={16} />
         <DiscordLink />
         <Spacer width={16} />
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />

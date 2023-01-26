@@ -186,6 +186,9 @@ export class Network implements INetwork {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
+
+    const spaces = await this.fetchSpaces();
+
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -263,11 +266,13 @@ export class Network implements INetwork {
 
     const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
       const triples = fromNetworkTriples(result.entityOf);
+      const nameTriple = Entity.nameTriple(triples);
 
       return {
         id: result.id,
         name: result.name,
         description: Entity.description(triples),
+        nameTripleSpace: nameTriple?.space,
         types: Entity.types(triples, space),
         triples,
       };
@@ -297,6 +302,7 @@ export class Network implements INetwork {
               id
             }
             entity {
+              id
               entityOf {
                 id
                 stringValue
@@ -319,6 +325,7 @@ export class Network implements INetwork {
           editors: Account[];
           editorControllers: Account[];
           entity?: {
+            id: string;
             entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
           };
         }[];
@@ -340,6 +347,7 @@ export class Network implements INetwork {
         admins: space.admins.map(account => account.id),
         editorControllers: space.editorControllers.map(account => account.id),
         editors: space.editors.map(account => account.id),
+        entityId: space.entity?.id || '',
         attributes,
       };
     });

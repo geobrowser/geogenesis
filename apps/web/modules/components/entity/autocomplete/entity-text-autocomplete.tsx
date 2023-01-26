@@ -1,7 +1,10 @@
 import styled from '@emotion/styled';
+import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Text } from '~/modules/design-system/text';
-import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { useAutocomplete } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 
@@ -36,7 +39,7 @@ const ResultListContainer = styled.div(props => ({
   backgroundColor: props.theme.colors.white,
   zIndex: 1,
   width: 384,
-  height: 340,
+  maxHeight: 340,
   overflow: 'hidden',
   boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
 }));
@@ -44,6 +47,8 @@ const ResultListContainer = styled.div(props => ({
 const ResultListHeader = styled.p(props => ({
   padding: props.theme.space * 2.5,
 }));
+
+const AnimatedResultsItem = styled.div({});
 
 interface Props {
   placeholder?: string;
@@ -56,6 +61,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
   const { query, results, onQueryChange } = useAutocomplete(spaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
+  const { spaces } = useSpaces();
 
   useEffect(() => {
     document.addEventListener('click', e => {
@@ -75,19 +81,29 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
           <ResultListHeader>
             <Text variant="smallButton">Add a relation</Text>
           </ResultListHeader>
-          <ResultsList>
-            {results.map(result => (
-              <ResultContent
-                key={result.id}
-                onClick={() => {
-                  if (!itemIdsSet.has(result.id)) onDone(result);
-                }}
-                alreadySelected={itemIdsSet.has(result.id)}
-                results={results}
-                result={result}
-              />
-            ))}
-          </ResultsList>
+          <ResizableContainer duration={0.125}>
+            <ResultsList>
+              {results.map((result, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={result.id}
+                  onSelect={() => onDone(result)}
+                >
+                  <ResultContent
+                    key={result.id}
+                    onClick={() => {
+                      if (!itemIdsSet.has(result.id)) onDone(result);
+                    }}
+                    spaces={spaces}
+                    alreadySelected={itemIdsSet.has(result.id)}
+                    result={result}
+                  />
+                </motion.div>
+              ))}
+            </ResultsList>
+          </ResizableContainer>
         </ResultListContainer>
       )}
     </Container>

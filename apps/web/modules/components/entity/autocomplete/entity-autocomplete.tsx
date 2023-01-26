@@ -6,7 +6,9 @@ import React, { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
-import { useAutocomplete } from '~/modules/entity/autocomplete';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { useAutocomplete } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 
@@ -67,6 +69,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
   const autocomplete = useAutocomplete(spaceId);
   const theme = useTheme();
   const entityItemIdsSet = new Set(entityValueIds);
+  const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -97,9 +100,16 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
               </SearchIconContainer>
               <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.target.value)} />
             </InputContainer>
-            <ResultsList>
-              {autocomplete.query.length > 0
-                ? autocomplete.results.map(result => (
+            <ResizableContainer duration={0.125}>
+              <ResultsList>
+                {autocomplete.results.map((result, i) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
+                    key={result.id}
+                    onSelect={() => onDone(result)}
+                  >
                     <ResultContent
                       key={result.id}
                       onClick={() => {
@@ -107,11 +117,12 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
                       }}
                       alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
-                      results={autocomplete.results}
+                      spaces={spaces}
                     />
-                  ))
-                : null}
-            </ResultsList>
+                  </motion.div>
+                ))}
+              </ResultsList>
+            </ResizableContainer>
           </MotionContent>
         ) : null}
       </AnimatePresence>

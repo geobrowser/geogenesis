@@ -23,9 +23,7 @@ const StyledChip = styled.a(props => ({
   },
 }));
 
-{
-  /* Wrapper to prevent the icon from being scaled by flexbox */
-}
+/* Wrapper to prevent the icon from being scaled by flexbox */
 const StyledCheckCloseContainer = styled.button({
   all: 'unset',
   cursor: 'pointer',
@@ -63,12 +61,12 @@ const StyledDeletableChip = styled.a<{ isWarning: boolean }>(props => {
   };
 });
 
-interface Props {
+interface LinkableChipProps {
   href: string;
   children: React.ReactNode;
 }
 
-export function Chip({ href, children }: Props) {
+export function LinkableChip({ href, children }: LinkableChipProps) {
   return (
     <Link href={href} passHref>
       <StyledChip>{children}</StyledChip>

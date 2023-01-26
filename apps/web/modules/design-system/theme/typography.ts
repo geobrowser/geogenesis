@@ -91,6 +91,12 @@ const baseTypography = {
       lineHeight: '0.75rem',
       fontWeight: WEIGHTS.medium,
     },
+    tag: {
+      color: colors.light.text,
+      fontSize: '0.6875rem',
+      lineHeight: '0.8125rem',
+      fontWeight: WEIGHTS.medium,
+    },
     input: {
       color: colors.light.text,
       fontSize: '1.0625rem',
