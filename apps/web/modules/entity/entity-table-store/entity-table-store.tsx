@@ -1,15 +1,12 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import { Signer } from 'ethers';
 import produce from 'immer';
 import { ActionsStore } from '~/modules/action';
-import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import { Action, Column, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../../types';
+import { Column, FilterState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
-import { fromColumnsAndRows } from './Table';
 
 interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
