@@ -37,14 +37,16 @@ export function descriptionTriple(triples: TripleType[]): TripleType | undefined
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: TripleType[], currentSpace: string): string[] {
+export function types(triples: TripleType[], currentSpace: string): { id: string; name: string | null }[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
   return Object.entries(groupedTypeTriples)
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
-        return triples.flatMap(triple => (triple.value.type === 'entity' ? triple.value.name : []));
+        return triples.flatMap(triple =>
+          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
+        );
       }
 
       // There are some system level Entities that have Triples from multiple Spaces. We only
@@ -53,7 +55,7 @@ export function types(triples: TripleType[], currentSpace: string): string[] {
       if (triples.length > 1) {
         return triples
           .filter(triple => triple.space === currentSpace)
-          .flatMap(triple => (triple.value.type === 'entity' ? triple.value.name : []));
+          .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
       }
 
       return [];

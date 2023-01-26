@@ -114,7 +114,7 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
             {result.types.length > 0 && (
               <TagsContainer>
                 {result.types.map(type => (
-                  <Tag key={type}>{type}</Tag>
+                  <Tag key={type.id}>{type.name}</Tag>
                 ))}
               </TagsContainer>
             )}

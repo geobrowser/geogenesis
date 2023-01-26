@@ -130,11 +130,14 @@ export class EntityTableStore implements IEntityTableStore {
           const localEntities = pipe(
             ActionStore.actions$.get(),
             actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverRows)),
+            A.tap(e => console.log('mergedEntities', e)),
 
             // HACK: This doesn't work reliably since the entity name might not be unique. We need to use
             // the type id here, but right now that breaks entity editing if you are editing the type field.
-            A.filter(e => e.types.some(t => t === this.selectedType$.get()?.entityName))
+            A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId))
           );
+
+          console.log('localEntities', localEntities);
 
           const localEntitiesIds = new Set(localEntities.map(e => e.id));
 
