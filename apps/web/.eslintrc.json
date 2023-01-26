@@ -17,6 +17,7 @@
       "files": ["*.ts", "*.tsx"]
     }
   ],
+  "ignorePatterns": ["node_modules/**/*", ".next/**/*", ".turbo/**/*", ".cache/**/*"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": "latest",
@@ -30,5 +31,10 @@
     "@typescript-eslint/no-non-null-assertion": 0,
     "@next/next/no-img-element": 0,
     "react/react-in-jsx-scope": 0
+  },
+  "settings": {
+    "react": {
+      "version": "detect" // Tells eslint-plugin-react to automatically detect the version of React to use
+    }
   }
 }
