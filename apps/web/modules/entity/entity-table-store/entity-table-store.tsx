@@ -1,4 +1,5 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { A, pipe } from '@mobily/ts-belt';
 import { Signer } from 'ethers';
 import produce from 'immer';
 import { ActionsStore } from '~/modules/action';
@@ -11,7 +12,6 @@ import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { fromColumnsAndRows } from './Table';
 
 interface IEntityTableStore {
-  actions$: Observable<Action[]>;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   types$: ObservableComputed<TripleType[]>;
@@ -21,8 +21,6 @@ interface IEntityTableStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
-  create(triples: TripleType[]): void;
-  publish(signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
 }
@@ -58,7 +56,6 @@ export function initialFilterState(): FilterState {
 
 export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
-  actions$: Observable<Action[]> = observable<Action[]>([]);
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
@@ -132,20 +129,17 @@ export class EntityTableStore implements IEntityTableStore {
             abortController: this.abortController,
           });
 
-          // We need to do the same for columns :thinking:
-          // TODO: Merge local triples and server triples
-          const spaceTriples = ActionStore.actions$.get()[space];
-          const localEntities = Entity.mergeActionsWithEntities(
+          // We need to do the same for columns and columnsSchema :thinking:
+          const localEntities = pipe(
             ActionStore.actions$.get(),
-            Entity.entitiesFromTriples(serverRows)
+            actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverRows)),
+
+            // HACK: This doesn't work reliably since the entity name might not be unique. We need to use
+            // the type id here, but right now that breaks entity editing if you are editing the type field.
+            A.filter(e => e.types.some(t => t === this.selectedType$.get()?.entityName))
           );
 
           const localEntitiesIds = new Set(localEntities.map(e => e.id));
-
-          // const localEntities = Entity.entitiesFromTriples(localTriples);
-
-          // console.log('localEntities', localEntities);
-          // console.log('serverRows', serverRows);
 
           const { rows, hasNextPage } = EntityTable.fromColumnsAndRows(
             space,
@@ -181,21 +175,6 @@ export class EntityTableStore implements IEntityTableStore {
       return rows;
     });
   }
-
-  create = (triples: TripleType[]) => {
-    const actions: CreateTripleAction[] = triples.map(triple => ({
-      ...triple,
-      type: 'createTriple',
-    }));
-
-    this.actions$.set([...this.actions$.get(), ...actions]);
-  };
-
-  publish = async (signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
-    await this.api.publish({ actions: this.actions$.get(), signer, onChangePublishState, space: this.space });
-    this.setQuery('');
-    this.actions$.set([]);
-  };
 
   setQuery = (query: string) => {
     this.setFilterState(
