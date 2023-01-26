@@ -176,6 +176,13 @@ export class EntityTableStore implements IEntityTableStore {
           );
 
           const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
+          const serverEntitiesChangedLocallyIds = new Set(
+            serverTriplesForEntitiesChangedLocally.flatMap(t => t.triples).map(t => t.entityId)
+          );
+
+          const filteredServerRows = serverRows.filter(
+            sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
+          );
 
           const { rows, hasNextPage } = EntityTable.fromColumnsAndRows(
             space,
@@ -189,7 +196,7 @@ export class EntityTableStore implements IEntityTableStore {
               ...serverTriplesForEntitiesChangedLocally.flatMap(e => e.triples),
 
               // These are entities that have been fetched from the server and have the selected type
-              ...serverRows.filter(sr => !localEntitiesIds.has(sr.id)),
+              ...filteredServerRows,
             ],
             serverColumns,
             columnsSchema
