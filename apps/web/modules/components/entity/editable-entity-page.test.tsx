@@ -1,3 +1,4 @@
+import { when } from '@legendapp/state';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +13,14 @@ describe('Editable Entity Page', () => {
 
     render(
       <Providers>
-        <EntityStoreProvider id={'1'} spaceId={'1'} initialTriples={[]} initialSchemaTriples={[]}>
+        <EntityStoreProvider
+          id={'1'}
+          spaceId={'1'}
+          initialTriples={[]}
+          initialSchemaTriples={[
+            { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
+          ]}
+        >
           <EditableEntityPage
             id="1"
             name="Banana"
@@ -35,7 +43,24 @@ describe('Editable Entity Page', () => {
 
     render(
       <Providers>
-        <EntityStoreProvider id={'1'} spaceId={'1'} initialTriples={[]} initialSchemaTriples={[]}>
+        <EntityStoreProvider
+          id={'1'}
+          spaceId={'1'}
+          initialTriples={[]}
+          initialSchemaTriples={[
+            {
+              ...makeStubTriple('Schema'),
+              attributeName: 'Schema',
+              attributeId: 'Schema',
+              value: {
+                type: 'entity',
+                name: '',
+                id: '',
+              },
+              placeholder: true,
+            },
+          ]}
+        >
           <EditableEntityPage
             id="1"
             name="Banana"
@@ -60,6 +85,6 @@ describe('Editable Entity Page', () => {
     );
 
     expect(screen.getByText('Schema')).toBeInTheDocument();
-    expect(screen.getByTestId('placeholder-entity-autocomplete')).toBeInTheDocument();
+    expect(screen.getAllByTestId('placeholder-entity-autocomplete').length).toBeGreaterThan(0);
   });
 });
