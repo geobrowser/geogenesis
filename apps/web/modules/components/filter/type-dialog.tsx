@@ -68,16 +68,11 @@ const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
   },
 }));
 
-const AddTypeContainer = styled.div(() => ({
-  display: 'flex',
-  flexDirection: 'column',
-}));
+const MotionContent = motion(StyledContent);
 
 const CreateButton = styled(Button)(props => ({
   margin: `0 ${props.theme.space * 2}px ${props.theme.space * 2}px ${props.theme.space * 2}px`,
 }));
-
-const MotionContent = motion(StyledContent);
 
 const SearchContainer = styled.div(props => ({
   position: 'relative',
@@ -116,22 +111,16 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
-  const [displayCreateType, setDisplayCreateType] = useState(false);
   const [filter, setFilter] = useState('');
   const filteredTypes = entityTableStore.types.filter(type =>
     (type.entityName || '').toLowerCase().includes(filter.toLowerCase())
   );
 
-  const searchMode = filteredTypes.length >= 1 && !displayCreateType;
+  const hasResults = filteredTypes.length >= 1;
 
   const handleSelect = (type: TripleType) => {
     entityTableStore.setType(type);
     setOpen(false);
-  };
-
-  const handleCancel = () => {
-    setFilter('');
-    setDisplayCreateType(false);
   };
 
   const handleCreateType = () => {
@@ -159,7 +148,6 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     ActionStore.create(nameTriple);
     ActionStore.create(typeTriple);
     setFilter('');
-    setDisplayCreateType(false);
   };
 
   return (
@@ -186,7 +174,14 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
             sideOffset={theme.space * 2}
             align="start"
           >
-            <AddTypeContainer>
+            {!hasResults && (
+              <>
+                <Spacer height={8} />
+                <TypeText variant="smallButton">Create new type</TypeText>
+              </>
+            )}
+
+            <motion.div layout="position">
               <SearchContainer>
                 <SearchIconContainer>
                   <Search />
@@ -198,19 +193,24 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                   }}
                 />
               </SearchContainer>
+            </motion.div>
 
-              <TypeText variant="smallButton">All types</TypeText>
+            {hasResults && (
+              <>
+                <TypeText variant="smallButton">All types</TypeText>
+                <Spacer height={8} />
+              </>
+            )}
 
-              <ResultsList>
-                {searchMode
-                  ? filteredTypes.map(type => (
-                      <ResultItem onClick={() => handleSelect(type)} key={type.id}>
-                        {type.entityName}
-                      </ResultItem>
-                    ))
-                  : isEditor && <CreateButton onClick={handleCreateType}>Create Type</CreateButton>}
-              </ResultsList>
-            </AddTypeContainer>
+            <ResultsList>
+              {hasResults
+                ? filteredTypes.map(type => (
+                    <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                      {type.entityName}
+                    </ResultItem>
+                  ))
+                : isEditor && <CreateButton onClick={handleCreateType}>Create Type</CreateButton>}
+            </ResultsList>
           </MotionContent>
         ) : null}
       </AnimatePresence>
