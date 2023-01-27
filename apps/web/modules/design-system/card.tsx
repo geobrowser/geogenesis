@@ -13,12 +13,17 @@ const CoverImageContainer = styled.div({
   position: 'relative',
   overflow: 'hidden',
 
-  width: 590,
+  width: 386.67,
   height: 240,
   objectFit: 'cover',
   transition: 'all ease-in-out 0.15s',
 
   '@media (max-width: 1200px)': {
+    width: '46vw',
+    maxHeight: 240,
+  },
+
+  '@media (max-width: 694px)': {
     width: '92vw',
     maxHeight: 240,
   },
