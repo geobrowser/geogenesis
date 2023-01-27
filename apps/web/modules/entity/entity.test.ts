@@ -242,12 +242,17 @@ const triplesWithConflictingTypesFromDifferentSpaces: Triple[] = [
 
 describe('Entity types helpers', () => {
   it('Entity.types should parse types from triples assigned to Entity', () => {
-    expect(types(triplesWithMultipleTypesFromSameSpace, 'spaceId')).toEqual(['banana', 'orange']);
+    expect(types(triplesWithMultipleTypesFromSameSpace, 'spaceId')).toEqual([
+      { id: 'valueId', name: 'banana' },
+      { id: 'valueId', name: 'orange' },
+    ]);
   });
 
   // See the comment in entity.ts for more details on when this happens
   it('Entity.types should parse only the types from the current space', () => {
-    expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual(['banana']);
+    expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual([
+      { id: 'valueId', name: 'banana' },
+    ]);
   });
 });
 

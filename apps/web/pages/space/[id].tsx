@@ -6,7 +6,7 @@ import { EntityTableContainer } from '~/modules/components/entity-table/entity-t
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Spacer } from '~/modules/design-system/spacer';
-import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider, EntityTable } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
@@ -104,10 +104,19 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     typeId,
   };
 
-  const { columns, rows } = await network.fetchEntityTableData({
+  const { columns, columnsSchema } = await network.columns({
     spaceId,
     params,
   });
+
+  const { rows: serverRows } = await network.rows({
+    spaceId,
+    params,
+    columns,
+    columnsSchema,
+  });
+
+  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns, columnsSchema);
 
   return {
     props: {
