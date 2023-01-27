@@ -54,7 +54,11 @@ export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
   return (
     <SearchDialog open={open} onOpenChange={onOpenChange} label="Entity search">
       <InputContainer shouldShowBorder={A.isNotEmpty(autocomplete.results)}>
-        <Input withIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} value={autocomplete.query} />
+        <Input
+          withSearchIcon
+          onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
+          value={autocomplete.query}
+        />
       </InputContainer>
       <ResizableContainer duration={0.15}>
         <ResultsList>
