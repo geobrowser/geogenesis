@@ -35,6 +35,7 @@ module.exports = {
         4.5: '18px',
       },
       padding: {
+        '8.5px': '8.5px',
         '9px': '9px',
         '10px': '10px',
       },
@@ -44,6 +45,14 @@ module.exports = {
           {
             lineHeight: '1.125rem',
             fontWeight: '400',
+          },
+        ],
+        button: [
+          '1.0625rem',
+          {
+            lineHeight: '1.1875rem',
+            letterSpacing: '-0.17px',
+            fontWeight: '500',
           },
         ],
       },
