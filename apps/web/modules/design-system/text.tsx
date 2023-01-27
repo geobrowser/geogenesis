@@ -9,14 +9,11 @@ interface Props {
   variant?: TypographyName;
   as?: 'h1' | 'h2' | 'h3' | 'p' | 'span' | 'div' | 'a' | 'li';
   ellipsize?: boolean;
-  flex?: string;
-  href?: string;
 }
 
 const BaseText = styled.span<Required<Omit<Props, 'href'>>>(props => ({
   ...props.theme.typography[props.variant],
   color: props.theme.colors[props.color],
-  ...(props.flex && { flex: props.flex }),
   ...(props.ellipsize && {
     whiteSpace: 'pre',
     textOverflow: 'ellipsis',
@@ -25,11 +22,11 @@ const BaseText = styled.span<Required<Omit<Props, 'href'>>>(props => ({
 }));
 
 export const Text = forwardRef(function Text(
-  { children, color = 'text', variant = 'body', as = 'span', ellipsize = false, flex = '', ...rest }: Props,
+  { children, color = 'text', variant = 'body', as = 'span', ellipsize = false, ...rest }: Props,
   forwardedRef: React.Ref<HTMLSpanElement>
 ) {
   return (
-    <BaseText ref={forwardedRef} as={as} color={color} variant={variant} ellipsize={ellipsize} flex={flex} {...rest}>
+    <BaseText ref={forwardedRef} as={as} color={color} variant={variant} ellipsize={ellipsize} {...rest}>
       {children}
     </BaseText>
   );

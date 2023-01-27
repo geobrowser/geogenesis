@@ -45,7 +45,7 @@ export function SpaceHeader({ spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props)
           />
         </SpaceImageContainer>
 
-        <Text flex="0 0 auto" variant="mainPage" as="h1">
+        <Text variant="mainPage" as="h1">
           {spaceName}
         </Text>
       </SpaceInfo>
