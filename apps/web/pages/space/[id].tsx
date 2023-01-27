@@ -90,7 +90,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       ],
     }),
   ]);
-
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
 
   const initialSelectedType =

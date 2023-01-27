@@ -1,7 +1,8 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 import produce from 'immer';
-import { Action, ActionsStore } from '~/modules/action';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { ActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
@@ -19,7 +20,7 @@ interface IEntityTableStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
-  ActionStore: ActionsStore;
+  ActionsStore: ActionsStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
 }
@@ -33,7 +34,7 @@ interface IEntityTableStoreConfig {
   initialSelectedType: TripleType | null;
   initialTypes: TripleType[];
   initialColumns: Column[];
-  ActionStore: ActionsStore;
+  ActionsStore: ActionsStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -66,7 +67,7 @@ export class EntityTableStore implements IEntityTableStore {
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   space: string;
-  ActionStore: ActionsStore;
+  ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
 
   constructor({
@@ -76,21 +77,40 @@ export class EntityTableStore implements IEntityTableStore {
     initialSelectedType,
     initialColumns,
     initialTypes,
-    ActionStore,
+    ActionsStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
     this.api = api;
-    this.ActionStore = ActionStore;
+    this.ActionsStore = ActionsStore;
     this.hydrated$ = observable(false);
     this.rows$ = observable(initialRows);
     this.selectedType$ = observable(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
-    this.types$ = observable(initialTypes);
+
+    this.types$ = computed(() => {
+      const globalActions = ActionsStore.actions$.get()[space] || [];
+      const actions = globalActions.filter(a => {
+        const isCreate =
+          a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+        const isDelete =
+          a.type === 'deleteTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+        const isRemove =
+          a.type === 'editTriple' &&
+          a.before.attributeId === SYSTEM_IDS.TYPES &&
+          a.before.value.id === SYSTEM_IDS.SCHEMA_TYPE;
+
+        return isCreate || isDelete || isRemove;
+      });
+      const triplesFromActions = Triple.fromActions(actions, initialTypes);
+      return Triple.withLocalNames(globalActions, triplesFromActions);
+    });
+
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
+
     this.space = space;
     this.query$ = computed(() => {
       const filterState = this.filterState$.get();
@@ -142,7 +162,7 @@ export class EntityTableStore implements IEntityTableStore {
            * needs to render the columnSchema.
            */
           const changedEntitiesIdsFromAnotherType = pipe(
-            this.ActionStore.actions$.get()[space],
+            this.ActionsStore.actions$.get()[space],
             actions => Triple.fromActions(actions, []),
             triples => Entity.entitiesFromTriples(triples),
             A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId)),
@@ -170,7 +190,7 @@ export class EntityTableStore implements IEntityTableStore {
 
           // Merge any local changes to triples in an entity with the table rows from the server.
           const entitiesCreatedOrChangedLocally = pipe(
-            this.ActionStore.actions$.get(),
+            this.ActionsStore.actions$.get(),
             actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverRows)),
             A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId))
           );

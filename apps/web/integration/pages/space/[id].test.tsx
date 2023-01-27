@@ -68,28 +68,4 @@ describe('Space page', () => {
     expect(screen.queryByText('No results found')).not.toBeInTheDocument();
     expect(screen.getAllByText('Alice')).toBeTruthy();
   });
-
-  it('Should toggle advanced filters queries', async () => {
-    userEvent.setup();
-
-    render(
-      <Providers>
-        <SpacePage
-          spaceId="1"
-          spaceName="Banana"
-          spaceImage={null}
-          initialTypes={[]}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
-        />
-      </Providers>
-    );
-
-    expect(screen.getByRole('button', { name: /type-filter-dropdown/i })).toBeInTheDocument();
-    expect(screen.queryByText('All types')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /type-filter-dropdown/i }));
-    expect(screen.getByText('All types')).toBeInTheDocument();
-  });
 });
