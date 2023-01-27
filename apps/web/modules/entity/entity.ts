@@ -95,6 +95,7 @@ export function entitiesFromTriples(triples: TripleType[]): Entity[] {
         id: entityId,
         name: name(mutableTriples),
         description: description(mutableTriples),
+        nameTripleSpace: nameTriple(mutableTriples)?.space,
         types: types(mutableTriples, triples[0]?.space),
         triples: mutableTriples,
       };
