@@ -56,6 +56,7 @@ importers:
       '@vitejs/plugin-react': ^2.1.0
       '@vitest/ui': ^0.25.6
       autoprefixer: ^10.4.13
+      class-variance-authority: ^0.4.0
       cmdk: ^0.1.21
       connectkit: ^1.1.1
       eslint: ^8.15.0
@@ -107,6 +108,7 @@ importers:
       '@tanstack/query-core': 4.3.8
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
       '@vercel/analytics': 0.1.6_react@18.2.0
+      class-variance-authority: 0.4.0_typescript@4.8.4
       cmdk: 0.1.21_rj7ozvcq3uehdlnj3cbwzbi5ce
       connectkit: 1.1.1_opxkh35q2zbqahgybdihnqav2q
       ethers: 5.7.2
@@ -6535,6 +6537,17 @@ packages:
       isobject: 3.0.1
       static-extend: 0.1.2
     dev: true
+
+  /class-variance-authority/0.4.0_typescript@4.8.4:
+    resolution: {integrity: sha512-74enNN8O9ZNieycac/y8FxqgyzZhZbxmCitAtAeUrLPlxjSd5zA7LfpprmxEcOmQBnaGs5hYhiSGnJ0mqrtBLQ==}
+    peerDependencies:
+      typescript: '>= 4.5.5 < 5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+    dependencies:
+      typescript: 4.8.4
+    dev: false
 
   /clean-stack/2.2.0:
     resolution: {integrity: sha512-4diC9HaTE+KRAMWhDhrGOECgWZxoevMc5TlkObMqNSsVU62PYzXZ/SMTjzyGAFF1YusgxGcSWTEXBhp0CPwQ1A==}

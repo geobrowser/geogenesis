@@ -1,5 +1,4 @@
 import styled from '@emotion/styled';
-import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
@@ -9,17 +8,6 @@ import { Command } from 'cmdk';
 import { A } from '@mobily/ts-belt';
 import { motion } from 'framer-motion';
 import { ResizableContainer } from '../design-system/resizable-container';
-
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 5,
-  top: props.theme.space * 4.5,
-  zIndex: 100,
-}));
-
-const AutocompleteInput = styled(Input)(props => ({
-  paddingLeft: props.theme.space * 9,
-}));
 
 interface Props {
   onDone: (result: Entity) => void;
@@ -51,7 +39,6 @@ const ResultItem = styled(Command.Item)(props => ({
 }));
 
 const InputContainer = styled.div<{ shouldShowBorder?: boolean }>(props => ({
-  position: 'relative',
   padding: props.theme.space * 2,
   ...(props.shouldShowBorder && {
     borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
@@ -67,14 +54,7 @@ export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
   return (
     <SearchDialog open={open} onOpenChange={onOpenChange} label="Entity search">
       <InputContainer shouldShowBorder={A.isNotEmpty(autocomplete.results)}>
-        <SearchIconContainer>
-          <Search />
-        </SearchIconContainer>
-        <AutocompleteInput
-          value={autocomplete.query}
-          onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
-          placeholder="Search for an entity..."
-        />
+        <Input withIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} value={autocomplete.query} />
       </InputContainer>
       <ResizableContainer duration={0.15}>
         <ResultsList>

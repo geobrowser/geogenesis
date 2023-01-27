@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { useRect } from '@radix-ui/react-use-rect';
 import { useMemo, useRef } from 'react';
-import { EntityStoreProvider, useEntityTable } from '~/modules/entity';
+import { useEntityTable } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
 import { Search } from '../../design-system/icons/search';
@@ -77,8 +77,6 @@ export function EntityInput({ spaceId }: Props) {
     entityTableStore.setFilterState(filteredFilters);
   };
 
-  const newId = useMemo(() => ID.createEntityId(), []);
-
   return (
     <InputContainer ref={inputContainerRef}>
       <TypeDialog
@@ -93,7 +91,7 @@ export function EntityInput({ spaceId }: Props) {
           <Search />
         </SearchIconContainer>
         {showBasicFilter ? (
-          <TriplesInputField placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
+          <Input placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
         ) : (
           <AdvancedFilters>
             {entityTableStore.filterState.map(filter => (
