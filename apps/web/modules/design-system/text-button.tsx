@@ -1,19 +1,20 @@
-import styled from '@emotion/styled';
+import { cva, VariantProps } from 'class-variance-authority';
 
-export const TextButton = styled.button(props => ({
-  display: 'flex',
-  alignItems: 'center',
+const buttonStyles = cva(
+  'flex items-center bg-transparent outline-none hover:text-ctaHover hover:outline-none focus:outline-none',
+  {
+    variants: {
+      disabled: {
+        true: 'cursor-not-allowed text-grey-04',
+      },
+    },
+  }
+);
 
-  border: 'none',
-  backgroundColor: 'transparent',
-  cursor: 'pointer',
+interface Props extends VariantProps<typeof buttonStyles> {
+  children: React.ReactNode;
+}
 
-  ':hover': {
-    border: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
-  },
-
-  ':focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.ctaPrimary}`,
-    outline: 'none',
-  },
-}));
+export function TextButton({ children, disabled = false }: Props) {
+  return <button className={buttonStyles({ disabled })}>{children}</button>;
+}

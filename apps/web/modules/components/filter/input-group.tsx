@@ -52,7 +52,7 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
         <Input
           value={filterClause.value}
           onChange={e => {
-            const newFilterClause: FilterClause = { ...filterClause, value: e.target.value };
+            const newFilterClause: FilterClause = { ...filterClause, value: e.currentTarget.value };
             onChange(newFilterClause);
           }}
         />

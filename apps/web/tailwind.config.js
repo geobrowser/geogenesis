@@ -3,6 +3,7 @@ module.exports = {
   content: ['./app/**/*.{js,ts,jsx,tsx}', './pages/**/*.{js,ts,jsx,tsx}', './modules/**/*.{js,ts,jsx,tsx}'],
   theme: {
     colors: {
+      transparent: 'transparent',
       white: '#FFFFFF',
       text: '#202020',
       ctaPrimary: '#3963FE',
