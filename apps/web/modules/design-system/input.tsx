@@ -1,5 +1,5 @@
 import { cva, VariantProps } from 'class-variance-authority';
-import { HTMLAttributes } from 'react';
+import React, { ForwardedRef } from 'react';
 import { Search } from './icons/search';
 
 const inputStyles = cva(
@@ -24,18 +24,18 @@ const inputStyles = cva(
 const inputContainerStyles = cva(`relative w-full`);
 const iconContainerStyles = cva(`absolute left-3 top-2.5 z-10`);
 
-interface Props extends HTMLAttributes<HTMLInputElement>, VariantProps<typeof inputStyles> {
+interface Props
+  extends React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>,
+    VariantProps<typeof inputStyles> {
   value?: string;
 }
 
-export function Input({
-  withSearchIcon = false,
-  withExternalSearchIcon = false,
-  withFilterIcon = false,
-  ...props
-}: Props) {
+export const Input = React.forwardRef(function Input(
+  { withSearchIcon = false, withExternalSearchIcon = false, withFilterIcon = false, ...props }: Props,
+  ref: ForwardedRef<HTMLInputElement>
+) {
   return (
-    <div className={inputContainerStyles()}>
+    <div ref={ref} className={inputContainerStyles()}>
       {withSearchIcon && (
         <div className={iconContainerStyles()}>
           <Search />
@@ -44,4 +44,4 @@ export function Input({
       <input className={inputStyles({ withSearchIcon, withExternalSearchIcon, withFilterIcon })} {...props} />
     </div>
   );
-}
+});

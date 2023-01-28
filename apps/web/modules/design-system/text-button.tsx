@@ -1,4 +1,5 @@
-import { cva, VariantProps } from 'class-variance-authority';
+import { cva } from 'class-variance-authority';
+import React from 'react';
 
 const buttonStyles = cva(
   'flex items-center bg-transparent outline-none hover:text-ctaHover hover:outline-none focus:outline-none',
@@ -11,9 +12,7 @@ const buttonStyles = cva(
   }
 );
 
-interface Props extends VariantProps<typeof buttonStyles> {
-  children: React.ReactNode;
-}
+interface Props extends React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement> {}
 
 export function TextButton({ children, disabled = false }: Props) {
   return <button className={buttonStyles({ disabled })}>{children}</button>;
