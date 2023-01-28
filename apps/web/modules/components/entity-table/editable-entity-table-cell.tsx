@@ -8,7 +8,7 @@ import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { NumberField, StringField } from '../entity/editable-fields';
+import { StringField } from '../entity/editable-fields';
 
 const Entities = styled.div(({ theme }) => ({
   display: 'flex',
@@ -93,21 +93,14 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         return (
           <StringField
             key={triple.id}
-            variant="body"
+            variant="tableCell"
             placeholder="Add value..."
             onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             value={triple.value.value}
           />
         );
       case 'number':
-        return (
-          <NumberField
-            key={triple.id}
-            placeholder="Add value..."
-            onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
-            initialValue={triple.value.value}
-          />
-        );
+        return null;
       case 'entity':
         if (isEmptyEntity) {
           return (
@@ -137,6 +130,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   if (isNameCell) {
     return (
       <StringField
+        variant="tableCell"
         color="text"
         placeholder="Entity name..."
         value={entityName}
