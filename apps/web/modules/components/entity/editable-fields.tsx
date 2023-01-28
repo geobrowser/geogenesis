@@ -1,25 +1,21 @@
-import styled from '@emotion/styled';
-import React, { useEffect, useRef, useState } from 'react';
+import { cva } from 'class-variance-authority';
+import React, { useEffect, useRef } from 'react';
 
-const Textarea = styled.textarea<Required<Pick<StringFieldProps, 'color' | 'variant'>>>(props => ({
-  ...props.theme.typography[props.variant],
-  width: '100%',
-  height: '100%',
-  resize: 'none',
-  backgroundColor: 'transparent',
-  overflow: 'hidden',
-  color: props.theme.colors[props.color],
-  margin: 0,
-  padding: 0,
-
-  '&::placeholder': {
-    color: props.theme.colors['grey-02'],
-  },
-
-  '&:focus': {
-    outline: 'none',
-  },
-}));
+const textareaStyles = cva(
+  'w-full h-full resize-none bg-transparent overflow-hidden m-0 p-0 placeholder:text-grey-02 focus:outline-none',
+  {
+    variants: {
+      variant: {
+        mainPage: 'text-mainPage',
+        body: 'text-body',
+        tableCell: 'text-tableCell',
+      },
+    },
+    defaultVariants: {
+      variant: 'body',
+    },
+  }
+);
 
 interface PlaceholderFieldProps {
   onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
@@ -37,7 +33,7 @@ interface StringFieldProps {
 }
 
 export function PlaceholderField({ variant = 'body', color = 'text', onBlur, ...props }: PlaceholderFieldProps) {
-  return <Textarea {...props} rows={1} onBlur={onBlur} variant={variant} color={color} />;
+  return <textarea {...props} rows={1} onBlur={onBlur} color={color} className={textareaStyles({ variant })} />;
 }
 
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
@@ -54,72 +50,14 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
   });
 
   return (
-    <Textarea
+    <textarea
       {...props}
       ref={ref}
       rows={1}
       onChange={props.onChange}
-      variant={variant}
       color={color}
       value={props.value}
-    />
-  );
-}
-
-const NumberInput = styled.input(props => ({
-  ...props.theme.typography.body,
-  width: '100%',
-  backgroundColor: 'transparent',
-
-  '&::placeholder': {
-    color: props.theme.colors['grey-02'],
-  },
-
-  '&:focus': {
-    outline: 'none',
-  },
-}));
-
-interface NumberFieldProps {
-  initialValue: string;
-  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-}
-
-export function NumberField(props: NumberFieldProps) {
-  // We're using controlled state instead of refs in order to more easily validate the keypresses
-  const [value, setValue] = useState('');
-
-  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const numberRegex = /^[0-9]*$/;
-
-    // TODO: Validation UI?
-    if (!numberRegex.test(e.target.value)) {
-      return;
-    }
-
-    props.onBlur(e);
-  };
-
-  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const numberRegex = /^[0-9]*$/;
-    if (!numberRegex.test(e.target.value)) {
-      return;
-    }
-
-    setValue(e.target.value);
-  };
-
-  // Mimicking the type="number" behavior so we don't show the weird arrows
-  return (
-    <NumberInput
-      {...props}
-      type="text"
-      onBlur={onBlur}
-      inputMode="numeric"
-      pattern="[0-9]*"
-      value={value}
-      onChange={onChange}
+      className={textareaStyles({ variant })}
     />
   );
 }

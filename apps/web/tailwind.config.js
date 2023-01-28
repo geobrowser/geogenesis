@@ -41,10 +41,32 @@ module.exports = {
         '10px': '10px',
       },
       fontSize: {
+        mainPage: [
+          '2.75rem',
+          {
+            lineHeight: '2.875rem',
+            letterSpacing: '0.37px',
+            fontWeight: '600',
+          },
+        ],
         input: [
           '1.0625rem',
           {
             lineHeight: '1.125rem',
+            fontWeight: '400',
+          },
+        ],
+        body: [
+          '1.1875rem',
+          {
+            lineHeight: '1.8125rem',
+            fontWeight: '400',
+          },
+        ],
+        tableCell: [
+          '1.1875rem',
+          {
+            lineHeight: '1.3125rem',
             fontWeight: '400',
           },
         ],

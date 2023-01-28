@@ -15,7 +15,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
-import { NumberField, PlaceholderField, StringField } from './editable-fields';
+import { PlaceholderField, StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -366,14 +366,7 @@ function EntityAttributes({
           />
         );
       case 'number':
-        return (
-          <NumberField
-            key={triple.id}
-            placeholder="Add value..."
-            onBlur={e => updateValue(triple, e.target.value)}
-            initialValue={triple.value.value}
-          />
-        );
+        return null;
       case 'entity':
         if (isEmptyEntity) {
           return (
