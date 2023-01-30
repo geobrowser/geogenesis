@@ -1,13 +1,9 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '~/modules/triple';
 import { Column, Row, Triple as TripleType } from '~/modules/types';
 import { DEFAULT_PAGE_SIZE, Entity } from '..';
 
-export function fromColumnsAndRows(
-  spaceId: string,
-  rows: TripleType[],
-  columns: Column[],
-  columnsSchema: TripleType[][]
-) {
+export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns: Column[]) {
   const rowTriplesWithEntityIds = Entity.entitiesFromTriples(rows);
 
   /* Finally, we can build our initialRows */
@@ -16,8 +12,8 @@ export function fromColumnsAndRows(
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
       /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
-      const columnTypeTriple = columnsSchema.find(cs => cs[0]?.entityId === column.id);
-      const columnValueType = columnTypeTriple?.[0].value.id;
+      const columnValueTypeTriple = column.triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+      const columnValueType = columnValueTypeTriple?.value.id;
 
       const defaultTriple = {
         ...Triple.emptyPlaceholder(spaceId, id, columnValueType),

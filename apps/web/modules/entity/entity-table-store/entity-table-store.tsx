@@ -136,7 +136,7 @@ export class EntityTableStore implements IEntityTableStore {
             skip: pageNumber * pageSize,
           };
 
-          const { columns: serverColumns, columnsSchema } = await this.api.columns({
+          const { columns: serverColumns } = await this.api.columns({
             spaceId: space,
             params,
             abortController: this.abortController,
@@ -146,7 +146,6 @@ export class EntityTableStore implements IEntityTableStore {
             spaceId: space,
             params,
             columns: serverColumns,
-            columnsSchema,
             abortController: this.abortController,
           });
 
@@ -218,8 +217,7 @@ export class EntityTableStore implements IEntityTableStore {
               // These are entities that have been fetched from the server and have the selected type
               ...filteredServerRows,
             ],
-            serverColumns,
-            columnsSchema
+            serverColumns
           );
 
           this.hydrated$.set(true);
