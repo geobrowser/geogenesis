@@ -6,7 +6,7 @@ import { ActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import { Action, Column, CreateTripleAction, FilterState, ReviewState, Row, Triple as TripleType } from '../../types';
+import { Column, FilterState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -69,7 +69,6 @@ export class EntityTableStore implements IEntityTableStore {
   space: string;
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
-  ActionsStore: ActionsStore;
 
   constructor({
     api,
@@ -117,7 +116,6 @@ export class EntityTableStore implements IEntityTableStore {
       const filterState = this.filterState$.get();
       return filterState.find(f => f.field === 'entity-name')?.value || '';
     });
-    this.ActionsStore = ActionsStore;
 
     const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
