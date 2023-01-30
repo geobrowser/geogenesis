@@ -1,4 +1,3 @@
-import styled from '@emotion/styled';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -12,34 +11,14 @@ interface Props {
   spaceId: string;
 }
 
-const Actions = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-});
-
-const NavbarContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  width: '100%',
-});
-
-const TabLinksContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  flexDirection: 'row',
-  gap: props.theme.space * 4,
-}));
-
-export const SpaceActions = ({ spaceId }: Props) => {
+const SpaceActions = ({ spaceId }: Props) => {
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { editable } = useEditable();
 
   return (
-    <Actions>
+    <div className="flex items-center">
       {(isEditor || isAdmin || isEditorController) && editable && (
-        <NavbarContainer>
+        <div className="flex items-center justify-between w-full">
           {(isEditorController || isAdmin) && (
             <Link href={`/space/${spaceId}/access-control`}>
               <Button variant="secondary">Devvy Admin</Button>
@@ -56,9 +35,9 @@ export const SpaceActions = ({ spaceId }: Props) => {
               </Link>
             </>
           )}
-        </NavbarContainer>
+        </div>
       )}
-    </Actions>
+    </div>
   );
 };
 
@@ -82,15 +61,15 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
   ];
 
   return (
-    <NavbarContainer>
-      <TabLinksContainer>
+    <div className="flex items-center justify-between w-full h-9">
+      <div className="flex items-center gap-4">
         {tabs.map(tab => (
           <TabLink key={tab.name} href={tab.href} isActive={tab.selected}>
             {tab.name}
           </TabLink>
         ))}
-      </TabLinksContainer>
+      </div>
       <SpaceActions spaceId={spaceId} />
-    </NavbarContainer>
+    </div>
   );
 };

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -22,51 +21,49 @@ export function Triples({ spaceId, initialTriples }: Props) {
     <PageContainer>
       <Spacer height={20} />
 
-      <motion.div style={{ maxWidth: '100%' }} layout="position" transition={{ duration: 0.1 }}>
-        <TripleInput />
+      <TripleInput />
 
-        <Spacer height={12} />
+      <Spacer height={12} />
 
-        <TripleTable space={spaceId} triples={tripleStore.hydrated ? tripleStore.triples : initialTriples} />
+      <TripleTable space={spaceId} triples={tripleStore.hydrated ? tripleStore.triples : initialTriples} />
 
-        <Spacer height={12} />
+      <Spacer height={12} />
 
-        <PageNumberContainer>
-          {tripleStore.pageNumber > 1 && (
-            <>
-              <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
-              {tripleStore.pageNumber > 2 ? (
-                <>
-                  <Spacer width={16} />
-                  <Text color="grey-03" variant="metadataMedium">
-                    ...
-                  </Text>
-                  <Spacer width={16} />
-                </>
-              ) : (
-                <Spacer width={4} />
-              )}
-            </>
-          )}
-          {tripleStore.hasPreviousPage && (
-            <>
-              <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+      <PageNumberContainer>
+        {tripleStore.pageNumber > 1 && (
+          <>
+            <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+            {tripleStore.pageNumber > 2 ? (
+              <>
+                <Spacer width={16} />
+                <Text color="grey-03" variant="metadataMedium">
+                  ...
+                </Text>
+                <Spacer width={16} />
+              </>
+            ) : (
               <Spacer width={4} />
-            </>
-          )}
-          <PageNumber isActive number={tripleStore.pageNumber + 1} />
-          {tripleStore.hasNextPage && (
-            <>
-              <Spacer width={4} />
-              <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
-            </>
-          )}
-          <Spacer width={32} />
-          <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
-          <Spacer width={12} />
-          <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
-        </PageNumberContainer>
-      </motion.div>
+            )}
+          </>
+        )}
+        {tripleStore.hasPreviousPage && (
+          <>
+            <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+            <Spacer width={4} />
+          </>
+        )}
+        <PageNumber isActive number={tripleStore.pageNumber + 1} />
+        {tripleStore.hasNextPage && (
+          <>
+            <Spacer width={4} />
+            <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+          </>
+        )}
+        <Spacer width={32} />
+        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+        <Spacer width={12} />
+        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+      </PageNumberContainer>
     </PageContainer>
   );
 }
