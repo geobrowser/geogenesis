@@ -1,6 +1,4 @@
-import styled from '@emotion/styled';
 import { memo } from 'react';
-import { useActionsStore } from '~/modules/action';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { DeletableChipButton } from '../../design-system/chip';
@@ -9,12 +7,6 @@ import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomp
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
 import { StringField } from '../entity/editable-fields';
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
-}));
 
 interface Props {
   cell: Cell;
@@ -140,7 +132,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   }
 
   return (
-    <Entities>
+    <div className="flex flex-wrap gap-2">
       {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
       {isEntityGroup && !isEmptyEntity && (
         <EntityAutocompleteDialog
@@ -149,6 +141,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           entityValueIds={entityValueTriples.map(t => t.value.id)}
         />
       )}
-    </Entities>
+    </div>
   );
 });
