@@ -55,13 +55,6 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
   );
 };
 
-const Table = styled.table(props => ({
-  width: '100%',
-  borderStyle: 'hidden',
-  borderCollapse: 'collapse',
-  backgroundColor: props.theme.colors.white,
-}));
-
 const SpaceHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
   padding: props.theme.space * 2.5,
@@ -71,17 +64,6 @@ const SpaceHeader = styled.th<{ width: number }>(props => ({
   '@media (max-width: 768px)': {
     minWidth: 300,
   },
-}));
-
-const TableRow = styled.tr(props => ({
-  ':hover': {
-    backgroundColor: props.theme.colors.bg,
-  },
-}));
-
-const Container = styled.div(props => ({
-  borderRadius: props.theme.radius,
-  overflowX: 'scroll',
 }));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
@@ -147,8 +129,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   });
 
   return (
-    <Container>
-      <Table cellSpacing={0} cellPadding={0}>
+    <div className="overflow-x-scroll rounded">
+      <table className="w-full border-hidden border-collapse bg-white" cellSpacing={0} cellPadding={0}>
         <thead className="relative">
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
@@ -196,7 +178,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
                 initialSchemaTriples={[]}
                 initialTriples={initialTriples}
               >
-                <TableRow>
+                <tr className="hover:bg-bg">
                   {cells.map(cell => {
                     const cellId = `${row.original.id}-${cell.column.id}`;
                     const firstTriple = cell.getValue<Cell>()?.triples[0];
@@ -221,12 +203,12 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
                       </TableCell>
                     );
                   })}
-                </TableRow>
+                </tr>
               </EntityStoreProvider>
             );
           })}
         </tbody>
-      </Table>
-    </Container>
+      </table>
+    </div>
   );
 });

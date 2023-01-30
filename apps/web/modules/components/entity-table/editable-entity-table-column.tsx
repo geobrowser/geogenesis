@@ -1,15 +1,8 @@
-import styled from '@emotion/styled';
 import { memo } from 'react';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Column } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 import { StringField } from '../entity/editable-fields';
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
-}));
 
 interface Props {
   column: Column;
@@ -46,13 +39,13 @@ export const EditableEntityTableColumn = memo(function EditableEntityTableColumn
   const nameTriple = Entity.nameTriple(triples);
 
   return (
-    <Entities>
+    <div className="flex flex-wrap gap-3">
       <StringField
-        variant="body"
+        variant="smallTitle"
         placeholder="Column name..."
         onChange={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}
         value={name}
       />
-    </Entities>
+    </div>
   );
 });

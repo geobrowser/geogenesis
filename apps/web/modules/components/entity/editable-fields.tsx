@@ -9,6 +9,7 @@ const textareaStyles = cva(
         mainPage: 'text-mainPage',
         body: 'text-body',
         tableCell: 'text-tableCell',
+        smallTitle: 'text-smallTitle',
       },
     },
     defaultVariants: {
@@ -27,7 +28,7 @@ interface PlaceholderFieldProps {
 interface StringFieldProps {
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'tableCell';
+  variant?: 'mainPage' | 'body' | 'tableCell' | 'smallTitle';
   color?: 'text' | 'grey-04';
   value?: string;
 }

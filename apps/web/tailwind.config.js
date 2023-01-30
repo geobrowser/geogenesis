@@ -41,6 +41,13 @@ module.exports = {
             fontWeight: '600',
           },
         ],
+        smallTitle: [
+          '1.1875rem',
+          {
+            lineHeight: '1.3125rem',
+            fontWeight: '600',
+          },
+        ],
         input: [
           '1.0625rem',
           {
