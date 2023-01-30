@@ -141,7 +141,6 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
     })
   );
 
-  // TODO: We need to make it work with create triple too?
   return A.map(triples, triple => {
     // The triple is part of the entity whose name changed
     if (triple.entityId in newEntityNames) {
@@ -161,7 +160,6 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
 
     // The triple has a an entity value whose name changed
     if (triple.value.id in newEntityNames) {
-      console.log(triple.value.id, 'is in newEntityNames');
       return {
         ...triple,
         value: {

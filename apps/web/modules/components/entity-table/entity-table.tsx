@@ -22,21 +22,28 @@ import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
-import { EditableEntityTableColumn } from './editable-entity-table-column';
 import { EntityTableCell } from './entity-table-cell';
+
+const columnHelper = createColumnHelper<Row>();
+
+const formatColumns = (columns: Column[] = []) => {
+  const columnSize = 1200 / columns.length;
+
+  return columns.map(column =>
+    columnHelper.accessor(row => row[column.id], {
+      id: column.id,
+      header: () => <Text variant="smallTitle">{column.name}</Text>,
+      size: columnSize < 300 ? 300 : columnSize,
+    })
+  );
+};
 
 const Table = styled.table(props => ({
   width: '100%',
   borderStyle: 'hidden',
   borderCollapse: 'collapse',
   backgroundColor: props.theme.colors.white,
-  position: 'relative',
-  borderRadius: props.theme.radius,
 }));
-
-const TableHead = styled.thead({
-  position: 'relative',
-});
 
 const SpaceHeader = styled.th<{ width: number }>(props => ({
   border: `1px solid ${props.theme.colors['grey-02']}`,
@@ -60,36 +67,6 @@ const Container = styled.div(props => ({
   overflowX: 'scroll',
 }));
 
-const columnHelper = createColumnHelper<Row>();
-
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: string) => {
-  const columnSize = 1200 / columns.length;
-
-  return columns.map(column =>
-    columnHelper.accessor(row => row[column.id], {
-      id: column.id,
-      header: () => {
-        const { actions } = useActionsStore(space);
-        const isNameColumn = column.id === SYSTEM_IDS.NAME;
-
-        return isEditMode && !isNameColumn ? (
-          <EntityStoreProvider spaceId={space} id={column.id} initialTriples={column.triples} initialSchemaTriples={[]}>
-            <EditableEntityTableColumn
-              column={column}
-              entityId={column.id}
-              hasActions={A.isNotEmpty(actions)}
-              space={space}
-            />
-          </EntityStoreProvider>
-        ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
-        );
-      },
-      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
-    })
-  );
-};
-
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, column: { id }, table, cell }) => {
     const space = table.options.meta!.space;
@@ -104,9 +81,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const { actions } = useActionsStore(space);
 
-    const isEditMode = isEditor && editable;
+    const showEditableCell = isEditor && editable;
 
-    if (isEditMode) {
+    if (showEditableCell) {
       return (
         <EditableEntityTableCell hasActions={A.isNotEmpty(actions)} entityId={entityId} cell={cellData} space={space} />
       );
@@ -130,11 +107,9 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const { isEditor } = useAccessControl(space);
   const { selectedType } = useEntityTable();
 
-  const isEditMode = isEditor && editable;
-
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, space),
+    columns: formatColumns(columns),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -156,7 +131,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   return (
     <Container>
       <Table cellSpacing={0} cellPadding={0}>
-        <TableHead>
+        <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (

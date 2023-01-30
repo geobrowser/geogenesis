@@ -49,7 +49,7 @@ const StyledIconButton = styled.button<{ open: boolean }>(props => ({
   all: 'unset',
   backgroundColor: props.open ? props.theme.colors['grey-01'] : props.theme.colors.white,
   color: props.theme.colors['grey-04'],
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
   transition: 'colors 0.15s ease-in-out',
   borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
   borderLeft: 'none',

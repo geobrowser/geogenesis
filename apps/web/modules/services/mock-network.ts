@@ -98,11 +98,11 @@ export class MockNetwork implements INetwork {
   };
 
   columns = async () => {
-    return { columns: [] };
+    return { columns: [], columnsSchema: [] };
   };
 
   rows = async () => {
-    return { rows: [] };
+    return { rows: [], hasNextPage: false };
   };
 
   publish = async () => {

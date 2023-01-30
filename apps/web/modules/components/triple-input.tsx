@@ -17,7 +17,6 @@ const SearchIconContainer = styled.div(props => ({
 }));
 
 const FilterIconContainer = styled.div(props => ({
-  // overflow: 'hidden',
   display: 'flex',
   alignItems: 'center',
   backgroundColor: props.theme.colors.white,
@@ -32,12 +31,6 @@ const InputContainer = styled.div({
   display: 'flex',
   position: 'relative',
 });
-
-const TriplesInputField = styled(Input)(props => ({
-  width: '100%',
-  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
-  paddingLeft: props.theme.space * 10,
-}));
 
 const AdvancedFilters = styled.div(props => ({
   overflow: 'hidden',
@@ -72,7 +65,13 @@ export function TripleInput() {
         <Search />
       </SearchIconContainer>
       {showBasicFilter ? (
-        <TriplesInputField placeholder="Search facts..." value={tripleStore.query} onChange={onChange} />
+        <Input
+          withExternalSearchIcon
+          withFilterIcon
+          placeholder="Search facts..."
+          value={tripleStore.query}
+          onChange={onChange}
+        />
       ) : (
         <AdvancedFilters>
           {tripleStore.filterState.map(filter => (

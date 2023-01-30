@@ -87,14 +87,14 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: string[];
+  types: { id: string; name: string | null }[];
   triples: Triple[];
   nameTripleSpace?: string;
 };
 
 export interface Column {
   id: string;
-  triples: Triple[];
+  name: string;
 }
 
 export interface Cell {

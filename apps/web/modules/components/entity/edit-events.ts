@@ -347,7 +347,7 @@ const listener =
           );
         }
 
-        update(
+        return update(
           {
             ...triple,
             value: { ...triple.value, type: 'string', value },

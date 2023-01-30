@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 
 const StyledTag = styled.span(props => ({
   ...props.theme.typography.tag,
-  borderRadius: '4px',
+  borderRadius: props.theme.radius,
   padding: `0px ${props.theme.space}px`,
   display: 'inline-block',
   backgroundColor: props.theme.colors['grey-02'],

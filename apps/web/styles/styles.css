@@ -44,7 +44,7 @@
   Additional resets based on Tailwind's Preflight
   https://tailwindcss.com/docs/preflight
 */
-blockquote,
+/* blockquote,
 dl,
 dd,
 h1,
@@ -92,8 +92,4 @@ object {
 button:focus {
   outline: 1px dotted;
   outline: 5px auto -webkit-focus-ring-color;
-}
-
-a {
-  text-decoration: none;
-}
+} */

@@ -7,6 +7,7 @@ import { ResultContent } from './results-list';
 
 const space: Space = {
   id: 'space-1',
+  entityId: 'space-1',
   isRootSpace: false,
   editors: [],
   editorControllers: [],
@@ -29,7 +30,7 @@ describe('Entity autocomplete results list', () => {
             id: '1',
             name: 'Name-1',
             description: 'Description-1',
-            types: ['Type-1'],
+            types: [{ id: 'type-id-1', name: 'Type-1' }],
             triples: [],
             nameTripleSpace: 'space-1',
           }}

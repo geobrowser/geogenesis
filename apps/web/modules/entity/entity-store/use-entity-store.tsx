@@ -3,7 +3,8 @@ import { Triple } from '~/modules/types';
 import { useEntityStoreContext } from './entity-store-provider';
 
 export function useEntityStore() {
-  const { create, triples$, schemaTriples$, update, remove, hideSchema, hiddenSchemaIds$ } = useEntityStoreContext();
+  const { create, triples$, schemaTriples$, update, remove, hideSchema, hiddenSchemaIds$, id } =
+    useEntityStoreContext();
   const triples = useSelector(triples$);
   const schemaTriples = useSelector<Triple[]>(schemaTriples$);
   const hiddenSchemaIds = useSelector<string[]>(hiddenSchemaIds$);
@@ -16,5 +17,6 @@ export function useEntityStore() {
     remove,
     hideSchema,
     hiddenSchemaIds,
+    id,
   };
 }

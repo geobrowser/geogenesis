@@ -15,6 +15,7 @@ import {
   Space,
   Triple as TripleType,
 } from '../types';
+import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
 
@@ -58,6 +59,7 @@ interface FetchColumnsOptions {
 
 interface FetchColumnsResult {
   columns: Column[];
+  columnsSchema: TripleType[][];
 }
 
 interface FetchRowsOptions {
@@ -67,11 +69,12 @@ interface FetchRowsOptions {
     first: number;
   };
   columns: Column[];
+  columnsSchema: TripleType[][];
   abortController?: AbortController;
 }
 
 interface FetchRowsResult {
-  rows: TripleType[][];
+  rows: TripleType[];
 }
 
 export interface INetwork {
@@ -386,12 +389,12 @@ export class Network implements INetwork {
       )
     );
 
-    return { rows: rowTriples.map(r => r.triples) };
+    return { rows: rowTriples.flatMap(r => r.triples) };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
     if (!params.typeId) {
-      return { columns: [] };
+      return { columns: [], columnsSchema: [] };
     }
 
     const columnsTriples = await this.fetchTriples({
@@ -406,8 +409,8 @@ export class Network implements INetwork {
       ],
     });
 
-    /* Then we fetch all of the associated triples for each column */
-    const relatedColumnTriples = await Promise.all(
+    /* Then we fetch all of the Value type for each column */
+    const columnsSchema = await Promise.all(
       columnsTriples.triples.map(triple => {
         return this.fetchTriples({
           query: '',
@@ -419,26 +422,30 @@ export class Network implements INetwork {
               field: 'entity-id',
               value: triple.value.id,
             },
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.VALUE_TYPE,
+            },
           ],
         });
       })
     );
 
     /* Name is the default column... */
-    const defaultColumns: Column[] = [
+    const defaultColumns = [
       {
+        name: 'Name',
         id: SYSTEM_IDS.NAME,
-        triples: [],
       },
     ];
 
     /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
+    const schemaColumns: Column[] = columnsTriples.triples.map(triple => ({
+      name: Value.nameOfEntityValue(triple) || triple.value.id,
       id: triple.value.id,
-      triples: relatedColumnTriples[i].triples,
     }));
 
-    return { columns: [...defaultColumns, ...schemaColumns] };
+    return { columns: [...defaultColumns, ...schemaColumns], columnsSchema: columnsSchema.map(cs => cs.triples) };
   };
 }
 

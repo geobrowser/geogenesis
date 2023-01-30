@@ -1,9 +1,7 @@
 import styled from '@emotion/styled';
 import Image from 'next/image';
 import { Text } from '~/modules/design-system/text';
-// import { importCSVFile } from '~/modules/services/import';
 import { ZERO_WIDTH_SPACE } from '../../constants';
-// import { getFilesFromFileList } from '../utils';
 
 const SpaceImageContainer = styled.div(props => ({
   // this is required for next/image
@@ -28,14 +26,6 @@ const SpaceHeaderContainer = styled.div({
   width: '100%',
 });
 
-// const FileImport = styled.input({
-//   margin: '0',
-//   padding: '0',
-//   opacity: '0',
-//   position: 'absolute',
-//   inset: '0',
-// });
-
 interface Props {
   spaceId: string;
   spaceName?: string;
@@ -55,7 +45,7 @@ export function SpaceHeader({ spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props)
           />
         </SpaceImageContainer>
 
-        <Text flex="0 0 auto" variant="mainPage" as="h1">
+        <Text variant="mainPage" as="h1">
           {spaceName}
         </Text>
       </SpaceInfo>

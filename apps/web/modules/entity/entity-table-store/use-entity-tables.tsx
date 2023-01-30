@@ -4,11 +4,8 @@ import { useEntityTableStore } from './entity-table-store-provider';
 
 export const useEntityTable = () => {
   const {
-    create,
-    publish,
     rows$,
     query$,
-    actions$,
     setQuery,
     setPageNumber,
     setNextPage,
@@ -25,7 +22,6 @@ export const useEntityTable = () => {
     setFilterState,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
-  const actions = useSelector(actions$);
   const columns = useSelector(columns$);
   const types = useSelector(types$);
   const hydrated = useSelector(hydrated$);
@@ -38,11 +34,8 @@ export const useEntityTable = () => {
 
   return {
     rows,
-    actions,
     columns,
     types,
-    create,
-    publish,
     query,
     hydrated,
     selectedType,

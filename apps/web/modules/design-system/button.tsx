@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
-import { HACKY_COPY_FILL_CLASS_NAME, ZERO_WIDTH_SPACE } from '../constants';
+import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
 import { Copy } from './icons/copy';
 import { Create } from './icons/create';
@@ -14,6 +14,7 @@ import { Preset } from './icons/preset';
 import { Publish } from './icons/publish';
 import { Relation } from './icons/relation';
 import { RightArrowLongSmall } from './icons/right-arrow-long-small';
+import { Search } from './icons/search';
 import { Text } from './icons/text';
 import { Tick } from './icons/tick';
 import { Trash } from './icons/trash';
@@ -100,12 +101,6 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 
     transition: '200ms all ease-in-out',
 
-    // HACK: The way our copy icon is designed the top "page" in the icon expects a fill color in order
-    // to correctly render. For now we can just set the background color match the button background color.
-    ['.' + HACKY_COPY_FILL_CLASS_NAME]: {
-      fill: buttonColors.backgroundColor,
-    },
-
     ':hover': {
       boxShadow: `inset 0 0 0 1px ${buttonColors.borderColorHover}`,
       backgroundColor: buttonColors.backgroundColorHover,
@@ -139,7 +134,8 @@ type Icon =
   | 'preset'
   | 'relation'
   | 'text'
-  | 'rightArrowLongSmall';
+  | 'rightArrowLongSmall'
+  | 'search';
 
 const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   create: (color?: ColorName) => <Create color={color} />,
@@ -158,6 +154,7 @@ const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
   relation: (color?: ColorName) => <Relation color={color} />,
   text: (color?: ColorName) => <Text color={color} />,
   rightArrowLongSmall: (color?: ColorName) => <RightArrowLongSmall color={color} />,
+  search: (color?: ColorName) => <Search color={color} />,
 };
 
 interface Props {
