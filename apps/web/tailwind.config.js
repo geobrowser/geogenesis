@@ -32,14 +32,6 @@ module.exports = {
       'inner-lg': 'inset 0 0 0 2px',
     },
     extend: {
-      spacing: {
-        4.5: '18px',
-      },
-      padding: {
-        '8.5px': '8.5px',
-        '9px': '9px',
-        '10px': '10px',
-      },
       fontSize: {
         mainPage: [
           '2.75rem',
