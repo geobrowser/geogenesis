@@ -1,29 +1,47 @@
-import styled from '@emotion/styled';
+import { cva, VariantProps } from 'class-variance-authority';
+import React, { ForwardedRef } from 'react';
+import { Search } from './icons/search';
 
-export const Input = styled.input(props => ({
-  ...props.theme.typography.input,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  borderRadius: props.theme.radius,
-  width: '100%',
-  padding: `${9}px ${props.theme.space * 2.5}px`,
-  outline: 'none',
-  WebkitAppearance: 'none',
+const inputStyles = cva(
+  `text-input w-full rounded outline-none outline-0 px-[10px] py-[9px] text-text shadow-inner shadow-grey-02 placeholder:text-grey-03
+ hover:shadow-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02
+  disabled:cursor-not-allowed`,
+  {
+    variants: {
+      withSearchIcon: {
+        true: `pl-9`,
+      },
+      withExternalSearchIcon: {
+        true: `pl-9`,
+      },
+      withFilterIcon: {
+        true: `rounded-r-none`,
+      },
+    },
+  }
+);
 
-  '::placeholder': {
-    color: props.theme.colors['grey-03'],
-  },
+const inputContainerStyles = cva(`relative w-full`);
+const iconContainerStyles = cva(`absolute left-3 top-2.5 z-10`);
 
-  ':hover:enabled': {
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
-  },
+interface Props
+  extends React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>,
+    VariantProps<typeof inputStyles> {
+  value?: string;
+}
 
-  ':focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.ctaPrimary}`,
-  },
-
-  ':disabled': {
-    backgroundColor: props.theme.colors.divider,
-    color: props.theme.colors['grey-03'],
-    cursor: 'not-allowed',
-  },
-}));
+export const Input = React.forwardRef(function Input(
+  { withSearchIcon = false, withExternalSearchIcon = false, withFilterIcon = false, ...props }: Props,
+  ref: ForwardedRef<HTMLInputElement>
+) {
+  return (
+    <div ref={ref} className={inputContainerStyles()}>
+      {withSearchIcon && (
+        <div className={iconContainerStyles()}>
+          <Search />
+        </div>
+      )}
+      <input className={inputStyles({ withSearchIcon, withExternalSearchIcon, withFilterIcon })} {...props} />
+    </div>
+  );
+});

@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
-import { HACKY_COPY_FILL_CLASS_NAME, ZERO_WIDTH_SPACE } from '../constants';
+import { ZERO_WIDTH_SPACE } from '../constants';
 import { ContractSmall } from './icons/contract-small';
 import { Copy } from './icons/copy';
 import { Create } from './icons/create';
@@ -100,12 +100,6 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
     boxShadow: `inset 0 0 0 1px ${buttonColors.borderColor}`,
 
     transition: '200ms all ease-in-out',
-
-    // HACK: The way our copy icon is designed the top "page" in the icon expects a fill color in order
-    // to correctly render. For now we can just set the background color match the button background color.
-    ['.' + HACKY_COPY_FILL_CLASS_NAME]: {
-      fill: buttonColors.backgroundColor,
-    },
 
     ':hover': {
       boxShadow: `inset 0 0 0 1px ${buttonColors.borderColorHover}`,

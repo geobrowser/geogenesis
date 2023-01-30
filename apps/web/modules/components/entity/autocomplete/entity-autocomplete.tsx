@@ -98,7 +98,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
               <SearchIconContainer>
                 <Search />
               </SearchIconContainer>
-              <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.target.value)} />
+              <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </InputContainer>
             <ResizableContainer duration={0.125}>
               <ResultsList>

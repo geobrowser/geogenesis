@@ -16,7 +16,7 @@ import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 
-import 'modern-normalize';
+import '../styles/tailwind.css';
 import '../styles/styles.css';
 
 const globalStyles = css`

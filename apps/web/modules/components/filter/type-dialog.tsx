@@ -8,7 +8,6 @@ import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { useEntityTable } from '~/modules/entity';
 import { ID } from '~/modules/id';
@@ -75,21 +74,9 @@ const CreateButton = styled(Button)(props => ({
 }));
 
 const SearchContainer = styled.div(props => ({
-  position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   padding: props.theme.space * 2,
-}));
-
-const SearchInput = styled(Input)(props => ({
-  paddingLeft: props.theme.space * 9,
-}));
-
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 5,
-  top: props.theme.space * 4.5,
-  zIndex: 10,
 }));
 
 const TypeText = styled(Text)(props => ({
@@ -183,24 +170,11 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
 
             <motion.div layout="position">
               <SearchContainer>
-                <SearchIconContainer>
-                  <Search />
-                </SearchIconContainer>
-                <SearchInput
-                  value={filter}
-                  onChange={e => {
-                    setFilter(e.target.value);
-                  }}
-                />
+                <Input value={filter} onChange={e => setFilter(e.currentTarget.value)} />
               </SearchContainer>
             </motion.div>
 
-            {hasResults && (
-              <>
-                <TypeText variant="smallButton">All types</TypeText>
-                <Spacer height={8} />
-              </>
-            )}
+            {hasResults && <TypeText variant="smallButton">All types</TypeText>}
 
             <ResultsList>
               {hasResults
