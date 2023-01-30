@@ -8,7 +8,7 @@ import { useEditEvents } from '../entity/edit-events';
 const StyledIconButton = styled.button(props => ({
   all: 'unset',
   backgroundColor: props.theme.colors.white,
-  padding: `${props.theme.space * 2.5}px ${props.theme.space * 3}px`,
+  padding: `0 ${props.theme.space * 3}px`,
   transition: 'colors 0.15s ease-in-out',
   position: 'absolute',
   right: 0,

@@ -44,6 +44,9 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
   useEffect(() => {
     if (ref.current) {
       ref.current.style.height = 'auto';
+
+      if (variant === 'body' || variant === 'tableCell' || variant === 'smallTitle') return;
+
       // This aligns the bottom of the text area with the sum of line heights * number of lines
       // for body text.
       ref.current.style.height = ref.current.scrollHeight - 4 + 'px';

@@ -15,7 +15,7 @@ import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
-import { ChipCellContainer, EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
+import { EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
 
 const Container = styled.div(props => ({
   padding: 0,
@@ -83,11 +83,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         const value = cellData as Value;
 
         if (value.type === 'entity') {
-          return (
-            <ChipCellContainer>
-              <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>
-            </ChipCellContainer>
-          );
+          return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
         }
 
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;
