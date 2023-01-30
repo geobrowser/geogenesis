@@ -10,10 +10,10 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Entity, EntityStoreProvider, useEntityTable } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE, Entity, EntityStoreProvider, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
@@ -34,7 +34,6 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => {
-        const { actions } = useActionsStore(space);
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
 
         return isEditMode && !isNameColumn ? (
@@ -42,7 +41,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
             <EditableEntityTableColumn
               column={column}
               entityId={column.id}
-              hasActions={A.isNotEmpty(actions)}
+              hasActions={A.isNotEmpty([])}
               space={space}
             />
           </EntityStoreProvider>
@@ -73,14 +72,15 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isExpanded = !!table.options?.meta?.expandedCells[cellId];
     const editable = table.options.meta?.editable;
     const isEditor = table.options.meta?.isEditor;
+    const actions = table.options.meta?.actions ?? [];
 
     const entityId = Object.values(row.original)[0].entityId;
-    const cellData = getValue<Cell>();
-    const isPlaceholder = cellData.triples[0]?.placeholder;
-
-    const { actions } = useActionsStore(space);
+    const cellData = getValue<Cell | undefined>();
+    const isPlaceholder = cellData?.triples[0]?.placeholder;
 
     const isEditMode = isEditor && editable;
+
+    if (!cellData) return null;
 
     if (isEditMode) {
       return (
@@ -105,6 +105,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
   const { selectedType } = useEntityTable();
+  // const { actions } = useActionsStore(space);
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
@@ -117,7 +118,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: DEFAULT_PAGE_SIZE,
       },
     },
     meta: {
@@ -125,6 +126,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
       space,
       editable,
       isEditor,
+      actions: [],
     },
   });
 

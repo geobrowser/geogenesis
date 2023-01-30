@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A, D, pipe } from '@mobily/ts-belt';
 import { Triple } from '~/modules/triple';
-import { Column, Row, Triple as TripleType } from '~/modules/types';
+import { Action, Column, Row, Triple as TripleType } from '~/modules/types';
 import { DEFAULT_PAGE_SIZE, Entity } from '..';
 
 export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns: Column[]) {
@@ -39,4 +40,24 @@ export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns:
     rows: aggregatedRows,
     hasNextPage: rowTriplesWithEntityIds.length > DEFAULT_PAGE_SIZE,
   };
+}
+
+export function columnsFromActions(actions: Action[] | undefined, columns: Column[]): Column[] {
+  if (!actions) return columns;
+
+  const newTriples = Triple.fromActions(
+    actions,
+    columns.flatMap(t => t.triples)
+  );
+  const triplesWithNames = Triple.withLocalNames(actions, newTriples);
+  const triplesThatAreAttributes = triplesWithNames.filter(triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES);
+
+  const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
+    id: triple.value.id,
+    triples: triplesWithNames.filter(t => {
+      return t.entityId === triple.value.id;
+    }),
+  }));
+
+  return [...columns, ...newColumns];
 }

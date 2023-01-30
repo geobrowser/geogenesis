@@ -320,15 +320,25 @@ const listener =
           value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
         });
 
+        const newAttributeNameTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: newAttributeTriple.entityId,
+          entityName: 'New Column',
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: { id: ID.createValueId(), type: 'string', value: 'New Column' },
+        });
+
         const newTypeTriple = Triple.withId({
           space: context.spaceId,
           entityId: context.entityId,
           entityName: context.entityName,
           attributeId: SYSTEM_IDS.ATTRIBUTES,
-          attributeName: 'Type',
-          value: { id: newAttributeTriple.entityId, type: 'entity', name: 'New Column' },
+          attributeName: 'Attributes',
+          value: { id: newAttributeTriple.entityId, type: 'entity', name: newAttributeNameTriple.entityName },
         });
 
+        create(newAttributeNameTriple);
         create(newAttributeTriple);
         return create(newTypeTriple);
       }

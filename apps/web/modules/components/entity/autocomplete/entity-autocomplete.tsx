@@ -55,10 +55,6 @@ const AddEntityButton = styled(SquareButton)({
   height: 23,
 });
 
-const AutocompleteInput = styled(Input)(props => ({
-  paddingLeft: props.theme.space * 9,
-}));
-
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
@@ -98,7 +94,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
               <SearchIconContainer>
                 <Search />
               </SearchIconContainer>
-              <AutocompleteInput onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
+              <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </InputContainer>
             <ResizableContainer duration={0.125}>
               <ResultsList>

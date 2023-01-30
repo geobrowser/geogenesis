@@ -118,7 +118,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [], hasNextPage: false },
+      { columns: [], rows: [] },
       computed(async () => {
         try {
           this.abortController.abort();
@@ -187,7 +187,6 @@ export class EntityTableStore implements IEntityTableStore {
             )
           );
 
-          // Merge any local changes to triples in an entity with the table rows from the server.
           const entitiesCreatedOrChangedLocally = pipe(
             this.ActionsStore.actions$.get(),
             actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverRows)),
@@ -203,7 +202,7 @@ export class EntityTableStore implements IEntityTableStore {
             sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
           );
 
-          const { rows, hasNextPage } = EntityTable.fromColumnsAndRows(
+          const { rows } = EntityTable.fromColumnsAndRows(
             space,
             [
               // These are entities that were created locally and have the selected type
@@ -221,7 +220,10 @@ export class EntityTableStore implements IEntityTableStore {
           );
 
           this.hydrated$.set(true);
-          return { columns: serverColumns, rows: rows.slice(0, pageSize), hasNextPage };
+          return {
+            columns: serverColumns,
+            rows: rows.slice(0, pageSize),
+          };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
             // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -235,17 +237,26 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      return columns;
+      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[space], columns);
     });
 
-    this.rows$ = computed(() => {
-      const { rows } = networkData$.get();
-      return rows;
+    this.rows$ = computed(async () => {
+      const serverColumns = this.columns$.get();
+      const { rows: serverRows } = networkData$.get();
+
+      console.log('rerunning');
+
+      return EntityTable.fromColumnsAndRows(
+        space,
+        serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples)),
+        serverColumns
+      ).rows;
     });
+
+    this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
   }
 
   setQuery = (query: string) => {

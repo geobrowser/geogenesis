@@ -131,6 +131,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     );
   }
 
+  console.log('rerendering entity-editable-table-cell');
+
   return (
     <div className="flex flex-wrap gap-2">
       {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
