@@ -38,6 +38,7 @@ export function PlaceholderField({ variant = 'body', color = 'text', onBlur, ...
 }
 
 export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // Manually keep the height of the textarea in sync with its content.
@@ -58,9 +59,9 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
       {...props}
       ref={ref}
       rows={1}
-      onChange={props.onChange}
-      color={color}
-      value={props.value}
+      onBlur={props.onChange}
+      onChange={e => setLocalValue(e.currentTarget.value)}
+      value={localValue}
       className={textareaStyles({ variant })}
     />
   );

@@ -41,7 +41,7 @@ export const EditableEntityTableColumn = memo(function EditableEntityTableColumn
   return (
     <div className="flex flex-wrap gap-3">
       <input
-        className="text-smallTitle w-full focus:outline-none"
+        className="text-smallTitle w-full focus:outline-none placeholder:text-grey-02"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
         onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}

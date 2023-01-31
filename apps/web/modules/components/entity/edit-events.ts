@@ -314,7 +314,7 @@ const listener =
         const newAttributeTriple = Triple.withId({
           space: context.spaceId,
           entityId: ID.createEntityId(),
-          entityName: 'New Column',
+          entityName: '',
           attributeId: SYSTEM_IDS.TYPES,
           attributeName: 'Type',
           value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
@@ -323,10 +323,10 @@ const listener =
         const newAttributeNameTriple = Triple.withId({
           space: context.spaceId,
           entityId: newAttributeTriple.entityId,
-          entityName: 'New Column',
+          entityName: '',
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: 'New Column' },
+          value: { id: ID.createValueId(), type: 'string', value: '' },
         });
 
         const newTypeTriple = Triple.withId({
