@@ -251,8 +251,7 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.rows$ = computed(async () => {
       const serverColumns = this.columns$.get();
-      const { rows: serverRows, triples } = networkData$.get();
-      const rowTriples = serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples));
+      const { triples } = networkData$.get();
 
       // Merge all local changes with the server row triples.
       const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], triples);
