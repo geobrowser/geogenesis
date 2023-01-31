@@ -97,6 +97,10 @@ export class MockNetwork implements INetwork {
     return [];
   };
 
+  fetchEntity = async () => {
+    return { id: '', triples: [], name: null, description: null, types: [] };
+  };
+
   columns = async () => {
     return { columns: [], columnsSchema: [] };
   };
