@@ -57,12 +57,13 @@ export function columnsFromActions(
   const triplesWithNames = Triple.withLocalNames(actions, newTriples);
 
   // Only show the column if it is an attribute of the selected type
-  const columnOnlyTriplesWithNames = triplesWithNames.filter(t => t.entityId === selectedTypeId);
-  const triplesThatAreAttributes = triplesWithNames.filter(triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES);
+  const triplesThatAreAttributes = triplesWithNames.filter(
+    triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES && triple.entityId === selectedTypeId
+  );
 
   const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
     id: triple.value.id,
-    triples: columnOnlyTriplesWithNames.filter(t => {
+    triples: triplesWithNames.filter(t => {
       return t.entityId === triple.value.id;
     }),
   }));
