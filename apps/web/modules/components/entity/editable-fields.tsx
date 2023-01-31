@@ -22,22 +22,20 @@ interface PlaceholderFieldProps {
   onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body';
-  color?: 'text' | 'grey-04';
+}
+
+export function PlaceholderField({ variant = 'body', onBlur, ...props }: PlaceholderFieldProps) {
+  return <textarea {...props} rows={1} onBlur={onBlur} className={textareaStyles({ variant })} />;
 }
 
 interface StringFieldProps {
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   variant?: 'mainPage' | 'body' | 'tableCell' | 'smallTitle';
-  color?: 'text' | 'grey-04';
   value?: string;
 }
 
-export function PlaceholderField({ variant = 'body', color = 'text', onBlur, ...props }: PlaceholderFieldProps) {
-  return <textarea {...props} rows={1} onBlur={onBlur} color={color} className={textareaStyles({ variant })} />;
-}
-
-export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
+export function StringField({ variant = 'body', ...props }: StringFieldProps) {
   const [localValue, setLocalValue] = React.useState(props.value || '');
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -59,7 +57,7 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
       {...props}
       ref={ref}
       rows={1}
-      onBlur={props.onChange}
+      onBlur={props.onBlur}
       onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
       className={textareaStyles({ variant })}

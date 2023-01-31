@@ -4,7 +4,6 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { Column } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
-import { StringField } from '../entity/editable-fields';
 
 interface Props {
   column: Column;

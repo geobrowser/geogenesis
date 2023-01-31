@@ -91,7 +91,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             key={triple.id}
             variant="tableCell"
             placeholder="Add value..."
-            onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
+            onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
             value={triple.value.value}
           />
         );
@@ -127,10 +127,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     return (
       <StringField
         variant="tableCell"
-        color="text"
         placeholder="Entity name..."
         value={entityName}
-        onChange={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
+        onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
       />
     );
   }
