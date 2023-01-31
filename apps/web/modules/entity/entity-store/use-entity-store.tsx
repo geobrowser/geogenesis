@@ -2,7 +2,7 @@ import { useSelector } from '@legendapp/state/react';
 import { Triple } from '~/modules/types';
 import { useEntityStoreContext } from './entity-store-provider';
 
-export function useEntityStore() {
+export function useEntityPageStore() {
   const { create, triples$, schemaTriples$, update, remove, hideSchema, hiddenSchemaIds$, id } =
     useEntityStoreContext();
   const triples = useSelector(triples$);

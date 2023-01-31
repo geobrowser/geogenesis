@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Entity, useEntityStore } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
@@ -12,22 +12,26 @@ interface Props {
   cell: Cell;
   space: string;
   entityId: string;
-  hasActions: boolean;
+  triples: Triple[];
+  create: (triple: Triple) => void;
+  update: (triple: Triple, oldTriple: Triple) => void;
+  remove: (triple: Triple) => void;
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
   entityId,
-  hasActions,
+  triples: serverTriples,
+  create,
+  update,
+  remove,
 }: Props) {
-  const { triples: localTriples, update, create, remove } = useEntityStore();
-
   const send = useEditEvents({
     context: {
       entityId,
       spaceId: space,
-      entityName: Entity.name(localTriples) ?? '',
+      entityName: Entity.name(serverTriples) ?? '',
     },
     api: {
       create,
@@ -38,7 +42,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && !hasActions ? cell.triples : localTriples;
+  const triples = serverTriples.length === 0 ? cell.triples : serverTriples;
 
   const entityName = Entity.name(triples) || '';
 
@@ -131,7 +135,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     );
   }
 
-  console.log('rerendering entity-editable-table-cell');
+  // console.log('rerendering entity-editable-table-cell');
 
   return (
     <div className="flex flex-wrap gap-2">

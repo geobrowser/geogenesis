@@ -1,5 +1,4 @@
 import '@tanstack/react-table';
-import { Action } from './modules/types';
 
 // We declare a new function that we will define and pass into the useTable hook.
 // See: https://tanstack.com/table/v8/docs/examples/react/editable-data
@@ -10,6 +9,5 @@ declare module '@tanstack/react-table' {
     expandedCells: Record<string, boolean>;
     editable: boolean;
     isEditor: boolean;
-    actions: Action[];
   }
 }

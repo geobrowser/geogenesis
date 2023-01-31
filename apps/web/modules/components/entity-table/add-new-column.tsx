@@ -1,7 +1,7 @@
 import styled from '@emotion/styled';
 import { memo } from 'react';
+import { useActionsStoreContext } from '~/modules/action';
 import { Plus } from '~/modules/design-system/icons/plus';
-import { useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 
@@ -41,7 +41,7 @@ interface Props {
 }
 
 export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: Props) {
-  const { triples: localTriples, update, create, remove } = useEntityStore();
+  const { update, create, remove } = useActionsStoreContext();
 
   const send = useEditEvents({
     context: {
