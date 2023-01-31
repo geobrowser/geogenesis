@@ -247,8 +247,21 @@ export class EntityTableStore implements IEntityTableStore {
       const serverColumns = this.columns$.get();
       const { rows: serverRows } = networkData$.get();
       const rowTriples = serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples));
+
+      // Merge all local changes with the server row triples.
       const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], rowTriples);
-      return EntityTable.fromColumnsAndRows(space, mergedRowTriples, serverColumns).rows;
+
+      // Make sure we only generate rows for entities that have the selected type
+      const entities = Entity.entitiesFromTriples(mergedRowTriples);
+      const entitiesWithSelectedType = entities.filter(e =>
+        e.types.some(t => t.id === this.selectedType$.get()?.entityId)
+      );
+
+      return EntityTable.fromColumnsAndRows(
+        space,
+        entitiesWithSelectedType.flatMap(e => e.triples),
+        serverColumns
+      ).rows;
     });
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
