@@ -2,6 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
+import { ROOT_SPACE_IMAGE } from '../constants';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE } from '../triple';
 import {
@@ -338,7 +339,8 @@ export class Network implements INetwork {
       );
 
       if (space.isRootSpace) {
-        attributes.name = 'Root Space';
+        attributes.name = 'Root';
+        attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
       }
 
       return {
