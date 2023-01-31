@@ -61,7 +61,6 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      console.log('rerunning computed in entity-store');
       const spaceActions = ActionsStore.actions$.get()[spaceId] || [];
 
       return pipe(

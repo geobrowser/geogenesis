@@ -246,14 +246,8 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = computed(async () => {
       const serverColumns = this.columns$.get();
       const { rows: serverRows } = networkData$.get();
-
-      console.log('rerunning');
-
-      return EntityTable.fromColumnsAndRows(
-        space,
-        serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples)),
-        serverColumns
-      ).rows;
+      const rowTriples = serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples));
+      return EntityTable.fromColumnsAndRows(space, rowTriples, serverColumns).rows;
     });
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
