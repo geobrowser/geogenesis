@@ -125,6 +125,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const { selectedType } = useEntityTable();
   const isEditMode = isEditor && editable;
 
+  console.log('table rerendering');
+
   const table = useReactTable({
     data: rows,
     columns: formatColumns(columns, isEditMode, space),

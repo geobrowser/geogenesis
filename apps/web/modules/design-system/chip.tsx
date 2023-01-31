@@ -1,82 +1,24 @@
-import styled from '@emotion/styled';
+import { cva } from 'class-variance-authority';
 import Link from 'next/link';
 import { useState } from 'react';
 import { CheckCloseSmall } from '~/modules/design-system/icons/check-close-small';
-
-const StyledChip = styled.a(props => ({
-  ...props.theme.typography.metadataMedium,
-  borderRadius: props.theme.radius,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
-  padding: `${props.theme.space}px ${props.theme.space * 2}px`,
-  display: 'inline-block',
-  backgroundColor: props.theme.colors.white,
-  textDecoration: 'none',
-
-  // We want to avoid large amounts of text in a chip being centered.
-  textAlign: 'left',
-
-  '&:hover, &:focus': {
-    cursor: 'pointer',
-    color: props.theme.colors.ctaPrimary,
-    backgroundColor: props.theme.colors.ctaTertiary,
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
-  },
-}));
-
-/* Wrapper to prevent the icon from being scaled by flexbox */
-const StyledCheckCloseContainer = styled.button({
-  all: 'unset',
-  cursor: 'pointer',
-});
-
-const StyledDeletableChip = styled.a<{ isWarning: boolean }>(props => {
-  const chipHoverActiveStyles = props.isWarning
-    ? {}
-    : {
-        cursor: 'pointer',
-        color: props.theme.colors.ctaPrimary,
-        backgroundColor: props.theme.colors.ctaTertiary,
-        boxShadow: `inset 0 0 0 1px ${props.theme.colors.ctaPrimary}`,
-      };
-
-  const closeButtonActiveStyles = props.isWarning ? {} : { opacity: 0.3 };
-
-  return {
-    ...props.theme.typography.metadataMedium,
-    borderRadius: props.theme.radius,
-    padding: `${props.theme.space}px ${props.theme.space * 2}px`,
-    textDecoration: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    gap: props.theme.space,
-    // We want to avoid large amounts of text in a chip being centered.
-    textAlign: 'left',
-
-    backgroundColor: props.isWarning ? props.theme.colors['red-02'] : props.theme.colors.white,
-    color: props.isWarning ? props.theme.colors['red-01'] : props.theme.colors.text,
-    boxShadow: `inset 0 0 0 1px ${props.isWarning ? props.theme.colors['red-01'] : props.theme.colors.text}`,
-
-    '&:hover, &:focus': chipHoverActiveStyles,
-    [`&:hover ${StyledCheckCloseContainer}, &:focus ${StyledCheckCloseContainer}`]: closeButtonActiveStyles,
-  };
-});
 
 interface LinkableChipProps {
   href: string;
   children: React.ReactNode;
 }
 
+const linkableChipStyles = cva(
+  'text-metadataMedium rounded shadow-inner shadow-text py-1 px-2 inline-block bg-white text-left hover:cursor-pointer hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary'
+);
+
 export function LinkableChip({ href, children }: LinkableChipProps) {
   return (
     <Link href={href} passHref>
-      <StyledChip>{children}</StyledChip>
+      <a className={linkableChipStyles()}>{children}</a>
     </Link>
   );
 }
-
-const StyledLink = styled.a({
-  color: 'currentcolor',
-});
 
 interface ChipButtonProps {
   onClick: () => void;
@@ -84,20 +26,41 @@ interface ChipButtonProps {
   href: string;
 }
 
+const deletableChipStyles = cva(
+  'flex items-center gap-1 text-metadataMedium text-left rounded py-1 px-2 text-text bg-white shadow-inner shadow-text hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary  focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary hover:cursor-pointer',
+  {
+    variants: {
+      isWarning: {
+        true: 'bg-red-02 text-red-01 shadow-red-01 hover:text-red-01 hover:bg-red-02 hover:shadow-red-01',
+      },
+    },
+  }
+);
+
+const deleteButtonStyles = cva('cursor-pointer', {
+  variants: {
+    isWarning: {
+      true: 'opacity-100',
+    },
+  },
+});
+
 export function DeletableChipButton({ onClick, children, href }: ChipButtonProps) {
   const [isWarning, setIsWarning] = useState(false);
+
   return (
-    <StyledDeletableChip as="button" role="button" isWarning={isWarning}>
+    <button className={deletableChipStyles({ isWarning })}>
       <Link href={href} passHref>
-        <StyledLink>{children}</StyledLink>
+        <a className="text-current">{children}</a>
       </Link>
-      <StyledCheckCloseContainer
+      <button
+        className={deleteButtonStyles({ isWarning })}
         onClick={onClick}
         onMouseOver={() => setIsWarning(true)}
         onMouseOut={() => setIsWarning(false)}
       >
         <CheckCloseSmall />
-      </StyledCheckCloseContainer>
-    </StyledDeletableChip>
+      </button>
+    </button>
   );
 }

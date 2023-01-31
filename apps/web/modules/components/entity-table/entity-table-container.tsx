@@ -17,6 +17,8 @@ interface Props {
 export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
 
+  console.log('container rerendering');
+
   return (
     <PageContainer>
       <Spacer height={20} />
