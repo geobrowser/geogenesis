@@ -73,8 +73,7 @@ export class EntityStore implements IEntityStore {
           return isCreate || isDelete || isRemove;
         }),
         actions => Triple.fromActions(actions, initialTriples),
-        triples => Triple.withLocalNames(spaceActions, triples),
-        A.uniqBy(triple => triple.id)
+        triples => Triple.withLocalNames(spaceActions, triples)
       );
     });
 

@@ -247,7 +247,8 @@ export class EntityTableStore implements IEntityTableStore {
       const serverColumns = this.columns$.get();
       const { rows: serverRows } = networkData$.get();
       const rowTriples = serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples));
-      return EntityTable.fromColumnsAndRows(space, rowTriples, serverColumns).rows;
+      const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], rowTriples);
+      return EntityTable.fromColumnsAndRows(space, mergedRowTriples, serverColumns).rows;
     });
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
