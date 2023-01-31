@@ -34,22 +34,10 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => {
-        const { actions$, create, update, remove } = useActionsStoreContext();
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
-        const columnTriples = Triple.fromActions(actions$.get()[space], column.triples).filter(
-          t => t.entityId === column.id
-        );
 
         return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumn
-            triples={columnTriples}
-            create={create}
-            update={update}
-            remove={remove}
-            column={column}
-            entityId={column.id}
-            space={space}
-          />
+          <EditableEntityTableColumn column={column} entityId={column.id} space={space} />
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );
@@ -124,8 +112,6 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const { isEditor } = useAccessControl(space);
   const { selectedType } = useEntityTable();
   const isEditMode = isEditor && editable;
-
-  console.log('table rerendering');
 
   const table = useReactTable({
     data: rows,

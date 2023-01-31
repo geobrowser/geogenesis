@@ -112,10 +112,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const { rows: serverRows } = await network.rows({
     spaceId,
     params,
-    columns,
   });
 
-  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
+  const { rows } = EntityTable.fromColumnsAndRows(
+    spaceId,
+    serverRows.flatMap(sr => sr.triples),
+    columns
+  );
 
   return {
     props: {

@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A, D, pipe } from '@mobily/ts-belt';
 import { Triple } from '~/modules/triple';
 import { Action, Column, Row, Triple as TripleType } from '~/modules/types';
 import { DEFAULT_PAGE_SIZE, Entity } from '..';
@@ -38,23 +37,32 @@ export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns:
 
   return {
     rows: aggregatedRows,
+    triples: rows,
     hasNextPage: rowTriplesWithEntityIds.length > DEFAULT_PAGE_SIZE,
   };
 }
 
-export function columnsFromActions(actions: Action[] | undefined, columns: Column[]): Column[] {
+export function columnsFromActions(
+  actions: Action[] | undefined,
+  columns: Column[],
+  selectedTypeId?: string
+): Column[] {
   if (!actions) return columns;
 
   const newTriples = Triple.fromActions(
     actions,
     columns.flatMap(t => t.triples)
   );
+
   const triplesWithNames = Triple.withLocalNames(actions, newTriples);
+
+  // Only show the column if it is an attribute of the selected type
+  const columnOnlyTriplesWithNames = triplesWithNames.filter(t => t.entityId === selectedTypeId);
   const triplesThatAreAttributes = triplesWithNames.filter(triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES);
 
   const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
     id: triple.value.id,
-    triples: triplesWithNames.filter(t => {
+    triples: columnOnlyTriplesWithNames.filter(t => {
       return t.entityId === triple.value.id;
     }),
   }));

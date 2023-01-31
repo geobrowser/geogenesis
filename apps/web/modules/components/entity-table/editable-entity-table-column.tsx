@@ -1,6 +1,8 @@
 import { memo } from 'react';
+import { useActionsStoreContext } from '~/modules/action';
 import { Entity } from '~/modules/entity';
-import { Column, Triple } from '~/modules/types';
+import { Triple } from '~/modules/triple';
+import { Column, Triple as Tripl } from '~/modules/types';
 import { useEditEvents } from '../entity/edit-events';
 import { StringField } from '../entity/editable-fields';
 
@@ -8,21 +10,12 @@ interface Props {
   column: Column;
   space: string;
   entityId: string;
-  triples: Triple[];
-  create: (triple: Triple) => void;
-  update: (triple: Triple, oldTriple: Triple) => void;
-  remove: (triple: Triple) => void;
 }
 
-export const EditableEntityTableColumn = memo(function EditableEntityTableColumn({
-  column,
-  space,
-  entityId,
-  triples: localTriples,
-  create,
-  update,
-  remove,
-}: Props) {
+export const EditableEntityTableColumn = memo(function EditableEntityTableColumn({ column, space, entityId }: Props) {
+  const { actions$, create, update, remove } = useActionsStoreContext();
+  const localTriples = Triple.fromActions(actions$.get()[space], column.triples).filter(t => t.entityId === column.id);
+
   const send = useEditEvents({
     context: {
       entityId,

@@ -118,7 +118,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [] },
+      { columns: [], rows: [], triples: [] },
       computed(async () => {
         try {
           this.abortController.abort();
@@ -145,7 +145,6 @@ export class EntityTableStore implements IEntityTableStore {
           const { rows: serverRows } = await this.api.rows({
             spaceId: space,
             params,
-            columns: serverColumns,
             abortController: this.abortController,
           });
 
@@ -187,9 +186,11 @@ export class EntityTableStore implements IEntityTableStore {
             )
           );
 
+          const serverEntityTriples = serverRows.flatMap(t => t.triples);
+
           const entitiesCreatedOrChangedLocally = pipe(
             this.ActionsStore.actions$.get(),
-            actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverRows)),
+            actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
             A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId))
           );
 
@@ -198,11 +199,11 @@ export class EntityTableStore implements IEntityTableStore {
             serverTriplesForEntitiesChangedLocally.flatMap(t => t.triples).map(t => t.entityId)
           );
 
-          const filteredServerRows = serverRows.filter(
+          const filteredServerRows = serverEntityTriples.filter(
             sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
           );
 
-          const { rows } = EntityTable.fromColumnsAndRows(
+          const { rows, triples } = EntityTable.fromColumnsAndRows(
             space,
             [
               // These are entities that were created locally and have the selected type
@@ -223,6 +224,7 @@ export class EntityTableStore implements IEntityTableStore {
           return {
             columns: serverColumns,
             rows: rows.slice(0, pageSize),
+            triples,
           };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
@@ -231,7 +233,7 @@ export class EntityTableStore implements IEntityTableStore {
           }
 
           // TODO: Real error handling
-          return { columns: [], rows: [], hasNextPage: false };
+          return { columns: [], rows: [], triples: [], hasNextPage: false };
         }
       })
     );
@@ -240,16 +242,20 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[space], columns);
+      return EntityTable.columnsFromActions(
+        this.ActionsStore.actions$.get()[space],
+        columns,
+        this.selectedType$.get()?.entityId
+      );
     });
 
     this.rows$ = computed(async () => {
       const serverColumns = this.columns$.get();
-      const { rows: serverRows } = networkData$.get();
+      const { rows: serverRows, triples } = networkData$.get();
       const rowTriples = serverRows.flatMap(sr => Object.values(sr).flatMap(r => r.triples));
 
       // Merge all local changes with the server row triples.
-      const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], rowTriples);
+      const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], triples);
 
       // Make sure we only generate rows for entities that have the selected type
       const entities = Entity.entitiesFromTriples(mergedRowTriples);
@@ -259,7 +265,7 @@ export class EntityTableStore implements IEntityTableStore {
 
       return EntityTable.fromColumnsAndRows(
         space,
-        entitiesWithSelectedType.flatMap(e => e.triples),
+        entitiesWithSelectedType.flatMap(sr => sr.triples),
         serverColumns
       ).rows;
     });

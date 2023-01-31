@@ -67,12 +67,11 @@ interface FetchRowsOptions {
     skip: number;
     first: number;
   };
-  columns: Column[];
   abortController?: AbortController;
 }
 
 interface FetchRowsResult {
-  rows: TripleType[];
+  rows: EntityType[];
 }
 
 export interface INetwork {
@@ -435,20 +434,9 @@ export class Network implements INetwork {
 
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
-    const rowTriples = await Promise.all(
-      rowEntityIds.map(entityId =>
-        this.fetchTriples({
-          query: '',
-          space: spaceId,
-          abortController,
-          first: DEFAULT_PAGE_SIZE,
-          skip: 0,
-          filter: [{ field: 'entity-id', value: entityId }],
-        })
-      )
-    );
+    const entities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
 
-    return { rows: rowTriples.flatMap(r => r.triples) };
+    return { rows: entities };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
@@ -482,6 +470,8 @@ export class Network implements INetwork {
         triples: [],
       },
     ];
+
+    console.log(columnsTriples);
 
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
