@@ -17,26 +17,17 @@ type Space @entity {
   createdAtBlock: BigInt!
   entity: GeoEntity
 
-  # Should be able to include types from other spaces
+  # These are the types that are defined in this space
+  # Making a distinction between imported and defined types for now, not sure if we want to keep it like this though. Figured it would be better to show changes cross space
   types: [SpaceType!] @derivedFrom(field: "spaceId")
-  importedTypes: [SpaceType!] #These are the types from other spaces that are manually imported into this space
+  importedTypes: [SpaceType!] #These are the types imported from other spaces
 }
 
 type SpaceType @entity {
   id: ID!
   spaceId: Space!
-  #type: EntityType!
-  type: GeoEntity! # This will only be populated if a triple is found that creates the type
-  # this means the attribute is: 'type'0
-  # and the value is the Type GeoEntity
+  type: GeoEntity!
 }
-
-# Global Type. We filter this by space to get the types for a space
-# Do we need this or should it instead just be the GeoEntity?
-# type EntityType @entity {
-#   id: ID! # why should this not be the entityId?
-#   entityId: GeoEntity! #ID of the GeoEntity we are defining as a type
-# }
 
 type Account @entity {
   id: ID!

@@ -75,7 +75,7 @@ export function handleCreateTripleAction(
   // if we are making a type triple we need to create a SpaceType entity
   const factEntityValue = fact.value.asEntityValue();
   //@note the use of == instead of === is intentional, assemblyscript == is the same as === in javascript, === in assemblyscript compares references to memory
-  // can't do this in the isTypeTriple because the compiler complains about possible null even after checking
+  //@note Can't null check directly in isTypeTriple because the compiler complains about possible null value even though we check for null before accessing id 
   if(factEntityValue != null) {
     const isTypeTriple = fact.attributeId == TYPES && factEntityValue.id == SCHEMA_TYPE;
     if(isTypeTriple) {
