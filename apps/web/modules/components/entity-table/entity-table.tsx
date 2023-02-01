@@ -22,7 +22,7 @@ import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
-import { EditableEntityTableColumn } from './editable-entity-table-column';
+import { EditableEntityTableColumnHeader } from './editable-entity-table-column-header';
 import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
@@ -37,7 +37,11 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
 
         return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumn column={column} entityId={column.id} space={space} />
+          <EditableEntityTableColumnHeader
+            column={column}
+            entityId={column.id}
+            spaceId={Entity.nameTriple(column.triples)?.space}
+          />
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );

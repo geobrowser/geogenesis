@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { useActionsStoreContext } from '~/modules/action';
+import { useActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { Column } from '~/modules/types';
@@ -7,13 +7,21 @@ import { useEditEvents } from '../entity/edit-events';
 
 interface Props {
   column: Column;
-  space: string;
+  // This spaceId is the spaceId of the attribute, not the current space.
+  // We need the attribute spaceId to get the actions for the attribute
+  // (since actions are grouped by spaceId) to be able to keep the updated
+  // name in sync.
+  spaceId?: string;
   entityId: string;
 }
 
-export const EditableEntityTableColumn = memo(function EditableEntityTableColumn({ column, space, entityId }: Props) {
-  const { actions$, create, update, remove } = useActionsStoreContext();
-  const localTriples = Triple.fromActions(actions$.get()[space], column.triples).filter(t => t.entityId === column.id);
+export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
+  column,
+  spaceId,
+  entityId,
+}: Props) {
+  const { actions, create, update, remove } = useActionsStore(spaceId);
+  const localTriples = Triple.fromActions(actions, column.triples).filter(t => t.entityId === column.id);
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
@@ -22,7 +30,7 @@ export const EditableEntityTableColumn = memo(function EditableEntityTableColumn
   const send = useEditEvents({
     context: {
       entityId,
-      spaceId: space,
+      spaceId: spaceId ?? '',
       entityName: Entity.name(localTriples) ?? '',
     },
     api: {
