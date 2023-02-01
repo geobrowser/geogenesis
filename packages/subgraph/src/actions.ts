@@ -4,6 +4,7 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
+import { SCHEMA_TYPE, TYPES } from '@geogenesis/ids/system-ids'
 import {
   Address,
   BigDecimal,
@@ -11,7 +12,7 @@ import {
   log,
   store,
 } from '@graphprotocol/graph-ts'
-import { GeoEntity, Space, Triple } from '../generated/schema'
+import { GeoEntity, Space, Triple, SpaceType } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { createTripleId } from './id'
 
@@ -19,7 +20,7 @@ export function handleSpaceAdded(
   spaceAddress: string,
   isRootSpace: boolean,
   createdAtBlock: BigInt,
-  entityId: string | null
+  entityId: string | null,
 ): void {
   if (spaceAddress.length != 42) {
     log.debug(`Invalid space address: ${spaceAddress}`, [])
@@ -70,6 +71,22 @@ export function handleCreateTripleAction(
     fact.attributeId,
     fact.value
   )
+
+  // if we are making a type triple we need to create a SpaceType entity
+  const factEntityValue = fact.value.asEntityValue();
+  //@note the use of == instead of === is intentional, assemblyscript == is the same as === in javascript, === in assemblyscript compares references to memory
+  // can't do this in the isTypeTriple because the compiler complains about possible null even after checking
+  if(factEntityValue != null) {
+    const isTypeTriple = fact.attributeId == TYPES && factEntityValue.id == SCHEMA_TYPE;
+    if(isTypeTriple) {
+      const id = space + "-" + fact.entityId;
+
+      const spaceType = new SpaceType(id)
+      spaceType.spaceId = space;
+      spaceType.type = fact.entityId;
+      spaceType.save()
+    }
+  }
 
   const existing = Triple.load(tripleId)
 
