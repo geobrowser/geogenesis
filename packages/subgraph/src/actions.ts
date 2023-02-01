@@ -72,21 +72,6 @@ export function handleCreateTripleAction(
     fact.value
   )
 
-  // if we are making a type triple we need to create a SpaceType entity
-  const factEntityValue = fact.value.asEntityValue();
-  //@note the use of == instead of === is intentional, assemblyscript == is the same as === in javascript, === in assemblyscript compares references to memory
-  //@note Can't null check directly in isTypeTriple because the compiler complains about possible null value even though we check for null before accessing id 
-  if(factEntityValue != null) {
-    const isTypeTriple = fact.attributeId == TYPES && factEntityValue.id == SCHEMA_TYPE;
-    if(isTypeTriple) {
-      const id = space + "-" + fact.entityId;
-
-      const spaceType = new SpaceType(id)
-      spaceType.spaceId = space;
-      spaceType.type = fact.entityId;
-      spaceType.save()
-    }
-  }
 
   const existing = Triple.load(tripleId)
 
@@ -147,6 +132,20 @@ export function handleCreateTripleAction(
 
   triple.save()
 
+  // if we are making a type triple we need to also create a SpaceType entity
+  //@note the use of == instead of === is intentional, assemblyscript == is the same as === in javascript, === in assemblyscript compares references to memory
+  if(entityValue) {
+    const isTypeTriple = triple.attribute == TYPES && triple.entityValue == SCHEMA_TYPE;
+    if(isTypeTriple) {
+      const id = space + "-" + triple.entity;
+
+      const spaceType = new SpaceType(id)
+      spaceType.spaceId = space;
+      spaceType.type = triple.entity;
+      spaceType.save()
+    }
+  }
+
   log.debug(`ACTION: Created triple: ${triple.id}`, [])
 }
 
@@ -166,6 +165,15 @@ function handleDeleteTripleAction(
   if (triple && triple.isProtected) {
     log.debug(`Couldn't delete triple '${tripleId}' since it's protected'!`, [])
     return
+  }
+
+  // if we are deleting a type triple we need to delete the SpaceType entity
+  if(triple) {
+    const isTypeTriple = triple.attribute == TYPES && triple.entityValue == SCHEMA_TYPE;
+    if(isTypeTriple) {
+      const id = space + "-" + triple.entity;
+      store.remove('SpaceType', id);
+    }
   }
 
   if (fact.attributeId == 'name') {
