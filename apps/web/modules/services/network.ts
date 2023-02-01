@@ -244,7 +244,6 @@ export class Network implements INetwork {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
-
     const spaces = await this.fetchSpaces();
 
     const response = await fetch(this.subgraphUrl, {
