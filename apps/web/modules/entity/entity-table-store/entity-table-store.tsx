@@ -200,23 +200,14 @@ export class EntityTableStore implements IEntityTableStore {
         A.map(t => t.id)
       );
 
-      // Fetch any entities that have been changed locally and have the selected type to make sure we have all
-      // of the triples necessary to build the table.
+      // Fetch any entities that exist already remotely that have been changed locally
+      // and have the selected type to make sure we have all of the triples necessary
+      // to represent the entity in the table.
+      //
+      // e.g., We add Type A to Entity A. When we render the Type A table, we need
+      // _all_ of the triples for Entity A, not just the ones that have changed locally.
       const serverTriplesForEntitiesChangedLocally = await Promise.all(
-        changedEntitiesIdsFromAnotherType.map(id =>
-          this.api.fetchTriples({
-            space,
-            query: '',
-            skip: 0,
-            first: 100,
-            filter: [
-              {
-                field: 'entity-id',
-                value: id,
-              },
-            ],
-          })
-        )
+        changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
       );
 
       const serverEntityTriples = serverRows.flatMap(t => t.triples);
@@ -228,16 +219,14 @@ export class EntityTableStore implements IEntityTableStore {
       );
 
       const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
-      const serverEntitiesChangedLocallyIds = new Set(
-        serverTriplesForEntitiesChangedLocally.flatMap(t => t.triples).map(t => t.entityId)
-      );
+      const serverEntitiesChangedLocallyIds = new Set(serverTriplesForEntitiesChangedLocally.map(e => e.id));
 
+      // Filter out any server rows that have been changed locally
       const filteredServerRows = serverEntityTriples.filter(
         sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
       );
 
-      // Merge all local changes with the server row triples and remove duplicates
-      const mergedRowTriples = Triple.fromActions(this.ActionsStore.actions$.get()[space], [
+      const entities = Entity.entitiesFromTriples([
         // These are entities that were created locally and have the selected type
         ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
 
@@ -246,21 +235,19 @@ export class EntityTableStore implements IEntityTableStore {
         // populate the table.
         ...serverTriplesForEntitiesChangedLocally.flatMap(e => e.triples),
 
-        // These are entities that have been fetched from the server and have the selected type
+        // These are entities that have been fetched from the server and have the selected type.
+        // They are deduped from the local changes above.
         ...filteredServerRows,
       ]);
 
       // Make sure we only generate rows for entities that have the selected type
-      const entities = Entity.entitiesFromTriples(mergedRowTriples);
       const entitiesWithSelectedType = entities.filter(e =>
         e.types.some(t => t.id === this.selectedType$.get()?.entityId)
       );
 
-      return EntityTable.fromColumnsAndRows(
-        space,
-        entitiesWithSelectedType.flatMap(sr => sr.triples),
-        serverColumns
-      ).rows;
+      const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, serverColumns);
+
+      return rows;
     });
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);

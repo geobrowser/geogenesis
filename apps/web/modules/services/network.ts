@@ -180,7 +180,7 @@ export class Network implements INetwork {
     return { triples };
   };
 
-  fetchEntity = async (id: string, abortController?: AbortController) => {
+  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType> => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {

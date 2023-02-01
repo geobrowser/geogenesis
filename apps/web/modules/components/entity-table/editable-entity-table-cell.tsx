@@ -43,13 +43,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = serverTriples.length === 0 ? cell.triples : serverTriples;
-
   const entityName = Entity.name(triples) || '';
-
   const attributeId = cell.columnId;
-
   const groupedTriples = groupBy(triples, t => t.attributeId);
-
   const cellTriples = groupedTriples[attributeId] || [];
 
   const isEmptyEntity = cellTriples.length === 1 && cellTriples[0].value.type === 'entity' && !cellTriples[0].value.id;

@@ -1,13 +1,11 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '~/modules/triple';
-import { Action, Column, Row, Triple as TripleType } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE, Entity } from '..';
+import { Action, Column, Entity, Row } from '~/modules/types';
+import { DEFAULT_PAGE_SIZE } from '..';
 
-export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns: Column[]) {
-  const rowTriplesWithEntityIds = Entity.entitiesFromTriples(rows);
-
+export function fromColumnsAndRows(spaceId: string, entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
-  const aggregatedRows = rowTriplesWithEntityIds.map(({ triples, id }) => {
+  const aggregatedRows = entities.map(({ triples, id }) => {
     return columns.reduce((acc, column) => {
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
@@ -37,8 +35,7 @@ export function fromColumnsAndRows(spaceId: string, rows: TripleType[], columns:
 
   return {
     rows: aggregatedRows,
-    triples: rows,
-    hasNextPage: rowTriplesWithEntityIds.length > DEFAULT_PAGE_SIZE,
+    hasNextPage: entities.length > DEFAULT_PAGE_SIZE,
   };
 }
 

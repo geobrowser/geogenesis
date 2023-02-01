@@ -82,8 +82,10 @@ export function ensureStableId(triple: Triple): Triple {
 }
 
 export function fromActions(actions: ActionType[] | undefined, triples: Triple[]) {
+  if (!actions) return triples;
+
   const newTriples: Triple[] = [...triples].reverse();
-  const newActions = actions ?? [];
+  const newActions = actions;
 
   // If our actions have modified one of the network triples, we don't want to add that
   // network triple to the triples array
@@ -105,7 +107,7 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
       case 'deleteTriple': {
         const index = newTriples.findIndex(t => t.id === action.id);
         if (index === -1) {
-          return;
+          break;
         }
 
         newTriples.splice(index, 1);
@@ -115,7 +117,7 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
         const index = newTriples.findIndex(t => t.id === action.before.id);
         if (index === -1) {
           newTriples.push(ensureStableId(action.after));
-          return;
+          break;
         }
 
         newTriples[index] = ensureStableId(action.after);

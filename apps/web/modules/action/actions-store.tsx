@@ -50,8 +50,6 @@ export class ActionsStore implements IActionsStore {
       type: 'createTriple',
     };
 
-    console.log('new action', action);
-
     this.addActions(triple.space, [action]);
   };
 

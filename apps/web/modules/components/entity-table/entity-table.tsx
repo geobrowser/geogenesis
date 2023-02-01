@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -80,8 +81,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const cellTriples = Triple.fromActions(actions$.get()[space], cellData.triples).filter(
-      t => t.entityId === cellData.entityId
+    const cellTriples = pipe(
+      actions$.get()[space],
+      actions => Triple.fromActions(actions, cellData.triples),
+      A.filter(t => t.entityId === cellData.entityId),
+      A.uniqBy(t => t.id)
     );
 
     if (isEditMode) {
