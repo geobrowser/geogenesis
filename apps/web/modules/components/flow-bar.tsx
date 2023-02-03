@@ -127,7 +127,12 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
 
 function ToastText({ children }: { children: React.ReactNode }) {
   return (
-    <motion.span initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}>
+    <motion.span
+      initial={{ y: 15, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -15, opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
+    >
       {children}
     </motion.span>
   );
