@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Signer } from 'ethers';
 import pluralize from 'pluralize';
-import { Button } from '../design-system/button';
+import { Button, SmallButton } from '../design-system/button';
 import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
@@ -13,6 +13,7 @@ import { Action as ActionType, ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
 import { groupBy } from '../utils';
 import { Action } from '../action';
+import { RetrySmall } from '../design-system/icons/retry-small';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -46,7 +47,10 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
   // deletes since that would double the change count.
   const showFlowBar = reviewState === 'idle';
   const showToast =
-    reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
+    reviewState === 'publishing-ipfs' ||
+    reviewState === 'signing-wallet' ||
+    reviewState === 'publishing-contract' ||
+    reviewState === 'publish-complete';
 
   const actionsCount = Action.getChangeCount(actions);
 
@@ -89,7 +93,21 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                 </motion.span>
               )}
               <Spacer width={12} />
-              {reviewState === 'publishing-ipfs' && 'Uploading changes to IPFS'}
+              {reviewState === 'publishing-ipfs' && ' Uploading changes to IPFS'}
+              {reviewState === 'signing-wallet' && (
+                <div className="flex items-center justify-between gap-[6px]">
+                  Sign your transaction
+                  <button
+                    className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
+                    onClick={publish}
+                  >
+                    <RetrySmall />
+                    <Text variant="smallButton" color="white">
+                      Re-prompt
+                    </Text>
+                  </button>
+                </div>
+              )}
               {reviewState === 'publishing-contract' && 'Adding your changes to the blockchain'}
               {reviewState === 'publish-complete' && 'Changes published!'}
             </Toast>
