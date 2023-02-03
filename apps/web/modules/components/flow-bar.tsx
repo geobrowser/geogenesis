@@ -102,7 +102,9 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                   className="flex items-center justify-between gap-[6px]"
                 >
                   Sign your transaction
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
                     onClick={publish}
                   >
@@ -110,7 +112,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                     <Text variant="smallButton" color="white">
                       Re-prompt
                     </Text>
-                  </button>
+                  </motion.button>
                 </motion.div>
               )}
               {reviewState === 'publishing-contract' && <ToastText>Adding your changes to the blockchain</ToastText>}
