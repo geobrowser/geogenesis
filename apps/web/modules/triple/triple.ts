@@ -136,7 +136,14 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
   const newEntityNames = pipe(
     actions,
     Action.squashChanges,
-    A.flatMap(a => (a.type === 'editTriple' ? [a.after] : [])),
+    A.map(a => {
+      switch (a.type) {
+        case 'editTriple':
+          return a.after;
+        default:
+          return a;
+      }
+    }),
     A.reduce({} as Record<string, string>, (acc, entity) => {
       if (entity.entityName) acc[entity.entityId] = entity.entityName;
       return acc;

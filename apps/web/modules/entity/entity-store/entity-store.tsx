@@ -61,19 +61,19 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
 
     this.triples$ = computed(() => {
-      const spaceActions = ActionsStore.actions$.get()[spaceId] || [];
+      const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
 
       return pipe(
         spaceActions,
-        A.filter(a => {
-          const isCreate = a.type === 'createTriple' && a.entityId === id;
-          const isDelete = a.type === 'deleteTriple' && a.entityId === id;
-          const isRemove = a.type === 'editTriple' && a.before.entityId === id;
-
-          return isCreate || isDelete || isRemove;
-        }),
         actions => Triple.fromActions(actions, initialTriples),
-        triples => Triple.withLocalNames(spaceActions, triples)
+        A.filter(t => t.entityId === id),
+        triples =>
+          // We may be referencing attributes/entities from other spaces whose name has changed.
+          // We pass _all_ local changes instead of just the current space changes.
+          Triple.withLocalNames(
+            Object.values(ActionsStore.actions$.get()).flatMap(a => a),
+            triples
+          )
       );
     });
 
