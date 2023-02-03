@@ -284,6 +284,7 @@ const listener =
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
+            placeholder: false,
             value: {
               type: 'string',
               id: triple.value.id,
@@ -303,6 +304,7 @@ const listener =
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
+            placeholder: false,
             value: {
               type: 'entity',
               id: entityId,
@@ -353,6 +355,7 @@ const listener =
             {
               ...triple,
               entityName: value,
+              placeholder: false,
               value: { ...triple.value, type: 'string', value },
             },
             triple
@@ -362,6 +365,7 @@ const listener =
         return update(
           {
             ...triple,
+            placeholder: false,
             value: { ...triple.value, type: 'string', value },
           },
           triple
