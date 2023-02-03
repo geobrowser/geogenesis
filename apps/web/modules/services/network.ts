@@ -113,8 +113,8 @@ export class Network implements INetwork {
       cids.push(`ipfs://${cidString}`);
     }
 
-    onChangePublishState('publishing-contract');
-    await addEntries(contract, cids);
+    onChangePublishState('signing-wallet');
+    await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
@@ -484,7 +484,7 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
   return (receipt.events || []).filter(event => event.event === name);
 }
 
-async function addEntries(spaceContract: SpaceContract, uris: string[]) {
+async function addEntries(spaceContract: SpaceContract, uris: string[], onStartPublish: () => void) {
   const gasResponse = await fetch('https://gasstation-mainnet.matic.network/v2');
   const gasSuggestion: {
     safeLow: {
@@ -509,7 +509,11 @@ async function addEntries(spaceContract: SpaceContract, uris: string[]) {
     maxFeePerGas: maxFeeAsGWei,
     maxPriorityFeePerGas: maxPriorityFeeAsGWei,
   });
+
   console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
+
+  onStartPublish();
+
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;

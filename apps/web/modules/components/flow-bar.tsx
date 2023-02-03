@@ -13,6 +13,7 @@ import { Action as ActionType, ReviewState } from '../types';
 import { Spinner } from '../design-system/spinner';
 import { groupBy } from '../utils';
 import { Action } from '../action';
+import { RetrySmall } from '../design-system/icons/retry-small';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -46,7 +47,10 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
   // deletes since that would double the change count.
   const showFlowBar = reviewState === 'idle';
   const showToast =
-    reviewState === 'publishing-ipfs' || reviewState === 'publishing-contract' || reviewState === 'publish-complete';
+    reviewState === 'publishing-ipfs' ||
+    reviewState === 'signing-wallet' ||
+    reviewState === 'publishing-contract' ||
+    reviewState === 'publish-complete';
 
   const actionsCount = Action.getChangeCount(actions);
 
@@ -62,7 +66,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {/* We let the toast persist during the publish-complete state before it switches to idle state */}
       {actionsCount > 0 || reviewState === 'publish-complete' ? (
         <>
@@ -89,14 +93,48 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                 </motion.span>
               )}
               <Spacer width={12} />
-              {reviewState === 'publishing-ipfs' && 'Uploading changes to IPFS'}
-              {reviewState === 'publishing-contract' && 'Adding your changes to the blockchain'}
-              {reviewState === 'publish-complete' && 'Changes published!'}
+              {reviewState === 'publishing-ipfs' && <ToastText>Uploading changes to IPFS</ToastText>}
+              {reviewState === 'signing-wallet' && (
+                <motion.div
+                  initial={{ y: 15, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -15, opacity: 0 }}
+                  className="flex items-center justify-between gap-[6px]"
+                >
+                  Sign your transaction
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
+                    onClick={publish}
+                  >
+                    <RetrySmall />
+                    <Text variant="smallButton" color="white">
+                      Re-prompt
+                    </Text>
+                  </motion.button>
+                </motion.div>
+              )}
+              {reviewState === 'publishing-contract' && <ToastText>Adding your changes to the blockchain</ToastText>}
+              {reviewState === 'publish-complete' && <ToastText>Changes published!</ToastText>}
             </Toast>
           )}
         </>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+function ToastText({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.span
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -20, opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut', opacity: { duration: 0.25 } }}
+    >
+      {children}
+    </motion.span>
   );
 }
 

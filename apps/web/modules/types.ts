@@ -53,7 +53,13 @@ export type Account = {
   id: string;
 };
 
-export type ReviewState = 'idle' | 'reviewing' | 'publishing-ipfs' | 'publishing-contract' | 'publish-complete';
+export type ReviewState =
+  | 'idle'
+  | 'reviewing'
+  | 'publishing-ipfs'
+  | 'signing-wallet'
+  | 'publishing-contract'
+  | 'publish-complete';
 
 export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value' | 'linked-to';
 
