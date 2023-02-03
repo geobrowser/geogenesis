@@ -31,7 +31,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
           <div className="absolute flex items-center right-0 top-0 gap-1 z-10">
             {isExpandable && (
               <SquareButton
-                onClick={() => toggleExpanded()}
+                onClick={toggleExpanded}
                 icon={isExpanded ? 'contractSmall' : 'expandSmall'}
                 variant="secondary"
               />

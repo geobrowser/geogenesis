@@ -97,7 +97,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
         />
       );
-    } else if (cellData && !isPlaceholder) {
+    } else if (cellData) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
       return null;

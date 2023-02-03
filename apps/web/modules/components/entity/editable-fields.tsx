@@ -18,16 +18,6 @@ const textareaStyles = cva(
   }
 );
 
-interface PlaceholderFieldProps {
-  onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  variant?: 'mainPage' | 'body';
-}
-
-export function PlaceholderField({ variant = 'body', onBlur, ...props }: PlaceholderFieldProps) {
-  return <textarea {...props} rows={1} onBlur={onBlur} className={textareaStyles({ variant })} />;
-}
-
 interface StringFieldProps {
   onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;

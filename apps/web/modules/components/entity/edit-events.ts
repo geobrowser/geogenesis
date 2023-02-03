@@ -275,6 +275,8 @@ const listener =
       case 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER': {
         const { value, triple } = event.payload;
 
+        if (!value) return;
+
         return create(
           Triple.withId({
             space: context.spaceId,

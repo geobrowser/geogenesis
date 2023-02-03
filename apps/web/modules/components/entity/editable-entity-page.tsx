@@ -15,7 +15,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
-import { PlaceholderField, StringField } from './editable-fields';
+import { StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -341,13 +341,13 @@ function EntityAttributes({
     switch (triple.value.type) {
       case 'string':
         return triple.placeholder ? (
-          <PlaceholderField
+          <StringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
             aria-label="placeholder-text-field"
             onBlur={e => {
-              createStringTripleFromPlaceholder({ ...triple }, e.target.value);
+              createStringTripleFromPlaceholder(triple, e.target.value);
             }}
           />
         ) : (
