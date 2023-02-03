@@ -64,7 +64,7 @@ const SpaceHeader = styled.th<{ width: number }>(props => ({
 }));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
-  cell: ({ getValue, row, column: { id }, table, cell }) => {
+  cell: ({ getValue, row, table, cell }) => {
     const space = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = !!table.options?.meta?.expandedCells[cellId];
@@ -73,10 +73,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const { create, update, remove, actions$ } = useActionsStoreContext();
 
-    const entityId = Object.values(row.original)[0].entityId;
     const cellData = getValue<Cell | undefined>();
     const isPlaceholder = cellData?.triples[0]?.placeholder;
-
     const isEditMode = isEditor && editable;
 
     if (!cellData) return null;
@@ -95,7 +93,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           create={create}
           update={update}
           remove={remove}
-          entityId={entityId}
           cell={cellData}
           space={space}
         />

@@ -11,7 +11,6 @@ import { StringField } from '../entity/editable-fields';
 interface Props {
   cell: Cell;
   space: string;
-  entityId: string;
   triples: Triple[];
   create: (triple: Triple) => void;
   update: (triple: Triple, oldTriple: Triple) => void;
@@ -21,7 +20,6 @@ interface Props {
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
-  entityId,
   triples: serverTriples,
   create,
   update,
@@ -29,7 +27,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 }: Props) {
   const send = useEditEvents({
     context: {
-      entityId,
+      entityId: cell.entityId,
       spaceId: space,
       entityName: Entity.name(serverTriples) ?? '',
     },
