@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Signer } from 'ethers';
 import pluralize from 'pluralize';
-import { Button, SmallButton } from '../design-system/button';
+import { Button } from '../design-system/button';
 import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
 import { Text } from '../design-system/text';
@@ -66,7 +66,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {/* We let the toast persist during the publish-complete state before it switches to idle state */}
       {actionsCount > 0 || reviewState === 'publish-complete' ? (
         <>
@@ -93,9 +93,14 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                 </motion.span>
               )}
               <Spacer width={12} />
-              {reviewState === 'publishing-ipfs' && ' Uploading changes to IPFS'}
+              {reviewState === 'publishing-ipfs' && <ToastText>Uploading changes to IPFS</ToastText>}
               {reviewState === 'signing-wallet' && (
-                <div className="flex items-center justify-between gap-[6px]">
+                <motion.div
+                  initial={{ y: 15, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -15, opacity: 0 }}
+                  className="flex items-center justify-between gap-[6px]"
+                >
                   Sign your transaction
                   <button
                     className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
@@ -106,15 +111,23 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                       Re-prompt
                     </Text>
                   </button>
-                </div>
+                </motion.div>
               )}
-              {reviewState === 'publishing-contract' && 'Adding your changes to the blockchain'}
-              {reviewState === 'publish-complete' && 'Changes published!'}
+              {reviewState === 'publishing-contract' && <ToastText>Adding your changes to the blockchain</ToastText>}
+              {reviewState === 'publish-complete' && <ToastText>Changes published!</ToastText>}
             </Toast>
           )}
         </>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+function ToastText({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.span initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}>
+      {children}
+    </motion.span>
   );
 }
 
