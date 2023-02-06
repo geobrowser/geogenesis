@@ -38,7 +38,7 @@ export class EntityTableErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      return <Text variant="mediumTitle">Something went wrong. Try freshing the page.</Text>;
+      return <Text variant="mediumTitle">Something went wrong. Try refreshing the page.</Text>;
     }
 
     return this.props.children;
