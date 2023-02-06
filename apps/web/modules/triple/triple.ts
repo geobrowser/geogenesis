@@ -150,9 +150,6 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
     })
   );
 
-  console.log('triples', triples);
-  console.log('newEntityNames', newEntityNames);
-
   return A.map(triples, triple => {
     const newTriple = { ...triple };
 
@@ -165,8 +162,6 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
     if (newEntityNames[triple.attributeId]) {
       newTriple.attributeName = newEntityNames[triple.attributeId];
     }
-
-    console.log('value id', triple.value.id);
 
     // The triple has a an entity value whose name changed
     if (newEntityNames[triple.value.id]) {
