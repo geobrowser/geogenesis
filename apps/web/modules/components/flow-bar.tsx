@@ -109,9 +109,6 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                     onClick={publish}
                   >
                     <RetrySmall />
-                    <Text variant="smallButton" color="white">
-                      Re-prompt
-                    </Text>
                   </motion.button>
                 </motion.div>
               )}
