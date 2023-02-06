@@ -2,6 +2,7 @@ import { Root } from '@geogenesis/action-schema';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
+import { ROOT_SPACE_IMAGE } from '../constants';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE } from '../triple';
 import {
@@ -110,8 +111,8 @@ export class Network implements INetwork {
       cids.push(`ipfs://${cidString}`);
     }
 
-    onChangePublishState('publishing-contract');
-    await addEntries(contract, cids);
+    onChangePublishState('signing-wallet');
+    await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
@@ -395,7 +396,8 @@ export class Network implements INetwork {
       );
 
       if (space.isRootSpace) {
-        attributes.name = 'Root Space';
+        attributes.name = 'Root';
+        attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
       }
 
       return {
@@ -514,7 +516,7 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
   return (receipt.events || []).filter(event => event.event === name);
 }
 
-async function addEntries(spaceContract: SpaceContract, uris: string[]) {
+async function addEntries(spaceContract: SpaceContract, uris: string[], onStartPublish: () => void) {
   const gasResponse = await fetch('https://gasstation-mainnet.matic.network/v2');
   const gasSuggestion: {
     safeLow: {
@@ -539,7 +541,11 @@ async function addEntries(spaceContract: SpaceContract, uris: string[]) {
     maxFeePerGas: maxFeeAsGWei,
     maxPriorityFeePerGas: maxPriorityFeeAsGWei,
   });
+
   console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
+
+  onStartPublish();
+
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;

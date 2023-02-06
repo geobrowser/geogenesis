@@ -56,14 +56,12 @@ export default function Spaces({ spaces }: Props) {
         <Spacer height={40} />
 
         <Grid>
-          {spaces
-            .filter(space => isEditor || isAdmin || !space.isRootSpace)
-            .map(space => {
-              const name = space.attributes.name;
-              const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+          {spaces.map(space => {
+            const name = space.attributes.name;
+            const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-              return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-            })}
+            return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
+          })}
         </Grid>
 
         <Spacer height={100} />
