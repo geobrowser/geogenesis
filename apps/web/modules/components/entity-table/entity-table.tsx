@@ -52,12 +52,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
   );
 };
 
-const SpaceHeader = styled.th<{ width: number }>(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: props.theme.space * 2.5,
-  textAlign: 'left',
-  minWidth: props.width,
-
+const SpaceHeader = styled.th(props => ({
   '@media (max-width: 768px)': {
     minWidth: 300,
   },
@@ -74,7 +69,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const { create, update, remove, actions$ } = useActionsStoreContext();
 
     const cellData = getValue<Cell | undefined>();
-    const isPlaceholder = cellData?.triples[0]?.placeholder;
     const isEditMode = isEditor && editable;
 
     if (!cellData) return null;
@@ -146,7 +140,11 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <SpaceHeader width={header.column.getSize()} key={header.id}>
+                <SpaceHeader
+                  style={{ minWidth: header.column.getSize() }}
+                  className="border border-grey-02 border-b-0 text-left p-[10px]"
+                  key={header.id}
+                >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </SpaceHeader>
               ))}
