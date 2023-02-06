@@ -2,6 +2,7 @@
 
 a {
   text-decoration: none;
+  @apply: focus: outline-none;
 }
 
 @tailwind components;

@@ -104,7 +104,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     typeId,
   };
 
-  const { columns, columnsSchema } = await network.columns({
+  const { columns } = await network.columns({
     spaceId,
     params,
   });
@@ -112,11 +112,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const { rows: serverRows } = await network.rows({
     spaceId,
     params,
-    columns,
-    columnsSchema,
   });
 
-  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns, columnsSchema);
+  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
 
   return {
     props: {

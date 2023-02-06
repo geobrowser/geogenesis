@@ -82,8 +82,10 @@ export function ensureStableId(triple: Triple): Triple {
 }
 
 export function fromActions(actions: ActionType[] | undefined, triples: Triple[]) {
+  if (!actions) return triples;
+
   const newTriples: Triple[] = [...triples].reverse();
-  const newActions = actions ?? [];
+  const newActions = actions;
 
   // If our actions have modified one of the network triples, we don't want to add that
   // network triple to the triples array
@@ -105,7 +107,7 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
       case 'deleteTriple': {
         const index = newTriples.findIndex(t => t.id === action.id);
         if (index === -1) {
-          return;
+          break;
         }
 
         newTriples.splice(index, 1);
@@ -115,7 +117,7 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
         const index = newTriples.findIndex(t => t.id === action.before.id);
         if (index === -1) {
           newTriples.push(ensureStableId(action.after));
-          return;
+          break;
         }
 
         newTriples[index] = ensureStableId(action.after);
@@ -134,7 +136,14 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
   const newEntityNames = pipe(
     actions,
     Action.squashChanges,
-    A.flatMap(a => (a.type === 'editTriple' ? [a.after] : [])),
+    A.map(a => {
+      switch (a.type) {
+        case 'editTriple':
+          return a.after;
+        default:
+          return a;
+      }
+    }),
     A.reduce({} as Record<string, string>, (acc, entity) => {
       if (entity.entityName) acc[entity.entityId] = entity.entityName;
       return acc;
@@ -142,33 +151,26 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
   );
 
   return A.map(triples, triple => {
+    const newTriple = { ...triple };
+
     // The triple is part of the entity whose name changed
-    if (triple.entityId in newEntityNames) {
-      return {
-        ...triple,
-        entityName: newEntityNames[triple.entityId],
-      };
+    if (newEntityNames[triple.entityId]) {
+      newTriple.entityName = newEntityNames[triple.entityId];
     }
 
     // The triple has an attribute whose name changed
-    if (triple.attributeId in newEntityNames) {
-      return {
-        ...triple,
-        attributeName: newEntityNames[triple.attributeId],
-      };
+    if (newEntityNames[triple.attributeId]) {
+      newTriple.attributeName = newEntityNames[triple.attributeId];
     }
 
     // The triple has a an entity value whose name changed
-    if (triple.value.id in newEntityNames) {
-      return {
-        ...triple,
-        value: {
-          ...triple.value,
-          name: newEntityNames[triple.value.id],
-        },
-      };
+    if (newEntityNames[triple.value.id]) {
+      newTriple.value = {
+        ...triple.value,
+        name: newEntityNames[triple.value.id],
+      } as EntityValue;
     }
 
-    return triple;
+    return newTriple;
   });
 }

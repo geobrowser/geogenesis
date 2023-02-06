@@ -60,7 +60,6 @@ interface FetchColumnsOptions {
 
 interface FetchColumnsResult {
   columns: Column[];
-  columnsSchema: TripleType[][];
 }
 
 interface FetchRowsOptions {
@@ -69,18 +68,17 @@ interface FetchRowsOptions {
     skip: number;
     first: number;
   };
-  columns: Column[];
-  columnsSchema: TripleType[][];
   abortController?: AbortController;
 }
 
 interface FetchRowsResult {
-  rows: TripleType[];
+  rows: EntityType[];
 }
 
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
+  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
   fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
@@ -183,11 +181,70 @@ export class Network implements INetwork {
     return { triples };
   };
 
+  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType> => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: `query {
+          geoEntity(id: ${JSON.stringify(id)}) {
+            id,
+            name
+            entityOf {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
+              space {
+                id
+              }
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+            }
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        geoEntity: NetworkEntity;
+      };
+    } = await response.json();
+
+    const entity = json.data.geoEntity;
+
+    const triples = fromNetworkTriples(entity.entityOf);
+    const nameTriple = Entity.nameTriple(triples);
+
+    return {
+      id: entity.id,
+      name: entity.name,
+      description: Entity.description(triples),
+      nameTripleSpace: nameTriple?.space,
+      types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
+      triples,
+    };
+  };
+
   fetchEntities = async (name: string, space: string, abortController?: AbortController) => {
     // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
     // followed by a list of entities that contain the search term.
     // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
-
     const spaces = await this.fetchSpaces();
 
     const response = await fetch(this.subgraphUrl, {
@@ -378,25 +435,14 @@ export class Network implements INetwork {
 
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
-    const rowTriples = await Promise.all(
-      rowEntityIds.map(entityId =>
-        this.fetchTriples({
-          query: '',
-          space: spaceId,
-          abortController,
-          first: DEFAULT_PAGE_SIZE,
-          skip: 0,
-          filter: [{ field: 'entity-id', value: entityId }],
-        })
-      )
-    );
+    const entities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
 
-    return { rows: rowTriples.flatMap(r => r.triples) };
+    return { rows: entities };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
     if (!params.typeId) {
-      return { columns: [], columnsSchema: [] };
+      return { columns: [] };
     }
 
     const columnsTriples = await this.fetchTriples({
@@ -411,43 +457,27 @@ export class Network implements INetwork {
       ],
     });
 
-    /* Then we fetch all of the Value type for each column */
-    const columnsSchema = await Promise.all(
-      columnsTriples.triples.map(triple => {
-        return this.fetchTriples({
-          query: '',
-          space: spaceId,
-          first: DEFAULT_PAGE_SIZE,
-          skip: 0,
-          filter: [
-            {
-              field: 'entity-id',
-              value: triple.value.id,
-            },
-            {
-              field: 'attribute-id',
-              value: SYSTEM_IDS.VALUE_TYPE,
-            },
-          ],
-        });
-      })
+    /* Then we fetch all of the associated triples for each column */
+
+    // This will return empty triples if the related entity is not in the same space
+    const relatedColumnTriples = await Promise.all(
+      columnsTriples.triples.map(triple => this.fetchEntity(triple.value.id))
     );
 
     /* Name is the default column... */
-    const defaultColumns = [
+    const defaultColumns: Column[] = [
       {
-        name: 'Name',
         id: SYSTEM_IDS.NAME,
+        triples: [],
       },
     ];
 
-    /* ...and then we can format our user-defined schemaColumns */
-    const schemaColumns: Column[] = columnsTriples.triples.map(triple => ({
-      name: Value.nameOfEntityValue(triple) || triple.value.id,
+    const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
+      triples: relatedColumnTriples[i].triples,
     }));
 
-    return { columns: [...defaultColumns, ...schemaColumns], columnsSchema: columnsSchema.map(cs => cs.triples) };
+    return { columns: [...defaultColumns, ...schemaColumns] };
   };
 }
 

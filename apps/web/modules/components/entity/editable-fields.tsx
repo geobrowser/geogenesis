@@ -9,6 +9,7 @@ const textareaStyles = cva(
         mainPage: 'text-mainPage',
         body: 'text-body',
         tableCell: 'text-tableCell',
+        smallTitle: 'text-smallTitle',
       },
     },
     defaultVariants: {
@@ -17,32 +18,24 @@ const textareaStyles = cva(
   }
 );
 
-interface PlaceholderFieldProps {
-  onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  variant?: 'mainPage' | 'body';
-  color?: 'text' | 'grey-04';
-}
-
 interface StringFieldProps {
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'tableCell';
-  color?: 'text' | 'grey-04';
+  variant?: 'mainPage' | 'body' | 'tableCell' | 'smallTitle';
   value?: string;
 }
 
-export function PlaceholderField({ variant = 'body', color = 'text', onBlur, ...props }: PlaceholderFieldProps) {
-  return <textarea {...props} rows={1} onBlur={onBlur} color={color} className={textareaStyles({ variant })} />;
-}
-
-export function StringField({ variant = 'body', color = 'text', ...props }: StringFieldProps) {
+export function StringField({ variant = 'body', ...props }: StringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // Manually keep the height of the textarea in sync with its content.
   useEffect(() => {
     if (ref.current) {
       ref.current.style.height = 'auto';
+
+      if (variant === 'body' || variant === 'tableCell' || variant === 'smallTitle') return;
+
       // This aligns the bottom of the text area with the sum of line heights * number of lines
       // for body text.
       ref.current.style.height = ref.current.scrollHeight - 4 + 'px';
@@ -54,9 +47,9 @@ export function StringField({ variant = 'body', color = 'text', ...props }: Stri
       {...props}
       ref={ref}
       rows={1}
-      onChange={props.onChange}
-      color={color}
-      value={props.value}
+      onBlur={props.onBlur}
+      onChange={e => setLocalValue(e.currentTarget.value)}
+      value={localValue}
       className={textareaStyles({ variant })}
     />
   );

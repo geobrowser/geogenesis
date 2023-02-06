@@ -2,8 +2,9 @@ import { cva, VariantProps } from 'class-variance-authority';
 import React, { ForwardedRef } from 'react';
 import { Search } from './icons/search';
 
+// appearance-none fixes iOS specific shadow issues.
 const inputStyles = cva(
-  `text-input w-full rounded outline-none outline-0 px-[10px] py-[9px] text-text shadow-inner shadow-grey-02 placeholder:text-grey-03
+  `appearance-none text-input w-full rounded outline-none px-[10px] py-[9px] text-text shadow-inner shadow-grey-02 placeholder:text-grey-03
  hover:shadow-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02
   disabled:cursor-not-allowed`,
   {

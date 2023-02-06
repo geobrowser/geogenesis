@@ -51,11 +51,6 @@ export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => (
   },
 }));
 
-const ResultText = styled(Text)(props => ({
-  // HACK: Increase line-height a bit to avoid clipping descenders
-  lineHeight: props.theme.typography.input.lineHeight,
-}));
-
 const ResultHeader = styled.div({
   display: 'flex',
   alignItems: 'center',
@@ -95,9 +90,9 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
       <ResultHeader>
-        <ResultText as="li" variant="metadataMedium" ellipsize>
+        <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
           {result.name ?? result.id}
-        </ResultText>
+        </Text>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
       </ResultHeader>
 

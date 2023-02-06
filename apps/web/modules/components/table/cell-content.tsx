@@ -1,20 +1,6 @@
-import styled from '@emotion/styled';
 import Link from 'next/link';
 import { Text } from '../../design-system/text';
 import { Truncate } from '../../design-system/truncate';
-
-const StyledLink = styled.a(({ theme }) => ({
-  ...theme.typography.tableCell,
-  display: 'inline-block',
-  color: theme.colors.ctaPrimary,
-  transition: 'color 0.15s ease-in-out',
-
-  ':hover': {
-    textDecoration: 'underline',
-    textDecorationColor: theme.colors.ctaHover,
-    color: theme.colors.ctaHover,
-  },
-}));
 
 interface Props {
   value: string;
@@ -26,7 +12,9 @@ interface Props {
 export function CellContent({ isExpanded, value, isEntity, href }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <StyledLink>{value}</StyledLink>
+      <a className="text-tableCell inline-block text-ctaPrimary transition-colors duration-150 ease-in-out hover:underline hover:decoration-ctaHover hover:text-ctaHover">
+        {value}
+      </a>
     </Link>
   ) : (
     <Text variant="tableCell">{value}</Text>

@@ -36,8 +36,3 @@ export const TableRow = styled.tr(props => ({
     backgroundColor: props.theme.colors.bg,
   },
 }));
-
-// Negative margin so table row height matches a single line of text
-export const ChipCellContainer = styled.div({
-  margin: '-1px 0',
-});

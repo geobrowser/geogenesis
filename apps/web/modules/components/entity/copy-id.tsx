@@ -1,17 +1,9 @@
-import styled from '@emotion/styled';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { SmallButton } from '~/modules/design-system/button';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-
-const CopyText = styled(Text)`
-  display: inline-flex;
-  align-items: center;
-`;
-
-const MotionCopyText = motion(CopyText);
 
 export function CopyIdButton({ id }: { id: string }) {
   const [copyText, setCopyText] = useState<'Copy ID' | 'Entity ID Copied'>('Copy ID');
@@ -30,17 +22,17 @@ export function CopyIdButton({ id }: { id: string }) {
     >
       <AnimatePresence mode="wait">
         {copyText === 'Entity ID Copied' ? (
-          <MotionCopyText
-            color="white"
+          <motion.span
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.85 }}
-            variant="smallButton"
           >
-            <Tick />
-            <Spacer width={4} />
-            {copyText}
-          </MotionCopyText>
+            <Text color="white" variant="smallButton" className="inline-flex items-center">
+              <Tick />
+              <Spacer width={4} />
+              {copyText}
+            </Text>
+          </motion.span>
         ) : (
           <motion.span
             initial={{ opacity: 0, scale: 0.85 }}

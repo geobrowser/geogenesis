@@ -79,10 +79,6 @@ const SearchContainer = styled.div(props => ({
   padding: props.theme.space * 2,
 }));
 
-const TypeText = styled(Text)(props => ({
-  padding: props.theme.space * 2,
-}));
-
 interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
@@ -164,7 +160,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
             {!hasResults && (
               <>
                 <Spacer height={8} />
-                <TypeText variant="smallButton">Create new type</TypeText>
+                <Text className="p-2" variant="smallButton">
+                  Create new type
+                </Text>
               </>
             )}
 
@@ -174,7 +172,11 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               </SearchContainer>
             </motion.div>
 
-            {hasResults && <TypeText variant="smallButton">All types</TypeText>}
+            {hasResults && (
+              <Text className="p-2" variant="smallButton">
+                All types
+              </Text>
+            )}
 
             <ResultsList>
               {hasResults

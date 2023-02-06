@@ -1,31 +1,6 @@
-import styled from '@emotion/styled';
 import Link from 'next/link';
 import React from 'react';
 import { SquareButton } from '~/modules/design-system/button';
-
-type StyledProps = Pick<Props, 'width'>;
-
-const StyledTableCell = styled.td<StyledProps>(props => ({
-  verticalAlign: 'top',
-  backgroundColor: 'transparent', // To allow the row to be styled on hover
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  maxWidth: `${props.width}px`,
-  padding: props.theme.space * 2.5,
-}));
-
-const Relative = styled.div({
-  position: 'relative',
-});
-
-const Absolute = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space,
-  top: 0,
-  right: 0,
-  position: 'absolute',
-  zIndex: 10,
-}));
 
 interface Props {
   href?: string;
@@ -41,14 +16,22 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
   const [isHovered, setIsHovered] = React.useState(false);
 
   return (
-    <StyledTableCell onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} width={width}>
-      <Relative>
+    <td
+      className="align-top bg-transparent border border-grey-02 p-[10px]"
+      style={{
+        maxWidth: width,
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      width={width}
+    >
+      <div className="relative">
         {children}
         {isHovered && (
-          <Absolute>
+          <div className="absolute flex items-center right-0 top-0 gap-1 z-10">
             {isExpandable && (
               <SquareButton
-                onClick={() => toggleExpanded()}
+                onClick={toggleExpanded}
                 icon={isExpanded ? 'contractSmall' : 'expandSmall'}
                 variant="secondary"
               />
@@ -60,9 +43,9 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
                 </a>
               </Link>
             )}
-          </Absolute>
+          </div>
         )}
-      </Relative>
-    </StyledTableCell>
+      </div>
+    </td>
   );
 }

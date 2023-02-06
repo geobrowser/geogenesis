@@ -15,7 +15,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
-import { PlaceholderField, StringField } from './editable-fields';
+import { StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -137,13 +137,7 @@ export function EditableEntityPage({
           <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
         </Head>
 
-        <StringField
-          variant="mainPage"
-          color="text"
-          placeholder="Entity name..."
-          value={name}
-          onChange={onNameChange}
-        />
+        <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
 
         {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
@@ -159,7 +153,7 @@ export function EditableEntityPage({
           variant="body"
           placeholder="Add a description..."
           value={description ?? undefined}
-          onChange={onDescriptionChange}
+          onBlur={onDescriptionChange}
         />
 
         {/* 
@@ -347,13 +341,13 @@ function EntityAttributes({
     switch (triple.value.type) {
       case 'string':
         return triple.placeholder ? (
-          <PlaceholderField
+          <StringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
             aria-label="placeholder-text-field"
             onBlur={e => {
-              createStringTripleFromPlaceholder({ ...triple }, e.target.value);
+              createStringTripleFromPlaceholder(triple, e.target.value);
             }}
           />
         ) : (
@@ -361,7 +355,7 @@ function EntityAttributes({
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onChange={e => updateValue(triple, e.target.value)}
+            onBlur={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
         );

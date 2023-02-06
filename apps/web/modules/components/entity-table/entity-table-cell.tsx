@@ -1,16 +1,8 @@
-import styled from '@emotion/styled';
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell } from '../../types';
 import { NavUtils } from '../../utils';
 import { CellContent } from '../table/cell-content';
-import { ChipCellContainer } from '../table/styles';
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
-}));
 
 interface Props {
   cell: Cell;
@@ -36,18 +28,18 @@ export const EntityTableCell = ({ cell, space, isExpanded }: Props) => {
     );
   } else
     return (
-      <Entities>
+      <div className="flex flex-wrap gap-2">
         {cell.triples.map(({ value }) => {
           if (value.type === 'entity') {
             return (
-              <ChipCellContainer key={value.id}>
-                <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>
-              </ChipCellContainer>
+              <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>
+                {value.name ?? value.id}
+              </LinkableChip>
             );
           } else {
             return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
           }
         })}
-      </Entities>
+      </div>
     );
 };

@@ -1,7 +1,6 @@
 import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Memo } from '@legendapp/state/react';
-import { A } from '@mobily/ts-belt';
+import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -12,82 +11,87 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { memo, useState } from 'react';
-import { useActionsStore } from '~/modules/action';
+import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { EntityStoreProvider } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
+import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
+import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
+import { EditableEntityTableColumnHeader } from './editable-entity-table-column-header';
 import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = []) => {
+const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: string) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map(column =>
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
-      header: () => <Text variant="smallTitle">{column.name}</Text>,
-      size: columnSize < 300 ? 300 : columnSize,
+      header: () => {
+        const isNameColumn = column.id === SYSTEM_IDS.NAME;
+
+        return isEditMode && !isNameColumn ? (
+          <EditableEntityTableColumnHeader
+            column={column}
+            entityId={column.id}
+            spaceId={Entity.nameTriple(column.triples)?.space}
+          />
+        ) : (
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
+        );
+      },
+      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
     })
   );
 };
 
-const Table = styled.table(props => ({
-  width: '100%',
-  borderStyle: 'hidden',
-  borderCollapse: 'collapse',
-  backgroundColor: props.theme.colors.white,
-}));
-
-const SpaceHeader = styled.th<{ width: number }>(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: props.theme.space * 2.5,
-  textAlign: 'left',
-  minWidth: props.width,
-
+const SpaceHeader = styled.th(props => ({
   '@media (max-width: 768px)': {
     minWidth: 300,
   },
 }));
 
-const TableRow = styled.tr(props => ({
-  ':hover': {
-    backgroundColor: props.theme.colors.bg,
-  },
-}));
-
-const Container = styled.div(props => ({
-  borderRadius: props.theme.radius,
-  overflowX: 'scroll',
-}));
-
 const defaultColumn: Partial<ColumnDef<Row>> = {
-  cell: ({ getValue, row, column: { id }, table, cell }) => {
+  cell: ({ getValue, row, table, cell }) => {
     const space = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = !!table.options?.meta?.expandedCells[cellId];
     const editable = table.options.meta?.editable;
     const isEditor = table.options.meta?.isEditor;
 
-    const entityId = Object.values(row.original)[0].entityId;
-    const cellData = getValue<Cell>();
-    const isPlaceholder = cellData.triples[0]?.placeholder;
+    const { create, update, remove, actions$ } = useActionsStoreContext();
 
-    const { actions } = useActionsStore(space);
+    const cellData = getValue<Cell | undefined>();
+    const isEditMode = isEditor && editable;
 
-    const showEditableCell = isEditor && editable;
+    if (!cellData) return null;
 
-    if (showEditableCell) {
+    const cellTriples = pipe(
+      actions$.get()[space],
+      actions => Triple.fromActions(actions, cellData.triples),
+      A.filter(t => t.entityId === cellData.entityId),
+      A.uniqBy(t => t.id)
+    );
+
+    if (isEditMode) {
       return (
-        <EditableEntityTableCell hasActions={A.isNotEmpty(actions)} entityId={entityId} cell={cellData} space={space} />
+        <EditableEntityTableCell
+          triples={cellTriples}
+          create={create}
+          update={update}
+          remove={remove}
+          cell={cellData}
+          space={space}
+        />
       );
-    } else if (cellData && !isPlaceholder) {
+    } else if (cellData) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
       return null;
@@ -105,10 +109,12 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
+  const { selectedType } = useEntityTable();
+  const isEditMode = isEditor && editable;
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns),
+    columns: formatColumns(columns, isEditMode, space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -116,7 +122,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 50,
+        pageSize: DEFAULT_PAGE_SIZE,
       },
     },
     meta: {
@@ -128,18 +134,29 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   });
 
   return (
-    <Container>
-      <Table cellSpacing={0} cellPadding={0}>
-        <thead>
+    <div className="overflow-x-scroll rounded">
+      <table className="w-full border-hidden border-collapse bg-white" cellSpacing={0} cellPadding={0}>
+        <thead className="relative">
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <SpaceHeader width={header.column.getSize()} key={header.id}>
+                <SpaceHeader
+                  style={{ minWidth: header.column.getSize() }}
+                  className="border border-grey-02 border-b-0 text-left p-[10px]"
+                  key={header.id}
+                >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </SpaceHeader>
               ))}
             </tr>
           ))}
+          {editable && selectedType && (
+            <tr>
+              <th>
+                <AddNewColumn space={space} selectedType={selectedType} />
+              </th>
+            </tr>
+          )}
         </thead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
@@ -156,44 +173,36 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <EntityStoreProvider
-                key={row.id}
-                id={entityId}
-                spaceId={space}
-                initialSchemaTriples={[]}
-                initialTriples={initialTriples}
-              >
-                <TableRow>
-                  {cells.map(cell => {
-                    const cellId = `${row.original.id}-${cell.column.id}`;
-                    const firstTriple = cell.getValue<Cell>()?.triples[0];
-                    const isExpandable = firstTriple && firstTriple.value.type === 'string';
+              <tr className="hover:bg-bg">
+                {cells.map(cell => {
+                  const cellId = `${row.original.id}-${cell.column.id}`;
+                  const firstTriple = cell.getValue<Cell>()?.triples[0];
+                  const isExpandable = firstTriple && firstTriple.value.type === 'string';
 
-                    return (
-                      <TableCell
-                        isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
-                        href={NavUtils.toEntity(space, entityId)}
-                        isExpandable={isExpandable}
-                        isExpanded={expandedCells[cellId]}
-                        width={cell.column.getSize()}
-                        key={cell.id}
-                        toggleExpanded={() =>
-                          setExpandedCells(prev => ({
-                            ...prev,
-                            [cellId]: !prev[cellId],
-                          }))
-                        }
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              </EntityStoreProvider>
+                  return (
+                    <TableCell
+                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                      href={NavUtils.toEntity(space, entityId)}
+                      isExpandable={isExpandable}
+                      isExpanded={expandedCells[cellId]}
+                      width={cell.column.getSize()}
+                      key={cell.id}
+                      toggleExpanded={() =>
+                        setExpandedCells(prev => ({
+                          ...prev,
+                          [cellId]: !prev[cellId],
+                        }))
+                      }
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  );
+                })}
+              </tr>
             );
           })}
         </tbody>
-      </Table>
-    </Container>
+      </table>
+    </div>
   );
 });

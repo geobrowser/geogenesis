@@ -66,6 +66,9 @@ export type EditEvent =
       };
     }
   | {
+      type: 'ADD_NEW_COLUMN';
+    }
+  | {
       type: 'UPDATE_VALUE';
       payload: {
         value: string;
@@ -272,6 +275,8 @@ const listener =
       case 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER': {
         const { value, triple } = event.payload;
 
+        if (!value) return;
+
         return create(
           Triple.withId({
             space: context.spaceId,
@@ -279,6 +284,7 @@ const listener =
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
+            placeholder: false,
             value: {
               type: 'string',
               id: triple.value.id,
@@ -298,6 +304,7 @@ const listener =
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
+            placeholder: false,
             value: {
               type: 'entity',
               id: entityId,
@@ -305,6 +312,39 @@ const listener =
             },
           })
         );
+      }
+
+      case 'ADD_NEW_COLUMN': {
+        const newAttributeTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: ID.createEntityId(),
+          entityName: '',
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Type',
+          value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
+        });
+
+        const newAttributeNameTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: newAttributeTriple.entityId,
+          entityName: '',
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: { id: ID.createValueId(), type: 'string', value: '' },
+        });
+
+        const newTypeTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: context.entityId,
+          entityName: context.entityName,
+          attributeId: SYSTEM_IDS.ATTRIBUTES,
+          attributeName: 'Attributes',
+          value: { id: newAttributeTriple.entityId, type: 'entity', name: newAttributeNameTriple.entityName },
+        });
+
+        create(newAttributeNameTriple);
+        create(newAttributeTriple);
+        return create(newTypeTriple);
       }
 
       case 'UPDATE_VALUE': {
@@ -315,6 +355,7 @@ const listener =
             {
               ...triple,
               entityName: value,
+              placeholder: false,
               value: { ...triple.value, type: 'string', value },
             },
             triple
@@ -324,6 +365,7 @@ const listener =
         return update(
           {
             ...triple,
+            placeholder: false,
             value: { ...triple.value, type: 'string', value },
           },
           triple
