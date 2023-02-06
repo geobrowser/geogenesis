@@ -472,8 +472,6 @@ export class Network implements INetwork {
       },
     ];
 
-    console.log(columnsTriples);
-
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
       triples: relatedColumnTriples[i].triples,

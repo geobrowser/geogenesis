@@ -150,34 +150,32 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
     })
   );
 
+  console.log('triples', triples);
+  console.log('newEntityNames', newEntityNames);
+
   return A.map(triples, triple => {
+    const newTriple = { ...triple };
+
     // The triple is part of the entity whose name changed
-    if (triple.entityId in newEntityNames) {
-      return {
-        ...triple,
-        entityName: newEntityNames[triple.entityId],
-      };
+    if (newEntityNames[triple.entityId]) {
+      newTriple.entityName = newEntityNames[triple.entityId];
     }
 
     // The triple has an attribute whose name changed
-    if (triple.attributeId in newEntityNames) {
-      return {
-        ...triple,
-        attributeName: newEntityNames[triple.attributeId],
-      };
+    if (newEntityNames[triple.attributeId]) {
+      newTriple.attributeName = newEntityNames[triple.attributeId];
     }
+
+    console.log('value id', triple.value.id);
 
     // The triple has a an entity value whose name changed
-    if (triple.value.id in newEntityNames) {
-      return {
-        ...triple,
-        value: {
-          ...triple.value,
-          name: newEntityNames[triple.value.id],
-        },
-      };
+    if (newEntityNames[triple.value.id]) {
+      newTriple.value = {
+        ...triple.value,
+        name: newEntityNames[triple.value.id],
+      } as EntityValue;
     }
 
-    return triple;
+    return newTriple;
   });
 }
