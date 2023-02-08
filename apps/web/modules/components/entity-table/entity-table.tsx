@@ -150,13 +150,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               ))}
             </tr>
           ))}
-          {editable && selectedType && (
-            <tr>
-              <th>
-                <AddNewColumn space={space} selectedType={selectedType} />
-              </th>
-            </tr>
-          )}
+          {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         </thead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
