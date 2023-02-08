@@ -135,8 +135,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
 
   return (
     <div className="overflow-x-scroll rounded">
-      <table className="w-full border-hidden border-collapse bg-white" cellSpacing={0} cellPadding={0}>
-        <thead className="relative">
+      <table className="w-full border-hidden border-collapse bg-white relative" cellSpacing={0} cellPadding={0}>
+        <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
@@ -150,8 +150,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
               ))}
             </tr>
           ))}
-          {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         </thead>
+        {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
