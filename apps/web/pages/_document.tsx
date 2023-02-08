@@ -6,10 +6,6 @@ class MyDocument extends Document {
       <Html lang="en">
         <Head>
           <meta name="robots" content="follow, index" />
-          <meta
-            name="viewport"
-            content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0"
-          />
 
           <link rel="apple-touch-icon" sizes="76x76" href="/static/apple-touch-icon.png" />
           <link rel="shortcut icon" type="image/png" href="/static/favicon.png" />
