@@ -18,7 +18,7 @@ const SpaceActions = ({ spaceId }: Props) => {
   return (
     <div className="flex items-center">
       {(isEditor || isAdmin || isEditorController) && editable && (
-        <div className="flex items-center justify-between w-full">
+        <div className="flex w-full items-center justify-between">
           {(isEditorController || isAdmin) && (
             <Link href={`/space/${spaceId}/access-control`}>
               <Button variant="secondary">Devvy Admin</Button>
@@ -61,7 +61,7 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
   ];
 
   return (
-    <div className="flex items-center justify-between w-full h-9">
+    <div className="flex h-9 w-full items-center justify-between">
       <div className="flex items-center gap-4">
         {tabs.map(tab => (
           <TabLink key={tab.name} href={tab.href} isActive={tab.selected}>

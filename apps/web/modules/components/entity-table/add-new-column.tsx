@@ -27,7 +27,7 @@ export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: 
 
   return (
     <button
-      className="absolute bg-white p-[13.5px] top-0 right-0 border-l border-b border-grey-02 transition-colors ease-in-out duration-150 hover:cursor-pointer hover:bg-grey-01 hover:text-text active:text-text active:outline-ctaPrimary focus:text-text focus:outline-ctaPrimary"
+      className="absolute top-0 right-0 border-l border-b border-grey-02 bg-white p-[13.5px] transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:outline-ctaPrimary active:text-text active:outline-ctaPrimary"
       onClick={() => send({ type: 'ADD_NEW_COLUMN' })}
     >
       <Plus />

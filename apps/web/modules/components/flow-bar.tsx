@@ -105,7 +105,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
+                    className="flex items-center gap-[6px] rounded border border-white bg-transparent p-1"
                     onClick={publish}
                   >
                     <RetrySmall />

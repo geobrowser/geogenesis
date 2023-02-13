@@ -31,7 +31,7 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
         the table easier. Otherwise we need to do some pseudoselector shenanigans
         or use box-shadow instead of border.
       */}
-        <div className="p-0 border border-grey-02 rounded overflow-hidden">
+        <div className="overflow-hidden rounded border border-grey-02 p-0">
           <EntityTable
             space={spaceId}
             columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}

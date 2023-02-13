@@ -135,14 +135,14 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
 
   return (
     <div className="overflow-x-scroll rounded">
-      <table className="w-full border-hidden border-collapse bg-white relative" cellSpacing={0} cellPadding={0}>
+      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
                 <SpaceHeader
                   style={{ minWidth: header.column.getSize() }}
-                  className="border border-grey-02 border-b-0 text-left p-[10px]"
+                  className="border border-b-0 border-grey-02 p-[10px] text-left"
                   key={header.id}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}

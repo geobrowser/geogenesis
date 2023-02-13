@@ -17,7 +17,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
 
   return (
     <td
-      className="align-top bg-transparent border border-grey-02 p-[10px]"
+      className="border border-grey-02 bg-transparent p-[10px] align-top"
       style={{
         maxWidth: width,
       }}
@@ -28,7 +28,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
       <div className="relative">
         {children}
         {isHovered && (
-          <div className="absolute flex items-center right-0 top-0 gap-1 z-10">
+          <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (
               <SquareButton
                 onClick={toggleExpanded}
