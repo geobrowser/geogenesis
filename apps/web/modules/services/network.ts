@@ -16,7 +16,6 @@ import {
   Space,
   Triple as TripleType,
 } from '../types';
-import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
 
@@ -78,6 +77,7 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
+  fetchProfile: (address: string, abortController?: AbortController) => Promise<Account>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
   fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
@@ -113,6 +113,44 @@ export class Network implements INetwork {
 
     onChangePublishState('signing-wallet');
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
+  };
+
+  fetchProfile = async (address: string, abortController?: AbortController): Promise<EntityType> => {
+    /* Use the account entity until I figure out where profile info lives */
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: `query {
+          account(id: ${JSON.stringify(address)}) {
+            id
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        geoEntity: NetworkEntity;
+      };
+    } = await response.json();
+
+    const entity = json.data.geoEntity;
+
+    const triples = fromNetworkTriples(entity.entityOf);
+    const nameTriple = Entity.nameTriple(triples);
+
+    return {
+      id: entity.id,
+      name: entity.name,
+      description: Entity.description(triples),
+      nameTripleSpace: nameTriple?.space,
+      types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
+      triples,
+    };
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {

@@ -4,20 +4,22 @@ import { Analytics } from '@vercel/analytics/react';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { useState } from 'react';
 import { Action, useActionsStore } from '~/modules/action';
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
-import { Providers } from '~/modules/providers';
-import { useState } from 'react';
-import { Dialog } from '~/modules/search';
-import { NavUtils } from '~/modules/utils';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { OnboardingDialog } from '~/modules/onboarding/dialog';
+import { useOnboarding } from '~/modules/onboarding/use-onboarding';
+import { Providers } from '~/modules/providers';
+import { Dialog } from '~/modules/search';
 import { useEditable } from '~/modules/stores/use-editable';
-import { useAccessControl } from '~/modules/auth/use-access-control';
+import { NavUtils } from '~/modules/utils';
 
-import '../styles/tailwind.css';
 import '../styles/styles.css';
+import '../styles/tailwind.css';
 
 const globalStyles = css`
   html {
@@ -66,6 +68,7 @@ function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string | undefined };
   const { setEditable, editable } = useEditable();
+  const { showOnboarding } = useOnboarding();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
 
@@ -90,6 +93,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
+      <OnboardingDialog open={false} />
       <Dialog
         open={open}
         onOpenChange={setOpen}
