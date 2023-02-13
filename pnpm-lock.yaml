@@ -57,6 +57,7 @@ importers:
       '@vitest/ui': ^0.25.6
       autoprefixer: ^10.4.13
       class-variance-authority: ^0.4.0
+      classnames: ^2.3.2
       cmdk: ^0.1.21
       connectkit: ^1.1.1
       eslint: ^8.21.0
@@ -110,6 +111,7 @@ importers:
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
       '@vercel/analytics': 0.1.6_react@18.2.0
       class-variance-authority: 0.4.0_typescript@4.8.4
+      classnames: 2.3.2
       cmdk: 0.1.21_rj7ozvcq3uehdlnj3cbwzbi5ce
       connectkit: 1.1.1_opxkh35q2zbqahgybdihnqav2q
       ethers: 5.7.2
@@ -6549,6 +6551,10 @@ packages:
         optional: true
     dependencies:
       typescript: 4.8.4
+    dev: false
+
+  /classnames/2.3.2:
+    resolution: {integrity: sha512-CSbhY4cFEJRe6/GQzIk5qXZ4Jeg5pcsP7b5peFSDpffpe1cqjASH/n9UTjBwOp6XpMSTwQ8Za2K5V02ueA7Tmw==}
     dev: false
 
   /clean-stack/2.2.0:

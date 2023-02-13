@@ -30,16 +30,12 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (
-              <SquareButton
-                onClick={toggleExpanded}
-                icon={isExpanded ? 'contractSmall' : 'expandSmall'}
-                variant="secondary"
-              />
+              <SquareButton onClick={toggleExpanded} icon={isExpanded ? 'contractSmall' : 'expandSmall'} />
             )}
             {isLinkable && href && (
               <Link href={href} passHref>
                 <a>
-                  <SquareButton icon="rightArrowLongSmall" variant="secondary" />
+                  <SquareButton icon="rightArrowLongSmall" />
                 </a>
               </Link>
             )}

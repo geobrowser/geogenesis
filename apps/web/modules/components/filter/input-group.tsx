@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { Button, StyledLabel } from '~/modules/design-system/button';
+import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -33,9 +33,9 @@ export type FilterOption = {
 export function FilterInputGroup({ filterClause, onChange, options, label, onDelete, isDeletable }: Props) {
   return (
     <Flex>
-      <StyledLabel disabled variant="secondary">
+      <Button disabled variant="secondary" className="min-w-[67px] !bg-grey-01 !text-text !shadow-none">
         {label}
-      </StyledLabel>
+      </Button>
       <Spacer width={12} />
       <InputWrapper>
         <Select

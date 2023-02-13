@@ -139,7 +139,7 @@ export function EditableEntityPage({
 
         <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
 
-        {/* 
+        {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -156,7 +156,7 @@ export function EditableEntityPage({
           onBlur={onDescriptionChange}
         />
 
-        {/* 
+        {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -433,7 +433,7 @@ function EntityAttributes({
               <TripleActions>
                 {!isPlaceholder && (
                   <TripleTypeDropdown
-                    value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
+                    value={<SquareButton icon={isEntityGroup ? 'relation' : 'text'} className="!inline-block" />}
                     options={[
                       {
                         label: (

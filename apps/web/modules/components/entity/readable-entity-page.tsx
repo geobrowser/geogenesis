@@ -1,3 +1,4 @@
+import cx from 'classnames';
 import styled from '@emotion/styled';
 import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
@@ -167,7 +168,7 @@ function EntityAttributes({
             {triples[0].attributeName || attributeId}
           </Text>
           <GroupedAttributes>
-            {/* 
+            {/*
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
             */}
@@ -312,10 +313,9 @@ function LinkedEntityCard({
             {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
           </Text>
           <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
-            <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
+            <span className={cx(isExpanded && 'rotate-180')}>
               <ChevronDownSmall color="grey-04" />
             </span>
-            <Spacer width={6} />
             {isExpanded
               ? `Hide ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`
               : `Show ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`}

@@ -50,11 +50,6 @@ const SearchIconContainer = styled.div(props => ({
   zIndex: 100,
 }));
 
-const AddEntityButton = styled(SquareButton)({
-  width: 23,
-  height: 23,
-});
-
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
@@ -73,7 +68,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <AddEntityButton as="span" icon="createSmall" />
+        <SquareButton icon="createSmall" className="!inline-block !h-[23px] !w-[23px]" />
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (

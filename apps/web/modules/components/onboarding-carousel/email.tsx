@@ -153,6 +153,7 @@ export function Email() {
                     exit={{ scale: 0.1 }}
                     transition={{ duration: 0.1 }}
                     key="email-idle"
+                    className="whitespace-nowrap"
                   >
                     Notify me
                   </motion.span>
