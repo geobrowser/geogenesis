@@ -30,7 +30,15 @@ module.exports = {
     boxShadow: {
       none: 'none',
       inner: 'inset 0 0 0 1px',
+      'inner-transparent': 'inset 0 0 0 1px transparent',
+      'inner-grey-02': 'inset 0 0 0 1px #DBDBDB',
+      'inner-text': 'inset 0 0 0 1px #202020',
+      'inner-green': 'inset 0 0 0 1px #2ACE9D',
       'inner-lg': 'inset 0 0 0 2px',
+      'inner-lg-transparent': 'inset 0 0 0 2px transparent',
+      'inner-lg-grey-02': 'inset 0 0 0 2px #DBDBDB',
+      'inner-lg-text': 'inset 0 0 0 2px #202020',
+      'inner-lg-green': 'inset 0 0 0 2px #2ACE9D',
     },
     screens: {
       '2xl': { max: '1535px' },

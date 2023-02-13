@@ -30,7 +30,10 @@
   "rules": {
     "@typescript-eslint/no-non-null-assertion": 0,
     "@next/next/no-img-element": 0,
-    "react/react-in-jsx-scope": 0
+    "react/react-in-jsx-scope": 0,
+    "react/prop-types": 0, // Use TypeScript instead of PropTypes
+    "no-undef": 1,
+    "no-unused-vars": 1
   },
   "settings": {
     "react": {

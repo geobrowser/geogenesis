@@ -1,8 +1,7 @@
 @tailwind base;
 
 a {
-  text-decoration: none;
-  @apply: focus: outline-none;
+  @apply no-underline focus:!outline-none;
 }
 
 @tailwind components;
