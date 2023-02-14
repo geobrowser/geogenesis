@@ -1,23 +1,22 @@
-import { useState } from 'react';
+import { useObservable } from '@legendapp/state/react';
 import { useAccount } from 'wagmi';
 import { useGeoProfile } from '../auth/use-geo-profile';
 
 export function useOnboarding() {
   const { profile } = useGeoProfile();
-  const [connected, setConnected] = useState(false);
+  const isOnboardingVisible = useObservable(false);
 
   useAccount({
-    onDisconnect: () => setConnected(false),
+    onDisconnect: () => isOnboardingVisible.set(false),
     onConnect({ address, isReconnected }) {
       // If the user autoconnects, we don't want to show the modal.
       if (address && !isReconnected) {
-        setConnected(true);
+        isOnboardingVisible.set(true);
       }
     },
   });
 
-  // const isOnboardingVisible = !profile && connected;
-  const isOnboardingVisible = connected;
+  const hideOnboarding = () => isOnboardingVisible.set(false);
 
-  return { isOnboardingVisible: true };
+  return { isOnboardingVisible, hideOnboarding };
 }

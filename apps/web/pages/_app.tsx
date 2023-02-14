@@ -12,7 +12,6 @@ import { Navbar } from '~/modules/components/navbar/navbar';
 import { colors } from '~/modules/design-system/theme/colors';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';
-import { useOnboarding } from '~/modules/onboarding/use-onboarding';
 import { Providers } from '~/modules/providers';
 import { Dialog } from '~/modules/search';
 import { useEditable } from '~/modules/stores/use-editable';
@@ -68,7 +67,6 @@ function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string | undefined };
   const { setEditable, editable } = useEditable();
-  const { isOnboardingVisible } = useOnboarding();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
 
@@ -93,7 +91,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      <OnboardingDialog open={isOnboardingVisible} />
+      <OnboardingDialog />
       <Dialog
         open={open}
         onOpenChange={setOpen}
