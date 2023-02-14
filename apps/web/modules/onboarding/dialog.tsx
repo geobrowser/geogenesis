@@ -2,7 +2,7 @@ import styled from '@emotion/styled';
 import { Command } from 'cmdk';
 import { useAccount } from 'wagmi';
 import { Entity } from '~/modules/types';
-import { SquareButton } from '../design-system/button';
+import { Button, SquareButton } from '../design-system/button';
 import { formatAddress } from '../utils';
 
 interface Props {
@@ -19,7 +19,7 @@ const DialogContainer = styled(Command.Dialog)(props => ({
   left: '50%',
   transform: 'translateX(-50%)',
   width: '100%',
-  maxWidth: 434,
+  maxWidth: 360,
   padding: props.theme.space * 4,
   backgroundColor: props.theme.colors.white,
   borderRadius: props.theme.radius,
@@ -36,17 +36,27 @@ export function OnboardingDialog({ onDone, open, onOpenChange }: Props) {
   return (
     <DialogContainer open={open} onOpenChange={onOpenChange} label="Entity search">
       <div className="flex justify-between items-center pb-12">
-        <SquareButton icon="trash" onClick={() => console.log('freedom')} />
+        <div className="rotate-180">
+          <SquareButton icon="rightArrowLongSmall" onClick={() => console.log('freedom')} />
+        </div>
         <div className="text-metadataMedium">Profile Creation</div>
-        <SquareButton icon="rightArrowLongSmall" onClick={() => console.log('freedom')} />
+        <SquareButton icon="close" onClick={() => console.log('freedom')} />
       </div>
       <div className="flex justify-center pb-8">
         <div className="bg-divider rounded px-2 py-1 inline-block text-mediumTitle">{formatAddress(address)}</div>
       </div>
-      <div>
+      <div className="pb-3">
         <div className="text-bodySemibold text-xl text-center">
           It looks like you don’t have a<br /> Geo profile on this wallet address.
         </div>
+      </div>
+      <div className="flex justify-center pb-24">
+        <div className="text-ctaPrimary text-metadataMedium text-center cursor-pointer hover:underline inline-block">
+          Change wallet
+        </div>
+      </div>
+      <div className="flex justify-center pb-8">
+        <Button>Create Profile</Button>
       </div>
     </DialogContainer>
   );

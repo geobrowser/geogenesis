@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import React, { ForwardedRef } from 'react';
 import { ZERO_WIDTH_SPACE } from '../constants';
+import { Close } from './icons/close';
 import { ContractSmall } from './icons/contract-small';
 import { Copy } from './icons/copy';
 import { Create } from './icons/create';
@@ -119,6 +120,7 @@ const StyledButton = styled.button<Required<Pick<Props, 'variant' | 'disabled'>>
 });
 
 type Icon =
+  | 'close'
   | 'create'
   | 'createSmall'
   | 'publish'
@@ -138,6 +140,7 @@ type Icon =
   | 'search';
 
 const icons: Record<Icon, (color?: ColorName) => JSX.Element> = {
+  close: (color?: ColorName) => <Close color={color} />,
   create: (color?: ColorName) => <Create color={color} />,
   createSmall: (color?: ColorName) => <CreateSmall color={color} />,
   publish: (color?: ColorName) => <Publish color={color} />,
