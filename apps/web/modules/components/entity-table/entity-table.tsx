@@ -70,6 +70,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
+    const isPlaceholderCell = cellData?.triples[0]?.placeholder;
 
     if (!cellData) return null;
 
@@ -91,7 +92,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
         />
       );
-    } else if (cellData) {
+    } else if (cellData && !isPlaceholderCell) {
       return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
     } else {
       return null;
