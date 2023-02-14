@@ -16,7 +16,8 @@ export function useOnboarding() {
     },
   });
 
-  const showOnboarding = !profile && connected;
+  // const isOnboardingVisible = !profile && connected;
+  const isOnboardingVisible = connected;
 
-  return { showOnboarding };
+  return { isOnboardingVisible: true };
 }

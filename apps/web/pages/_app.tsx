@@ -68,7 +68,7 @@ function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { id: spaceId } = router.query as { id: string | undefined };
   const { setEditable, editable } = useEditable();
-  const { showOnboarding } = useOnboarding();
+  const { isOnboardingVisible } = useOnboarding();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
 
@@ -93,7 +93,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      <OnboardingDialog open={false} />
+      <OnboardingDialog open={isOnboardingVisible} />
       <Dialog
         open={open}
         onOpenChange={setOpen}
