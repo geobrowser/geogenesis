@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import { Command } from 'cmdk';
-import { useAccount } from 'wagmi';
+import { ConnectKitButton, useModal } from 'connectkit';
+import { useAccount, useDisconnect } from 'wagmi';
 import { Entity } from '~/modules/types';
 import { Button, SquareButton } from '../design-system/button';
 import { formatAddress } from '../utils';
@@ -30,6 +31,8 @@ const DialogContainer = styled(Command.Dialog)(props => ({
 
 export function OnboardingDialog({ onDone, open, onOpenChange }: Props) {
   const { address } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { setOpen } = useModal();
 
   if (!address) return null;
 
@@ -51,9 +54,22 @@ export function OnboardingDialog({ onDone, open, onOpenChange }: Props) {
         </div>
       </div>
       <div className="flex justify-center pb-24">
-        <div className="text-ctaPrimary text-metadataMedium text-center cursor-pointer hover:underline inline-block">
-          Change wallet
-        </div>
+        <ConnectKitButton.Custom>
+          {({ show, hide }) => {
+            return (
+              <div
+                onClick={() => {
+                  hide && hide();
+                  disconnect();
+                  show && show();
+                }}
+                className="text-ctaPrimary text-metadataMedium text-center cursor-pointer hover:underline inline-block"
+              >
+                Change wallet
+              </div>
+            );
+          }}
+        </ConnectKitButton.Custom>
       </div>
       <div className="flex justify-center pb-8">
         <Button>Create Profile</Button>
