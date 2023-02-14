@@ -140,8 +140,6 @@ export function StepSuccess() {
 export const OnboardingDialog = observer(() => {
   const { isOnboardingVisible, hideOnboarding } = useOnboarding();
 
-  console.log('isOnboardingVisible.get()', isOnboardingVisible.get(), isOnboardingVisible.get());
-
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
 
