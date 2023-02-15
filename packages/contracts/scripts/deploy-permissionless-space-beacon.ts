@@ -15,15 +15,8 @@ dotenv.config()
 async function deployPermissionlessBeacon() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
   const networkId = process.env.HARDHAT_NETWORK as string
-
   const networkConfig = config.networks![networkId]!
-
-  console.log('Deploying on network', networkId, {
-    ...networkConfig,
-    gas: 50000000000,
-    gasLimit: 50000000000,
-    gasPrice: 50000000000, // 50 gwei
-  })
+  console.log('Deploying on network', networkId, networkConfig)
 
   const beacon = await deployPermissionlessSpaceBeacon()
   console.log('Deployed permissionless beacon at address: ', beacon.address)

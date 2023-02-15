@@ -19,16 +19,9 @@ dotenv.config()
 async function deployPermissionedSpaceImplementation() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
   const networkId = process.env.HARDHAT_NETWORK as string
-
   const networkConfig = config.networks![networkId]!
   const chainId = networkConfig.chainId!.toString()
-
-  console.log('Deploying on network', networkId, {
-    ...networkConfig,
-    gas: 50000000000,
-    gasLimit: 50000000000,
-    gasPrice: 50000000000, // 50 gwei
-  })
+  console.log('Deploying on network', networkId, networkConfig)
 
   const spaceBeacon = ethers.ContractFactory.getContract(
     SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS,
