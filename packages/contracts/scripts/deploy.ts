@@ -10,6 +10,14 @@ import { addEntry } from '../src/entry'
 
 dotenv.config()
 
+/**
+ * This function was initially used to deploy the Health and San Francisco spaces
+ * on the mainnet. It is not used anymore except for deploying and bootstrapping
+ * new spaces during local development in the local docker instance.
+ *
+ * Opt for using the permissioned/permissionless space scripts in /scripts instead
+ * if you are ad-hoc deploying scripts to mumbai or polygon.
+ */
 async function main() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
   const networkId = process.env.HARDHAT_NETWORK as string

@@ -55,3 +55,5 @@ export const BEACONS = [
     kind: 'beacon',
   },
 ]
+
+export const ROOT_SPACE_REGISTRY = '0x170b749413328ac9a94762031a7A05b00c1D2e34'

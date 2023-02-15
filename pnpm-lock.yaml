@@ -237,6 +237,7 @@ importers:
       '@ethersproject/bytes': ^5.6.1
       '@ethersproject/providers': ^5.6.8
       '@geogenesis/action-schema': workspace:*
+      '@geogenesis/ids': workspace:*
       '@nomiclabs/hardhat-ethers': ^2.0.6
       '@nomiclabs/hardhat-etherscan': ^3.0.3
       '@nomiclabs/hardhat-waffle': ^2.0.3
@@ -287,6 +288,7 @@ importers:
       '@ethersproject/bytes': 5.6.1
       '@ethersproject/providers': 5.6.8
       '@geogenesis/action-schema': link:../action-schema
+      '@geogenesis/ids': link:../ids
       '@nomiclabs/hardhat-ethers': 2.1.0_72jgnctblym52z6vqt46lbuldu
       '@nomiclabs/hardhat-etherscan': 3.1.0_hardhat@2.10.1
       '@nomiclabs/hardhat-waffle': 2.0.3_q2ktf46bpuaddom63xwo7uqczm
