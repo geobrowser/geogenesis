@@ -13,5 +13,6 @@ There are scripts that correspond to each of these steps.
 ---
 
 - [ ] Explainers for each type of contract
+- [ ] Explainers for how each contract interacts with each other in Geo
 - [ ] Explainers for upgradable contracts
 - [ ] Explainers for deploying specific types of contracts
