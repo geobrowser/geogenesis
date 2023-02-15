@@ -1,12 +1,7 @@
-import { Root } from '@geogenesis/action-schema'
-import { SYSTEM_IDS } from '@geogenesis/ids'
-import { randomUUID } from 'crypto'
 import dotenv from 'dotenv'
 import { config, ethers } from 'hardhat'
 import { Space, Space__factory } from '../build/types'
 import { deploySpaceInstance } from '../src/deploy'
-import { addEntry } from '../src/entry'
-import { saveAddress } from '../src/save-address'
 
 dotenv.config()
 

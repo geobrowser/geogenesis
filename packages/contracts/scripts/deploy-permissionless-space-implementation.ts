@@ -6,7 +6,6 @@ import { config, ethers } from 'hardhat'
 import {
   PermissionlessSpace,
   PermissionlessSpace__factory,
-  Space,
 } from '../build/types'
 import { deployPermissionlessSpaceInstance } from '../src/deploy'
 import { addEntry } from '../src/entry'
@@ -88,7 +87,6 @@ async function main() {
 
   // We need to configure roles after it has been added to the registry so the
   // subgraph can correctly pick up the role configuration event.
-  await newPermissionlessSpace.configureRoles()
 
   saveAddress({
     chainId,

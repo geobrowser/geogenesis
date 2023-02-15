@@ -1,20 +1,10 @@
-import { Root } from '@geogenesis/action-schema'
-import { SYSTEM_IDS } from '@geogenesis/ids'
-import { randomUUID } from 'crypto'
 import dotenv from 'dotenv'
 import { config, ethers } from 'hardhat'
 import {
   PermissionlessSpace,
   PermissionlessSpace__factory,
-  Space,
-  Space__factory,
 } from '../build/types'
-import {
-  deployPermissionlessSpaceInstance,
-  deploySpaceInstance,
-} from '../src/deploy'
-import { addEntry } from '../src/entry'
-import { saveAddress } from '../src/save-address'
+import { deployPermissionlessSpaceInstance } from '../src/deploy'
 
 dotenv.config()
 
@@ -29,7 +19,6 @@ async function deployPermissionlessSpaceRegistry() {
   const networkId = process.env.HARDHAT_NETWORK as string
 
   const networkConfig = config.networks![networkId]!
-  const chainId = networkConfig.chainId!.toString()
 
   console.log('Deploying on network', networkId, {
     ...networkConfig,
@@ -47,8 +36,6 @@ async function deployPermissionlessSpaceRegistry() {
     await deployPermissionlessSpaceInstance(spaceBeacon, {
       debug: true,
     })
-
-  await newPermissionlessSpaceRegistry.configureRoles()
 
   console.log(
     'Deployed permissionless space registry at address: ',
