@@ -97,11 +97,15 @@ export function StepAvatar({
   name: string;
   address: string;
 }) {
-  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+  const { network } = Services.useServices();
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAvatar(URL.createObjectURL(e.target.files[0]));
+      const file = e.target.files[0];
+      const ipfsUri = await network.uploadFile(file);
+      setAvatar(ipfsUri);
     }
-  }
+  };
 
   return (
     <div>
@@ -127,6 +131,7 @@ export function StepAvatar({
           <input accept="image/png, image/jpeg" onChange={handleChange} type="file" className="hidden" />
         </label>
       </div>
+      {avatar}
       <div className="flex justify-center absolute bottom-6 inset-x-0">
         <Button onClick={nextStep}>Done</Button>
       </div>
@@ -163,13 +168,6 @@ export const OnboardingDialog = observer(() => {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
   const [step, setStep] = useState(0);
-
-  const { network } = Services.useServices();
-
-  const createProfile = async () => {
-    await network.createProfile({ name, avatar });
-    setStep(steps.length - 1);
-  };
 
   const nextStep = () => {
     if (step < steps.length - 1) {

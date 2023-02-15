@@ -83,6 +83,7 @@ export interface INetwork {
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
+  uploadFile: (file: File) => Promise<string>;
 }
 
 const UPLOAD_CHUNK_SIZE = 2000;
@@ -115,9 +116,15 @@ export class Network implements INetwork {
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
   };
 
-  createProfile = async (): Promise<void> => {
-    // TODO
+  uploadFile = async (file: File): Promise<string> => {
+    const cidString = await this.storageClient.uploadFile(file);
+    return `https://ipfs.io/ipfs/${cidString}`;
+    // return `ipfs://${cidString}`;
   };
+
+  // createProfile = async (): Promise<void> => {
+  //   // TODO
+  // };
 
   fetchProfile = async (address: string, abortController?: AbortController): Promise<EntityType> => {
     /* Use the account entity until I figure out where profile info lives */
