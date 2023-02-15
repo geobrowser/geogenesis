@@ -26,3 +26,32 @@ export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
+
+/** 
+  There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
+  Going forward we need to make sure all new permissionless spaces are deployed using a single Beacon
+  rather than creating a new beacon.
+
+  See packages/contracts/.openzepplin/polygon.json for metadata on the deployed contracts.
+*/
+export const BEACONS = [
+  {
+    // This is the original beacon proxy deployed for the first spaces.
+    address: '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0',
+    txHash:
+      '0x3b7e16025ef0ceb218dc244a2145ea6dc153185cea175dc7a01ef09d0e214aea',
+    kind: 'beacon',
+  },
+  {
+    address: '0x9C65Ff69c55B2Af83d1E396188Ec05f2101F4b7E',
+    txHash:
+      '0x91e258c315a7d4e8cebbe51ca1dcd7c973a8700698e7bf7f16ecb44c15dc47bc',
+    kind: 'beacon',
+  },
+  {
+    address: '0x9952B5C325981fa48Df48BfCCdb019161E9e56D3',
+    txHash:
+      '0xfafedd87721f08c559dd0c7fc80c73b4a61756650a3dee504c89160a11045e69',
+    kind: 'beacon',
+  },
+]
