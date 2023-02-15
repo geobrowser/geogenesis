@@ -29,10 +29,10 @@ export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
 /** 
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
-  Going forward we need to make sure all new permissionless spaces are deployed using a single Beacon
-  rather than creating a new beacon.
+  Going forward we need to make sure all new permissionless and permissioned spaces are deployed using 
+  a single Beacon for each type rather than creating a new beacon every time we deploy new spaces.
 
-  See packages/contracts/.openzepplin/polygon.json for metadata on the deployed contracts.
+  See packages/contracts/.openzepplin/polygon.json for metadata on the deployed beacons.
 */
 export const BEACONS = [
   {
@@ -56,11 +56,25 @@ export const BEACONS = [
   },
 ]
 
+/**
+ * Addresses for important contracts on Polygon mainnet.
+ *
+ * Note: If you want to test deployments on a different network (e.g. local or Mumbai),
+ * you can update these addresses to point to the correct contracts on that network.
+ */
+
+// This represents the beacon proxy for the first set of deployed permissioned spaces.
+// We should use this beacon proxy for all new permissioned spaces.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS = BEACONS[0].address
 
+// This represents the Space contract acting as the registry for all permissioned spaces.
+// This is the address for the Root Space.
 export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
   '0x170b749413328ac9a94762031a7A05b00c1D2e34'
 
+// This represents the beacon proxy for all permissionless spaces.
 export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
 
+// This represents the PermissionlessSpace contract acting as the registry for all
+// permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
