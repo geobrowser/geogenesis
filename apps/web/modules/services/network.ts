@@ -115,6 +115,10 @@ export class Network implements INetwork {
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
   };
 
+  createProfile = async (): Promise<void> => {
+    // TODO
+  };
+
   fetchProfile = async (address: string, abortController?: AbortController): Promise<EntityType> => {
     /* Use the account entity until I figure out where profile info lives */
     const response = await fetch(this.subgraphUrl, {
