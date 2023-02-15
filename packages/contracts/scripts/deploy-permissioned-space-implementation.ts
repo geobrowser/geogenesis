@@ -25,12 +25,12 @@ async function deployPermissionedSpaceImplementation() {
   })
 
   const spaceBeacon = ethers.ContractFactory.getContract(
-    '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0',
+    SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS,
     Space__factory.abi
   )
 
   const spaceRegistry = ethers.ContractFactory.getContract(
-    '0x170b749413328ac9a94762031a7A05b00c1D2e34',
+    SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
     Space__factory.abi
   ) as Space
 

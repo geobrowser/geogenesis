@@ -28,15 +28,13 @@ async function main() {
     gasPrice: 50000000000, // 50 gwei
   })
 
-  // TODO: This should read the address for the permissionless space registry
-  // from somewhere.
   const permissionlessSpaceBeacon = ethers.ContractFactory.getContract(
-    '',
+    SYSTEM_IDS.PERMISSIONLESS_SPACE_BEACON_ADDRESS,
     PermissionlessSpace__factory.abi
-  ) as Space
+  ) as PermissionlessSpace
 
   const permissionlessSpaceRegistry = ethers.ContractFactory.getContract(
-    '',
+    SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
     PermissionlessSpace__factory.abi
   ) as PermissionlessSpace
 
