@@ -13,7 +13,13 @@ import { saveAddress } from '../src/save-address'
 
 dotenv.config()
 
-async function main() {
+/**
+ * This function deploys an instance of the PermissionlessSpace contract and adds
+ * it as a Space Entity to the permissionless space registry. It uses the address
+ * for the deployed permissionless beacon when deploying the new space to ensure
+ * that the new space is upgradable from the beacon.
+ */
+async function deployPermissionlessSpaceImplementation() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
   const networkId = process.env.HARDHAT_NETWORK as string
 
@@ -107,7 +113,7 @@ async function main() {
   return newPermissionlessSpace.address
 }
 
-main().catch((error) => {
+deployPermissionlessSpaceImplementation().catch((error) => {
   console.error(error)
   process.exitCode = 1
 })

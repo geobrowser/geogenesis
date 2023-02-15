@@ -10,6 +10,12 @@ import { saveAddress } from '../src/save-address'
 
 dotenv.config()
 
+/**
+ * This function deploys an instance of the permissioned Space contract and adds
+ * it as a Space Entity to the permissioned space registry. It uses the address
+ * for the deployed permissioned beacon when deploying the new space to ensure
+ * that the new space is upgradable from the beacon.
+ */
 async function deployPermissionedSpaceImplementation() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
   const networkId = process.env.HARDHAT_NETWORK as string

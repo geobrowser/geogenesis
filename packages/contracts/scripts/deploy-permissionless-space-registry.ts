@@ -9,10 +9,14 @@ import { deployPermissionlessSpaceInstance } from '../src/deploy'
 dotenv.config()
 
 /**
+ * This function deploys and instance of a Permissionless Space registry. All
+ * Permissionless Spaces should be added to this registry.
+ *
  * A PermissionlessSpace Registry is an instance of the PermissionlessSpace contract,
  * but is not instantiated the same way as a regular Space. The order that certain
  * events are emitted and roles configured is important for the subgraph to correctly
- * pick up the data emitted from the contracts.
+ * pick up the data emitted from the contracts. So we have a separate script for deploying
+ * the registry and configuring the roles in a way the subgraph can pick up.
  */
 async function deployPermissionlessSpaceRegistry() {
   // eslint-disable-next-line turbo/no-undeclared-env-vars
