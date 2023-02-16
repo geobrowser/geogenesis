@@ -1,5 +1,7 @@
-import { GetServerSideProps } from 'next';
+import * as React from 'react';
 import { useEffect } from 'react';
+import type { GetServerSideProps } from 'next';
+
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';

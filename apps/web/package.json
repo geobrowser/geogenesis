@@ -13,9 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@emotion/is-prop-valid": "^1.2.0",
-    "@emotion/react": "^11.10.4",
-    "@emotion/styled": "^11.10.4",
+    "@emotion/react": "^11.10.5",
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
@@ -54,6 +52,7 @@
   "devDependencies": {
     "@babel/core": "^7.19.0",
     "@next/bundle-analyzer": "^12.3.0",
+    "@tailwindcss/line-clamp": "^0.4.2",
     "@testing-library/dom": "^8.19.1",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",

@@ -1,5 +1,6 @@
+import * as React from 'react';
 import Link from 'next/link';
-import React from 'react';
+
 import { SquareButton } from '~/modules/design-system/button';
 
 interface Props {

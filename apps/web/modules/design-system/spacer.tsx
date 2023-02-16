@@ -1,15 +1,10 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
 
-const Box = styled.div<Props>(props => ({
-  height: props.height,
-  width: props.width,
-}));
-
-interface Props {
+type Props = React.ComponentPropsWithoutRef<'div'> & {
   height?: number;
   width?: number;
-}
+};
 
-export function Spacer({ height = 0, width = 0 }: Props) {
-  return <Box height={height} width={width} />;
+export function Spacer({ height = 0, width = 0, style = {}, ...rest }: Props) {
+  return <div style={{ height, width, ...style }} {...rest} />;
 }

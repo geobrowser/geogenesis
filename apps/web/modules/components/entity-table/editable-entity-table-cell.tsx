@@ -1,4 +1,6 @@
+import * as React from 'react';
 import { memo } from 'react';
+
 import { Entity } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { DeletableChipButton } from '../../design-system/chip';

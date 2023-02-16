@@ -1,8 +1,0 @@
-@tailwind base;
-
-a {
-  @apply no-underline focus:!outline-none;
-}
-
-@tailwind components;
-@tailwind utilities;

@@ -1,4 +1,7 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
+import { useAccount } from 'wagmi';
+
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Edit } from '~/modules/design-system/icons/edit';
 import { Eye } from '~/modules/design-system/icons/eye';
@@ -7,15 +10,15 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useEditable } from '~/modules/stores/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
-import { useAccount } from 'wagmi';
+import { textColors } from '~/utils';
 
-type ColorOption = ColorName;
+type LabelRowProps = React.ComponentPropsWithoutRef<'div'> & {
+  color: ColorName;
+};
 
-const LabelRow = styled.div<{ color: ColorOption }>(props => ({
-  color: props.theme.colors[props.color],
-  display: 'flex',
-  alignItems: 'center',
-}));
+const LabelRow = ({ color, className = '', ...rest }: LabelRowProps) => (
+  <div className={cx(textColors[color], 'flex items-center', className)} {...rest} />
+);
 
 type DropdownOptionValue = 'browse-mode' | 'edit-mode' | 'connect-wallet';
 

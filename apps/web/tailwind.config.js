@@ -29,6 +29,11 @@ module.exports = {
     },
     boxShadow: {
       none: 'none',
+      dropdown: '0px 6px 8px #60606033',
+      button: '0px 1px 2px #F0F0F0',
+      card: '0px 26px 45px rgba(0, 0, 0, 0.09)',
+      light: '0px 1px 2px #F0F0F0',
+      big: '0 1px 21px #DBDBDB',
       inner: 'inset 0 0 0 1px',
       'inner-transparent': 'inset 0 0 0 1px transparent',
       'inner-grey-02': 'inset 0 0 0 1px #DBDBDB',
@@ -41,6 +46,9 @@ module.exports = {
       'inner-lg-green': 'inset 0 0 0 2px #2ACE9D',
     },
     screens: {
+      '3xl': { max: '1920px' },
+      // => @media (max-width: 1920px) { ... }
+
       '2xl': { max: '1535px' },
       // => @media (max-width: 1535px) { ... }
 
@@ -239,7 +247,14 @@ module.exports = {
           },
         ],
       },
+      zIndex: {
+        60: '60',
+        70: '70',
+        80: '80',
+        90: '90',
+        100: '100',
+      },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/line-clamp')],
 };

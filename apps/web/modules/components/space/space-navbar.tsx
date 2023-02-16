@@ -1,5 +1,7 @@
+import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';

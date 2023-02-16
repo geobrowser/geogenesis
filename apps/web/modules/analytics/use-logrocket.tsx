@@ -1,6 +1,7 @@
 import LogRocket from 'logrocket';
 import setupLogRocketReact from 'logrocket-react';
 import { useAccount } from 'wagmi';
+
 import { useAccessControl } from '../auth/use-access-control';
 
 export function useLogRocket(space: string) {

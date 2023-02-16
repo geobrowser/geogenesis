@@ -1,86 +1,13 @@
-import isPropValid from '@emotion/is-prop-valid';
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { useState } from 'react';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
+
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
 
-const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
-  all: 'unset',
-  ...props.theme.typography.button,
-  color: props.theme.colors.text,
-  flex: 1,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderRadius: props.theme.radius,
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  textWrap: 'nowrap',
-  whiteSpace: 'pre',
-  width: 103,
-
-  '&:hover': {
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
-    cursor: 'pointer',
-  },
-
-  '&:focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
-    outline: 'none',
-  },
-
-  '&[data-placeholder]': { color: props.theme.colors.text },
-}));
-
-const StyledContent = styled(DropdownPrimitive.Content)(props => ({
-  overflow: 'hidden',
-  backgroundColor: props.theme.colors.white,
-  zIndex: 10,
-  borderRadius: 6,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  width: 273,
-}));
-
-const MotionContent = motion(StyledContent);
-
-const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
-  overflow: 'hidden',
-  borderRadius: props.theme.radius,
-}));
-
-const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
-  disabled: boolean;
-  isLast: boolean;
-}>(props => ({
-  all: 'unset',
-  ...props.theme.typography.button,
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  color: props.theme.colors['grey-04'],
-
-  userSelect: 'none',
-
-  ...(!props.isLast && {
-    borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
-  }),
-
-  '&[data-highlighted]': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors.bg,
-    color: props.theme.colors.text,
-  },
-
-  ...(props.disabled && {
-    color: props.theme.colors['grey-04'],
-    cursor: 'not-allowed',
-  }),
-}));
+const MotionContent = motion(DropdownPrimitive.Content);
 
 interface Props {
   trigger: React.ReactNode;
@@ -93,11 +20,11 @@ export const Dropdown = ({ trigger, options }: Props) => {
 
   return (
     <DropdownPrimitive.Root onOpenChange={setOpen}>
-      <StyledTrigger>
+      <DropdownPrimitive.Trigger className="flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
         {trigger}
         <Spacer width={8} />
         <ChevronDownSmall color="ctaPrimary" />
-      </StyledTrigger>
+      </DropdownPrimitive.Trigger>
       <AnimatePresence>
         {open && (
           <MotionContent
@@ -111,14 +38,15 @@ export const Dropdown = ({ trigger, options }: Props) => {
             }}
             align="end"
             sideOffset={2}
+            className="z-10 w-[273px] overflow-hidden rounded border border-grey-02 bg-white"
           >
-            <StyledGroup>
+            <DropdownPrimitive.Group className="overflow-hidden">
               {options.map((option, index) => (
-                <StyledItem
+                <DropdownPrimitive.Item
                   key={`dropdown-item-${index}`}
                   disabled={option.disabled}
-                  isLast={index === options.length - 1}
                   onClick={option.onClick}
+                  className="flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 aria-disabled:cursor-not-allowed aria-disabled:text-grey-04 [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text"
                 >
                   {option.label}
                   {option.disabled && (
@@ -126,9 +54,9 @@ export const Dropdown = ({ trigger, options }: Props) => {
                       {option.sublabel}
                     </Text>
                   )}
-                </StyledItem>
+                </DropdownPrimitive.Item>
               ))}
-            </StyledGroup>
+            </DropdownPrimitive.Group>
           </MotionContent>
         )}
       </AnimatePresence>

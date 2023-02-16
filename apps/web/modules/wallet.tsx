@@ -1,8 +1,9 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
 import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
 import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
+
 import { Config } from './config';
 import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
@@ -63,18 +64,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-const StyledConnectButton = styled.button(props => ({
-  background: 'transparent',
-  border: 'none',
-  cursor: 'pointer',
-  color: props.theme.colors.ctaPrimary,
-  display: 'flex',
-  width: '100%',
-  alignItems: 'center',
-  padding: 0,
-  margin: 0,
-}));
-
 export function GeoConnectButton() {
   // There's currently no mechanisms in connectkit to handle disconnecting their APIs
   // without going through the modal. It uses wagmi internally so we can escape-hatch
@@ -86,13 +75,16 @@ export function GeoConnectButton() {
       {({ show, isConnected }) => {
         return (
           // We're using an anonymous function for disconnect to appease the TS gods.
-          <StyledConnectButton onClick={isConnected ? () => disconnect() : show}>
+          <button
+            onClick={isConnected ? () => disconnect() : show}
+            className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0 text-ctaPrimary"
+          >
             {isConnected ? <Unlink /> : <Link />}
             <Spacer width={8} />
             <Text color="ctaPrimary" variant="button">
               {isConnected ? 'Disconnect wallet' : 'Connect wallet'}
             </Text>
-          </StyledConnectButton>
+          </button>
         );
       }}
     </ConnectKitButton.Custom>

@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { Triple } from '~/modules/types';
 
 export function sortEditableEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {

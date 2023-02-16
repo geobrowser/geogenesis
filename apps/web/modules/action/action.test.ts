@@ -1,4 +1,5 @@
 import { describe, expect } from 'vitest';
+
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Action as ActionType, EditTripleAction } from '~/modules/types';
 import { getChangeCount, squashChanges, unpublishedChanges } from './action';

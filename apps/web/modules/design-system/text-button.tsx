@@ -1,5 +1,5 @@
+import * as React from 'react';
 import { cva } from 'class-variance-authority';
-import React from 'react';
 
 const buttonStyles = cva(
   'flex items-center bg-transparent outline-none hover:text-ctaHover hover:outline-none focus:outline-none',

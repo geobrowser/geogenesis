@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
+
 import { Triple } from '../triple';
 import { Action, Entity, Triple as TripleType } from '../types';
 import { groupBy } from '../utils';

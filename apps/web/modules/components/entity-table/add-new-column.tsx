@@ -1,4 +1,6 @@
+import * as React from 'react';
 import { memo } from 'react';
+
 import { useActionsStoreContext } from '~/modules/action';
 import { Plus } from '~/modules/design-system/icons/plus';
 import { Triple } from '~/modules/types';

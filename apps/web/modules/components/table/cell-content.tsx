@@ -1,4 +1,6 @@
+import * as React from 'react';
 import Link from 'next/link';
+
 import { Text } from '../../design-system/text';
 import { Truncate } from '../../design-system/truncate';
 

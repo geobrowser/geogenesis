@@ -1,8 +1,8 @@
+import * as React from 'react';
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
 
 interface Props {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 export function Toast({ children }: Props) {

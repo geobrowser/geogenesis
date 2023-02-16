@@ -1,6 +1,8 @@
-import { cva } from 'class-variance-authority';
-import Link from 'next/link';
+import * as React from 'react';
 import { useState } from 'react';
+import Link from 'next/link';
+import { cva } from 'class-variance-authority';
+
 import { CheckCloseSmall } from '~/modules/design-system/icons/check-close-small';
 
 interface LinkableChipProps {

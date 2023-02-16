@@ -1,28 +1,23 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
 import Link from 'next/link';
-import React from 'react';
 
-const StyledLink = styled.a<{ isActive: boolean }>(({ theme, isActive }) => ({
-  ...theme.typography.mediumTitle,
-  color: isActive ? theme.colors.text : theme.colors['grey-04'],
-  cursor: 'pointer',
-  outline: 'none',
-  ':hover': {
-    color: theme.colors.text,
-  },
-}));
-
-interface Props {
+type Props = React.ComponentPropsWithoutRef<'a'> & {
   isActive: boolean;
   href: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}
+};
 
-export const TabLink = ({ isActive, href, children }: Props) => {
+export const TabLink = ({ isActive, href, className = '', ...rest }: Props) => {
   return (
     <Link href={href}>
-      <StyledLink isActive={isActive}>{children}</StyledLink>
+      <a
+        className={cx(
+          isActive ? 'text-text' : 'text-grey-04',
+          'cursor-pointer text-mediumTitle outline-none hover:text-text',
+          className
+        )}
+        {...rest}
+      />
     </Link>
   );
 };

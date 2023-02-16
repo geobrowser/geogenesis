@@ -1,4 +1,6 @@
+import * as React from 'react';
 import { memo, useState } from 'react';
+
 import { useActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';

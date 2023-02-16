@@ -1,11 +1,11 @@
-import { useTheme } from '@emotion/react';
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { useState } from 'react';
+import cx from 'classnames';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
-import React, { useState } from 'react';
+
 import { Filter } from '~/modules/design-system/icons/filter';
-import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { initialFilterState } from '~/modules/triple';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
@@ -14,62 +14,7 @@ import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
 
-interface ContentProps {
-  children: React.ReactNode;
-  width: number;
-  alignOffset?: number;
-  sideOffset?: number;
-}
-
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  borderRadius: props.theme.radius,
-  padding: props.theme.space * 3,
-  width: `calc(${props.width}px / 2)`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.button,
-  zIndex: 1,
-
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-
-  '@media (max-width: 768px)': {
-    margin: '0 auto',
-    width: '98vw',
-  },
-}));
-
-const MotionContent = motion(StyledContent);
-
-const ButtonGroup = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-});
-
-const StyledIconButton = styled.button<{ open: boolean }>(props => ({
-  all: 'unset',
-  backgroundColor: props.open ? props.theme.colors['grey-01'] : props.theme.colors.white,
-  color: props.theme.colors['grey-04'],
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  transition: 'colors 0.15s ease-in-out',
-  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  borderLeft: 'none',
-
-  '&:hover': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors['grey-01'],
-    color: props.theme.colors.text,
-  },
-
-  '&:active': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-
-  '&:focus': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-}));
+const MotionContent = motion(PopoverPrimitive.Content);
 
 interface Props {
   inputContainerWidth: number;
@@ -98,18 +43,21 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
 }
 
 export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
-  const theme = useTheme();
-  const { width } = useWindowSize();
-
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledIconButton aria-label="advanced-filter-button" open={open}>
+        <button
+          className={cx(
+            open ? 'bg-grey-01' : 'bg-white',
+            'border-l-none rounded-r py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary'
+          )}
+          aria-label="advanced-filter-button"
+        >
           <Filter />
-        </StyledIconButton>
+        </button>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
@@ -123,10 +71,8 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               ease: 'easeInOut',
             }}
             avoidCollisions={true}
-            width={inputContainerWidth}
-            sideOffset={theme.space * 2.5 + 2}
-            alignOffset={-(theme.space * 2) + 4}
-            align={width > 768 ? 'end' : 'start'}
+            className="shadow-button z-[1] self-end rounded border border-grey-02 bg-white p-3 md:mx-auto md:w-[98vw] md:self-start"
+            style={{ width: `calc(${inputContainerWidth}px / 2)` }}
           >
             <Text variant="button">Show triples</Text>
             <Spacer height={12} />
@@ -159,7 +105,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               )
             )}
             <Spacer height={12} />
-            <ButtonGroup>
+            <div className="flex items-center justify-between">
               <Button
                 icon="create"
                 variant="secondary"
@@ -176,7 +122,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               >
                 And
               </Button>
-              <ButtonGroup>
+              <div className="flex items-center justify-between">
                 <Button
                   icon="trash"
                   variant="secondary"
@@ -186,8 +132,8 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                 >
                   Clear all
                 </Button>
-              </ButtonGroup>
-            </ButtonGroup>
+              </div>
+            </div>
           </MotionContent>
         ) : null}
       </AnimatePresence>
