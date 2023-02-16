@@ -2,12 +2,7 @@
 
 pragma solidity ^0.8.14;
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
-import {ISpace} from './ISpace.sol';
-
-struct Entry {
-    string uri;
-    address author;
-}
+import {ISpace, Entry} from './ISpace.sol';
 
 /**
  * An immutable log of uri strings. The log is permissionless, so anyone can add
@@ -17,14 +12,9 @@ contract PermissionlessSpace is
     ISpace,
     Initializable
 {
-    // *** Constants ***
-
-    // *** State variables ***
-
     Entry[] _entries;
 
     // *** Initialize upgradeable instance ***
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -77,5 +67,9 @@ contract PermissionlessSpace is
 
     function min(uint256 a, uint256 b) private pure returns (uint256) {
         return a <= b ? a : b;
+    }
+
+    function version() public virtual pure returns (string memory) {
+      return "1.0.0";
     }
 }

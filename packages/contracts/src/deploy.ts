@@ -55,25 +55,9 @@ export async function deploySpaceInstance(
   return signer ? deployed.connect(signer) : deployed
 }
 
-export async function upgradeToSpaceV2(
-  beacon: Contract,
-  instance: Contract,
-  options: DeployOptions = {}
-): Promise<FakeSpaceV2> {
-  const { signer, debug } = options
-
+export async function upgradeToSpaceV2(beacon: Contract) {
   const SpaceV2 = await ethers.getContractFactory('FakeSpaceV2')
   await upgrades.upgradeBeacon(beacon.address, SpaceV2)
-
-  const upgraded = SpaceV2.attach(instance.address) as FakeSpaceV2
-
-  await upgraded.initializeV2()
-
-  if (debug) {
-    console.log(`Upgraded Beacon at ${upgraded.address}`)
-  }
-
-  return signer ? upgraded.connect(signer) : upgraded
 }
 
 export async function deployPermissionlessSpaceBeacon(
@@ -129,4 +113,9 @@ export async function deployPermissionlessSpaceInstance(
   }
 
   return signer ? deployed.connect(signer) : deployed
+}
+
+export async function upgradeToPermissionlessSpaceV2(beacon: Contract) {
+  const SpaceV2 = await ethers.getContractFactory('FakeSpaceV2')
+  await upgrades.upgradeBeacon(beacon.address, SpaceV2)
 }

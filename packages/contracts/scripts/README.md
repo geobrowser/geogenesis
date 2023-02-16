@@ -11,7 +11,7 @@ There are scripts that correspond to each of these steps.
 ### Running a deployment script
 
 ```sh
-npx hardhat run --network [polygon_mainnet | polygon_mumbai] scripts/deploy-permissionless-space-beacon
+npx hardhat run --network [polygon_mainnet | polygon_mumbai] scripts/deploy-permissionless-space-beacon.ts
 ```
 
 ### How do the contracts interact?
