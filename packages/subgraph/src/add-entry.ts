@@ -24,10 +24,6 @@ export function addEntry(params: EntryParams): void {
 
   let entry = new LogEntry(id)
 
-  // const author = event.params.author
-  // const uri = event.params.uri
-  // const space = event.address.toHexString()
-
   entry.author = author
   entry.uri = uri
   entry.space = space
