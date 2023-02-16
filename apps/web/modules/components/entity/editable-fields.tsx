@@ -29,6 +29,10 @@ export function StringField({ variant = 'body', ...props }: StringFieldProps) {
   const [localValue, setLocalValue] = React.useState(props.value || '');
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
   // Manually keep the height of the textarea in sync with its content.
   useEffect(() => {
     if (ref.current) {

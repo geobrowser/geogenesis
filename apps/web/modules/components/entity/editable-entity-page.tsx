@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -14,7 +15,7 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
-import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
+import { sortEntityPageTriples } from './editable-entity-page-utils';
 import { StringField } from './editable-fields';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
@@ -89,6 +90,7 @@ export function EditableEntityPage({
   const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
+
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
@@ -136,9 +138,7 @@ export function EditableEntityPage({
           <title>{name ?? id}</title>
           <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
         </Head>
-
         <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
-
         {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
@@ -148,14 +148,12 @@ export function EditableEntityPage({
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
         <Spacer height={9} />
-
         <StringField
           variant="body"
           placeholder="Add a description..."
           value={description ?? undefined}
           onBlur={onDescriptionChange}
         />
-
         {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
@@ -165,13 +163,10 @@ export function EditableEntityPage({
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
         <Spacer height={12} />
-
         <EntityActionGroup>
           <CopyIdButton id={id} />
         </EntityActionGroup>
-
         <Spacer height={8} />
-
         <Content>
           <Attributes>
             <EntityAttributes
@@ -250,7 +245,7 @@ function EntityAttributes({
 
   const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
 
-  const sortedTriples = sortEditableEntityPageTriples(visibleTriples, schemaTriples);
+  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples);
 
   const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
@@ -327,14 +322,25 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: TripleType, value: string) => {
-    send({
-      type: 'UPDATE_VALUE',
-      payload: {
-        triple,
-        value,
-      },
-    });
+  const updateValue = (triple: TripleType, name: string) => {
+    const isNameChange = triple.attributeId === SYSTEM_IDS.NAME;
+    if (isNameChange) {
+      send({
+        type: 'EDIT_ENTITY_NAME',
+        payload: {
+          triple,
+          name,
+        },
+      });
+    } else {
+      send({
+        type: 'UPDATE_VALUE',
+        payload: {
+          triple,
+          value: name,
+        },
+      });
+    }
   };
 
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
