@@ -2,6 +2,8 @@ import { useAccount } from 'wagmi';
 import { useHydrated } from '../hooks/use-hydrated';
 
 export function useGeoProfile() {
+  /* Note! Stub hook! Need to have profile backend ready... */
+
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();

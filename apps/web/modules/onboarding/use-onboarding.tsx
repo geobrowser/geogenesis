@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi';
 import { useGeoProfile } from '../auth/use-geo-profile';
 
 export function useOnboarding() {
+  /* Note! Stub hook! Need to have profile backend ready... */
   const { profile } = useGeoProfile();
   const isOnboardingVisible = useObservable(false);
 

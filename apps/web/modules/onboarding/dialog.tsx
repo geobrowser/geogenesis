@@ -113,7 +113,7 @@ export function StepAvatar({
       <div className="pb-4 flex justify-center">
         {avatar ? (
           <div
-            className="bg-cover bg-center border-8 border-black"
+            className="bg-cover bg-center border-8 border-black rounded"
             style={{
               backgroundImage: `url(${avatar})`,
               height: 154,
@@ -131,7 +131,6 @@ export function StepAvatar({
           <input accept="image/png, image/jpeg" onChange={handleChange} type="file" className="hidden" />
         </label>
       </div>
-      {avatar}
       <div className="flex justify-center absolute bottom-6 inset-x-0">
         <Button onClick={nextStep}>Done</Button>
       </div>
@@ -194,9 +193,10 @@ export const OnboardingDialog = observer(() => {
   const showTitle = step !== steps.length - 1;
   const showAnimatedBackground = step === steps.length - 1;
 
-  //isOnboardingVisible.get()
+  // Note: set open to true or to isOnboardingVisible.get() to see the onboarding flow
+  // Currently stubbed as we don't have a way to create a profile yet
   return (
-    <DialogContainer open={true} label="Entity search">
+    <DialogContainer open={false} label="Entity search">
       <div className="flex justify-between items-center pb-12">
         <div className={`rotate-180`}>
           {showBackButton && <SquareButton icon="rightArrowLongSmall" onClick={prevStep} />}

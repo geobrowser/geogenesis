@@ -9,33 +9,50 @@ export class StorageClient implements IStorageClient {
 
   async uploadObject(object: unknown): Promise<string> {
     const blob = new Blob([JSON.stringify(object)], { type: 'application/json' });
+    const formData = new FormData();
+    formData.append('file', blob);
 
-    const params = new URLSearchParams({ baseUrl: this.ipfsUrl });
+    const url = `${this.ipfsUrl}/api/v0/add`;
 
-    const response = await fetch(`/api/ipfs/upload?${params.toString()}`, {
+    console.log(`Posting to url`, url);
+
+    const response = await fetch(url, {
       method: 'POST',
-      body: blob,
+      body: formData,
     });
 
-    const cidString = await response.text();
+    if (response.status >= 300) {
+      const text = await response.text();
+      console.log(text);
+      return text;
+    }
 
-    console.log(cidString);
+    const { Hash } = await response.json();
 
-    return cidString;
+    return Hash;
   }
 
   async uploadFile(file: File): Promise<string> {
-    const params = new URLSearchParams({ baseUrl: this.ipfsUrl });
+    const formData = new FormData();
+    formData.append('file', file);
 
-    const response = await fetch(`/api/ipfs/upload-file?${params.toString()}`, {
+    const url = `${this.ipfsUrl}/api/v0/add`;
+
+    console.log(`Posting to url`, url);
+
+    const response = await fetch(url, {
       method: 'POST',
-      body: file,
+      body: formData,
     });
 
-    const cidString = await response.text();
+    if (response.status >= 300) {
+      const text = await response.text();
+      console.log(text);
+      return text;
+    }
 
-    console.log(cidString);
+    const { Hash } = await response.json();
 
-    return cidString;
+    return `${this.ipfsUrl}/api/v0/cat?arg=${Hash}`;
   }
 }
