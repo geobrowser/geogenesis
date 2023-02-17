@@ -18,12 +18,12 @@ export function LinkableBreadcrumb({ children, href, img, isNested, shouldTrunca
   return (
     <Link href={href} passHref>
       <a
-        className="pypx [&>span]:transition-color flex cursor-pointer items-center whitespace-nowrap no-underline [&>span]:duration-150 [&>span]:ease-in-out hover:[&>span]:text-text"
+        className="[&>span]:transition-color flex cursor-pointer items-center whitespace-nowrap no-underline [&>span]:duration-150 [&>span]:ease-in-out hover:[&>span]:text-text"
         title={children}
       >
         {img && (
           <>
-            <div className="rounded-sm relative hidden h-4 w-4">
+            <div className="relative h-4 w-4 overflow-hidden rounded">
               <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
             </div>
             <Spacer width={8} />

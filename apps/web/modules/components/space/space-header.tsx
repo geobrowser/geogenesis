@@ -14,7 +14,7 @@ export function SpaceHeader({ spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props)
   return (
     <div className="flex w-full items-center justify-between">
       <div className="flex items-center gap-5">
-        <div className="rounded-lg relative hidden h-14 w-14">
+        <div className="relative h-14 w-14 overflow-hidden rounded">
           <Image
             objectFit="cover"
             layout="fill"
