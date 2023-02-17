@@ -13,7 +13,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@emotion/react": "^11.10.5",
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
