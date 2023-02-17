@@ -1,6 +1,7 @@
 # Schemas
 
 Schemas in Geo are groups of related entities and triples that conform to an expected shape. Right now schemas are not _validated_, but the Geo subgraph and client will expect certain schemas for certain types of data.
+
 <br>
 
 ### Types
@@ -15,6 +16,8 @@ Types can also have specific **attributes** which define the **schema** for a Ty
 | Name          | Bill Gates       |
 | Date of Birth | October 28, 1955 |
 | Date of Death |                  |
+
+<br>
 
 These required attributes are defined on the type itself using the **Attributes** attribute.
 
@@ -36,9 +39,12 @@ As part of the schema, each Attribute can define what **Value Type** it should h
 | Name       | Date of Birth                                               |
 | Value Type | Date                                                        |
 
+<br>
+
 ### Schema validation
 
 Right now we do not validate entities of a Type correctly conform to the Type's schema. It is something we will likely do eventually.
+
 <br>
 
 ### Using schemas to define data models
