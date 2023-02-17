@@ -9,7 +9,7 @@ export const Divider = ({ className = '', ...rest }: Props) => {
   return (
     <div
       className={cx(
-        rest.type === 'horizontal' && 'jsutify-stretch',
+        rest.type === 'horizontal' && 'justify-stretch',
         rest.type === 'vertical' && 'items-stretch',
         'border-[0.5px] border-grey-02',
         className
