@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Avatar } from '../avatar';
 import { Button, SquareButton } from '../design-system/button';
+import { Text } from '../design-system/text';
 import { Services } from '../services';
 import { formatAddress } from '../utils';
 import { useOnboarding } from './use-onboarding';
@@ -56,7 +57,7 @@ export function StepName({
   name: string;
   setName: (name: string) => void;
 }) {
-  const validName = name.length > 3;
+  const validName = name.length > 0;
 
   return (
     <div>
@@ -71,9 +72,9 @@ export function StepName({
           />
         </div>
       </div>
-      <div className="text-bodySemibold text-xl text-center">
+      <Text as="h3" variant="bodySemibold" className="text-center">
         You can use your real name or a pseudonym if you’d prefer to remain anonymous.
-      </div>
+      </Text>
 
       <div className="flex justify-center absolute bottom-6 inset-x-0">
         <Button disabled={!validName} onClick={nextStep}>
@@ -109,7 +110,9 @@ export function StepAvatar({
 
   return (
     <div>
-      <div className="text-center pb-4 text-smallTitle -mt-6">{name}</div>
+      <Text as={'h3'} variant={'smallTitle'} className="text-center pb-4  -mt-6">
+        {name}
+      </Text>
       <div className="pb-4 flex justify-center">
         {avatar ? (
           <div
@@ -126,10 +129,12 @@ export function StepAvatar({
       </div>
 
       <div className="flex justify-center">
-        <label className="text-ctaPrimary text-metadataMedium text-center cursor-pointer hover:underline inline-block">
-          Upload photo
-          <input accept="image/png, image/jpeg" onChange={handleChange} type="file" className="hidden" />
+        <label htmlFor="avatar-file" className="text-center cursor-pointer hover:underline inline-block">
+          <Text variant="metadataMedium" color="ctaPrimary">
+            Upload photo
+          </Text>
         </label>
+        <input accept="image/png, image/jpeg" id="avatar-file" onChange={handleChange} type="file" className="hidden" />
       </div>
       <div className="flex justify-center absolute bottom-6 inset-x-0">
         <Button onClick={nextStep}>Done</Button>
@@ -140,73 +145,90 @@ export function StepAvatar({
 
 export function StepSuccess() {
   return (
-    <>
-      <div className="h-full pt-16">
-        <div className="flex justify-center">
-          <div className="bg-white text-center shadow-lg inline-block py-2 px-8 rounded">
-            <div className="justify-center flex w-full pb-3">
-              <GeoLogoLarge width={67} height={67} />
-            </div>
-            <div className="text-input">Welcome to</div>
-            <div className="text-largeTitle -mt-1">GEO</div>
+    <div className="h-full pt-8">
+      <div className="flex justify-center">
+        <div className="bg-white text-center shadow-onboarding inline-block py-2 px-8 rounded">
+          <div className="justify-center flex w-full pb-3">
+            <GeoLogoLarge width={67} height={67} />
           </div>
-        </div>
-
-        <div className="flex justify-center absolute bottom-6 inset-x-0">
-          <Button>View Profile</Button>
+          <Text as={'h3'} variant={'input'}>
+            Welcome to
+          </Text>
+          <Text as={'h3'} variant={'largeTitle'} className="-mt-1">
+            Geo
+          </Text>
         </div>
       </div>
-    </>
+
+      <div className="flex justify-center absolute bottom-6 inset-x-0">
+        <Button>View Profile</Button>
+      </div>
+    </div>
   );
 }
 
+type Steps = 'wallet' | 'name' | 'avatar' | 'success';
+
+const StepHeader = ({ prevStep, showTitle = true }: { prevStep?: () => void; showTitle?: boolean }) => {
+  const { hideOnboarding } = useOnboarding();
+
+  return (
+    <div className="flex justify-between items-center pb-12">
+      <div className="rotate-180">{prevStep && <SquareButton icon="rightArrowLongSmall" onClick={prevStep} />}</div>
+      <div className="text-metadataMedium">{showTitle && 'Profile Creation'}</div>
+      <SquareButton icon="close" onClick={hideOnboarding} />
+    </div>
+  );
+};
+
 export const OnboardingDialog = observer(() => {
-  const { isOnboardingVisible, hideOnboarding } = useOnboarding();
+  const { isOnboardingVisible } = useOnboarding();
   const { address } = useAccount();
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
-  const [step, setStep] = useState(0);
-
-  const nextStep = () => {
-    if (step < steps.length - 1) {
-      setStep(step + 1);
-    }
-  };
-
-  const prevStep = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    }
-  };
+  const [step, setStep] = useState<Steps>('wallet');
 
   if (!address) return null;
-
-  const steps = [
-    <StepWallet nextStep={nextStep} address={address} key="wallet" />,
-    <StepName nextStep={nextStep} setName={setName} name={name} key="name" />,
-    <StepAvatar nextStep={nextStep} avatar={avatar} setAvatar={setAvatar} name={name} address={address} key="avatar" />,
-    <StepSuccess key="success" />,
-  ];
-
-  const showBackButton = step > 0 && step < steps.length - 1;
-  const showTitle = step !== steps.length - 1;
-  const showAnimatedBackground = step === steps.length - 1;
 
   // Note: set open to true or to isOnboardingVisible.get() to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
   return (
-    <DialogContainer open={false} label="Entity search">
-      <div className="flex justify-between items-center pb-12">
-        <div className={`rotate-180`}>
-          {showBackButton && <SquareButton icon="rightArrowLongSmall" onClick={prevStep} />}
-        </div>
-        <div className="text-metadataMedium">{showTitle && 'Profile Creation'}</div>
-        <SquareButton icon="close" onClick={hideOnboarding} />
+    <DialogContainer open={isOnboardingVisible.get()} label="Entity search">
+      <div className="relative z-10 h-full">
+        {step === 'wallet' && (
+          <>
+            <StepHeader />
+            <StepWallet nextStep={() => setStep('name')} address={address} />
+          </>
+        )}
+        {step === 'name' && (
+          <>
+            <StepHeader prevStep={() => setStep('wallet')} />
+            <StepName nextStep={() => setStep('avatar')} setName={setName} name={name} />
+          </>
+        )}
+        {step === 'avatar' && (
+          <>
+            <StepHeader prevStep={() => setStep('name')} />
+            <StepAvatar
+              nextStep={() => setStep('success')}
+              avatar={avatar}
+              setAvatar={setAvatar}
+              name={name}
+              address={address}
+            />
+          </>
+        )}
+        {step === 'success' && (
+          <>
+            <StepHeader showTitle={false} />
+            <StepSuccess />
+          </>
+        )}
       </div>
 
-      <div className="pb-6 px-6 relative z-10 h-full">{steps[step]}</div>
-      {showAnimatedBackground && <img src="/mosaic.png" className="absolute -z-1 inset-0 w-full h-full object-cover" />}
+      {step === 'success' && <img src="/mosaic.png" className="absolute -z-1 inset-0 w-full h-full object-cover" />}
     </DialogContainer>
   );
 });

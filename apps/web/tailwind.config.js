@@ -29,6 +29,7 @@ module.exports = {
     },
     boxShadow: {
       none: 'none',
+      onboarding: '0px 0px 71.36363220214844px 0px',
       inner: 'inset 0 0 0 1px',
       'inner-lg': 'inset 0 0 0 2px',
     },

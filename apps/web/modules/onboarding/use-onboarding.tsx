@@ -1,11 +1,13 @@
-import { useObservable } from '@legendapp/state/react';
+import { observable } from '@legendapp/state';
 import { useAccount } from 'wagmi';
 import { useGeoProfile } from '../auth/use-geo-profile';
+
+/* Extracting state outside component so any component can use this hook and share the same state */
+const isOnboardingVisible = observable(false);
 
 export function useOnboarding() {
   /* Note! Stub hook! Need to have profile backend ready... */
   const { profile } = useGeoProfile();
-  const isOnboardingVisible = useObservable(false);
 
   useAccount({
     onDisconnect: () => isOnboardingVisible.set(false),
