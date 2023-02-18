@@ -29,31 +29,33 @@ const DialogContainer = styled(Command.Dialog)(props => ({
   boxShadow: props.theme.shadows.dropdown,
 }));
 
-export function StepWallet({ nextStep, address }: { nextStep: () => void; address: string }) {
+export function StepWallet({ onNext, address }: { onNext: () => void; address: string }) {
   return (
     <div>
       <div className="flex justify-center pb-8">
-        <div className="bg-divider rounded px-2 py-1 inline-block text-mediumTitle">{formatAddress(address)}</div>
+        <Text variant="mediumTitle" className="bg-divider rounded px-2 py-1 inline-block">
+          {formatAddress(address)}
+        </Text>
       </div>
       <div className="pb-3">
-        <div className="text-bodySemibold text-xl text-center">
+        <Text variant="bodySemibold" className="text-center">
           It looks like you don’t have a Geo profile on this wallet address.
-        </div>
+        </Text>
       </div>
 
       <div className="flex justify-center absolute bottom-6 inset-x-0">
-        <Button onClick={nextStep}>Create Profile</Button>
+        <Button onClick={onNext}>Create Profile</Button>
       </div>
     </div>
   );
 }
 
 export function StepName({
-  nextStep,
+  onNext,
   name,
   setName,
 }: {
-  nextStep: () => void;
+  onNext: () => void;
   name: string;
   setName: (name: string) => void;
 }) {
@@ -62,10 +64,10 @@ export function StepName({
   return (
     <div>
       <div className="flex justify-center">
-        <div className="pb-8 inline-block text-mediumTitle">
+        <div className="pb-8 inline-block">
           <input
             placeholder="Name..."
-            className="text-center block px-2 py-1"
+            className="text-mediumTitle text-center block px-2 py-1"
             value={name}
             onChange={e => setName(e.target.value)}
             autoFocus
@@ -77,7 +79,7 @@ export function StepName({
       </Text>
 
       <div className="flex justify-center absolute bottom-6 inset-x-0">
-        <Button disabled={!validName} onClick={nextStep}>
+        <Button disabled={!validName} onClick={onNext}>
           Continue
         </Button>
       </div>
@@ -86,13 +88,13 @@ export function StepName({
 }
 
 export function StepAvatar({
-  nextStep,
+  onNext,
   name,
   avatar,
   setAvatar,
   address,
 }: {
-  nextStep: () => void;
+  onNext: () => void;
   avatar: string;
   setAvatar: (file: string) => void;
   name: string;
@@ -110,7 +112,7 @@ export function StepAvatar({
 
   return (
     <div>
-      <Text as={'h3'} variant={'smallTitle'} className="text-center pb-4  -mt-6">
+      <Text as={'h3'} variant={'smallTitle'} className="text-center pb-4 -mt-6">
         {name}
       </Text>
       <div className="pb-4 flex justify-center">
@@ -137,7 +139,7 @@ export function StepAvatar({
         <input accept="image/png, image/jpeg" id="avatar-file" onChange={handleChange} type="file" className="hidden" />
       </div>
       <div className="flex justify-center absolute bottom-6 inset-x-0">
-        <Button onClick={nextStep}>Done</Button>
+        <Button onClick={onNext}>Done</Button>
       </div>
     </div>
   );
@@ -169,12 +171,12 @@ export function StepSuccess() {
 
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
 
-const StepHeader = ({ prevStep, showTitle = true }: { prevStep?: () => void; showTitle?: boolean }) => {
+const StepHeader = ({ onPrev, showTitle = true }: { onPrev?: () => void; showTitle?: boolean }) => {
   const { hideOnboarding } = useOnboarding();
 
   return (
     <div className="flex justify-between items-center pb-12">
-      <div className="rotate-180">{prevStep && <SquareButton icon="rightArrowLongSmall" onClick={prevStep} />}</div>
+      <div className="rotate-180">{onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}</div>
       <div className="text-metadataMedium">{showTitle && 'Profile Creation'}</div>
       <SquareButton icon="close" onClick={hideOnboarding} />
     </div>
@@ -194,25 +196,25 @@ export const OnboardingDialog = observer(() => {
   // Note: set open to true or to isOnboardingVisible.get() to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
   return (
-    <DialogContainer open={isOnboardingVisible.get()} label="Entity search">
+    <DialogContainer open={false} label="Entity search">
       <div className="relative z-10 h-full">
         {step === 'wallet' && (
           <>
             <StepHeader />
-            <StepWallet nextStep={() => setStep('name')} address={address} />
+            <StepWallet onNext={() => setStep('name')} address={address} />
           </>
         )}
         {step === 'name' && (
           <>
-            <StepHeader prevStep={() => setStep('wallet')} />
-            <StepName nextStep={() => setStep('avatar')} setName={setName} name={name} />
+            <StepHeader onPrev={() => setStep('wallet')} />
+            <StepName onNext={() => setStep('avatar')} setName={setName} name={name} />
           </>
         )}
         {step === 'avatar' && (
           <>
-            <StepHeader prevStep={() => setStep('name')} />
+            <StepHeader onPrev={() => setStep('name')} />
             <StepAvatar
-              nextStep={() => setStep('success')}
+              onNext={() => setStep('success')}
               avatar={avatar}
               setAvatar={setAvatar}
               name={name}
