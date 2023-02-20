@@ -1,4 +1,5 @@
 import { ColorName } from '~/modules/design-system/theme/colors';
+import { TypographyName } from '~/modules/design-system/theme/typography';
 
 export const textColors: Record<ColorName, string> = {
   text: 'text-text',
@@ -18,4 +19,32 @@ export const textColors: Record<ColorName, string> = {
   divider: 'text-divider',
   'red-01': 'text-red-01',
   'red-02': 'text-red-02',
+};
+
+export const textStyles: Record<TypographyName, string> = {
+  mainPage: 'text-mainPage',
+  largeTitle: 'text-largeTitle',
+  mediumTitle: 'text-mediumTitle',
+  cardEntityTitle: 'text-cardEntityTitle',
+  smallTitle: 'text-smallTitle',
+  body: 'text-body',
+  tableCell: 'text-tableCell',
+  textLink: 'text-textLink',
+  quote: 'text-quote',
+  listItem: 'text-listItem',
+  button: 'text-button',
+  smallButton: 'text-smallButton',
+  tag: 'text-tag',
+  input: 'text-input',
+  metadata: 'text-metadata',
+  breadcrumb: 'text-breadcrumb',
+  navlink: 'text-navLink',
+  footnote: 'text-footnote',
+  bodySemibold: 'text-bodySemibold',
+  textLinkSemibold: 'text-textLinkSemibold',
+  listSemibold: 'text-listSemibold',
+  quoteMedium: 'text-quoteMedium',
+  inputMedium: 'text-inputMedium',
+  metadataMedium: 'text-metadataMedium',
+  footnoteMedium: 'text-footnoteMedium',
 };

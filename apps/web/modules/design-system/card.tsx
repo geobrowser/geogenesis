@@ -28,7 +28,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
           <RightArrowDiagonal color={hovered ? 'text' : 'grey-04'} />
         </div>
         {image && (
-          <div className="relative h-[240px] w-[387px] object-cover transition-all duration-150 ease-in-out xl:max-h-[240px] xl:w-[46vw] md:w-[92vw]">
+          <div className="relative aspect-video w-full object-cover transition-all duration-150 ease-in-out">
             <Image
               src={image}
               alt={`Cover image for ${name}`}

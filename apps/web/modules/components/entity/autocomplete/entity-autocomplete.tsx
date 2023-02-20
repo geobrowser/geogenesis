@@ -49,7 +49,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <SquareButton icon="createSmall" className="!inline-block !h-[23px] !w-[23px]" />
+        <SquareButton icon="createSmall" />
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (

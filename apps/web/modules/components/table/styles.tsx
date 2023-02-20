@@ -4,7 +4,7 @@ import cx from 'classnames';
 type EmptyTableTextProps = React.ComponentPropsWithoutRef<'td'>;
 
 export const EmptyTableText = ({ className = '', ...rest }: EmptyTableTextProps) => (
-  <td className={cx('p-2.5', className)} {...rest} />
+  <td className={cx('p-2.5 text-lg', className)} {...rest} />
 );
 
 type PageContainerProps = React.ComponentPropsWithoutRef<'div'>;
@@ -22,7 +22,7 @@ export const PageNumberContainer = ({ className = '', ...rest }: PageNumberConta
 type TableProps = React.ComponentPropsWithoutRef<'table'>;
 
 export const Table = ({ className = '', ...rest }: TableProps) => (
-  <table className={cx('w-full border-collapse border-none bg-white', className)} {...rest} />
+  <table className={cx('w-full rounded border border-grey-02 bg-white', className)} {...rest} />
 );
 
 type TableHeaderProps = React.ComponentPropsWithoutRef<'th'> & { width: number };

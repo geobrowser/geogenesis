@@ -1,15 +1,25 @@
 import * as React from 'react';
 import cx from 'classnames';
 
+import { textStyles } from '~/utils';
+import type { TypographyName } from '~/modules/design-system/theme/typography';
+
 type Props = React.ComponentPropsWithoutRef<'div'> & {
   shouldTruncate?: boolean;
   maxLines?: number;
+  variant?: TypographyName;
 };
 
-export const Truncate = ({ shouldTruncate = false, maxLines = 1, className = '', ...rest }: Props) => {
+export const Truncate = ({
+  shouldTruncate = false,
+  maxLines = 1,
+  variant = 'body',
+  className = '',
+  ...rest
+}: Props) => {
   if (maxLines > 6) throw new Error(`Maximum lines is currently 6.`);
 
-  return <div className={(cx(shouldTruncate && clampClassName[maxLines]), className)} {...rest} />;
+  return <div className={cx(shouldTruncate && clampClassName[maxLines], textStyles[variant], className)} {...rest} />;
 };
 
 const clampClassName: Record<number, string> = {

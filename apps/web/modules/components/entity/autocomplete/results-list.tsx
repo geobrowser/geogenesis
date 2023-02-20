@@ -26,7 +26,7 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
   <button
     className={cx(
       existsOnEntity ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
-      'hover:grey-01 flex w-full flex-col p-2 focus:bg-grey-01 focus:outline-none aria-selected:bg-grey-02',
+      'flex w-full flex-col p-2 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none aria-selected:bg-grey-02',
       className
     )}
     {...rest}
@@ -80,7 +80,7 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
       {result.description && (
         <>
           <Spacer height={4} />
-          <Truncate maxLines={3} shouldTruncate>
+          <Truncate maxLines={3} shouldTruncate variant="footnote">
             <Text variant="footnote">{result.description}</Text>
           </Truncate>
         </>

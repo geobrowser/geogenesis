@@ -24,23 +24,19 @@ export const Select = ({ value, onChange, options, variant = 'secondary' }: Prop
       <Spacer width={8} />
       <ChevronDownSmall color={variant === 'secondary' ? 'ctaPrimary' : 'white'} />
     </SelectPrimitive.SelectTrigger>
-    <SelectPrimitive.Portal>
-      <SelectPrimitive.Content className="z-[2] overflow-hidden rounded border border-grey-02 bg-white">
-        <div className="overflow-hidden rounded">
-          <SelectPrimitive.Group>
-            {options.map(option => (
-              <SelectPrimitive.Item
-                aria-label={option.label}
-                key={option.value}
-                value={option.value}
-                className="flex select-none flex-col justify-center py-2.5 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text"
-              >
-                <SelectPrimitive.SelectItemText>{option.label}</SelectPrimitive.SelectItemText>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Group>
-        </div>
-      </SelectPrimitive.Content>
-    </SelectPrimitive.Portal>
+    <SelectPrimitive.Content className="z-[2] mt-10 w-[241px] rounded border border-grey-02 bg-white">
+      <SelectPrimitive.Group>
+        {options.map(option => (
+          <SelectPrimitive.Item
+            aria-label={option.label}
+            key={option.value}
+            value={option.value}
+            className="flex w-full select-none flex-col justify-center overflow-hidden rounded py-2.5 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text"
+          >
+            <SelectPrimitive.SelectItemText>{option.label}</SelectPrimitive.SelectItemText>
+          </SelectPrimitive.Item>
+        ))}
+      </SelectPrimitive.Group>
+    </SelectPrimitive.Content>
   </SelectPrimitive.Root>
 );

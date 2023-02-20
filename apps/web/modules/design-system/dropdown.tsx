@@ -46,7 +46,7 @@ export const Dropdown = ({ trigger, options }: Props) => {
                   key={`dropdown-item-${index}`}
                   disabled={option.disabled}
                   onClick={option.onClick}
-                  className="flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 aria-disabled:cursor-not-allowed aria-disabled:text-grey-04 [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text"
+                  className="flex cursor-pointer select-none items-center justify-between border-b border-b-grey-02 py-2 px-3 text-button text-grey-04 last:border-none hover:bg-bg hover:text-text hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
                 >
                   {option.label}
                   {option.disabled && (

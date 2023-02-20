@@ -13,6 +13,7 @@ import { Button } from '../../design-system/button';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
+import { useWindowSize } from '~/modules/hooks/use-window-size';
 
 const MotionContent = motion(PopoverPrimitive.Content);
 
@@ -45,6 +46,7 @@ function getFilterOptions(filterState: FilterState, value?: FilterClause) {
 export function FilterDialog({ inputContainerWidth, filterState, setFilterState }: Props) {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+  const { width } = useWindowSize();
 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
@@ -71,8 +73,11 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               ease: 'easeInOut',
             }}
             avoidCollisions={true}
-            className="shadow-button z-[1] self-end rounded border border-grey-02 bg-white p-3 md:mx-auto md:w-[98vw] md:self-start"
+            className="relative z-[1] rounded border border-grey-02 bg-white p-3 shadow-button md:mx-auto md:w-[98vw] md:self-start"
             style={{ width: `calc(${inputContainerWidth}px / 2)` }}
+            sideOffset={14}
+            alignOffset={-1}
+            align={width > 768 ? 'end' : 'start'}
           >
             <Text variant="button">Show triples</Text>
             <Spacer height={12} />

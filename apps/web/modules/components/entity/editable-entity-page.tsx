@@ -364,7 +364,7 @@ function EntityAttributes({
               <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
                   <TripleTypeDropdown
-                    value={<SquareButton icon={isEntityGroup ? 'relation' : 'text'} className="!inline-block" />}
+                    value={<SquareButton icon={isEntityGroup ? 'relation' : 'text'} />}
                     options={[
                       {
                         label: (

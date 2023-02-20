@@ -31,7 +31,7 @@ export default function Spaces({ spaces }: Props) {
       <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>
         <Spacer height={40} />
-        <div className="flex flex-wrap items-start gap-4 xl:items-center">
+        <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
           {spaces.map(space => {
             const name = space.attributes.name;
             const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];

@@ -32,7 +32,8 @@ export const Button = ({
     {
       variants: {
         variant: {
-          primary: 'text-white bg-ctaPrimary hover:bg-ctaHover border-transparent',
+          primary:
+            'text-white bg-ctaPrimary hover:bg-ctaHover border-transparent focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
             'text-text bg-white hover:bg-bg border-grey-02 hover:border-text focus:border-text focus:shadow-inner-text',
           tertiary: 'text-white bg-text border-text',
@@ -71,7 +72,7 @@ export const SquareButton = ({
   ...rest
 }: SquareButtonProps) => {
   const squareButtonClassNames = cva([
-    'box-border relative flex justify-center items-center w-5 h-5 p-1 border rounded focus:outline-none transition ease-in-out duration-200 text-text bg-white hover:bg-bg hover:border-text focus:border-text focus:shadow-inner-text',
+    'box-border relative flex justify-center items-center w-6 h-6 p-1 border rounded focus:outline-none transition ease-in-out duration-200 text-text bg-white hover:bg-bg hover:border-text focus:border-text focus:shadow-inner-text',
     !isActive ? 'border-grey-02' : 'border-text',
     !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
   ]);

@@ -112,11 +112,11 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
   });
 
   return (
-    <div className="overflow-hidden overflow-x-hidden rounded border border-grey-02 p-0 xl:overflow-x-scroll">
-      <Table cellSpacing={0} cellPadding={0}>
+    <div className="overflow-hidden rounded border border-b-0 border-grey-02 xl:overflow-x-scroll">
+      <Table cellSpacing={0} cellPadding={0} className="relative -inset-px">
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
-            <tr key={headerGroup.id}>
+            <tr key={headerGroup.id} className="">
               {headerGroup.headers.map(header => (
                 <TableHeader width={header.column.getSize()} key={header.id}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
