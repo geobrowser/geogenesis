@@ -1,7 +1,7 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 import produce from 'immer';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
@@ -58,6 +58,7 @@ export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
+  unpublishedColumns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<TripleType | null>;
@@ -167,6 +168,14 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+
+    this.unpublishedColumns$ = computed(() => {
+      return EntityTable.columnsFromActions(
+        this.ActionsStore.actions$.get()[space],
+        [],
+        this.selectedType$.get()?.entityId
+      );
+    });
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();

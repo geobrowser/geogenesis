@@ -13,12 +13,17 @@ import {
 import { memo, useState } from 'react';
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
+import { SquareButton } from '~/modules/design-system/button';
+import { Relation } from '~/modules/design-system/icons/relation';
+import { Text as TextIcon } from '~/modules/design-system/icons/text';
+import { Spacer } from '~/modules/design-system/spacer';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
+import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
 import { TableCell } from '../table/cell';
 import { EmptyTableText } from '../table/styles';
 import { AddNewColumn } from './add-new-column';
@@ -28,7 +33,7 @@ import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: string) => {
+const formatColumns = (columns: Column[] = [], unpublishedColumns: Column[], isEditMode: boolean) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map(column =>
@@ -37,12 +42,47 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
       header: () => {
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
 
-        return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumnHeader
-            column={column}
-            entityId={column.id}
-            spaceId={Entity.nameTriple(column.triples)?.space}
+        const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
+
+        const columnTypeToggle = isUnpublished && (
+          <TripleTypeDropdown
+            value={<SquareButton as="span" icon={'relation'} />}
+            options={[
+              {
+                label: (
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <TextIcon />
+                    <Spacer width={8} />
+                    Text
+                  </div>
+                ),
+                disabled: false,
+                // onClick: () => onChangeTripleType('string', triples),
+              },
+              {
+                label: (
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Relation />
+                    <Spacer width={8} />
+                    Relation
+                  </div>
+                ),
+                disabled: false,
+                // onClick: () => onChangeTripleType('entity', triples),
+              },
+            ]}
           />
+        );
+
+        return isEditMode && !isNameColumn ? (
+          <div className="flex justify-between items-center">
+            <EditableEntityTableColumnHeader
+              column={column}
+              entityId={column.id}
+              spaceId={Entity.nameTriple(column.triples)?.space}
+            />
+            {columnTypeToggle}
+          </div>
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );
@@ -110,12 +150,12 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { selectedType } = useEntityTable();
+  const { selectedType, unpublishedColumns } = useEntityTable();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, space),
+    columns: formatColumns(columns, unpublishedColumns, isEditMode),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -133,6 +173,8 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
       isEditor,
     },
   });
+
+  console.log('table.getHeaderGroups()', table.getHeaderGroups());
 
   return (
     <div className="overflow-x-scroll rounded">
