@@ -37,9 +37,9 @@ export function StepWallet({ onNext, address }: { onNext: () => void; address: s
           {formatAddress(address)}
         </Text>
       </div>
-      <div className="pb-3">
-        <Text variant="bodySemibold" className="text-center">
-          It looks like you don’t have a Geo profile on this wallet address.
+      <div className="pb-3 text-center">
+        <Text variant="bodySemibold">
+          It looks like you don’t have a<br /> Geo profile on this wallet address.
         </Text>
       </div>
 
@@ -196,7 +196,7 @@ export const OnboardingDialog = observer(() => {
   // Note: set open to true or to isOnboardingVisible.get() to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
   return (
-    <DialogContainer open={false} label="Entity search">
+    <DialogContainer open={isOnboardingVisible.get()} label="Entity search">
       <div className="relative z-10 h-full">
         {step === 'wallet' && (
           <>
