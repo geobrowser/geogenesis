@@ -27,9 +27,9 @@ export function EntityOthersToast() {
     <AnimatePresence>
       {shouldShow ? (
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ y: 90 }}
+          animate={{ y: 0 }}
+          exit={{ y: 90 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
           className="absolute right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
         >
@@ -40,7 +40,9 @@ export function EntityOthersToast() {
                   <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                 </li>
               ))}
-              <Text variant="metadataMedium">{others.length} user is editing right now</Text>
+              <Text variant="metadataMedium">
+                {others.length} {pluralize('user', others.length)} {others.length > 1 ? 'are' : 'is'} editing right now
+              </Text>
             </ul>
             <button onClick={() => setOpen(false)}>
               <CloseSmall />
