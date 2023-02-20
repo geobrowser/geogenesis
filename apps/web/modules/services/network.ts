@@ -245,6 +245,11 @@ export class Network implements INetwork {
         types: Entity.types(triples, space),
         triples,
       };
+    }).sort((a, b) => {
+      const aNameLength = a.name?.length || 0 ;
+      const bNameLength = b.name?.length || 0;
+      
+      return aNameLength - bNameLength;
     });
 
     return sortedResultsWithTypesAndDescription;
