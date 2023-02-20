@@ -10,6 +10,10 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { CloseSmall } from '~/modules/design-system/icons/close-small';
 import { AnimatePresence, motion } from 'framer-motion';
 
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-6)}`;
+}
+
 export function EntityOthersToast() {
   const account = useAccount();
   const [open, setOpen] = useState(true);
@@ -26,14 +30,14 @@ export function EntityOthersToast() {
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="absolute right-8 bottom-8 bg-white rounded p-3 shadow-inner shadow-grey-02 drop-shadow-lg w-60"
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="absolute right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
         >
           <div className="flex items-center justify-between">
             <ul className="flex items-center gap-2">
               {others.map(other => (
                 <li key={other.id}>
-                  <BoringAvatar size={16} name={account.address} variant="pixel" />
+                  <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                 </li>
               ))}
               <Text variant="metadataMedium">{others.length} user is editing right now</Text>
@@ -46,15 +50,22 @@ export function EntityOthersToast() {
           <Spacer height={8} />
 
           {isExpanded && (
-            <ul className="space-y-3">
-              {others.map(other => (
-                <li key={other.connectionId} className="flex items-center gap-2">
-                  <BoringAvatar size={16} name={account.address} variant="pixel" />
+            <ul className="space-y-3 mb-2">
+              {others.map((other, i) => (
+                <motion.li
+                  key={other.connectionId}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.02 * i, ease: 'easeOut' }}
+                  className="flex items-center gap-2"
+                >
+                  <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                   <Text variant="metadata" color="grey-04">
-                    {other.presence.address}
+                    {shortAddress(other.presence.address ?? '')}
                   </Text>
-                </li>
+                </motion.li>
               ))}
+              {/* TODO: You segment */}
             </ul>
           )}
 

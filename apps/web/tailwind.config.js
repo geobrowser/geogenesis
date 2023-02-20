@@ -31,6 +31,7 @@ module.exports = {
       none: 'none',
       inner: 'inset 0 0 0 1px',
       'inner-lg': 'inset 0 0 0 2px',
+      'lg': '0 8px 25px rgba(0, 0, 0, 0.09)',
     },
     screens: {
       '2xl': { max: '1535px' },
