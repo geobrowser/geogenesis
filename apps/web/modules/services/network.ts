@@ -195,7 +195,7 @@ export class Network implements INetwork {
       signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
-          entitySearch(text: "${name}:*") {
+          entitySearch(text: "'${name}:*'") {
             id,
             name
             entityOf {
