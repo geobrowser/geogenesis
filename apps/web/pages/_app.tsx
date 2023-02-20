@@ -45,6 +45,7 @@ const Layout = styled.main(props => ({
 
 const Relative = styled.div({
   position: 'relative',
+  minHeight: '100vh',
 });
 
 function Root(props: AppProps) {
@@ -101,7 +102,7 @@ function App({ Component, pageProps }: AppProps) {
         }}
         spaceId=""
       />
-      <Layout>
+      <Layout className="min-h-full">
         <Component {...pageProps} />
         <Analytics />
       </Layout>
