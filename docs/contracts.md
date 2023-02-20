@@ -12,11 +12,9 @@ For permissionless Spaces we do the same thing, but instead add permissionless s
 
 All Spaces must live within a a "registry." A Registry is a `Space.sol` contract that contains the addresses other deployed `Space.sol` contracts as Geo entities. Right now most Spaces live within the "Root" space, with the exception of the Permissionless Registry. All permissionlessly created Spaces live within the Permissionless Registry.
 
-See the image below for the hierarchy of Spaces. 
+See the image below for the hierarchy of Spaces.
 
 <img width="798" alt="CleanShot 2023-02-20 at 13 20 23@2x" src="https://user-images.githubusercontent.com/26263630/220192053-6d4a5ab6-b4bc-4f42-95f3-963072acbe5d.png">
-
-
 
 ### Upgrading contracts
 
