@@ -33,14 +33,14 @@ const TabLinksContainer = styled.div(props => ({
 }));
 
 export const SpaceActions = ({ spaceId }: Props) => {
-  const { isEditor, isAdmin } = useAccessControl(spaceId);
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { editable } = useEditable();
 
   return (
     <Actions>
-      {(isEditor || isAdmin) && editable && (
+      {(isEditor || isAdmin || isEditorController) && editable && (
         <NavbarContainer>
-          {isAdmin && (
+          {(isEditorController || isAdmin) && (
             <Link href={`/space/${spaceId}/access-control`}>
               <Button variant="secondary">Devvy Admin</Button>
             </Link>

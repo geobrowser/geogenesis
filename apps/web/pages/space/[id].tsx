@@ -1,16 +1,16 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Spacer } from '~/modules/design-system/spacer';
+import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider, EntityTable } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Triple } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE, EntityTableStoreProvider } from '~/modules/entity';
 
 interface Props {
   spaceId: string;
@@ -75,9 +75,25 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const initialTypes = (await fetchSpaceTypeTriples(network, spaceId)) || [];
+  const [initialTypes, defaultTypeTriples] = await Promise.all([
+    fetchSpaceTypeTriples(network, spaceId),
+    network.fetchTriples({
+      query: '',
+      skip: 0,
+      first: DEFAULT_PAGE_SIZE,
+      filter: [
+        { field: 'entity-id', value: space?.entityId ?? '' },
+        {
+          field: 'attribute-id',
+          value: SYSTEM_IDS.DEFAULT_TYPE,
+        },
+      ],
+    }),
+  ]);
+  const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
 
-  const initialSelectedType = initialTypes.find(t => t.entityId === initialParams.typeId) || initialTypes[0] || null;
+  const initialSelectedType =
+    initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
   const typeId = initialSelectedType?.entityId;
 
@@ -88,10 +104,19 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     typeId,
   };
 
-  const { columns, rows } = await network.fetchEntityTableData({
+  const { columns, columnsSchema } = await network.columns({
     spaceId,
     params,
   });
+
+  const { rows: serverRows } = await network.rows({
+    spaceId,
+    params,
+    columns,
+    columnsSchema,
+  });
+
+  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns, columnsSchema);
 
   return {
     props: {

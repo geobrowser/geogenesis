@@ -242,12 +242,17 @@ const triplesWithConflictingTypesFromDifferentSpaces: Triple[] = [
 
 describe('Entity types helpers', () => {
   it('Entity.types should parse types from triples assigned to Entity', () => {
-    expect(types(triplesWithMultipleTypesFromSameSpace, 'spaceId')).toEqual(['banana', 'orange']);
+    expect(types(triplesWithMultipleTypesFromSameSpace, 'spaceId')).toEqual([
+      { id: 'valueId', name: 'banana' },
+      { id: 'valueId', name: 'orange' },
+    ]);
   });
 
   // See the comment in entity.ts for more details on when this happens
   it('Entity.types should parse only the types from the current space', () => {
-    expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual(['banana']);
+    expect(types(triplesWithConflictingTypesFromDifferentSpaces, 'spaceId')).toEqual([
+      { id: 'valueId', name: 'banana' },
+    ]);
   });
 });
 
@@ -313,6 +318,7 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
       name: 'entity-1',
       description: 'banana description',
       types: [],
+      nameTripleSpace: 'spaceId',
       triples: [triplesFromMultipleEntities[0], triplesFromMultipleEntities[1]],
     },
     {
@@ -320,6 +326,7 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
       name: 'entity-2',
       description: 'apple description',
       types: [],
+      nameTripleSpace: 'spaceId',
       triples: [triplesFromMultipleEntities[2], triplesFromMultipleEntities[3]],
     },
   ];
@@ -365,6 +372,7 @@ it('Entity.mergeActionsWithNetworkEntities should merge local actions with entit
       name: 'entity-1-changed',
       description: 'banana description',
       types: [],
+      nameTripleSpace: 'spaceId',
       triples: [
         {
           type: 'createTriple',

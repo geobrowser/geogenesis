@@ -13,21 +13,20 @@ interface IEntityStore {
   remove(triple: TripleType): void;
 }
 
-export const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
-  return [
-    Triple.withId({
-      space: spaceId,
-      entityId,
-      entityName: '',
-      attributeName: 'Types',
-      attributeId: SYSTEM_IDS.TYPES,
-      value: {
-        id: '',
-        type: 'entity',
-        name: '',
-      },
-    }),
-  ];
+export const createInitialDefaultTriple = (spaceId: string, entityId: string): TripleType => {
+  return Triple.withId({
+    space: spaceId,
+    entityId,
+    entityName: '',
+    attributeName: 'Types',
+    attributeId: SYSTEM_IDS.TYPES,
+    placeholder: true,
+    value: {
+      id: '',
+      type: 'entity',
+      name: '',
+    },
+  });
 };
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -53,13 +52,11 @@ export class EntityStore implements IEntityStore {
   abortController: AbortController = new AbortController();
 
   constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
-    const initialDefaultTriples =
-      initialTriples.length === 0 ? createInitialDefaultTriples(spaceId, id) : initialTriples;
+    const defaultTypeTriple = createInitialDefaultTriple(spaceId, id);
 
     this.id = id;
     this.api = api;
-    this.triples$ = observable(initialDefaultTriples);
-    this.schemaTriples$ = observable(initialSchemaTriples);
+    this.schemaTriples$ = observable([...initialSchemaTriples, defaultTypeTriple]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
@@ -75,8 +72,9 @@ export class EntityStore implements IEntityStore {
 
           return isCreate || isDelete || isRemove;
         }),
-        actions => Triple.fromActions(actions, initialDefaultTriples),
-        triples => Triple.withLocalNames(spaceActions, triples)
+        actions => Triple.fromActions(actions, initialTriples),
+        triples => Triple.withLocalNames(spaceActions, triples),
+        A.uniqBy(triple => triple.id)
       );
     });
 

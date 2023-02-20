@@ -46,6 +46,7 @@ export type Space = {
   editorControllers: string[];
   admins: string[];
   attributes: Dictionary<string, string>;
+  entityId: string;
 };
 
 export type Account = {
@@ -86,7 +87,7 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: string[];
+  types: { id: string; name: string | null }[];
   triples: Triple[];
   nameTripleSpace?: string;
 };
