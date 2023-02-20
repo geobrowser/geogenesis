@@ -71,7 +71,7 @@ function AdvancedFilterPill({ filterClause, onClick }: AdvancedFilterPillprops) 
 
   return (
     <button
-      className="flex items-center overflow-hidden whitespace-nowrap rounded bg-white p-px py-0.5 text-metadataMedium shadow-inner-grey-02 hover:cursor-pointer hover:bg-bg hover:shadow-inner-text focus:bg-bg focus:shadow-inner-lg-text focus:outline-none"
+      className="flex items-center overflow-hidden whitespace-nowrap rounded bg-white p-2 py-1 text-metadataMedium shadow-inner-grey-02 hover:cursor-pointer hover:bg-bg hover:shadow-inner-text focus:bg-bg focus:shadow-inner-lg-text focus:outline-none"
       onClick={onClick}
     >
       {label} {value}
