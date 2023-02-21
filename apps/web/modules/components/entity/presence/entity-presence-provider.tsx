@@ -1,4 +1,5 @@
 import { createRoomContext } from '@liveblocks/react';
+import { Component } from 'react';
 import { useAccount } from 'wagmi';
 import { client } from './entity-presence-client';
 
@@ -27,8 +28,44 @@ export function EntityPresenceProvider({ children, entityId }: Props) {
   if (import.meta?.env) return null;
 
   return (
-    <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address: account.address }}>
-      {children}
-    </EntityPresenceContext.RoomProvider>
+    <EntityPresenceErrorBoundary>
+      <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address: account.address }}>
+        {children}
+      </EntityPresenceContext.RoomProvider>
+    </EntityPresenceErrorBoundary>
   );
+}
+
+interface EntityPresenceErrorBoundaryState {
+  hasError: boolean;
+}
+
+interface EntityPresenceErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+export class EntityPresenceErrorBoundary extends Component<
+  EntityPresenceErrorBoundaryProps,
+  EntityPresenceErrorBoundaryState
+> {
+  constructor({ children }: Props) {
+    super({ children });
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('Error in EntityPresenceErrorBoundary', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+
+    return this.props.children;
+  }
 }
