@@ -135,7 +135,7 @@ export function EditableEntityPage({
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   return (
-    <EntityPresenceProvider entityId={id}>
+    <>
       <PageContainer>
         <EntityContainer>
           <Head>
@@ -199,8 +199,10 @@ export function EditableEntityPage({
           </Content>
         </EntityContainer>
       </PageContainer>
-      <EntityOthersToast spaceId={space} />
-    </EntityPresenceProvider>
+      <EntityPresenceProvider entityId={id} spaceId={space}>
+        <EntityOthersToast spaceId={space} />
+      </EntityPresenceProvider>
+    </>
   );
 }
 

@@ -27,11 +27,11 @@ export function EntityOthersToast({ spaceId }: Props) {
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
-  // We only show the first 3 avatars in the avatar group
-  const othersAvatars = others.slice(0, 3);
-  const shouldShow = others.length > 0 && isEditor && editable;
+  const editors = others.filter(other => other.presence.isEditing);
 
-  console.log('shouldShow', { shouldShow, others, isEditor, editable });
+  // We only show the first 3 avatars in the avatar group
+  const editorsAvatars = editors.slice(0, 3);
+  const shouldShow = editors.length > 0 && isEditor && editable;
 
   return (
     <AnimatePresence>
@@ -45,15 +45,15 @@ export function EntityOthersToast({ spaceId }: Props) {
         >
           <div className="flex items-center gap-2">
             <ul className="flex items-center -space-x-1">
-              {othersAvatars.map((other, i) => (
+              {editorsAvatars.map((other, i) => (
                 <li key={other.id} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
                   <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                 </li>
               ))}
             </ul>
             <Text variant="metadataMedium">
-              {others.length >= 3 ? '3+' : others.length} {pluralize('user', others.length)}{' '}
-              {others.length > 1 ? 'are' : 'is'} editing now
+              {editors.length >= 3 ? '3+' : editors.length} {pluralize('user', editors.length)}{' '}
+              {editors.length > 1 ? 'are' : 'is'} editing now
             </Text>
           </div>
 
@@ -63,7 +63,7 @@ export function EntityOthersToast({ spaceId }: Props) {
             {isExpanded ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <ul key="presence-user-list" className="space-y-3 mb-2 overflow-hidden">
-                  {others.map((other, i) => (
+                  {editors.map(other => (
                     <li key={other.connectionId} className="flex items-center gap-2">
                       <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                       <Text variant="metadata" color="grey-04">
@@ -93,7 +93,7 @@ export function EntityOthersToast({ spaceId }: Props) {
               <ChevronDownSmall color="grey-04" />
             </span>
             <Spacer width={6} />
-            {isExpanded ? `Hide ${pluralize('editor', others.length)}` : `View ${pluralize('editor', others.length)}`}
+            {isExpanded ? `Hide ${pluralize('editor', editors.length)}` : `View ${pluralize('editor', editors.length)}`}
           </SmallButton>
         </motion.div>
       ) : null}
