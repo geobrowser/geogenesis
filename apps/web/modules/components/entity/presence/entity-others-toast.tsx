@@ -9,8 +9,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
-import { useAccessControl } from '~/modules/auth/use-access-control';
-import { useEditable } from '~/modules/stores/use-editable';
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
