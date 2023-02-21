@@ -16,20 +16,14 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
 
-interface Props {
-  spaceId: string;
-}
-
-export function EntityOthersToast({ spaceId }: Props) {
-  const { isEditor } = useAccessControl(spaceId);
-  const { editable } = useEditable();
+export function EntityOthersToast() {
   const [isExpanded, setIsExpanded] = useState(false);
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
   // We only show the first 3 avatars in the avatar group
   const editorsAvatars = others.slice(0, 3);
-  const shouldShow = others.length > 0 && isEditor && editable;
+  const shouldShow = others.length > 0;
 
   // We include the active user in the count
   const editorsCount = others.length + 1;
@@ -39,9 +33,9 @@ export function EntityOthersToast({ spaceId }: Props) {
       {shouldShow ? (
         <motion.div
           initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
+          animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 15 }}
-          transition={{ duration: 0.15, ease: 'easeOut' }}
+          transition={{ duration: 0.15 }}
           className="fixed right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
         >
           <div className="flex items-center gap-2">
