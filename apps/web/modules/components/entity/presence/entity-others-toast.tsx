@@ -27,11 +27,12 @@ export function EntityOthersToast({ spaceId }: Props) {
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
-  const editors = others.filter(other => other.presence.isEditing);
-
   // We only show the first 3 avatars in the avatar group
-  const editorsAvatars = editors.slice(0, 3);
-  const shouldShow = editors.length > 0 && isEditor && editable;
+  const editorsAvatars = others.slice(0, 3);
+  const shouldShow = others.length > 0 && isEditor && editable;
+
+  // We include the active user in the count
+  const editorsCount = others.length + 1;
 
   return (
     <AnimatePresence>
@@ -52,8 +53,8 @@ export function EntityOthersToast({ spaceId }: Props) {
               ))}
             </ul>
             <Text variant="metadataMedium">
-              {editors.length >= 3 ? '3+' : editors.length} {pluralize('user', editors.length)}{' '}
-              {editors.length > 1 ? 'are' : 'is'} editing now
+              {editorsCount >= 3 ? '3+' : editorsCount} {pluralize('user', editorsCount)}{' '}
+              {editorsCount > 1 ? 'are' : 'is'} editing now
             </Text>
           </div>
 
@@ -63,7 +64,7 @@ export function EntityOthersToast({ spaceId }: Props) {
             {isExpanded ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <ul key="presence-user-list" className="space-y-3 mb-2 overflow-hidden">
-                  {editors.map(other => (
+                  {others.map(other => (
                     <li key={other.connectionId} className="flex items-center gap-2">
                       <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                       <Text variant="metadata" color="grey-04">
@@ -93,7 +94,7 @@ export function EntityOthersToast({ spaceId }: Props) {
               <ChevronDownSmall color="grey-04" />
             </span>
             <Spacer width={6} />
-            {isExpanded ? `Hide ${pluralize('editor', editors.length)}` : `View ${pluralize('editor', editors.length)}`}
+            {isExpanded ? `Hide ${pluralize('editor', editorsCount)}` : `View ${pluralize('editor', editorsCount)}`}
           </SmallButton>
         </motion.div>
       ) : null}
