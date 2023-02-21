@@ -1,51 +1,60 @@
 import { useState } from 'react';
 import BoringAvatar from 'boring-avatars';
 import pluralize from 'pluralize';
+import clsx from 'classnames';
 import { EntityPresenceContext } from './entity-presence-provider';
 import { Text } from '~/modules/design-system/text';
 import { SmallButton } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { CloseSmall } from '~/modules/design-system/icons/close-small';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { useEditable } from '~/modules/stores/use-editable';
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
 
-export function EntityOthersToast() {
-  const [open, setOpen] = useState(true);
+interface Props {
+  spaceId: string;
+}
+
+export function EntityOthersToast({ spaceId }: Props) {
+  const { isEditor } = useAccessControl(spaceId);
+  const { editable } = useEditable();
   const [isExpanded, setIsExpanded] = useState(false);
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
-  const shouldShow = open && others.length > 0;
+  // We only show the first 3 avatars in the avatar group
+  const othersAvatars = others.slice(0, 3);
+  const shouldShow = others.length > 0 && isEditor && editable;
+
+  console.log('shouldShow', { shouldShow, others, isEditor, editable });
 
   return (
     <AnimatePresence>
       {shouldShow ? (
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          exit={{ opacity: 0, y: 15 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className="absolute right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
+          className="fixed right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
         >
-          <div className="flex items-center justify-between">
-            <ul className="flex items-center gap-2">
-              {others.map(other => (
-                <li key={other.id}>
+          <div className="flex items-center gap-2">
+            <ul className="flex items-center -space-x-1">
+              {othersAvatars.map((other, i) => (
+                <li key={other.id} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
                   <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
                 </li>
               ))}
-              <Text variant="metadataMedium">
-                {others.length} {pluralize('user', others.length)} {others.length > 1 ? 'are' : 'is'} editing right now
-              </Text>
             </ul>
-            <button onClick={() => setOpen(false)}>
-              <CloseSmall />
-            </button>
+            <Text variant="metadataMedium">
+              {others.length >= 3 ? '3+' : others.length} {pluralize('user', others.length)}{' '}
+              {others.length > 1 ? 'are' : 'is'} editing now
+            </Text>
           </div>
 
           <Spacer height={8} />

@@ -1,5 +1,5 @@
 import { createRoomContext } from '@liveblocks/react';
-import { useEffect } from 'react';
+import { useAccount } from 'wagmi';
 import { client } from './entity-presence-client';
 
 export const EntityPresenceContext = createRoomContext<{ address: `0x${string}` | undefined }>(client);
@@ -7,12 +7,13 @@ export const EntityPresenceContext = createRoomContext<{ address: `0x${string}` 
 interface Props {
   children: React.ReactNode;
   entityId: string;
-  address: `0x${string}` | undefined;
 }
 
-export function EntityPresenceProvider({ children, entityId, address }: Props) {
+export function EntityPresenceProvider({ children, entityId }: Props) {
+  const account = useAccount();
+
   return (
-    <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address }}>
+    <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address: account.address }}>
       {children}
     </EntityPresenceContext.RoomProvider>
   );

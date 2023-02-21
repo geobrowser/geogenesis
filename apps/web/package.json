@@ -34,6 +34,7 @@
     "@vercel/analytics": "^0.1.6",
     "boring-avatars": "^1.7.0",
     "class-variance-authority": "^0.4.0",
+    "classnames": "^2.3.2",
     "cmdk": "^0.1.21",
     "connectkit": "^1.1.1",
     "ethers": "^5.7.2",
