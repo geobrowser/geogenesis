@@ -1,19 +1,19 @@
 import styled from '@emotion/styled';
+import { Signer } from 'ethers';
 import { AnimatePresence, motion } from 'framer-motion';
+import pluralize from 'pluralize';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
-import { Signer } from 'ethers';
-import pluralize from 'pluralize';
+import { Action } from '../action';
 import { Button } from '../design-system/button';
+import { RetrySmall } from '../design-system/icons/retry-small';
 import { Trash } from '../design-system/icons/trash';
 import { Spacer } from '../design-system/spacer';
+import { Spinner } from '../design-system/spinner';
 import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { Action as ActionType, ReviewState } from '../types';
-import { Spinner } from '../design-system/spinner';
 import { groupBy } from '../utils';
-import { Action } from '../action';
-import { RetrySmall } from '../design-system/icons/retry-small';
 
 const Container = styled.div(props => ({
   display: 'flex',
@@ -153,7 +153,7 @@ const TrashButton = styled.button({
 function Review({ actions, onNext, onClear }: ReviewProps) {
   const actionsCount = Action.getChangeCount(actions);
   const entitiesCount = Object.keys(
-    groupBy(Action.squashChanges(actions), action => {
+    groupBy(actions, action => {
       if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
       return action.after.entityId;
     })

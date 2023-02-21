@@ -4,6 +4,7 @@ import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
+import { valueTypeNames, valueTypes } from '~/modules/value-types';
 
 export type EditEvent =
   | {
@@ -23,6 +24,13 @@ export type EditEvent =
     }
   | {
       type: 'CREATE_NEW_TRIPLE';
+    }
+  | {
+      type: 'CHANGE_VALUE_TYPE';
+      payload: {
+        triple?: TripleType;
+        valueType: keyof typeof valueTypes;
+      };
     }
   | {
       type: 'CHANGE_TRIPLE_TYPE';
@@ -173,6 +181,42 @@ const listener =
         return create({ ...Triple.empty(context.spaceId, context.entityId), entityName: context.entityName });
       case 'REMOVE_TRIPLE':
         return remove(event.payload.triple);
+      case 'CHANGE_VALUE_TYPE': {
+        const { valueType, triple } = event.payload;
+
+        if (triple) {
+          return update(
+            Triple.withId({
+              space: context.spaceId,
+              entityId: context.entityId,
+              entityName: context.entityName,
+              attributeId: SYSTEM_IDS.VALUE_TYPE,
+              attributeName: 'Value type',
+              value: {
+                type: 'entity',
+                id: valueType,
+                name: valueTypeNames[valueType],
+              },
+            }),
+            triple
+          );
+        } else {
+          return create(
+            Triple.withId({
+              space: context.spaceId,
+              entityId: context.entityId,
+              entityName: context.entityName,
+              attributeId: SYSTEM_IDS.VALUE_TYPE,
+              attributeName: 'Value type',
+              value: {
+                type: 'entity',
+                id: valueType,
+                name: valueTypeNames[valueType],
+              },
+            })
+          );
+        }
+      }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
 

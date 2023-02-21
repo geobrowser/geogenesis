@@ -76,6 +76,15 @@ export function nameTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
+export function valueTypeTriple(triples: TripleType[]): TripleType | undefined {
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+}
+
+export function valueType(triples: TripleType[]): string | null {
+  const triple = valueTypeTriple(triples);
+  return triple?.value.type === 'entity' ? triple?.value.id : null;
+}
+
 /**
  * This function takes an array of triples and maps them to an array of Entity types.
  */

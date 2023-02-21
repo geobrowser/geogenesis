@@ -1,7 +1,7 @@
 import { describe, expect } from 'vitest';
 import { makeStubTriple } from '~/modules/services/mock-network';
-import { Action as ActionType, EditTripleAction } from '~/modules/types';
-import { getChangeCount, squashChanges, unpublishedChanges } from './action';
+import { Action as ActionType } from '~/modules/types';
+import { getChangeCount, unpublishedChanges } from './action';
 
 // Count should be 3
 const basicActions: ActionType[] = [
@@ -117,98 +117,10 @@ describe('Action squashing', () => {
       },
     ];
 
-    const squashed = squashChanges(actions);
-    expect(squashed).toEqual([(actions[1] as EditTripleAction).after]);
   });
 
-  it('Squashes create-delete', () => {
-    const actions: ActionType[] = [
-      {
-        type: 'createTriple',
-        ...makeStubTriple('Devin'),
-      },
-      {
-        type: 'deleteTriple',
-        ...makeStubTriple('Devin'),
-        value: { type: 'string', id: 'string:2', value: 'Devin-2' },
-      },
-    ];
+ 
 
-    const squashed = squashChanges(actions);
-    expect(squashed).toEqual([]);
-  });
-
-  it('Squashes create-edit-delete', () => {
-    const actions: ActionType[] = [
-      {
-        type: 'createTriple',
-        ...makeStubTriple('Devin'),
-      },
-      {
-        type: 'editTriple',
-        before: {
-          type: 'deleteTriple',
-          ...makeStubTriple('Devin'),
-        },
-        after: {
-          type: 'createTriple',
-          ...makeStubTriple('Devin'),
-          value: { type: 'string', id: 'string:2', value: 'Devin-2' },
-        },
-      },
-      {
-        type: 'deleteTriple',
-        ...makeStubTriple('Devin'),
-        value: { type: 'string', id: 'string:2', value: 'Devin-2' },
-      },
-    ];
-
-    const squashed = squashChanges(actions);
-    expect(squashed).toEqual([]);
-  });
-
-  it('Squashes edit-edit', () => {
-    const squashed = squashChanges(multipleEditsToSameTriple);
-    expect(squashed).toEqual([multipleEditsToSameTriple[1]]);
-  });
-
-  it('Squashes edit-delete', () => {
-    const actions: ActionType[] = [
-      {
-        type: 'editTriple',
-        before: {
-          type: 'deleteTriple',
-          ...makeStubTriple('Alice'),
-        },
-        after: {
-          type: 'createTriple',
-          ...makeStubTriple('Alice'),
-          value: { type: 'string', id: 'string:2', value: 'Alice-2' },
-        },
-      },
-      {
-        type: 'deleteTriple',
-        ...makeStubTriple('Alice'),
-      },
-    ];
-
-    const squashed = squashChanges(actions);
-    expect(squashed).toEqual([actions[1]]);
-  });
-
-  it('Squashes edit-edit-delete', () => {
-    const actions: ActionType[] = [
-      ...multipleEditsToSameTriple,
-      {
-        type: 'deleteTriple',
-        ...makeStubTriple('Alice'),
-      },
-    ];
-
-    const squashed = squashChanges(actions);
-    expect(squashed).toEqual([actions[2]]);
-  });
-});
 
 const publishedAndUnpublishedActions: ActionType[] = [
   {

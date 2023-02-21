@@ -3,6 +3,7 @@ import { Entity } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
+import { DebugTriples } from '../debug/debug-triples';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { EditEvent, useEditEvents } from '../entity/edit-events';
@@ -140,6 +141,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         // allow string values to have a single triple at a time.
         <EditableEntityTableStringCell triple={cellTriples[0]} send={send} />
       )}
+      <div className="absolute right-0">
+        <DebugTriples triples={cellTriples} />
+      </div>
     </div>
   );
 });

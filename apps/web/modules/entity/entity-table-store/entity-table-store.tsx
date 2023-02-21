@@ -189,7 +189,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = makeOptionalComputed(
       [],
       computed(async () => {
-        const serverColumns = this.columns$.get();
+        const columns = this.columns$.get();
         const { rows: serverRows } = networkData$.get();
 
         /**
@@ -256,7 +256,7 @@ export class EntityTableStore implements IEntityTableStore {
           e.types.some(t => t.id === this.selectedType$.get()?.entityId)
         );
 
-        const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, serverColumns);
+        const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, columns);
 
         return rows;
       })

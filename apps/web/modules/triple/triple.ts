@@ -1,6 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
-import { Action } from '../action';
 import { ID } from '../id';
 import {
   Action as ActionType,
@@ -135,7 +134,6 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
 export function withLocalNames(actions: ActionType[], triples: Triple[]) {
   const newEntityNames = pipe(
     actions,
-    Action.squashChanges,
     A.map(a => {
       switch (a.type) {
         case 'editTriple':
