@@ -24,7 +24,7 @@ export function EntityPresenceProvider({ children, entityId }: Props) {
   // contexts and providers with Liveblocks, so this janky hack is easier
   // for now.
   // @ts-expect-error import.meta.env is not typed
-  if (import.meta.env.MODE) return null;
+  if (import.meta?.env) return null;
 
   return (
     <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address: account.address }}>
