@@ -115,7 +115,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { selectedType, unpublishedColumns } = useEntityTable();
+  const { selectedType } = useEntityTable();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({

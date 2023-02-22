@@ -7,8 +7,9 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Entity, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
-import { Column } from '~/modules/types';
+import { Column, Triple as TripleType } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
+import { DebugTriples } from '../debug/debug-triples';
 import { useEditEvents } from '../entity/edit-events';
 import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
 
@@ -20,6 +21,7 @@ interface Props {
   // name in sync.
   spaceId?: string;
   entityId: string;
+  columnCells: TripleType[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -28,7 +30,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
 }: Props) {
   const { actions, create, update, remove } = useActionsStore(spaceId);
-  const { unpublishedColumns } = useEntityTable();
+  const { unpublishedColumns, columnCells } = useEntityTable();
   const localTriples = Triple.fromActions(actions, column.triples).filter(t => t.entityId === column.id);
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
@@ -58,12 +60,14 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 
+  const cellTriples = columnCells(column.id).flatMap(cell => cell.triples);
   const onChangeTripleType = (valueType: keyof typeof valueTypes) => {
     send({
-      type: 'CHANGE_VALUE_TYPE',
+      type: 'CHANGE_COLUMN_VALUE_TYPE',
       payload: {
         valueType,
-        triple: valueTypeTriple,
+        valueTypeTriple,
+        cellTriples,
       },
     });
   };
@@ -107,6 +111,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
           ]}
         />
       )}
+      <DebugTriples triples={triples} />
     </div>
   );
 });

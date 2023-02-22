@@ -26,9 +26,10 @@ export type EditEvent =
       type: 'CREATE_NEW_TRIPLE';
     }
   | {
-      type: 'CHANGE_VALUE_TYPE';
+      type: 'CHANGE_COLUMN_VALUE_TYPE';
       payload: {
-        triple?: TripleType;
+        valueTypeTriple?: TripleType;
+        cellTriples: TripleType[];
         valueType: keyof typeof valueTypes;
       };
     }
@@ -181,11 +182,11 @@ const listener =
         return create({ ...Triple.empty(context.spaceId, context.entityId), entityName: context.entityName });
       case 'REMOVE_TRIPLE':
         return remove(event.payload.triple);
-      case 'CHANGE_VALUE_TYPE': {
-        const { valueType, triple } = event.payload;
+      case 'CHANGE_COLUMN_VALUE_TYPE': {
+        const { valueType, valueTypeTriple, cellTriples } = event.payload;
 
-        if (triple) {
-          return update(
+        if (valueTypeTriple) {
+          update(
             Triple.withId({
               space: context.spaceId,
               entityId: context.entityId,
@@ -198,10 +199,10 @@ const listener =
                 name: valueTypeNames[valueType],
               },
             }),
-            triple
+            valueTypeTriple
           );
         } else {
-          return create(
+          create(
             Triple.withId({
               space: context.spaceId,
               entityId: context.entityId,
@@ -216,6 +217,22 @@ const listener =
             })
           );
         }
+
+        const newCellType = valueTypes[valueType];
+
+        return cellTriples.forEach(triple => {
+          update(
+            Triple.ensureStableId({
+              ...triple,
+              value: {
+                ...(newCellType === 'entity'
+                  ? { type: 'entity', id: '', name: 'Entity James!' }
+                  : { type: 'string', id: triple.value.id, value: 'String James!' }),
+              },
+            }),
+            triple
+          );
+        });
       }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;

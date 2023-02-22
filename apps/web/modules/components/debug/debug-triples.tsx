@@ -2,12 +2,20 @@ import { RightArrowLong } from '~/modules/design-system/icons/right-arrow-long';
 import { Triple } from '~/modules/types';
 import { DebugPopover } from './debug-popover';
 
-export const DebugTriples = ({ triples, containerWidth = 3000 }: { triples: Triple[]; containerWidth?: number }) => {
+export const DebugTriples = ({
+  triples,
+  containerWidth = 3000,
+  className,
+}: {
+  triples: Triple[];
+  containerWidth?: number;
+  className?: string;
+}) => {
   /* A useful component for debugging triple data - generates a button which opens a popover containing nicely formatted triple data*/
   if (process.env.NODE_ENV !== 'development') return null;
 
   return (
-    <DebugPopover containerWidth={containerWidth}>
+    <DebugPopover containerWidth={containerWidth} className={className}>
       Triple Count: {triples.length}
       <div className="whitespace-wrap space-y-8 font-mono font-normal max-h-96 overflow-y-auto">
         {triples.map(triple => (
