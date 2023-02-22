@@ -16,7 +16,6 @@ import {
   Space,
   Triple as TripleType,
 } from '../types';
-import { Value } from '../value';
 import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
 import { IStorageClient } from './storage';
 
