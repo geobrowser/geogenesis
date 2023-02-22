@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { useAccount } from 'wagmi';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -16,6 +17,8 @@ import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
 import { StringField } from './editable-fields';
+import { EntityOthersToast } from './presence/entity-others-toast';
+import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -71,6 +74,8 @@ export function EditableEntityPage({
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
 }: Props) {
+  const account = useAccount();
+
   const {
     triples: localTriples,
     schemaTriples: localSchemaTriples,
@@ -130,16 +135,17 @@ export function EditableEntityPage({
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   return (
-    <PageContainer>
-      <EntityContainer>
-        <Head>
-          <title>{name ?? id}</title>
-          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-        </Head>
+    <>
+      <PageContainer>
+        <EntityContainer>
+          <Head>
+            <title>{name ?? id}</title>
+            <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+          </Head>
 
-        <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
+          <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
 
-        {/* 
+          {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -147,16 +153,16 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={9} />
+          <Spacer height={9} />
 
-        <StringField
-          variant="body"
-          placeholder="Add a description..."
-          value={description ?? undefined}
-          onBlur={onDescriptionChange}
-        />
+          <StringField
+            variant="body"
+            placeholder="Add a description..."
+            value={description ?? undefined}
+            onBlur={onDescriptionChange}
+          />
 
-        {/* 
+          {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -164,35 +170,39 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={12} />
+          <Spacer height={12} />
 
-        <EntityActionGroup>
-          <CopyIdButton id={id} />
-        </EntityActionGroup>
+          <EntityActionGroup>
+            <CopyIdButton id={id} />
+          </EntityActionGroup>
 
-        <Spacer height={8} />
+          <Spacer height={8} />
 
-        <Content>
-          <Attributes>
-            <EntityAttributes
-              entityId={id}
-              triples={triples}
-              spaceId={space}
-              schemaTriples={schemaTriples}
-              name={name}
-              send={send}
-              hideSchema={hideSchema}
-              hiddenSchemaIds={hiddenSchemaIds}
-            />
-          </Attributes>
-          <AddTripleContainer>
-            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-              Add triple
-            </Button>
-          </AddTripleContainer>
-        </Content>
-      </EntityContainer>
-    </PageContainer>
+          <Content>
+            <Attributes>
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                spaceId={space}
+                schemaTriples={schemaTriples}
+                name={name}
+                send={send}
+                hideSchema={hideSchema}
+                hiddenSchemaIds={hiddenSchemaIds}
+              />
+            </Attributes>
+            <AddTripleContainer>
+              <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+                Add triple
+              </Button>
+            </AddTripleContainer>
+          </Content>
+        </EntityContainer>
+      </PageContainer>
+      <EntityPresenceProvider entityId={id}>
+        <EntityOthersToast />
+      </EntityPresenceProvider>
+    </>
   );
 }
 

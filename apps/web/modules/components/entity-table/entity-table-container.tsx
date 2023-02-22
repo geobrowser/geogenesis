@@ -1,7 +1,11 @@
+import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useEntityTable } from '~/modules/entity';
+import { useEditable } from '~/modules/stores/use-editable';
 import { Column, Row } from '../../types';
+import { EntityOthersToast } from '../entity/presence/entity-others-toast';
+import { EntityPresenceProvider } from '../entity/presence/entity-presence-provider';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';
@@ -17,6 +21,8 @@ interface Props {
 
 export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
   const entityTableStore = useEntityTable();
+  const { isEditor } = useAccessControl(spaceId);
+  const { editable } = useEditable();
 
   return (
     <EntityTableErrorBoundary spaceId={spaceId} typeId={entityTableStore.selectedType?.entityId ?? ''}>
@@ -77,6 +83,11 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
           <NextButton isDisabled={!entityTableStore.hasNextPage} onClick={entityTableStore.setNextPage} />
         </PageNumberContainer>
       </PageContainer>
+      {isEditor && editable && (
+        <EntityPresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''}>
+          <EntityOthersToast />
+        </EntityPresenceProvider>
+      )}
     </EntityTableErrorBoundary>
   );
 }

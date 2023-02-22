@@ -45,6 +45,7 @@ const Layout = styled.main(props => ({
 
 const Relative = styled.div({
   position: 'relative',
+  minHeight: '100vh',
 });
 
 function Root(props: AppProps) {
