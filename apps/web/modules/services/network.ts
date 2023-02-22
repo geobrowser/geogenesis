@@ -10,6 +10,7 @@ import {
   Action,
   Column,
   Entity as EntityType,
+  EntityValue,
   FilterField,
   FilterState,
   ReviewState,
@@ -337,6 +338,74 @@ export class Network implements INetwork {
 
     return sortedResultsWithTypesAndDescription;
   };
+
+  //@note we probably want to create a more general fetchSpaceConfiguration function
+  // but for now because I only know foreign types are needed, I'm just going to
+  // fetch them directly
+  fetchForeignTypes = async (space: string, abortController?: AbortController) => {
+
+    const query = `\
+      {
+        triples(where: {
+          attribute: "${SYSTEM_IDS.FOREIGN_TYPES}",
+          space: "${space}",
+        }){
+          entityValue{
+            entityOf(where: {attribute: "${SYSTEM_IDS.TYPES}"}){
+              id
+              space{
+                id
+              }
+              entity{
+                id
+                name
+              }
+              attribute{
+                id
+                name
+              }
+              entityValue{
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query,
+      }),
+    });
+
+    const json = await response.json();
+
+    const foreignTypes = json.data.triples.map((foreignType: any) => {
+      const typeTriple = foreignType.entityValue.entityOf[0]
+      return {
+        id: typeTriple.id,
+        space: typeTriple.space.id,
+        entityId: typeTriple.entity.id,
+        entityName: typeTriple.entity.name,
+        attributeId: typeTriple.attribute.id,
+        attributeName: typeTriple.attribute.name,
+        value: {
+          id: typeTriple.entityValue.id,
+          name: typeTriple.entityValue.name
+        } as EntityValue
+      }
+    })
+
+    return foreignTypes;
+  };
+
 
   fetchSpaces = async () => {
     const response = await fetch(this.subgraphUrl, {

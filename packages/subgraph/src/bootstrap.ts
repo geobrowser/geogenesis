@@ -16,6 +16,8 @@ import {
   TEXT,
   TYPES,
   VALUE_TYPE,
+  SPACE_CONFIGURATION,
+  FOREIGN_TYPES
 } from '@geogenesis/ids/system-ids'
 import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
@@ -33,6 +35,8 @@ const entities: string[] = [
   NAME,
   SPACE,
   ATTRIBUTE,
+  SPACE_CONFIGURATION,
+  FOREIGN_TYPES
 ]
 
 class Tuple<T, U> {
@@ -52,6 +56,8 @@ const names: Tuple<string, StringValue>[] = [
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
+  { _0: SPACE_CONFIGURATION, _1: new StringValue(SPACE_CONFIGURATION, 'Space Configuration') },
+  { _0: FOREIGN_TYPES, _1: new StringValue(FOREIGN_TYPES, 'Foreign Types') },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -63,6 +69,7 @@ const attributes: Tuple<string, string>[] = [
   { _0: DESCRIPTION, _1: TEXT },
   { _0: NAME, _1: TEXT },
   { _0: SPACE, _1: TEXT },
+  { _0: FOREIGN_TYPES, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
@@ -71,6 +78,7 @@ const types: Tuple<string, string[]>[] = [
   { _0: RELATION, _1: [] },
   { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
   { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
+  { _0: SPACE_CONFIGURATION, _1: [FOREIGN_TYPES] },
 ]
 
 export function bootstrapRootSpaceCoreTypes(

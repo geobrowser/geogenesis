@@ -75,7 +75,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const [initialTypes, defaultTypeTriples] = await Promise.all([
+  const [initialTypes, defaultTypeTriples, foreignTypes] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
     network.fetchTriples({
       query: '',
@@ -89,7 +89,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         },
       ],
     }),
+    network.fetchForeignTypes(spaceId),
   ]);
+
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
 
   const initialSelectedType =
@@ -116,6 +118,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
 
+  const types = [...initialTypes, ...foreignTypes];
+
   return {
     props: {
       spaceId,
@@ -124,7 +128,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialSelectedType,
       initialColumns: columns,
       initialRows: rows,
-      initialTypes,
+      initialTypes: types,
     },
   };
 };
