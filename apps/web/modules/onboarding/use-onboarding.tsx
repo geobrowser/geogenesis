@@ -1,5 +1,6 @@
 import { observable } from '@legendapp/state';
 import { useAccount } from 'wagmi';
+
 import { useGeoProfile } from '../auth/use-geo-profile';
 
 /* Extracting state outside component so any component can use this hook and share the same state */
