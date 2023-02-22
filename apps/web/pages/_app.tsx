@@ -102,7 +102,7 @@ function App({ Component, pageProps }: AppProps) {
         }}
         spaceId=""
       />
-      <Layout className="min-h-full">
+      <Layout>
         <Component {...pageProps} />
         <Analytics />
       </Layout>
