@@ -199,7 +199,7 @@ export function EditableEntityPage({
           </Content>
         </EntityContainer>
       </PageContainer>
-      <EntityPresenceProvider entityId={id}>
+      <EntityPresenceProvider entityId={id} spaceId={space}>
         <EntityOthersToast />
       </EntityPresenceProvider>
     </>

@@ -9,22 +9,43 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { useAccount } from 'wagmi';
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
 
 export function EntityOthersToast() {
+  const account = useAccount();
   const [isExpanded, setIsExpanded] = useState(false);
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
-  // We only show the first 3 avatars in the avatar group
-  const editorsAvatars = others.slice(0, 3);
-  const shouldShow = others.length > 0;
+  // Include me in the list of editors
+  const editors = [
+    ...others,
+    {
+      // Set Other properties to me's address. We can use this later to
+      // differentiate between the active tab me and others in the editor list.
+      id: me.address,
+      connectionId: me.address,
+      presence: {
+        address: me.address,
+        hasChangesToEntity: me.hasChangesToEntity,
+      },
+    },
+  ]
+    .filter(e => e.presence.hasChangesToEntity)
+    // Filter out myself if I am the only editor and I'm in the current tab being edited
+    .filter((e, _, filteredEditors) => {
+      if (filteredEditors.length === 1 && e.connectionId === account.address) return false;
+      return true;
+    });
 
-  // We include the active user in the count
-  const editorsCount = others.length + 1;
+  // We only show the first 3 avatars in the avatar group
+  const editorsAvatars = editors.slice(0, 3);
+  const editorsCount = editors.length;
+  const shouldShow = editorsCount > 0;
 
   return (
     <AnimatePresence>
@@ -38,9 +59,9 @@ export function EntityOthersToast() {
         >
           <div className="flex items-center gap-2">
             <ul className="flex items-center -space-x-1">
-              {editorsAvatars.map((other, i) => (
-                <li key={other.id} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
-                  <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
+              {editorsAvatars.map((editor, i) => (
+                <li key={editor.id} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
+                  <BoringAvatar size={16} name={editor.presence.address} variant="pixel" />
                 </li>
               ))}
             </ul>
@@ -56,25 +77,21 @@ export function EntityOthersToast() {
             {isExpanded ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <ul key="presence-user-list" className="space-y-3 mb-2 overflow-hidden">
-                  {others.map(other => (
-                    <li key={other.connectionId} className="flex items-center gap-2">
-                      <BoringAvatar size={16} name={other.presence.address} variant="pixel" />
-                      <Text variant="metadata" color="grey-04">
-                        {shortAddress(other.presence.address ?? '')}
-                      </Text>
+                  {editors.map(editor => (
+                    <li key={editor.connectionId} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BoringAvatar size={16} name={me.address} variant="pixel" />
+                        <Text variant="metadata" color="grey-04">
+                          {shortAddress(editor.presence.address ?? '')}
+                        </Text>
+                      </div>
+                      {editor.presence.address === account?.address && (
+                        <Text className="rounded bg-grey-02 px-1" color="grey-04" variant="footnoteMedium">
+                          You
+                        </Text>
+                      )}
                     </li>
                   ))}
-                  <li className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <BoringAvatar size={16} name={me.address} variant="pixel" />
-                      <Text variant="metadata" color="grey-04">
-                        {shortAddress(me.address ?? '')}
-                      </Text>
-                    </div>
-                    <Text className="rounded bg-grey-02 px-1" color="grey-04" variant="footnoteMedium">
-                      You
-                    </Text>
-                  </li>
                 </ul>
                 <Spacer height={4} />
               </motion.div>
