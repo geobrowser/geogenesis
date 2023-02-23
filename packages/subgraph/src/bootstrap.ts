@@ -8,6 +8,7 @@ import {
   ATTRIBUTE,
   ATTRIBUTES,
   DESCRIPTION,
+  IMAGE,
   IMAGE_ATTRIBUTE,
   NAME,
   RELATION,
@@ -27,8 +28,8 @@ const entities: string[] = [
   VALUE_TYPE,
   RELATION,
   TEXT,
+  IMAGE,
   IMAGE_ATTRIBUTE,
-  DESCRIPTION,
   DESCRIPTION,
   NAME,
   SPACE,
@@ -50,6 +51,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: VALUE_TYPE, _1: new StringValue(VALUE_TYPE, 'Value type') },
   { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
+  { _0: IMAGE, _1: new StringValue(TEXT, 'Image') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
 ]
@@ -69,6 +71,7 @@ const attributes: Tuple<string, string>[] = [
 const types: Tuple<string, string[]>[] = [
   { _0: TEXT, _1: [] },
   { _0: RELATION, _1: [] },
+  { _0: IMAGE, _1: [] },
   { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
   { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
 ]

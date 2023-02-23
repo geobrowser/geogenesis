@@ -1,12 +1,12 @@
 import {
   CreateTripleAction as CreateTripleActionSchema,
-  DeleteTripleAction as DeleteTripleActionSchema,
+  DeleteTripleAction as DeleteTripleActionSchema
 } from '@geogenesis/action-schema';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image';
 
 export type NumberValue = {
   type: 'number';
@@ -26,7 +26,13 @@ export type EntityValue = {
   name: string | null;
 };
 
-export type Value = NumberValue | StringValue | EntityValue;
+export type ImageValue = {
+  type: 'image';
+  id: string;
+  value: string;
+};
+
+export type Value = NumberValue | StringValue | EntityValue | ImageValue;
 
 export type Triple = {
   id: string;

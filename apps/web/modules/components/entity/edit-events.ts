@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useMemo } from 'react';
 
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType } from '~/modules/types';
+import { emptyValue } from '~/modules/triple/triple';
+import { Triple as TripleType, TripleValueType } from '~/modules/types';
 
 export type EditEvent =
   | {
@@ -26,9 +27,22 @@ export type EditEvent =
       type: 'CREATE_NEW_TRIPLE';
     }
   | {
+      type: 'UPLOAD_IMAGE';
+      payload: {
+        triple: TripleType;
+        imageSrc: string;
+      };
+    }
+  | {
+      type: 'REMOVE_IMAGE';
+      payload: {
+        triple: TripleType;
+      };
+    }
+  | {
       type: 'CHANGE_TRIPLE_TYPE';
       payload: {
-        type: 'string' | 'entity';
+        type: TripleValueType;
         triples: TripleType[];
       };
     }
@@ -177,15 +191,20 @@ const listener =
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
 
+        const value = emptyValue(type);
+
         return triples.forEach(triple => {
+          const isString = type === 'string';
+          const isImage = type === 'image';
+
+          const retainTripleValueId = isString || isImage;
+
+          const newValue = retainTripleValueId ? { ...value, id: triple.value.id } : value;
+
           update(
             Triple.ensureStableId({
               ...triple,
-              value: {
-                ...(type === 'entity'
-                  ? { type: 'entity', id: '', name: '' }
-                  : { type: 'string', id: triple.value.id, value: '' }),
-              },
+              value: newValue,
             }),
             triple
           );
@@ -357,6 +376,32 @@ const listener =
             placeholder: false,
             value: { ...triple.value, type: 'string', value },
           },
+          triple
+        );
+      }
+
+      case 'REMOVE_IMAGE': {
+        const { triple } = event.payload;
+        const newValue = { ...triple.value, value: null };
+
+        return update(
+          Triple.ensureStableId({
+            ...triple,
+            value: newValue,
+          }),
+          triple
+        );
+      }
+
+      case 'UPLOAD_IMAGE': {
+        const { imageSrc, triple } = event.payload;
+        const newValue = { ...triple.value, value: imageSrc };
+
+        return update(
+          Triple.ensureStableId({
+            ...triple,
+            value: newValue,
+          }),
           triple
         );
       }
