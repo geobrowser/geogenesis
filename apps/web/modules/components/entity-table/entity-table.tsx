@@ -84,16 +84,24 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     if (isEditMode) {
       return (
         <EditableEntityTableCell
+          // HACK (baiirun): For some reason the table value for the name field is stale
+          // when changing the selectedType in edit mode. When debugging it looks like the
+          // cell has the correct data, but the value of the name is the value of the last
+          // cell in the previous selectedType. For now we can use a key to force the
+          // cell to re-mount when the selectedType and name changes.
+          key={Entity.name(cellTriples)}
           triples={cellTriples}
+          cell={cellData}
           create={create}
           update={update}
           remove={remove}
-          cell={cellData}
           space={space}
         />
       );
     } else if (cellData && !isPlaceholderCell) {
-      return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
+      return (
+        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} space={space} isExpanded={isExpanded} />
+      );
     } else {
       return null;
     }
@@ -106,7 +114,7 @@ interface Props {
   rows: Row[];
 }
 
-export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
+export function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -200,4 +208,4 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
       </table>
     </div>
   );
-});
+}
