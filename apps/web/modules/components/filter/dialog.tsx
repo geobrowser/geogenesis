@@ -54,7 +54,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
         <button
           className={cx(
             open ? 'bg-grey-01' : 'bg-white',
-            'border-l-none rounded-r py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary'
+            'border-l-none h-full rounded-r py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary'
           )}
           aria-label="advanced-filter-button"
         >
@@ -75,7 +75,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
             avoidCollisions={true}
             className="relative z-[1] rounded border border-grey-02 bg-white p-3 shadow-button md:mx-auto md:w-[98vw] md:self-start"
             style={{ width: `calc(${inputContainerWidth}px / 2)` }}
-            sideOffset={14}
+            sideOffset={6}
             alignOffset={-1}
             align={width > 768 ? 'end' : 'start'}
           >

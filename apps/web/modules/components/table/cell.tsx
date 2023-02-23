@@ -18,7 +18,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
 
   return (
     <td
-      className="border border-grey-02 bg-transparent p-[10px] align-top"
+      className="border border-grey-02 bg-transparent px-[10px] py-[5px] align-top"
       style={{
         maxWidth: width,
       }}

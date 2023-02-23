@@ -23,14 +23,14 @@ export function LinkableBreadcrumb({ children, href, img, isNested, shouldTrunca
       >
         {img && (
           <>
-            <div className="relative h-4 w-4 overflow-hidden rounded">
+            <div className="relative h-4 w-4 overflow-hidden rounded-sm">
               <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
             </div>
             <Spacer width={8} />
           </>
         )}
-        <div className={cx('max-w-full overflow-hidden', shouldTruncate && 'truncate')}>
-          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'}>
+        <div className={cx('overflow-hidde max-w-full', shouldTruncate && 'truncate')}>
+          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'} className="hover:!text-text">
             {children}
           </Text>
         </div>
@@ -49,7 +49,7 @@ export function Breadcrumb({ children, img }: BreadcrumbProps) {
     <span className="flex cursor-pointer items-center whitespace-nowrap py-px no-underline">
       {img && (
         <>
-          <div className="rounded-sm relative h-3 w-3 overflow-hidden">
+          <div className="relative h-3 w-3 overflow-hidden rounded-sm">
             <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
           </div>
           <Spacer width={4} />

@@ -77,12 +77,12 @@ export const Text = ({
   variant = 'body',
   as = 'span',
   ellipsize = false,
-  className,
+  className = '',
   ...rest
 }: Props) => {
   const Tag = as;
   return (
-    <Tag className={textStyles({ variant, color, ellipsize }) + ` ${className}`} {...rest}>
+    <Tag className={textStyles({ variant, color, ellipsize, className })} {...rest}>
       {children}
     </Tag>
   );

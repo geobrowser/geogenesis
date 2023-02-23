@@ -46,6 +46,9 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
+  // @TODO remove console.info
+  console.info('open:', open);
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>

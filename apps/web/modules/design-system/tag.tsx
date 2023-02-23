@@ -4,5 +4,5 @@ import cx from 'classnames';
 type Props = React.ComponentPropsWithoutRef<'div'>;
 
 export const Tag = ({ className = '', ...rest }: Props) => {
-  return <div className={cx('inline-block rounded bg-grey-02 px-1 text-tag no-underline', className)} {...rest} />;
+  return <div className={cx('inline-block rounded-sm bg-grey-02 px-1 text-tag no-underline', className)} {...rest} />;
 };

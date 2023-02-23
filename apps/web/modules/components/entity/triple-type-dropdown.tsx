@@ -1,13 +1,17 @@
 import * as React from 'react';
 import { useState } from 'react';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+
+import { SquareButton } from '~/modules/design-system/button';
+import type { IconName } from '~/modules/design-system/icon';
 
 const MotionContent = motion(DropdownPrimitive.Content);
 
 interface Props {
-  value: React.ReactNode;
-  options: { label: React.ReactNode; onClick: () => void; disabled: boolean }[];
+  value: IconName;
+  options: { value: IconName; label: React.ReactNode; onClick: () => void; disabled: boolean }[];
 }
 
 export const TripleTypeDropdown = ({ value, options }: Props) => {
@@ -15,9 +19,9 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
   const [open, setOpen] = useState(false);
 
   return (
-    <DropdownPrimitive.Root onOpenChange={setOpen}>
-      <DropdownPrimitive.Trigger className="inline-flex flex-1 items-center justify-between whitespace-nowrap rounded bg-white text-button text-text hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
-        {value}
+    <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
+      <DropdownPrimitive.Trigger className="inline-flex flex-1 items-center justify-between">
+        <SquareButton icon={value} isActive={open} />
       </DropdownPrimitive.Trigger>
       <AnimatePresence>
         {open && (
@@ -39,7 +43,10 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
                 <DropdownPrimitive.Item
                   key={`triple-type-dropdown-${index}`}
                   onClick={option.disabled ? undefined : option.onClick}
-                  className="flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 aria-disabled:cursor-not-allowed aria-disabled:text-grey-04 [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text"
+                  className={cx(
+                    'flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    value === option.value && '!bg-bg !text-text'
+                  )}
                 >
                   {option.label}
                 </DropdownPrimitive.Item>
