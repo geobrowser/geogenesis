@@ -17,7 +17,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { sortEntityPageTriples } from './editable-entity-page-utils';
-import { StringField } from './editable-fields';
+import { PageStringField } from './editable-fields';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
@@ -145,7 +145,7 @@ export function EditableEntityPage({
             <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
           </Head>
 
-          <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
+          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
 
           {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
@@ -157,11 +157,11 @@ export function EditableEntityPage({
         */}
           <Spacer height={9} />
 
-          <StringField
+          <PageStringField
             variant="body"
             placeholder="Add a description..."
             value={description ?? undefined}
-            onBlur={onDescriptionChange}
+            onChange={onDescriptionChange}
           />
 
           {/* 
@@ -364,21 +364,21 @@ function EntityAttributes({
     switch (triple.value.type) {
       case 'string':
         return triple.placeholder ? (
-          <StringField
+          <PageStringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
             aria-label="placeholder-text-field"
-            onBlur={e => {
+            onChange={e => {
               createStringTripleFromPlaceholder(triple, e.target.value);
             }}
           />
         ) : (
-          <StringField
+          <PageStringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onBlur={e => updateValue(triple, e.target.value)}
+            onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
         );
