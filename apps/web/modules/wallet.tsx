@@ -44,7 +44,7 @@ const DEFAULT_CHAIN: Chain = {
 };
 
 const { chains, provider, webSocketProvider } = configureChains(
-  // Only make the testnet chain available in development
+  // Only make the dev chains available in development
   [DEFAULT_CHAIN, ...(process.env.NODE_ENV === 'development' ? [TESTNET_CHAIN, LOCAL_CHAIN] : [])],
   [publicProvider()]
 );
