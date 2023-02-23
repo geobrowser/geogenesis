@@ -14,7 +14,7 @@ pnpm start
 
 ### Environment variables
 
-The frontend relies on [Liveblocks](https://liveblocks.io) for a frontend-specific feature that shows which users are currently editing a given entity. To use this feature you need to have a Liveblocks API key configured and in your `.env.local` file picked up by Next.js.
+The frontend relies on [Liveblocks](https://liveblocks.io) for a frontend-specific feature that shows which users are currently editing a given entity. To use this feature you need to have a Liveblocks API key configured and in your `.env.local` file.
 
 ```bash
 # .env.local
