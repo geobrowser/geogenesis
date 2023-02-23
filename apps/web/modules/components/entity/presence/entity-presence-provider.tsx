@@ -1,16 +1,21 @@
 import { createRoomContext } from '@liveblocks/react';
-import { Component } from 'react';
+import { Component, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { Action, useActionsStore } from '~/modules/action';
 import { client } from './entity-presence-client';
 
-export const EntityPresenceContext = createRoomContext<{ address: `0x${string}` | undefined }>(client);
+export const EntityPresenceContext = createRoomContext<{
+  address: `0x${string}` | undefined;
+  hasChangesToEntity: boolean;
+}>(client);
 
 interface Props {
   children: React.ReactNode;
   entityId: string;
+  spaceId: string;
 }
 
-export function EntityPresenceProvider({ children, entityId }: Props) {
+export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   const account = useAccount();
 
   // HACK (baiirun)
@@ -29,11 +34,32 @@ export function EntityPresenceProvider({ children, entityId }: Props) {
 
   return (
     <EntityPresenceErrorBoundary>
-      <EntityPresenceContext.RoomProvider id={entityId} initialPresence={{ address: account.address }}>
-        {children}
+      <EntityPresenceContext.RoomProvider
+        id={entityId}
+        initialPresence={{ address: account.address, hasChangesToEntity: false }}
+      >
+        <HasEntityChanges entityId={entityId} spaceId={spaceId} address={account.address}>
+          {children}
+        </HasEntityChanges>
       </EntityPresenceContext.RoomProvider>
     </EntityPresenceErrorBoundary>
   );
+}
+
+interface HasEntityChangesProps extends Props {
+  address: `0x${string}` | undefined;
+}
+
+function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityChangesProps) {
+  const { actions } = useActionsStore(spaceId);
+  const updateMyPresence = EntityPresenceContext.useUpdateMyPresence();
+  const hasChangesToEntity = Action.getChangeCount(Action.forEntityId(actions, entityId)) > 0;
+
+  useEffect(() => {
+    updateMyPresence({ address: address, hasChangesToEntity });
+  }, [actions, entityId, hasChangesToEntity]);
+
+  return <>{children}</>;
 }
 
 interface EntityPresenceErrorBoundaryState {

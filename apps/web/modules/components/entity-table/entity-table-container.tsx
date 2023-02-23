@@ -84,7 +84,7 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
         </PageNumberContainer>
       </PageContainer>
       {isEditor && editable && (
-        <EntityPresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''}>
+        <EntityPresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
           <EntityOthersToast />
         </EntityPresenceProvider>
       )}

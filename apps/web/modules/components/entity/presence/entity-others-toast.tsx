@@ -25,18 +25,27 @@ export function EntityOthersToast() {
   const editors = [
     ...others,
     {
+      // Set Other properties to me's address. We can use this later to
+      // differentiate between the active tab me and others in the editor list.
       id: me.address,
       connectionId: me.address,
       presence: {
         address: me.address,
+        hasChangesToEntity: me.hasChangesToEntity,
       },
     },
-  ];
+  ]
+    .filter(e => e.presence.hasChangesToEntity)
+    // Filter out myself if I am the only editor and I'm in the current tab being edited
+    .filter((e, _, filteredEditors) => {
+      if (filteredEditors.length === 1 && e.connectionId === account.address) return false;
+      return true;
+    });
 
   // We only show the first 3 avatars in the avatar group
   const editorsAvatars = editors.slice(0, 3);
-  const shouldShow = others.length > 0;
   const editorsCount = editors.length;
+  const shouldShow = editorsCount > 0;
 
   return (
     <AnimatePresence>
