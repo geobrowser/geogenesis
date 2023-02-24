@@ -1,6 +1,5 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
-import { useAccount } from 'wagmi';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
@@ -75,8 +74,6 @@ export function EditableEntityPage({
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
 }: Props) {
-  const account = useAccount();
-
   const {
     triples: localTriples,
     schemaTriples: localSchemaTriples,
@@ -262,12 +259,20 @@ function EntityAttributes({
 
   const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
 
-  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples);
+  // Some triples are rendered outside of the normal attribute list to better control their styling.
+  const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
+  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples).filter(
+    triple => !filteredAttributeIds.includes(triple.attributeId)
+  );
 
   const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
 
   const orderedGroupedTriples = Object.entries(groupedTriples);
+
+  const nameTriple = Entity.nameTriple(triples);
+  const descriptionTriple = Entity.descriptionTriple(triples);
+  const description = Entity.description(triples);
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -340,46 +345,50 @@ function EntityAttributes({
   };
 
   const updateValue = (triple: TripleType, name: string) => {
-    const isNameChange = triple.attributeId === SYSTEM_IDS.NAME;
-    if (isNameChange) {
-      send({
-        type: 'EDIT_ENTITY_NAME',
-        payload: {
-          triple,
-          name,
-        },
-      });
-    } else {
-      send({
-        type: 'UPDATE_VALUE',
-        payload: {
-          triple,
-          value: name,
-        },
-      });
-    }
+    send({
+      type: 'UPDATE_VALUE',
+      payload: {
+        triple,
+        value: name,
+      },
+    });
+  };
+
+  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    send({
+      type: 'EDIT_ENTITY_NAME',
+      payload: {
+        name: e.target.value,
+        triple: nameTriple,
+      },
+    });
+  };
+
+  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    send({
+      type: 'EDIT_ENTITY_DESCRIPTION',
+      payload: {
+        name,
+        description: e.target.value,
+        triple: descriptionTriple,
+      },
+    });
   };
 
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
-        return triple.placeholder ? (
+        return (
           <PageStringField
-            key={triple.id}
+            key={triple.attributeId}
             variant="body"
             placeholder="Add value..."
-            aria-label="placeholder-text-field"
+            aria-label={triple.placeholder ? 'placeholder-text-field' : 'text-field'}
             onChange={e => {
-              createStringTripleFromPlaceholder(triple, e.target.value);
+              triple.placeholder
+                ? createStringTripleFromPlaceholder(triple, e.target.value)
+                : updateValue(triple, e.target.value);
             }}
-          />
-        ) : (
-          <PageStringField
-            key={triple.id}
-            variant="body"
-            placeholder="Add value..."
-            onChange={e => updateValue(triple, e.target.value)}
-            value={triple.value.value}
           />
         );
       case 'number':
@@ -420,6 +429,25 @@ function EntityAttributes({
 
   return (
     <>
+      <div>
+        <Text as="p" variant="bodySemibold">
+          Name
+        </Text>
+        <PageStringField variant="body" placeholder="Entity name..." value={name} onChange={onNameChange} />
+      </div>
+
+      <div>
+        <Text as="p" variant="bodySemibold">
+          Description
+        </Text>
+        <PageStringField
+          variant="body"
+          placeholder="Add a description..."
+          value={description ?? undefined}
+          onChange={onDescriptionChange}
+        />
+      </div>
+
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
