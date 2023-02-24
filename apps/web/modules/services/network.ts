@@ -343,7 +343,6 @@ export class Network implements INetwork {
   // but for now because I only know foreign types are needed, I'm just going to
   // fetch them directly
   fetchForeignTypes = async (space: string, abortController?: AbortController) => {
-
     const query = `\
       {
         triples(where: {
@@ -388,7 +387,7 @@ export class Network implements INetwork {
     const json = await response.json();
 
     const foreignTypes = json.data.triples.map((foreignType: any) => {
-      const typeTriple = foreignType.entityValue.entityOf[0]
+      const typeTriple = foreignType.entityValue.entityOf[0];
       return {
         id: typeTriple.id,
         space: typeTriple.space.id,
@@ -398,14 +397,13 @@ export class Network implements INetwork {
         attributeName: typeTriple.attribute.name,
         value: {
           id: typeTriple.entityValue.id,
-          name: typeTriple.entityValue.name
-        } as EntityValue
-      }
-    })
+          name: typeTriple.entityValue.name,
+        } as EntityValue,
+      };
+    });
 
     return foreignTypes;
   };
-
 
   fetchSpaces = async () => {
     const response = await fetch(this.subgraphUrl, {

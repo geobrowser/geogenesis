@@ -17,7 +17,7 @@ import {
   TYPES,
   VALUE_TYPE,
   SPACE_CONFIGURATION,
-  FOREIGN_TYPES
+  FOREIGN_TYPES,
 } from '@geogenesis/ids/system-ids'
 import { BigInt, log } from '@graphprotocol/graph-ts'
 import { handleAction, handleCreateTripleAction } from './actions'
@@ -36,7 +36,7 @@ const entities: string[] = [
   SPACE,
   ATTRIBUTE,
   SPACE_CONFIGURATION,
-  FOREIGN_TYPES
+  FOREIGN_TYPES,
 ]
 
 class Tuple<T, U> {
@@ -56,7 +56,10 @@ const names: Tuple<string, StringValue>[] = [
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
-  { _0: SPACE_CONFIGURATION, _1: new StringValue(SPACE_CONFIGURATION, 'Space Configuration') },
+  {
+    _0: SPACE_CONFIGURATION,
+    _1: new StringValue(SPACE_CONFIGURATION, 'Space Configuration'),
+  },
   { _0: FOREIGN_TYPES, _1: new StringValue(FOREIGN_TYPES, 'Foreign Types') },
 ]
 
