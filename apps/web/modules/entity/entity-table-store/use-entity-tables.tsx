@@ -21,7 +21,9 @@ export const useEntityTable = () => {
     columns$,
     types$,
     unpublishedColumns$,
+    columnValueType,
     setFilterState,
+    columnName,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -50,6 +52,8 @@ export const useEntityTable = () => {
     setPreviousPage,
     setType,
     pageNumber,
+    columnValueType,
+    columnName,
     hasPreviousPage,
     hasNextPage,
     filterState,

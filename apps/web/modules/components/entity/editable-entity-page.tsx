@@ -308,9 +308,10 @@ function EntityAttributes({
 
   const createEntityTripleFromPlaceholder = (triple: TripleType, linkedEntity: EntityType) => {
     send({
-      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {
-        triple,
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
         entityId: linkedEntity.id,
         entityName: linkedEntity.name || '',
       },
@@ -319,9 +320,10 @@ function EntityAttributes({
 
   const createStringTripleFromPlaceholder = (triple: TripleType, value: string) => {
     send({
-      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER',
+      type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
       payload: {
-        triple,
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
         value,
       },
     });

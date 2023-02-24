@@ -272,6 +272,28 @@ export class EntityTableStore implements IEntityTableStore {
       .filter(cell => cell); // Filter out undefined cells in newly created columns
   };
 
+  columnValueType = (columnId: string): string => {
+    const column = this.columns$.get().find(c => c.id === columnId);
+
+    if (!column) {
+      // Typescript defensive programming
+      return SYSTEM_IDS.TEXT;
+    }
+
+    return Entity.valueType(column.triples) ?? SYSTEM_IDS.TEXT;
+  };
+
+  columnName = (columnId: string): string => {
+    const column = this.columns$.get().find(c => c.id === columnId);
+
+    if (!column) {
+      // Typescript defensive programming
+      return '';
+    }
+
+    return Entity.name(column.triples) || '';
+  };
+
   setQuery = (query: string) => {
     this.setFilterState(
       produce(this.filterState$.get(), draft => {

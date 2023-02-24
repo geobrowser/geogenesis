@@ -1,12 +1,14 @@
 import { memo } from 'react';
-import { Entity } from '~/modules/entity';
+import { SYSTEM_IDS } from '~/../../packages/ids';
+import { Entity, useEntityTable } from '~/modules/entity';
 import { groupBy, NavUtils } from '~/modules/utils';
+import { Value } from '~/modules/value';
 import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { DebugTriples } from '../debug/debug-triples';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
-import { EditEvent, useEditEvents } from '../entity/edit-events';
+import { useEditEvents } from '../entity/edit-events';
 import { StringField } from '../entity/editable-fields';
 
 interface Props {
@@ -26,6 +28,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   update,
   remove,
 }: Props) {
+  const { columnValueType, columnName } = useEntityTable();
   const send = useEditEvents({
     context: {
       entityId: cell.entityId,
@@ -47,9 +50,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const groupedTriples = groupBy(triples, t => t.attributeId);
   const cellTriples = groupedTriples[attributeId] || [];
 
-  const isEmptyEntity = cellTriples.length === 1 && cellTriples[0].value.type === 'entity' && !cellTriples[0].value.id;
   const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
-  const isEntityGroup = cellTriples.find(t => t.value.type === 'entity');
+
+  const valueType = columnValueType(cell.columnId);
+  const cellColumnName = columnName(cell.columnId);
 
   const isNameCell = cell.columnId === 'name';
 
@@ -63,52 +67,37 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const addEntityValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
-    // If it's an empty triple value
+  const createEntityTripleWithValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
     send({
-      type: 'ADD_ENTITY_VALUE',
+      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {
-        triplesByAttributeId: groupedTriples,
-        attribute: {
-          id: attributeId,
-        },
-        linkedEntity,
-        entityName,
+        attributeId,
+        attributeName: cellColumnName,
+        entityId: linkedEntity.id,
+        entityName: linkedEntity.name || '',
       },
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: Triple, isEmptyEntity: boolean) => {
-    switch (triple.value.type) {
-      // String and number shouldn't be hit here because we're only using tripleToEditableField
-      // for rendering entity values.
-      case 'string':
-      case 'number':
-        return null;
-      case 'entity':
-        if (isEmptyEntity) {
-          return (
-            <EntityTextAutocomplete
-              spaceId={space}
-              key={`entity-${attributeId}-${triple.value.id}`}
-              placeholder="Add value..."
-              onDone={result => addEntityValue(attributeId, result)}
-              itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
-            />
-          );
-        }
+  const createStringTripleWithValue = (value: string) => {
+    send({
+      type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId,
+        attributeName: cellColumnName,
+        value,
+      },
+    });
+  };
 
-        return (
-          <div key={`entity-${triple.value.id}`}>
-            <DeletableChipButton
-              href={NavUtils.toEntity(space, triple.value.id)}
-              onClick={() => removeOrResetEntityTriple(triple)}
-            >
-              <a>{triple.value.name || triple.value.id}</a>
-            </DeletableChipButton>
-          </div>
-        );
-    }
+  const updateStringTripleValue = (triple: Triple, value: string) => {
+    send({
+      type: 'UPDATE_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
   };
 
   if (isNameCell) {
@@ -122,44 +111,63 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     );
   }
 
+  const firstTriple = cellTriples[0];
+  const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
+  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+  const isEmptyCell = cellTriples.length === 0;
+
+  const isEmptyRelation = isRelationValueType && isEmptyCell;
+  const isEmptyText = isTextValueType && isEmptyCell;
+  const isPopulatedRelation = isRelationValueType && !isEmptyCell;
+
   return (
     <div className="flex flex-wrap gap-2">
-      {isEntityGroup ? (
+      {isPopulatedRelation && (
         <>
-          {cellTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
-          {!isEmptyEntity && (
-            <EntityAutocompleteDialog
-              spaceId={space}
-              onDone={entity => addEntityValue(attributeId, entity)}
-              entityValueIds={entityValueTriples.map(t => t.value.id)}
-            />
-          )}
+          {cellTriples.map(triple => (
+            <div key={`entity-${triple.value.id}`}>
+              <DeletableChipButton
+                href={NavUtils.toEntity(space, triple.value.id)}
+                onClick={() => removeOrResetEntityTriple(triple)}
+              >
+                <a>{Value.nameOfEntityValue(triple)}</a>
+              </DeletableChipButton>
+            </div>
+          ))}
+
+          <EntityAutocompleteDialog
+            spaceId={space}
+            onDone={entity => createEntityTripleWithValue(attributeId, entity)}
+            entityValueIds={entityValueTriples.map(t => t.value.id)}
+          />
         </>
-      ) : (
-        // The entity-table-store always has at least one triple for each attribute.
-        // If there's no real values it adds a placeholder triple. We only want to
-        // allow string values to have a single triple at a time.
-        <EditableEntityTableStringCell triple={cellTriples[0]} send={send} />
       )}
+
+      {isEmptyRelation && (
+        <EntityTextAutocomplete
+          spaceId={space}
+          placeholder="Add value..."
+          onDone={result => createEntityTripleWithValue(attributeId, result)}
+          itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+        />
+      )}
+
+      {isTextValueType && (
+        <StringField
+          variant="tableCell"
+          placeholder="Add value..."
+          onBlur={e =>
+            isEmptyText
+              ? createStringTripleWithValue(e.target.value)
+              : updateStringTripleValue(firstTriple, e.target.value)
+          }
+          value={Value.nameOfStringValue(firstTriple)}
+        />
+      )}
+
       <div className="absolute right-0">
         <DebugTriples triples={cellTriples} />
       </div>
     </div>
   );
 });
-
-interface EditableEntityTableStringCellProps {
-  triple: Triple;
-  send: (event: EditEvent) => void;
-}
-
-function EditableEntityTableStringCell({ triple, send }: EditableEntityTableStringCellProps) {
-  return (
-    <StringField
-      variant="tableCell"
-      placeholder="Add value..."
-      onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
-      value={triple.value.type === 'string' ? triple.value.value : ''}
-    />
-  );
-}

@@ -1,3 +1,4 @@
+import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
@@ -30,8 +31,18 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
 }: Props) {
   const { actions, create, update, remove } = useActionsStore(spaceId);
-  const { unpublishedColumns, columnCells } = useEntityTable();
-  const localTriples = Triple.fromActions(actions, column.triples).filter(t => t.entityId === column.id);
+  const { unpublishedColumns } = useEntityTable();
+
+  const localTriples = pipe(
+    Triple.fromActions(actions, column.triples),
+    A.filter(t => t.entityId === column.id),
+    A.uniqBy(t => t.id)
+  );
+
+  const localCellTriples = pipe(
+    Triple.fromActions(actions, []),
+    A.filter(triple => triple.attributeId === column.id)
+  );
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
@@ -60,16 +71,18 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 
-  const cellTriples = columnCells(column.id).flatMap(cell => cell.triples);
   const onChangeTripleType = (valueType: keyof typeof valueTypes) => {
-    send({
-      type: 'CHANGE_COLUMN_VALUE_TYPE',
-      payload: {
-        valueType,
-        valueTypeTriple,
-        cellTriples,
-      },
-    });
+    if (valueTypeTriple) {
+      // Typescript doesn't know that valueTypeTriple is defined for newly created columns.
+      send({
+        type: 'CHANGE_COLUMN_VALUE_TYPE',
+        payload: {
+          valueType,
+          valueTypeTriple,
+          cellTriples: localCellTriples,
+        },
+      });
+    }
   };
 
   return (

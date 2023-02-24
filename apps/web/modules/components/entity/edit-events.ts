@@ -4,6 +4,8 @@ import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
+import { groupBy } from '~/modules/utils';
+import { Value } from '~/modules/value';
 import { valueTypeNames, valueTypes } from '~/modules/value-types';
 
 export type EditEvent =
@@ -28,7 +30,7 @@ export type EditEvent =
   | {
       type: 'CHANGE_COLUMN_VALUE_TYPE';
       payload: {
-        valueTypeTriple?: TripleType;
+        valueTypeTriple: TripleType;
         cellTriples: TripleType[];
         valueType: keyof typeof valueTypes;
       };
@@ -85,18 +87,20 @@ export type EditEvent =
       };
     }
   | {
-      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER';
+      type: 'CREATE_STRING_TRIPLE_WITH_VALUE';
       payload: {
         value: string;
-        triple: TripleType;
+        attributeId: string;
+        attributeName: string;
       };
     }
   | {
-      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER';
+      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE';
       payload: {
         entityId: string;
         entityName: string;
-        triple: TripleType;
+        attributeId: string;
+        attributeName: string;
       };
     }
   | {
@@ -185,54 +189,54 @@ const listener =
       case 'CHANGE_COLUMN_VALUE_TYPE': {
         const { valueType, valueTypeTriple, cellTriples } = event.payload;
 
-        if (valueTypeTriple) {
-          update(
-            Triple.withId({
-              space: context.spaceId,
-              entityId: context.entityId,
-              entityName: context.entityName,
-              attributeId: SYSTEM_IDS.VALUE_TYPE,
-              attributeName: 'Value type',
-              value: {
-                type: 'entity',
-                id: valueType,
-                name: valueTypeNames[valueType],
-              },
-            }),
-            valueTypeTriple
-          );
+        update(
+          Triple.ensureStableId({
+            ...valueTypeTriple,
+            value: {
+              type: 'entity',
+              id: valueType,
+              name: valueTypeNames[valueType],
+            },
+          }),
+          valueTypeTriple
+        );
+
+        const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
+        const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+
+        if (isTextValueType) {
+          // Handles the case when the column is changed from relation to text.
+          // Former entities values join into one string value separated by a comma
+          // e.g. San Francisco and New York entities transform into a single string value "San Francisco, New York"
+
+          const cellTriplesByRow = Object.values(groupBy(cellTriples, triple => triple.entityId));
+
+          return cellTriplesByRow.forEach(triples => {
+            const migratedName = triples.map(triple => Value.nameOfEntityValue(triple)).join(', ');
+            const isCellPopulated = triples.length > 0;
+
+            if (!isCellPopulated) return;
+
+            triples.forEach(triple => {
+              remove(triple);
+            });
+
+            const firstTriple = triples[0];
+
+            create(
+              Triple.withId({
+                ...firstTriple,
+                value: { id: ID.createValueId(), type: 'string', value: migratedName },
+              })
+            );
+          });
+        } else if (isRelationValueType) {
+          // Handles the case when the column is changed from text to relation.
+          console.log('Removing all triples from the column');
+          return cellTriples.forEach(triple => remove(triple));
         } else {
-          create(
-            Triple.withId({
-              space: context.spaceId,
-              entityId: context.entityId,
-              entityName: context.entityName,
-              attributeId: SYSTEM_IDS.VALUE_TYPE,
-              attributeName: 'Value type',
-              value: {
-                type: 'entity',
-                id: valueType,
-                name: valueTypeNames[valueType],
-              },
-            })
-          );
+          return;
         }
-
-        const newCellType = valueTypes[valueType];
-
-        return cellTriples.forEach(triple => {
-          update(
-            Triple.ensureStableId({
-              ...triple,
-              value: {
-                ...(newCellType === 'entity'
-                  ? { type: 'entity', id: '', name: 'Entity James!' }
-                  : { type: 'string', id: triple.value.id, value: 'String James!' }),
-              },
-            }),
-            triple
-          );
-        });
       }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
@@ -297,6 +301,9 @@ const listener =
       case 'ADD_ENTITY_VALUE': {
         const { triplesByAttributeId, attribute, linkedEntity, entityName } = event.payload;
 
+        // This first if clause handles the case when we delete an entity value triple and
+        // there’s no entity value triples left, but we want to keep the
+        // field in place for better UX in the entity page
         if (
           triplesByAttributeId[attribute.id]?.length === 1 &&
           triplesByAttributeId[attribute.id][0].value.type === 'entity' &&
@@ -333,8 +340,8 @@ const listener =
           })
         );
       }
-      case 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER': {
-        const { value, triple } = event.payload;
+      case 'CREATE_STRING_TRIPLE_WITH_VALUE': {
+        const { value, attributeId, attributeName } = event.payload;
 
         if (!value) return;
 
@@ -342,29 +349,28 @@ const listener =
           Triple.withId({
             space: context.spaceId,
             entityId: context.entityId,
-            entityName: triple.entityName,
-            attributeId: triple.attributeId,
-            attributeName: triple.attributeName,
-            placeholder: false,
+            entityName: context.entityName,
+            attributeId,
+            attributeName,
             value: {
               type: 'string',
-              id: triple.value.id,
+              id: ID.createValueId(),
               value: value,
             },
           })
         );
       }
 
-      case 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER': {
-        const { entityId, entityName, triple } = event.payload;
+      case 'CREATE_ENTITY_TRIPLE_WITH_VALUE': {
+        const { entityId, entityName, attributeId, attributeName } = event.payload;
 
         return create(
           Triple.withId({
             space: context.spaceId,
             entityId: context.entityId,
-            entityName: triple.entityName,
-            attributeId: triple.attributeId,
-            attributeName: triple.attributeName,
+            entityName: context.entityName,
+            attributeId: attributeId,
+            attributeName: attributeName,
             placeholder: false,
             value: {
               type: 'entity',
@@ -403,8 +409,18 @@ const listener =
           value: { id: newAttributeTriple.entityId, type: 'entity', name: newAttributeNameTriple.entityName },
         });
 
+        const newValueTypeTriple = Triple.withId({
+          space: context.spaceId,
+          entityId: newAttributeTriple.entityId,
+          entityName: '',
+          attributeId: SYSTEM_IDS.VALUE_TYPE,
+          attributeName: 'Value type',
+          value: { id: SYSTEM_IDS.TEXT, type: 'entity', name: 'Text' },
+        });
+
         create(newAttributeNameTriple);
         create(newAttributeTriple);
+        create(newValueTypeTriple);
         return create(newTypeTriple);
       }
 
