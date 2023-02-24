@@ -26,6 +26,8 @@ importers:
       '@geogenesis/contracts': workspace:*
       '@geogenesis/ids': workspace:*
       '@legendapp/state': ^0.23.2
+      '@liveblocks/client': ^1.0.0
+      '@liveblocks/react': ^1.0.0
       '@mailchimp/mailchimp_marketing': ^3.0.80
       '@mobily/ts-belt': ^4.0.0-rc.2
       '@next/bundle-analyzer': ^12.3.0
@@ -56,7 +58,9 @@ importers:
       '@vitejs/plugin-react': ^2.1.0
       '@vitest/ui': ^0.25.6
       autoprefixer: ^10.4.13
+      boring-avatars: ^1.7.0
       class-variance-authority: ^0.4.0
+      classnames: ^2.3.2
       cmdk: ^0.1.21
       connectkit: ^1.1.1
       eslint: ^8.15.0
@@ -98,6 +102,8 @@ importers:
       '@geogenesis/contracts': link:../../packages/contracts
       '@geogenesis/ids': link:../../packages/ids
       '@legendapp/state': 0.23.2_react@18.2.0
+      '@liveblocks/client': 1.0.0
+      '@liveblocks/react': 1.0.0_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
       '@mobily/ts-belt': 4.0.0-rc.5
       '@radix-ui/react-dialog': 1.0.2_rj7ozvcq3uehdlnj3cbwzbi5ce
@@ -108,7 +114,9 @@ importers:
       '@tanstack/query-core': 4.3.8
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
       '@vercel/analytics': 0.1.6_react@18.2.0
+      boring-avatars: 1.7.0
       class-variance-authority: 0.4.0_typescript@4.8.4
+      classnames: 2.3.2
       cmdk: 0.1.21_rj7ozvcq3uehdlnj3cbwzbi5ce
       connectkit: 1.1.1_opxkh35q2zbqahgybdihnqav2q
       ethers: 5.7.2
@@ -1956,6 +1964,27 @@ packages:
         optional: true
     dependencies:
       react: 18.2.0
+    dev: false
+
+  /@liveblocks/client/1.0.0:
+    resolution: {integrity: sha512-nDjwNqzYdHMjSakrm8f6mk5EEt6SAt5SaaSTRZ5aKVqLZ99FTAWqrIZyAvHap4yMwNGhpfH5FeYzVCzxjvt+NA==}
+    dependencies:
+      '@liveblocks/core': 1.0.0
+    dev: false
+
+  /@liveblocks/core/1.0.0:
+    resolution: {integrity: sha512-Y7shkoOqc629/6dAjqTQkWm65GDCm72NBs1NTM3m6SieBAzK5NJ0pAAeL4Ct1HB85rO1gbl6hbAMwXtJkpWVrA==}
+    dev: false
+
+  /@liveblocks/react/1.0.0_react@18.2.0:
+    resolution: {integrity: sha512-1zl4uVBQFQlbTnaMmfO0kbFQd0U3lfBqoOxz5Y1EXQobLEmnpDI86XGMCTeUYHjVGmdYLy7zaS7Fh2avp7OalQ==}
+    peerDependencies:
+      react: ^16.14.0 || ^17 || ^18
+    dependencies:
+      '@liveblocks/client': 1.0.0
+      '@liveblocks/core': 1.0.0
+      react: 18.2.0
+      use-sync-external-store: 1.2.0_react@18.2.0
     dev: false
 
   /@mailchimp/mailchimp_marketing/3.0.80:
@@ -5984,6 +6013,10 @@ packages:
       readable-stream: 3.6.0
     dev: true
 
+  /boring-avatars/1.7.0:
+    resolution: {integrity: sha512-ZNHd8J7C/V0IjQMGQowLJ5rScEFU23WxePigH6rqKcT2Esf0qhYvYxw8s9i3srmlfCnCV00ddBjaoGey1eNOfA==}
+    dev: false
+
   /borsh/0.7.0:
     resolution: {integrity: sha512-CLCsZGIBCFnPtkNnieW/a8wmreDmfUtjU2m9yHrzPXIlNbqVs0AQrSatSG6vdNYUqdc83tkQi2eHfF98ubzQLA==}
     dependencies:
@@ -6549,6 +6582,10 @@ packages:
         optional: true
     dependencies:
       typescript: 4.8.4
+    dev: false
+
+  /classnames/2.3.2:
+    resolution: {integrity: sha512-CSbhY4cFEJRe6/GQzIk5qXZ4Jeg5pcsP7b5peFSDpffpe1cqjASH/n9UTjBwOp6XpMSTwQ8Za2K5V02ueA7Tmw==}
     dev: false
 
   /clean-stack/2.2.0:

@@ -1,5 +1,17 @@
 import { Action, Action as ActionType } from '~/modules/types';
 
+export function forEntityId(actions: ActionType[], entityId: string) {
+  return actions.filter(a => {
+    switch (a.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        return a.entityId === entityId;
+      case 'editTriple':
+        return a.before.entityId === entityId || a.after.entityId === entityId;
+    }
+  });
+}
+
 // For each id we find, we need to traverse the list to find the first and last actions associated with that id
 // Then we need to check the first and last actions and compare to see if they've changed.
 export function getChangeCount(actions: ActionType[]) {

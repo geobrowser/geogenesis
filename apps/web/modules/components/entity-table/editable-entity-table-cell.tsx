@@ -9,7 +9,7 @@ import { DebugTriples } from '../debug/debug-triples';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { StringField } from '../entity/editable-fields';
+import { TableStringField } from '../entity/editable-fields';
 
 interface Props {
   cell: Cell;
@@ -102,11 +102,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   if (isNameCell) {
     return (
-      <StringField
-        variant="tableCell"
+      <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: cellTriples[0], name: e.target.value } })}
       />
     );
   }
@@ -153,8 +152,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       )}
 
       {isTextValueType && (
-        <StringField
-          variant="tableCell"
+        <TableStringField
           placeholder="Add value..."
           onBlur={e =>
             isEmptyText

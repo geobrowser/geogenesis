@@ -1,5 +1,7 @@
 import styled from '@emotion/styled';
 import Head from 'next/head';
+import { useAccount } from 'wagmi';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -14,8 +16,10 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
-import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
-import { StringField } from './editable-fields';
+import { sortEntityPageTriples } from './editable-entity-page-utils';
+import { PageStringField } from './editable-fields';
+import { EntityOthersToast } from './presence/entity-others-toast';
+import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 const PageContainer = styled.div({
@@ -71,6 +75,8 @@ export function EditableEntityPage({
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
 }: Props) {
+  const account = useAccount();
+
   const {
     triples: localTriples,
     schemaTriples: localSchemaTriples,
@@ -89,6 +95,7 @@ export function EditableEntityPage({
   const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
+
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
@@ -130,16 +137,17 @@ export function EditableEntityPage({
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   return (
-    <PageContainer>
-      <EntityContainer>
-        <Head>
-          <title>{name ?? id}</title>
-          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-        </Head>
+    <>
+      <PageContainer>
+        <EntityContainer>
+          <Head>
+            <title>{name ?? id}</title>
+            <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+          </Head>
 
-        <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
+          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
 
-        {/* 
+          {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -147,16 +155,16 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={9} />
+          <Spacer height={9} />
 
-        <StringField
-          variant="body"
-          placeholder="Add a description..."
-          value={description ?? undefined}
-          onBlur={onDescriptionChange}
-        />
+          <PageStringField
+            variant="body"
+            placeholder="Add a description..."
+            value={description ?? undefined}
+            onChange={onDescriptionChange}
+          />
 
-        {/* 
+          {/* 
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -164,35 +172,39 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={12} />
+          <Spacer height={12} />
 
-        <EntityActionGroup>
-          <CopyIdButton id={id} />
-        </EntityActionGroup>
+          <EntityActionGroup>
+            <CopyIdButton id={id} />
+          </EntityActionGroup>
 
-        <Spacer height={8} />
+          <Spacer height={8} />
 
-        <Content>
-          <Attributes>
-            <EntityAttributes
-              entityId={id}
-              triples={triples}
-              spaceId={space}
-              schemaTriples={schemaTriples}
-              name={name}
-              send={send}
-              hideSchema={hideSchema}
-              hiddenSchemaIds={hiddenSchemaIds}
-            />
-          </Attributes>
-          <AddTripleContainer>
-            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-              Add triple
-            </Button>
-          </AddTripleContainer>
-        </Content>
-      </EntityContainer>
-    </PageContainer>
+          <Content>
+            <Attributes>
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                spaceId={space}
+                schemaTriples={schemaTriples}
+                name={name}
+                send={send}
+                hideSchema={hideSchema}
+                hiddenSchemaIds={hiddenSchemaIds}
+              />
+            </Attributes>
+            <AddTripleContainer>
+              <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+                Add triple
+              </Button>
+            </AddTripleContainer>
+          </Content>
+        </EntityContainer>
+      </PageContainer>
+      <EntityPresenceProvider entityId={id} spaceId={space}>
+        <EntityOthersToast />
+      </EntityPresenceProvider>
+    </>
   );
 }
 
@@ -250,7 +262,7 @@ function EntityAttributes({
 
   const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
 
-  const sortedTriples = sortEditableEntityPageTriples(visibleTriples, schemaTriples);
+  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples);
 
   const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
@@ -329,35 +341,46 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: TripleType, value: string) => {
-    send({
-      type: 'UPDATE_VALUE',
-      payload: {
-        triple,
-        value,
-      },
-    });
+  const updateValue = (triple: TripleType, name: string) => {
+    const isNameChange = triple.attributeId === SYSTEM_IDS.NAME;
+    if (isNameChange) {
+      send({
+        type: 'EDIT_ENTITY_NAME',
+        payload: {
+          triple,
+          name,
+        },
+      });
+    } else {
+      send({
+        type: 'UPDATE_VALUE',
+        payload: {
+          triple,
+          value: name,
+        },
+      });
+    }
   };
 
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
         return triple.placeholder ? (
-          <StringField
+          <PageStringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
             aria-label="placeholder-text-field"
-            onBlur={e => {
+            onChange={e => {
               createStringTripleFromPlaceholder(triple, e.target.value);
             }}
           />
         ) : (
-          <StringField
+          <PageStringField
             key={triple.id}
             variant="body"
             placeholder="Add value..."
-            onBlur={e => updateValue(triple, e.target.value)}
+            onChange={e => updateValue(triple, e.target.value)}
             value={triple.value.value}
           />
         );

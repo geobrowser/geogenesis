@@ -1,4 +1,3 @@
-import { when } from '@legendapp/state';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -35,7 +34,7 @@ describe('Editable Entity Page', () => {
     );
 
     expect(screen.getByText('Schema')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'placeholder-text-field' })).toBeInTheDocument();
+    expect(screen.getAllByRole('textbox', { name: 'placeholder-text-field' })[0]).toBeInTheDocument();
   });
 
   it('Renders relation schema triples placeholders', async () => {
