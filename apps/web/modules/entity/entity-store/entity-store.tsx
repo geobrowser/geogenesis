@@ -13,8 +13,36 @@ interface IEntityStore {
   remove(triple: TripleType): void;
 }
 
-export const createInitialDefaultTriple = (spaceId: string, entityId: string): TripleType => {
-  return Triple.withId({
+export const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
+  const nameTriple = Triple.withId({
+    space: spaceId,
+    entityId,
+    entityName: '',
+    attributeName: 'Name',
+    attributeId: SYSTEM_IDS.NAME,
+    placeholder: true,
+    value: {
+      id: '',
+      type: 'string',
+      value: '',
+    },
+  });
+
+  const descriptionTriple = Triple.withId({
+    space: spaceId,
+    entityId,
+    entityName: '',
+    attributeName: 'Description',
+    attributeId: SYSTEM_IDS.DESCRIPTION,
+    placeholder: true,
+    value: {
+      id: '',
+      type: 'string',
+      value: '',
+    },
+  });
+
+  const typeTriple = Triple.withId({
     space: spaceId,
     entityId,
     entityName: '',
@@ -27,6 +55,8 @@ export const createInitialDefaultTriple = (spaceId: string, entityId: string): T
       name: '',
     },
   });
+
+  return [nameTriple, descriptionTriple, typeTriple];
 };
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -52,11 +82,11 @@ export class EntityStore implements IEntityStore {
   abortController: AbortController = new AbortController();
 
   constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
-    const defaultTypeTriple = createInitialDefaultTriple(spaceId, id);
+    const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
     this.id = id;
     this.api = api;
-    this.schemaTriples$ = observable([...initialSchemaTriples, defaultTypeTriple]);
+    this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
