@@ -1,7 +1,7 @@
 import * as React from 'react';
 import cx from 'classnames';
 
-import { textStyles } from '~/utils';
+import { textStyles } from '~/modules/design-system/theme/typography';
 import type { TypographyName } from '~/modules/design-system/theme/typography';
 
 type Props = React.ComponentPropsWithoutRef<'div'> & {

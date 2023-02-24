@@ -67,19 +67,4 @@ textarea::placeholder {
 
 @tailwind components;
 
-/* Animation utilities */
-
-@keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.15s ease-in-out`;
-}
-
 @tailwind utilities;

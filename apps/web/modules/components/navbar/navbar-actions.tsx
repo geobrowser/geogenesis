@@ -10,7 +10,7 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useEditable } from '~/modules/stores/use-editable';
 import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
-import { textColors } from '~/utils';
+import { textColors } from '~/modules/design-system/theme/colors';
 
 type LabelRowProps = React.ComponentPropsWithoutRef<'div'> & {
   color: ColorName;

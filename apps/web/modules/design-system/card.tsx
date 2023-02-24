@@ -21,7 +21,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
       <a
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="animate-fade-in group cursor-pointer overflow-hidden rounded border border-grey-02 shadow-button transition-shadow duration-150 ease-in-out hover:shadow-card"
+        className="group animate-fade-in cursor-pointer overflow-hidden rounded border border-grey-02 shadow-button transition-shadow duration-150 ease-in-out hover:shadow-card"
       >
         <div className="flex items-center justify-between bg-white p-4">
           <Text variant="smallTitle">{name}</Text>

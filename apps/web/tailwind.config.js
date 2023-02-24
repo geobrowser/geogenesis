@@ -68,6 +68,15 @@ module.exports = {
       // => @media (max-width: 639px) { ... }
     },
     extend: {
+      animation: {
+        'fade-in': 'fadeIn 0.15s ease-in-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+      },
       fontSize: {
         mainPage: [
           '2.75rem',
