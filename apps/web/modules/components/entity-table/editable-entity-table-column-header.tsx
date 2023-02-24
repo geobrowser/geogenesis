@@ -8,7 +8,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Entity, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
-import { Column, Triple as TripleType } from '~/modules/types';
+import { Column } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
 import { DebugTriples } from '../debug/debug-triples';
 import { useEditEvents } from '../entity/edit-events';
@@ -22,7 +22,6 @@ interface Props {
   // name in sync.
   spaceId?: string;
   entityId: string;
-  columnCells: TripleType[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({

@@ -95,33 +95,6 @@ describe('Action counts', () => {
   });
 });
 
-// edit-delete
-describe('Action squashing', () => {
-  it('Squashes create-edit', () => {
-    const actions: ActionType[] = [
-      {
-        type: 'createTriple',
-        ...makeStubTriple('Devin'),
-      },
-      {
-        type: 'editTriple',
-        before: {
-          type: 'deleteTriple',
-          ...makeStubTriple('Devin'),
-        },
-        after: {
-          type: 'createTriple',
-          ...makeStubTriple('Devin'),
-          value: { type: 'string', id: 'string:2', value: 'Devin-2' },
-        },
-      },
-    ];
-
-  });
-
- 
-
-
 const publishedAndUnpublishedActions: ActionType[] = [
   {
     type: 'createTriple',

@@ -161,7 +161,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               ? createStringTripleWithValue(e.target.value)
               : updateStringTripleValue(firstTriple, e.target.value)
           }
-          value={Value.nameOfStringValue(firstTriple)}
+          value={Value.nameOfStringValue(firstTriple) || ''}
         />
       )}
 
