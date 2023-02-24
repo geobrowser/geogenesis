@@ -19,7 +19,12 @@ export const Truncate = ({
 }: Props) => {
   if (maxLines > 6) throw new Error(`Maximum lines is currently 6.`);
 
-  return <div className={cx(shouldTruncate && clampClassName[maxLines], textStyles[variant], className)} {...rest} />;
+  return (
+    <div
+      className={cx(shouldTruncate && clampClassName[maxLines], textStyles[variant], 'leading-none', className)}
+      {...rest}
+    />
+  );
 };
 
 const clampClassName: Record<number, string> = {

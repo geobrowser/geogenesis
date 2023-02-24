@@ -26,7 +26,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
       onMouseLeave={() => setIsHovered(false)}
       width={width}
     >
-      <div className="relative inline-flex h-full items-center">
+      <div className="relative flex h-full w-full items-center justify-between leading-none">
         {children}
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
