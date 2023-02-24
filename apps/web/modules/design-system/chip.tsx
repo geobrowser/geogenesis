@@ -11,13 +11,15 @@ interface LinkableChipProps {
 }
 
 const linkableChipStyles = cva(
-  'text-metadataMedium rounded-sm shadow-inner shadow-text py-1 px-2 inline-block bg-white text-left hover:cursor-pointer hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary'
+  'text-metadataMedium rounded-sm shadow-inner shadow-text min-h-[1.5rem] px-2 py-1 inline-flex items-center bg-white text-left hover:cursor-pointer leading-none hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary'
 );
 
 export function LinkableChip({ href, children }: LinkableChipProps) {
   return (
     <Link href={href} passHref>
-      <a className={linkableChipStyles()}>{children}</a>
+      <a className={linkableChipStyles()}>
+        <span>{children}</span>
+      </a>
     </Link>
   );
 }
@@ -29,7 +31,7 @@ interface ChipButtonProps {
 }
 
 const deletableChipStyles = cva(
-  'flex items-center gap-1 text-metadataMedium text-left rounded py-1 px-2 text-text bg-white shadow-inner shadow-text hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary hover:cursor-pointer group',
+  'items-center gap-1 text-metadataMedium leading-none text-left rounded-sm min-h-[1.5rem] py-1 inline-flex items-center px-2 text-text bg-white shadow-inner shadow-text hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary hover:cursor-pointer group',
   {
     variants: {
       isWarning: {

@@ -30,7 +30,7 @@ export function LinkableBreadcrumb({ children, href, img, isNested, shouldTrunca
           </>
         )}
         <div className={cx('overflow-hidde max-w-full', shouldTruncate && 'truncate')}>
-          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'} className="hover:!text-text">
+          <Text variant="button" color={isNested ? 'grey-04' : 'text'} className="hover:!text-text">
             {children}
           </Text>
         </div>

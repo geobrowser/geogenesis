@@ -67,8 +67,8 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
             }}
             sideOffset={8}
           >
-            <div className="relative m-0.5">
-              <div className="absolute left-3 top-2.5 z-100">
+            <div className="relative m-0.5 p-2">
+              <div className="absolute top-[1.125rem] left-5 z-100">
                 <Search />
               </div>
               <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />

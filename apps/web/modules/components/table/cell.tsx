@@ -18,7 +18,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
 
   return (
     <td
-      className="border border-grey-02 bg-transparent px-[10px] py-[5px] align-top"
+      className="min-h-[40px] border border-grey-02 bg-transparent p-[10px] align-top"
       style={{
         maxWidth: width,
       }}
@@ -26,7 +26,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
       onMouseLeave={() => setIsHovered(false)}
       width={width}
     >
-      <div className="relative">
+      <div className="relative inline-flex h-full items-center">
         {children}
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">

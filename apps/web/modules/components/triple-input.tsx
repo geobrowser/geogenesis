@@ -49,7 +49,7 @@ export function TripleInput() {
           ))}
         </div>
       )}
-      <div className="flex items-center rounded-r border border-l-0 border-grey-02 bg-white text-grey-04">
+      <div className="flex items-center overflow-hidden rounded-r border border-l-0 border-grey-02 bg-white text-grey-04">
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
           filterState={tripleStore.filterState}
