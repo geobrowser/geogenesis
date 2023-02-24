@@ -9,11 +9,11 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
-import { Dialog } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { intersperse, NavUtils, titleCase } from '~/modules/utils';
+import { intersperse, titleCase } from '~/modules/utils';
+import { DebugActions } from '../debug/debug-actions';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
 
@@ -139,6 +139,7 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
+  const spaceId = components?.[2]?.split('?')[0];
   return (
     <Header>
       <NavigationItemsContainer>
@@ -182,7 +183,8 @@ export function Navbar({ onSearchClick }: Props) {
         <Spacer width={16} />
         <DiscordLink />
         <Spacer width={16} />
-        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
+        <NavbarActions spaceId={spaceId ?? ''} />
+        <DebugActions spaceId={spaceId ?? ''} />
       </Row>
     </Header>
   );
