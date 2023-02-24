@@ -9,21 +9,21 @@ import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
 
-// const LOCAL_CHAIN: Chain = {
-//   id: Number(Config.options.development.chainId),
-//   name: 'Geo Genesis Dev', // Human-readable name
-//   network: 'ethereum', // Internal network name
-//   nativeCurrency: {
-//     name: 'Ethereum',
-//     symbol: 'ETH',
-//     decimals: 18,
-//   },
-//   rpcUrls: {
-//     default: {
-//       http: [Config.options.development.rpc]
-//     }
-//   },
-// };
+const LOCAL_CHAIN: Chain = {
+  id: Number(Config.options.development.chainId),
+  name: 'Geo Genesis Dev', // Human-readable name
+  network: 'ethereum', // Internal network name
+  nativeCurrency: {
+    name: 'Ethereum',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: [Config.options.development.rpc],
+    },
+  },
+};
 
 const TESTNET_CHAIN: Chain = {
   ...polygonMumbai,
@@ -43,7 +43,11 @@ const DEFAULT_CHAIN: Chain = {
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains([DEFAULT_CHAIN, TESTNET_CHAIN], [publicProvider()]);
+const { chains, provider, webSocketProvider } = configureChains(
+  // Only make the dev chains available in development
+  [DEFAULT_CHAIN, ...(process.env.NODE_ENV === 'development' ? [TESTNET_CHAIN, LOCAL_CHAIN] : [])],
+  [publicProvider()]
+);
 
 const wagmiClient = createClient({
   ...getDefaultClient({
