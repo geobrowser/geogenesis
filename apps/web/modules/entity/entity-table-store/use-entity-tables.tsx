@@ -11,7 +11,6 @@ export const useEntityTable = () => {
     setNextPage,
     setType,
     setPreviousPage,
-    columnCells,
     pageNumber$,
     hasPreviousPage$,
     hasNextPage$,
@@ -40,7 +39,6 @@ export const useEntityTable = () => {
   return {
     rows,
     columns,
-    columnCells,
     unpublishedColumns,
     types,
     query,

@@ -6,7 +6,7 @@ import { ActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import { Cell, Column, FilterState, Row, Triple as TripleType } from '../../types';
+import { Column, FilterState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -264,13 +264,6 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
   }
-
-  columnCells = (columnId: string): Cell[] => {
-    return this.rows$
-      .get()
-      .flatMap(row => row[columnId])
-      .filter(cell => cell); // Filter out undefined cells in newly created columns
-  };
 
   columnValueType = (columnId: string): string => {
     const column = this.columns$.get().find(c => c.id === columnId);
