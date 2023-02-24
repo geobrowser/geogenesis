@@ -115,7 +115,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: cellTriples[0], name: e.target.value } })}
       />
     );
   }
