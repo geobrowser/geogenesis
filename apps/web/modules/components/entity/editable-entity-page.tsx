@@ -157,7 +157,7 @@ export function EditableEntityPage({
           <PageStringField
             variant="body"
             placeholder="Add a description..."
-            value={description ?? undefined}
+            value={description ?? ''}
             onChange={onDescriptionChange}
           />
 
@@ -429,24 +429,40 @@ function EntityAttributes({
 
   return (
     <>
-      <div>
+      <EntityAttributeContainer>
         <Text as="p" variant="bodySemibold">
           Name
         </Text>
         <PageStringField variant="body" placeholder="Entity name..." value={name} onChange={onNameChange} />
-      </div>
+        {nameTriple && (
+          <TripleActions>
+            <SquareButton
+              icon="trash"
+              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: nameTriple } })}
+            />
+          </TripleActions>
+        )}
+      </EntityAttributeContainer>
 
-      <div>
+      <EntityAttributeContainer>
         <Text as="p" variant="bodySemibold">
           Description
         </Text>
         <PageStringField
           variant="body"
           placeholder="Add a description..."
-          value={description ?? undefined}
+          value={description ?? ''}
           onChange={onDescriptionChange}
         />
-      </div>
+        {descriptionTriple && (
+          <TripleActions>
+            <SquareButton
+              icon="trash"
+              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: descriptionTriple } })}
+            />
+          </TripleActions>
+        )}
+      </EntityAttributeContainer>
 
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
