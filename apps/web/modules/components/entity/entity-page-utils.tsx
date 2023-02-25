@@ -11,6 +11,10 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     const { attributeId: attributeIdA } = tripleA;
     const { attributeId: attributeIdB } = tripleB;
 
+    const aName = attributeIdA === SYSTEM_IDS.NAME;
+    const bName = attributeIdB === SYSTEM_IDS.NAME;
+    const aDescription = attributeIdA === SYSTEM_IDS.DESCRIPTION;
+    const bDescription = attributeIdB === SYSTEM_IDS.DESCRIPTION;
     const aTypes = attributeIdA === SYSTEM_IDS.TYPES;
     const bTypes = attributeIdB === SYSTEM_IDS.TYPES;
 
@@ -19,6 +23,12 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
 
     const aInSchema = schemaAttributeIds.includes(attributeIdA);
     const bInSchema = schemaAttributeIds.includes(attributeIdB);
+
+    if (aName && !bName) return -1;
+    if (!aName && bName) return 1;
+
+    if (aDescription && !bDescription) return -1;
+    if (!aDescription && bDescription) return 1;
 
     if (aTypes && !bTypes) return -1;
     if (!aTypes && bTypes) return 1;
