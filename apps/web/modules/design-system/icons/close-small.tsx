@@ -1,13 +1,13 @@
-import { useTheme } from '@emotion/react';
-import { ColorName } from '~/modules/design-system/theme/colors';
+import * as React from 'react';
+
+import { colors, ColorName } from '~/modules/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;
 }
 
 export function CloseSmall({ color }: Props) {
-  const theme = useTheme();
-  const themeColor = color ? theme.colors[color] : 'currentColor';
+  const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
