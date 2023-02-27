@@ -18,7 +18,7 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
-import { sortEntityPageTriples } from './editable-entity-page-utils';
+import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 
 interface Props {

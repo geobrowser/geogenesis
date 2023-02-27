@@ -46,6 +46,6 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
       return aIndex - bIndex;
     }
 
-    return 0;
+    return -1;
   });
 }
