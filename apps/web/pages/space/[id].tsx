@@ -1,6 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { GetServerSideProps } from 'next';
+import * as React from 'react';
+import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';

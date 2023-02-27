@@ -1,54 +1,13 @@
-import styled from '@emotion/styled';
-import { motion } from 'framer-motion';
+import * as React from 'react';
 import { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
-
-const Container = styled.div({
-  position: 'relative',
-  width: '100%',
-});
-
-const QueryInput = styled.input(props => ({
-  ...props.theme.typography.body,
-  width: '100%',
-  height: '100%',
-  padding: 0,
-  margin: 0,
-  backgroundColor: 'transparent',
-
-  '&::placeholder': {
-    color: props.theme.colors['grey-02'],
-  },
-
-  '&:focus': {
-    outline: 'none',
-  },
-}));
-
-const ResultListContainer = styled.div(props => ({
-  top: 36,
-  position: 'absolute',
-  display: 'flex',
-  flexDirection: 'column',
-  borderRadius: props.theme.radius,
-  backgroundColor: props.theme.colors.white,
-  zIndex: 1,
-  width: 384,
-  maxHeight: 340,
-  overflow: 'hidden',
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-}));
-
-const ResultListHeader = styled.p(props => ({
-  padding: props.theme.space * 2.5,
-}));
-
-const AnimatedResultsItem = styled.div({});
 
 interface Props {
   placeholder?: string;
@@ -74,13 +33,21 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
   // TODO: Implement keyboard navigation
 
   return (
-    <Container>
-      <QueryInput placeholder={placeholder} value={query} onChange={e => onQueryChange(e.target.value)} />
+    <div className="relative w-full">
+      <input
+        value={query}
+        onChange={e => onQueryChange(e.target.value)}
+        placeholder={placeholder}
+        className="m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+      />
       {query && (
-        <ResultListContainer ref={containerRef}>
-          <ResultListHeader>
+        <div
+          ref={containerRef}
+          className="absolute top-[36px] z-[1] flex max-h-[340px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+        >
+          <p className="p-2.5">
             <Text variant="smallButton">Add a relation</Text>
-          </ResultListHeader>
+          </p>
           <ResizableContainer duration={0.125}>
             <ResultsList>
               {results.map((result, i) => (
@@ -104,8 +71,8 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }
               ))}
             </ResultsList>
           </ResizableContainer>
-        </ResultListContainer>
+        </div>
       )}
-    </Container>
+    </div>
   );
 }

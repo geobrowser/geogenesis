@@ -1,15 +1,13 @@
-import { css, Global } from '@emotion/react';
-import styled from '@emotion/styled';
 import { Analytics } from '@vercel/analytics/react';
-import { AppProps } from 'next/app';
+import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+
 import { Action, useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
-import { colors } from '~/modules/design-system/theme/colors';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';
 import { Providers } from '~/modules/providers';
@@ -17,49 +15,20 @@ import { Dialog } from '~/modules/search';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 
+import '../styles/fonts.css';
 import '../styles/styles.css';
-import '../styles/tailwind.css';
-
-const globalStyles = css`
-  html {
-    overflow-y: overlay;
-    overflow-x: hidden;
-  }
-
-  body {
-    font-family: Calibre, sans-serif;
-    text-rendering: 'optimizeLegibility';
-    background-color: ${colors.light.bg};
-  }
-`;
-
-const Layout = styled.main(props => ({
-  paddingTop: props.theme.space * 10,
-  paddingBottom: props.theme.space * 20,
-  maxWidth: 1200,
-  margin: '0 auto',
-
-  '@media (max-width: 1200px)': {
-    padding: `${props.theme.space * 10}px 2ch 4ch 2ch`,
-  },
-}));
-
-const Relative = styled.div({
-  position: 'relative',
-});
 
 function Root(props: AppProps) {
   return (
-    <Relative>
+    <div className="relative">
       <Providers>
         <Head>
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>Geo Genesis</title>
         </Head>
-        <Global styles={globalStyles} />
         <App {...props} />
       </Providers>
-    </Relative>
+    </div>
   );
 }
 
@@ -103,29 +72,22 @@ function App({ Component, pageProps }: AppProps) {
         }}
         spaceId=""
       />
-      <Layout>
+      <main className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
         <Component {...pageProps} />
         <Analytics />
-      </Layout>
+      </main>
       <GlobalFlowBar spaceId={spaceId ?? ''} />
     </>
   );
 }
 
-const FlowbarContainer = styled.div({
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-});
-
 function GlobalFlowBar({ spaceId }: { spaceId: string }) {
   const { actions, publish, clear } = useActionsStore(spaceId);
 
   return (
-    <FlowbarContainer>
+    <div className="relative flex flex-col items-center">
       <FlowBar actions={Action.unpublishedChanges(actions)} onClear={clear} onPublish={publish} spaceId={spaceId} />
-    </FlowbarContainer>
+    </div>
   );
 }
 

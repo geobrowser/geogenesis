@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { Triple } from '~/modules/triple';
 import { Action, Column, Entity, Row } from '~/modules/types';
 import { DEFAULT_PAGE_SIZE } from '..';

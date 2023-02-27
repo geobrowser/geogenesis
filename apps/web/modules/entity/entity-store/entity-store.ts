@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
+
 import { ActionsStore } from '~/modules/action';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
@@ -13,8 +14,36 @@ interface IEntityStore {
   remove(triple: TripleType): void;
 }
 
-export const createInitialDefaultTriple = (spaceId: string, entityId: string): TripleType => {
-  return Triple.withId({
+export const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
+  const nameTriple = Triple.withId({
+    space: spaceId,
+    entityId,
+    entityName: '',
+    attributeName: 'Name',
+    attributeId: SYSTEM_IDS.NAME,
+    placeholder: true,
+    value: {
+      id: '',
+      type: 'string',
+      value: '',
+    },
+  });
+
+  const descriptionTriple = Triple.withId({
+    space: spaceId,
+    entityId,
+    entityName: '',
+    attributeName: 'Description',
+    attributeId: SYSTEM_IDS.DESCRIPTION,
+    placeholder: true,
+    value: {
+      id: '',
+      type: 'string',
+      value: '',
+    },
+  });
+
+  const typeTriple = Triple.withId({
     space: spaceId,
     entityId,
     entityName: '',
@@ -27,6 +56,8 @@ export const createInitialDefaultTriple = (spaceId: string, entityId: string): T
       name: '',
     },
   });
+
+  return [nameTriple, descriptionTriple, typeTriple];
 };
 
 const DEFAULT_PAGE_SIZE = 100;
@@ -52,11 +83,11 @@ export class EntityStore implements IEntityStore {
   abortController: AbortController = new AbortController();
 
   constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
-    const defaultTypeTriple = createInitialDefaultTriple(spaceId, id);
+    const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
     this.id = id;
     this.api = api;
-    this.schemaTriples$ = observable([...initialSchemaTriples, defaultTypeTriple]);
+    this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
 
@@ -77,16 +108,16 @@ export class EntityStore implements IEntityStore {
       );
     });
 
-    /* 
-    In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to 
-    persist the Attribute field. Filtering out those entities here. 
+    /*
+    In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to
+    persist the Attribute field. Filtering out those entities here.
     */
     this.typeTriples$ = computed(() => {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
     });
 
-    /* 
-    Computed values in @legendapp/state will rerun for every change recursively up the tree.   
+    /*
+    Computed values in @legendapp/state will rerun for every change recursively up the tree.
     This is problematic when the computed value is expensive to compute or involves a network request.
     To avoid this, we can use the observe function to only run the computation when the direct dependencies change.
     */

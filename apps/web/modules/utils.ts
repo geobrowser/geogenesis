@@ -64,6 +64,6 @@ export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[]
   );
 }
 
-export function formatAddress(address: string): string {
+export function formatShortAddress(address: string): string {
   return address.slice(0, 8) + '...' + address.slice(-6);
 }

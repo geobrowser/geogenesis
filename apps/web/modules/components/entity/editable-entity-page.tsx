@@ -1,5 +1,7 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
 import Head from 'next/head';
+
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -14,47 +16,9 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
-import { sortEditableEntityPageTriples } from './editable-entity-page-utils';
-import { StringField } from './editable-fields';
+import { PageStringField } from './editable-fields';
+import { sortEntityPageTriples } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
-
-const PageContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-});
-
-const EntityContainer = styled.div({
-  width: '100%',
-});
-
-const Content = styled.div(({ theme }) => ({
-  border: `1px solid ${theme.colors['grey-02']}`,
-  borderRadius: theme.radius,
-  backgroundColor: theme.colors.white,
-}));
-
-const Attributes = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: theme.space * 6,
-  padding: theme.space * 5,
-}));
-
-const EntityActionGroup = styled.div({
-  display: 'flex',
-  justifyContent: 'flex-end',
-
-  '@media (max-width: 600px)': {
-    button: {
-      flexGrow: 1,
-    },
-  },
-});
-
-const AddTripleContainer = styled.div(({ theme }) => ({
-  padding: theme.space * 4,
-}));
 
 interface Props {
   triples: TripleType[];
@@ -89,6 +53,7 @@ export function EditableEntityPage({
   const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
+
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
@@ -130,16 +95,15 @@ export function EditableEntityPage({
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   return (
-    <PageContainer>
-      <EntityContainer>
-        <Head>
-          <title>{name ?? id}</title>
-          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-        </Head>
-
-        <StringField variant="mainPage" placeholder="Entity name..." value={name} onBlur={onNameChange} />
-
-        {/* 
+    <>
+      <div className="flex flex-col items-center">
+        <div className="w-full">
+          <Head>
+            <title>{name ?? id}</title>
+            <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+          </Head>
+          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+          {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -147,16 +111,14 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={9} />
-
-        <StringField
-          variant="body"
-          placeholder="Add a description..."
-          value={description ?? undefined}
-          onBlur={onDescriptionChange}
-        />
-
-        {/* 
+          <Spacer height={9} />
+          <PageStringField
+            variant="body"
+            placeholder="Add a description..."
+            value={description ?? ''}
+            onChange={onDescriptionChange}
+          />
+          {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -164,60 +126,35 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <Spacer height={12} />
-
-        <EntityActionGroup>
-          <CopyIdButton id={id} />
-        </EntityActionGroup>
-
-        <Spacer height={8} />
-
-        <Content>
-          <Attributes>
-            <EntityAttributes
-              entityId={id}
-              triples={triples}
-              spaceId={space}
-              schemaTriples={schemaTriples}
-              name={name}
-              send={send}
-              hideSchema={hideSchema}
-              hiddenSchemaIds={hiddenSchemaIds}
-            />
-          </Attributes>
-          <AddTripleContainer>
-            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-              Add triple
-            </Button>
-          </AddTripleContainer>
-        </Content>
-      </EntityContainer>
-    </PageContainer>
+          <Spacer height={12} />
+          <div className="flex justify-end sm:[&>button]:flex-grow">
+            <CopyIdButton id={id} />
+          </div>
+          <Spacer height={8} />
+          <div className="rounded border border-grey-02 bg-white">
+            <div className="flex flex-col gap-6 p-5">
+              <EntityAttributes
+                entityId={id}
+                triples={triples}
+                spaceId={space}
+                schemaTriples={schemaTriples}
+                name={name}
+                send={send}
+                hideSchema={hideSchema}
+                hiddenSchemaIds={hiddenSchemaIds}
+              />
+            </div>
+            <div className="p-4">
+              <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+                Add triple
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
-
-const EntityAttributeContainer = styled.div({
-  position: 'relative',
-  wordBreak: 'break-word',
-});
-
-const TripleActions = styled.div(props => ({
-  position: 'absolute',
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space * 2,
-
-  // HACK to visually align the buttons with the attribut name line-height
-  top: 6,
-  right: 0,
-}));
-
-const GroupedAttributesList = styled.div(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.space,
-  flexWrap: 'wrap',
-}));
 
 function EntityAttributes({
   entityId,
@@ -250,12 +187,20 @@ function EntityAttributes({
 
   const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
 
-  const sortedTriples = sortEditableEntityPageTriples(visibleTriples, schemaTriples);
+  // Some triples are rendered outside of the normal attribute list to better control their styling.
+  const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
+  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples).filter(
+    triple => !filteredAttributeIds.includes(triple.attributeId)
+  );
 
   const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
   const attributeIds = Object.keys(groupedTriples);
 
   const orderedGroupedTriples = Object.entries(groupedTriples);
+
+  const nameTriple = Entity.nameTriple(triples);
+  const descriptionTriple = Entity.descriptionTriple(triples);
+  const description = Entity.description(triples);
 
   const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
     send({
@@ -327,12 +272,33 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: TripleType, value: string) => {
+  const updateValue = (triple: TripleType, name: string) => {
     send({
       type: 'UPDATE_VALUE',
       payload: {
         triple,
-        value,
+        value: name,
+      },
+    });
+  };
+
+  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    send({
+      type: 'EDIT_ENTITY_NAME',
+      payload: {
+        name: e.target.value,
+        triple: nameTriple,
+      },
+    });
+  };
+
+  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    send({
+      type: 'EDIT_ENTITY_DESCRIPTION',
+      payload: {
+        name,
+        description: e.target.value,
+        triple: descriptionTriple,
       },
     });
   };
@@ -340,23 +306,17 @@ function EntityAttributes({
   const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
-        return triple.placeholder ? (
-          <StringField
-            key={triple.id}
+        return (
+          <PageStringField
+            key={triple.attributeId}
             variant="body"
             placeholder="Add value..."
-            aria-label="placeholder-text-field"
-            onBlur={e => {
-              createStringTripleFromPlaceholder(triple, e.target.value);
+            aria-label={triple.placeholder ? 'placeholder-text-field' : 'text-field'}
+            onChange={e => {
+              triple.placeholder
+                ? createStringTripleFromPlaceholder(triple, e.target.value)
+                : updateValue(triple, e.target.value);
             }}
-          />
-        ) : (
-          <StringField
-            key={triple.id}
-            variant="body"
-            placeholder="Add value..."
-            onBlur={e => updateValue(triple, e.target.value)}
-            value={triple.value.value}
           />
         );
       case 'number':
@@ -397,6 +357,39 @@ function EntityAttributes({
 
   return (
     <>
+      <div className="relative break-words">
+        <Text as="p" variant="bodySemibold">
+          Name
+        </Text>
+        <PageStringField variant="body" placeholder="Entity name..." value={name} onChange={onNameChange} />
+        {nameTriple && (
+          <div className="absolute top-[6px] right-0 flex items-center gap-8">
+            <SquareButton
+              icon="trash"
+              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: nameTriple } })}
+            />
+          </div>
+        )}
+      </div>
+      <div className="relative break-words">
+        <Text as="p" variant="bodySemibold">
+          Description
+        </Text>
+        <PageStringField
+          variant="body"
+          placeholder="Add a description..."
+          value={description ?? ''}
+          onChange={onDescriptionChange}
+        />
+        {descriptionTriple && (
+          <div className="absolute top-[6px] right-0 flex items-center gap-8">
+            <SquareButton
+              icon="trash"
+              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: descriptionTriple } })}
+            />
+          </div>
+        )}
+      </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
@@ -404,7 +397,7 @@ function EntityAttributes({
         const isPlaceholder = triples[0].placeholder;
 
         return (
-          <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
+          <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
               <EntityTextAutocomplete
                 placeholder="Add attribute..."
@@ -418,9 +411,8 @@ function EntityAttributes({
               </Text>
             )}
             {isEntityGroup && <Spacer height={4} />}
-            <GroupedAttributesList>
+            <div className="flex flex-wrap items-center gap-1">
               {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
-
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
@@ -429,11 +421,10 @@ function EntityAttributes({
                   spaceId={spaceId}
                 />
               )}
-
-              <TripleActions>
+              <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
                   <TripleTypeDropdown
-                    value={<SquareButton as="span" icon={isEntityGroup ? 'relation' : 'text'} />}
+                    value={isEntityGroup ? 'relation' : 'text'}
                     options={[
                       {
                         label: (
@@ -443,6 +434,7 @@ function EntityAttributes({
                             Text
                           </div>
                         ),
+                        value: 'text',
                         onClick: () => onChangeTripleType('string', triples),
                         disabled: !isEntityGroup,
                       },
@@ -454,6 +446,7 @@ function EntityAttributes({
                             Relation
                           </div>
                         ),
+                        value: 'relation',
                         onClick: () => onChangeTripleType('entity', triples),
                         disabled: Boolean(isEntityGroup),
                       },
@@ -473,9 +466,9 @@ function EntityAttributes({
                         }
                   }
                 />
-              </TripleActions>
-            </GroupedAttributesList>
-          </EntityAttributeContainer>
+              </div>
+            </div>
+          </div>
         );
       })}
     </>

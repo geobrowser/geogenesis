@@ -1,8 +1,8 @@
-import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
+
 import { ActionsStore } from '../action';
 import { makeStubTextAttribute, makeStubTripleWithType, MockNetwork } from '../services/mock-network';
-import { createInitialDefaultTriple, EntityStore } from './entity-store/entity-store';
+import { createInitialDefaultTriples, EntityStore } from './entity-store/entity-store';
 
 describe('EntityStore', () => {
   it('Initializes to defaults', async () => {
@@ -16,13 +16,15 @@ describe('EntityStore', () => {
       ActionsStore: new ActionsStore({ api: network }),
     });
 
-    const defaultTriple = createInitialDefaultTriple('s', 'e');
+    const defaultTriples = createInitialDefaultTriples('s', 'e');
 
     const triples = store.triples$.get();
 
     expect(triples).toHaveLength(0);
     expect(triples).toStrictEqual([]);
-    expect(store.schemaTriples$.get()).toStrictEqual([defaultTriple]);
+    expect(store.schemaTriples$.get()[0]).toStrictEqual(defaultTriples[0]);
+    expect(store.schemaTriples$.get()[1]).toStrictEqual(defaultTriples[1]);
+    expect(store.schemaTriples$.get()[2]).toStrictEqual(defaultTriples[2]);
     expect(store.typeTriples$.get()).toStrictEqual([]);
   });
 
@@ -42,8 +44,8 @@ describe('EntityStore', () => {
       ActionsStore: new ActionsStore({ api: network }),
     });
 
-    expect(store.schemaTriples$.get()).toHaveLength(1);
+    expect(store.schemaTriples$.get()).toHaveLength(3);
     expect(store.schemaTriples$.get()[0].placeholder).toBeTruthy();
-    expect(store.schemaTriples$.get()[0].value.type).toStrictEqual('entity');
+    expect(store.schemaTriples$.get()[0].value.type).toStrictEqual('string');
   });
 });

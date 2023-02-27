@@ -1,5 +1,7 @@
+import * as React from 'react';
+import { ForwardedRef } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
-import React, { ForwardedRef } from 'react';
+
 import { Search } from './icons/search';
 
 // appearance-none fixes iOS specific shadow issues.

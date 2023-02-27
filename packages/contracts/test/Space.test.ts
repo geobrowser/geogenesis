@@ -1,10 +1,14 @@
 /* eslint-disable node/no-missing-import */
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
+import { FakeSpaceV2 } from '../build/types'
 
 import {
+  deployPermissionlessSpaceBeacon,
+  deployPermissionlessSpaceInstance,
   deploySpaceBeacon,
   deploySpaceInstance,
+  upgradeToPermissionlessSpaceV2,
   upgradeToSpaceV2,
 } from '../src/deploy'
 import { addEntry } from '../src/entry'
@@ -97,14 +101,58 @@ describe('Space', () => {
   it('works after upgrading', async function () {
     const [deployer] = await ethers.getSigners()
     const beacon = await deploySpaceBeacon({ signer: deployer })
-    const instance = await deploySpaceInstance(beacon, {
+    const original = await deploySpaceInstance(beacon, {
       signer: deployer,
     })
 
-    const spaceV2 = await upgradeToSpaceV2(beacon, instance, {
+    const original2 = await deploySpaceInstance(beacon, {
       signer: deployer,
     })
 
-    expect(await spaceV2._hasBananas()).to.be.eq(true)
+    await upgradeToSpaceV2(beacon)
+
+    const SpaceV2 = await ethers.getContractFactory('FakeSpaceV2')
+    const upgradedOriginal = SpaceV2.attach(original.address) as FakeSpaceV2
+    await upgradedOriginal.initializeV2()
+    const upgradedOriginal2 = SpaceV2.attach(original2.address) as FakeSpaceV2
+
+    expect(await upgradedOriginal._hasBananas()).to.be.eq(true)
+
+    // False because we haven't called the initializer
+    expect(await upgradedOriginal2._hasBananas()).to.be.eq(false)
+  })
+})
+
+describe('PermissionlessSpace', () => {
+  it('add entry', async () => {
+    const [deployer] = await ethers.getSigners()
+    const beacon = await deployPermissionlessSpaceBeacon({ signer: deployer })
+    const contract = await deployPermissionlessSpaceInstance(beacon, {
+      signer: deployer,
+    })
+
+    const uri1 = 'abc'
+    const entry1 = await addEntry(contract, uri1)
+
+    expect(entry1.author).to.be.eq(deployer.address.toString())
+    expect(entry1.uri).to.be.eq(uri1)
+    expect(entry1.index).to.be.eq(0)
+
+    const uri2 = 'def'
+    const entry2 = await addEntry(contract, uri2)
+
+    expect(entry2.author).to.be.eq(deployer.address.toString())
+    expect(entry2.uri).to.be.eq(uri2)
+    expect(entry2.index).to.be.eq(1)
+  })
+
+  it('returns version 1.0.0', async () => {
+    const [deployer] = await ethers.getSigners()
+    const beacon = await deployPermissionlessSpaceBeacon({ signer: deployer })
+    const contract = await deployPermissionlessSpaceInstance(beacon, {
+      signer: deployer,
+    })
+
+    expect(await contract.version()).to.be.eq('1.0.0')
   })
 })

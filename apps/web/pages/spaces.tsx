@@ -1,8 +1,8 @@
-import styled from '@emotion/styled';
-import { GetServerSideProps } from 'next';
+import * as React from 'react';
+import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
-import { useAccessControl } from '~/modules/auth/use-access-control';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '@geogenesis/ids';
@@ -14,35 +14,12 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
 
-const Column = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-});
-
-const Grid = styled.div(props => ({
-  display: 'flex',
-  justifyItems: 'space-between',
-  flexWrap: 'wrap',
-  gap: props.theme.space * 4,
-
-  '@media (max-width: 1200px)': {
-    alignItems: 'center',
-  },
-}));
-
-const TextContainer = styled.div({
-  alignSelf: 'center',
-  textAlign: 'center',
-  maxWidth: 830,
-});
-
 interface Props {
   spaces: Space[];
 }
 
 export default function Spaces({ spaces }: Props) {
   const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
-  const { isEditor, isAdmin } = useAccessControl(rootSpaceId);
   useLogRocket(rootSpaceId);
 
   return (
@@ -50,37 +27,29 @@ export default function Spaces({ spaces }: Props) {
       <Head>
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
       </Head>
-      <Column>
+      <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>
-
         <Spacer height={40} />
-
-        <Grid>
+        <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
           {spaces.map(space => {
             const name = space.attributes.name;
             const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
             return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
           })}
-        </Grid>
-
+        </div>
         <Spacer height={100} />
-
-        <TextContainer>
+        <div className="max-w-[830px] self-center text-center">
           <Text variant="largeTitle">
             Together we can change how society is organized, put power into the hands of those who’ve earned it, and
             distribute resources and opportunity far and wide.
           </Text>
-        </TextContainer>
-
+        </div>
         <Spacer height={40} />
-
         <OboardingCarousel />
-
         <Spacer height={100} />
-
         <Email />
-      </Column>
+      </div>
     </div>
   );
 }

@@ -1,18 +1,8 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
 
-const StyledTag = styled.span(props => ({
-  ...props.theme.typography.tag,
-  borderRadius: props.theme.radius,
-  padding: `0px ${props.theme.space}px`,
-  display: 'inline-block',
-  backgroundColor: props.theme.colors['grey-02'],
-  textDecoration: 'none',
-}));
+type Props = React.ComponentPropsWithoutRef<'div'>;
 
-interface Props {
-  children: React.ReactNode;
-}
-
-export function Tag({ children }: Props) {
-  return <StyledTag>{children}</StyledTag>;
-}
+export const Tag = ({ className = '', ...rest }: Props) => {
+  return <div className={cx('inline-block rounded-sm bg-grey-02 px-1 text-tag no-underline', className)} {...rest} />;
+};

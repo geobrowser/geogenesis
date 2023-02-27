@@ -1,4 +1,5 @@
 import { v4, validate, version } from 'uuid';
+
 import { OmitStrict, Triple } from '../types';
 
 export function createEntityId() {

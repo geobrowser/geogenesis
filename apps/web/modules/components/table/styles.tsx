@@ -1,38 +1,42 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
 
-export const EmptyTableText = styled.td(props => ({
-  ...props.theme.typography.tableCell,
-  padding: props.theme.space * 2.5,
-}));
+type EmptyTableTextProps = React.ComponentPropsWithoutRef<'td'>;
 
-export const PageContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-});
+export const EmptyTableText = ({ className = '', ...rest }: EmptyTableTextProps) => (
+  <td className={cx('p-2.5 text-lg', className)} {...rest} />
+);
 
-export const PageNumberContainer = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  alignSelf: 'flex-end',
-});
+type PageContainerProps = React.ComponentPropsWithoutRef<'div'>;
 
-export const Table = styled.table(props => ({
-  width: '100%',
-  borderStyle: 'hidden',
-  borderCollapse: 'collapse',
-  backgroundColor: props.theme.colors.white,
-}));
+export const PageContainer = ({ className = '', ...rest }: PageContainerProps) => (
+  <div className={cx('flex flex-col', className)} {...rest} />
+);
 
-export const TableHeader = styled.th<{ width: number }>(props => ({
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  padding: props.theme.space * 2.5,
-  textAlign: 'left',
-  minWidth: props.width,
-}));
+type PageNumberContainerProps = React.ComponentPropsWithoutRef<'div'>;
 
-export const TableRow = styled.tr(props => ({
-  ':hover': {
-    backgroundColor: props.theme.colors.bg,
-  },
-}));
+export const PageNumberContainer = ({ className = '', ...rest }: PageNumberContainerProps) => (
+  <div className={cx('flex items-center justify-end self-end', className)} {...rest} />
+);
+
+type TableProps = React.ComponentPropsWithoutRef<'table'>;
+
+export const Table = ({ className = '', ...rest }: TableProps) => (
+  <table className={cx('w-full rounded border border-grey-02 bg-white', className)} {...rest} />
+);
+
+type TableHeaderProps = React.ComponentPropsWithoutRef<'th'> & { width: number };
+
+export const TableHeader = ({ width, className = '', style = {}, ...rest }: TableHeaderProps) => (
+  <th
+    className={cx('border border-grey-02 p-2.5 text-left', className)}
+    style={{ minWidth: width, ...style }}
+    {...rest}
+  />
+);
+
+type TableRowProps = React.ComponentPropsWithoutRef<'tr'>;
+
+export const TableRow = ({ className = '', ...rest }: TableRowProps) => (
+  <tr className={cx('hover:bg-bg', className)} {...rest} />
+);

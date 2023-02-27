@@ -1,17 +1,17 @@
-import * as React from 'react';
-import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { observer } from '@legendapp/state/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Command } from 'cmdk';
-import { useAccount } from 'wagmi';
+import { AnimatePresence, motion } from 'framer-motion';
 import Confetti from 'js-confetti';
+import * as React from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useAccount } from 'wagmi';
 
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Avatar } from '../avatar';
 import { Button, SquareButton } from '../design-system/button';
 import { Text } from '../design-system/text';
 import { Services } from '../services';
-import { formatAddress } from '../utils';
+import { formatShortAddress } from '../utils';
 import { useOnboarding } from './use-onboarding';
 
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
@@ -26,16 +26,16 @@ export const OnboardingDialog = observer(() => {
 
   if (!address) return null;
 
-  // Note: set open to true or to isOnboardingVisible.get() to see the onboarding flow
+  // Note: set open to true or to isOnboardingVisible to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
 
   return (
-    <Command.Dialog open={isOnboardingVisible.get()} label="Onboarding profile">
+    <Command.Dialog open={true} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           {step !== 'success' && (
             <ModalCard key="onboarding">
-              <div className="relative min-h-full z-10">
+              <div className="relative z-10 min-h-full">
                 {step === 'wallet' && (
                   <>
                     <StepHeader />
@@ -88,7 +88,7 @@ const ModalCard = ({ key, children }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative pointer-events-auto mt-32 z-10 w-full max-w-[434px] aspect-square overflow-hidden rounded border border-grey-02 bg-white shadow-dropdown p-4"
+      className="pointer-events-auto relative z-10 mt-32 aspect-square w-full max-w-[434px] overflow-hidden rounded border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -104,7 +104,7 @@ const StepHeader = ({ onPrev, showTitle = true }: StepHeaderProps) => {
   const { hideOnboarding } = useOnboarding();
 
   return (
-    <div className="flex justify-between items-center pb-12 relative z-20">
+    <div className="relative z-20 flex items-center justify-between pb-12">
       <div className="rotate-180">{onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}</div>
       <div className="text-metadataMedium">{showTitle && 'Profile Creation'}</div>
       <SquareButton icon="close" onClick={hideOnboarding} />
@@ -137,15 +137,15 @@ function StepWallet({ onNext, address }: { onNext: () => void; address: string }
     <>
       <StepContents key="wallet">
         <div className="flex justify-center pb-8">
-          <Text variant="mediumTitle" className="bg-divider rounded px-2 py-1 inline-block">
-            {formatAddress(address)}
+          <Text variant="mediumTitle" className="inline-block rounded bg-divider px-2 py-1">
+            {formatShortAddress(address)}
           </Text>
         </div>
-        <div className="pb-3 text-center px-16">
+        <div className="px-16 pb-3 text-center">
           <Text variant="bodySemibold">It looks like you don’t have a Geo profile on this wallet address.</Text>
         </div>
       </StepContents>
-      <div className="flex justify-center absolute bottom-6 inset-x-0">
+      <div className="absolute inset-x-0 bottom-6 flex justify-center">
         <Button onClick={onNext}>Create Profile</Button>
       </div>
     </>
@@ -165,21 +165,21 @@ function StepName({ onNext, name, setName }: StepNameProps) {
     <>
       <StepContents key="name">
         <div className="flex justify-center">
-          <div className="pb-8 inline-block">
+          <div className="inline-block pb-8">
             <input
               placeholder="Name..."
-              className="text-mediumTitle text-center block px-2 py-1"
+              className="block px-2 py-1 text-center text-mediumTitle"
               value={name}
               onChange={e => setName(e.target.value)}
               autoFocus
             />
           </div>
         </div>
-        <Text as="h3" variant="bodySemibold" className="text-center px-16">
+        <Text as="h3" variant="bodySemibold" className="px-16 text-center">
           You can use your real name or a pseudonym if you’d prefer to remain anonymous.
         </Text>
       </StepContents>
-      <div className="flex justify-center absolute bottom-6 inset-x-0">
+      <div className="absolute inset-x-0 bottom-6 flex justify-center">
         <Button disabled={!validName} onClick={onNext}>
           Continue
         </Button>
@@ -210,13 +210,13 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
   return (
     <>
       <StepContents key="avatar">
-        <Text as="h3" variant="smallTitle" className="text-center pb-4 -mt-6">
+        <Text as="h3" variant="smallTitle" className="-mt-6 pb-4 text-center">
           {name}
         </Text>
-        <div className="pb-4 flex justify-center">
+        <div className="flex justify-center pb-4">
           {avatar ? (
             <div
-              className="bg-cover bg-center border-8 border-black rounded"
+              className="border-black rounded border-8 bg-cover bg-center"
               style={{
                 backgroundImage: `url(${avatar})`,
                 height: 154,
@@ -228,7 +228,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
           )}
         </div>
         <div className="flex justify-center">
-          <label htmlFor="avatar-file" className="text-center cursor-pointer hover:underline inline-block">
+          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
             <Text variant="metadataMedium" color="ctaPrimary">
               Upload photo
             </Text>
@@ -242,7 +242,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
           />
         </div>
       </StepContents>
-      <div className="flex justify-center absolute bottom-6 inset-x-0">
+      <div className="absolute inset-x-0 bottom-6 flex justify-center">
         <Button onClick={onNext}>Done</Button>
       </div>
     </>
@@ -268,16 +268,16 @@ function StepSuccess() {
 
   return (
     <div className="h-full pt-8">
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-0 bg-[#000000]" />
+      <canvas ref={canvasRef} className="absolute inset-0 z-0 h-full w-full bg-[#000000]" />
       <div className="relative z-10 flex justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
           transition={{ type: 'spring', bounce: 0.25, delay: 0.45 }}
-          className="bg-white text-center shadow-onboarding inline-block py-2 px-8 rounded"
+          className="inline-block rounded bg-white py-2 px-8 text-center shadow-onboarding"
         >
-          <div className="justify-center flex w-full pb-3">
+          <div className="flex w-full justify-center pb-3">
             <GeoLogoLarge width={67} height={67} />
           </div>
           <Text as="h3" variant="input">
@@ -289,7 +289,7 @@ function StepSuccess() {
         </motion.div>
       </div>
       <Marquees />
-      <div className="flex justify-center absolute bottom-6 inset-x-0">
+      <div className="absolute inset-x-0 bottom-6 flex justify-center">
         <Button>View Profile</Button>
       </div>
     </div>
@@ -298,7 +298,7 @@ function StepSuccess() {
 
 const Marquees = () => {
   return (
-    <div className="flex flex-col gap-4 -rotate-45 scale-[1.4] absolute inset-0 w-full h-full opacity-50">
+    <div className="absolute inset-0 flex h-full w-full -rotate-45 scale-[1.4] flex-col gap-4 opacity-50">
       <Marquee direction="left" />
       <Marquee direction="right" />
       <Marquee direction="left" />
@@ -318,14 +318,14 @@ const Marquee = ({ direction = 'left' }: MarqueeProps) => {
   const renderedImages = direction === 'left' ? doubledImages : doubledImages.reverse();
 
   return (
-    <div className="relative overflow-hidden select-none">
+    <div className="relative select-none overflow-hidden">
       <motion.div
         animate={{ x: [source, destination] }}
         transition={{ ease: 'linear', repeat: Infinity, repeatType: 'loop', duration: 120 }}
         className="flex gap-4"
       >
         {renderedImages.map((image: string, index: number) => (
-          <img key={index} src={image} className="w-16 h-16 object-cover object-center rounded" />
+          <img key={index} src={image} className="h-16 w-16 rounded object-cover object-center" />
         ))}
       </motion.div>
     </div>

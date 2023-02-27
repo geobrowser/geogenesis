@@ -1,4 +1,5 @@
 import { describe } from 'vitest';
+
 import { getConfig, options } from './config';
 
 describe('Config', () => {

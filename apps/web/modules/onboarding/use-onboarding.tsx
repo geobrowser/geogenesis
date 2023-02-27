@@ -22,5 +22,5 @@ export function useOnboarding() {
 
   const hideOnboarding = () => isOnboardingVisible.set(false);
 
-  return { isOnboardingVisible, hideOnboarding };
+  return { isOnboardingVisible: isOnboardingVisible.get(), hideOnboarding };
 }

@@ -1,5 +1,6 @@
+import * as React from 'react';
 import Link from 'next/link';
-import React from 'react';
+
 import { SquareButton } from '~/modules/design-system/button';
 
 interface Props {
@@ -17,7 +18,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
 
   return (
     <td
-      className="align-top bg-transparent border border-grey-02 p-[10px]"
+      className="min-h-[40px] border border-grey-02 bg-transparent p-[10px] align-top"
       style={{
         maxWidth: width,
       }}
@@ -25,21 +26,17 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
       onMouseLeave={() => setIsHovered(false)}
       width={width}
     >
-      <div className="relative">
+      <div className="relative flex h-full w-full items-center justify-between leading-none">
         {children}
         {isHovered && (
-          <div className="absolute flex items-center right-0 top-0 gap-1 z-10">
+          <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (
-              <SquareButton
-                onClick={toggleExpanded}
-                icon={isExpanded ? 'contractSmall' : 'expandSmall'}
-                variant="secondary"
-              />
+              <SquareButton onClick={toggleExpanded} icon={isExpanded ? 'contractSmall' : 'expandSmall'} />
             )}
             {isLinkable && href && (
               <Link href={href} passHref>
                 <a>
-                  <SquareButton icon="rightArrowLongSmall" variant="secondary" />
+                  <SquareButton icon="rightArrowLongSmall" />
                 </a>
               </Link>
             )}

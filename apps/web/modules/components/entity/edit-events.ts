@@ -1,5 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
@@ -349,18 +350,6 @@ const listener =
 
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
-
-        if (triple.attributeId === SYSTEM_IDS.NAME) {
-          return update(
-            {
-              ...triple,
-              entityName: value,
-              placeholder: false,
-              value: { ...triple.value, type: 'string', value },
-            },
-            triple
-          );
-        }
 
         return update(
           {

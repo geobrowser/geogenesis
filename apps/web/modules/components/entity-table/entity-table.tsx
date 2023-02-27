@@ -1,4 +1,5 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 import {
@@ -10,7 +11,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useState } from 'react';
+
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
@@ -52,12 +53,6 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: strin
   );
 };
 
-const SpaceHeader = styled.th(props => ({
-  '@media (max-width: 768px)': {
-    minWidth: 300,
-  },
-}));
-
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
     const space = table.options.meta!.space;
@@ -70,6 +65,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
+    const isPlaceholderCell = cellData?.triples[0]?.placeholder;
 
     if (!cellData) return null;
 
@@ -83,16 +79,24 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     if (isEditMode) {
       return (
         <EditableEntityTableCell
+          // HACK (baiirun): For some reason the table value for the name field is stale
+          // when changing the selectedType in edit mode. When debugging it looks like the
+          // cell has the correct data, but the value of the name is the value of the last
+          // cell in the previous selectedType. For now we can use a key to force the
+          // cell to re-mount when the selectedType and name changes.
+          key={Entity.name(cellTriples)}
           triples={cellTriples}
+          cell={cellData}
           create={create}
           update={update}
           remove={remove}
-          cell={cellData}
           space={space}
         />
       );
-    } else if (cellData) {
-      return <EntityTableCell cell={cellData} space={space} isExpanded={isExpanded} />;
+    } else if (cellData && !isPlaceholderCell) {
+      return (
+        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} space={space} isExpanded={isExpanded} />
+      );
     } else {
       return null;
     }
@@ -105,7 +109,7 @@ interface Props {
   rows: Row[];
 }
 
-export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
+export function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -135,18 +139,18 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
 
   return (
     <div className="overflow-x-scroll rounded">
-      <table className="w-full border-hidden border-collapse bg-white relative" cellSpacing={0} cellPadding={0}>
+      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <SpaceHeader
-                  style={{ minWidth: header.column.getSize() }}
-                  className="border border-grey-02 border-b-0 text-left p-[10px]"
+                <th
                   key={header.id}
+                  className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
+                  style={{ minWidth: header.column.getSize() }}
                 >
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                </SpaceHeader>
+                </th>
               ))}
             </tr>
           ))}
@@ -167,7 +171,7 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <tr className="hover:bg-bg">
+              <tr key={entityId} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
@@ -175,12 +179,12 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
 
                   return (
                     <TableCell
+                      key={cellId}
                       isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}
                       width={cell.column.getSize()}
-                      key={cell.id}
                       toggleExpanded={() =>
                         setExpandedCells(prev => ({
                           ...prev,
@@ -199,4 +203,4 @@ export const EntityTable = memo(function EntityTable({ rows, space, columns }: P
       </table>
     </div>
   );
-});
+}

@@ -1,4 +1,6 @@
+import * as React from 'react';
 import { cva } from 'class-variance-authority';
+
 import { ColorName } from './theme/colors';
 import { TypographyName } from './theme/typography';
 
@@ -75,12 +77,12 @@ export const Text = ({
   variant = 'body',
   as = 'span',
   ellipsize = false,
-  className,
+  className = '',
   ...rest
 }: Props) => {
   const Tag = as;
   return (
-    <Tag className={textStyles({ variant, color, ellipsize }) + ` ${className}`} {...rest}>
+    <Tag className={textStyles({ variant, color, ellipsize, className })} {...rest}>
       {children}
     </Tag>
   );

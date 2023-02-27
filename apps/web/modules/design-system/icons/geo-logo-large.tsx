@@ -1,4 +1,6 @@
-export function GeoLogoLarge(props?: React.SVGProps<SVGSVGElement>) {
+import { SVGProps } from 'react';
+
+export function GeoLogoLarge(props?: SVGProps<SVGSVGElement>) {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <g clipPath="url(#clip0_2998_28196)">

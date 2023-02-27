@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.14;
-import {Space} from './Space.sol';
+import {Space} from '../Space.sol';
 
 /**
  * FakeSpaceV2 is a fake implementation for upgrading to a new version of the Space contract.

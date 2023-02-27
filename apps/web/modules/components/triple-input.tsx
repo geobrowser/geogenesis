@@ -1,48 +1,14 @@
-import styled from '@emotion/styled';
-import { useRect } from '@radix-ui/react-use-rect';
+import * as React from 'react';
 import { useRef } from 'react';
+import { useRect } from '@radix-ui/react-use-rect';
+
 import { CheckCloseSmall } from '../design-system/icons/check-close-small';
 import { Search } from '../design-system/icons/search';
 import { Input } from '../design-system/input';
 import { Spacer } from '../design-system/spacer';
 import { useTriples } from '../triple/use-triples';
-import { FilterClause } from '../types';
 import { FilterDialog } from './filter/dialog';
-
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 3,
-  top: props.theme.space * 2.5,
-  zIndex: 100,
-}));
-
-const FilterIconContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  backgroundColor: props.theme.colors.white,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  borderLeft: 'none',
-  color: props.theme.colors['grey-04'],
-}));
-
-const InputContainer = styled.div({
-  overflow: 'hidden',
-  display: 'flex',
-  position: 'relative',
-});
-
-const AdvancedFilters = styled.div(props => ({
-  overflow: 'hidden',
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space,
-  width: '100%',
-  borderRadius: `${props.theme.radius}px 0 0 ${props.theme.radius}px`,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  paddingLeft: props.theme.space * 10,
-  backgroundColor: props.theme.colors.white,
-}));
+import type { FilterClause } from '../types';
 
 export function TripleInput() {
   const tripleStore = useTriples();
@@ -60,10 +26,10 @@ export function TripleInput() {
   };
 
   return (
-    <InputContainer ref={inputContainerRef}>
-      <SearchIconContainer>
+    <div className="relative flex overflow-hidden" ref={inputContainerRef}>
+      <div className="absolute left-3 top-2.5 z-100">
         <Search />
-      </SearchIconContainer>
+      </div>
       {showBasicFilter ? (
         <Input
           withExternalSearchIcon
@@ -73,7 +39,7 @@ export function TripleInput() {
           onChange={onChange}
         />
       ) : (
-        <AdvancedFilters>
+        <div className="flex w-full items-center gap-1 overflow-hidden rounded-l bg-white pl-10 shadow-inner-grey-02">
           {tripleStore.filterState.map(filter => (
             <AdvancedFilterPill
               key={filter.field}
@@ -81,74 +47,45 @@ export function TripleInput() {
               onClick={() => onAdvancedFilterClick(filter.field)}
             />
           ))}
-        </AdvancedFilters>
+        </div>
       )}
-      <FilterIconContainer>
+      <div className="flex items-center overflow-hidden rounded-r border border-l-0 border-grey-02 bg-white text-grey-04">
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
           filterState={tripleStore.filterState}
           setFilterState={tripleStore.setFilterState}
         />
-      </FilterIconContainer>
-    </InputContainer>
+      </div>
+    </div>
   );
 }
-
-const AdvancedFilterPillContainer = styled.button(props => ({
-  ...props.theme.typography.metadataMedium,
-  overflow: 'hidden',
-  whiteSpace: 'nowrap',
-  display: 'flex',
-  alignItems: 'center',
-  padding: `${props.theme.space}px ${props.theme.space * 2}px`,
-  borderRadius: props.theme.space,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-
-  '&:hover': {
-    backgroundColor: props.theme.colors.bg,
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
-    cursor: 'pointer',
-  },
-
-  '&:focus': {
-    backgroundColor: props.theme.colors.bg,
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
-    outline: 'none',
-  },
-}));
 
 interface AdvancedFilterPillprops {
   filterClause: FilterClause;
   onClick: () => void;
 }
 
-function getFilterLabel(field: FilterClause['field']) {
-  switch (field) {
-    case 'entity-id':
-      return 'Entity ID is';
-    case 'entity-name':
-      return 'Entity name contains';
-    case 'attribute-name':
-      return 'Attribute name contains';
-    case 'attribute-id':
-      return 'Attribute ID is';
-    case 'value':
-      return 'Value contains';
-    case 'linked-to':
-      return 'Entity contains reference to';
-  }
-}
-
 function AdvancedFilterPill({ filterClause, onClick }: AdvancedFilterPillprops) {
   const { field, value } = filterClause;
-  const label = getFilterLabel(field);
+  const label = filterLabels[field];
 
   return (
-    <AdvancedFilterPillContainer onClick={onClick}>
+    <button
+      className="flex items-center overflow-hidden whitespace-nowrap rounded bg-white p-2 py-1 text-metadataMedium shadow-inner-grey-02 hover:cursor-pointer hover:bg-bg hover:shadow-inner-text focus:bg-bg focus:shadow-inner-lg-text focus:outline-none"
+      onClick={onClick}
+    >
       {label} {value}
       <Spacer width={8} />
       <CheckCloseSmall />
-    </AdvancedFilterPillContainer>
+    </button>
   );
 }
+
+const filterLabels: Record<string, string> = {
+  'entity-id': 'Entity ID is',
+  'entity-name': 'Entity name contains',
+  'attribute-name': 'Attribute name contains',
+  'attribute-id': 'Attribute ID is',
+  value: 'Value contains',
+  'linked-to': 'Entity contains reference to',
+};

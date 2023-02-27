@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest';
+
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Action as ActionType, Triple as TripleType } from '../types';
 import { empty, withId, withLocalNames } from './triple';

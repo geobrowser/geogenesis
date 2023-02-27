@@ -1,6 +1,6 @@
+import { useCallback } from 'react';
 import { observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import { useCallback } from 'react';
 
 const pageName$ = observable('');
 

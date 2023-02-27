@@ -1,10 +1,11 @@
-import styled from '@emotion/styled';
-import React, { useRef, useState } from 'react';
+import * as React from 'react';
+import { useRef, useState } from 'react';
+import { useRect } from '@radix-ui/react-use-rect';
+import { motion } from 'framer-motion';
+
 import { RightArrowLong } from '../../design-system/icons/right-arrow-long';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
-import { useRect } from '@radix-ui/react-use-rect';
-import { motion } from 'framer-motion';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { OnboardingStep, ONBOARDING_CONTENT } from './content';
 import { Select } from '~/modules/design-system/select';
@@ -13,45 +14,6 @@ import { CaretUp } from '~/modules/design-system/icons/caret-up';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;
-
-const Column = styled.div({
-  alignSelf: 'center',
-});
-
-const Row = styled.div(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: theme.space * 2,
-}));
-
-const OnboardingContent = styled.div(({ theme }) => ({
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  border: `1px solid ${theme.colors.text}`,
-  borderRadius: theme.radius,
-  padding: theme.space * 5,
-  maxWidth: 880,
-}));
-
-const MotionContent = motion(OnboardingContent);
-
-interface ArrowProps {
-  left?: number;
-}
-
-const ContentArrow = styled.span<ArrowProps>(({ left = 0 }) => ({
-  position: 'absolute',
-
-  // -10 is the height of the arrow
-  top: -10,
-
-  // - 8 is the width of the arrow
-  left: left - 8,
-}));
-
-const MotionArrow = motion(ContentArrow);
 
 function getArrowPosition(selectedArrowPosition: number, initialButtonWidth: number) {
   return selectedArrowPosition === 0 ? initialButtonWidth / 2 + DEFAULT_ARROW_LEFT : selectedArrowPosition;
@@ -95,8 +57,8 @@ export function OboardingCarousel() {
   const arrowLeft = getArrowPosition(selectedArrowLeft, initialButtonRect?.width ?? 0);
 
   return (
-    <Column ref={containerRef}>
-      <Row>
+    <div ref={containerRef} className="self-center">
+      <div className="flex items-center justify-center gap-2">
         {width > BREAKPOINT ? (
           <>
             <TabButton
@@ -107,21 +69,15 @@ export function OboardingCarousel() {
             >
               Collect data
             </TabButton>
-
             <RightArrowLong color="grey-04" />
-
             <TabButton icon="organize-data" onClick={onStepChange('organize')} isActive={step === 'organize'}>
               Organize data
             </TabButton>
-
             <RightArrowLong color="grey-04" />
-
             <TabButton icon="entity" onClick={onStepChange('empower')} isActive={step === 'empower'}>
               Empower communities
             </TabButton>
-
             <RightArrowLong color="grey-04" />
-
             <TabButton icon="target" onClick={onStepChange('solve')} isActive={step === 'solve'}>
               Solve real problems
             </TabButton>
@@ -134,19 +90,26 @@ export function OboardingCarousel() {
             onChange={value => setStep(value as OnboardingStep)}
           />
         )}
-      </Row>
-
+      </div>
       <Spacer height={22} />
-
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
-      <MotionContent initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.5 }}>
-        <MotionArrow layout="position" left={width > BREAKPOINT ? arrowLeft : DEFAULT_ARROW_LEFT}>
+      <motion.div
+        className="relative flex max-w-[880px] flex-col rounded border border-text p-5"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.5 }}
+      >
+        <motion.span
+          className="absolute -top-[10px] inline-block"
+          layout="position"
+          style={{ left: width > BREAKPOINT ? arrowLeft - 8 : DEFAULT_ARROW_LEFT - 8 }}
+        >
           <CaretUp />
-        </MotionArrow>
+        </motion.span>
         <Text variant="mediumTitle">{ONBOARDING_CONTENT[step].title}</Text>
         <Spacer height={4} />
         <Text>{ONBOARDING_CONTENT[step].description}</Text>
-      </MotionContent>
-    </Column>
+      </motion.div>
+    </div>
   );
 }

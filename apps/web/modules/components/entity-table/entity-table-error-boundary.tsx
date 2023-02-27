@@ -1,4 +1,5 @@
-import { Component, ReactNode } from 'react';
+import * as React from 'react';
+
 import { Text } from '~/modules/design-system/text';
 
 interface State {
@@ -8,10 +9,10 @@ interface State {
 interface Props {
   typeId: string;
   spaceId: string;
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-export class EntityTableErrorBoundary extends Component<Props, State> {
+export class EntityTableErrorBoundary extends React.Component<Props, State> {
   private typeId: string;
   private spaceId: string;
 

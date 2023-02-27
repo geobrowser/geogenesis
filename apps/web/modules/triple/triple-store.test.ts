@@ -1,5 +1,6 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
+
 import { ActionsStore } from '../action';
 import { makeStubTriple, MockNetwork } from '../services/mock-network';
 import { TripleStore } from './triple-store';

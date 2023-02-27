@@ -1,30 +1,14 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
 import Link from 'next/link';
+
 import { Button } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 
-const ErrorContainer = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: '75vh',
-  position: 'relative',
-});
-
-const Content = styled.div({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 10,
-});
-
 export default function Custom404() {
   return (
-    <ErrorContainer>
-      <Content>
+    <div className="relative flex min-h-[75vh] flex-col items-center justify-center">
+      <div>
         <img src="/404.svg" alt="Image of a 404 error." />
         <Spacer height={24} />
         <Text as="h1" variant="bodySemibold">
@@ -40,8 +24,7 @@ export default function Custom404() {
             </a>
           </Link>
         </Button>
-      </Content>
-
+      </div>
       <img
         src="/405.svg"
         style={{ position: 'absolute', opacity: 1, zIndex: 5 }}
@@ -57,6 +40,6 @@ export default function Custom404() {
         style={{ position: 'absolute', opacity: 1, zIndex: 3 }}
         alt="Background image of a 404 error"
       />
-    </ErrorContainer>
+    </div>
   );
 }

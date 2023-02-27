@@ -1,9 +1,9 @@
-import { useTheme } from '@emotion/react';
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { useState } from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
@@ -17,67 +17,7 @@ import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultItem, ResultsList } from '../entity/autocomplete/results-list';
 
-interface ContentProps {
-  children: React.ReactNode;
-  width: number;
-  alignOffset?: number;
-  sideOffset?: number;
-}
-
-const StyledTrigger = styled.button(props => ({
-  all: 'unset',
-  ...props.theme.typography.button,
-  color: props.theme.colors.text,
-  flex: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderRadius: props.theme.radius,
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-  textWrap: 'nowrap',
-  whiteSpace: 'pre',
-  width: 230,
-
-  '&:hover': {
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
-    cursor: 'pointer',
-  },
-
-  '&:focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
-    outline: 'none',
-  },
-
-  '&[data-placeholder]': { color: props.theme.colors.text },
-}));
-
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  borderRadius: props.theme.radius,
-  width: `calc(${props.width}px / 2)`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.button,
-  zIndex: 100,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-
-  '@media (max-width: 768px)': {
-    margin: '0 auto',
-    width: '98vw',
-  },
-}));
-
-const MotionContent = motion(StyledContent);
-
-const CreateButton = styled(Button)(props => ({
-  margin: `0 ${props.theme.space * 2}px ${props.theme.space * 2}px ${props.theme.space * 2}px`,
-}));
-
-const SearchContainer = styled.div(props => ({
-  display: 'flex',
-  flexDirection: 'column',
-  padding: props.theme.space * 2,
-}));
+const MotionContent = motion(PopoverPrimitive.Content);
 
 interface Props {
   inputContainerWidth: number;
@@ -87,7 +27,6 @@ interface Props {
 }
 
 export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
-  const theme = useTheme();
   const entityTableStore = useEntityTable();
   const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
@@ -136,11 +75,14 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledTrigger aria-label="type-filter-dropdown">
+        <button
+          className="flex w-[230px] flex-none items-center justify-between whitespace-pre rounded bg-white py-2 px-3 text-button text-text shadow-inner-grey-02 placeholder-shown:text-text hover:cursor-pointer hover:shadow-inner-text focus:shadow-inner-lg-text focus:outline-none"
+          aria-label="type-filter-dropdown"
+        >
           {entityTableStore.selectedType?.entityName || 'No Types Found'}
           <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
-        </StyledTrigger>
+        </button>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
@@ -153,9 +95,10 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            width={inputContainerWidth}
-            sideOffset={theme.space * 2}
+            className="z-100 w-full self-start rounded border border-grey-02 bg-white shadow-button md:mx-auto md:w-[98vw]"
+            style={{ width: `calc(${inputContainerWidth}px / 2)` }}
             align="start"
+            sideOffset={8}
           >
             {!hasResults && (
               <>
@@ -165,19 +108,16 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                 </Text>
               </>
             )}
-
             <motion.div layout="position">
-              <SearchContainer>
+              <div className="flex flex-col p-2">
                 <Input value={filter} onChange={e => setFilter(e.currentTarget.value)} />
-              </SearchContainer>
+              </div>
             </motion.div>
-
             {hasResults && (
               <Text className="p-2" variant="smallButton">
                 All types
               </Text>
             )}
-
             <ResultsList>
               {hasResults
                 ? filteredTypes.map(type => (
@@ -185,7 +125,11 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                       {type.entityName}
                     </ResultItem>
                   ))
-                : isEditor && <CreateButton onClick={handleCreateType}>Create Type</CreateButton>}
+                : isEditor && (
+                    <Button onClick={handleCreateType} className="mr-2 mb-2 ml-2">
+                      Create Type
+                    </Button>
+                  )}
             </ResultsList>
           </MotionContent>
         ) : null}
