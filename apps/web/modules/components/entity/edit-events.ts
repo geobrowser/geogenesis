@@ -351,18 +351,6 @@ const listener =
       case 'UPDATE_VALUE': {
         const { value, triple } = event.payload;
 
-        if (triple.attributeId === SYSTEM_IDS.NAME) {
-          return update(
-            {
-              ...triple,
-              entityName: value,
-              placeholder: false,
-              value: { ...triple.value, type: 'string', value },
-            },
-            triple
-          );
-        }
-
         return update(
           {
             ...triple,

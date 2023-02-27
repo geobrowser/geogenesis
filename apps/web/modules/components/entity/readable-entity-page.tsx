@@ -18,18 +18,21 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
+import { sortEntityPageTriples } from './editable-entity-page-utils';
 import { LinkedEntityGroup } from './types';
 
 interface Props {
   triples: Triple[];
+  schemaTriples: Triple[];
   id: string;
   name: string;
   space: string;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ triples, id, name, space, linkedEntities }: Props) {
+export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples }: Props) {
   const description = Entity.description(triples);
+  const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
   return (
     <div>
@@ -57,7 +60,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities }:
       <Spacer height={8} />
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes entityId={id} triples={triples} space={space} />
+          <EntityAttributes entityId={id} triples={sortedTriples} space={space} />
         </div>
       </div>
       <Spacer height={40} />

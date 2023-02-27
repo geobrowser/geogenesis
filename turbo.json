@@ -40,6 +40,9 @@
         "@geogenesis/subgraph#codegen"
       ]
     },
+    "@geogenesis/contracts#build": {
+      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
+    },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []

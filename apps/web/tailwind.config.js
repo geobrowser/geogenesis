@@ -27,6 +27,7 @@ module.exports = {
       none: '0',
       sm: '4px',
       DEFAULT: '6px',
+      full: '9999px',
     },
     boxShadow: {
       none: 'none',
@@ -35,6 +36,7 @@ module.exports = {
       card: '0px 26px 45px rgba(0, 0, 0, 0.09)',
       light: '0px 1px 2px #F0F0F0',
       big: '0 1px 21px #DBDBDB',
+      lg: '0 8px 25px rgba(0, 0, 0, 0.09)',
       inner: 'inset 0 0 0 1px',
       'inner-transparent': 'inset 0 0 0 1px transparent',
       'inner-grey-02': 'inset 0 0 0 1px #DBDBDB',

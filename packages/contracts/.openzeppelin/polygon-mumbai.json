@@ -30,6 +30,11 @@
       "address": "0x3C9be4b42B313318091344A261DCDCd02DCd5736",
       "txHash": "0xbe6c6a6ab48d0a423bc89070ca7979f5bbdb85e6f4dc920112bc26fae5e4a112",
       "kind": "beacon"
+    },
+    {
+      "address": "0x94c49940963c5De5B78c260bB6D22E92D43cDD09",
+      "txHash": "0x8ee10fb9b0a4abad458b2cf41cea7930ccaca02dba1abf2dc6bd15e1d5e0941e",
+      "kind": "beacon"
     }
   ],
   "impls": {
@@ -197,6 +202,80 @@
           "t_uint256": {
             "label": "uint256",
             "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        }
+      }
+    },
+    "6ca60d2ba2c4c8aa7292cdfe1043e0a3c8ae23132d30d67edc74c5499c1acfdc": {
+      "address": "0x30B339fE7CDdE3A62Ea9Bd647bFc4562F0D59FCf",
+      "txHash": "0xafaea841f4e2e9a3a4d18177b0e55f9e8d60b94d7e54da60d18c3a0b5d185a8e",
+      "layout": {
+        "solcVersion": "0.8.14",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:62",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:67"
+          },
+          {
+            "label": "_entries",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_struct(Entry)2181_storage)dyn_storage",
+            "contract": "PermissionlessSpace",
+            "src": "contracts/PermissionlessSpace.sol:24"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_struct(Entry)2181_storage)dyn_storage": {
+            "label": "struct Entry[]",
+            "numberOfBytes": "32"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Entry)2181_storage": {
+            "label": "struct Entry",
+            "members": [
+              {
+                "label": "uri",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "author",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
           },
           "t_uint8": {
             "label": "uint8",

@@ -8,7 +8,7 @@ import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { EditEvent, useEditEvents } from '../entity/edit-events';
-import { StringField } from '../entity/editable-fields';
+import { TableStringField } from '../entity/editable-fields';
 
 interface Props {
   cell: Cell;
@@ -114,11 +114,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   if (isNameCell) {
     return (
-      <StringField
-        variant="tableCell"
+      <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple: cellTriples[0], value: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: cellTriples[0], name: e.target.value } })}
       />
     );
   }
@@ -153,8 +152,7 @@ interface EditableEntityTableStringCellProps {
 
 function EditableEntityTableStringCell({ triple, send }: EditableEntityTableStringCellProps) {
   return (
-    <StringField
-      variant="tableCell"
+    <TableStringField
       placeholder="Add value..."
       onBlur={e => send({ type: 'UPDATE_VALUE', payload: { triple, value: e.target.value } })}
       value={triple.value.type === 'string' ? triple.value.value : ''}
