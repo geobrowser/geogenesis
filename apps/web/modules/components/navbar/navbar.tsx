@@ -1,7 +1,7 @@
-import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
 import { IconButton } from '~/modules/design-system/button';
@@ -16,73 +16,6 @@ import { intersperse, titleCase } from '~/modules/utils';
 import { DebugActions } from '../debug/debug-actions';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
-
-const Header = styled.header(({ theme }) => ({
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${theme.space}px ${theme.space * 4}px`,
-  backgroundColor: theme.colors.white,
-  boxShadow: `0 1px 21px ${theme.colors['grey-02']}`,
-  gap: theme.space * 5,
-
-  '@media (max-width: 1920px)': {
-    padding: `${theme.space}px ${theme.space * 4}px`,
-  },
-
-  '@media (max-width: 768px)': {
-    padding: `${theme.space * 3}px ${theme.space * 4}px`,
-
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore -- this is valid in emotion
-    [Row]: {
-      display: 'none',
-    },
-  },
-
-  // Leave some extra space for the scroll bar to come in
-  paddingRight: theme.space * 6,
-}));
-
-const BreadcrumbsContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space * 2,
-  overflow: 'hidden',
-}));
-
-const NavigationItemsContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  overflow: 'hidden',
-  maxWidth: '40%',
-  gap: props.theme.space * 8,
-
-  'a:last-child': {
-    overflow: 'hidden',
-    // To make the text container slightly smaller than parent container so the ellipsis renders
-    maxWidth: '99%',
-  },
-
-  '@media (max-width: 768px)': {
-    maxWidth: '100%',
-    gap: props.theme.space * 4,
-
-    'a:nth-of-type(3)': {
-      display: 'none',
-    },
-
-    'span:nth-of-type(2)': {
-      display: 'none',
-    },
-  },
-}));
-
-const Row = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-});
 
 type GetComponentRouteConfig = {
   components: string[];
@@ -141,14 +74,14 @@ export function Navbar({ onSearchClick }: Props) {
 
   const spaceId = components?.[2]?.split('?')[0];
   return (
-    <Header>
-      <NavigationItemsContainer>
+    <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex max-w-[40%] items-center gap-8 overflow-hidden md:max-w-full md:gap-4 [&>a:last-child]:max-w-[99%] [&>a:last-child]:overflow-hidden md:[&>a:nth-of-type(3)]:hidden md:[&>span:nth-of-type(2)]:hidden">
         <Link href="/" passHref>
           <a>
             <GeoLogoLarge />
           </a>
         </Link>
-        <BreadcrumbsContainer>
+        <div className="flex items-center gap-2 overflow-hidden">
           {intersperse(
             components.map((component, index) => {
               if (index === 0) return null; // skip the "Geo" part
@@ -175,42 +108,28 @@ export function Navbar({ onSearchClick }: Props) {
               );
             }
           )}
-        </BreadcrumbsContainer>
-      </NavigationItemsContainer>
-
-      <Row>
+        </div>
+      </div>
+      <div className="flex items-center">
         <IconButton onClick={onSearchClick} icon="search" />
         <Spacer width={16} />
         <DiscordLink />
         <Spacer width={16} />
-        <NavbarActions spaceId={spaceId ?? ''} />
+        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
         <DebugActions spaceId={spaceId ?? ''} />
-      </Row>
-    </Header>
+      </div>
+    </div>
   );
 }
-
-const DiscordLinkContainer = styled(Row)(({ theme }) => ({
-  ...theme.typography.button,
-  display: 'flex',
-  alignItems: 'center',
-  color: theme.colors['grey-04'],
-  transition: '0.15s ease-in-out all',
-  width: 105,
-
-  ':hover': {
-    color: theme.colors.text,
-  },
-}));
 
 function DiscordLink() {
   return (
     <ExternalLink href="https://discord.gg/axFtvyxRNQ">
-      <DiscordLinkContainer>
+      <div className="flex w-[105px] items-center text-button text-grey-04 transition-all duration-150 ease-in-out hover:text-text">
         <Discord />
         <Spacer width={8} />
         <p>Geo Discord</p>
-      </DiscordLinkContainer>
+      </div>
     </ExternalLink>
   );
 }

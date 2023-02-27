@@ -2,7 +2,6 @@ import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
-import { SquareButton } from '~/modules/design-system/button';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -96,7 +95,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
       {isUnpublished && (
         <TripleTypeDropdown
-          value={<SquareButton as="span" icon={valueType === SYSTEM_IDS.TEXT ? 'text' : 'relation'} />}
+          value={SYSTEM_IDS.TEXT ? 'text' : 'relation'}
           options={[
             {
               label: (
@@ -106,6 +105,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Text
                 </div>
               ),
+              value: 'text',
               disabled: false,
               onClick: () => onChangeTripleType(SYSTEM_IDS.TEXT),
             },
@@ -117,6 +117,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Relation
                 </div>
               ),
+              value: 'relation',
               disabled: false,
               onClick: () => onChangeTripleType(SYSTEM_IDS.RELATION),
             },

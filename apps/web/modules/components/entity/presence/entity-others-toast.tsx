@@ -1,15 +1,17 @@
+import * as React from 'react';
 import { useState } from 'react';
+import clsx from 'classnames';
 import BoringAvatar from 'boring-avatars';
 import pluralize from 'pluralize';
-import clsx from 'classnames';
+import { useAccount } from 'wagmi';
+import { AnimatePresence, motion } from 'framer-motion';
+
 import { EntityPresenceContext } from './entity-presence-provider';
 import { Text } from '~/modules/design-system/text';
 import { SmallButton } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
-import { useAccount } from 'wagmi';
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
@@ -55,7 +57,7 @@ export function EntityOthersToast() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 15 }}
           transition={{ duration: 0.15 }}
-          className="fixed right-8 bottom-8 bg-white rounded p-3 border border-grey-02 shadow-lg w-60"
+          className="fixed right-8 bottom-8 w-60 rounded border border-grey-02 bg-white p-3 shadow-lg"
         >
           <div className="flex items-center gap-2">
             <ul className="flex items-center -space-x-1">
@@ -70,13 +72,11 @@ export function EntityOthersToast() {
               {editorsCount > 1 ? 'are' : 'is'} editing now
             </Text>
           </div>
-
           <Spacer height={8} />
-
           <ResizableContainer duration={0.15}>
             {isExpanded ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <ul key="presence-user-list" className="space-y-3 mb-2 overflow-hidden">
+                <ul key="presence-user-list" className="mb-2 space-y-3 overflow-hidden">
                   {editors.map(editor => (
                     <li key={editor.connectionId} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -97,7 +97,6 @@ export function EntityOthersToast() {
               </motion.div>
             ) : null}
           </ResizableContainer>
-
           <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
             <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
               <ChevronDownSmall color="grey-04" />

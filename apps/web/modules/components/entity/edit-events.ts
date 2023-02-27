@@ -1,5 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';

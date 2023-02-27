@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { Triple } from '~/modules/types';
 
 export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
@@ -45,6 +46,6 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
       return aIndex - bIndex;
     }
 
-    return 0;
+    return -1;
   });
 }

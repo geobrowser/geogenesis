@@ -1,5 +1,7 @@
+import * as React from 'react';
 import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
+
 import { Config } from './config';
 import { INetwork, Network } from './services/network';
 import { StorageClient } from './services/storage';

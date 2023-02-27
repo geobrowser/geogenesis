@@ -25,16 +25,35 @@ module.exports = {
     },
     borderRadius: {
       none: '0',
-      full: '100%',
+      sm: '4px',
       DEFAULT: '6px',
+      full: '9999px',
     },
     boxShadow: {
       none: 'none',
-      inner: 'inset 0 0 0 1px',
-      'inner-lg': 'inset 0 0 0 2px',
+      dropdown: '0px 6px 8px #60606033',
+      button: '0px 1px 2px #F0F0F0',
+      card: '0px 26px 45px rgba(0, 0, 0, 0.09)',
+      light: '0px 1px 2px #F0F0F0',
+      big: '0 1px 21px #DBDBDB',
       lg: '0 8px 25px rgba(0, 0, 0, 0.09)',
+      inner: 'inset 0 0 0 1px',
+      'inner-transparent': 'inset 0 0 0 1px transparent',
+      'inner-grey-02': 'inset 0 0 0 1px #DBDBDB',
+      'inner-ctaHover': 'inset 0 0 0 1px #002FD9',
+      'inner-text': 'inset 0 0 0 1px #202020',
+      'inner-green': 'inset 0 0 0 1px #2ACE9D',
+      'inner-lg': 'inset 0 0 0 2px',
+      'inner-lg-transparent': 'inset 0 0 0 2px transparent',
+      'inner-lg-grey-02': 'inset 0 0 0 2px #DBDBDB',
+      'inner-lg-ctaHover': 'inset 0 0 0 2px #002FD9',
+      'inner-lg-text': 'inset 0 0 0 2px #202020',
+      'inner-lg-green': 'inset 0 0 0 2px #2ACE9D',
     },
     screens: {
+      '3xl': { max: '1920px' },
+      // => @media (max-width: 1920px) { ... }
+
       '2xl': { max: '1535px' },
       // => @media (max-width: 1535px) { ... }
 
@@ -51,6 +70,15 @@ module.exports = {
       // => @media (max-width: 639px) { ... }
     },
     extend: {
+      animation: {
+        'fade-in': 'fadeIn 0.15s ease-in-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+      },
       fontSize: {
         mainPage: [
           '2.75rem',
@@ -233,7 +261,14 @@ module.exports = {
           },
         ],
       },
+      zIndex: {
+        60: '60',
+        70: '70',
+        80: '80',
+        90: '90',
+        100: '100',
+      },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/line-clamp')],
 };

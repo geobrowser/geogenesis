@@ -1,7 +1,7 @@
-import styled from '@emotion/styled';
 import { Signer } from 'ethers';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
+import * as React from 'react';
 import { useState } from 'react';
 import { useSigner } from 'wagmi';
 import { Action } from '../action';
@@ -14,23 +14,6 @@ import { Text } from '../design-system/text';
 import { Toast } from '../design-system/toast';
 import { Action as ActionType, ReviewState } from '../types';
 import { groupBy } from '../utils';
-
-const Container = styled.div(props => ({
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  position: 'fixed',
-  bottom: props.theme.space * 10,
-
-  backgroundColor: props.theme.colors.white,
-  boxShadow: `0px 1px 2px #F0F0F0`,
-  padding: props.theme.space * 2,
-  paddingLeft: props.theme.space * 4,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: props.theme.radius,
-}));
-
-const MotionContainer = motion(Container);
 
 interface Props {
   actions: ActionType[];
@@ -71,17 +54,18 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
       {actionsCount > 0 || reviewState === 'publish-complete' ? (
         <>
           {showFlowBar && (
-            <MotionContainer
+            <motion.div
+              key="action-bar"
+              className="fixed bottom-10 flex items-center justify-between rounded border border-grey-02 bg-white p-2 pl-4 shadow-light"
               initial={{ y: 90 }}
               animate={{ y: 0 }}
               exit={{ y: 90 }}
               transition={{ duration: 0.1, ease: 'easeInOut' }}
-              key="action-bar"
             >
               {reviewState === 'idle' && (
                 <Review actions={actions} onBack={() => setReviewState('idle')} onNext={publish} onClear={clear} />
               )}
-            </MotionContainer>
+            </motion.div>
           )}
           {showToast && (
             <Toast key="publish-toast">
@@ -105,7 +89,7 @@ export function FlowBar({ actions, onPublish, onClear, spaceId }: Props) {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex items-center bg-transparent border gap-[6px] border-white rounded p-1"
+                    className="flex items-center gap-[6px] rounded border border-white bg-transparent p-1"
                     onClick={publish}
                   >
                     <RetrySmall />
@@ -145,11 +129,6 @@ interface ReviewProps {
   onClear: () => void;
 }
 
-const TrashButton = styled.button({
-  all: 'unset',
-  cursor: 'pointer',
-});
-
 function Review({ actions, onNext, onClear }: ReviewProps) {
   const actionsCount = Action.getChangeCount(actions);
   const entitiesCount = Object.keys(
@@ -161,9 +140,9 @@ function Review({ actions, onNext, onClear }: ReviewProps) {
 
   return (
     <>
-      <TrashButton onClick={onClear}>
+      <button className="cursor-pointer" onClick={onClear}>
         <Trash color="grey-04" />
-      </TrashButton>
+      </button>
       <Spacer width={8} />
       <Text color="grey-04" variant="button">
         {actionsCount} {pluralize('change', actionsCount)} across {entitiesCount} {pluralize('entity', entitiesCount)}

@@ -1,4 +1,5 @@
 import { useAccount } from 'wagmi';
+
 import { useHydrated } from '../hooks/use-hydrated';
 import { useSpaces } from '../spaces/use-spaces';
 

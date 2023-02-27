@@ -1,4 +1,6 @@
+import * as React from 'react';
 import Link from 'next/link';
+
 import { Text } from '../../design-system/text';
 import { Truncate } from '../../design-system/truncate';
 
@@ -12,7 +14,7 @@ interface Props {
 export function CellContent({ isExpanded, value, isEntity, href }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <a className="text-tableCell inline-block text-ctaPrimary transition-colors duration-150 ease-in-out hover:underline hover:decoration-ctaHover hover:text-ctaHover">
+      <a className="inline-block text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">
         {value}
       </a>
     </Link>

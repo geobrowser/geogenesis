@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
+
 import { ID } from '../id';
 import {
   Action as ActionType,
@@ -9,7 +10,7 @@ import {
   StringValue,
   Triple,
   TripleValueType,
-  Value,
+  Value
 } from '../types';
 import { valueTypes } from '../value-types';
 

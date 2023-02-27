@@ -1,61 +1,15 @@
-import { useTheme } from '@emotion/react';
-import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { cx } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
+import { Eye } from '~/modules/design-system/icons/eye';
 import { useWindowSize } from '~/modules/hooks/use-window-size';
-import { Eye } from '../../design-system/icons/eye';
 
-interface ContentProps {
-  children: React.ReactNode;
-  width: number;
-  alignOffset?: number;
-  sideOffset?: number;
-}
 
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  borderRadius: props.theme.radius,
-  padding: props.theme.space * 3,
-  width: `calc(${props.width}px / 2)`,
-  backgroundColor: props.theme.colors.white,
-  boxShadow: props.theme.shadows.button,
-  zIndex: 1,
+const MotionContent = motion(PopoverPrimitive.Content);
 
-  border: `1px solid ${props.theme.colors['grey-02']}`,
 
-  '@media (max-width: 768px)': {
-    margin: '0 auto',
-    width: '98vw',
-  },
-}));
 
-const MotionContent = motion(StyledContent);
-
-const StyledIconButton = styled.button<{ open: boolean }>(props => ({
-  all: 'unset',
-  backgroundColor: props.open ? props.theme.colors['grey-01'] : props.theme.colors.white,
-  color: props.theme.colors['grey-04'],
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  transition: 'colors 0.15s ease-in-out',
-  borderRadius: `0 ${props.theme.radius}px ${props.theme.radius}px 0`,
-  borderLeft: 'none',
-
-  '&:hover': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors['grey-01'],
-    color: props.theme.colors.text,
-  },
-
-  '&:active': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-
-  '&:focus': {
-    color: props.theme.colors.text,
-    outlineColor: props.theme.colors.ctaPrimary,
-  },
-}));
 
 interface Props {
   containerWidth: number;
@@ -64,7 +18,6 @@ interface Props {
 }
 
 export function DebugPopover({ children, containerWidth, className }: Props) {
-  const theme = useTheme();
   const { width } = useWindowSize();
 
   // Using a controlled state to enable exit animations with framer-motion
@@ -72,34 +25,40 @@ export function DebugPopover({ children, containerWidth, className }: Props) {
 
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>
-        <span className={className}>
-          <StyledIconButton open={open}>
-            <Eye />
-          </StyledIconButton>
-        </span>
-      </PopoverPrimitive.Trigger>
-      <AnimatePresence mode="wait">
-        {open ? (
-          <MotionContent
-            forceMount={true} // We force mounting so we can control exit animations through framer-motion
-            initial={{ opacity: 0, y: -10 }}
-            exit={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.1,
-              ease: 'easeInOut',
-            }}
-            avoidCollisions={true}
-            width={containerWidth}
-            sideOffset={theme.space * 2.5 + 2}
-            alignOffset={-(theme.space * 2) + 4}
-            align={width > 768 ? 'end' : 'start'}
-          >
-            {children}
-          </MotionContent>
-        ) : null}
-      </AnimatePresence>
-    </PopoverPrimitive.Root>
+    <PopoverPrimitive.Trigger asChild>
+      <button
+        className={cx(
+          open ? 'bg-grey-01' : 'bg-white',
+          'h-full py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary',
+          className
+        )}
+        aria-label="advanced-filter-button"
+      >
+        <Eye />
+      </button>
+    </PopoverPrimitive.Trigger>
+    <AnimatePresence mode="wait">
+      {open ? (
+        <MotionContent
+          forceMount={true} // We force mounting so we can control exit animations through framer-motion
+          initial={{ opacity: 0, y: -10 }}
+          exit={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: 0.1,
+            ease: 'easeInOut',
+          }}
+          avoidCollisions={true}
+          className="relative z-[1] rounded border border-grey-02 bg-white p-3 shadow-button md:mx-auto md:w-[98vw] md:self-start"
+          style={{ width: `calc(${containerWidth}px / 2)` }}
+          sideOffset={6}
+          alignOffset={-1}
+          align={width > 768 ? 'end' : 'start'}
+        >
+         {children}
+        </MotionContent>
+      ) : null}
+    </AnimatePresence>
+  </PopoverPrimitive.Root>
   );
 }

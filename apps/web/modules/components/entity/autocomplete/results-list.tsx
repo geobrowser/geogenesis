@@ -1,5 +1,7 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
@@ -9,54 +11,27 @@ import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity, Space } from '~/modules/types';
 
-export const ResultsList = styled.ul({
-  listStyle: 'none',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
-  margin: 0,
-  padding: 0,
+type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
-  maxHeight: 340,
-  overflowX: 'hidden',
-  overflowY: 'auto',
-});
+export const ResultsList = (props: ResultsListProps) => (
+  <ul
+    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden p-0"
+    {...props}
+  />
+);
 
-export const ResultItem = styled.button<{ existsOnEntity?: boolean }>(props => ({
-  all: 'unset',
-  display: 'flex',
-  flexDirection: 'column',
-  width: '100%',
-  padding: `${props.theme.space * 2}px`,
+type ResultItemProps = React.ComponentPropsWithoutRef<'button'> & { existsOnEntity?: boolean };
 
-  '&:hover': {
-    backgroundColor: props.theme.colors['grey-01'],
-    ...(!props.existsOnEntity && {
-      cursor: 'pointer',
-    }),
-  },
-
-  '&:focus': {
-    outline: 'none',
-    backgroundColor: props.theme.colors['grey-01'],
-  },
-
-  ...(props.existsOnEntity && {
-    backgroundColor: props.theme.colors['grey-01'],
-    cursor: 'not-allowed',
-  }),
-
-  "&[aria-selected='true']": {
-    backgroundColor: props.theme.colors['grey-02'],
-  },
-}));
-
-const ResultHeader = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  lineHeight: '1rem',
-});
+export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: ResultItemProps) => (
+  <button
+    className={cx(
+      existsOnEntity ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
+      'flex w-full flex-col p-2 hover:bg-grey-01 focus:bg-grey-01 focus:outline-none aria-selected:bg-grey-02',
+      className
+    )}
+    {...rest}
+  />
+);
 
 interface Props {
   onClick: () => void;
@@ -64,19 +39,6 @@ interface Props {
   alreadySelected?: boolean;
   spaces: Space[];
 }
-
-const BreadcrumbsContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space * 1.5,
-  overflow: 'hidden',
-}));
-
-const TagsContainer = styled.div(props => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: props.theme.space * 1.5,
-}));
 
 export function ResultContent({ onClick, result, alreadySelected, spaces }: Props) {
   const space = spaces.find(space => space.id === result.nameTripleSpace);
@@ -89,17 +51,16 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
 
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
-      <ResultHeader>
+      <div className="flex items-center justify-between leading-[1rem]">
         <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
           {result.name ?? result.id}
         </Text>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
-      </ResultHeader>
-
+      </div>
       {showBreadcrumbs && (
         <>
           <Spacer height={4} />
-          <BreadcrumbsContainer>
+          <div className="flex items-center gap-1.5 overflow-hidden">
             {spaceName && <Breadcrumb img={spaceImg}>{spaceName}</Breadcrumb>}
             {showBreadcrumbChevron && (
               <span style={{ rotate: '270deg' }}>
@@ -107,19 +68,19 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
               </span>
             )}
             {result.types.length > 0 && (
-              <TagsContainer>
+              <div className="flex items-center gap-1.5">
                 {result.types.map(type => (
                   <Tag key={type.id}>{type.name}</Tag>
                 ))}
-              </TagsContainer>
+              </div>
             )}
-          </BreadcrumbsContainer>
+          </div>
         </>
       )}
       {result.description && (
         <>
           <Spacer height={4} />
-          <Truncate maxLines={3} shouldTruncate variantLineHeight="footnote">
+          <Truncate maxLines={3} shouldTruncate variant="footnote">
             <Text variant="footnote">{result.description}</Text>
           </Truncate>
         </>

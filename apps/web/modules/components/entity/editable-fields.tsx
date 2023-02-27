@@ -1,5 +1,6 @@
+import * as React from 'react';
+import { useEffect, useRef } from 'react';
 import { cva } from 'class-variance-authority';
-import React, { useEffect, useRef } from 'react';
 
 const textareaStyles = cva(
   'w-full h-full resize-none bg-transparent overflow-hidden m-0 p-0 placeholder:text-grey-02 focus:outline-none',

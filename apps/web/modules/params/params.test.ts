@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { Config } from '../config';
 import { getConfigFromUrl, stringifyQueryParameters, parseTripleQueryParameters } from './params';
 

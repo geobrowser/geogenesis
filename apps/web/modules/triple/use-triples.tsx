@@ -1,4 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
+
 import { FilterState } from '../types';
 import { useTripleStoreContext } from './triple-store-provider';
 

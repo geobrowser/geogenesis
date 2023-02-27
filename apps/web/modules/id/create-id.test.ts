@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { EntityValue, NumberValue, StringValue } from '../types';
 import { createTripleId } from './create-id';
 

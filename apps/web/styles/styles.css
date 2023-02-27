@@ -1,95 +1,70 @@
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 400;
-  src: url('/fonts/calibre-regular.woff2') format('woff2');
+@tailwind base;
+
+/* Global styles */
+html {
+  @apply overflow-y-auto overflow-x-hidden;
 }
 
-/* @font-face {
-  font-family: 'Calibre';
-  font-style: italic;
-  font-weight: 400;
-  src: url('/fonts/TestCalibre-RegularItalic.otf') format('opentype');
-} */
-
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 500;
-  src: url('/fonts/calibre-medium.woff2') format('woff2');
+body {
+  @apply bg-bg;
+  font-family: Calibre, sans-serif;
+  text-rendering: 'optimizeLegibility';
 }
 
-/* @font-face {
-  font-family: 'Calibre';
-  font-style: italic;
-  font-weight: 500;
-  src: url('/fonts/TestCalibre-MediumItalic.otf') format('opentype');
-} */
-
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 600;
-  src: url('/fonts/calibre-semibold.woff2') format('woff2');
+html body {
+  margin-right: 0 !important;
 }
 
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 700;
-  src: url('/fonts/calibre-bold.woff2') format('woff2');
+/* Normalize link, button, and form styles */
+a {
+  text-decoration: none;
 }
 
-/* 
-  Additional resets based on Tailwind's Preflight
-  https://tailwindcss.com/docs/preflight
-*/
-/* blockquote,
-dl,
-dd,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-hr,
-figure,
-p,
-pre {
-  margin: 0;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-size: inherit;
+button {
+  border-radius: 0;
   font-weight: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
 }
 
-img,
-svg,
-video,
-canvas,
-audio,
-iframe,
-embed,
-object {
-  display: block;
-  vertical-align: middle;
+select {
+  text-transform: inherit;
 }
 
-*,
-::before,
-::after {
-  border-width: 0;
-  border-style: solid;
+input[type='button'],
+input[type='reset'],
+input[type='submit'] {
+  text-align: inherit;
+  cursor: pointer;
 }
 
-button:focus {
-  outline: 1px dotted;
-  outline: 5px auto -webkit-focus-ring-color;
-} */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-results-button,
+input[type='search']::-webkit-search-results-decoration {
+  appearance: none;
+}
+
+a:focus,
+button:focus,
+input[type='button']:focus,
+input[type='reset']:focus,
+input[type='submit']:focus {
+  outline: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: inherit;
+  opacity: 0.75;
+}
+
+@tailwind components;
+
+@tailwind utilities;

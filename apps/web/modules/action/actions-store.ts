@@ -1,5 +1,6 @@
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
+
 import { Action } from '.';
 import { INetwork } from '../services/network';
 import {

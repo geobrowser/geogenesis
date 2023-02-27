@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell } from '../../types';

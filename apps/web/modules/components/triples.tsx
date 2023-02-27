@@ -1,4 +1,6 @@
+import * as React from 'react';
 import { useState } from 'react';
+
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { useTriples } from '~/modules/triple/use-triples';

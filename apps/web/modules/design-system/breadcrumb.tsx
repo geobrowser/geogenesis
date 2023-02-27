@@ -1,64 +1,10 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import cx from 'classnames';
 import Image from 'next/image';
 import Link from 'next/link';
+
 import { Spacer } from './spacer';
 import { Text } from './text';
-
-const BreadcrumbLink = styled.a(props => ({
-  textDecoration: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  padding: '1px 0', // creates space above the image and text to make focus state look better
-  whiteSpace: 'nowrap',
-
-  span: {
-    transition: 'color 0.15s ease-in-out',
-  },
-
-  '&:hover': {
-    span: {
-      color: props.theme.colors.text,
-    },
-  },
-}));
-
-const BasicBreadcrumbContainer = styled.span(props => ({
-  textDecoration: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  padding: '1px 0', // creates space above the image and text to make focus state look better
-  whiteSpace: 'nowrap',
-}));
-
-const ImageContainer = styled.div(props => ({
-  // this is required for next/image
-  // https://nextjs.org/docs/api-reference/next/image#fill
-  position: 'relative',
-  overflow: 'hidden',
-  width: props.theme.space * 4,
-  height: props.theme.space * 4,
-  borderRadius: props.theme.radius / 1.5,
-}));
-
-const SmallImageContainer = styled.div(props => ({
-  // this is required for next/image
-  // https://nextjs.org/docs/api-reference/next/image#fill
-  position: 'relative',
-  overflow: 'hidden',
-  width: props.theme.space * 3,
-  height: props.theme.space * 3,
-  borderRadius: props.theme.radius / 1.5,
-}));
-
-const Truncate = styled.div<{ shouldTruncate?: boolean }>(props => ({
-  ...(props.shouldTruncate && {
-    maxWidth: '100%',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  }),
-}));
 
 interface LinkableBreadcrumbProps {
   href: string;
@@ -71,21 +17,24 @@ interface LinkableBreadcrumbProps {
 export function LinkableBreadcrumb({ children, href, img, isNested, shouldTruncate }: LinkableBreadcrumbProps) {
   return (
     <Link href={href} passHref>
-      <BreadcrumbLink title={children}>
+      <a
+        className="[&>span]:transition-color flex cursor-pointer items-center whitespace-nowrap no-underline [&>span]:duration-150 [&>span]:ease-in-out hover:[&>span]:text-text"
+        title={children}
+      >
         {img && (
           <>
-            <ImageContainer>
+            <div className="relative h-4 w-4 overflow-hidden rounded-sm">
               <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
-            </ImageContainer>
+            </div>
             <Spacer width={8} />
           </>
         )}
-        <Truncate shouldTruncate={shouldTruncate}>
-          <Text variant="metadataMedium" color={isNested ? 'grey-04' : 'text'}>
+        <div className={cx('overflow-hidde max-w-full', shouldTruncate && 'truncate')}>
+          <Text variant="button" color={isNested ? 'grey-04' : 'text'} className="hover:!text-text">
             {children}
           </Text>
-        </Truncate>
-      </BreadcrumbLink>
+        </div>
+      </a>
     </Link>
   );
 }
@@ -97,18 +46,18 @@ interface BreadcrumbProps {
 
 export function Breadcrumb({ children, img }: BreadcrumbProps) {
   return (
-    <BasicBreadcrumbContainer>
+    <span className="flex cursor-pointer items-center whitespace-nowrap py-px no-underline">
       {img && (
         <>
-          <SmallImageContainer>
+          <div className="relative h-3 w-3 overflow-hidden rounded-sm">
             <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
-          </SmallImageContainer>
+          </div>
           <Spacer width={4} />
         </>
       )}
       <Text variant="tag" color={'text'}>
         {children}
       </Text>
-    </BasicBreadcrumbContainer>
+    </span>
   );
 }

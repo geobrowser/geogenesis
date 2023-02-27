@@ -1,5 +1,7 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import * as React from 'react';
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+
 import { SmallButton } from '~/modules/design-system/button';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Spacer } from '~/modules/design-system/spacer';

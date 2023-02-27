@@ -1,9 +1,11 @@
-import styled from '@emotion/styled';
-import { LayoutGroup } from 'framer-motion';
+import * as React from 'react';
+import { useState } from 'react';
+import cx from 'classnames';
 import Head from 'next/head';
 import Link from 'next/link';
+import { LayoutGroup } from 'framer-motion';
 import pluralize from 'pluralize';
-import { useState } from 'react';
+
 import { SmallButton } from '~/modules/design-system/button';
 import { LinkableChip } from '~/modules/design-system/chip';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
@@ -16,39 +18,8 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
-import { sortEntityPageTriples } from './editable-entity-page-utils';
+import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
-
-const Content = styled.div(({ theme }) => ({
-  border: `1px solid ${theme.colors['grey-02']}`,
-  borderRadius: theme.radius,
-  backgroundColor: theme.colors.white,
-}));
-
-const Attributes = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: theme.space * 6,
-  padding: theme.space * 5,
-}));
-
-const Entities = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  flexWrap: 'wrap',
-  gap: theme.space * 3,
-}));
-
-const EntityActionGroup = styled.div({
-  display: 'flex',
-  justifyContent: 'flex-end',
-
-  '@media (max-width: 600px)': {
-    button: {
-      flexGrow: 1,
-    },
-  },
-});
 
 interface Props {
   triples: Triple[];
@@ -69,13 +40,11 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
         <title>{name ?? id}</title>
         <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
       </Head>
-
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
       </Truncate>
-
       {description && (
         <>
           <Spacer height={16} />
@@ -84,28 +53,21 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
           </Text>
         </>
       )}
-
       <Spacer height={16} />
-
-      <EntityActionGroup>
+      <div className="flex justify-end sm:[&>button]:flex-grow">
         <CopyIdButton id={id} />
-      </EntityActionGroup>
-
+      </div>
       <Spacer height={8} />
-
-      <Content>
-        <Attributes>
+      <div className="rounded border border-grey-02 bg-white">
+        <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} space={space} />
-        </Attributes>
-      </Content>
-
+        </div>
+      </div>
       <Spacer height={40} />
-
       <Text as="h2" variant="mediumTitle">
         Linked by
       </Text>
-
-      <Entities>
+      <div className="felx-wrap flex flex-col gap-3">
         {Object.entries(linkedEntities).length === 0 ? (
           <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
         ) : (
@@ -116,20 +78,10 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
             ))}
           </LayoutGroup>
         )}
-      </Entities>
+      </div>
     </div>
   );
 }
-
-const EntityAttributeContainer = styled.div({
-  wordBreak: 'break-word',
-});
-
-const GroupedAttributes = styled.div(({ theme }) => ({
-  display: 'flex',
-  gap: theme.space * 2,
-  flexWrap: 'wrap',
-}));
 
 function EntityAttribute({ triple, space }: { triple: Triple; space: string }) {
   return (
@@ -165,12 +117,12 @@ function EntityAttributes({
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <EntityAttributeContainer key={`${entityId}-${attributeId}-${index}`}>
+        <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
           <Text as="p" variant="bodySemibold">
             {triples[0].attributeName || attributeId}
           </Text>
-          <GroupedAttributes>
-            {/* 
+          <div className="flex flex-wrap gap-2">
+            {/*
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
             */}
@@ -187,74 +139,12 @@ function EntityAttributes({
                 </Text>
               )
             )}
-          </GroupedAttributes>
-        </EntityAttributeContainer>
+          </div>
+        </div>
       ))}
     </>
   );
 }
-
-const LinkedEntityCardContainer = styled.div(({ theme }) => ({
-  borderRadius: theme.radius,
-  border: `1px solid ${theme.colors['grey-02']}`,
-  overflow: 'hidden',
-  transition: 'border-color 0.15s ease-in-out',
-
-  ':hover': {
-    border: `1px solid ${theme.colors.text}`,
-
-    a: {
-      borderColor: theme.colors.text,
-    },
-  },
-}));
-
-const LinkedEntityCardHeader = styled.a(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'space-between',
-  verticalAlign: 'top',
-  gap: theme.space * 5,
-
-  padding: theme.space * 4,
-
-  div: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: theme.space * 4,
-  },
-
-  img: {
-    borderRadius: theme.radius,
-  },
-}));
-
-const IconContainer = styled.div({
-  // HACK: Fix visual alignment when aligning the content to the top. The icon does not
-  // line up visually because of the text line height.
-  marginTop: 6,
-});
-
-const LinkedEntityCardContent = styled.div(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: theme.space * 4,
-  padding: theme.space * 4,
-  backgroundColor: theme.colors.white,
-}));
-
-const LinkedEntityCardFooter = styled.div(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${theme.space * 2}px ${theme.space * 4}px`,
-  backgroundColor: theme.colors.white,
-}));
-
-const LinkedEntityDescription = styled.div(({ theme }) => ({
-  padding: theme.space * 4,
-  paddingTop: 0,
-  backgroundColor: theme.colors.bg,
-}));
 
 function LinkedEntityCard({
   originalEntityId,
@@ -278,28 +168,26 @@ function LinkedEntityCard({
 
   return (
     <ResizableContainer>
-      <LinkedEntityCardContainer>
+      <div className="duraiton-150 overflow-hidden rounded border border-grey-02 transition-colors ease-in-out hover:border-text hover:[&>a]:border-text">
         <Link href={NavUtils.toEntity(space, entityGroup.id)} passHref>
-          <LinkedEntityCardHeader>
+          <a className="flex justify-between gap-5 p-4 align-top [&>div]:flex [&>div]:items-start [&>div]:gap-4 [&>img]:rounded">
             <Text as="h2" variant="cardEntityTitle">
               {entityGroup.name ?? entityGroup.id}
             </Text>
             {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
-            <IconContainer>
+            <div className="mt-[6px]">
               <RightArrowDiagonal color="grey-04" />
-            </IconContainer>
-          </LinkedEntityCardHeader>
+            </div>
+          </a>
         </Link>
-
         {description && (
-          <LinkedEntityDescription>
+          <div className="bg-bg p-4 pt-0">
             <Text as="p" color="grey-04">
               {description}
             </Text>
-          </LinkedEntityDescription>
+          </div>
         )}
-
-        <LinkedEntityCardContent>
+        <div className="flex flex-col gap-4 bg-white p-4">
           {shouldMaximizeContent && (
             <>
               {linkedTriples.map((triple, i) => (
@@ -308,23 +196,21 @@ function LinkedEntityCard({
               {isExpanded && <EntityAttributes entityId={entityGroup.id} triples={unlinkedTriples} space={space} />}
             </>
           )}
-        </LinkedEntityCardContent>
-
-        <LinkedEntityCardFooter>
+        </div>
+        <div className="flex items-center justify-between bg-white py-2 px-4">
           <Text variant="breadcrumb">
             {entityGroup.triples.length} {pluralize('value', entityGroup.triples.length)}
           </Text>
           <SmallButton variant="secondary" onClick={() => setIsExpanded(!isExpanded)}>
-            <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
+            <span className={cx(isExpanded && 'rotate-180')}>
               <ChevronDownSmall color="grey-04" />
             </span>
-            <Spacer width={6} />
             {isExpanded
               ? `Hide ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`
               : `Show ${unlinkedTriples.length} more ${pluralize('value', unlinkedTriples.length)}`}
           </SmallButton>
-        </LinkedEntityCardFooter>
-      </LinkedEntityCardContainer>
+        </div>
+      </div>
     </ResizableContainer>
   );
 }

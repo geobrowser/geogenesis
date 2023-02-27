@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { SquareButton } from '~/modules/design-system/button';
 import { LeftArrowLong } from '~/modules/design-system/icons/left-arrow-long';
 import { Spacer } from '~/modules/design-system/spacer';

@@ -1,4 +1,3 @@
-import styled from '@emotion/styled';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 import {
@@ -8,9 +7,10 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  useReactTable,
+  useReactTable
 } from '@tanstack/react-table';
 import { useState } from 'react';
+
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
@@ -56,12 +56,6 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
     })
   );
 };
-
-const SpaceHeader = styled.th(props => ({
-  '@media (max-width: 768px)': {
-    minWidth: 300,
-  },
-}));
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
@@ -149,19 +143,21 @@ export function EntityTable({ rows, space, columns }: Props) {
 
   return (
     <div className="overflow-x-scroll rounded">
-      <table className="w-full border-hidden border-collapse bg-white relative" cellSpacing={0} cellPadding={0}>
-        <thead>
-          <tr>
-            {table.getFlatHeaders().map(header => (
-              <SpaceHeader
-                style={{ minWidth: header.column.getSize() }}
-                className="border border-grey-02 border-b-0 text-left p-[10px]"
-                key={header.id}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </SpaceHeader>
-            ))}
-          </tr>
+      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+      <thead>
+          {table.getHeaderGroups().map(headerGroup => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map(header => (
+                <th
+                  key={header.id}
+                  className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
+                  style={{ minWidth: header.column.getSize() }}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              ))}
+            </tr>
+          ))}
         </thead>
         {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         <tbody>
@@ -172,14 +168,11 @@ export function EntityTable({ rows, space, columns }: Props) {
           )}
           {table.getRowModel().rows.map(row => {
             const cells = row.getVisibleCells();
-            const initialTriples = cells
-              .map(cell => cell.getValue<Cell>()?.triples)
-              .flat()
-              .filter(Boolean);
+            
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <tr className="hover:bg-bg">
+              <tr key={entityId} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
@@ -187,12 +180,12 @@ export function EntityTable({ rows, space, columns }: Props) {
 
                   return (
                     <TableCell
+                      key={cellId}
                       isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}
                       width={cell.column.getSize()}
-                      key={cell.id}
                       toggleExpanded={() =>
                         setExpandedCells(prev => ({
                           ...prev,
