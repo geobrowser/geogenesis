@@ -1,4 +1,5 @@
 
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => {
-  const isNameCell = cell.columnId === 'name';
+  const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   
 
 
