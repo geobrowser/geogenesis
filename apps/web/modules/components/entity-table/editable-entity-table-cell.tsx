@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Entity, useEntityTable } from '~/modules/entity';
-import { groupBy, NavUtils } from '~/modules/utils';
+import { NavUtils } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
@@ -23,7 +23,7 @@ interface Props {
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
-  triples: serverTriples,
+  triples,
   create,
   update,
   remove,
@@ -33,7 +33,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     context: {
       entityId: cell.entityId,
       spaceId: space,
-      entityName: Entity.name(serverTriples) ?? '',
+      entityName: Entity.name(triples) ?? '',
     },
     api: {
       create,
@@ -42,20 +42,23 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     },
   });
 
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = serverTriples.length === 0 ? cell.triples : serverTriples;
   const entityName = Entity.name(triples) || '';
   const attributeId = cell.columnId;
-  const groupedTriples = groupBy(triples, t => t.attributeId);
-  const cellTriples = groupedTriples[attributeId] || [];
 
-  const entityValueTriples = cellTriples.filter(t => t.value.type === 'entity');
+  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
 
   const valueType = columnValueType(cell.columnId);
   const cellColumnName = columnName(cell.columnId);
 
   const isNameCell = cell.columnId === 'name';
+  const firstTriple = triples[0];
+  const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
+  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+  const isEmptyCell = triples.length === 0;
+
+  const isEmptyRelation = isRelationValueType && isEmptyCell;
+  const isEmptyText = isTextValueType && isEmptyCell;
+  const isPopulatedRelation = isRelationValueType && !isEmptyCell;
 
   const removeEntityTriple = (triple: Triple) => {
     send({
@@ -104,25 +107,16 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: cellTriples[0], name: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: firstTriple, name: e.target.value } })}
       />
     );
   }
-
-  const firstTriple = cellTriples[0];
-  const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
-  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
-  const isEmptyCell = cellTriples.length === 0;
-
-  const isEmptyRelation = isRelationValueType && isEmptyCell;
-  const isEmptyText = isTextValueType && isEmptyCell;
-  const isPopulatedRelation = isRelationValueType && !isEmptyCell;
 
   return (
     <div className="flex flex-wrap gap-2">
       {isPopulatedRelation && (
         <>
-          {cellTriples.map(triple => (
+          {triples.map(triple => (
             <div key={`entity-${triple.value.id}`}>
               <DeletableChipButton
                 href={NavUtils.toEntity(space, triple.value.id)}
@@ -162,9 +156,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      <div className="absolute right-0">
-        <DebugTriples triples={cellTriples} />
-      </div>
+      <DebugTriples triples={triples} className="absolute right-0" />
     </div>
   );
 });

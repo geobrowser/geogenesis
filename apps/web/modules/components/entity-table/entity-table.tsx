@@ -10,7 +10,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useState } from 'react';
+import { useState } from 'react';
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
@@ -82,8 +82,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const cellTriples = pipe(
       actions$.get()[space],
       actions => Triple.fromActions(actions, cellData.triples),
-      A.filter(t => t.entityId === cellData.entityId),
-      A.uniqBy(t => t.id)
+      A.filter(triple => triple.entityId === cellData.entityId && triple.attributeId === cellData.columnId),
+      A.uniqBy(triple => triple.id)
     );
 
     if (isEditMode) {
@@ -151,19 +151,17 @@ export function EntityTable({ rows, space, columns }: Props) {
     <div className="overflow-x-scroll rounded">
       <table className="w-full border-hidden border-collapse bg-white relative" cellSpacing={0} cellPadding={0}>
         <thead>
-          {table.getHeaderGroups().map(headerGroup => (
-            <tr key={headerGroup.id}>
-              {headerGroup.headers.map(header => (
-                <SpaceHeader
-                  style={{ minWidth: header.column.getSize() }}
-                  className="border border-grey-02 border-b-0 text-left p-[10px]"
-                  key={header.id}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </SpaceHeader>
-              ))}
-            </tr>
-          ))}
+          <tr>
+            {table.getFlatHeaders().map(header => (
+              <SpaceHeader
+                style={{ minWidth: header.column.getSize() }}
+                className="border border-grey-02 border-b-0 text-left p-[10px]"
+                key={header.id}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </SpaceHeader>
+            ))}
+          </tr>
         </thead>
         {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         <tbody>

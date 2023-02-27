@@ -73,9 +73,11 @@ export function DebugPopover({ children, containerWidth, className }: Props) {
   return (
     <PopoverPrimitive.Root onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <StyledIconButton className={className} aria-label="advanced-filter-button" open={open}>
-          <Eye />
-        </StyledIconButton>
+        <span className={className}>
+          <StyledIconButton open={open}>
+            <Eye />
+          </StyledIconButton>
+        </span>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
