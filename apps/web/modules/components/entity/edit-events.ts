@@ -70,7 +70,7 @@ export type EditEvent =
       };
     }
   | {
-      type: 'ADD_ENTITY_VALUE';
+      type: 'ADD_PAGE_ENTITY_VALUE';
       payload: {
         triplesByAttributeId: Record<string, TripleType[]>;
         attribute: {
@@ -311,7 +311,7 @@ const listener =
 
         break;
       }
-      case 'ADD_ENTITY_VALUE': {
+      case 'ADD_PAGE_ENTITY_VALUE': {
         const { triplesByAttributeId, attribute, linkedEntity, entityName } = event.payload;
 
         // This first if clause handles the case when we delete an entity value triple and

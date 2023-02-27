@@ -1,5 +1,5 @@
-import * as React from 'react';
 import Head from 'next/head';
+import * as React from 'react';
 
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
@@ -239,7 +239,7 @@ function EntityAttributes({
   const addEntityValue = (attributeId: string, linkedEntity: EntityType) => {
     // If it's an empty triple value
     send({
-      type: 'ADD_ENTITY_VALUE',
+      type: 'ADD_PAGE_ENTITY_VALUE',
       payload: {
         triplesByAttributeId: groupedTriples,
         attribute: {
