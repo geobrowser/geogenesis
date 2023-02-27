@@ -1,14 +1,14 @@
+import * as React from 'react';
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
 
 interface Props {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 export function Toast({ children }: Props) {
   return (
     <motion.div
-      className="text-button text-white fixed flex justify-between items-center bottom-10 bg-text py-2 px-3 rounded"
+      className="fixed bottom-10 flex items-center justify-between rounded bg-text py-2 px-3 text-button text-white"
       initial={{ y: 90 }}
       animate={{ y: 0 }}
       exit={{ y: 90 }}

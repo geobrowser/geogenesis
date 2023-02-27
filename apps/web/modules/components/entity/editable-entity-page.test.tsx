@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+
 import { EntityStoreProvider } from '~/modules/entity';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';

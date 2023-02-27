@@ -1,20 +1,10 @@
-import styled from '@emotion/styled';
-import { Button, StyledLabel } from '~/modules/design-system/button';
+import * as React from 'react';
+
+import { Button } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
 import { Spacer } from '~/modules/design-system/spacer';
 import { FilterClause, FilterField } from '~/modules/types';
-
-const Flex = styled.div({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-});
-
-const InputWrapper = styled.div({
-  display: 'flex',
-  flex: '1 1 0%',
-});
 
 interface Props {
   filterClause: FilterClause;
@@ -32,12 +22,12 @@ export type FilterOption = {
 
 export function FilterInputGroup({ filterClause, onChange, options, label, onDelete, isDeletable }: Props) {
   return (
-    <Flex>
-      <StyledLabel disabled variant="secondary">
+    <div className="flex items-center justify-center">
+      <Button disabled variant="secondary" className="min-w-[67px] !bg-grey-01 !text-text !shadow-none">
         {label}
-      </StyledLabel>
+      </Button>
       <Spacer width={12} />
-      <InputWrapper>
+      <div className="flex flex-1">
         <Select
           options={options}
           value={filterClause.field}
@@ -46,9 +36,9 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
             onChange(newFilterClause);
           }}
         />
-      </InputWrapper>
+      </div>
       <Spacer width={12} />
-      <InputWrapper>
+      <div className="flex flex-1">
         <Input
           value={filterClause.value}
           onChange={e => {
@@ -56,13 +46,13 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
             onChange(newFilterClause);
           }}
         />
-      </InputWrapper>
+      </div>
       {isDeletable && (
         <>
           <Spacer width={12} />
           <Button icon="trash" variant="secondary" onClick={onDelete} />
         </>
       )}
-    </Flex>
+    </div>
   );
 }

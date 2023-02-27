@@ -12,9 +12,6 @@ const nextConfig = {
   // experimental: {
   //   runtime: 'experimental-edge',
   // },
-  compiler: {
-    emotion: true,
-  },
   images: {
     remotePatterns: [
       {

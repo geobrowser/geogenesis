@@ -1,8 +1,8 @@
-import { useTheme } from '@emotion/react';
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { useState } from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
+
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
@@ -18,42 +18,19 @@ interface ContentProps {
   sideOffset?: number;
 }
 
-const StyledContent = styled(PopoverPrimitive.Content)<ContentProps>(props => ({
-  display: 'flex',
-  flexDirection: 'column',
-  borderRadius: props.theme.radius,
-  backgroundColor: props.theme.colors.white,
-  zIndex: 1,
-  width: 384,
-  overflow: 'hidden',
-  height: '100%',
-
-  boxShadow: `inset 0 0 0 1px ${props.theme.colors['grey-02']}`,
-
-  '@media (max-width: 768px)': {
-    margin: '0 auto',
-    width: '98vw',
-  },
-}));
+const StyledContent = (props: ContentProps) => {
+  return (
+    <PopoverPrimitive.Content
+      className="z-[1] flex h-full w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 md:mx-auto md:w-[98vw]"
+      align="start"
+      avoidCollisions={false}
+      forceMount={true}
+      {...props}
+    />
+  );
+};
 
 const MotionContent = motion(StyledContent);
-
-const InputContainer = styled.div(props => ({
-  position: 'relative',
-  margin: `${props.theme.space * 2}px`,
-}));
-
-const SearchIconContainer = styled.div(props => ({
-  position: 'absolute',
-  left: props.theme.space * 3,
-  top: props.theme.space * 2.5,
-  zIndex: 100,
-}));
-
-const AddEntityButton = styled(SquareButton)({
-  width: 23,
-  height: 23,
-});
 
 interface Props {
   entityValueIds: string[];
@@ -63,22 +40,24 @@ interface Props {
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
   const autocomplete = useAutocomplete(spaceId);
-  const theme = useTheme();
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
+  // @TODO remove console.info
+  console.info('open:', open);
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <AddEntityButton as="span" icon="createSmall" />
+        <SquareButton icon="createSmall" />
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
           <MotionContent
-            forceMount={true} // We force mounting so we can control exit animations through framer-motion
+            // We force mounting so we can control exit animations through framer-motion
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -86,16 +65,14 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            avoidCollisions={false}
-            sideOffset={theme.space * 2}
-            align="start"
+            sideOffset={8}
           >
-            <InputContainer>
-              <SearchIconContainer>
+            <div className="relative m-0.5 p-2">
+              <div className="absolute top-[1.125rem] left-5 z-100">
                 <Search />
-              </SearchIconContainer>
+              </div>
               <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
-            </InputContainer>
+            </div>
             <ResizableContainer duration={0.125}>
               <ResultsList>
                 {autocomplete.results.map((result, i) => (

@@ -1,6 +1,8 @@
-import { createRoomContext } from '@liveblocks/react';
+import * as React from 'react';
 import { Component, useEffect } from 'react';
+import { createRoomContext } from '@liveblocks/react';
 import { useAccount } from 'wagmi';
+
 import { Action, useActionsStore } from '~/modules/action';
 import { client } from './entity-presence-client';
 

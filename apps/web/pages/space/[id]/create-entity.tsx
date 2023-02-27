@@ -1,5 +1,7 @@
-import { GetServerSideProps } from 'next';
+import * as React from 'react';
 import { useMemo } from 'react';
+import type { GetServerSideProps } from 'next';
+
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { EntityStoreProvider } from '~/modules/entity';
 import { ID } from '~/modules/id';

@@ -1,7 +1,9 @@
-import { Space, Space__factory } from '@geogenesis/contracts';
-import { useRouter } from 'next/router';
+import * as React from 'react';
 import { FormEvent } from 'react';
+import { useRouter } from 'next/router';
+import { Space, Space__factory } from '@geogenesis/contracts';
 import { useSigner } from 'wagmi';
+
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 

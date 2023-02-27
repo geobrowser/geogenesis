@@ -1,4 +1,5 @@
-import styled from '@emotion/styled';
+import * as React from 'react';
+import { memo, useState } from 'react';
 import {
   ColumnDef,
   createColumnHelper,
@@ -8,7 +9,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { memo, useState } from 'react';
+
 import { LinkableChip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { Triple, Value } from '../types';
@@ -16,17 +17,6 @@ import { NavUtils } from '../utils';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
-
-const Container = styled.div(props => ({
-  padding: 0,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  borderRadius: props.theme.radius,
-  overflow: 'hidden',
-
-  '@media(max-width: 1200px)': {
-    overflowX: 'scroll',
-  },
-}));
 
 const columnHelper = createColumnHelper<Triple>();
 
@@ -122,11 +112,11 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
   });
 
   return (
-    <Container>
-      <Table cellSpacing={0} cellPadding={0}>
+    <div className="overflow-hidden rounded border border-b-0 border-grey-02 xl:overflow-x-scroll">
+      <Table cellSpacing={0} cellPadding={0} className="relative -inset-px">
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
-            <tr key={headerGroup.id}>
+            <tr key={headerGroup.id} className="">
               {headerGroup.headers.map(header => (
                 <TableHeader width={header.column.getSize()} key={header.id}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
@@ -169,6 +159,6 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
           ))}
         </tbody>
       </Table>
-    </Container>
+    </div>
   );
 });

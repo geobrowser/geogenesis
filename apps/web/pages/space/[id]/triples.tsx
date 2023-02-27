@@ -1,5 +1,7 @@
-import { GetServerSideProps } from 'next';
+import * as React from 'react';
+import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';

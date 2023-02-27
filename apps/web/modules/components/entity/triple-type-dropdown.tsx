@@ -1,83 +1,17 @@
-import isPropValid from '@emotion/is-prop-valid';
-import styled from '@emotion/styled';
-import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import * as React from 'react';
+import { useState } from 'react';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
+import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 
-const StyledTrigger = styled(DropdownPrimitive.Trigger)(props => ({
-  all: 'unset',
-  ...props.theme.typography.button,
-  color: props.theme.colors.text,
-  backgroundColor: props.theme.colors.white,
-  flex: 1,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderRadius: props.theme.radius,
-  textWrap: 'nowrap',
-  whiteSpace: 'pre',
+import { SquareButton } from '~/modules/design-system/button';
+import type { IconName } from '~/modules/design-system/icon';
 
-  '&:hover': {
-    boxShadow: `inset 0 0 0 1px ${props.theme.colors.text}`,
-    cursor: 'pointer',
-  },
-
-  '&:focus': {
-    boxShadow: `inset 0 0 0 2px ${props.theme.colors.text}`,
-    outline: 'none',
-  },
-
-  '&[data-placeholder]': { color: props.theme.colors.text },
-}));
-
-const StyledContent = styled(DropdownPrimitive.Content)(props => ({
-  overflow: 'hidden',
-  backgroundColor: 'white',
-  borderRadius: 6,
-  border: `1px solid ${props.theme.colors['grey-02']}`,
-  width: 160,
-  zIndex: 10,
-}));
-
-const MotionContent = motion(StyledContent);
-
-const StyledGroup = styled(DropdownPrimitive.Group)(props => ({
-  overflow: 'hidden',
-  borderRadius: props.theme.radius,
-}));
-
-const StyledItem = styled(DropdownPrimitive.Item, { shouldForwardProp: prop => isPropValid(prop) })<{
-  isLast: boolean;
-}>(props => ({
-  all: 'unset',
-  ...props.theme.typography.button,
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: `${props.theme.space * 2}px ${props.theme.space * 3}px`,
-  color: props.theme.colors['grey-04'],
-
-  userSelect: 'none',
-
-  ...(!props.isLast && {
-    borderBottom: `1px solid ${props.theme.colors['grey-02']}`,
-  }),
-
-  '&[data-highlighted]': {
-    cursor: 'pointer',
-    backgroundColor: props.theme.colors.bg,
-    color: props.theme.colors.text,
-  },
-
-  ...(props.disabled && {
-    color: props.theme.colors['grey-04'],
-    cursor: 'not-allowed',
-  }),
-}));
+const MotionContent = motion(DropdownPrimitive.Content);
 
 interface Props {
-  value: React.ReactNode;
-  options: { label: React.ReactNode; onClick: () => void; disabled: boolean }[];
+  value: IconName;
+  options: { value: IconName; label: React.ReactNode; onClick: () => void; disabled: boolean }[];
 }
 
 export const TripleTypeDropdown = ({ value, options }: Props) => {
@@ -85,8 +19,10 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
   const [open, setOpen] = useState(false);
 
   return (
-    <DropdownPrimitive.Root onOpenChange={setOpen}>
-      <StyledTrigger>{value}</StyledTrigger>
+    <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
+      <DropdownPrimitive.Trigger className="inline-flex flex-1 items-center justify-between">
+        <SquareButton icon={value} isActive={open} />
+      </DropdownPrimitive.Trigger>
       <AnimatePresence>
         {open && (
           <MotionContent
@@ -100,18 +36,22 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
             }}
             align="end"
             sideOffset={2}
+            className="z-10 w-[160px] self-end overflow-hidden rounded border border-grey-02 bg-white"
           >
-            <StyledGroup>
+            <DropdownPrimitive.Group className="overflow-hidden rounded">
               {options.map((option, index) => (
-                <StyledItem
+                <DropdownPrimitive.Item
                   key={`triple-type-dropdown-${index}`}
-                  isLast={index === options.length - 1}
                   onClick={option.disabled ? undefined : option.onClick}
+                  className={cx(
+                    'flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    value === option.value && '!bg-bg !text-text'
+                  )}
                 >
                   {option.label}
-                </StyledItem>
+                </DropdownPrimitive.Item>
               ))}
-            </StyledGroup>
+            </DropdownPrimitive.Group>
           </MotionContent>
         )}
       </AnimatePresence>

@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -28,25 +30,21 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
     <EntityTableErrorBoundary spaceId={spaceId} typeId={entityTableStore.selectedType?.entityId ?? ''}>
       <PageContainer>
         <Spacer height={20} />
-
         <EntityInput spaceId={spaceId} />
         <Spacer height={12} />
-
-        {/* 
+        {/*
         Using a container to wrap the table to make styling borders around
         the table easier. Otherwise we need to do some pseudoselector shenanigans
         or use box-shadow instead of border.
       */}
-        <div className="p-0 border border-grey-02 rounded overflow-hidden">
+        <div className="overflow-hidden rounded border border-grey-02 p-0">
           <EntityTable
             space={spaceId}
             columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}
             rows={entityTableStore.hydrated ? entityTableStore.rows : initialRows}
           />
         </div>
-
         <Spacer height={12} />
-
         <PageNumberContainer>
           {entityTableStore.pageNumber > 1 && (
             <>

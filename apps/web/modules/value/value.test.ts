@@ -1,4 +1,5 @@
 import { describe, expect } from 'vitest';
+
 import { Triple } from '../types';
 import { nameOfEntityValue } from './value';
 

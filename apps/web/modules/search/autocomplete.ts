@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, G, pipe, S } from '@mobily/ts-belt';
-import { useMemo } from 'react';
+
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
