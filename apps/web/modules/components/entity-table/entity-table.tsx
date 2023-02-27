@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { memo, useState } from 'react';
+import { useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 import {
@@ -171,7 +171,7 @@ export function EntityTable({ rows, space, columns }: Props) {
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (
-              <tr className="hover:bg-bg">
+              <tr key={entityId} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
@@ -179,12 +179,12 @@ export function EntityTable({ rows, space, columns }: Props) {
 
                   return (
                     <TableCell
+                      key={cellId}
                       isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}
                       width={cell.column.getSize()}
-                      key={cell.id}
                       toggleExpanded={() =>
                         setExpandedCells(prev => ({
                           ...prev,

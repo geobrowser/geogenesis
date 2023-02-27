@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { GetServerSideProps } from 'next';
+import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';

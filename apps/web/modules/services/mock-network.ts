@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
+
 import { Triple } from '../types';
 import { FetchTriplesOptions, INetwork } from './network';
 
