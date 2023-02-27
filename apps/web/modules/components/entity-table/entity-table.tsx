@@ -9,6 +9,7 @@ import {
   getPaginationRowModel,
   useReactTable
 } from '@tanstack/react-table';
+import { cx } from 'class-variance-authority';
 import { useState } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
@@ -42,7 +43,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={`flex justify-between items-center ${isLastColumn && 'pr-12'}`}>
+          <div className={cx("flex justify-between items-center", isLastColumn ? 'pr-12' : '')}>
             <EditableEntityTableColumnHeader
               column={column}
               entityId={column.id}
