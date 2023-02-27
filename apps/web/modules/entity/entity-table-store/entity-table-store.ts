@@ -24,6 +24,7 @@ interface IEntityTableStore {
   ActionsStore: ActionsStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
+  columnValueType: (columnId: string) => string;
 }
 
 interface IEntityTableStoreConfig {

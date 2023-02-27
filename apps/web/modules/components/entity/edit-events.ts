@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useMemo } from 'react';
 
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
@@ -239,7 +239,6 @@ const listener =
           });
         } else if (isRelationValueType) {
           // Handles the case when the column is changed from text to relation.
-          console.log('Removing all triples from the column');
           return cellTriples.forEach(triple => remove(triple));
         } else {
           return;

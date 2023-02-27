@@ -67,6 +67,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const valueType = Entity.valueType(triples) ?? SYSTEM_IDS.TEXT;
 
+  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 
   const onChangeTripleType = (valueType: keyof typeof valueTypes) => {
@@ -95,7 +96,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
       {isUnpublished && (
         <TripleTypeDropdown
-          value={SYSTEM_IDS.TEXT ? 'text' : 'relation'}
+          value={isTextValueType ? 'text' : 'relation'}
           options={[
             {
               label: (

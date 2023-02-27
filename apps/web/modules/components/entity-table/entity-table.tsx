@@ -17,6 +17,7 @@ import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
+import { valueTypes } from '~/modules/value-types';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
@@ -66,6 +67,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const isEditor = table.options.meta?.isEditor;
 
     const { create, update, remove, actions$ } = useActionsStoreContext();
+    const { columnValueType } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -73,10 +75,17 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
+    const valueType = columnValueType(cellData.columnId);
+
     const cellTriples = pipe(
       actions$.get()[space],
       actions => Triple.fromActions(actions, cellData.triples),
-      A.filter(triple => triple.entityId === cellData.entityId && triple.attributeId === cellData.columnId),
+      A.filter(triple => {
+        const isRowCell = triple.entityId === cellData.entityId;
+        const isColCell = triple.attributeId === cellData.columnId;
+        const isCurrentValueType = triple.value.type === valueTypes[valueType];
+        return isRowCell && isColCell && isCurrentValueType;
+      }),
       A.uniqBy(triple => triple.id)
     );
 
@@ -99,7 +108,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       );
     } else if (cellData && !isPlaceholderCell) {
       return (
-        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} space={space} isExpanded={isExpanded} />
+        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} triples={cellTriples} space={space} isExpanded={isExpanded} />
       );
     } else {
       return null;
