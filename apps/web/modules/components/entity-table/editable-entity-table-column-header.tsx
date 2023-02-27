@@ -85,9 +85,9 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   };
 
   return (
-    <div className="flex items-center justify-between w-full">
+    <div className="flex w-full items-center justify-between">
       <input
-        className="text-smallTitle w-full focus:outline-none placeholder:text-grey-02"
+        className="w-full text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
         onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}

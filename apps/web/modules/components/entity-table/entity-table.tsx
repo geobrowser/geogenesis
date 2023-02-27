@@ -7,7 +7,7 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  useReactTable
+  useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
 import { useState } from 'react';
@@ -43,7 +43,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={cx("flex justify-between items-center", isLastColumn ? 'pr-12' : '')}>
+          <div className={cx('flex items-center justify-between', isLastColumn ? 'pr-12' : '')}>
             <EditableEntityTableColumnHeader
               column={column}
               entityId={column.id}
@@ -109,7 +109,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       );
     } else if (cellData && !isPlaceholderCell) {
       return (
-        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} triples={cellTriples} space={space} isExpanded={isExpanded} />
+        <EntityTableCell
+          key={Entity.name(cellData.triples)}
+          cell={cellData}
+          triples={cellTriples}
+          space={space}
+          isExpanded={isExpanded}
+        />
       );
     } else {
       return null;
@@ -154,7 +160,7 @@ export function EntityTable({ rows, space, columns }: Props) {
   return (
     <div className="overflow-x-scroll rounded">
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-      <thead>
+        <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
@@ -178,7 +184,7 @@ export function EntityTable({ rows, space, columns }: Props) {
           )}
           {table.getRowModel().rows.map(row => {
             const cells = row.getVisibleCells();
-            
+
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (

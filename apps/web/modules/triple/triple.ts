@@ -10,7 +10,7 @@ import {
   StringValue,
   Triple,
   TripleValueType,
-  Value
+  Value,
 } from '../types';
 import { valueTypes } from '../value-types';
 

@@ -18,12 +18,12 @@ export const DebugActions = ({
   return (
     <DebugPopover containerWidth={containerWidth} className={className}>
       Action Count: {actions.length}
-      <div className="whitespace-wrap space-y-8 font-mono font-normal max-h-screen pb-24 overflow-y-auto">
+      <div className="whitespace-wrap max-h-screen space-y-8 overflow-y-auto pb-24 font-mono font-normal">
         {actions.map((action, i) => (
           <div key={i}>
             {Object.entries(action).map(([key, value]) => (
-              <div key={key} className="whitespace-normal flex items-center">
-                <div className="text-purple inline-block underline w-32">{key}</div>
+              <div key={key} className="flex items-center whitespace-normal">
+                <div className="inline-block w-32 text-purple underline">{key}</div>
                 <div className="px-4">
                   <RightArrowLong />
                 </div>

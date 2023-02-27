@@ -15,10 +15,10 @@ export const DebugObject = ({
 
   return (
     <DebugPopover containerWidth={containerWidth} className={className}>
-      <div className="whitespace-wrap space-y-8 font-mono font-normal  overflow-y-auto">
+      <div className="whitespace-wrap space-y-8 overflow-y-auto font-mono  font-normal">
         {Object.entries(object).map(([key, value]) => (
-          <div key={key} className="whitespace-normal flex items-center">
-            <div className="text-purple inline-block underline">{key}</div>
+          <div key={key} className="flex items-center whitespace-normal">
+            <div className="inline-block text-purple underline">{key}</div>
             <div className="px-4">
               <RightArrowLong />
             </div>
