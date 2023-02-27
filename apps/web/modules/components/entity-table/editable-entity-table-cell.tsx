@@ -57,12 +57,11 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isNameCell = cell.columnId === 'name';
 
-  const removeOrResetEntityTriple = (triple: Triple) => {
+  const removeEntityTriple = (triple: Triple) => {
     send({
       type: 'REMOVE_ENTITY',
       payload: {
         triple,
-        isLastEntity: groupedTriples[triple.attributeId].length === 1,
       },
     });
   };
@@ -127,7 +126,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             <div key={`entity-${triple.value.id}`}>
               <DeletableChipButton
                 href={NavUtils.toEntity(space, triple.value.id)}
-                onClick={() => removeOrResetEntityTriple(triple)}
+                onClick={() => removeEntityTriple(triple)}
               >
                 <a>{Value.nameOfEntityValue(triple)}</a>
               </DeletableChipButton>

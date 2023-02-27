@@ -282,7 +282,7 @@ function EntityAttributes({
   const removeOrResetEntityTriple = (triple: TripleType) => {
     hideSchema(triple.attributeId);
     send({
-      type: 'REMOVE_ENTITY',
+      type: 'REMOVE_PAGE_ENTITY',
       payload: {
         triple,
         isLastEntity: groupedTriples[triple.attributeId].length === 1,

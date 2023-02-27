@@ -46,6 +46,12 @@ export type EditEvent =
       type: 'REMOVE_ENTITY';
       payload: {
         triple: TripleType;
+      };
+    }
+  | {
+      type: 'REMOVE_PAGE_ENTITY';
+      payload: {
+        triple: TripleType;
         isLastEntity: boolean;
       };
     }
@@ -255,7 +261,14 @@ const listener =
           );
         });
       }
+
       case 'REMOVE_ENTITY': {
+        const { triple } = event.payload;
+
+        return remove(triple);
+      }
+
+      case 'REMOVE_PAGE_ENTITY': {
         const { triple, isLastEntity } = event.payload;
 
         if (triple.value.type === 'entity') {

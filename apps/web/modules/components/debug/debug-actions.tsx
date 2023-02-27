@@ -18,7 +18,7 @@ export const DebugActions = ({
   return (
     <DebugPopover containerWidth={containerWidth} className={className}>
       Action Count: {actions.length}
-      <div className="whitespace-wrap space-y-8 font-mono font-normal max-h-screen overflow-y-auto">
+      <div className="whitespace-wrap space-y-8 font-mono font-normal max-h-screen pb-24 overflow-y-auto">
         {actions.map((action, i) => (
           <div key={i}>
             {Object.entries(action).map(([key, value]) => (
