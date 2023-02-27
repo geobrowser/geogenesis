@@ -28,9 +28,9 @@ export const OnboardingDialog = observer(() => {
 
   // Note: set open to true or to isOnboardingVisible to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
-
+  // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={true} label="Onboarding profile">
+    <Command.Dialog open={false} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           {step !== 'success' && (

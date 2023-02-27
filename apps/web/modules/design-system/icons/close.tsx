@@ -4,7 +4,7 @@ interface Props {
   color?: ColorName;
 }
 
-export function CreateSmall({ color }: Props) {
+export function Close({ color }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (

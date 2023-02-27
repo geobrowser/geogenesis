@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { Close } from '~/modules/design-system/icons/close';
 import { ContractSmall } from '~/modules/design-system/icons/contract-small';
 import { Copy } from '~/modules/design-system/icons/copy';
 import { Create } from '~/modules/design-system/icons/create';
@@ -18,12 +19,12 @@ import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
 import type { ColorName } from '~/modules/design-system/theme/colors';
-import { Close } from './icons/close';
 
 export type IconName =
   | 'create'
   | 'createSmall'
   | 'publish'
+  | 'close'
   | 'eye'
   | 'expand'
   | 'expandSmall'
