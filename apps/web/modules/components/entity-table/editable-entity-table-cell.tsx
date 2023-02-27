@@ -50,7 +50,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const valueType = columnValueType(cell.columnId);
   const cellColumnName = columnName(cell.columnId);
 
-  const isNameCell = cell.columnId === 'name';
+  const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   const firstTriple = triples[0];
   const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
