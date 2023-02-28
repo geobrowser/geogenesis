@@ -53,6 +53,8 @@ async function deployPermissionlessSpaceImplementation() {
   const spaceRoot: Root = {
     type: 'root',
     version: '0.0.1',
+    name: '',
+    description: '',
     actions: [
       {
         type: 'createTriple',

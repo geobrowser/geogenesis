@@ -2,7 +2,7 @@ import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Address, BigInt, Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
-import { LogEntry } from '../generated/schema'
+import { LogEntry, Proposal } from '../generated/schema'
 import { handleAction } from './actions'
 
 const IPFS_URI_SCHEME = 'ipfs://'
@@ -29,6 +29,16 @@ export function addEntry(params: EntryParams): void {
   entry.space = space
   entry.createdAtBlock = createdAtBlock
 
+  // For now, Proposal and LogEntry are fairly similar. Eventually
+  // there will be two different handlers for Proposals and LogEntries.
+  const proposalId = `${space}:${author.toHex()}:${params.index.toHex()}`
+  let proposal = new Proposal(proposalId)
+  log.debug(`New proposal: ${proposalId}`, [])
+
+  proposal.space = space
+  proposal.author = author
+  proposal.createdAtBlock = createdAtBlock
+
   log.debug(`Adding entry to space: ${space}`, [])
 
   if (uri.startsWith('data:')) {
@@ -39,12 +49,24 @@ export function addEntry(params: EntryParams): void {
 
       entry.mimeType = dataURI.mimeType
       entry.decoded = bytes
+      proposal.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
         const root = handleActionData(bytes, space, createdAtBlock)
 
         if (root) {
           entry.json = root.toJSON().toString()
+          proposal.json = root.toJSON().toString()
+
+          if (root.name !== null) {
+            proposal.name = root.name
+          } else {
+            proposal.name = proposalId
+          }
+
+          if (root.description !== null) {
+            proposal.description = root.description
+          }
         }
       }
     }
@@ -59,11 +81,23 @@ export function addEntry(params: EntryParams): void {
 
       if (root) {
         entry.json = root.toJSON().toString()
+        proposal.json = root.toJSON().toString()
+
+        if (root.name !== null) {
+          proposal.name = root.name
+        } else {
+          proposal.name = proposalId
+        }
+
+        if (root.description !== null) {
+          proposal.description = root.description
+        }
       }
     }
   }
 
   entry.save()
+  proposal.save()
 
   log.debug(`Indexed: ${entry.uri}`, [])
 }

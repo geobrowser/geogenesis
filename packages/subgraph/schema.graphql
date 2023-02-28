@@ -37,6 +37,8 @@ type LogEntry @entity {
 
   space: Space!
 
+  # @TODO: We may want to store the related Proposal on the LogEntry
+
   """
   The binary data located at the uri.
   """
@@ -46,6 +48,48 @@ type LogEntry @entity {
   The decoded actions located at the uri.
   """
   json: String
+}
+
+"""
+A proposed LogEntry.
+"""
+type Proposal @entity {
+  id: ID!
+  createdAtBlock: BigInt!
+  author: Bytes!
+  name: String!
+  description: String
+  space: Space!
+
+  """
+  The binary data located at the uri.
+  """
+  decoded: Bytes
+
+  """
+  The decoded actions located at the uri.
+  """
+  json: String
+
+  """
+  The changes associated with a proposal
+  """
+  actions: [Action!]! @derivedFrom(field: "proposal")
+}
+
+type Action @entity {
+  type: String!
+  id: ID!
+  proposal: Proposal!
+  entity: GeoEntity!
+  attribute: GeoEntity!
+  valueType: ValueType!
+  valueId: String!
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+  isProtected: Boolean!
+  space: Space!
 }
 
 """
@@ -68,7 +112,7 @@ An edge within the knowledge graph.
 Triples are 3-tuples of (entity, attribute, value).
 """
 type Triple @entity {
-  id: ID! # TODO: namespace ids with space id
+  id: ID!
   entity: GeoEntity!
   attribute: GeoEntity!
   valueType: ValueType!

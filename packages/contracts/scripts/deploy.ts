@@ -49,6 +49,8 @@ async function main() {
   const spaceRoot: Root = {
     type: 'root',
     version: '0.0.1',
+    name: '',
+    description: '',
     actions: [
       {
         type: 'createTriple',

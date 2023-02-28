@@ -112,3 +112,10 @@ export interface Cell {
 }
 
 export type Row = Record<string, Cell>;
+
+export type Proposal = {
+  id: string;
+  json: string; // represents the Root object
+  name: string;
+  description: string;
+}

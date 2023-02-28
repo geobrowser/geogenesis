@@ -1,6 +1,8 @@
 export interface Root {
   type: 'root'
   version: string
+  name: string
+  description: string
   actions: Action[]
 }
 

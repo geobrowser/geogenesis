@@ -5,6 +5,8 @@ it('validates', () => {
   const data: Root = {
     type: 'root',
     version: '0.0.1',
+    name: 'banana',
+    description: 'banana test',
     actions: [
       {
         type: 'createTriple',

@@ -103,6 +103,8 @@ export class Network implements INetwork {
 
       const root: Root = {
         type: 'root',
+        name: 'TODO NAME',
+        description: 'TODO DESCRIPTION',
         version: '0.0.1',
         actions: chunk.flatMap(getActionFromChangeStatus),
       };
