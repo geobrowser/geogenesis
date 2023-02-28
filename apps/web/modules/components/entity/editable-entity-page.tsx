@@ -18,7 +18,7 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
-import { ImageField, PageStringField } from './editable-fields';
+import { PageImageField, PageStringField } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
@@ -342,7 +342,7 @@ function EntityAttributes({
         );
       case 'image':
         return (
-          <ImageField
+          <PageImageField
             key={triple.attributeId}
             variant="avatar"
             imageSrc={triple.value.value}

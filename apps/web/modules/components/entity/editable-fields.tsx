@@ -1,7 +1,7 @@
 import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
-import { Button, SquareButton } from '~/modules/design-system/button';
+import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
 
 const textareaStyles = cva(
@@ -79,33 +79,49 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   );
 }
 
+type ImageVariant = 'avatar' | 'banner' | 'default';
+
+interface ImageZoomProps {
+  imageSrc: string;
+  variant?: ImageVariant;
+}
+
+export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+  const imageStyles: Record<ImageVariant, React.CSSProperties> = {
+    default: {
+      maxHeight: 80,
+    },
+    avatar: {
+      height: 44,
+      width: 44,
+    },
+    banner: {
+      height: 44,
+      width: 240,
+    },
+  };
+
+  const style = {
+    ...imageStyles[variant],
+    backgroundImage: `url(${imageSrc})`,
+  };
+
+  return <div className="relative rounded bg-cover bg-center bg-no-repeat" style={style} />;
+}
+
 interface ImageFieldProps {
   imageSrc?: string;
   onImageChange: (imageSrc: string) => void;
   onImageRemove: () => void;
-  variant?: 'avatar' | 'banner';
+  variant?: ImageVariant;
+  horizontal?: boolean;
 }
 
-export function AvatarImage({ imageSrc, children }: { imageSrc: string; children?: React.ReactNode }) {
-  return (
-    <div
-      className="relative rounded bg-cover bg-center bg-no-repeat"
-      style={{
-        backgroundImage: `url(${imageSrc})`,
-        height: 64,
-        width: 64,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function ImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
   const { network } = Services.useServices();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
-    // This is a hack to get around label htmlFor not working with nested React components.
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -120,37 +136,77 @@ export function ImageField({ imageSrc, onImageChange, onImageRemove, variant = '
   };
 
   return (
-    <>
-      <div className="flex justify-center pb-4">
-        {imageSrc ? (
-          <AvatarImage imageSrc={imageSrc}>
-            <div className="absolute inset-0 m-auto flex grid place-items-center rounded bg-black/50 opacity-0 transition hover:opacity-100">
-              <div className="flex gap-2">
-                <label htmlFor="avatar-file">
-                  <SquareButton onClick={handleFileInputClick} icon="upload" />
-                </label>
-                <SquareButton onClick={onImageRemove} icon="trash" />
-              </div>
-            </div>
-          </AvatarImage>
-        ) : (
-          <div className="flex justify-center">
-            <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center">
-              <Button onClick={handleFileInputClick} variant="secondary" icon="upload">
-                Upload
-              </Button>
-            </label>
-          </div>
-        )}
-        <input
-          ref={fileInputRef}
-          accept="image/png, image/jpeg"
-          id="avatar-file"
-          onChange={handleChange}
-          type="file"
-          className="hidden"
-        />
+    <div>
+      {imageSrc && (
+        <div className="pt-1">
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      )}
+
+      <div className="flex justify-center gap-2 pt-2">
+        <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center">
+          <SmallButton onClick={handleFileInputClick} icon="upload">
+            Upload
+          </SmallButton>
+        </label>
+        {imageSrc && <SquareButton onClick={onImageRemove} icon="trash" />}
       </div>
-    </>
+
+      <input
+        ref={fileInputRef}
+        accept="image/png, image/jpeg"
+        id="avatar-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+export function TableImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const { network } = Services.useServices();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const file = e.target.files[0];
+      const imageSrc = await network.uploadFile(file);
+      onImageChange(imageSrc);
+    }
+  };
+
+  return (
+    <div className="group flex justify-between">
+      {imageSrc && (
+        <div>
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      )}
+
+      {imageSrc && (
+        <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center">
+            <SquareButton onClick={handleFileInputClick} icon="upload" />
+          </label>
+          <SquareButton onClick={onImageRemove} icon="trash" />
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        accept="image/png, image/jpeg"
+        id="avatar-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
+    </div>
   );
 }
