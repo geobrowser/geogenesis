@@ -17,7 +17,7 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
-import { AvatarImage } from './editable-fields';
+import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 
@@ -123,7 +123,7 @@ function EntityAttributes({
           </Text>
         );
       case 'image':
-        return <AvatarImage key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
+        return <ImageZoom key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
       case 'entity': {
         return (
           <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>

@@ -1,6 +1,7 @@
 import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
+import Zoom from 'react-medium-image-zoom';
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
 
@@ -89,7 +90,7 @@ interface ImageZoomProps {
 export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   const imageStyles: Record<ImageVariant, React.CSSProperties> = {
     default: {
-      maxHeight: 80,
+      height: 80,
     },
     avatar: {
       height: 44,
@@ -101,12 +102,13 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
     },
   };
 
-  const style = {
-    ...imageStyles[variant],
-    backgroundImage: `url(${imageSrc})`,
-  };
-
-  return <div className="relative rounded bg-cover bg-center bg-no-repeat" style={style} />;
+  return (
+    <Zoom>
+      <div className="relative rounded" style={imageStyles[variant]}>
+        <img src={imageSrc} className="h-full object-cover" />
+      </div>
+    </Zoom>
+  );
 }
 
 interface ImageFieldProps {
