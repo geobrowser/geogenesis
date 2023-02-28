@@ -42,10 +42,8 @@ export default function EntitiesPage({
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
-
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
-
       <EntityTableStoreProvider
         space={spaceId}
         initialRows={initialRows}
@@ -77,10 +75,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
+  // @TODO pass proper `entityId` value here
+  const [orderBy, orderDirection] = await network.fetchSort({ entityId: 'b60da185-ddcd-43e0-aeac-2e01cf1e638d' });
+
   const [initialTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
     network.fetchTriples({
       query: '',
+      orderBy,
+      orderDirection,
       skip: 0,
       first: DEFAULT_PAGE_SIZE,
       filter: [
@@ -114,6 +117,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const { rows: serverRows } = await network.rows({
     spaceId,
     params,
+    orderBy,
+    orderDirection,
   });
 
   const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);

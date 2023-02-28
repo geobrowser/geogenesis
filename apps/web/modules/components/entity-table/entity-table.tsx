@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import * as Popover from '@radix-ui/react-popover';
 import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -12,6 +13,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 
+import { useEditEvents } from '../entity/edit-events';
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
@@ -26,6 +28,9 @@ import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from './editable-entity-table-column-header';
 import { EntityTableCell } from './entity-table-cell';
+import { SquareButton } from '~/modules/design-system/button';
+import { Icon } from '~/modules/design-system/icon';
+import type { Triple as TripleType } from '../../types';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -61,6 +66,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const editable = table.options.meta?.editable;
     const isEditor = table.options.meta?.isEditor;
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const { create, update, remove, actions$ } = useActionsStoreContext();
 
     const cellData = getValue<Cell | undefined>();
@@ -114,6 +120,7 @@ export function EntityTable({ rows, space, columns }: Props) {
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
   const { selectedType } = useEntityTable();
+  const { entityId, entityName } = selectedType as TripleType;
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
@@ -137,21 +144,94 @@ export function EntityTable({ rows, space, columns }: Props) {
     },
   });
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { create, update, remove } = useActionsStoreContext();
+
+  const send = useEditEvents({
+    context: {
+      entityId,
+      spaceId: space,
+      entityName: String(entityName),
+    },
+    api: {
+      create,
+      update,
+      remove,
+    },
+  });
+
+  const handleSort = useCallback(
+    (by: string, direction: string) => {
+      send({
+        type: 'UPDATE_VALUE',
+        payload: {
+          triple: {} as any, // @TODO add triple for entity sort by
+          value: `entity__${by}`,
+        },
+      });
+
+      send({
+        type: 'UPDATE_VALUE',
+        payload: {
+          triple: {} as any, // @TODO add triple for entity sort direction
+          value: `${direction}`,
+        },
+      });
+    },
+    [send]
+  );
+
   return (
     <div className="overflow-x-scroll rounded">
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
-              {headerGroup.headers.map(header => (
-                <th
-                  key={header.id}
-                  className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
-                  style={{ minWidth: header.column.getSize() }}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
+              {headerGroup.headers.map(header => {
+                const by = String(header?.column?.columnDef?.header?.()?.props?.children ?? '').toLowerCase();
+
+                return (
+                  <th
+                    key={header.id}
+                    className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
+                    style={{ minWidth: header.column.getSize() }}
+                  >
+                    <div className="group inline-flex w-full items-center justify-between">
+                      <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                      {isEditMode && (
+                        <div className="inline-flex items-center gap-2 opacity-0 group-hover:opacity-100">
+                          <Popover.Root>
+                            <Popover.Trigger asChild>
+                              <button>
+                                <SquareButton icon="sort" />
+                              </button>
+                            </Popover.Trigger>
+                            <Popover.Content
+                              align="end"
+                              className="relative z-10 mt-1 inline-flex flex-col divide-y !divide-grey-02 rounded border border-grey-02 bg-white font-normal"
+                            >
+                              <button
+                                onClick={() => handleSort(by, 'ascending')}
+                                className="inline-flex items-center gap-2 px-2 py-1 text-left hover:bg-grey-02/10"
+                              >
+                                <Icon icon="sortAscending" />
+                                <span>Sort ascending</span>
+                              </button>
+                              <button
+                                onClick={() => handleSort(by, 'descending')}
+                                className="inline-flex items-center gap-2 px-2 py-1 text-left hover:bg-grey-02/10"
+                              >
+                                <Icon icon="sortDescending" />
+                                <span>Sort descending</span>
+                              </button>
+                            </Popover.Content>
+                          </Popover.Root>
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
@@ -164,10 +244,10 @@ export function EntityTable({ rows, space, columns }: Props) {
           )}
           {table.getRowModel().rows.map(row => {
             const cells = row.getVisibleCells();
-            const initialTriples = cells
-              .map(cell => cell.getValue<Cell>()?.triples)
-              .flat()
-              .filter(Boolean);
+            // const initialTriples = cells
+            //   .map(cell => cell.getValue<Cell>()?.triples)
+            //   .flat()
+            //   .filter(Boolean);
             const entityId = cells[0].getValue<Cell>()?.entityId;
 
             return (

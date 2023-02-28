@@ -31,12 +31,19 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
+export type FetchSortOptions = {
+  entityId: string;
+  abortController?: AbortController;
+};
+
 export type FetchTriplesOptions = {
   query: string;
   space?: string;
   skip: number;
   first: number;
   filter: FilterState;
+  orderBy?: string;
+  orderDirection?: OrderDirection;
   abortController?: AbortController;
 };
 
@@ -46,6 +53,8 @@ export type PublishOptions = {
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
 };
+
+type FetchSortResult = [string, OrderDirection];
 
 type FetchTriplesResult = { triples: TripleType[] };
 
@@ -62,12 +71,16 @@ interface FetchColumnsResult {
   columns: Column[];
 }
 
+type OrderDirection = 'asc' | 'desc';
+
 interface FetchRowsOptions {
   spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
     first: number;
   };
+  orderBy?: string;
+  orderDirection?: OrderDirection;
   abortController?: AbortController;
 }
 
@@ -76,6 +89,7 @@ interface FetchRowsResult {
 }
 
 export interface INetwork {
+  fetchSort: (options: FetchSortOptions) => Promise<FetchSortResult>;
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
@@ -115,7 +129,44 @@ export class Network implements INetwork {
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
   };
 
-  fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
+  fetchSort = async ({ entityId, abortController }: FetchSortOptions) => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: `{
+          geoEntity(id: ${JSON.stringify(entityId)}) {
+            id
+            entityOf {
+              attribute {
+                name
+              }
+              stringValue
+            }
+          }
+        }`,
+      }),
+    });
+
+    const json = await response.json();
+    const sort = getSortFromEntity(json.data.geoEntity);
+
+    return sort as FetchSortResult;
+  };
+
+  fetchTriples = async ({
+    space,
+    query,
+    skip,
+    first,
+    filter,
+    orderBy,
+    orderDirection,
+    abortController,
+  }: FetchTriplesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -136,6 +187,9 @@ export class Network implements INetwork {
       .filter(Boolean)
       .join(' ');
 
+    const sortBy = orderBy ? `, orderBy: ${orderBy}` : '';
+    const sortOrder = orderDirection ? `, orderDirection: ${orderDirection}` : '';
+
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -144,7 +198,7 @@ export class Network implements INetwork {
       signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
-          triples(where: {${where}}, skip: ${skip}, first: ${first}) {
+          triples(where: {${where}}, skip: ${skip}, first: ${first}${sortBy}${sortOrder}) {
             id
             attribute {
               id
@@ -178,6 +232,10 @@ export class Network implements INetwork {
     } = await response.json();
 
     const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
+
+    // @TODO remove console.info
+    console.info('triples:', triples);
+
     return { triples };
   };
 
@@ -414,7 +472,7 @@ export class Network implements INetwork {
     return spaces;
   };
 
-  rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
+  rows = async ({ spaceId, params, orderBy, orderDirection, abortController }: FetchRowsOptions) => {
     if (!params.typeId) {
       return { rows: [] };
     }
@@ -431,6 +489,8 @@ export class Network implements INetwork {
         { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
         { field: 'linked-to', value: params.typeId },
       ],
+      orderBy,
+      orderDirection,
     });
 
     /* Then we then fetch all triples associated with those row entity IDs */
@@ -548,4 +608,11 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
   return eventObject;
+}
+
+function getSortFromEntity(geoEntity) {
+  const sortBy = geoEntity.entityOf.find(item => item.attribute.name === 'Sort By').stringValue;
+  const sortDirection = geoEntity.entityOf.find(item => item.attribute.name === 'Sort Direction').stringValue;
+
+  return [sortBy, sortDirection];
 }

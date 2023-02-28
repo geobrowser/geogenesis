@@ -17,6 +17,9 @@ import { Search } from '~/modules/design-system/icons/search';
 import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
+import { Sort } from './icons/sort';
+import { SortAscending } from './icons/sort-ascending';
+import { SortDescending } from './icons/sort-descending';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
@@ -36,7 +39,10 @@ export type IconName =
   | 'relation'
   | 'text'
   | 'rightArrowLongSmall'
-  | 'search';
+  | 'search'
+  | 'sort'
+  | 'sortAscending'
+  | 'sortDescending';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -67,4 +73,7 @@ const icons: Record<IconName, React.ElementType> = {
   text: Text,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
+  sort: Sort,
+  sortAscending: SortAscending,
+  sortDescending: SortDescending,
 };
