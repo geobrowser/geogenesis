@@ -382,7 +382,7 @@ const listener =
 
       case 'REMOVE_IMAGE': {
         const { triple } = event.payload;
-        const newValue = { ...triple.value, value: null };
+        const newValue = { ...triple.value, value: '' };
 
         return update(
           Triple.ensureStableId({

@@ -249,7 +249,9 @@ function convertTypeName(schema: JSONSchema7, property: JSONSchema7) {
   switch (property.type) {
     case 'boolean':
     case 'string':
-      return property.type
+      return 'string'
+    case 'image':
+      return 'string'
     case 'number':
       return 'f64'
     case 'array':

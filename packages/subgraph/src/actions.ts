@@ -94,22 +94,7 @@ export function handleCreateTripleAction(
   triple.space = space
 
   const stringValue = fact.value.asStringValue()
-  const entityValue = fact.value.asEntityValue()
-  const numberValue = fact.value.asNumberValue()
-
-  const isImage = fact.value.type === 'image'
-  log.debug(`fact value type: ${fact.value.type}`, [])
-
-  if (isImage && stringValue) {
-    triple.valueType = 'IMAGE'
-    triple.valueId = stringValue.id
-    triple.stringValue = stringValue.value
-
-    log.debug(
-      `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${stringValue.value}`,
-      []
-    )
-  } else if (stringValue) {
+  if (stringValue) {
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
     triple.stringValue = stringValue.value
@@ -127,11 +112,29 @@ export function handleCreateTripleAction(
     if (attribute.id == 'space') {
       handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
     }
-  } else if (numberValue) {
+  }
+
+  const imageValue = fact.value.asImageValue()
+  if (imageValue) {
+    triple.valueType = 'IMAGE'
+    triple.valueId = imageValue.id
+    triple.stringValue = imageValue.value
+
+    log.debug(
+      `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${imageValue.value}`,
+      []
+    )
+  }
+
+  const numberValue = fact.value.asNumberValue()
+  if (numberValue) {
     triple.valueType = 'NUMBER'
     triple.valueId = numberValue.id
     triple.numberValue = BigDecimal.fromString(numberValue.value)
-  } else if (entityValue) {
+  }
+
+  const entityValue = fact.value.asEntityValue()
+  if (entityValue) {
     triple.valueType = 'ENTITY'
     triple.valueId = entityValue.id
     triple.entityValue = entityValue.id
