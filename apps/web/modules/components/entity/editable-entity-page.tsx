@@ -205,7 +205,6 @@ function EntityAttributes({
   const description = Entity.description(triples);
 
   const onChangeTripleType = (type: TripleValueType, triples: TripleType[]) => {
-    alert(type);
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
