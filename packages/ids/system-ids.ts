@@ -24,7 +24,7 @@ export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 
-/* Example Usage: Health -> FOREIGN_TYPES -> SF Config */
+/* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */
 export const FOREIGN_TYPES = "be745973-05a9-4cd0-a46d-1c5538270faf"
 
 /* Example Usage: SF Config -> TYPES -> SPACE_CONFIGURATION */

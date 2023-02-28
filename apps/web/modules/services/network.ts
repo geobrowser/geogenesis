@@ -80,6 +80,8 @@ export interface INetwork {
   fetchSpaces: () => Promise<Space[]>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
   fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
+  fetchAllTypes: (space:string, abortController?: AbortController) => Promise<TripleType[]>;
+  fetchAllEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -338,6 +340,186 @@ export class Network implements INetwork {
 
     return sortedResultsWithTypesAndDescription;
   };
+
+  fetchAllEntities = async (name: string, space: string, abortController?: AbortController) => {
+    // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
+    // followed by a list of entities that contain the search term.
+    // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
+    const spaces = await this.fetchSpaces();
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: `query {
+          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
+            id,
+            name
+            entityOf(where: {attribute: "${SYSTEM_IDS.TYPES}", valueId: "${SYSTEM_IDS.SCHEMA_TYPE}"}) {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
+              space {
+                id
+              }
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+            }
+          }
+          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
+            id,
+            name,
+            entityOf(where: {attribute: "${SYSTEM_IDS.TYPES}", valueId: "${SYSTEM_IDS.SCHEMA_TYPE}"}) {
+              id
+              stringValue
+              valueId
+              valueType
+              numberValue
+              space {
+                id
+              }
+              entityValue {
+                id
+                name
+              }
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+            }
+          }
+        }`,
+      }),
+    });
+
+    const json: {
+      data: {
+        startEntities: NetworkEntity[];
+        containEntities: NetworkEntity[];
+      };
+    } = await response.json();
+
+    const { startEntities, containEntities } = json.data;
+
+    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+
+
+    // I think we need to flatmap here to filter out null entities, IE things that aren't a type
+    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.flatMap(result => {
+      const triples = fromNetworkTriples(result.entityOf);
+      if(triples.length === 0) return [];
+
+      const space = triples[0].space;
+
+      return [{
+        id: result.id,
+        name: result.name,
+        description: Entity.description(triples),
+        nameTripleSpace: space,
+        types: Entity.types(triples, space),
+        triples,
+      }];
+    });
+/*
+    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.flatMap(result => {
+      const triples = fromNetworkTriples(result.entityOf);
+      const nameTriple = Entity.nameTriple(triples);
+      if (triples.some((triple) => triple.value.type !== "entity")){
+        return [];
+      }
+
+      return [{
+        id: result.id,
+        name: result.name,
+        description: Entity.description(triples),
+        nameTripleSpace: nameTriple?.space,
+        types: Entity.types(triples, space),
+        triples,
+      }];
+    });
+      * */
+
+    return sortedResultsWithTypesAndDescription;
+  };
+
+  fetchAllTypes = async(space: string, abortController?: AbortController) => {
+
+    const query = `\
+      {
+        triples(where: {
+          or: [
+            # where attribute is a type, and space is not the spaceID
+            {and: [
+              {attribute: "type"}
+              {space_not:"${space}"}
+            ]}
+            {and: [
+              {attribute: "be745973-05a9-4cd0-a46d-1c5538270faf"}
+              {space_not:"${space}"}
+            ]}
+          ]
+        }) {
+            id
+            space{
+              id
+            }
+            entity{
+              id
+              name
+            }
+            attribute{
+              id
+              name
+            }
+            valueId
+            valueType
+            stringValue
+            numberValue
+            entityValue{
+              id
+              name
+            }
+        }
+      }`;
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query
+      }),
+    });
+
+    const json = await response.json();
+
+    const triples = fromNetworkTriples(json.data.triples);
+
+    return triples;
+
+  }
+
 
   //@note we probably want to create a more general fetchSpaceConfiguration function
   // but for now because I only know foreign types are needed, I'm just going to

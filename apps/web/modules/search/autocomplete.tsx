@@ -11,6 +11,7 @@ import { Entity as EntityType } from '../types';
 
 interface EntityAutocompleteOptions {
   api: INetwork;
+  entityFetcher?: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
   spaceId: string;
   ActionsStore: ActionsStore;
 }
@@ -21,7 +22,7 @@ class EntityAutocomplete {
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
 
-  constructor({ api, spaceId, ActionsStore }: EntityAutocompleteOptions) {
+  constructor({ api, spaceId, ActionsStore, entityFetcher = api.fetchEntities }: EntityAutocompleteOptions) {
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -34,7 +35,8 @@ class EntityAutocomplete {
           if (query.length === 0) return [];
 
           this.loading$.set(true);
-          const networkEntities = await api.fetchEntities(query, spaceId, this.abortController);
+
+          const networkEntities = await entityFetcher(query, spaceId, this.abortController);
 
           const localEntities = pipe(
             ActionsStore.actions$.get(),
@@ -73,10 +75,33 @@ export function useAutocomplete(spaceId: string) {
   const ActionsStore = useActionsStoreContext();
 
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network, spaceId, ActionsStore });
+    return new EntityAutocomplete({ api: network, spaceId, ActionsStore});
   }, [network, spaceId, ActionsStore]);
 
   const results = useSelector(autocomplete.results$);
+  const query = useSelector(autocomplete.query$);
+  const loading = useSelector(autocomplete.loading$);
+
+  return {
+    isEmpty: A.isEmpty(results) && S.isNotEmpty(query) && !loading,
+    isLoading: loading,
+    results: query ? results : [],
+    query,
+    onQueryChange: autocomplete.onQueryChange,
+  };
+}
+
+export function useTypeAutocomplete(spaceId: string) {
+  const { network } = Services.useServices();
+  const ActionsStore = useActionsStoreContext();
+  const entityFetcher = network.fetchAllEntities
+
+  const autocomplete = useMemo(() => {
+    return new EntityAutocomplete({ api: network, spaceId, ActionsStore, entityFetcher});
+  }, [network, spaceId, ActionsStore]);
+
+  const results = useSelector(autocomplete.results$);
+  console.log('results', results)
   const query = useSelector(autocomplete.query$);
   const loading = useSelector(autocomplete.loading$);
 

@@ -8,6 +8,7 @@ import { Search } from '~/modules/design-system/icons/search';
 import { Input } from '~/modules/design-system/input';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { useAutocomplete } from '~/modules/search';
+import { useTypeAutocomplete } from '~/modules/search/autocomplete';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
@@ -59,10 +60,11 @@ interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
   spaceId: string;
+  typeAutocomplete?: boolean;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
-  const autocomplete = useAutocomplete(spaceId);
+export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId, typeAutocomplete }: Props) {
+  const autocomplete = typeAutocomplete ? useTypeAutocomplete(spaceId) : useAutocomplete(spaceId);
   const theme = useTheme();
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
