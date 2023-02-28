@@ -1,6 +1,6 @@
 import {
   CreateTripleAction as CreateTripleActionSchema,
-  DeleteTripleAction as DeleteTripleActionSchema
+  DeleteTripleAction as DeleteTripleActionSchema,
 } from '@geogenesis/action-schema';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
