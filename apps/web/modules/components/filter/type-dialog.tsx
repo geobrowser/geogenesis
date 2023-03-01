@@ -14,7 +14,7 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
-import { FilterState, Triple as TripleType } from '~/modules/types';
+import { Entity, FilterState, Triple as TripleType } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/results-list';
@@ -47,6 +47,8 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const { editable } = useEditable();
   const { spaces } = useSpaces();
 
+  const space = spaces.find(s => s.id === spaceId);
+
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
   const [entityName, setEntityName] = useState('');
@@ -76,7 +78,50 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     setOpen(false);
   };
 
-  const handleCreateType = () => {
+  const createForeignType = (typeEntity: Entity) => {
+    if (!space) {
+      // Typescript doesn't know that space is defined here
+      return;
+    }
+    const spaceConfigEntityId = space.spaceConfigEntityId || ID.createEntityId();
+
+    if (!space.spaceConfigEntityId) {
+      const spaceConfigNameTriple = Triple.withId({
+        space: space.id,
+        entityId: spaceConfigEntityId,
+        entityName: 'Space Configuration',
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
+      });
+
+      const spaceConfigTypeTriple = Triple.withId({
+        space: space.id,
+        entityId: spaceConfigEntityId,
+        entityName: 'Space Configuration',
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        value: { id: SYSTEM_IDS.SCHEMA_TYPE, type: 'entity', name: 'Type' },
+      });
+
+      ActionStore.create(spaceConfigNameTriple);
+      ActionStore.create(spaceConfigTypeTriple);
+    }
+
+    const spaceConfigForeignTypeTriple = Triple.withId({
+      space: space.id,
+      entityId: spaceConfigEntityId,
+      entityName: 'Space Configuration',
+      attributeId: SYSTEM_IDS.FOREIGN_TYPES,
+      attributeName: 'Foreign Types',
+      value: { id: typeEntity.id, type: 'entity', name: typeEntity.name },
+    });
+
+    ActionStore.create(spaceConfigForeignTypeTriple);
+  };
+
+  const createType = () => {
+    /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
     const entityId = ID.createEntityId();
     const nameTriple = Triple.withId({
       space: spaceId,
@@ -161,7 +206,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                     <ResultContent
                       key={result.id}
                       onClick={() => {
-                        handleCreateType();
+                        createForeignType(result);
                       }}
                       alreadySelected={filteredTypes.some(type => type.id === result.id)}
                       result={result}
@@ -179,7 +224,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                   <TextButton onClick={() => updateMode('foreign-space')} className="cursor-pointer">
                     Add from space
                   </TextButton>
-                  <TextButton className="cursor-pointer">Create type</TextButton>
+                  <TextButton className="cursor-pointer" onClick={createType}>
+                    Create type
+                  </TextButton>
                 </div>
               )}
             </div>

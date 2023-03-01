@@ -41,7 +41,7 @@ export type FetchTriplesOptions = {
 };
 
 export type FetchEntitiesOptions = {
-  query: string;
+  query?: string;
   space?: string;
   filter: FilterState;
   abortController?: AbortController;
@@ -378,7 +378,17 @@ export class Network implements INetwork {
   };
 
   fetchSpaces = async () => {
-    const response = await fetch(this.subgraphUrl, {
+    const { triples: spaceConfigTriples } = await this.fetchTriples({
+      query: '',
+      first: 1000,
+      skip: 0,
+      filter: [
+        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+        { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
+      ],
+    });
+
+    const spacesResponse = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -426,7 +436,7 @@ export class Network implements INetwork {
           };
         }[];
       };
-    } = await response.json();
+    } = await spacesResponse.json();
 
     const spaces = json.data.spaces.map((space): Space => {
       const attributes = Object.fromEntries(
@@ -446,6 +456,7 @@ export class Network implements INetwork {
         editors: space.editors.map(account => account.id),
         entityId: space.entity?.id || '',
         attributes,
+        spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
       };
     });
 
