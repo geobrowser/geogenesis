@@ -65,7 +65,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   const nameTriple = Entity.nameTriple(triples);
   const valueTypeTriple = Entity.valueTypeTriple(triples);
 
-  const valueType = Entity.valueType(triples) ?? SYSTEM_IDS.TEXT;
+  const valueType = Entity.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
 
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
@@ -85,7 +85,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   };
 
   return (
-    <div className="flex w-full items-center justify-between">
+    <div className="relative flex w-full items-center justify-between">
       <input
         className="w-full text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
@@ -125,7 +125,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
           ]}
         />
       )}
-      <DebugTriples triples={triples} />
+      <DebugTriples triples={triples} className="-mt-3.5 h-3" />
     </div>
   );
 });

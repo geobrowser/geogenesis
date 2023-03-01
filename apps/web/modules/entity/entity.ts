@@ -81,7 +81,7 @@ export function valueTypeTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
 
-export function valueType(triples: TripleType[]): string | null {
+export function valueTypeId(triples: TripleType[]): string | null {
   // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
   const triple = valueTypeTriple(triples);
   return triple?.value.type === 'entity' ? triple?.value.id : null;

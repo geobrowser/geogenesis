@@ -43,7 +43,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
         const isLastColumn = i === columns.length - 1;
 
         return isEditMode && !isNameColumn ? (
-          <div className={cx('flex items-center justify-between', isLastColumn ? 'pr-12' : '')}>
+          <div className={cx(isLastColumn ? 'pr-12' : '')}>
             <EditableEntityTableColumnHeader
               column={column}
               entityId={column.id}

@@ -4,6 +4,6 @@ export function nameOfEntityValue(triple: Triple) {
   return triple?.value?.type === 'entity' ? triple.value.name : null;
 }
 
-export function nameOfStringValue(triple: Triple) {
+export function stringValue(triple: Triple) {
   return triple?.value?.type === 'string' ? triple.value.value : null;
 }

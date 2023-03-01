@@ -25,7 +25,7 @@ export function DebugPopover({ children, containerWidth, className }: Props) {
         <button
           className={cx(
             open ? 'bg-grey-01' : 'bg-white',
-            'h-full py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary',
+            'py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary',
             className
           )}
           aria-label="advanced-filter-button"

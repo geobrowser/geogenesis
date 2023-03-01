@@ -275,7 +275,7 @@ export class EntityTableStore implements IEntityTableStore {
       return SYSTEM_IDS.TEXT;
     }
 
-    return Entity.valueType(column.triples) ?? SYSTEM_IDS.TEXT;
+    return Entity.valueTypeId(column.triples) ?? SYSTEM_IDS.TEXT;
   };
 
   columnName = (columnId: string): string => {
