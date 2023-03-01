@@ -8,12 +8,13 @@ import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 import { ActionsStore, useActionsStoreContext } from '../action';
 import { Entity } from '../entity';
-import { Entity as EntityType } from '../types';
+import { Entity as EntityType, FilterState } from '../types';
 
 interface EntityAutocompleteOptions {
   api: INetwork;
-  spaceId: string;
+  spaceId?: string;
   ActionsStore: ActionsStore;
+  filter?: FilterState;
 }
 
 class EntityAutocomplete {
@@ -22,7 +23,7 @@ class EntityAutocomplete {
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
 
-  constructor({ api, spaceId, ActionsStore }: EntityAutocompleteOptions) {
+  constructor({ api, spaceId, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -39,7 +40,7 @@ class EntityAutocomplete {
             query,
             space: spaceId,
             abortController: this.abortController,
-            filter: [],
+            filter,
           });
 
           const localEntities = pipe(
@@ -61,8 +62,10 @@ class EntityAutocomplete {
 
           // This will put the local entities first, and then the network entities that don't exist locally.
           // This might not be the ideal UX.
+
           return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
         } catch (e) {
+          console.log("Couldn't fetch entities", e);
           return [];
         }
       })
@@ -74,12 +77,18 @@ class EntityAutocomplete {
   };
 }
 
-export function useAutocomplete(spaceId: string) {
+interface AutocompleteProps {
+  spaceId?: string;
+  filter?: FilterState;
+}
+
+export function useAutocomplete({ spaceId, filter }: AutocompleteProps) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network, spaceId, ActionsStore });
+    return new EntityAutocomplete({ api: network, spaceId, ActionsStore, filter });
+    // For unknown reasons, including filter in the dependency array causes results to be an empty array in the useAutocomplete hook.
   }, [network, spaceId, ActionsStore]);
 
   const results = useSelector(autocomplete.results$);

@@ -30,7 +30,15 @@ interface Props {
 type TypeDialogMode = 'current-space' | 'foreign-space';
 
 export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
-  const autocomplete = useAutocomplete(spaceId);
+  const autocomplete = useAutocomplete({
+    filter: [
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+      {
+        field: 'linked-to',
+        value: SYSTEM_IDS.SCHEMA_TYPE,
+      },
+    ],
+  });
   const entityTableStore = useEntityTable();
   const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
@@ -163,12 +171,14 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               <Text variant="smallButton" color="grey-04">
                 {resultCount} Types
               </Text>
-              <div className="flex gap-2">
-                <TextButton onClick={() => updateMode('foreign-space')} className="cursor-pointer">
-                  Add from space
-                </TextButton>
-                <TextButton className="cursor-pointer">Create type</TextButton>
-              </div>
+              {isEditor && (
+                <div className="flex gap-2">
+                  <TextButton onClick={() => updateMode('foreign-space')} className="cursor-pointer">
+                    Add from space
+                  </TextButton>
+                  <TextButton className="cursor-pointer">Create type</TextButton>
+                </div>
+              )}
             </div>
           </MotionContent>
         ) : null}

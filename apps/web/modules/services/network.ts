@@ -42,7 +42,7 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query: string;
-  space: string;
+  space?: string;
   filter: FilterState;
   abortController?: AbortController;
 };
