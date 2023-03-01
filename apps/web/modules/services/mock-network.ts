@@ -114,4 +114,12 @@ export class MockNetwork implements INetwork {
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     await new Promise(() => {});
   };
+
+  fetchProfile = async () => {
+    return null;
+  };
+
+  uploadFile = async () => {
+    return '';
+  };
 }
