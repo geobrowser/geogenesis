@@ -51,7 +51,7 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
 
   return (
     <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
-      <div className="flex items-center justify-between leading-[1rem]">
+      <div className="flex w-full items-center justify-between leading-[1rem]">
         <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
           {result.name ?? result.id}
         </Text>
