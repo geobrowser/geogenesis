@@ -96,7 +96,7 @@ export class ActionsStore implements IActionsStore {
 
     try {
       await this.api.publish({
-        actions: Action.squashChanges(Action.unpublishedChanges(spaceActions)),
+        actions: Action.unpublishedChanges(spaceActions),
         signer,
         onChangePublishState,
         space: spaceId,

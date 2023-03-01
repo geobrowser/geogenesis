@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { Close } from '~/modules/design-system/icons/close';
 import { ContractSmall } from '~/modules/design-system/icons/contract-small';
 import { Copy } from '~/modules/design-system/icons/copy';
 import { Create } from '~/modules/design-system/icons/create';
@@ -23,6 +24,7 @@ export type IconName =
   | 'create'
   | 'createSmall'
   | 'publish'
+  | 'close'
   | 'eye'
   | 'expand'
   | 'expandSmall'
@@ -52,6 +54,7 @@ export const Icon = ({ icon, ...rest }: IconProps) => {
 const icons: Record<IconName, React.ElementType> = {
   create: Create,
   createSmall: CreateSmall,
+  close: Close,
   publish: Publish,
   eye: Eye,
   expand: Expand,

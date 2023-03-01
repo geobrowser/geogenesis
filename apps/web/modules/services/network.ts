@@ -85,11 +85,13 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
+  fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
+  uploadFile: (file: File) => Promise<string>;
 }
 
 const UPLOAD_CHUNK_SIZE = 2000;
@@ -120,6 +122,16 @@ export class Network implements INetwork {
 
     onChangePublishState('signing-wallet');
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
+  };
+
+  uploadFile = async (file: File): Promise<string> => {
+    const fileUri = await this.storageClient.uploadFile(file);
+    return fileUri;
+  };
+
+  fetchProfile = async (address: string, abortController?: AbortController): Promise<null> => {
+    /* Stub function */
+    return null;
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
