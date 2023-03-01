@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, G, pipe, S } from '@mobily/ts-belt';
+import { useMemo } from 'react';
 
 import { Services } from '~/modules/services';
 import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
-import { Entity } from '../entity';
 import { ActionsStore, useActionsStoreContext } from '../action';
+import { Entity } from '../entity';
 import { Entity as EntityType } from '../types';
 
 interface EntityAutocompleteOptions {
@@ -35,7 +35,12 @@ class EntityAutocomplete {
           if (query.length === 0) return [];
 
           this.loading$.set(true);
-          const networkEntities = await api.fetchEntities(query, spaceId, this.abortController);
+          const networkEntities = await api.fetchEntities({
+            query,
+            space: spaceId,
+            abortController: this.abortController,
+            filter: [],
+          });
 
           const localEntities = pipe(
             ActionsStore.actions$.get(),

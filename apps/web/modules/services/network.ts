@@ -40,6 +40,13 @@ export type FetchTriplesOptions = {
   abortController?: AbortController;
 };
 
+export type FetchEntitiesOptions = {
+  query: string;
+  space: string;
+  filter: FilterState;
+  abortController?: AbortController;
+};
+
 export type PublishOptions = {
   signer: Signer;
   actions: Action[];
@@ -79,7 +86,7 @@ export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
-  fetchEntities: (name: string, space: string, abortController?: AbortController) => Promise<EntityType[]>;
+  fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -241,11 +248,25 @@ export class Network implements INetwork {
     };
   };
 
-  fetchEntities = async (name: string, space: string, abortController?: AbortController) => {
-    // Until full-text search is supported, fetchEntities will return a list of entities that start with the search term,
-    // followed by a list of entities that contain the search term.
-    // Tracking issue:  https://github.com/graphprotocol/graph-node/issues/2330#issuecomment-1353512794
-    const spaces = await this.fetchSpaces();
+  fetchEntities = async ({ space, query, filter, abortController }: FetchEntitiesOptions) => {
+    const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
+      FilterField,
+      string
+    >;
+
+    const entityOfWhere = [
+      space && `space: ${JSON.stringify(space)}`,
+      fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
+      fieldFilters['attribute-name'] &&
+        `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
+      fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+
+      // Until we have OR we can't search for name_contains OR value string contains
+      fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
+      fieldFilters['linked-to'] && `valueId: ${JSON.stringify(fieldFilters['linked-to'])}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -255,7 +276,9 @@ export class Network implements INetwork {
       signal: abortController?.signal,
       body: JSON.stringify({
         query: `query {
-          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(name)}}) {
+          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(
+            query
+          )}, entityOf_: {${entityOfWhere}}}) {
             id,
             name
             entityOf {
@@ -281,7 +304,9 @@ export class Network implements INetwork {
               }
             }
           }
-          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(name)}}) {
+          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(
+            query
+          )}, entityOf_: {${entityOfWhere}}}) {
             id,
             name,
             entityOf {

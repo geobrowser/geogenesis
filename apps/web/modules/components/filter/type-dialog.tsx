@@ -1,14 +1,13 @@
-import * as React from 'react';
-import { useState } from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useState } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Button } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
+import { TextButton } from '~/modules/design-system/text-button';
 import { useEntityTable } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
@@ -119,17 +118,20 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               </Text>
             )}
             <ResultsList>
-              {hasResults
-                ? filteredTypes.map(type => (
-                    <ResultItem onClick={() => handleSelect(type)} key={type.id}>
-                      {type.entityName}
-                    </ResultItem>
-                  ))
-                : isEditor && (
-                    <Button onClick={handleCreateType} className="mr-2 mb-2 ml-2">
-                      Create Type
-                    </Button>
-                  )}
+              {filteredTypes.map(type => (
+                <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+                  {type.entityName}
+                </ResultItem>
+              ))}
+              <div className="flex justify-between pt-2">
+                <Text variant="smallButton" color="grey-04">
+                  {filteredTypes.length} Types
+                </Text>
+                <div className="flex gap-2">
+                  <TextButton className="cursor-pointer">Add from space</TextButton>
+                  <TextButton className="cursor-pointer">Create type</TextButton>
+                </div>
+              </div>
             </ResultsList>
           </MotionContent>
         ) : null}

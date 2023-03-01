@@ -61,7 +61,15 @@ export type ReviewState =
   | 'publishing-contract'
   | 'publish-complete';
 
-export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value' | 'linked-to';
+export type FilterField =
+  | 'entity-id'
+  | 'entity-name'
+  | 'attribute-id'
+  | 'attribute-name'
+  | 'value'
+  | 'linked-to'
+  | 'starts-with'
+  | 'not-space';
 
 export type FilterClause = {
   field: FilterField;
