@@ -69,7 +69,7 @@ export type FilterField =
   | 'value'
   | 'linked-to'
   | 'starts-with'
-  | 'not-space';
+  | 'not-space-id';
 
 export type FilterClause = {
   field: FilterField;

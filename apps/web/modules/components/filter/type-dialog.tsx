@@ -12,6 +12,7 @@ import { useEntityTable } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
+import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { FilterState, Triple as TripleType } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
@@ -23,7 +24,7 @@ const MotionContent = motion(PopoverPrimitive.Content);
 interface Props {
   inputContainerWidth: number;
   filterState: FilterState;
-  setFilterState: (filterState: FilterState) => void;
+  setEntityNameState: (filterState: FilterState) => void;
   spaceId: string;
 }
 
@@ -33,6 +34,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const autocomplete = useAutocomplete({
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+      { field: 'not-space-id', value: spaceId },
       {
         field: 'linked-to',
         value: SYSTEM_IDS.SCHEMA_TYPE,
@@ -42,25 +44,26 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const entityTableStore = useEntityTable();
   const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
+  const { editable } = useEditable();
   const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState('');
+  const [entityName, setEntityName] = useState('');
   const filteredTypes = entityTableStore.types.filter(type =>
-    (type.entityName || '').toLowerCase().includes(filter.toLowerCase())
+    (type.entityName || '').toLowerCase().includes(entityName.toLowerCase())
   );
 
   const handleSearchChange = (value: string) => {
     if (mode === 'foreign-space') {
       autocomplete.onQueryChange(value);
     }
-    setFilter(value);
+    setEntityName(value);
   };
 
   const updateMode = (mode: TypeDialogMode) => {
     setMode(mode);
-    setFilter('');
+    setEntityName('');
     if (mode === 'foreign-space') {
       autocomplete.onQueryChange('');
     }
@@ -74,19 +77,19 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   };
 
   const handleCreateType = () => {
-    const newId = ID.createEntityId();
+    const entityId = ID.createEntityId();
     const nameTriple = Triple.withId({
       space: spaceId,
-      entityId: newId,
-      entityName: filter,
-      attributeId: 'name',
+      entityId,
+      entityName,
+      attributeId: SYSTEM_IDS.NAME,
       attributeName: 'Name',
-      value: { id: SYSTEM_IDS.NAME, type: 'string', value: filter },
+      value: { id: ID.createValueId(), type: 'string', value: entityName },
     });
     const typeTriple = Triple.withId({
       space: spaceId,
-      entityId: newId,
-      entityName: filter,
+      entityId,
+      entityName,
       attributeId: SYSTEM_IDS.TYPES,
       attributeName: 'Types',
       value: {
@@ -97,7 +100,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     });
     ActionStore.create(nameTriple);
     ActionStore.create(typeTriple);
-    setFilter('');
+    setEntityName('');
   };
 
   const resultCount = mode === 'current-space' ? filteredTypes.length : autocomplete.results.length;
@@ -144,7 +147,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
             </div>
             <motion.div layout="position">
               <div className="px-2">
-                <Input value={filter} onChange={e => handleSearchChange(e.currentTarget.value)} />
+                <Input value={entityName} onChange={e => handleSearchChange(e.currentTarget.value)} />
               </div>
             </motion.div>
             <ResultsList className="max-h-96 overflow-y-auto px-0">
@@ -160,7 +163,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                       onClick={() => {
                         handleCreateType();
                       }}
-                      alreadySelected={false}
+                      alreadySelected={filteredTypes.some(type => type.id === result.id)}
                       result={result}
                       spaces={spaces}
                     />
@@ -171,7 +174,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               <Text variant="smallButton" color="grey-04">
                 {resultCount} Types
               </Text>
-              {isEditor && (
+              {isEditor && editable && (
                 <div className="flex gap-2">
                   <TextButton onClick={() => updateMode('foreign-space')} className="cursor-pointer">
                     Add from space
