@@ -1,10 +1,9 @@
-import * as React from 'react';
-import { useState } from 'react';
 import cx from 'classnames';
+import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
-import { LayoutGroup } from 'framer-motion';
 import pluralize from 'pluralize';
+import { useState } from 'react';
 
 import { SmallButton } from '~/modules/design-system/button';
 import { LinkableChip } from '~/modules/design-system/chip';
@@ -18,6 +17,7 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
+import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 
@@ -58,6 +58,8 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
         <CopyIdButton id={id} />
       </div>
       <Spacer height={8} />
+      <Editor editable={false} />
+
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} space={space} />

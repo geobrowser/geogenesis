@@ -1,5 +1,5 @@
-import * as React from 'react';
 import Head from 'next/head';
+import * as React from 'react';
 
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
@@ -17,6 +17,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { PageStringField } from './editable-fields';
+import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
@@ -131,6 +132,8 @@ export function EditableEntityPage({
             <CopyIdButton id={id} />
           </div>
           <Spacer height={8} />
+          <Editor />
+          <Spacer height={80} />
           <div className="rounded border border-grey-02 bg-white">
             <div className="flex flex-col gap-6 p-5">
               <EntityAttributes
