@@ -14,6 +14,10 @@ const buttonStyles = cva(
 
 interface Props extends React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement> {}
 
-export function TextButton({ children, disabled = false }: Props) {
-  return <button className={buttonStyles({ disabled })}>{children}</button>;
+export function TextButton({ children, disabled = false, ...props }: Props) {
+  return (
+    <button {...props} className={buttonStyles({ disabled })}>
+      {children}
+    </button>
+  );
 }
