@@ -101,7 +101,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
         entityName: 'Space Configuration',
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
-        value: { id: SYSTEM_IDS.SCHEMA_TYPE, type: 'entity', name: 'Type' },
+        value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
       });
 
       ActionStore.create(spaceConfigNameTriple);
