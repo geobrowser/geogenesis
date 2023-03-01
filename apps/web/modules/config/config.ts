@@ -28,13 +28,15 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '80001',
     rpc: 'https://rpc-mumbai.maticvigil.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/banana',
+    //subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/banana',
+    subgraph: 'https://api.thegraph.com/subgraphs/name/mercuricchloride/geo-testnet'
   },
   production: {
     chainId: '137',
     rpc: 'https://polygon-rpc.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
+    //subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
+    subgraph: 'https://api.thegraph.com/subgraphs/name/mercuricchloride/geo-fulltext-master'
   },
 };
 

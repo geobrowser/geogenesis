@@ -2,11 +2,11 @@ import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Button } from '~/modules/design-system/button';
+import { Button, SmallButton } from '~/modules/design-system/button';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { useEntityTable } from '~/modules/entity';
@@ -15,7 +15,12 @@ import { Triple } from '~/modules/triple';
 import { FilterState, Triple as TripleType } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
-import { ResultItem, ResultsList } from '../entity/autocomplete/results-list';
+import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/results-list';
+import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
+import { Search } from '~/modules/design-system/icons/search';
+import { useAutocomplete } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
+import { useTypeAutocomplete } from '~/modules/search/autocomplete';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -73,10 +78,26 @@ const CreateButton = styled(Button)(props => ({
   margin: `0 ${props.theme.space * 2}px ${props.theme.space * 2}px ${props.theme.space * 2}px`,
 }));
 
+const ImportButton = styled(SmallButton)(props => ({
+  margin: `0 ${props.theme.space * 2}px ${props.theme.space * 2}px ${props.theme.space * 2}px`,
+}));
+
 const SearchContainer = styled.div(props => ({
   display: 'flex',
   flexDirection: 'column',
   padding: props.theme.space * 2,
+}));
+
+const SearchIconContainer = styled.div(props => ({
+  position: 'absolute',
+  left: props.theme.space * 3,
+  top: props.theme.space * 2.5,
+  zIndex: 100,
+}));
+
+const InputContainer = styled.div(props => ({
+  position: 'relative',
+  margin: `${props.theme.space * 2}px`,
 }));
 
 interface Props {
@@ -91,10 +112,15 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   const entityTableStore = useEntityTable();
   const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
+  const {spaces} = useSpaces();
+
+  // we need some way to get all of the types, regardless of the space
+  // normally we would do this via the network class, however for some reason the network object is private within the entityTableStore. Maybe we want to change this?
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  const [showAllTypes, setShowAllTypes] = useState(false);
   const filteredTypes = entityTableStore.types.filter(type =>
     (type.entityName || '').toLowerCase().includes(filter.toLowerCase())
   );
@@ -133,6 +159,28 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     setFilter('');
   };
 
+  const handleImportType = () => {
+    setShowAllTypes(true);
+    const space = spaces.find(space => space.id === spaceId);
+    if(!space?.spaceConfigurationId) {
+    // create a space configuration entity
+    // create an entity for the space config
+    // create a triple (SampleSpaceConfig -> Types -> SPACE_CONFIGURATION) Type triple
+    // create a triple (SampleSpaceConfig -> Name -> "Sample Space Config") Name triple
+    }
+    // create a triple (SampleSpaceConfig -> ForeignTypes -> Type) ForeignType triple
+    console.log("Importing type");
+  }
+  
+
+  const autocomplete = useTypeAutocomplete(spaceId);
+
+  useEffect(() => {
+    if(showAllTypes) {
+      autocomplete.onQueryChange(filter);
+    }
+  }, [filter, showAllTypes]);
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
@@ -168,7 +216,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
 
             <motion.div layout="position">
               <SearchContainer>
-                <Input value={filter} onChange={e => setFilter(e.currentTarget.value)} />
+                <Input value={filter} onChange={e => {
+                  setFilter(e.currentTarget.value)
+                }} />
               </SearchContainer>
             </motion.div>
 
@@ -178,14 +228,34 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
               </Text>
             )}
 
+
             <ResultsList>
-              {hasResults
+              {hasResults && !showAllTypes
                 ? filteredTypes.map(type => (
                     <ResultItem onClick={() => handleSelect(type)} key={type.id}>
                       {type.entityName}
                     </ResultItem>
                   ))
-                : isEditor && <CreateButton onClick={handleCreateType}>Create Type</CreateButton>}
+                : showAllTypes 
+                ? (
+                autocomplete.results.map(result => (
+                  <ResultContent
+                    key={result.id}
+                    onClick={() => {}}
+                    alreadySelected={false}
+                    result={result}
+                    spaces={spaces}
+                  />)))
+                : isEditor && (
+                <>
+                <CreateButton onClick={handleCreateType}>Create Type</CreateButton>
+                <ImportButton variant="secondary" borderColor="#0000" onClick={handleImportType}>
+                  <Text className="pb-2 self-center" variant="smallButton" color="ctaPrimary">
+                  Add type from another space
+                  </Text>
+                </ImportButton>
+                </>
+                )}
             </ResultsList>
           </MotionContent>
         ) : null}

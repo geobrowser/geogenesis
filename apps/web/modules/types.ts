@@ -47,6 +47,7 @@ export type Space = {
   admins: string[];
   attributes: Dictionary<string, string>;
   entityId: string;
+  spaceConfigurationId: string | null;
 };
 
 export type Account = {

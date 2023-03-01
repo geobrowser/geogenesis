@@ -620,6 +620,11 @@ export class Network implements INetwork {
               }
             }
           }
+          spaceConfigs: triples(where: {entityValue: "1d5d0c2a-db23-466c-a0b0-9abe879df457"}) {
+            space{
+              id
+            }
+          }
         }`,
       }),
     });
@@ -637,6 +642,11 @@ export class Network implements INetwork {
             entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
           };
         }[];
+        spaceConfigs: {
+          space: {
+            id: string;
+          }
+        }[]
       };
     } = await response.json();
 
@@ -650,9 +660,12 @@ export class Network implements INetwork {
         attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
       }
 
+      const spaceConfiguration = json.data.spaceConfigs.find(spaceConfig => spaceConfig.space.id === space.id);
+
       return {
         id: space.id,
         isRootSpace: space.isRootSpace,
+        spaceConfigurationId: spaceConfiguration?.space?.id || null,
         admins: space.admins.map(account => account.id),
         editorControllers: space.editorControllers.map(account => account.id),
         editors: space.editors.map(account => account.id),

@@ -90,6 +90,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       ],
     }),
     network.fetchForeignTypes(spaceId),
+    network.fetchAllTypes(spaceId),
   ]);
 
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;

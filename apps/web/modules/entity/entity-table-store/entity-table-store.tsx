@@ -6,7 +6,7 @@ import { ActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import { Column, FilterState, Row, Triple as TripleType } from '../../types';
+import { Column, Entity as EntityType, FilterState, Row, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -66,6 +66,7 @@ export class EntityTableStore implements IEntityTableStore {
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
+  allTypes$: ObservableComputed<TripleType[]>;
   space: string;
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
@@ -88,6 +89,11 @@ export class EntityTableStore implements IEntityTableStore {
     this.selectedType$ = observable(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
+
+    // Need to fetch the types not in the space
+    this.allTypes$ = computed(() => {
+      return this.api.fetchAllTypes(this.space);
+    });
 
     this.types$ = computed(() => {
       const globalActions = ActionsStore.actions$.get()[space] || [];
