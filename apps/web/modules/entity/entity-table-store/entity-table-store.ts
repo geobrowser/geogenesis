@@ -24,6 +24,7 @@ interface IEntityTableStore {
   ActionsStore: ActionsStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
+  columnValueType: (columnId: string) => string;
 }
 
 interface IEntityTableStoreConfig {
@@ -59,6 +60,7 @@ export class EntityTableStore implements IEntityTableStore {
   private api: INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
+  unpublishedColumns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<TripleType | null>;
@@ -169,6 +171,14 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
 
+    this.unpublishedColumns$ = computed(() => {
+      return EntityTable.columnsFromActions(
+        this.ActionsStore.actions$.get()[space],
+        [],
+        this.selectedType$.get()?.entityId
+      );
+    });
+
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
       return EntityTable.columnsFromActions(
@@ -181,7 +191,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = makeOptionalComputed(
       [],
       computed(async () => {
-        const serverColumns = this.columns$.get();
+        const columns = this.columns$.get();
         const { rows: serverRows } = networkData$.get();
 
         /**
@@ -248,7 +258,7 @@ export class EntityTableStore implements IEntityTableStore {
           e.types.some(t => t.id === this.selectedType$.get()?.entityId)
         );
 
-        const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, serverColumns);
+        const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, columns);
 
         return rows;
       })
@@ -256,6 +266,28 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
   }
+
+  columnValueType = (columnId: string): string => {
+    const column = this.columns$.get().find(c => c.id === columnId);
+
+    if (!column) {
+      // Typescript defensive programming
+      return SYSTEM_IDS.TEXT;
+    }
+
+    return Entity.valueTypeId(column.triples) ?? SYSTEM_IDS.TEXT;
+  };
+
+  columnName = (columnId: string): string => {
+    const column = this.columns$.get().find(c => c.id === columnId);
+
+    if (!column) {
+      // Typescript defensive programming
+      return '';
+    }
+
+    return Entity.name(column.triples) || '';
+  };
 
   setQuery = (query: string) => {
     this.setFilterState(
