@@ -72,6 +72,7 @@ export class EntityTableStore implements IEntityTableStore {
   query$: ObservableComputed<string>;
   space$: ObservableComputed<Space>;
   filterState$: Observable<FilterState>;
+  localForeignTypes$: Observable<TripleType[]>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   spaceId: string;
@@ -100,6 +101,8 @@ export class EntityTableStore implements IEntityTableStore {
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
 
+    this.localForeignTypes$ = observable<TripleType[]>([]);
+
     this.types$ = computed(() => {
       const globalActions = ActionsStore.actions$.get()[spaceId] || [];
       const actions = globalActions.filter(a => {
@@ -114,8 +117,10 @@ export class EntityTableStore implements IEntityTableStore {
 
         return isCreate || isDelete || isRemove;
       });
+
+      const localForeignTypes = this.localForeignTypes$.get();
       const triplesFromActions = Triple.fromActions(actions, initialTypes);
-      return Triple.withLocalNames(globalActions, triplesFromActions);
+      return [...Triple.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
     });
 
     this.filterState$ = observable<FilterState>(
@@ -340,7 +345,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.filterState$.set(newState);
   };
 
-  createForeignType = (typeEntityId: string, typeEntityName: string) => {
+  createForeignType = (foreignType: TripleType) => {
     const spaceConfigEntityId = this.space$.spaceConfigEntityId.get() || ID.createEntityId();
 
     if (!this.space$.spaceConfigEntityId.get()) {
@@ -372,16 +377,14 @@ export class EntityTableStore implements IEntityTableStore {
       entityName: 'Space Configuration',
       attributeId: SYSTEM_IDS.FOREIGN_TYPES,
       attributeName: 'Foreign Types',
-      value: { id: typeEntityId, type: 'entity', name: typeEntityName },
+      value: { id: foreignType.entityId, type: 'entity', name: foreignType.entityName },
     });
 
+    this.localForeignTypes$.set([...this.localForeignTypes$.get(), foreignType]);
     this.ActionsStore.create(spaceConfigForeignTypeTriple);
   };
 
   createType = (entityName: string) => {
-    if (entityName.length === 0) {
-      return;
-    }
     /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
     const entityId = ID.createEntityId();
     const nameTriple = Triple.withId({
@@ -406,5 +409,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
     this.ActionsStore.create(nameTriple);
     this.ActionsStore.create(typeTriple);
+
+    return typeTriple;
   };
 }

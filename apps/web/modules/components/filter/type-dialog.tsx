@@ -71,12 +71,26 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   };
 
   const createForeignType = (typeEntity: Entity) => {
-    entityTableStore.createForeignType(typeEntity.id, typeEntity.name || '');
+    const foreignTypeTriple = typeEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id === SYSTEM_IDS.SCHEMA_TYPE
+    );
+
+    if (!foreignTypeTriple) return;
+
+    entityTableStore.createForeignType(foreignTypeTriple);
+    entityTableStore.setType(foreignTypeTriple);
+    setEntityName('');
+    setOpen(false);
   };
 
   const createType = () => {
-    entityTableStore.createType(entityName);
+    if (entityName.length === 0) {
+      return;
+    }
+    const newType = entityTableStore.createType(entityName);
+    entityTableStore.setType(newType);
     setEntityName('');
+    setOpen(false);
   };
 
   const spaceTypeIds = entityTableStore.types.map(type => type.entityId);
