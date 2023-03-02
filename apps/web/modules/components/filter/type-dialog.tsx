@@ -3,7 +3,6 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
-import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
@@ -38,12 +37,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     ],
   });
   const entityTableStore = useEntityTable();
-  const ActionStore = useActionsStoreContext();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
   const { spaces } = useSpaces();
-
-  const space = spaces.find(s => s.id === spaceId);
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -83,11 +79,19 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     setEntityName('');
   };
 
-  const resultCount = mode === 'current-space' ? filteredTypes.length : autocomplete.results.length;
+  const spaceTypeIds = entityTableStore.types.map(type => type.entityId);
+
+  // Prevent non-types or current space types from showing up in the autocomplete results
+  const filteredAutocompleteResults = autocomplete.results.filter(result => {
+    const typeIds = result.triples.map(triple => triple.value.id);
+    return !spaceTypeIds.includes(result.id) && typeIds.includes(SYSTEM_IDS.SCHEMA_TYPE);
+  });
+
+  const resultCount = mode === 'current-space' ? filteredTypes.length : filteredAutocompleteResults.length;
 
   const noResultsFound =
     (mode === 'current-space' && filteredTypes.length === 0) ||
-    (mode === 'foreign-space' && autocomplete.results.length === 0);
+    (mode === 'foreign-space' && filteredAutocompleteResults.length === 0);
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -137,7 +141,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                       {type.entityName}
                     </ResultItem>
                   ))
-                : autocomplete.results.map((result, i) => (
+                : filteredAutocompleteResults.map((result, i) => (
                     <ResultContent
                       key={result.id}
                       onClick={() => {
