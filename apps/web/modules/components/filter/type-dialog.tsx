@@ -14,7 +14,7 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
-import { Entity, FilterState, Triple as TripleType } from '~/modules/types';
+import { Entity, Triple as TripleType } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/results-list';
@@ -23,8 +23,6 @@ const MotionContent = motion(PopoverPrimitive.Content);
 
 interface Props {
   inputContainerWidth: number;
-  filterState: FilterState;
-  setEntityNameState: (filterState: FilterState) => void;
   spaceId: string;
 }
 
@@ -121,6 +119,9 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   };
 
   const createType = () => {
+    if (entityName.length === 0) {
+      return;
+    }
     /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
     const entityId = ID.createEntityId();
     const nameTriple = Triple.withId({

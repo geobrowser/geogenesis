@@ -1,6 +1,6 @@
+import { useRect } from '@radix-ui/react-use-rect';
 import * as React from 'react';
 import { useRef } from 'react';
-import { useRect } from '@radix-ui/react-use-rect';
 
 import { useEntityTable } from '~/modules/entity';
 import { Input } from '../../design-system/input';
@@ -21,12 +21,7 @@ export function EntityInput({ spaceId }: Props) {
 
   return (
     <div ref={inputContainerRef} className="relative flex w-full gap-4 overflow-hidden sm:flex-col sm:gap-1">
-      <TypeDialog
-        inputContainerWidth={Math.min(inputRect?.width || 0, 678)}
-        filterState={entityTableStore.filterState}
-        setFilterState={entityTableStore.setFilterState}
-        spaceId={spaceId}
-      />
+      <TypeDialog inputContainerWidth={Math.min(inputRect?.width || 0, 678)} spaceId={spaceId} />
       <div className="relative w-full sm:ml-0">
         <Input withSearchIcon placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
       </div>
