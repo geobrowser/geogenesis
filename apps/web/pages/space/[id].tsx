@@ -53,7 +53,7 @@ export default function EntitiesPage({
       <SpaceNavbar spaceId={spaceId} />
 
       <EntityTableStoreProvider
-        space={spaceId}
+        spaceId={spaceId}
         initialRows={initialRows}
         initialSelectedType={initialSelectedType}
         initialColumns={initialColumns}

@@ -4,10 +4,12 @@ import { A, pipe } from '@mobily/ts-belt';
 import produce from 'immer';
 
 import { ActionsStore } from '~/modules/action';
+import { ID } from '~/modules/id';
+import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { INetwork } from '../../services/network';
-import { Column, FilterState, Row, Triple as TripleType } from '../../types';
+import { Column, FilterState, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
@@ -22,6 +24,7 @@ interface IEntityTableStore {
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   ActionsStore: ActionsStore;
+  SpaceStore: SpaceStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
   columnValueType: (columnId: string) => string;
@@ -29,7 +32,7 @@ interface IEntityTableStore {
 
 interface IEntityTableStoreConfig {
   api: INetwork;
-  space: string;
+  spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialRows: Row[];
@@ -37,6 +40,7 @@ interface IEntityTableStoreConfig {
   initialTypes: TripleType[];
   initialColumns: Column[];
   ActionsStore: ActionsStore;
+  SpaceStore: SpaceStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -66,26 +70,30 @@ export class EntityTableStore implements IEntityTableStore {
   selectedType$: Observable<TripleType | null>;
   types$: ObservableComputed<TripleType[]>;
   query$: ObservableComputed<string>;
+  space$: ObservableComputed<Space>;
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
-  space: string;
+  spaceId: string;
   ActionsStore: ActionsStore;
+  SpaceStore: SpaceStore;
   abortController: AbortController = new AbortController();
 
   constructor({
     api,
-    space,
+    spaceId,
     initialRows,
     initialSelectedType,
     initialColumns,
     initialTypes,
     ActionsStore,
+    SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
     this.api = api;
     this.ActionsStore = ActionsStore;
+    this.SpaceStore = SpaceStore;
     this.hydrated$ = observable(false);
     this.rows$ = observable(initialRows);
     this.selectedType$ = observable(initialSelectedType);
@@ -93,7 +101,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.columns$ = observable(initialColumns);
 
     this.types$ = computed(() => {
-      const globalActions = ActionsStore.actions$.get()[space] || [];
+      const globalActions = ActionsStore.actions$.get()[spaceId] || [];
       const actions = globalActions.filter(a => {
         const isCreate =
           a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
@@ -114,7 +122,7 @@ export class EntityTableStore implements IEntityTableStore {
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
 
-    this.space = space;
+    this.spaceId = spaceId;
     this.query$ = computed(() => {
       const filterState = this.filterState$.get();
       return filterState.find(f => f.field === 'entity-name')?.value || '';
@@ -140,13 +148,13 @@ export class EntityTableStore implements IEntityTableStore {
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: space,
+            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
 
           const { rows: serverRows } = await this.api.rows({
-            spaceId: space,
+            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -173,7 +181,7 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(
-        this.ActionsStore.actions$.get()[space],
+        this.ActionsStore.actions$.get()[spaceId],
         [],
         this.selectedType$.get()?.entityId
       );
@@ -182,10 +190,15 @@ export class EntityTableStore implements IEntityTableStore {
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
       return EntityTable.columnsFromActions(
-        this.ActionsStore.actions$.get()[space],
+        this.ActionsStore.actions$.get()[spaceId],
         columns,
         this.selectedType$.get()?.entityId
       );
+    });
+
+    this.space$ = computed(() => {
+      const spaces = this.SpaceStore.spaces$.get();
+      return spaces.find(s => s.id === spaceId) as Space;
     });
 
     this.rows$ = makeOptionalComputed(
@@ -206,7 +219,7 @@ export class EntityTableStore implements IEntityTableStore {
          * needs to render the columnSchema.
          */
         const changedEntitiesIdsFromAnotherType = pipe(
-          this.ActionsStore.actions$.get()[space],
+          this.ActionsStore.actions$.get()[spaceId],
           actions => Triple.fromActions(actions, []),
           triples => Entity.entitiesFromTriples(triples),
           A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId)),
@@ -258,7 +271,7 @@ export class EntityTableStore implements IEntityTableStore {
           e.types.some(t => t.id === this.selectedType$.get()?.entityId)
         );
 
-        const { rows } = EntityTable.fromColumnsAndRows(space, entitiesWithSelectedType, columns);
+        const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
 
         return rows;
       })
@@ -325,5 +338,73 @@ export class EntityTableStore implements IEntityTableStore {
     const newState = filter.length === 0 ? initialFilterState() : filter;
     this.setPageNumber(0);
     this.filterState$.set(newState);
+  };
+
+  createForeignType = (typeEntityId: string, typeEntityName: string) => {
+    const spaceConfigEntityId = this.space$.spaceConfigEntityId.get() || ID.createEntityId();
+
+    if (!this.space$.spaceConfigEntityId.get()) {
+      const spaceConfigNameTriple = Triple.withId({
+        space: this.spaceId,
+        entityId: spaceConfigEntityId,
+        entityName: 'Space Configuration',
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
+      });
+
+      const spaceConfigTypeTriple = Triple.withId({
+        space: this.spaceId,
+        entityId: spaceConfigEntityId,
+        entityName: 'Space Configuration',
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
+      });
+
+      this.ActionsStore.create(spaceConfigNameTriple);
+      this.ActionsStore.create(spaceConfigTypeTriple);
+    }
+
+    const spaceConfigForeignTypeTriple = Triple.withId({
+      space: this.spaceId,
+      entityId: spaceConfigEntityId,
+      entityName: 'Space Configuration',
+      attributeId: SYSTEM_IDS.FOREIGN_TYPES,
+      attributeName: 'Foreign Types',
+      value: { id: typeEntityId, type: 'entity', name: typeEntityName },
+    });
+
+    this.ActionsStore.create(spaceConfigForeignTypeTriple);
+  };
+
+  createType = (entityName: string) => {
+    if (entityName.length === 0) {
+      return;
+    }
+    /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
+    const entityId = ID.createEntityId();
+    const nameTriple = Triple.withId({
+      space: this.spaceId,
+      entityId,
+      entityName,
+      attributeId: SYSTEM_IDS.NAME,
+      attributeName: 'Name',
+      value: { id: ID.createValueId(), type: 'string', value: entityName },
+    });
+    const typeTriple = Triple.withId({
+      space: this.spaceId,
+      entityId,
+      entityName,
+      attributeId: SYSTEM_IDS.TYPES,
+      attributeName: 'Types',
+      value: {
+        id: SYSTEM_IDS.SCHEMA_TYPE,
+        type: 'entity',
+        name: 'Type',
+      },
+    });
+    this.ActionsStore.create(nameTriple);
+    this.ActionsStore.create(typeTriple);
   };
 }

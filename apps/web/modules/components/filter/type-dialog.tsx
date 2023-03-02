@@ -9,11 +9,9 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Input } from '~/modules/design-system/input';
 import { TextButton } from '~/modules/design-system/text-button';
 import { useEntityTable } from '~/modules/entity';
-import { ID } from '~/modules/id';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useEditable } from '~/modules/stores/use-editable';
-import { Triple } from '~/modules/triple';
 import { Entity, Triple as TripleType } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
@@ -77,75 +75,11 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   };
 
   const createForeignType = (typeEntity: Entity) => {
-    if (!space) {
-      // Typescript doesn't know that space is defined here
-      return;
-    }
-    const spaceConfigEntityId = space.spaceConfigEntityId || ID.createEntityId();
-
-    if (!space.spaceConfigEntityId) {
-      const spaceConfigNameTriple = Triple.withId({
-        space: space.id,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
-      });
-
-      const spaceConfigTypeTriple = Triple.withId({
-        space: space.id,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
-      });
-
-      ActionStore.create(spaceConfigNameTriple);
-      ActionStore.create(spaceConfigTypeTriple);
-    }
-
-    const spaceConfigForeignTypeTriple = Triple.withId({
-      space: space.id,
-      entityId: spaceConfigEntityId,
-      entityName: 'Space Configuration',
-      attributeId: SYSTEM_IDS.FOREIGN_TYPES,
-      attributeName: 'Foreign Types',
-      value: { id: typeEntity.id, type: 'entity', name: typeEntity.name },
-    });
-
-    ActionStore.create(spaceConfigForeignTypeTriple);
+    entityTableStore.createForeignType(typeEntity.id, typeEntity.name || '');
   };
 
   const createType = () => {
-    if (entityName.length === 0) {
-      return;
-    }
-    /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
-    const entityId = ID.createEntityId();
-    const nameTriple = Triple.withId({
-      space: spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.NAME,
-      attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: entityName },
-    });
-    const typeTriple = Triple.withId({
-      space: spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.TYPES,
-      attributeName: 'Types',
-      value: {
-        id: SYSTEM_IDS.SCHEMA_TYPE,
-        type: 'entity',
-        name: 'Type',
-      },
-    });
-    ActionStore.create(nameTriple);
-    ActionStore.create(typeTriple);
+    entityTableStore.createType(entityName);
     setEntityName('');
   };
 
