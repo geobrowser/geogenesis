@@ -1,8 +1,7 @@
-import * as React from 'react';
-import cx from 'classnames';
-import { motion } from 'framer-motion';
-import { Command } from 'cmdk';
 import { A } from '@mobily/ts-belt';
+import cx from 'classnames';
+import { Command } from 'cmdk';
+import { motion } from 'framer-motion';
 
 import { Input } from '~/modules/design-system/input';
 import { useAutocomplete } from '~/modules/search';
@@ -19,7 +18,7 @@ interface Props {
 }
 
 export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
-  const autocomplete = useAutocomplete(spaceId);
+  const autocomplete = useAutocomplete({ spaceId });
   const { spaces } = useSpaces();
 
   if (!open) return null;

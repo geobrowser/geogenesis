@@ -39,7 +39,7 @@ interface Props {
 }
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
-  const autocomplete = useAutocomplete(spaceId);
+  const autocomplete = useAutocomplete({ spaceId });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 

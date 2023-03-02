@@ -1,11 +1,11 @@
-import * as React from 'react';
-import { useState } from 'react';
-import cx from 'classnames';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
+import { useState } from 'react';
 
 import { Filter } from '~/modules/design-system/icons/filter';
+import { useWindowSize } from '~/modules/hooks/use-window-size';
 import { initialFilterState } from '~/modules/triple';
 import { FilterClause, FilterField, FilterState } from '~/modules/types';
 import { intersperse } from '~/modules/utils';
@@ -13,7 +13,6 @@ import { Button } from '../../design-system/button';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { FilterInputGroup } from './input-group';
-import { useWindowSize } from '~/modules/hooks/use-window-size';
 
 const MotionContent = motion(PopoverPrimitive.Content);
 
@@ -23,7 +22,7 @@ interface Props {
   setFilterState: (filterState: FilterState) => void;
 }
 
-const FIELD_LABELS: Record<FilterField, string> = {
+const FIELD_LABELS: Partial<Record<FilterField, string>> = {
   'entity-name': 'Entity contains',
   'attribute-name': 'Attribute contains',
   value: 'Value contains',
