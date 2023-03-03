@@ -237,6 +237,9 @@ export class EntityTableStore implements IEntityTableStore {
         //
         // e.g., We add Type A to Entity A. When we render the Type A table, we need
         // _all_ of the triples for Entity A, not just the ones that have changed locally.
+        //
+        // TODO: We need to not fetch things from the server for entities that have been created locally with the selected type
+        // Tracking Ticket: https://linear.app/geobrowser/issue/GEO-445/unhandled-error-when-adding-type-to-new-entity
         const serverTriplesForEntitiesChangedLocally = await Promise.all(
           changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
         );

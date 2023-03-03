@@ -267,7 +267,6 @@ export class Network implements INetwork {
     >;
 
     const entityOfWhere = [
-      space && `space: ${JSON.stringify(space)}`,
       fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
