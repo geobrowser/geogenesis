@@ -44,6 +44,8 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
   const [entityName, setEntityName] = useState('');
+  const [mode, setMode] = useState<TypeDialogMode>('current-space');
+
   const filteredTypes = entityTableStore.types.filter(type =>
     (type.entityName || '').toLowerCase().includes(entityName.toLowerCase())
   );
@@ -57,13 +59,10 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
 
   const updateMode = (mode: TypeDialogMode) => {
     setMode(mode);
-    setEntityName('');
     if (mode === 'foreign-space') {
-      autocomplete.onQueryChange('');
+      autocomplete.onQueryChange(entityName);
     }
   };
-
-  const [mode, setMode] = useState<TypeDialogMode>('current-space');
 
   const handleSelect = (type: TripleType) => {
     entityTableStore.setType(type);
@@ -143,10 +142,8 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
                 <TextButton onClick={() => updateMode('current-space')}>Back</TextButton>
               ) : null}
             </div>
-            <motion.div layout="position">
-              <div className="px-2">
-                <Input value={entityName} onChange={e => handleSearchChange(e.currentTarget.value)} />
-              </div>
+            <motion.div layout="position" className="px-2">
+              <Input value={entityName} onChange={e => handleSearchChange(e.currentTarget.value)} />
             </motion.div>
             <ResultsList className="max-h-96 overflow-y-auto px-0">
               {mode === 'current-space'
