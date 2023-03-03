@@ -86,7 +86,7 @@ export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
-  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType>;
+  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
@@ -200,7 +200,7 @@ export class Network implements INetwork {
     return { triples };
   };
 
-  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType> => {
+  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -246,6 +246,10 @@ export class Network implements INetwork {
     } = await response.json();
 
     const entity = json.data.geoEntity;
+
+    if (!entity) {
+      return null;
+    }
 
     const triples = fromNetworkTriples(entity.entityOf);
     const nameTriple = Entity.nameTriple(triples);
@@ -484,8 +488,9 @@ export class Network implements INetwork {
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
     const entities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
+    const filteredEntities = entities.flatMap(entity => (entity ? [entity] : []));
 
-    return { rows: entities };
+    return { rows: filteredEntities };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
@@ -512,6 +517,8 @@ export class Network implements INetwork {
       columnsTriples.triples.map(triple => this.fetchEntity(triple.value.id))
     );
 
+    const filteredRelatedColumnTriples = relatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
+
     /* Name is the default column... */
     const defaultColumns: Column[] = [
       {
@@ -522,7 +529,7 @@ export class Network implements INetwork {
 
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
-      triples: relatedColumnTriples[i].triples,
+      triples: filteredRelatedColumnTriples[i].triples,
     }));
 
     return { columns: [...defaultColumns, ...schemaColumns] };

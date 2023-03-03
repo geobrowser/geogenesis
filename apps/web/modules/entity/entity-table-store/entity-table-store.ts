@@ -217,6 +217,7 @@ export class EntityTableStore implements IEntityTableStore {
          * with server data in the entity table:
          * 1. An entity is created locally and is given the selected type
          * 2. An entity is edited locally and is given the selected type
+         * 3. A type is created locally and an entity is given the new type
          *
          * Since the table aggregation code expects triples, we may end up in a situation where
          * the type for an entity has changed, but the name hasn't. In this case there is no local
@@ -244,6 +245,8 @@ export class EntityTableStore implements IEntityTableStore {
           changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
         );
 
+        const serverEntitiesChangedLocally = serverTriplesForEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
+
         const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
         const entitiesCreatedOrChangedLocally = pipe(
@@ -253,7 +256,7 @@ export class EntityTableStore implements IEntityTableStore {
         );
 
         const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
-        const serverEntitiesChangedLocallyIds = new Set(serverTriplesForEntitiesChangedLocally.map(e => e.id));
+        const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
 
         // Filter out any server rows that have been changed locally
         const filteredServerRows = serverEntityTriples.filter(
@@ -267,7 +270,7 @@ export class EntityTableStore implements IEntityTableStore {
           // These are entities that have a new type locally and may exist on the server.
           // We need to fetch all triples associated with this entity in order to correctly
           // populate the table.
-          ...serverTriplesForEntitiesChangedLocally.flatMap(e => e.triples),
+          ...serverEntitiesChangedLocally.flatMap(e => e.triples),
 
           // These are entities that have been fetched from the server and have the selected type.
           // They are deduped from the local changes above.
