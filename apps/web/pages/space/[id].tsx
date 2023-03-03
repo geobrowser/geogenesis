@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { useEffect } from 'react';
 
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
@@ -10,7 +9,6 @@ import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Spacer } from '~/modules/design-system/spacer';
 import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
-import { Services } from '~/modules/services';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Triple } from '~/modules/types';
@@ -35,11 +33,6 @@ export default function EntitiesPage({
   initialTypes,
 }: Props) {
   useLogRocket(spaceId);
-
-  const { network } = Services.useServices();
-  useEffect(() => {
-    fetchForeignTypeTriples(network, spaceId);
-  });
 
   return (
     <div>
