@@ -1,6 +1,6 @@
-import * as React from 'react';
-import cx from 'classnames';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import cx from 'classnames';
+import * as React from 'react';
 
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/modules/design-system/icons/check-circle-small';
@@ -15,7 +15,7 @@ type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = (props: ResultsListProps) => (
   <ul
-    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden p-0"
+    className="m-0 mb-2 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden px-2"
     {...props}
   />
 );

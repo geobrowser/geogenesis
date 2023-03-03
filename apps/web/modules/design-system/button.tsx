@@ -1,7 +1,6 @@
 import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { forwardRef } from 'react';
-
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import type { IconName } from '~/modules/design-system/icon';
 import { Icon } from '~/modules/design-system/icon';
