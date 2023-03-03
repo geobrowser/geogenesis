@@ -64,6 +64,8 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
+    case 'IMAGE':
+      return !networkTriple.stringValue;
   }
 }
 
