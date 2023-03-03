@@ -7,11 +7,11 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Input } from '~/modules/design-system/input';
 import { TextButton } from '~/modules/design-system/text-button';
-import { useEntityTable } from '~/modules/entity';
+import { SelectedEntityType, useEntityTable } from '~/modules/entity';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useEditable } from '~/modules/stores/use-editable';
-import { Entity, Triple as TripleType } from '~/modules/types';
+import { Entity } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/results-list';
@@ -64,8 +64,8 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     }
   };
 
-  const handleSelect = (type: TripleType) => {
-    entityTableStore.setType(type);
+  const handleSelect = (type: SelectedEntityType) => {
+    entityTableStore.setSelectedType(type);
     setOpen(false);
   };
 
@@ -77,7 +77,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
     if (!foreignTypeTriple) return;
 
     entityTableStore.createForeignType(foreignTypeTriple);
-    entityTableStore.setType(foreignTypeTriple);
+    entityTableStore.setSelectedType(foreignTypeTriple);
     setEntityName('');
     setOpen(false);
   };
@@ -87,7 +87,7 @@ export function TypeDialog({ inputContainerWidth, spaceId }: Props) {
       return;
     }
     const newType = entityTableStore.createType(entityName);
-    entityTableStore.setType(newType);
+    entityTableStore.setSelectedType(newType);
     setEntityName('');
     setOpen(false);
   };
