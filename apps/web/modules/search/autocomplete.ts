@@ -88,8 +88,9 @@ export function useAutocomplete({ spaceId, filter }: AutocompleteProps) {
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({ api: network, spaceId, ActionsStore, filter });
-    // For unknown reasons, including filter in the dependency array causes results to be an empty array in the useAutocomplete hook.
-  }, [network, spaceId, ActionsStore]);
+    // Typically we wouldn't want to stringify a dependency array value, but since
+    // we know that the FilterState object is small we know it won't create a performance issue.
+  }, [network, spaceId, ActionsStore, JSON.stringify(filter)]);
 
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);
