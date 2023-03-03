@@ -344,22 +344,17 @@ function EntityAttributes({
         );
       case 'image':
         return (
-          <>
-            <div>TRIPLE ID {triple.id}</div>
-            <div>TRIPLE VALUE ID {triple.value.id}</div>
-
-            <PageImageField
-              key={triple.attributeId}
-              variant="avatar"
-              imageSrc={triple.value.value}
-              onImageChange={imageSrc => {
-                uploadImage(triple, imageSrc);
-              }}
-              onImageRemove={() => {
-                removeImage(triple);
-              }}
-            />
-          </>
+          <PageImageField
+            key={triple.attributeId}
+            variant="avatar"
+            imageSrc={triple.value.value}
+            onImageChange={imageSrc => {
+              uploadImage(triple, imageSrc);
+            }}
+            onImageRemove={() => {
+              removeImage(triple);
+            }}
+          />
         );
       case 'number':
         return null;
