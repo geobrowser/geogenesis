@@ -487,10 +487,12 @@ export class Network implements INetwork {
 
     /* Then we then fetch all triples associated with those row entity IDs */
     const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
-    const entities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
-    const filteredEntities = entities.flatMap(entity => (entity ? [entity] : []));
 
-    return { rows: filteredEntities };
+    // This will return null if the entity we're fetching does not exist remotely
+    const maybeEntities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
+    const entities = maybeEntities.flatMap(entity => (entity ? [entity] : []));
+
+    return { rows: entities };
   };
 
   columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
@@ -512,12 +514,12 @@ export class Network implements INetwork {
 
     /* Then we fetch all of the associated triples for each column */
 
-    // This will return empty triples if the related entity is not in the same space
-    const relatedColumnTriples = await Promise.all(
+    // This will return null if the entity we're fetching does not exist remotely
+    const maybeRelatedColumnTriples = await Promise.all(
       columnsTriples.triples.map(triple => this.fetchEntity(triple.value.id))
     );
 
-    const filteredRelatedColumnTriples = relatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
+    const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
 
     /* Name is the default column... */
     const defaultColumns: Column[] = [
@@ -529,7 +531,7 @@ export class Network implements INetwork {
 
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
-      triples: filteredRelatedColumnTriples[i].triples,
+      triples: relatedColumnTriples[i].triples,
     }));
 
     return { columns: [...defaultColumns, ...schemaColumns] };
