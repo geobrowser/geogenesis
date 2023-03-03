@@ -217,7 +217,7 @@ function EntityAttributes({
   const removeOrResetEntityTriple = (triple: TripleType) => {
     hideSchema(triple.attributeId);
     send({
-      type: 'REMOVE_ENTITY',
+      type: 'REMOVE_PAGE_ENTITY',
       payload: {
         triple,
         isLastEntity: groupedTriples[triple.attributeId].length === 1,
@@ -241,7 +241,7 @@ function EntityAttributes({
   const addEntityValue = (attributeId: string, linkedEntity: EntityType) => {
     // If it's an empty triple value
     send({
-      type: 'ADD_ENTITY_VALUE',
+      type: 'ADD_PAGE_ENTITY_VALUE',
       payload: {
         triplesByAttributeId: groupedTriples,
         attribute: {
@@ -255,9 +255,10 @@ function EntityAttributes({
 
   const createEntityTripleFromPlaceholder = (triple: TripleType, linkedEntity: EntityType) => {
     send({
-      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {
-        triple,
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
         entityId: linkedEntity.id,
         entityName: linkedEntity.name || '',
       },
@@ -266,9 +267,10 @@ function EntityAttributes({
 
   const createStringTripleFromPlaceholder = (triple: TripleType, value: string) => {
     send({
-      type: 'CREATE_STRING_TRIPLE_FROM_PLACEHOLDER',
+      type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
       payload: {
-        triple,
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
         value,
       },
     });
@@ -342,17 +344,22 @@ function EntityAttributes({
         );
       case 'image':
         return (
-          <PageImageField
-            key={triple.attributeId}
-            variant="avatar"
-            imageSrc={triple.value.value}
-            onImageChange={imageSrc => {
-              uploadImage(triple, imageSrc);
-            }}
-            onImageRemove={() => {
-              removeImage(triple);
-            }}
-          />
+          <>
+            <div>TRIPLE ID {triple.id}</div>
+            <div>TRIPLE VALUE ID {triple.value.id}</div>
+
+            <PageImageField
+              key={triple.attributeId}
+              variant="avatar"
+              imageSrc={triple.value.value}
+              onImageChange={imageSrc => {
+                uploadImage(triple, imageSrc);
+              }}
+              onImageRemove={() => {
+                removeImage(triple);
+              }}
+            />
+          </>
         );
       case 'number':
         return null;
