@@ -68,7 +68,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const valueType = Entity.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
 
-  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 
   const onChangeTripleType = (valueType: keyof typeof valueTypes) => {

@@ -230,10 +230,10 @@ const listener =
           valueTypeTriple
         );
 
-        const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
-        const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+        const currentType = cellTriples[0]?.value.type;
+        const isRelationFromRelationToText = currentType === 'entity' && valueType === SYSTEM_IDS.TEXT;
 
-        if (isTextValueType) {
+        if (isRelationFromRelationToText) {
           // Handles the case when the column is changed from relation to text.
           // Former entities values join into one string value separated by a comma
           // e.g. San Francisco and New York entities transform into a single string value "San Francisco, New York"
@@ -259,11 +259,8 @@ const listener =
               })
             );
           });
-        } else if (isRelationValueType) {
-          // Handles the case when the column is changed from text to relation.
-          return cellTriples.forEach(triple => remove(triple));
         } else {
-          return;
+          return cellTriples.forEach(triple => remove(triple));
         }
       }
       case 'CHANGE_TRIPLE_TYPE': {
