@@ -13,14 +13,13 @@ describe('MergeDataSource merges local triples with network triples', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    store.remove(stubTriple);
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
       entityName: 'Bob',
       value: { ...stubTriple.value, value: 'Bob' } as StringValue,
     };
-    store.create(changedLocalTriple);
+    store.update(changedLocalTriple, stubTriple);
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const triples = await mergedNetwork.fetchTriples({
@@ -53,7 +52,7 @@ describe('MergeDataSource merges local entities with network entities', () => {
       entityName: 'Bob',
       value: { ...stubTriple.value, value: 'Bob' } as StringValue,
     };
-    store.create(changedLocalTriple);
+    store.update(changedLocalTriple, stubTriple);
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entities = await mergedNetwork.fetchEntities({
@@ -75,14 +74,14 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    store.remove(stubTriple);
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
       entityName: 'Bob',
       value: { ...stubTriple.value, value: 'Bob' } as StringValue,
     };
-    store.create(changedLocalTriple);
+
+    store.update(changedLocalTriple, stubTriple);
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entities = await mergedNetwork.fetchEntities({
@@ -100,7 +99,6 @@ describe('MergeDataSource merges local entities with network entities', () => {
   });
 });
 
-// @TODO: Use update instead of create/remove
 describe('MergeDataSource merges local entity with network entity', () => {
   // This should take the local version of the entity
   it('local entity and network entity both exist', async () => {
@@ -108,14 +106,14 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    store.remove(stubTriple);
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
       entityName: 'Bob',
       value: { ...stubTriple.value, value: 'Bob' } as StringValue,
     };
-    store.create(changedLocalTriple);
+
+    store.update(changedLocalTriple, stubTriple);
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entity = await mergedNetwork.fetchEntity(stubTriple.id);
@@ -157,9 +155,6 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entity = await mergedNetwork.fetchEntity(stubTriple.id);
-
-    console.log('entites', Entity.entitiesFromTriples([stubTriple]));
-    console.log('entity', entity);
 
     expect(entity).toEqual(Entity.entitiesFromTriples([stubTriple])[0]);
   });
