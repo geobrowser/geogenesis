@@ -10,7 +10,7 @@ export const useEntityTable = () => {
     setQuery,
     setPageNumber,
     setNextPage,
-    setType,
+    setSelectedType,
     setPreviousPage,
     pageNumber$,
     hasPreviousPage$,
@@ -24,6 +24,8 @@ export const useEntityTable = () => {
     columnValueType,
     setFilterState,
     columnName,
+    createForeignType,
+    createType,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -49,7 +51,7 @@ export const useEntityTable = () => {
     setPageNumber,
     setNextPage,
     setPreviousPage,
-    setType,
+    setSelectedType,
     pageNumber,
     columnValueType,
     columnName,
@@ -57,5 +59,7 @@ export const useEntityTable = () => {
     hasNextPage,
     filterState,
     setFilterState,
+    createType,
+    createForeignType,
   };
 };
