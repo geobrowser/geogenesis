@@ -8,6 +8,7 @@ import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 import { ActionsStore, useActionsStoreContext } from '../action';
 import { Entity } from '../entity';
+import { MergeDataSource } from '../services/io/merge-data-source';
 import { Entity as EntityType, FilterState } from '../types';
 
 interface EntityAutocompleteOptions {
@@ -22,8 +23,11 @@ class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
+  mergedDataSource: MergeDataSource;
 
   constructor({ api, spaceId, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
+    this.mergedDataSource = new MergeDataSource({ api, store: ActionsStore });
+
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -36,34 +40,12 @@ class EntityAutocomplete {
           if (query.length === 0) return [];
 
           this.loading$.set(true);
-          const networkEntities = await api.fetchEntities({
+          return await this.mergedDataSource.fetchEntities({
             query,
             space: spaceId,
             abortController: this.abortController,
             filter,
           });
-
-          const localEntities = pipe(
-            ActionsStore.actions$.get(),
-            actions => Entity.mergeActionsWithEntities(actions, networkEntities),
-            A.filter(e => {
-              if (!G.isString(e.name)) {
-                return false;
-              }
-
-              const lowerName = e.name.toLowerCase();
-              return lowerName.startsWith(query.toLowerCase()) || lowerName.includes(query.toLowerCase());
-            })
-          );
-
-          // We want to favor the local version of an entity if it exists on the network already.
-          const localEntityIds = new Set(localEntities.map(e => e.id));
-          this.loading$.set(true);
-
-          // This will put the local entities first, and then the network entities that don't exist locally.
-          // This might not be the ideal UX.
-
-          return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
         } catch (e) {
           console.log("Couldn't fetch entities", e);
           return [];
