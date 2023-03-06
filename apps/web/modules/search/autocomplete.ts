@@ -40,12 +40,14 @@ class EntityAutocomplete {
           if (query.length === 0) return [];
 
           this.loading$.set(true);
-          return await this.mergedDataSource.fetchEntities({
+          const entities = await this.mergedDataSource.fetchEntities({
             query,
             space: spaceId,
             abortController: this.abortController,
             filter,
           });
+          this.loading$.set(false);
+          return entities;
         } catch (e) {
           console.log("Couldn't fetch entities", e);
           return [];
