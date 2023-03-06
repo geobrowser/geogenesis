@@ -147,6 +147,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
     expect(entity).toEqual(Entity.entitiesFromTriples([changedLocalTripleAsAction])[0]);
   });
 
+  // This should take the network entity
   it('local entity does not exist and network entity exists', async () => {
     const stubTriple = makeStubTriple('Devin');
 
@@ -159,6 +160,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
     expect(entity).toEqual(Entity.entitiesFromTriples([stubTriple])[0]);
   });
 
+  // This should return null
   it('local entity does not exist and network does not exist', async () => {
     const stubTriple = makeStubTriple('Devin');
 
