@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';

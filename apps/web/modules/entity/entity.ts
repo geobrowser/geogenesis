@@ -38,7 +38,7 @@ export function descriptionTriple(triples: TripleType[]): TripleType | undefined
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: TripleType[], currentSpace: string): { id: string; name: string | null }[] {
+export function types(triples: TripleType[], currentSpace?: string): { id: string; name: string | null }[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
@@ -75,6 +75,16 @@ export function name(triples: TripleType[]): string | null {
 
 export function nameTriple(triples: TripleType[]): TripleType | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
+}
+
+export function valueTypeTriple(triples: TripleType[]): TripleType | undefined {
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
+}
+
+export function valueTypeId(triples: TripleType[]): string | null {
+  // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
+  const triple = valueTypeTriple(triples);
+  return triple?.value.type === 'entity' ? triple?.value.id : null;
 }
 
 /**

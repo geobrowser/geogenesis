@@ -1,19 +1,19 @@
-import * as React from 'react';
-
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
-import { Cell } from '../../types';
+import { Cell, Triple } from '../../types';
 import { NavUtils } from '../../utils';
 import { CellContent } from '../table/cell-content';
 
 interface Props {
   cell: Cell;
+  triples: Triple[];
   space: string;
   isExpanded: boolean;
 }
 
-export const EntityTableCell = ({ cell, space, isExpanded }: Props) => {
-  const isNameCell = cell.columnId === 'name';
+export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => {
+  const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
 
   if (isNameCell) {
     const entityId = cell.triples[0].entityId;
@@ -31,7 +31,7 @@ export const EntityTableCell = ({ cell, space, isExpanded }: Props) => {
   } else
     return (
       <div className="flex flex-wrap gap-2">
-        {cell.triples.map(({ value }) => {
+        {triples.map(({ value }) => {
           if (value.type === 'entity') {
             return (
               <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>

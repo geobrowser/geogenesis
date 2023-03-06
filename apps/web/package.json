@@ -41,6 +41,7 @@
     "ethers": "^5.7.2",
     "framer-motion": "^7.5.3",
     "immer": "^9.0.16",
+    "js-confetti": "^0.11.0",
     "logrocket": "^3.0.1",
     "logrocket-react": "^5.0.1",
     "modern-normalize": "^1.1.0",
