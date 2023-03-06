@@ -7,3 +7,7 @@ export function nameOfEntityValue(triple: Triple) {
 export function stringValue(triple: Triple) {
   return triple?.value?.type === 'string' ? triple.value.value : null;
 }
+
+export function imageValue(triple: Triple) {
+  return triple?.value?.type === 'image' ? triple.value.value : null;
+}

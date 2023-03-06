@@ -9,15 +9,15 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
 
   /* Visible triples includes both real triples and placeholder triples */
   return visibleTriples.sort((tripleA, tripleB) => {
-    const { attributeId: attributeIdA } = tripleA;
-    const { attributeId: attributeIdB } = tripleB;
+    const { attributeId: attributeIdA, attributeName: attributeNameA } = tripleA;
+    const { attributeId: attributeIdB, attributeName: attributeNameB } = tripleB;
 
-    const aName = attributeIdA === SYSTEM_IDS.NAME;
-    const bName = attributeIdB === SYSTEM_IDS.NAME;
-    const aDescription = attributeIdA === SYSTEM_IDS.DESCRIPTION;
-    const bDescription = attributeIdB === SYSTEM_IDS.DESCRIPTION;
-    const aTypes = attributeIdA === SYSTEM_IDS.TYPES;
-    const bTypes = attributeIdB === SYSTEM_IDS.TYPES;
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
 
     const aIndex = schemaAttributeIds.indexOf(attributeIdA);
     const bIndex = schemaAttributeIds.indexOf(attributeIdB);
@@ -25,14 +25,14 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
     const aInSchema = schemaAttributeIds.includes(attributeIdA);
     const bInSchema = schemaAttributeIds.includes(attributeIdB);
 
-    if (aName && !bName) return -1;
-    if (!aName && bName) return 1;
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
 
-    if (aDescription && !bDescription) return -1;
-    if (!aDescription && bDescription) return 1;
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
 
-    if (aTypes && !bTypes) return -1;
-    if (!aTypes && bTypes) return 1;
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
 
     if (aInSchema && !bInSchema) {
       return -1;
@@ -46,6 +46,6 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
       return aIndex - bIndex;
     }
 
-    return -1;
+    return (attributeNameA || '').localeCompare(attributeNameB || '');
   });
 }

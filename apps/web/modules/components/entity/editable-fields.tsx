@@ -109,8 +109,8 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
 
   return (
     <Zoom>
-      <div className="relative rounded" style={imageStyles[variant]}>
-        <img src={imageSrc} className="h-full object-cover" />
+      <div className="relative" style={imageStyles[variant]}>
+        <img src={imageSrc} className="h-full rounded object-cover" />
       </div>
     </Zoom>
   );
@@ -151,7 +151,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
       )}
 
       <div className="flex justify-center gap-2 pt-2">
-        <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center">
+        <label htmlFor="avatar-file">
           <SmallButton onClick={handleFileInputClick} icon="upload">
             Upload
           </SmallButton>
@@ -190,16 +190,22 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
   };
 
   return (
-    <div className="group flex justify-between">
-      {imageSrc && (
+    <div className="group flex w-full justify-between">
+      {imageSrc ? (
         <div>
           <ImageZoom variant={variant} imageSrc={imageSrc} />
         </div>
+      ) : (
+        <label htmlFor="avatar-file">
+          <SmallButton onClick={handleFileInputClick} icon="upload">
+            Upload
+          </SmallButton>
+        </label>
       )}
 
       {imageSrc && (
         <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center">
+          <label htmlFor="avatar-file">
             <SquareButton onClick={handleFileInputClick} icon="upload" />
           </label>
           <SquareButton onClick={onImageRemove} icon="trash" />

@@ -335,6 +335,7 @@ function EntityAttributes({
             variant="body"
             placeholder="Add value..."
             aria-label={triple.placeholder ? 'placeholder-text-field' : 'text-field'}
+            value={triple.value.value}
             onChange={e => {
               triple.placeholder
                 ? createStringTripleFromPlaceholder(triple, e.target.value)

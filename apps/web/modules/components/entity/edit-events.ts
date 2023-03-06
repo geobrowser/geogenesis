@@ -116,6 +116,14 @@ export type EditEvent =
       };
     }
   | {
+      type: 'CREATE_IMAGE_TRIPLE_WITH_VALUE';
+      payload: {
+        imageSrc: string;
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE';
       payload: {
         entityId: string;
@@ -388,6 +396,47 @@ const listener =
               type: 'string',
               id: ID.createValueId(),
               value: value,
+            },
+          })
+        );
+      }
+
+      case 'CREATE_IMAGE_TRIPLE_WITH_VALUE': {
+        const { imageSrc, attributeId, attributeName } = event.payload;
+
+        if (!imageSrc) return;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId,
+            attributeName,
+            value: {
+              type: 'image',
+              id: ID.createValueId(),
+              value: imageSrc,
+            },
+          })
+        );
+      }
+
+      case 'CREATE_ENTITY_TRIPLE_WITH_VALUE': {
+        const { entityId, entityName, attributeId, attributeName } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId: attributeId,
+            attributeName: attributeName,
+            placeholder: false,
+            value: {
+              type: 'entity',
+              id: entityId,
+              name: entityName,
             },
           })
         );
