@@ -1,6 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { ConfiguredCommandExtension } from './commands';
+import { CommandExtension } from './commands';
 
 interface Props {
   editable?: boolean;
@@ -8,9 +8,15 @@ interface Props {
 
 export const Editor = ({ editable = true }: Props) => {
   const editor = useEditor({
-    extensions: [StarterKit, ConfiguredCommandExtension],
+    extensions: [StarterKit, CommandExtension.configure({ suggestion: {} })],
     content: '<p>Hello World! 🌎️</p>',
     editable,
+    onUpdate: ({ editor }) => {
+      console.log(editor.getHTML());
+    },
+    onTransaction: ({ state }) => {
+      console.log(state.selection.anchor);
+    },
   });
 
   return (
