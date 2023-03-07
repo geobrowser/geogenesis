@@ -1,4 +1,5 @@
 import { mergeAttributes, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import React from 'react';
 import { EntityTableStoreProvider } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { EntityTableContainer } from '../../entity-table/entity-table-container';
@@ -43,7 +44,7 @@ const initialSelectedType: Triple = {
   space: '0xb5E2cD8A5F88517d3576ba99d52C005b19351A43',
 };
 
-export const TableNodeComponent = () => {
+export const TableNodeComponent = React.memo(function TableNodeComponent() {
   return (
     <NodeViewWrapper className="react-component-with-content">
       <EntityTableStoreProvider
@@ -64,4 +65,4 @@ export const TableNodeComponent = () => {
       <NodeViewContent className="content" />
     </NodeViewWrapper>
   );
-};
+});
