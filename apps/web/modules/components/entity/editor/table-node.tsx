@@ -1,4 +1,4 @@
-import { mergeAttributes, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { mergeAttributes, Node, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import React from 'react';
 import { EntityTableStoreProvider } from '~/modules/entity';
 import { Triple } from '~/modules/types';
@@ -6,10 +6,10 @@ import { EntityTableContainer } from '../../entity-table/entity-table-container'
 
 export const TableNode = Node.create({
   name: 'tableNode',
-
   group: 'block',
-
-  content: 'inline*',
+  atom: true,
+  spanning: false,
+  exitable: true,
 
   parseHTML() {
     return [
@@ -62,7 +62,6 @@ export const TableNodeComponent = React.memo(function TableNodeComponent() {
           initialRows={[]}
         />
       </EntityTableStoreProvider>
-      <NodeViewContent className="content" />
     </NodeViewWrapper>
   );
 });

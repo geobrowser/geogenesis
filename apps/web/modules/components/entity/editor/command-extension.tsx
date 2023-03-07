@@ -83,7 +83,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           title: 'Table',
           description: 'Table.',
           command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).setNode('tableNode').run();
+            editor.chain().focus().deleteRange(range).insertContent('<table-node></table-node><p></p>').run();
           },
         },
       ];
