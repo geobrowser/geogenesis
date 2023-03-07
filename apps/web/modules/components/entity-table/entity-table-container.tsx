@@ -17,9 +17,10 @@ interface Props {
   spaceName?: string;
   initialRows: Row[];
   initialColumns: Column[];
+  showHeader?: boolean;
 }
 
-export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
+export function EntityTableContainer({ spaceId, initialColumns, initialRows, showHeader }: Props) {
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -27,9 +28,13 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
   return (
     <EntityTableErrorBoundary spaceId={spaceId} typeId={entityTableStore.selectedType?.entityId ?? ''}>
       <PageContainer>
-        <Spacer height={20} />
-        <EntityInput spaceId={spaceId} />
-        <Spacer height={12} />
+        {showHeader && (
+          <>
+            <Spacer height={20} />
+            <EntityInput spaceId={spaceId} />
+            <Spacer height={12} />
+          </>
+        )}
         {/*
         Using a container to wrap the table to make styling borders around
         the table easier. Otherwise we need to do some pseudoselector shenanigans
