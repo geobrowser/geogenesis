@@ -17,6 +17,7 @@ import { NavUtils } from '~/modules/utils';
 
 import '../styles/fonts.css';
 import '../styles/styles.css';
+import '../styles/tiptap.css';
 
 function Root(props: AppProps) {
   return (

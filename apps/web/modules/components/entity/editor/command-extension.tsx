@@ -46,7 +46,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
     items: ({ query }) => {
       const items: CommandSuggestionItem[] = [
         {
-          // icon: <IoText />,
+          icon: <div className={'flex items-center justify-center text-[1.2em]'}>T</div>,
           title: 'Text',
           description: 'Just start writing with plain text.',
           command: ({ editor, range }) => {
@@ -79,11 +79,11 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           },
         },
         {
-          // icon: <MdImage />,
+          icon: <div className={'flex items-center justify-center text-[1.2em]'}>^^</div>,
           title: 'Table',
           description: 'Table.',
           command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+            editor.chain().focus().deleteRange(range).setNode('tableNode').run();
           },
         },
       ];

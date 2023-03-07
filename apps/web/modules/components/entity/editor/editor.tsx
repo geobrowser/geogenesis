@@ -1,6 +1,8 @@
+import UniqueID from '@tiptap-pro/extension-unique-id';
+import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { ConfiguredCommandExtension } from './commands';
+import { ConfiguredCommandExtension } from './command-extension';
 import { TableNode } from './table-node';
 
 interface Props {
@@ -9,34 +11,29 @@ interface Props {
 
 export const Editor = ({ editable = true }: Props) => {
   const editor = useEditor({
-    extensions: [StarterKit, ConfiguredCommandExtension, TableNode],
-    content: `
-    <p>
-      This is still the text editor you’re used to, but enriched with node views.
-    </p>
-    <table-node>
-    Foobar
-    </table-node>
-    <p>
-      Did you see that? That’s a React component. We are really living in the future.
-    </p>`,
+    extensions: [
+      StarterKit,
+      ConfiguredCommandExtension,
+      TableNode,
+      Placeholder.configure({
+        placeholder: ({ node }) => {
+          if (node.type.name === 'heading') {
+            return 'Heading...';
+          }
+
+          return '/ to select content block or write some content...';
+        },
+      }),
+      UniqueID.configure({
+        types: ['tableNode', 'p', 'h1', 'h2', 'h3'],
+      }),
+    ],
+
     editable,
-    // onUpdate: ({ editor }) => {
-    //   console.log(editor.getHTML());
-    // },
-    // onTransaction: ({ state }) => {
-    //   console.log(state.selection.anchor);
-    // },
+    onUpdate: ({ editor }) => {
+      console.log(editor.getJSON());
+    },
   });
 
-  return (
-    <div>
-      <EditorContent editor={editor} />
-      {/* {editor && (
-        <ControlledBubbleMenu editor={editor} open={true}>
-          Hi Hello
-        </ControlledBubbleMenu>
-      )} */}
-    </div>
-  );
+  return <EditorContent editor={editor} />;
 };

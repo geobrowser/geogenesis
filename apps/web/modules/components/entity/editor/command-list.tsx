@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import { cloneElement, forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { CommandSuggestionItem } from './commands';
+import type { CommandSuggestionItem } from './command-extension';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
@@ -66,12 +66,11 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, 
   return (
     <div
       ref={containerRef}
-      className="items relative flex h-80 w-80 flex-col overflow-y-auto rounded border p-1 shadow-lg"
+      className="items shadow-xl relative flex h-80 w-80 flex-col overflow-y-auto rounded bg-white shadow-card"
     >
       {props.items.length ? (
         props.items.map((item, index) => (
           <button
-            type={'button'}
             className={classNames(
               `item ${index === selectedIndex ? 'is-selected bg-ctaPrimary' : ''}`,
               'hover:bg-gray-200 flex gap-2 rounded p-1'
@@ -80,15 +79,12 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, 
             data-index={index}
             onClick={() => selectItem(index)}
           >
-            <div className={'border-gray-300 text-gray-400 h-12 w-12 shrink-0 rounded border p-2'}>
+            <div className="border-gray-300 text-gray-400 h-10 w-10 shrink-0 rounded border p-2">
               {/* {!item.icon && <MdImage className={'h-full w-full'} />} */}
               {item.icon &&
                 cloneElement(item.icon, { className: classNames('h-full w-full', item.icon.props.className) })}
             </div>
-            <div className={'flex flex-col '}>
-              <span className={'self-start'}>{item.title}</span>
-              <small className={'text-gray-500 truncate'}>{item.description}</small>
-            </div>
+            <div>{item.title}</div>
           </button>
         ))
       ) : (
