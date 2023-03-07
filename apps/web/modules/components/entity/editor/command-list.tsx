@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import { cloneElement, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { cloneElement, forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CommandSuggestionItem } from './commands';
 
 export interface CommandListRef {
@@ -7,6 +7,7 @@ export interface CommandListRef {
 }
 export interface CommandListProps {
   items: CommandSuggestionItem[];
+  screen?: ReactNode;
   command: (...props: any) => void;
 }
 export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, ref) => {
@@ -72,7 +73,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, 
           <button
             type={'button'}
             className={classNames(
-              `item ${index === selectedIndex ? 'is-selected bg-gray-200' : ''}`,
+              `item ${index === selectedIndex ? 'is-selected bg-ctaPrimary' : ''}`,
               'hover:bg-gray-200 flex gap-2 rounded p-1'
             )}
             key={index}

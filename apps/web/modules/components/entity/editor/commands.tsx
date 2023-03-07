@@ -80,9 +80,11 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         },
         {
           // icon: <MdImage />,
-          title: 'Image',
-
-          description: 'Upload or embed with a link.',
+          title: 'Table',
+          description: 'Table.',
+          command: ({ editor, range }) => {
+            editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+          },
         },
       ];
       return items.filter(v => v.command).filter(v => v.title.includes(query) || v.description?.includes(query));
