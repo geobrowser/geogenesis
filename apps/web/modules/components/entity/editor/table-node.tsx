@@ -3,8 +3,8 @@ import { EntityTableStoreProvider } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { EntityTableContainer } from '../../entity-table/entity-table-container';
 
-export const ReactComponent = Node.create({
-  name: 'reactComponent',
+export const TableNode = Node.create({
+  name: 'tableNode',
 
   group: 'block',
 
@@ -13,17 +13,17 @@ export const ReactComponent = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'react-component',
+        tag: 'table-node',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['react-component', mergeAttributes(HTMLAttributes), 0];
+    return ['table-node', mergeAttributes(HTMLAttributes), 0];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(Component);
+    return ReactNodeViewRenderer(TableNodeComponent);
   },
 });
 
@@ -43,7 +43,7 @@ const initialSelectedType: Triple = {
   space: '0xb5E2cD8A5F88517d3576ba99d52C005b19351A43',
 };
 
-export const Component = () => {
+export const TableNodeComponent = () => {
   return (
     <NodeViewWrapper className="react-component-with-content">
       <EntityTableStoreProvider

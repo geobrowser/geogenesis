@@ -1,7 +1,7 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { ConfiguredCommandExtension } from './commands';
-import { ReactComponent } from './table-node';
+import { TableNode } from './table-node';
 
 interface Props {
   editable?: boolean;
@@ -9,14 +9,14 @@ interface Props {
 
 export const Editor = ({ editable = true }: Props) => {
   const editor = useEditor({
-    extensions: [StarterKit, ConfiguredCommandExtension, ReactComponent],
+    extensions: [StarterKit, ConfiguredCommandExtension, TableNode],
     content: `
     <p>
       This is still the text editor you’re used to, but enriched with node views.
     </p>
-    <react-component>
-      <p>This is editable.</p>
-    </react-component>
+    <table-node>
+    Foobar
+    </table-node>
     <p>
       Did you see that? That’s a React component. We are really living in the future.
     </p>`,
