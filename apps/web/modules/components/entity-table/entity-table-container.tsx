@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -20,7 +21,12 @@ interface Props {
   showHeader?: boolean;
 }
 
-export function EntityTableContainer({ spaceId, initialColumns, initialRows, showHeader }: Props) {
+export const EntityTableContainer = memo(function EntityTableContainer({
+  spaceId,
+  initialColumns,
+  initialRows,
+  showHeader = true,
+}: Props) {
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -91,4 +97,4 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows, sho
       )}
     </EntityTableErrorBoundary>
   );
-}
+});

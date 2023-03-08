@@ -9,6 +9,8 @@ export const TableNode = Node.create({
   group: 'block',
   atom: true,
   spanning: false,
+  allowGapCursor: false,
+  defining: true,
   exitable: true,
 
   parseHTML() {
@@ -24,7 +26,18 @@ export const TableNode = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(TableNodeComponent);
+    return ReactNodeViewRenderer(TableNodeComponent, {
+      update: ({ oldNode, oldDecorations, newNode, newDecorations, updateProps }) => {
+        const attrsChanged = JSON.stringify(newNode.attrs) !== JSON.stringify(oldNode.attrs);
+        // Only update props and re-render if the node.attrs changed
+        console.log(newNode.attrs);
+        console.log('attrsChanged', attrsChanged);
+        if (attrsChanged) {
+          updateProps();
+        }
+        return true;
+      },
+    });
   },
 });
 
@@ -47,21 +60,23 @@ const initialSelectedType: Triple = {
 export const TableNodeComponent = React.memo(function TableNodeComponent() {
   return (
     <NodeViewWrapper className="react-component-with-content">
-      <EntityTableStoreProvider
-        spaceId={''}
-        initialRows={[]}
-        initialSelectedType={initialSelectedType}
-        initialColumns={[]}
-        initialTypes={[]}
-      >
-        <EntityTableContainer
-          showHeader={false}
-          spaceId={spaceId}
-          spaceName={'spaceName'}
-          initialColumns={[]}
+      <div contentEditable="false">
+        <EntityTableStoreProvider
+          spaceId={''}
           initialRows={[]}
-        />
-      </EntityTableStoreProvider>
+          initialSelectedType={initialSelectedType}
+          initialColumns={[]}
+          initialTypes={[]}
+        >
+          <EntityTableContainer
+            showHeader={false}
+            spaceId={spaceId}
+            spaceName={'spaceName'}
+            initialColumns={[]}
+            initialRows={[]}
+          />
+        </EntityTableStoreProvider>
+      </div>
     </NodeViewWrapper>
   );
 });

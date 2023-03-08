@@ -92,7 +92,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           },
         },
       ];
-      return items.filter(v => v.command).filter(v => v.title.includes(query) || v.description?.includes(query));
+      return items.filter(v => v.command).filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     },
     render() {
       let reactRenderer: ReactRenderer<CommandListRef, CommandSuggestionItem>;

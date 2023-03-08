@@ -11,34 +11,37 @@ interface Props {
 }
 
 export const Editor = ({ editable = true }: Props) => {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      ConfiguredCommandExtension,
-      TableNode,
-      Image,
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (node.type.name === 'heading') {
-            return 'Heading...';
-          }
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit,
+        ConfiguredCommandExtension,
+        TableNode,
+        Image,
+        Placeholder.configure({
+          placeholder: ({ node }) => {
+            if (node.type.name === 'heading') {
+              return 'Heading...';
+            }
 
-          return '/ to select content block or write some content...';
-        },
-      }),
-      UniqueID.configure({
-        types: ['tableNode', 'p', 'heading'],
-      }),
-    ],
+            return '/ to select content block or write some content...';
+          },
+        }),
+        UniqueID.configure({
+          types: ['tableNode', 'p', 'heading'],
+        }),
+      ],
 
-    editable,
-    onUpdate: ({ editor }) => {
-      console.log(editor.getJSON());
+      editable,
+      onUpdate: ({ editor }) => {
+        // console.log(editor.getJSON());
+      },
+      onBlur({ editor, event }) {
+        // The editor isn’t focused anymore.
+      },
     },
-    onBlur({ editor, event }) {
-      // The editor isn’t focused anymore.
-    },
-  });
+    []
+  );
 
   return <EditorContent editor={editor} />;
 };

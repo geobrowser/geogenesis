@@ -10,7 +10,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -129,7 +129,7 @@ interface Props {
   rows: Row[];
 }
 
-export function EntityTable({ rows, space, columns }: Props) {
+export const EntityTable = memo(function EntityTable({ rows, space, columns }: Props) {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -220,4 +220,4 @@ export function EntityTable({ rows, space, columns }: Props) {
       </table>
     </div>
   );
-}
+});
