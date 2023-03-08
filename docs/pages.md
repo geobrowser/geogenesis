@@ -36,6 +36,8 @@ Right now the Geo protocol supports multiple types of Page Blocks.
 - Image
 - Entity Table
 
+<br/>
+
 **Rich Text blocks**
 
 A TextBlock contains text content and metadata for how to parse rich text on that text content, like bold, italic, @entity-references, etc. Rich text is stored in Markdown format.
@@ -50,7 +52,10 @@ Types: TextBlock
 Content: "This is **text** [content](https://bananas.com) about _Bananas_"
 ```
 
+<br/>
+
 **Image blocks**
+
 An ImageBlock stores an IPFS content hash or http image source url.
 
 ```
@@ -60,6 +65,8 @@ Name: "Banana"
 Types: ImageBlock
 URL: "QmJjadoisjd092urdads"
 ```
+
+<br/>
 
 **Table blocks**
 A TableBlock is an instance of an entity table that references a Type in the knowledge graph. It holds information around the parent type, sort configuration, and column configuration, and any other application-specific configuration.
@@ -82,12 +89,16 @@ A block should be able to link to another entity inline within the text. How do 
 We might do an inline protocol in the link that we can parse when parsing the text content
 `[Some entity within Geo](geo://idOfReferencedEntity)
 
+<br/>
+
 **Page versioning and block versioning**
 How should page versions and block versions work?
 
 With this page→block(entity) model any page can reference and edit any other block – as long as you have permissions in that space. Does changing a block(entity) update versions for _every_ page referencing it? Or only the “parent page” of the block?
 
 Initial thinking is that making changes to a Block only updates the version of the "owning" page.
+
+<br/>
 
 **Indexing blocks and searching for blocks**
 How should searching for a block entity work? Do we only return the original block? Do we return all _usages_ of the block?
@@ -96,11 +107,15 @@ Block indexing should probably live separate from "higher-order" entity indexing
 
 See [Craft](https://craft.do) for examples on how block vs document searches might work.
 
+<br/>
+
 **Block reordering**
 We will eventually support drag-n-drop to reorder blocks in a Page.
 
 - How does this affect the page version?
 - How does deleting + recreating a block work wrt to versions and links?
+
+<br/>
 
 **Block deletions**
 Since blocks are entities and can be referenced by many pages, what happens if someone deletes a Block?
