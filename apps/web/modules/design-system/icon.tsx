@@ -25,6 +25,7 @@ import { EditorH3 } from './icons/editor-h3';
 import { EditorImage } from './icons/editor-image';
 import { EditorTable } from './icons/editor-table';
 import { EditorText } from './icons/editor-text';
+import { Plus } from './icons/plus';
 
 export type IconName =
   | 'create'
@@ -42,6 +43,7 @@ export type IconName =
   | 'copy'
   | 'preset'
   | 'relation'
+  | 'plus'
   | 'text'
   | 'rightArrowLongSmall'
   | 'search'
@@ -80,6 +82,7 @@ const icons: Record<IconName, React.ElementType> = {
   preset: Preset,
   relation: Relation,
   text: Text,
+  plus: Plus,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
   editorH1: EditorH1,

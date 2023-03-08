@@ -1,3 +1,12 @@
+.ProseMirror .tiptap-paragraph button {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ProseMirror .tiptap-paragraph:hover button {
+  opacity: 1;
+}
+
 /* Display Placeholders on every new line. */
 .ProseMirror .is-empty::before {
   color: #adb5bd;

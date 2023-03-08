@@ -45,6 +45,7 @@ importers:
       '@tiptap/core': 2.0.0-beta.220
       '@tiptap/extension-bubble-menu': 2.0.0-beta.220
       '@tiptap/extension-image': 2.0.0-beta.220
+      '@tiptap/extension-paragraph': 2.0.0-beta.220
       '@tiptap/extension-placeholder': 2.0.0-beta.220
       '@tiptap/pm': 2.0.0-beta.220
       '@tiptap/react': 2.0.0-beta.220
@@ -126,6 +127,7 @@ importers:
       '@tiptap/core': 2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220
       '@tiptap/extension-bubble-menu': 2.0.0-beta.220_ohumfzynigfck3hzagxvh2a4ky
       '@tiptap/extension-image': 2.0.0-beta.220_7w7m52asdh3tod4ocz57yex63q
+      '@tiptap/extension-paragraph': 2.0.0-beta.220_7w7m52asdh3tod4ocz57yex63q
       '@tiptap/extension-placeholder': 2.0.0-beta.220_ohumfzynigfck3hzagxvh2a4ky
       '@tiptap/pm': 2.0.0-beta.220_7w7m52asdh3tod4ocz57yex63q
       '@tiptap/react': 2.0.0-beta.220_xig6hpp4glylmgjqbtp4uwsv5e

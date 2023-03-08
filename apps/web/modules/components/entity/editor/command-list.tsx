@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Text } from '~/modules/design-system/text';
-import type { CommandSuggestionItem } from './command-extension';
+import { CommandSuggestionItem } from './command-items';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
@@ -16,8 +16,10 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, 
   const selectItem = (index: number) => {
     const item = props.items[index];
 
-    if (item) {
+    if (item && props.command) {
       props.command(item);
+    } else if (item) {
+      item.command();
     }
   };
   const containerRef = useRef<HTMLDivElement>(null);
