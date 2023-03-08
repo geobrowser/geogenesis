@@ -69,6 +69,7 @@ URL: "QmJjadoisjd092urdads"
 <br/>
 
 **Table blocks**
+
 A TableBlock is an instance of an entity table that references a Type in the knowledge graph. It holds information around the parent type, sort configuration, and column configuration, and any other application-specific configuration.
 
 ```
@@ -84,6 +85,7 @@ Sort by: Name
 ### Future features/research
 
 **Inline, internal links within a TextBlock**
+
 A block should be able to link to another entity inline within the text. How do we structure this? How do we query references from within a text block?
 
 We might do an inline protocol in the link that we can parse when parsing the text content
@@ -92,6 +94,7 @@ We might do an inline protocol in the link that we can parse when parsing the te
 <br/>
 
 **Page versioning and block versioning**
+
 How should page versions and block versions work?
 
 With this page→block(entity) model any page can reference and edit any other block – as long as you have permissions in that space. Does changing a block(entity) update versions for _every_ page referencing it? Or only the “parent page” of the block?
@@ -101,6 +104,7 @@ Initial thinking is that making changes to a Block only updates the version of t
 <br/>
 
 **Indexing blocks and searching for blocks**
+
 How should searching for a block entity work? Do we only return the original block? Do we return all _usages_ of the block?
 
 Block indexing should probably live separate from "higher-order" entity indexing so we can separate search into their different domain contexts. We don't want blocks to pollute the results of higher-order entities.
@@ -110,6 +114,7 @@ See [Craft](https://craft.do) for examples on how block vs document searches mig
 <br/>
 
 **Block reordering**
+
 We will eventually support drag-n-drop to reorder blocks in a Page.
 
 - How does this affect the page version?
@@ -118,4 +123,5 @@ We will eventually support drag-n-drop to reorder blocks in a Page.
 <br/>
 
 **Block deletions**
+
 Since blocks are entities and can be referenced by many pages, what happens if someone deletes a Block?
