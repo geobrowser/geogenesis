@@ -189,7 +189,7 @@ function handleDeleteTripleAction(
   }
 
   if (fact.attributeId == TYPES) {
-    const entity = GeoEntity.load(fact.entityId)
+    const entity = getOrCreateEntity(fact.entityId)
     const stringValue = fact.value.asStringValue()
     if (stringValue && entity) {
       removeEntityTypeId(entity, stringValue.id)
@@ -207,7 +207,7 @@ function handleDeleteTripleAction(
   }
 
   if (fact.attributeId == 'name') {
-    const entity = GeoEntity.load(fact.entityId)
+    const entity = getOrCreateEntity(fact.entityId)
 
     // Doesn't handle the situation where there's multiple name triples for a single entity
     if (entity) {
