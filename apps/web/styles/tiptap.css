@@ -11,13 +11,21 @@
 }
 
 .ProseMirror h1 {
-  @apply text-2xl font-bold;
+  @apply text-largeTitle;
 }
 
 .ProseMirror h2 {
-  @apply text-xl font-bold;
+  @apply text-mediumTitle;
 }
 
 .ProseMirror h3 {
-  @apply text-lg font-bold;
+  @apply text-smallTitle;
+}
+
+.ProseMirror p {
+  @apply text-body;
+}
+
+.ProseMirror > * {
+  margin-bottom: 16px;
 }

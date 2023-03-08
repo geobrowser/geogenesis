@@ -1,4 +1,5 @@
 import UniqueID from '@tiptap-pro/extension-unique-id';
+import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -15,6 +16,7 @@ export const Editor = ({ editable = true }: Props) => {
       StarterKit,
       ConfiguredCommandExtension,
       TableNode,
+      Image,
       Placeholder.configure({
         placeholder: ({ node }) => {
           if (node.type.name === 'heading') {
@@ -25,13 +27,16 @@ export const Editor = ({ editable = true }: Props) => {
         },
       }),
       UniqueID.configure({
-        types: ['tableNode', 'p', 'h1', 'h2', 'h3'],
+        types: ['tableNode', 'p', 'heading'],
       }),
     ],
 
     editable,
     onUpdate: ({ editor }) => {
       console.log(editor.getJSON());
+    },
+    onBlur({ editor, event }) {
+      // The editor isn’t focused anymore.
     },
   });
 
