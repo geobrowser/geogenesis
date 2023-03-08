@@ -4,6 +4,7 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
+import { TYPES } from '@geogenesis/ids/system-ids'
 import {
   Address,
   BigDecimal,
@@ -122,7 +123,7 @@ export function handleCreateTripleAction(
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
-    if(attribute.id == 'type') {
+    if(attribute.id == TYPES) {
       addEntityTypeId(entity, stringValue.id);
     }
     triple.valueType = 'STRING'
@@ -146,7 +147,7 @@ export function handleCreateTripleAction(
 
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
-    if(attribute.id == 'type') {
+    if(attribute.id == TYPES) {
       addEntityTypeId(entity, numberValue.id);
     }
     triple.valueType = 'NUMBER'
@@ -156,7 +157,7 @@ export function handleCreateTripleAction(
 
   const entityValue = fact.value.asEntityValue()
   if (entityValue) {
-    if(attribute.id == 'type') {
+    if(attribute.id == TYPES) {
       addEntityTypeId(entity, entityValue.id);
     }
     triple.valueType = 'ENTITY'
@@ -188,7 +189,7 @@ function handleDeleteTripleAction(
     return
   }
 
-  if (fact.attributeId == 'type') {
+  if (fact.attributeId == TYPES) {
     const entity = GeoEntity.load(fact.entityId)
     const stringValue = fact.value.asStringValue()
     if (stringValue && entity) {
@@ -224,7 +225,6 @@ function handleDeleteTripleAction(
 
 function handleCreateEntityAction(action: CreateEntityAction): void {
   const entity = getOrCreateEntity(action.entityId)
-  entity.typeIds = [];
   entity.save()
 
   log.debug(`ACTION: Created entity: ${entity.id}`, [])
