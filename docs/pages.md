@@ -88,8 +88,7 @@ Sort by: Name
 
 A block should be able to link to another entity inline within the text. How do we structure this? How do we query references from within a text block?
 
-We might do an inline protocol in the link that we can parse when parsing the text content
-`[Some entity within Geo](geo://idOfReferencedEntity)
+We might do an inline protocol in the link that we can parse when parsing the text content: `[Some entity within Geo](geo://idOfReferencedEntity)`
 
 <br/>
 
