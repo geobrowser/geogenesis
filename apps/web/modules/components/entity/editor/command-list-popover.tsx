@@ -3,7 +3,7 @@ import { Editor } from '@tiptap/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
-import { IconButton } from '~/modules/design-system/button';
+import { SquareButton } from '~/modules/design-system/button';
 import { plusCommandItems } from './command-items';
 import { CommandList } from './command-list';
 
@@ -15,7 +15,7 @@ export function CommandListPopover({ editor }: { editor: Editor }) {
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <IconButton icon="plus" />
+        <SquareButton icon="plus" />
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (

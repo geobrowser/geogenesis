@@ -1,34 +1,25 @@
-import { Editor, mergeAttributes, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { Paragraph } from '@tiptap/extension-paragraph';
+import { Editor, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { CommandListPopover } from './command-list-popover';
 
-export const ParagraphExtension = Node.create({
-  name: 'textBlock',
-  group: 'block',
-  content: 'inline*',
-
-  parseHTML() {
-    return [
-      {
-        tag: 'text-block',
-      },
-    ];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['table-node', mergeAttributes(HTMLAttributes), 0];
-  },
+export const ParagraphExtension = Paragraph.extend({
   addNodeView() {
     return ReactNodeViewRenderer(ParagraphComponent);
+  },
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => this.editor?.chain().focus(this.editor.state.selection.from).createParagraphNear().run(),
+    };
   },
 });
 
 export const ParagraphComponent = ({ editor }: { editor: Editor }) => {
   return (
-    <NodeViewWrapper className="relative">
+    <NodeViewWrapper className="tiptap-paragraph relative">
       <NodeViewContent />
-      <div className="absolute left-0" contentEditable={false}>
+      <span className="absolute -left-8 top-0" contentEditable={false}>
         <CommandListPopover editor={editor} />
-      </div>
+      </span>
     </NodeViewWrapper>
   );
 };
