@@ -1,5 +1,6 @@
 import classNames from 'classnames';
-import { cloneElement, forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Text } from '~/modules/design-system/text';
 import type { CommandSuggestionItem } from './command-extension';
 
 export interface CommandListRef {
@@ -66,25 +67,26 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>((props, 
   return (
     <div
       ref={containerRef}
-      className="items shadow-xl relative flex h-80 w-80 flex-col overflow-y-auto rounded bg-white shadow-card"
+      className="items shadow-xl relative flex w-80 flex-col overflow-y-auto rounded bg-white p-1 shadow-card"
     >
+      <Text variant="smallButton" className="p-1">
+        Select content block
+      </Text>
+
       {props.items.length ? (
-        props.items.map((item, index) => (
+        props.items.map(({ title, icon }, index) => (
           <button
             className={classNames(
-              `item ${index === selectedIndex ? 'is-selected bg-ctaPrimary' : ''}`,
-              'hover:bg-gray-200 flex gap-2 rounded p-1'
+              `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
+              'hover:bg-gray-200 flex flex items-center gap-2 rounded p-1'
             )}
             key={index}
             data-index={index}
+            onMouseOver={() => setSelectedIndex(index)}
             onClick={() => selectItem(index)}
           >
-            <div className="border-gray-300 text-gray-400 h-10 w-10 shrink-0 rounded border p-2">
-              {/* {!item.icon && <MdImage className={'h-full w-full'} />} */}
-              {item.icon &&
-                cloneElement(item.icon, { className: classNames('h-full w-full', item.icon.props.className) })}
-            </div>
-            <div>{item.title}</div>
+            <div className="grid h-9 w-9 place-items-center rounded bg-divider">{icon}</div>
+            <Text variant="metadataMedium">{title}</Text>
           </button>
         ))
       ) : (

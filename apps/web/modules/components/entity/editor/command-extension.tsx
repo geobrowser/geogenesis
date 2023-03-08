@@ -4,12 +4,17 @@ import type { SuggestionOptions } from '@tiptap/suggestion/dist/packages/suggest
 import type React from 'react';
 import type { Instance } from 'tippy.js';
 import tippy from 'tippy.js';
+import { EditorH1 } from '~/modules/design-system/icons/editor-h1';
+import { EditorH2 } from '~/modules/design-system/icons/editor-h2';
+import { EditorH3 } from '~/modules/design-system/icons/editor-h3';
+import { EditorTable } from '~/modules/design-system/icons/editor-table';
+import { EditorText } from '~/modules/design-system/icons/editor-text';
 import { CommandList, CommandListRef } from './command-list';
 
 export interface CommandSuggestionItem {
   title: string;
   group?: string;
-  icon?: React.ReactElement;
+  icon: React.ReactElement;
   description?: string;
   command?: SuggestionOptions<CommandSuggestionItem>['command'];
 }
@@ -46,7 +51,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
     items: ({ query }) => {
       const items: CommandSuggestionItem[] = [
         {
-          icon: <div className={'flex items-center justify-center text-[1.2em]'}>T</div>,
+          icon: <EditorText />,
           title: 'Text',
           description: 'Just start writing with plain text.',
           command: ({ editor, range }) => {
@@ -55,7 +60,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         },
 
         {
-          icon: <div className={'flex items-center justify-center text-[1.6em]'}>H1</div>,
+          icon: <EditorH1 />,
           title: 'Heading 1',
           description: 'Big section heading.',
           command: ({ editor, range }) => {
@@ -63,7 +68,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           },
         },
         {
-          icon: <div className={'flex items-center justify-center text-[1.4em]'}>H2</div>,
+          icon: <EditorH2 />,
           title: 'Heading 2',
           description: 'Medium section heading.',
           command: ({ editor, range }) => {
@@ -71,7 +76,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           },
         },
         {
-          icon: <div className={'flex items-center justify-center text-[1.2em]'}>H3</div>,
+          icon: <EditorH3 />,
           title: 'Heading 3',
           description: 'Small section heading.',
           command: ({ editor, range }) => {
@@ -79,7 +84,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
           },
         },
         {
-          icon: <div className={'flex items-center justify-center text-[1.2em]'}>^^</div>,
+          icon: <EditorTable />,
           title: 'Table',
           description: 'Table.',
           command: ({ editor, range }) => {
