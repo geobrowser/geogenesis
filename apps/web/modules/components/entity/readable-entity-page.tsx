@@ -17,7 +17,6 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
-import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 
@@ -58,7 +57,6 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
         <CopyIdButton id={id} />
       </div>
       <Spacer height={8} />
-      <Editor editable={false} />
 
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">

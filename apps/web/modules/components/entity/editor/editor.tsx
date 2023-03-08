@@ -31,7 +31,6 @@ export const Editor = ({ editable = true }: Props) => {
           types: ['tableNode', 'p', 'heading'],
         }),
       ],
-
       editable,
       onUpdate: ({ editor }) => {
         // console.log(editor.getJSON());
@@ -40,7 +39,7 @@ export const Editor = ({ editable = true }: Props) => {
         // The editor isn’t focused anymore.
       },
     },
-    []
+    [editable]
   );
 
   return <EditorContent editor={editor} />;

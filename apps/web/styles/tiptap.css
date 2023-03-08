@@ -1,4 +1,14 @@
+/* Display Placeholders on every new line. */
 .ProseMirror .is-empty::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Display a Placeholder only for the first line in an empty editor. */
+.ProseMirror p.is-editor-empty:first-child::before {
   color: #adb5bd;
   content: attr(data-placeholder);
   float: left;

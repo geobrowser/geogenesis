@@ -57,23 +57,25 @@ const initialSelectedType: Triple = {
   space: '0xb5E2cD8A5F88517d3576ba99d52C005b19351A43',
 };
 
+const emptyArrayToMakeReactMemoHappy = [];
+
 export const TableNodeComponent = React.memo(function TableNodeComponent() {
   return (
     <NodeViewWrapper className="react-component-with-content">
       <div contentEditable="false">
         <EntityTableStoreProvider
           spaceId={''}
-          initialRows={[]}
+          initialRows={emptyArrayToMakeReactMemoHappy}
           initialSelectedType={initialSelectedType}
-          initialColumns={[]}
-          initialTypes={[]}
+          initialColumns={emptyArrayToMakeReactMemoHappy}
+          initialTypes={emptyArrayToMakeReactMemoHappy}
         >
           <EntityTableContainer
             showHeader={false}
             spaceId={spaceId}
             spaceName={'spaceName'}
-            initialColumns={[]}
-            initialRows={[]}
+            initialColumns={emptyArrayToMakeReactMemoHappy}
+            initialRows={emptyArrayToMakeReactMemoHappy}
           />
         </EntityTableStoreProvider>
       </div>
