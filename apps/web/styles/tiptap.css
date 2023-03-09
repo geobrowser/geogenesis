@@ -20,7 +20,7 @@
 }
 
 /* Display Placeholders on every new line. */
-.ProseMirror .is-empty .tiptap-block::before {
+.ProseMirror .is-empty::before {
   color: #adb5bd;
   content: attr(data-placeholder);
   float: left;
@@ -41,19 +41,19 @@
   outline: none;
 }
 
-.ProseMirror .tiptap-h1 {
+.ProseMirror h1 {
   @apply text-largeTitle;
 }
 
-.ProseMirror .tiptap-h2 {
+.ProseMirror h2 {
   @apply text-mediumTitle;
 }
 
-.ProseMirror .tiptap-h3 {
+.ProseMirror h3 {
   @apply text-smallTitle;
 }
 
-.ProseMirror .tiptap-p {
+.ProseMirror p {
   @apply text-body;
 }
 
