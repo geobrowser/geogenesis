@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
 import { SquareButton } from '~/modules/design-system/button';
-import { plusCommandItems } from './command-items';
+import { commandItems } from './command-items';
 import { CommandList } from './command-list';
 
 const MotionContent = motion(PopoverPrimitive.Content);
@@ -33,7 +33,7 @@ export function CommandListPopover({ editor }: { editor: Editor }) {
             align="start"
             sideOffset={8}
           >
-            <CommandList items={plusCommandItems(editor)} />
+            <CommandList editor={editor} items={commandItems} variant="button" />
           </MotionContent>
         ) : null}
       </AnimatePresence>

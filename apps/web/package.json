@@ -46,6 +46,7 @@
     "cmdk": "^0.1.21",
     "connectkit": "^1.1.1",
     "ethers": "^5.7.2",
+    "extension-paragraph": "link:@types/@tiptap/extension-paragraph",
     "framer-motion": "^7.5.3",
     "immer": "^9.0.16",
     "js-confetti": "^0.11.0",

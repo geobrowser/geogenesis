@@ -3,7 +3,7 @@ import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions } from '@tiptap/suggestion/dist/packages/suggestion/src/suggestion';
 import type { Instance } from 'tippy.js';
 import tippy from 'tippy.js';
-import { CommandSuggestionItem, slashCommandItems } from './command-items';
+import { commandItems, CommandSuggestionItem } from './command-items';
 import { CommandList, CommandListRef } from './command-list';
 
 export const CommandExtension = Extension.create<{
@@ -36,7 +36,7 @@ export const CommandExtension = Extension.create<{
 export const ConfiguredCommandExtension = CommandExtension.configure({
   suggestion: {
     items: ({ query }) => {
-      return slashCommandItems
+      return commandItems
         .filter(v => v.command)
         .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     },
