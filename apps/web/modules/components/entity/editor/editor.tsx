@@ -4,7 +4,6 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { ConfiguredCommandExtension } from './command-extension';
-import { ParagraphExtension } from './paragraph-extension';
 import { TableNode } from './table-node';
 
 interface Props {
@@ -28,7 +27,8 @@ export const Editor = ({ editable = true }: Props) => {
             return '/ to select content block or write some content...';
           },
         }),
-        ParagraphExtension,
+        // TextBlock,
+        // HeadingBlock,
         UniqueID.configure({
           types: ['tableNode', 'p', 'heading'],
         }),
@@ -44,5 +44,9 @@ export const Editor = ({ editable = true }: Props) => {
     [editable]
   );
 
-  return <EditorContent editor={editor} />;
+  return (
+    <>
+      <EditorContent editor={editor} />
+    </>
+  );
 };

@@ -1,10 +1,16 @@
-.ProseMirror .tiptap-paragraph button {
+.ProseMirror .tiptap-block .tiptap-menu-trigger {
   opacity: 0;
   transition: opacity 0.2s;
 }
 
-.ProseMirror .tiptap-paragraph:hover button {
+.ProseMirror .tiptap-block:hover .tiptap-menu-trigger {
   opacity: 1;
+}
+
+.ProseMirror .node-paragraph .tiptap-menu-trigger {
+  position: absolute;
+  left: -36px;
+  top: 0;
 }
 
 /* Display Placeholders on every new line. */
