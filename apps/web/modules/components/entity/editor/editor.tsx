@@ -3,6 +3,7 @@ import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { HeadingBlock, TextBlock } from './blocks';
 import { ConfiguredCommandExtension } from './command-extension';
 import { TableNode } from './table-node';
 
@@ -19,16 +20,13 @@ export const Editor = ({ editable = true }: Props) => {
         TableNode,
         Image,
         Placeholder.configure({
-          placeholder: ({ node }) => {
-            if (node.type.name === 'heading') {
-              return 'Heading...';
-            }
-
-            return '/ to select content block or write some content...';
+          placeholder: () => {
+            // We are relying on our custom block components to provide the placeholder
+            return '';
           },
         }),
-        // TextBlock,
-        // HeadingBlock,
+        TextBlock,
+        HeadingBlock,
         UniqueID.configure({
           types: ['tableNode', 'p', 'heading'],
         }),

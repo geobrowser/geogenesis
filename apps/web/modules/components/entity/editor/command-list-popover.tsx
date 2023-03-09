@@ -15,7 +15,9 @@ export function CommandListPopover({ editor }: { editor: Editor }) {
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <SquareButton icon="plus" />
+        <span className="tiptap-menu-trigger" style={open ? { opacity: 1 } : {}}>
+          <SquareButton icon="plus" />
+        </span>
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (

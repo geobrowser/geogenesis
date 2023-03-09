@@ -35,8 +35,8 @@ export const commandItems: CommandSuggestionItem[] = [
     title: 'Heading 2',
     command: ({ editor, range }) => {
       range
-        ? editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run()
-        : editor.chain().focus().setNode('heading', { level: 1 }).run();
+        ? editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run()
+        : editor.chain().focus().setNode('heading', { level: 2 }).run();
     },
   },
   {
@@ -44,8 +44,8 @@ export const commandItems: CommandSuggestionItem[] = [
     title: 'Heading 3',
     command: ({ editor, range }) => {
       range
-        ? editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run()
-        : editor.chain().focus().setNode('heading', { level: 1 }).run();
+        ? editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run()
+        : editor.chain().focus().setNode('heading', { level: 3 }).run();
     },
   },
   {

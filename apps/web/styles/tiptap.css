@@ -1,3 +1,7 @@
+.ProseMirror .tiptap-block {
+  position: relative;
+}
+
 .ProseMirror .tiptap-block .tiptap-menu-trigger {
   opacity: 0;
   transition: opacity 0.2s;
@@ -7,14 +11,16 @@
   opacity: 1;
 }
 
-.ProseMirror .node-paragraph .tiptap-menu-trigger {
+.ProseMirror .tiptap-menu-trigger {
   position: absolute;
-  left: -36px;
-  top: 0;
+  padding-right: 24px;
+  left: -32px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* Display Placeholders on every new line. */
-.ProseMirror .is-empty::before {
+.ProseMirror .is-empty .tiptap-block::before {
   color: #adb5bd;
   content: attr(data-placeholder);
   float: left;
@@ -35,19 +41,19 @@
   outline: none;
 }
 
-.ProseMirror h1 {
+.ProseMirror .tiptap-h1 {
   @apply text-largeTitle;
 }
 
-.ProseMirror h2 {
+.ProseMirror .tiptap-h2 {
   @apply text-mediumTitle;
 }
 
-.ProseMirror h3 {
+.ProseMirror .tiptap-h3 {
   @apply text-smallTitle;
 }
 
-.ProseMirror p {
+.ProseMirror .tiptap-p {
   @apply text-body;
 }
 

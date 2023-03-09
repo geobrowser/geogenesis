@@ -1,13 +1,6 @@
 import { Heading } from '@tiptap/extension-heading';
 import { Paragraph } from '@tiptap/extension-paragraph';
-import {
-  Editor,
-  mergeAttributes,
-  NodeViewContent,
-  NodeViewRendererProps,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-} from '@tiptap/react';
+import { Editor, NodeViewContent, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { ElementType } from 'react';
 import { CommandListPopover } from './command-list-popover';
 
@@ -23,20 +16,13 @@ export const TextBlock = Paragraph.extend({
 });
 
 export const HeadingBlock = Heading.extend({
+  addAttributes() {
+    return {
+      level: 1,
+    };
+  },
   addNodeView() {
     return ReactNodeViewRenderer(BlockComponent);
-  },
-  renderHTML({
-    node,
-    HTMLAttributes,
-  }: {
-    node: NodeViewRendererProps['node'];
-    HTMLAttributes: Record<string, unknown>;
-  }) {
-    const hasLevel = this.options.levels.includes(node.attrs.level);
-    const level = hasLevel ? node.attrs.level : this.options.levels[0];
-
-    return [`f${level}`, mergeAttributes(this.options.HTMLAttributes, { class: `asdfh${level}` }), 0];
   },
   addKeyboardShortcuts() {
     return {
@@ -45,13 +31,21 @@ export const HeadingBlock = Heading.extend({
   },
 });
 
+const placeholder = (node: NodeViewRendererProps['node']) => {
+  if (node.type.name === 'heading') {
+    return 'Heading...';
+  }
+
+  return '/ to select content block or write some content...';
+};
+
 export const BlockComponent = ({ editor, node }: { editor: Editor; node: NodeViewRendererProps['node'] }) => {
   const htmlTag = (node.type.name === 'heading' ? `h${node.attrs.level}` : 'p') as ElementType<any>;
 
   return (
-    <NodeViewWrapper className="tiptap-block relative">
+    <NodeViewWrapper className={`tiptap-block tiptap-${htmlTag}`} data-placeholder={placeholder(node)}>
       <NodeViewContent as={htmlTag} />
-      <span className="tiptap-menu-trigger" contentEditable={false}>
+      <span contentEditable={false}>
         <CommandListPopover editor={editor} />
       </span>
     </NodeViewWrapper>
