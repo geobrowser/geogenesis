@@ -1,4 +1,4 @@
-import { mergeAttributes, Node, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import React from 'react';
 import { EntityTableStoreProvider } from '~/modules/entity';
 import { Triple } from '~/modules/types';
@@ -23,7 +23,10 @@ export const TableNode = Node.create({
 
   addAttributes() {
     return {
-      type: {
+      selectedType: {
+        default: null,
+      },
+      spaceId: {
         default: '',
       },
     };
@@ -55,21 +58,15 @@ const initialSelectedType: Triple = {
   space: '0xb5E2cD8A5F88517d3576ba99d52C005b19351A43',
 };
 
-const emptyArrayToMakeReactMemoHappy = [];
+export const TableNodeComponent = React.memo(function TableNodeComponent({ node }: NodeViewRendererProps) {
+  const { spaceId, selectedType } = node.attrs;
 
-export const TableNodeComponent = React.memo(function TableNodeComponent(props) {
-  console.log('~~~', props.node.attrs);
+  console.log({ spaceId, selectedType });
   return (
     <NodeViewWrapper className="react-component-with-content">
       <div contentEditable="false">
-        <EntityTableStoreProvider spaceId={''}>
-          <EntityTableContainer
-            showHeader={false}
-            spaceId={spaceId}
-            spaceName={'spaceName'}
-            initialColumns={emptyArrayToMakeReactMemoHappy}
-            initialRows={emptyArrayToMakeReactMemoHappy}
-          />
+        <EntityTableStoreProvider spaceId={spaceId} initialSelectedType={selectedType}>
+          <EntityTableContainer showHeader={false} spaceId={spaceId} spaceName={'spaceName'} />
         </EntityTableStoreProvider>
       </div>
     </NodeViewWrapper>

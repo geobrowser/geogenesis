@@ -21,14 +21,14 @@ export interface CommandListProps {
 
 type CommandListMode = 'select-block' | 'select-table';
 
-export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, editor, items, spaceId }, ref) => {
+export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, items, spaceId }, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<CommandListMode>('select-block');
 
   const tableItem = items.find(item => item.title === 'Table') as CommandSuggestionItem;
 
-  const handleTableSelect = (type: SelectedEntityType) => {
-    command({ ...tableItem, type: type.id });
+  const handleTableSelect = (selectedType: SelectedEntityType) => {
+    command({ ...tableItem, selectedType: selectedType, spaceId });
   };
 
   const invokeItem = (item: CommandSuggestionItem) => {

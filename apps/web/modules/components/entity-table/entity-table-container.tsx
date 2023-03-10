@@ -16,15 +16,15 @@ import { EntityTableErrorBoundary } from './entity-table-error-boundary';
 interface Props {
   spaceId: string;
   spaceName?: string;
-  initialRows: Row[];
-  initialColumns: Column[];
+  initialRows?: Row[];
+  initialColumns?: Column[];
   showHeader?: boolean;
 }
 
 export const EntityTableContainer = memo(function EntityTableContainer({
   spaceId,
-  initialColumns,
-  initialRows,
+  initialColumns = [],
+  initialRows = [],
   showHeader = true,
 }: Props) {
   const entityTableStore = useEntityTable();

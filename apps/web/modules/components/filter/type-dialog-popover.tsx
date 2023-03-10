@@ -22,7 +22,7 @@ export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
 
   const handleSelect = (type: SelectedEntityType) => {
     setOpen(false);
-    handleSelect(type);
+    entityTableStore.setSelectedType(type);
   };
 
   return (

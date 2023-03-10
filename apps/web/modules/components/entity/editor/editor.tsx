@@ -4,17 +4,15 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SquareButton } from '~/modules/design-system/button';
-import { Triple } from '~/modules/types';
 import { ConfiguredCommandExtension } from './command-extension';
 import { TableNode } from './table-node';
 
 interface Props {
   spaceId: string;
   editable?: boolean;
-  initialTypes: Triple[];
 }
 
-export const Editor = ({ editable = true, initialTypes, spaceId }: Props) => {
+export const Editor = ({ editable = true, spaceId }: Props) => {
   const editor = useEditor(
     {
       extensions: [
