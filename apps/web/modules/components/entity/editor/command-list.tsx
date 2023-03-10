@@ -28,7 +28,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
   const tableItem = items.find(item => item.title === 'Table') as CommandSuggestionItem;
 
   const handleTableSelect = (type: SelectedEntityType) => {
-    command(tableItem, { editor, typeId: type.id });
+    command({ ...tableItem, type: type.id });
   };
 
   const invokeItem = (item: CommandSuggestionItem) => {

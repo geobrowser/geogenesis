@@ -44,12 +44,14 @@ export const commandItems: CommandSuggestionItem[] = [
     icon: <EditorTable />,
     title: 'Table',
     command: ({ editor, range, props }) => {
-      console.log('props', props.typeId);
       editor
         .chain()
         .focus()
         .deleteRange(range)
-        .insertContent(`<table-node type="${props.typeId}"></table-node>`)
+        .setContent({
+          type: 'tableNode',
+          attrs: { type: props.type },
+        })
         .createParagraphNear()
         .run();
     },
