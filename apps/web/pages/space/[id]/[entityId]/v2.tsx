@@ -39,8 +39,6 @@ export default function EntityPage(props: Props) {
 
   const renderEditablePage = isEditor && editable;
 
-  console.log(props.initialTypes);
-
   return (
     <EntityStoreProvider
       id={props.id}
@@ -49,19 +47,19 @@ export default function EntityPage(props: Props) {
       initialSchemaTriples={props.schemaTriples}
     >
       <EntityTableStoreProvider spaceId={props.space} initialTypes={props.initialTypes}>
-      {renderEditablePage ? (
-        <div>
-          <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
-          <div>Entity ID: {props.id}</div>
-          <Editor spaceId={props.space} />
-        </div>
-      ) : (
-        <div>
-          <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
-          <div>Entity ID: {props.id}</div>
-          <Editor editable={false} spaceId={props.space} />
-        </div>
-      )}
+        {renderEditablePage ? (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor spaceId={props.space} />
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor editable={false} spaceId={props.space} />
+          </div>
+        )}
       </EntityTableStoreProvider>
     </EntityStoreProvider>
   );

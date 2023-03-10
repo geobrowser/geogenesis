@@ -32,15 +32,13 @@ export const Editor = ({ editable = true, spaceId }: Props) => {
         // TextBlock,
         // HeadingBlock,
         UniqueID.configure({
-          types: ['tableNode', 'p', 'heading'],
+          types: ['tableNode', 'paragraph', 'heading'],
         }),
       ],
       editable,
-      onUpdate: ({ editor }) => {
-        // console.log(editor.getJSON());
-      },
+
       onBlur({ editor, event }) {
-        // The editor isn’t focused anymore.
+        console.log(editor.getJSON());
       },
     },
     [editable]
