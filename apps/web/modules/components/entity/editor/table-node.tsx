@@ -21,23 +21,21 @@ export const TableNode = Node.create({
     ];
   },
 
+  addAttributes() {
+    return {
+      type: {
+        default: '',
+      },
+    };
+  },
+
   renderHTML({ HTMLAttributes }) {
+    console.log({ HTMLAttributes });
     return ['table-node', mergeAttributes(HTMLAttributes), 0];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(TableNodeComponent, {
-      update: ({ oldNode, oldDecorations, newNode, newDecorations, updateProps }) => {
-        const attrsChanged = JSON.stringify(newNode.attrs) !== JSON.stringify(oldNode.attrs);
-        // Only update props and re-render if the node.attrs changed
-        console.log(newNode.attrs);
-        console.log('attrsChanged', attrsChanged);
-        if (attrsChanged) {
-          updateProps();
-        }
-        return true;
-      },
-    });
+    return ReactNodeViewRenderer(TableNodeComponent);
   },
 });
 
@@ -59,7 +57,8 @@ const initialSelectedType: Triple = {
 
 const emptyArrayToMakeReactMemoHappy = [];
 
-export const TableNodeComponent = React.memo(function TableNodeComponent() {
+export const TableNodeComponent = React.memo(function TableNodeComponent(props) {
+  console.log('~~~', props.node.attrs);
   return (
     <NodeViewWrapper className="react-component-with-content">
       <div contentEditable="false">
