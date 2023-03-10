@@ -8,7 +8,7 @@ import { EditorText } from '~/modules/design-system/icons/editor-text';
 export interface CommandSuggestionItem {
   title: string;
   icon: React.ReactElement;
-  command: (props: { editor: Editor; range?: Range }) => void;
+  command: (props: { editor: Editor; range?: Range; typeId?: string }) => void;
 }
 
 export const commandItems: CommandSuggestionItem[] = [
@@ -51,10 +51,21 @@ export const commandItems: CommandSuggestionItem[] = [
   {
     icon: <EditorTable />,
     title: 'Table',
-    command: ({ editor, range }) => {
+    command: ({ editor, range, typeId }) => {
       range
-        ? editor.chain().focus().deleteRange(range).insertContent('<table-node></table-node><p></p>').run()
-        : editor.chain().focus().insertContent('<table-node></table-node><p></p>').run();
+        ? editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent(`<table-node type-id="${typeId}"></table-node>`)
+            .createParagraphNear()
+            .run()
+        : editor
+            .chain()
+            .focus()
+            .insertContent(`<table-node type-id="${typeId}"></table-node>`)
+            .createParagraphNear()
+            .run();
     },
   },
 ];

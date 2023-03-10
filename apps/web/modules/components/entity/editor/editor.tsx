@@ -3,20 +3,23 @@ import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Triple } from '~/modules/types';
 import { ConfiguredCommandExtension } from './command-extension';
 import { CommandListPopover } from './command-list-popover';
 import { TableNode } from './table-node';
 
 interface Props {
+  spaceId: string;
   editable?: boolean;
+  initialTypes: Triple[];
 }
 
-export const Editor = ({ editable = true }: Props) => {
+export const Editor = ({ editable = true, initialTypes, spaceId }: Props) => {
   const editor = useEditor(
     {
       extensions: [
         StarterKit,
-        ConfiguredCommandExtension,
+        ConfiguredCommandExtension(spaceId),
         TableNode,
         Image,
         Placeholder.configure({
@@ -50,7 +53,7 @@ export const Editor = ({ editable = true }: Props) => {
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
-          <CommandListPopover editor={editor} />
+          <CommandListPopover editor={editor} spaceId={spaceId} />
         </div>
       </FloatingMenu>
     </>

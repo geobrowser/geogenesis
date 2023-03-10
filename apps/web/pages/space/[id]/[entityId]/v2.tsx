@@ -4,7 +4,7 @@ import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Editor } from '~/modules/components/entity/editor/editor';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
@@ -12,6 +12,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple } from '~/modules/types';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../../[id]';
 
 interface Props {
   triples: Triple[];
@@ -20,6 +21,7 @@ interface Props {
   name: string;
   space: string;
   linkedEntities: Record<string, LinkedEntityGroup>;
+  initialTypes: Triple[];
 }
 
 export default function EntityPage(props: Props) {
@@ -37,6 +39,8 @@ export default function EntityPage(props: Props) {
 
   const renderEditablePage = isEditor && editable;
 
+  console.log(props.initialTypes);
+
   return (
     <EntityStoreProvider
       id={props.id}
@@ -44,19 +48,21 @@ export default function EntityPage(props: Props) {
       initialTriples={props.triples}
       initialSchemaTriples={props.schemaTriples}
     >
+      <EntityTableStoreProvider spaceId={props.space} initialTypes={props.initialTypes}>
       {renderEditablePage ? (
         <div>
           <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
           <div>Entity ID: {props.id}</div>
-          <Editor />
+          <Editor spaceId={props.space} />
         </div>
       ) : (
         <div>
           <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
           <div>Entity ID: {props.id}</div>
-          <Editor editable={false} />
+          <Editor editable={false} spaceId={props.space} />
         </div>
       )}
+      </EntityTableStoreProvider>
     </EntityStoreProvider>
   );
 }
@@ -68,6 +74,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
 
   const network = new Network(storage, config.subgraph);
+
+  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
+    fetchSpaceTypeTriples(network, space),
+    fetchForeignTypeTriples(network, space),
+  ]);
+
+  const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
   const [entity, related] = await Promise.all([
     network.fetchTriples({
@@ -116,6 +129,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       id: entityId,
       name: Entity.name(entity.triples) ?? entityId,
       space,
+      initialTypes,
       linkedEntities,
       key: entityId,
     },

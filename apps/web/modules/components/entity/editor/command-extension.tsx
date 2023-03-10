@@ -33,60 +33,63 @@ export const CommandExtension = Extension.create<{
 });
 
 // Inspired By https://github.com/wenerme/wode/blob/b66696f9ba60038e9b86b62e2624aa36e4e91524/apps/demo/src/contents/TipTap/TipTapPageContent.tsx
-export const ConfiguredCommandExtension = CommandExtension.configure({
-  suggestion: {
-    items: ({ query }) => {
-      return commandItems
-        .filter(v => v.command)
-        .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+export const ConfiguredCommandExtension = (spaceId: string) =>
+  CommandExtension.configure({
+    suggestion: {
+      items: ({ query }) => {
+        return commandItems
+          .filter(v => v.command)
+          .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+      },
+      render() {
+        let reactRenderer: ReactRenderer<CommandListRef, CommandSuggestionItem>;
+        let popup: Instance[];
+
+        return {
+          onStart: props => {
+            const componentProps = { ...props, spaceId };
+
+            reactRenderer = new ReactRenderer(CommandList, {
+              props: componentProps,
+              editor: props.editor,
+            });
+            if (!props.clientRect) {
+              return;
+            }
+            popup = tippy('body', {
+              getReferenceClientRect: props.clientRect as any, // fixme
+              appendTo: () => document.body,
+              content: reactRenderer.element,
+              showOnCreate: true,
+              interactive: true,
+              trigger: 'manual',
+              placement: 'bottom-start',
+            });
+          },
+
+          onUpdate(props) {
+            reactRenderer.updateProps(props);
+
+            popup[0].setProps({
+              getReferenceClientRect: props.clientRect as any, // fixme
+            });
+          },
+
+          onKeyDown(props) {
+            if (props.event.key === 'Escape') {
+              popup[0].hide();
+
+              return true;
+            }
+
+            return reactRenderer?.ref?.onKeyDown(props) ?? false;
+          },
+
+          onExit() {
+            popup[0].destroy();
+            reactRenderer.destroy();
+          },
+        };
+      },
     },
-    render() {
-      let reactRenderer: ReactRenderer<CommandListRef, CommandSuggestionItem>;
-      let popup: Instance[];
-
-      return {
-        onStart: props => {
-          reactRenderer = new ReactRenderer(CommandList, {
-            props,
-            editor: props.editor,
-          });
-          if (!props.clientRect) {
-            return;
-          }
-          popup = tippy('body', {
-            getReferenceClientRect: props.clientRect as any, // fixme
-            appendTo: () => document.body,
-            content: reactRenderer.element,
-            showOnCreate: true,
-            interactive: true,
-            trigger: 'manual',
-            placement: 'bottom-start',
-          });
-        },
-
-        onUpdate(props) {
-          reactRenderer.updateProps(props);
-
-          popup[0].setProps({
-            getReferenceClientRect: props.clientRect as any, // fixme
-          });
-        },
-
-        onKeyDown(props) {
-          if (props.event.key === 'Escape') {
-            popup[0].hide();
-
-            return true;
-          }
-
-          return reactRenderer?.ref?.onKeyDown(props) ?? false;
-        },
-
-        onExit() {
-          popup[0].destroy();
-          reactRenderer.destroy();
-        },
-      };
-    },
-  },
-});
+  });

@@ -4,12 +4,19 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
 import { SquareButton } from '~/modules/design-system/button';
+import { Triple } from '~/modules/types';
 import { commandItems } from './command-items';
 import { CommandList } from './command-list';
 
 const MotionContent = motion(PopoverPrimitive.Content);
 
-export function CommandListPopover({ editor }: { editor: Editor }) {
+interface Props {
+  editor: Editor;
+  spaceId: string;
+  initialTypes: Triple[];
+}
+
+export function CommandListPopover({ editor, spaceId, initialTypes }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -33,7 +40,13 @@ export function CommandListPopover({ editor }: { editor: Editor }) {
             align="start"
             sideOffset={8}
           >
-            <CommandList editor={editor} items={commandItems} variant="button" />
+            <CommandList
+              editor={editor}
+              items={commandItems}
+              initialTypes={initialTypes}
+              spaceId={spaceId}
+              variant="button"
+            />
           </MotionContent>
         ) : null}
       </AnimatePresence>

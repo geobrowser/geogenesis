@@ -2,6 +2,9 @@ import { Editor } from '@tiptap/react';
 import classNames from 'classnames';
 import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Text } from '~/modules/design-system/text';
+import { SelectedEntityType } from '~/modules/entity';
+import { Triple } from '~/modules/types';
+import { TypeDialog } from '../../filter/type-dialog';
 import { CommandSuggestionItem } from './command-items';
 
 export interface CommandListRef {
@@ -9,29 +12,43 @@ export interface CommandListRef {
 }
 export interface CommandListProps {
   items: CommandSuggestionItem[];
+  initialTypes: Triple[];
+  spaceId: string;
   screen?: ReactNode;
   editor: Editor;
   command?: (...props: any) => void;
   variant: 'key-press' | 'button';
 }
-export const CommandList = forwardRef<CommandListRef, CommandListProps>(
-  ({ command, editor, items, variant = 'key-press' }, ref) => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const selectItem = (index: number) => {
-      const item = items[index];
 
+type CommandListMode = 'select-block' | 'select-table';
+
+export const CommandList = forwardRef<CommandListRef, CommandListProps>(
+  ({ command, editor, items, spaceId, variant = 'key-press' }, ref) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [mode, setMode] = useState<CommandListMode>('select-block');
+
+    const tableItem = items.find(item => item.title === 'Table') as CommandSuggestionItem;
+
+    const handleTableSelect = (type: SelectedEntityType) => {
+      if (variant === 'key-press' && command) {
+        command(tableItem, { editor, typeId: type.id });
+      } else {
+        tableItem.command({ editor, typeId: type.id });
+      }
+    };
+
+    const invokeItem = (item: CommandSuggestionItem) => {
       if (!item) {
         return;
-      }
-
-      // TipTap Suggestion extension automatically passes in the command function which contains the current range
-      // We also need to handle the use case when a user clicks the "+" button
-      if (variant === 'key-press' && command) {
+      } else if (item.title === 'Table' && mode === 'select-block') {
+        setMode('select-table');
+      } else if (variant === 'key-press' && command) {
         command(item);
       } else {
         item.command({ editor });
       }
     };
+
     const containerRef = useRef<HTMLDivElement>(null);
     useEffect(() => setSelectedIndex(0), [items]);
     useImperativeHandle(ref, () => ({
@@ -47,7 +64,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(
         }
 
         if (event.key === 'Enter') {
-          selectItem(selectedIndex);
+          invokeItem(items[selectedIndex]);
           return true;
         }
 
@@ -76,33 +93,42 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(
         $div.scrollTop = max - h;
       }
     }, [selectedIndex]);
+
     return (
       <div
         ref={containerRef}
         className="items shadow-xl relative flex w-80 flex-col overflow-y-auto rounded bg-white p-1 shadow-card"
       >
-        <Text variant="smallButton" className="p-1">
-          Select content block
-        </Text>
+        {mode === 'select-block' ? (
+          <>
+            <Text variant="smallButton" className="p-1">
+              Select content block
+            </Text>
 
-        {items.length ? (
-          items.map(({ title, icon }, index) => (
-            <button
-              className={classNames(
-                `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
-                'hover:bg-gray-200 flex flex items-center gap-2 rounded p-1'
-              )}
-              key={index}
-              data-index={index}
-              onMouseOver={() => setSelectedIndex(index)}
-              onClick={() => selectItem(index)}
-            >
-              <div className="grid h-9 w-9 place-items-center rounded bg-divider">{icon}</div>
-              <Text variant="metadataMedium">{title}</Text>
-            </button>
-          ))
+            {items.length ? (
+              items.map(({ title, icon }, index) => (
+                <button
+                  className={classNames(
+                    `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
+                    'hover:bg-gray-200 flex flex items-center gap-2 rounded p-1'
+                  )}
+                  key={index}
+                  data-index={index}
+                  onMouseOver={() => setSelectedIndex(index)}
+                  onClick={() => invokeItem(items[selectedIndex])}
+                >
+                  <div className="grid h-9 w-9 place-items-center rounded bg-divider">{icon}</div>
+                  <Text variant="metadataMedium">{title}</Text>
+                </button>
+              ))
+            ) : (
+              <div className="item">No actions</div>
+            )}
+          </>
         ) : (
-          <div className="item">No actions</div>
+          <div>
+            <TypeDialog spaceId={spaceId} handleSelect={handleTableSelect} />
+          </div>
         )}
       </div>
     );

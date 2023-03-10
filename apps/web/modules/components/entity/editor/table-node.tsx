@@ -63,13 +63,7 @@ export const TableNodeComponent = React.memo(function TableNodeComponent() {
   return (
     <NodeViewWrapper className="react-component-with-content">
       <div contentEditable="false">
-        <EntityTableStoreProvider
-          spaceId={''}
-          initialRows={emptyArrayToMakeReactMemoHappy}
-          initialSelectedType={initialSelectedType}
-          initialColumns={emptyArrayToMakeReactMemoHappy}
-          initialTypes={emptyArrayToMakeReactMemoHappy}
-        >
+        <EntityTableStoreProvider spaceId={''}>
           <EntityTableContainer
             showHeader={false}
             spaceId={spaceId}

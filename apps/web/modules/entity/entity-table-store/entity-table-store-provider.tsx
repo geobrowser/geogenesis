@@ -15,10 +15,10 @@ const EntityTableStoreContext = createContext<EntityTableStore | undefined>(unde
 interface Props {
   spaceId: string;
   children: React.ReactNode;
-  initialRows: Row[];
-  initialSelectedType: Triple | null;
-  initialColumns: Column[];
-  initialTypes: Triple[];
+  initialRows?: Row[];
+  initialSelectedType?: Triple | null;
+  initialColumns?: Column[];
+  initialTypes?: Triple[];
 }
 
 export function EntityTableStoreProvider({
