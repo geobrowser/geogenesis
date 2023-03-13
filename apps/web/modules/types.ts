@@ -121,3 +121,16 @@ export interface Cell {
 }
 
 export type Row = Record<string, Cell>;
+
+export type Version = {
+  id: string;
+  name: string;
+  description?: string;
+  createdBy: {
+    id: string;
+    name?: string;
+    avatarUrl?: string;
+  };
+  createdAt: number;
+  actions: Array<Action>;
+};

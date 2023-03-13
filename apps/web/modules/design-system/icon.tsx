@@ -19,6 +19,7 @@ import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
 import type { ColorName } from '~/modules/design-system/theme/colors';
+import { History } from './icons/history';
 
 export type IconName =
   | 'create'
@@ -38,7 +39,8 @@ export type IconName =
   | 'relation'
   | 'text'
   | 'rightArrowLongSmall'
-  | 'search';
+  | 'search'
+  | 'history';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -70,4 +72,5 @@ const icons: Record<IconName, React.ElementType> = {
   text: Text,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
+  history: History,
 };
