@@ -12,23 +12,25 @@ export function HistoryItem({ version }: Props) {
   // @TODO: Make sure the actions are squashed, unique. This component may have changes
   // for an entire space or just for a single entity.
   const uniqueTripleChanges = Triple.fromActions(version.actions, []).length;
+  const truncatedVersionName = version.name.length > 36 ? `${version.name.slice(0, 36)}...` : version.name;
 
   return (
-    <div className="bg-white px-2 py-3">
-      <Text as="h1" variant="metadataMedium" className="mb-2">
-        {version.name}
-      </Text>
+    <div className="cursor-pointer bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text">
       <div className="flex items-center justify-between">
+        <Text as="h1" variant="metadataMedium" className="mb-2">
+          {truncatedVersionName}
+        </Text>
+      </div>
+
+      <div className="flex items-center justify-between ">
         <div className="flex items-center justify-between gap-1">
           <div className="overflow-hidden rounded-xs">
             <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
           </div>
-          <Text variant="smallButton" color="grey-04">
-            {version.createdBy.name ?? version.createdBy.id}
-          </Text>
+          <p className="text-smallButton">{version.createdBy.name ?? version.createdBy.id}</p>
         </div>
         <div className="flex">
-          <Text variant="smallButton" color="grey-04">
+          <p className="text-smallButton">
             {uniqueTripleChanges} {pluralize('edit', uniqueTripleChanges)} ·{' '}
             {new Date(version.createdAt).toLocaleDateString(undefined, {
               day: '2-digit',
@@ -41,7 +43,7 @@ export function HistoryItem({ version }: Props) {
               minute: '2-digit',
               hour12: false,
             })}
-          </Text>
+          </p>
         </div>
       </div>
     </div>
