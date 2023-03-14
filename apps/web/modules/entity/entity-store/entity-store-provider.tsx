@@ -14,6 +14,7 @@ interface Props {
   children: React.ReactNode;
   initialTriples: Triple[];
   initialSchemaTriples: Triple[];
+  name: string;
 }
 
 export function EntityStoreProvider({ id, spaceId, name, children, initialTriples, initialSchemaTriples }: Props) {

@@ -1,5 +1,6 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Editor } from '~/modules/components/entity/editor/editor';
@@ -28,6 +29,8 @@ export default function EntityPage(props: Props) {
   const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.space);
   const { editable } = useEditable();
+
+  console.log(props.blocks);
   useLogRocket(props.space);
 
   // This is a janky way to set the name in the navbar until we have nested layouts
@@ -52,13 +55,13 @@ export default function EntityPage(props: Props) {
           <div>
             <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
             <div>Entity ID: {props.id}</div>
-            <Editor spaceId={props.space} entityId={props.id} name={props.name} />
+            <Editor blocks={props.blocks} spaceId={props.space} />
           </div>
         ) : (
           <div>
             <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
             <div>Entity ID: {props.id}</div>
-            <Editor editable={false} spaceId={props.space} entityId={props.id} name={props.name} />
+            <Editor blocks={props.blocks} editable={false} spaceId={props.space} />
           </div>
         )}
       </EntityTableStoreProvider>
@@ -80,6 +83,34 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   ]);
 
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
+
+  const blockIdTriples = await network.fetchTriples({
+    space,
+    query: '',
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: entityId },
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BLOCKS,
+      },
+    ],
+  });
+
+  const blockIds = blockIdTriples.triples.map(triple => triple.value.id);
+
+  const blocks = await Promise.all(
+    blockIds.map(blockId => {
+      return network.fetchTriples({
+        space,
+        query: '',
+        skip: 0,
+        first: DEFAULT_PAGE_SIZE,
+        filter: [{ field: 'entity-id', value: blockId }],
+      });
+    })
+  );
 
   const [entity, related] = await Promise.all([
     network.fetchTriples({
@@ -131,6 +162,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialTypes,
       linkedEntities,
       key: entityId,
+      blocks,
     },
   };
 };

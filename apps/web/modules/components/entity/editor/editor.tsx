@@ -14,7 +14,7 @@ interface Props {
   editable?: boolean;
 }
 
-export const Editor = ({ editable = true, spaceId }: Props) => {
+export const Editor = ({ editable = true, spaceId, blocks }: Props) => {
   const entityStore = useEntityStore();
 
   const allExtensions = useMemo(
@@ -43,9 +43,9 @@ export const Editor = ({ editable = true, spaceId }: Props) => {
     {
       extensions: allExtensions,
       editable,
-
+      content: entityStore.editorContentFromBlocks(blocks),
       onBlur({ editor }) {
-        entityStore.updateBlocks(editor);
+        entityStore.updateEditorBlocks(editor);
       },
     },
     [editable]

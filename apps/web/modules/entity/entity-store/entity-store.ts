@@ -1,8 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import { generateHTML } from '@tiptap/core';
-import { Editor } from '@tiptap/react';
+import { Editor, generateHTML, JSONContent } from '@tiptap/core';
 
 import TurndownService from 'turndown';
 import { ActionsStore } from '~/modules/action';
@@ -235,7 +234,26 @@ export class EntityStore implements IEntityStore {
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
-  updateBlocks = (editor: Editor) => {
+  editorContentFromBlocks = (blocks: TripleType[][]): JSONContent => {
+    console.log('blocks', blocks);
+
+    return {
+      type: 'doc',
+      content: blocks.map(block => {
+        return {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'Hello World',
+            },
+          ],
+        };
+      }),
+    };
+  };
+
+  updateEditorBlocks = (editor: Editor) => {
     /* Iterate over TipTap nodes, produce entity blocks of type TABLE_BLOCK, TEXT_BLOCK, and IMAGE_BLOCK  */
     const { content = [] } = editor.getJSON();
 
@@ -250,6 +268,8 @@ export class EntityStore implements IEntityStore {
 
       if (isTableNode && rowTypeEntityId) {
         const entityName = node.attrs?.selectedType?.name || '';
+
+        console.log(node.attrs?.selectedType);
 
         const nameTriple = Triple.withId({
           space: this.spaceId,
@@ -301,8 +321,8 @@ export class EntityStore implements IEntityStore {
           space: this.spaceId,
           entityId: blockEntityId,
           entityName: entityName,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
           value: { id: ID.createValueId(), type: 'string', value: entityName },
         });
 
