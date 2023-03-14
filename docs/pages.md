@@ -82,6 +82,35 @@ Sort order: Ascending
 Sort by: Name
 ```
 
+### Page versioning and block versioning
+
+Since blocks are entities, any other entity (such as entity pages) can reference them. This raises a question around block ownership and versioning. If a block is changed, how are entity versions changed?
+
+If block content is changed, we only update version of the entity page that "owns" the block, usually the entity page that created it.
+
+This means that each block has a backwards reference to the entity that created it. The below schema has a "Parent Entity" attribute to handle the reference between a block and the parent entity.
+
+```
+Table about Projects
+id: "9034820492"
+Name: "Table about Projects"
+Parent Entity: "a09sdaksdj"
+Row Type: Project // reference to the root Type
+Types: TableBlock
+Sort order: Ascending
+Sort by: Name
+```
+
+### Deleting a block
+
+Since blocks are entities, any other entity (such as entity pages) can reference them. This can create cascading reference breaks if the block is deleted.
+
+Blocks are "owned" by a parent entity, so only the parent entity can completely delete a block. We should also cascade update all pages that reference the block that was deleted.
+
+_Note: Right now this is all only enforced by Geo Genesis' UI. There is no mechanism for enforcing this behavior in the protocol itself._
+
+<br/>
+
 ### Future features/research
 
 **Inline, internal links within a TextBlock**
@@ -89,16 +118,6 @@ Sort by: Name
 A block should be able to link to another entity inline within the text. How do we structure this? How do we query references from within a text block?
 
 We might do an inline protocol in the link that we can parse when parsing the text content: `[Some entity within Geo](geo://idOfReferencedEntity)`
-
-<br/>
-
-**Page versioning and block versioning**
-
-How should page versions and block versions work?
-
-With this page→block(entity) model any page can reference and edit any other block – as long as you have permissions in that space. Does changing a block(entity) update versions for _every_ page referencing it? Or only the “parent page” of the block?
-
-Initial thinking is that making changes to a Block only updates the version of the "owning" page.
 
 <br/>
 
