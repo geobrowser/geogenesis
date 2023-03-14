@@ -3,7 +3,7 @@ import { computed, Observable, observable, ObservableComputed, observe } from '@
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor, generateHTML, JSONContent } from '@tiptap/core';
 
-import TurndownService from 'turndown';
+import showdown from 'showdown';
 import { ActionsStore } from '~/modules/action';
 import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
 import { ID } from '~/modules/id';
@@ -12,7 +12,7 @@ import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
 import { Value } from '~/modules/value';
 
-const turndownService = new TurndownService();
+const markdownConverter = new showdown.Converter();
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -235,20 +235,25 @@ export class EntityStore implements IEntityStore {
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
   editorContentFromBlocks = (blocks: TripleType[][]): JSONContent => {
-    console.log('blocks', blocks);
-
     return {
       type: 'doc',
-      content: blocks.map(block => {
-        return {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'Hello World',
-            },
-          ],
-        };
+      content: blocks.map(blockTriples => {
+        console.log('blockTriples', blockTriples);
+        const markdownTriple = blockTriples.find(triple => triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT);
+
+        if (markdownTriple) {
+          const html = markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '');
+
+          return {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: html,
+              },
+            ],
+          };
+        }
       }),
     };
   };
@@ -315,7 +320,7 @@ export class EntityStore implements IEntityStore {
         const html = generateHTML({ type: 'doc', content: [node] }, editor.extensionManager.extensions);
         const nodeNameLength = 20;
         const entityName = htmlToPlainText(html).slice(0, nodeNameLength);
-        const markdown = turndownService.turndown(html);
+        const markdown = markdownConverter.makeMarkdown(html);
 
         const nameTriple = Triple.withId({
           space: this.spaceId,

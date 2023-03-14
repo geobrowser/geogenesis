@@ -100,7 +100,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const blockIds = blockIdTriples.triples.map(triple => triple.value.id);
 
-  const blocks = await Promise.all(
+  const blockTriples = await Promise.all(
     blockIds.map(blockId => {
       return network.fetchTriples({
         space,
@@ -111,6 +111,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       });
     })
   );
+
+  const blocks = blockTriples.map(block => block.triples);
 
   const [entity, related] = await Promise.all([
     network.fetchTriples({
