@@ -53,6 +53,28 @@ export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'
 /* Example Usage: SF Config -> TYPES -> SPACE_CONFIGURATION */
 export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
 
+/* Example Usage: Block Entity -> TYPES -> TABLE_BLOCK */
+export const TABLE_BLOCK = '88d59252-17ae-4d9a-a367-24710129eb47'
+
+/* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
+export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320'
+
+/* Example Usage: Block Entity -> TYPES -> IMAGE_BLOCK */
+export const IMAGE_BLOCK = 'f0553d4d-4838-425e-bcd7-613bd8f475a5'
+
+/* Example Usage: Entity -> BLOCKS -> Some_Entity_Of_Type_TEXT_BLOCK_or_TABLE_BLOCK */
+export const BLOCKS = 'beaba5cb-a677-41a8-b353-77030613fc70'
+
+/* Example Usage: 
+Block Entity -> TYPES -> TEXT_BLOCK
+Block Entity -> MARKDOWN_CONTENT -> "**hello world!**" */
+export const MARKDOWN_CONTENT = 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4'
+
+/* Example Usage: 
+Block Entity -> TYPES -> TABLE_BLOCK
+Block Entity -> ROW_TYPE -> Some_Type_ID */
+export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
+
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''

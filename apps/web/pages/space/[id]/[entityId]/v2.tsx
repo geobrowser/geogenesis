@@ -51,13 +51,13 @@ export default function EntityPage(props: Props) {
           <div>
             <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
             <div>Entity ID: {props.id}</div>
-            <Editor spaceId={props.space} />
+            <Editor spaceId={props.space} entityId={props.id} name={props.name} />
           </div>
         ) : (
           <div>
             <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
             <div>Entity ID: {props.id}</div>
-            <Editor editable={false} spaceId={props.space} />
+            <Editor editable={false} spaceId={props.space} entityId={props.id} name={props.name} />
           </div>
         )}
       </EntityTableStoreProvider>

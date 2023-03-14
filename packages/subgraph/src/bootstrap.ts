@@ -7,15 +7,21 @@ import {
 import {
   ATTRIBUTE,
   ATTRIBUTES,
+  BLOCKS,
   DESCRIPTION,
   FOREIGN_TYPES,
   IMAGE_ATTRIBUTE,
+  IMAGE_BLOCK,
+  MARKDOWN_CONTENT,
   NAME,
   RELATION,
+  ROW_TYPE,
   SCHEMA_TYPE,
   SPACE,
   SPACE_CONFIGURATION,
+  TABLE_BLOCK,
   TEXT,
+  TEXT_BLOCK,
   TYPES,
   VALUE_TYPE,
 } from '@geogenesis/ids/system-ids'
@@ -37,6 +43,12 @@ const entities: string[] = [
   ATTRIBUTE,
   SPACE_CONFIGURATION,
   FOREIGN_TYPES,
+  TABLE_BLOCK,
+  TEXT_BLOCK,
+  IMAGE_BLOCK,
+  BLOCKS,
+  MARKDOWN_CONTENT,
+  ROW_TYPE,
 ]
 
 class Tuple<T, U> {
@@ -61,6 +73,15 @@ const names: Tuple<string, StringValue>[] = [
     _1: new StringValue(SPACE_CONFIGURATION, 'Space Configuration'),
   },
   { _0: FOREIGN_TYPES, _1: new StringValue(FOREIGN_TYPES, 'Foreign Types') },
+  { _0: TABLE_BLOCK, _1: new StringValue(TABLE_BLOCK, 'Table Block') },
+  { _0: TEXT_BLOCK, _1: new StringValue(TEXT_BLOCK, 'Text Block') },
+  { _0: IMAGE_BLOCK, _1: new StringValue(IMAGE_BLOCK, 'Image Block') },
+  { _0: BLOCKS, _1: new StringValue(BLOCKS, 'Blocks') },
+  {
+    _0: MARKDOWN_CONTENT,
+    _1: new StringValue(MARKDOWN_CONTENT, 'Markdown Content'),
+  },
+  { _0: ROW_TYPE, _1: new StringValue(ROW_TYPE, 'Row Type') },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -73,6 +94,9 @@ const attributes: Tuple<string, string>[] = [
   { _0: NAME, _1: TEXT },
   { _0: SPACE, _1: TEXT },
   { _0: FOREIGN_TYPES, _1: RELATION },
+  { _0: MARKDOWN_CONTENT, _1: TEXT },
+  { _0: ROW_TYPE, _1: RELATION },
+  { _0: BLOCKS, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
@@ -82,6 +106,9 @@ const types: Tuple<string, string[]>[] = [
   { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
   { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
   { _0: SPACE_CONFIGURATION, _1: [FOREIGN_TYPES] },
+  { _0: IMAGE_BLOCK, _1: [IMAGE_ATTRIBUTE] },
+  { _0: TABLE_BLOCK, _1: [ROW_TYPE] },
+  { _0: TEXT_BLOCK, _1: [MARKDOWN_CONTENT] },
 ]
 
 export function bootstrapRootSpaceCoreTypes(

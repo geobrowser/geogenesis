@@ -6,5 +6,4 @@ build
 .turbo
 dist
 .env
-.npmrc
 
