@@ -1,12 +1,19 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
+import { generateHTML } from '@tiptap/core';
+import { Editor } from '@tiptap/react';
 
+import TurndownService from 'turndown';
 import { ActionsStore } from '~/modules/action';
+import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
+import { ID } from '~/modules/id';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
 import { Triple as TripleType } from '~/modules/types';
 import { Value } from '~/modules/value';
+
+const turndownService = new TurndownService();
 
 interface IEntityStore {
   create(triple: TripleType): void;
@@ -69,6 +76,7 @@ interface IEntityStoreConfig {
   initialTriples: TripleType[];
   initialSchemaTriples: TripleType[];
   ActionsStore: ActionsStore;
+  name: string;
 }
 
 export class EntityStore implements IEntityStore {
@@ -81,12 +89,14 @@ export class EntityStore implements IEntityStore {
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
+  name: string;
 
-  constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore }: IEntityStoreConfig) {
+  constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore, name }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
     this.id = id;
     this.api = api;
+    this.name = name;
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
@@ -224,4 +234,110 @@ export class EntityStore implements IEntityStore {
   create = (triple: TripleType) => this.ActionsStore.create(triple);
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
+
+  updateBlocks = (editor: Editor) => {
+    /* Iterate over TipTap nodes, produce entity blocks of type TABLE_BLOCK, TEXT_BLOCK, and IMAGE_BLOCK  */
+    const { content = [] } = editor.getJSON();
+
+    content.forEach(node => {
+      const blockEntityId = node.attrs?.id;
+      const rowTypeEntityId = node.attrs?.selectedType?.id;
+      const isTableNode = node.type === 'tableNode';
+
+      if (!blockEntityId) {
+        return;
+      }
+
+      if (isTableNode && rowTypeEntityId) {
+        const entityName = node.attrs?.selectedType?.name || '';
+
+        const nameTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          value: { id: ID.createValueId(), type: 'string', value: entityName },
+        });
+
+        const typeTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          value: { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' },
+        });
+
+        const rowTypeTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: { id: rowTypeEntityId, type: 'entity', name: 'Table Block' },
+        });
+
+        const blockTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: this.id,
+          entityName: this.name,
+          attributeId: SYSTEM_IDS.BLOCKS,
+          attributeName: 'Blocks',
+          value: { id: blockEntityId, type: 'entity', name: entityName },
+        });
+
+        this.ActionsStore.create(nameTriple);
+        this.ActionsStore.create(typeTriple);
+        this.ActionsStore.create(rowTypeTriple);
+        this.ActionsStore.create(blockTriple);
+      } else {
+        const html = generateHTML({ type: 'doc', content: [node] }, editor.extensionManager.extensions);
+        const nodeNameLength = 20;
+        const entityName = htmlToPlainText(html).slice(0, nodeNameLength);
+        const markdown = turndownService.turndown(html);
+
+        const nameTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          value: { id: ID.createValueId(), type: 'string', value: entityName },
+        });
+
+        const typeTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          value: { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' },
+        });
+
+        const markdownContentTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
+          attributeName: 'Name',
+          value: { id: ID.createValueId(), type: 'string', value: markdown },
+        });
+
+        const blockTriple = Triple.withId({
+          space: this.spaceId,
+          entityId: this.id,
+          entityName: this.name,
+          attributeId: SYSTEM_IDS.BLOCKS,
+          attributeName: 'Blocks',
+          value: { id: blockEntityId, type: 'entity', name: entityName },
+        });
+
+        this.ActionsStore.create(nameTriple);
+        this.ActionsStore.create(typeTriple);
+        this.ActionsStore.create(markdownContentTriple);
+        this.ActionsStore.create(blockTriple);
+      }
+    });
+  };
 }

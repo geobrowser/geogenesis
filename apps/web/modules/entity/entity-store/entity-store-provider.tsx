@@ -16,13 +16,13 @@ interface Props {
   initialSchemaTriples: Triple[];
 }
 
-export function EntityStoreProvider({ id, spaceId, children, initialTriples, initialSchemaTriples }: Props) {
+export function EntityStoreProvider({ id, spaceId, name, children, initialTriples, initialSchemaTriples }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
   const store = useMemo(() => {
-    return new EntityStore({ api: network, spaceId, initialTriples, initialSchemaTriples, id, ActionsStore });
-  }, [network, spaceId, initialTriples, initialSchemaTriples, id, ActionsStore]);
+    return new EntityStore({ api: network, name, spaceId, initialTriples, initialSchemaTriples, id, ActionsStore });
+  }, [network, spaceId, name, initialTriples, initialSchemaTriples, id, ActionsStore]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }

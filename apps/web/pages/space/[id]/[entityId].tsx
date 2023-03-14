@@ -1,6 +1,5 @@
-import * as React from 'react';
-import { useEffect } from 'react';
 import type { GetServerSideProps } from 'next';
+import { useEffect } from 'react';
 
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -45,6 +44,7 @@ export default function EntityPage(props: Props) {
   return (
     <EntityStoreProvider
       id={props.id}
+      name={props.name}
       spaceId={props.space}
       initialTriples={props.triples}
       initialSchemaTriples={props.schemaTriples}
