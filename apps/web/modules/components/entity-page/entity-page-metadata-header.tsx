@@ -27,15 +27,15 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
       <div className="mb-2 flex items-center justify-between text-text">
         <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
           <AvatarGroup usernames={contributors} />
-          <p>
+          <p className="text-text">
             {contributors.length} {pluralize('Editor', contributors.length)}
           </p>
           {latestVersion && (
-            <p>
+            <p className="text-grey-04">
               Last edited{' '}
               {new Date(latestVersion.createdAt).toLocaleDateString(undefined, {
-                day: '2-digit',
                 month: 'short',
+                day: '2-digit',
               })}
             </p>
           )}
@@ -46,7 +46,7 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
           ))}
         </HistoryPanel>
       </div>
-      <ul className="flex items-center gap-2">
+      <ul className="flex items-center gap-1">
         {types.map(t => (
           <li key={t}>
             <EntityPageTypeChip typeName={t} />
