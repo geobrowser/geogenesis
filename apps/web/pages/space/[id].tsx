@@ -11,7 +11,7 @@ import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modu
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Row, Triple, Version } from '~/modules/types';
+import { Column, Row, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;
