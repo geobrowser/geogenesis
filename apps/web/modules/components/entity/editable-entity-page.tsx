@@ -10,8 +10,9 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Entity as EntityType, Triple as TripleType } from '~/modules/types';
+import { Entity as EntityType, Triple as TripleType, Version } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
+import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
@@ -23,6 +24,7 @@ import { TripleTypeDropdown } from './triple-type-dropdown';
 interface Props {
   triples: TripleType[];
   schemaTriples: TripleType[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
@@ -34,6 +36,7 @@ export function EditableEntityPage({
   space,
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
+  versions,
 }: Props) {
   const {
     triples: localTriples,
@@ -102,6 +105,11 @@ export function EditableEntityPage({
             <title>{name ?? id}</title>
             <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
           </Head>
+
+          <EntityPageMetadataHeader versions={versions} types={[]} />
+
+          <Spacer height={40} />
+
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
           {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the

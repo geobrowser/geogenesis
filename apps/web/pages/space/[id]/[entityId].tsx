@@ -14,11 +14,13 @@ import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { Triple } from '~/modules/types';
+import { Triple, Version } from '~/modules/types';
+import { makeStubTriple } from '~/modules/services/mock-network';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
@@ -53,6 +55,39 @@ export default function EntityPage(props: Props) {
     </EntityStoreProvider>
   );
 }
+
+const versions = [
+  {
+    id: 'alksjdalkj',
+    name: 'Amended the title',
+    createdBy: {
+      id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24',
+      name: 'Yaniv Tal',
+    },
+    createdAt: Date.now(),
+    actions: [
+      {
+        type: 'createTriple' as const,
+        ...makeStubTriple('Alice'),
+      },
+    ],
+  },
+  {
+    id: 'a0s7dakjhds',
+    name: 'Created a page for ending homelessness',
+    createdBy: {
+      id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F30',
+      name: 'Nate Walpole',
+    },
+    createdAt: Date.now() - 2348395873,
+    actions: [
+      {
+        type: 'createTriple' as const,
+        ...makeStubTriple('Alice'),
+      },
+    ],
+  },
+];
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
@@ -110,6 +145,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       name: Entity.name(entity.triples) ?? entityId,
       space,
       linkedEntities,
+      versions: versions,
       key: entityId,
     },
   };

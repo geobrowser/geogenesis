@@ -31,7 +31,7 @@ export function Panel({ children, trigger }: Props) {
             }}
             align="end"
             sideOffset={8}
-            className="w-[360px] divide-y divide-grey-02 overflow-hidden rounded border border-grey-02 shadow-lg"
+            className="z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded border border-grey-02 shadow-lg"
           >
             {children}
           </MotionContent>

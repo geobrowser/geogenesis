@@ -15,22 +15,24 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
-import { Triple } from '~/modules/types';
+import { Triple, Version } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
+import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples }: Props) {
+export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples, versions }: Props) {
   const description = Entity.description(triples);
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
@@ -38,8 +40,13 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
     <div>
       <Head>
         <title>{name ?? id}</title>
-        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+        <meta property="og:url" content={`https://geobrowser.io/${NavUtils.toEntity(space, id)}`} />
       </Head>
+
+      <EntityPageMetadataHeader versions={versions} types={[]} />
+
+      <Spacer height={40} />
+
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
