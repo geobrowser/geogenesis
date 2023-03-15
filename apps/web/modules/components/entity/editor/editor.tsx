@@ -34,6 +34,7 @@ export const tiptapExtensions = [
 export const Editor = ({ editable = true }: Props) => {
   const entityStore = useEntityStore();
 
+  // Content must be undefined for TipTap to show the initial placeholder
   const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
 
   const editor = useEditor(
@@ -50,9 +51,6 @@ export const Editor = ({ editable = true }: Props) => {
 
   return editor ? (
     <>
-      {entityStore.blockIds.map((blockId, index) => (
-        <div key={blockId}>{blockId}</div>
-      ))}
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
