@@ -2,14 +2,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor, generateHTML, JSONContent } from '@tiptap/core';
-
 import showdown from 'showdown';
 import { ActionsStore } from '~/modules/action';
 import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
 import { ID } from '~/modules/id';
 import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType } from '~/modules/types';
+import { EntityValue, Triple as TripleType } from '~/modules/types';
 import { Value } from '~/modules/value';
 
 const markdownConverter = new showdown.Converter();
@@ -74,6 +73,8 @@ interface IEntityStoreConfig {
   id: string;
   initialTriples: TripleType[];
   initialSchemaTriples: TripleType[];
+  initialBlockIds: string[];
+  initialBlockTriples: TripleType[];
   ActionsStore: ActionsStore;
   name: string;
 }
@@ -83,6 +84,9 @@ export class EntityStore implements IEntityStore {
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
+  blockIds$: Observable<string[]> = observable<string[]>([]);
+  blockTriples$: ObservableComputed<TripleType[]>;
+  editorJson$: ObservableComputed<JSONContent>;
   typeTriples$: ObservableComputed<TripleType[]>;
   schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
@@ -90,7 +94,17 @@ export class EntityStore implements IEntityStore {
   abortController: AbortController = new AbortController();
   name: string;
 
-  constructor({ api, initialTriples, initialSchemaTriples, spaceId, id, ActionsStore, name }: IEntityStoreConfig) {
+  constructor({
+    api,
+    initialTriples,
+    initialBlockIds,
+    initialBlockTriples,
+    initialSchemaTriples,
+    spaceId,
+    id,
+    ActionsStore,
+    name,
+  }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
     this.id = id;
@@ -99,6 +113,7 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
+    this.blockIds$ = observable(initialBlockIds);
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
@@ -115,6 +130,72 @@ export class EntityStore implements IEntityStore {
             triples
           )
       );
+    });
+
+    this.blockTriples$ = computed(() => {
+      const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
+      const blockIds = this.blockIds$.get();
+
+      return pipe(
+        spaceActions,
+        actions => Triple.fromActions(actions, initialBlockTriples),
+        A.filter(t => blockIds.includes(t.entityId)),
+        triples =>
+          // We may be referencing attributes/entities from other spaces whose name has changed.
+          // We pass _all_ local changes instead of just the current space changes.
+          Triple.withLocalNames(
+            Object.values(ActionsStore.actions$.get()).flatMap(a => a),
+            triples
+          )
+      );
+    });
+
+    /* Transforms our block triples back into a TipTap-friendly JSON format */
+    this.editorJson$ = computed(() => {
+      const blockIds = this.blockIds$.get();
+      const blockTriples = this.blockTriples$.get();
+
+      return {
+        type: 'doc',
+        content: blockIds.map(blockId => {
+          const markdownTriple = blockTriples.find(
+            triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT
+          );
+          const rowTypeTriple = blockTriples.find(
+            triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
+          );
+
+          if (rowTypeTriple) {
+            const rowType = rowTypeTriple.value.id;
+
+            return {
+              type: 'tableNode',
+              attrs: {
+                spaceId: this.spaceId,
+                id: rowTypeTriple.entityId,
+                selectedType: rowType,
+              },
+              content: [
+                {
+                  type: 'tableNode',
+                },
+              ],
+            };
+          } else {
+            const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
+
+            return {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: html,
+                },
+              ],
+            };
+          }
+        }),
+      };
     });
 
     /*
@@ -234,135 +315,161 @@ export class EntityStore implements IEntityStore {
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
-  editorContentFromBlocks = (blocks: TripleType[][]): JSONContent => {
-    return {
-      type: 'doc',
-      content: blocks.map(blockTriples => {
-        console.log('blockTriples', blockTriples);
-        const markdownTriple = blockTriples.find(triple => triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT);
+  /* Helper function for creating, updating, or ignoring block triples. 
+  - If blockIds doesn't include the triple's entityId, it's a new block and we create it.
+  - If blockIds does include the triple's entityId and the value has changed, it's an updated block
+  - If blockIds does include the triple's entityId and the value hasn't changed, it's a duplicate and we ignore it. 
+   */
+  upsertBlockTriple = (triple: TripleType) => {
+    const blockIds = this.blockIds$.get();
+    const blockTriples = this.blockTriples$.get();
 
-        if (markdownTriple) {
-          const html = markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '');
+    const isNewBlock = !blockIds.includes(triple.entityId);
+    const existingBlockTriple = blockTriples.find(t => {
+      const isSameEntity = t.entityId === triple.entityId;
+      const isSameAttribute = t.attributeId === triple.attributeId;
+      const isSameValueId = t.value.id === triple.value.id; // Todo: confirm that this is constant
 
-          return {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: html,
-              },
-            ],
-          };
-        }
-      }),
-    };
+      return isSameEntity && isSameAttribute && isSameValueId;
+    });
+
+    const isUpdatedBlock = existingBlockTriple && Value.stringValue(existingBlockTriple) !== Value.stringValue(triple);
+
+    if (isNewBlock) {
+      this.create(triple);
+    } else if (isUpdatedBlock) {
+      this.update(triple, existingBlockTriple);
+    }
   };
 
+  /* Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
+  blockTypeTriple = (node: JSONContent, editor: Editor) => {
+    const blockEntityId = node.attrs?.id;
+    const entityName = this.nodeName(node, editor);
+    const isTableNode = node.type === 'tableNode';
+
+    const blockTypeValue: EntityValue = isTableNode
+      ? { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' }
+      : { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+
+    return Triple.withId({
+      space: this.spaceId,
+      entityId: blockEntityId,
+      entityName: entityName,
+      attributeId: SYSTEM_IDS.TYPES,
+      attributeName: 'Types',
+      value: blockTypeValue,
+    });
+  };
+
+  /* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
+  textNodeHTML = (node: JSONContent, editor: Editor) => {
+    return generateHTML({ type: 'doc', content: [node] }, editor.extensionManager.extensions);
+  };
+
+  /* Helper function for getting the human-readable, plain-text name of a node */
+  nodeName = (node: JSONContent, editor: Editor) => {
+    const blockEntityId = node.attrs?.id;
+    const isTableNode = node.type === 'tableNode';
+
+    if (isTableNode) {
+      return `Table Block ${blockEntityId}`;
+    } else {
+      const nodeHTML = this.textNodeHTML(node, editor);
+      const nodeNameLength = 20;
+      return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
+    }
+  };
+
+  /* Helper function for creating a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
+  blockNameTriple = (node: JSONContent, editor: Editor) => {
+    const blockEntityId = node.attrs?.id;
+    const entityName = this.nodeName(node, editor);
+
+    return Triple.withId({
+      space: this.spaceId,
+      entityId: blockEntityId,
+      entityName: entityName,
+      attributeId: SYSTEM_IDS.NAME,
+      attributeName: 'Name',
+      value: { id: ID.createValueId(), type: 'string', value: entityName },
+    });
+  };
+
+  /* Helper function for creating a new block markdown content triple for TEXT_BLOCKs only  */
+  blockMarkdownTriple = (node: JSONContent, editor: Editor) => {
+    const blockEntityId = node.attrs?.id;
+    const isTableNode = node.type === 'tableNode';
+
+    if (isTableNode) {
+      return null;
+    }
+
+    const nodeHTML = this.textNodeHTML(node, editor);
+
+    const entityName = this.nodeName(node, editor);
+    const markdown = markdownConverter.makeMarkdown(nodeHTML);
+
+    return Triple.withId({
+      space: this.spaceId,
+      entityId: blockEntityId,
+      entityName: entityName,
+      attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
+      attributeName: 'Markdown Content',
+      value: { id: ID.createValueId(), type: 'string', value: markdown },
+    });
+  };
+
+  /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
+  blockRowTypeTriple = (node: JSONContent) => {
+    const blockEntityId = node.attrs?.id;
+    const isTableNode = node.type === 'tableNode';
+    const rowTypeEntityId = node.attrs?.selectedType?.id;
+    const rowTypeEntityName = node.attrs?.selectedType?.entityName;
+
+    if (!isTableNode) {
+      return null;
+    }
+
+    return Triple.withId({
+      space: this.spaceId,
+      entityId: blockEntityId,
+      entityName: '',
+      attributeId: SYSTEM_IDS.ROW_TYPE,
+      attributeName: 'Row Type',
+      value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
+    });
+  };
+
+  /* Iterate over the content's of a TipTap editor to create or update triple blocks */
   updateEditorBlocks = (editor: Editor) => {
-    /* Iterate over TipTap nodes, produce entity blocks of type TABLE_BLOCK, TEXT_BLOCK, and IMAGE_BLOCK  */
     const { content = [] } = editor.getJSON();
 
     content.forEach(node => {
-      const blockEntityId = node.attrs?.id;
-      const rowTypeEntityId = node.attrs?.selectedType?.id;
-      const isTableNode = node.type === 'tableNode';
+      const blockTypeTriple = this.blockTypeTriple(node, editor);
+      const blockNameTriple = this.blockNameTriple(node, editor);
+      const blockMarkdownTriple = this.blockMarkdownTriple(node, editor);
+      const blockRowTypeTriple = this.blockRowTypeTriple(node);
 
-      if (!blockEntityId) {
-        return;
-      }
-
-      if (isTableNode && rowTypeEntityId) {
-        const entityName = node.attrs?.selectedType?.name || '';
-
-        console.log(node.attrs?.selectedType);
-
-        const nameTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
-          value: { id: ID.createValueId(), type: 'string', value: entityName },
-        });
-
-        const typeTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
-          value: { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' },
-        });
-
-        const rowTypeTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          value: { id: rowTypeEntityId, type: 'entity', name: 'Table Block' },
-        });
-
-        const blockTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: this.id,
-          entityName: this.name,
-          attributeId: SYSTEM_IDS.BLOCKS,
-          attributeName: 'Blocks',
-          value: { id: blockEntityId, type: 'entity', name: entityName },
-        });
-
-        this.ActionsStore.create(nameTriple);
-        this.ActionsStore.create(typeTriple);
-        this.ActionsStore.create(rowTypeTriple);
-        this.ActionsStore.create(blockTriple);
-      } else {
-        const html = generateHTML({ type: 'doc', content: [node] }, editor.extensionManager.extensions);
-        const nodeNameLength = 20;
-        const entityName = htmlToPlainText(html).slice(0, nodeNameLength);
-        const markdown = markdownConverter.makeMarkdown(html);
-
-        const nameTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: entityName },
-        });
-
-        const typeTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
-          value: { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' },
-        });
-
-        const markdownContentTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
-          attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: markdown },
-        });
-
-        const blockTriple = Triple.withId({
-          space: this.spaceId,
-          entityId: this.id,
-          entityName: this.name,
-          attributeId: SYSTEM_IDS.BLOCKS,
-          attributeName: 'Blocks',
-          value: { id: blockEntityId, type: 'entity', name: entityName },
-        });
-
-        this.ActionsStore.create(nameTriple);
-        this.ActionsStore.create(typeTriple);
-        this.ActionsStore.create(markdownContentTriple);
-        this.ActionsStore.create(blockTriple);
-      }
+      if (blockTypeTriple) this.upsertBlockTriple(blockTypeTriple);
+      if (blockNameTriple) this.upsertBlockTriple(blockNameTriple);
+      if (blockMarkdownTriple) this.upsertBlockTriple(blockMarkdownTriple);
+      if (blockRowTypeTriple) this.upsertBlockTriple(blockRowTypeTriple);
     });
+
+    // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
+    const blockIds = content.map(node => node.attrs?.id);
+    this.blockIds$.set(blockIds);
+
+    const blockTriple = Triple.withId({
+      space: this.spaceId,
+      entityId: this.id,
+      entityName: this.name,
+      attributeId: SYSTEM_IDS.BLOCKS,
+      attributeName: 'Blocks',
+      value: { id: ID.createValueId(), type: 'string', value: JSON.stringify(blockIds) },
+    });
+
+    this.ActionsStore.create(blockTriple);
   };
 }

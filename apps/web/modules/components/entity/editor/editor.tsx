@@ -14,7 +14,7 @@ interface Props {
   editable?: boolean;
 }
 
-export const Editor = ({ editable = true, spaceId, blocks }: Props) => {
+export const Editor = ({ editable = true, spaceId }: Props) => {
   const entityStore = useEntityStore();
 
   const allExtensions = useMemo(
@@ -39,16 +39,19 @@ export const Editor = ({ editable = true, spaceId, blocks }: Props) => {
     [spaceId]
   );
 
+  const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
+
   const editor = useEditor(
     {
       extensions: allExtensions,
       editable,
-      content: entityStore.editorContentFromBlocks(blocks),
+      content,
       onBlur({ editor }) {
+        console.log('onBlur', editor.getJSON());
         entityStore.updateEditorBlocks(editor);
       },
     },
-    [editable]
+    [editable, content]
   );
 
   return editor ? (

@@ -14,16 +14,47 @@ interface Props {
   children: React.ReactNode;
   initialTriples: Triple[];
   initialSchemaTriples: Triple[];
+  initialBlockIds: string[];
+  initialBlockTriples: Triple[];
   name: string;
 }
 
-export function EntityStoreProvider({ id, spaceId, name, children, initialTriples, initialSchemaTriples }: Props) {
+export function EntityStoreProvider({
+  id,
+  spaceId,
+  name,
+  children,
+  initialBlockIds,
+  initialBlockTriples,
+  initialTriples,
+  initialSchemaTriples,
+}: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
   const store = useMemo(() => {
-    return new EntityStore({ api: network, name, spaceId, initialTriples, initialSchemaTriples, id, ActionsStore });
-  }, [network, spaceId, name, initialTriples, initialSchemaTriples, id, ActionsStore]);
+    return new EntityStore({
+      api: network,
+      name,
+      spaceId,
+      initialBlockIds,
+      initialBlockTriples,
+      initialTriples,
+      initialSchemaTriples,
+      id,
+      ActionsStore,
+    });
+  }, [
+    network,
+    spaceId,
+    name,
+    initialBlockTriples,
+    initialTriples,
+    initialBlockIds,
+    initialSchemaTriples,
+    id,
+    ActionsStore,
+  ]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
