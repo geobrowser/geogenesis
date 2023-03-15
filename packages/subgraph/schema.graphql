@@ -56,12 +56,68 @@ type GeoEntity @entity {
   name: String
 
   typeIds: [String!]! # Maybe we want to make this non nullable? I think it's better like this though
-
   """
   This may not be performant. We can do all the same queries
   via triples(where: { entity: $id })) if needed.
   """
   entityOf: [Triple!]! @derivedFrom(field: "entity")
+
+  version: Version # The version number of the entity
+  versions: [Version!]! # All versions an entity has had
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+type ActionCount @entity {
+  id: ID! #always 1
+  count: BigInt!
+}
+
+type ProposedVersion @entity {
+  id: ID! #entityID + txHash?
+  name: String
+  description: String
+  author: Account
+  entity: GeoEntity!
+  createdAt: BigInt! # block number
+  actions: [Action!]! # All actions to be taken if this version is finalized
+}
+
+type Version @entity {
+  id: ID! #entityID + version number
+  name: String
+  description: String
+  author: Account
+  createdAt: BigInt! # block number
+  proposedVersion: ProposedVersion! # the proposed version that was finalized to make this entity
+  actions: [Action!]! # All actions taken from genesis to this version
+}
+
+#An action to take as part of a version
+type Action @entity {
+  id: ID! # entity + block number?
+  actionType: ActionType!
+
+  entity: GeoEntity!
+
+  # the rest of these are all nullable because we create entity action
+  # lacks these fields
+  attribute: GeoEntity
+  valueType: ValueType
+  valueId: String
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+}
+
+enum ActionType {
+  CREATE
+  DELETE
 }
 
 """

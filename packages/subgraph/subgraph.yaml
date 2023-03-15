@@ -12,7 +12,7 @@ dataSources:
     network: matic
     source:
       abi: SpaceRegistry
-      address: "0x170b749413328ac9a94762031a7A05b00c1D2e34"
+      address: '0x170b749413328ac9a94762031a7A05b00c1D2e34'
       startBlock: 36472400
     mapping:
       kind: ethereum/events

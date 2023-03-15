@@ -88,6 +88,7 @@ function handleActionData(
 function handleRoot(root: Root, space: string, createdAtBlock: BigInt): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
+    // TODO create an action entity
 
     handleAction(action, space, createdAtBlock)
   }
