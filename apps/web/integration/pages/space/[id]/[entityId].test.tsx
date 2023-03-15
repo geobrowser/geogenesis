@@ -38,7 +38,7 @@ describe('Entity page', () => {
   it('Renders page name', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" versions={[]} triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -52,6 +52,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[scalarDescriptionTriple]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -69,6 +70,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[genericAttribute]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -86,6 +88,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[{ ...genericAttribute, attributeName: null }]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -99,11 +102,11 @@ describe('Entity page', () => {
   it('Renders empty linked entities', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" space="1" versions={[]} triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
-    expect(screen.getByText('There are no other entities that are linking to this entity.')).toBeInTheDocument();
+    expect(screen.getByText('There are no other entities that are referencing Banana.')).toBeInTheDocument();
   });
 
   it('Renders linked entity', () => {
@@ -113,6 +116,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -136,6 +140,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -161,6 +166,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -191,6 +197,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{

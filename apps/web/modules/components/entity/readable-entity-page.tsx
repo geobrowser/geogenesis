@@ -76,7 +76,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
       </Text>
       <div className="felx-wrap flex flex-col gap-3">
         {Object.entries(linkedEntities).length === 0 ? (
-          <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
+          <Text color="grey-04">There are no other entities that are referencing {name}.</Text>
         ) : (
           <LayoutGroup>
             <Spacer height={12} />
