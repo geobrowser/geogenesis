@@ -20,6 +20,8 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
     A.flatMap(version => version.createdBy.name ?? version.createdBy.id)
   );
 
+  // We only render the first three avatars in the avatar group
+  const firstThreeContributors = A.take(contributors, 3);
   const latestVersion = A.head(versions);
 
   return (
@@ -27,7 +29,7 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
       {contributors.length > 0 && (
         <div className="mb-2 flex items-center justify-between text-text">
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
-            <AvatarGroup usernames={contributors} />
+            <AvatarGroup usernames={firstThreeContributors} />
             <p className="text-text">
               {contributors.length} {pluralize('Editor', contributors.length)}
             </p>
