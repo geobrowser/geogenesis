@@ -9,7 +9,6 @@ import { ConfiguredCommandExtension } from './command-extension';
 import { TableNode } from './table-node';
 
 interface Props {
-  spaceId: string;
   editable?: boolean;
 }
 
@@ -32,7 +31,7 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = ({ editable = true, spaceId }: Props) => {
+export const Editor = ({ editable = true }: Props) => {
   const entityStore = useEntityStore();
 
   const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
@@ -52,6 +51,9 @@ export const Editor = ({ editable = true, spaceId }: Props) => {
 
   return editor ? (
     <>
+      {entityStore.blockIds.map((blockId, index) => (
+        <div key={blockId}>{blockId}</div>
+      ))}
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">

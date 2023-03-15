@@ -22,7 +22,8 @@ interface Props {
   id: string;
   name: string;
   space: string;
-  initialBlockIds: string[];
+  blockTriples: Triple[];
+  blockIdsTriple: Triple;
   linkedEntities: Record<string, LinkedEntityGroup>;
   initialTypes: Triple[];
 }
@@ -43,9 +44,6 @@ export default function EntityPage(props: Props) {
 
   const renderEditablePage = isEditor && editable;
 
-  console.log('initialBlockTriples', props.blockTriples);
-  console.log('initialBlockIds', props.blockIds);
-
   return (
     <EntityStoreProvider
       id={props.id}
@@ -53,7 +51,7 @@ export default function EntityPage(props: Props) {
       name={props.name}
       initialTriples={props.triples}
       initialSchemaTriples={props.schemaTriples}
-      initialBlockIds={props.blockIds}
+      initialBlockIdsTriple={props.blockIdsTriple}
       initialBlockTriples={props.blockTriples}
     >
       <EntityTableStoreProvider spaceId={props.space} initialTypes={props.initialTypes}>
@@ -105,10 +103,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
-  const blockIdTriple = blockIdTriples.triples[0];
-  const blockIds: string[] = blockIdTriple ? JSON.parse(Value.stringValue(blockIdTriple) || '[]') : [];
-
-  console.log('blockIds in fetch', blockIds);
+  const blockIdsTriple = blockIdTriples.triples[0] || null;
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
 
   const blockTriples = (
     await Promise.all(
@@ -174,7 +170,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialTypes,
       linkedEntities,
       key: entityId,
-      blockIds,
+      blockIdsTriple,
       blockTriples,
     },
   };

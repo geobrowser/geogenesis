@@ -14,7 +14,7 @@ interface Props {
   children: React.ReactNode;
   initialTriples: Triple[];
   initialSchemaTriples: Triple[];
-  initialBlockIds: string[];
+  initialBlockIdsTriple: Triple | null;
   initialBlockTriples: Triple[];
   name: string;
 }
@@ -24,7 +24,7 @@ export function EntityStoreProvider({
   spaceId,
   name,
   children,
-  initialBlockIds,
+  initialBlockIdsTriple,
   initialBlockTriples,
   initialTriples,
   initialSchemaTriples,
@@ -37,7 +37,7 @@ export function EntityStoreProvider({
       api: network,
       name,
       spaceId,
-      initialBlockIds,
+      initialBlockIdsTriple,
       initialBlockTriples,
       initialTriples,
       initialSchemaTriples,
@@ -50,7 +50,7 @@ export function EntityStoreProvider({
     name,
     initialBlockTriples,
     initialTriples,
-    initialBlockIds,
+    initialBlockIdsTriple,
     initialSchemaTriples,
     id,
     ActionsStore,

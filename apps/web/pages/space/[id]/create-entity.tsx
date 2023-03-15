@@ -13,7 +13,15 @@ export default function CreateEntity({ spaceId }: Props) {
   const newId = useMemo(() => ID.createEntityId(), []);
 
   return (
-    <EntityStoreProvider id={newId} spaceId={spaceId} name="" initialTriples={[]} initialSchemaTriples={[]}>
+    <EntityStoreProvider
+      id={newId}
+      spaceId={spaceId}
+      name=""
+      initialTriples={[]}
+      initialSchemaTriples={[]}
+      initialBlockTriples={[]}
+      initialBlockIdsTriple={null}
+    >
       <EditableEntityPage id={newId} name="" space={spaceId} triples={[]} schemaTriples={[]} />
     </EntityStoreProvider>
   );

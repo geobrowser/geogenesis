@@ -74,7 +74,7 @@ interface IEntityStoreConfig {
   id: string;
   initialTriples: TripleType[];
   initialSchemaTriples: TripleType[];
-  initialBlockIdsTriple: string[];
+  initialBlockIdsTriple: TripleType | null;
   initialBlockTriples: TripleType[];
   ActionsStore: ActionsStore;
   name: string;
@@ -85,7 +85,8 @@ export class EntityStore implements IEntityStore {
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
-  blockIdsTriple$: Observable<TripleType | null> = observable<TripleType>([]);
+  blockIds$: ObservableComputed<string[]>;
+  blockIdsTriple$: Observable<TripleType | null> = observable<TripleType | null>(null);
   blockTriples$: ObservableComputed<TripleType[]>;
   editorJson$: ObservableComputed<JSONContent>;
   typeTriples$: ObservableComputed<TripleType[]>;
@@ -116,6 +117,11 @@ export class EntityStore implements IEntityStore {
     this.ActionsStore = ActionsStore;
     this.blockIdsTriple$ = observable(initialBlockIdsTriple);
 
+    this.blockIds$ = computed(() => {
+      const blockIdsTriple = this.blockIdsTriple$.get();
+      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
+    });
+
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
 
@@ -137,6 +143,8 @@ export class EntityStore implements IEntityStore {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
 
+      console.log('initialBlockTriples', initialBlockTriples);
+
       return pipe(
         spaceActions,
         actions => Triple.fromActions(actions, initialBlockTriples),
@@ -156,8 +164,7 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
-      // console.log('blockIds', blockIds);
-      // console.log('blockTriples', blockTriples);
+      console.log('blockTriples', blockTriples);
 
       return {
         type: 'doc',
@@ -169,6 +176,8 @@ export class EntityStore implements IEntityStore {
             triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
           );
 
+          console.log('rowTypeTriple', rowTypeTriple);
+
           if (rowTypeTriple) {
             const rowType = rowTypeTriple.value.id;
 
@@ -179,17 +188,11 @@ export class EntityStore implements IEntityStore {
                 id: rowTypeTriple.entityId,
                 selectedType: rowType,
               },
-              content: [
-                {
-                  type: 'tableNode',
-                },
-              ],
             };
           } else {
             const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
             const isSSR = typeof window === 'undefined';
             const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
-            // console.log({ html, json });
             return {
               ...json.content[0],
               attrs: {
@@ -318,11 +321,7 @@ export class EntityStore implements IEntityStore {
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
-  isNewBlock = (triple: TripleType) => {
-    return !this.getBlockTriple(triple);
-  };
-
-  isUpdatedBlock = (triple: TripleType) => {
+  isUpdatedBlockTriple = (triple: TripleType) => {
     const existingBlockTriple = this.getBlockTriple(triple);
 
     if (!existingBlockTriple) {
@@ -333,6 +332,18 @@ export class EntityStore implements IEntityStore {
     const updatedValueId = existingBlockTriple.id !== triple.id;
 
     return updatedStringValue || updatedValueId;
+  };
+
+  isUpdatedBlockIdsTriple = (triple: TripleType) => {
+    const existingBlockIdsTriple = this.blockIdsTriple$.get();
+
+    if (!existingBlockIdsTriple) {
+      return false;
+    }
+
+    const updatedStringValue = Value.stringValue(existingBlockIdsTriple) !== Value.stringValue(triple);
+
+    return updatedStringValue;
   };
 
   getBlockTriple = ({ entityId, attributeId }: TripleType) => {
@@ -403,7 +414,9 @@ export class EntityStore implements IEntityStore {
 
     if (!existingBlockTriple) {
       this.create(triple);
-    } else if (this.isUpdatedBlock(triple)) {
+    } else if (this.isUpdatedBlockTriple(triple)) {
+      triple.id = existingBlockTriple.id;
+      triple.value.id = existingBlockTriple.value.id;
       this.update(triple, existingBlockTriple);
     }
   };
@@ -414,6 +427,8 @@ export class EntityStore implements IEntityStore {
     const isTableNode = node.type === 'tableNode';
 
     if (isTableNode) {
+      console.log("isTableNode, don't create markdown triple");
+
       return null;
     }
 
@@ -435,7 +450,9 @@ export class EntityStore implements IEntityStore {
 
     if (!existingBlockTriple) {
       this.create(triple);
-    } else if (this.isUpdatedBlock(triple)) {
+    } else if (this.isUpdatedBlockTriple(triple)) {
+      triple.id = existingBlockTriple.id;
+      triple.value.id = existingBlockTriple.value.id;
       this.update(triple, existingBlockTriple);
     }
   };
@@ -468,21 +485,29 @@ export class EntityStore implements IEntityStore {
   };
 
   upsertBlocksTriple = (blockIds: string[]) => {
+    const existingBlockTriple = this.blockIdsTriple$.get();
+
     const triple = Triple.withId({
       space: this.spaceId,
       entityId: this.id,
       entityName: this.name,
       attributeId: SYSTEM_IDS.BLOCKS,
       attributeName: 'Blocks',
-      value: { id: ID.createValueId(), type: 'string', value: JSON.stringify(blockIds) },
+      value: {
+        id: ID.createValueId(),
+        type: 'string',
+        value: JSON.stringify(blockIds),
+      },
     });
-
-    const existingBlockTriple = this.getBlockTriple(triple);
 
     if (!existingBlockTriple) {
       this.create(triple);
-    } else if (this.isUpdatedBlock(triple)) {
+      this.blockIdsTriple$.set(triple);
+    } else if (this.isUpdatedBlockIdsTriple(triple)) {
+      triple.id = existingBlockTriple.id;
+      triple.value.id = existingBlockTriple.value.id;
       this.update(triple, existingBlockTriple);
+      this.blockIdsTriple$.set(triple);
     }
   };
 
@@ -500,6 +525,5 @@ export class EntityStore implements IEntityStore {
     // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
     const blockIds = content.map(node => node.attrs?.id);
     this.upsertBlocksTriple(blockIds);
-    this.blockIds$.set(blockIds);
   };
 }
