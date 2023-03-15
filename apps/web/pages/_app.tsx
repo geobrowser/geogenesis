@@ -20,7 +20,7 @@ import '../styles/styles.css';
 
 function Root(props: AppProps) {
   return (
-    <div className="relative">
+    <div className="relative min-h-screen">
       <Providers>
         <Head>
           <meta name="viewport" content="width=device-width, initial-scale=1" />

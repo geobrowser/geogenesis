@@ -21,6 +21,7 @@ import { CopyIdButton } from './copy-id';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
+import { EntityPageContentContainer } from './entity-page-content-container';
 
 interface Props {
   triples: Triple[];
@@ -37,15 +38,14 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
   return (
-    <div>
+    <EntityPageContentContainer>
       <Head>
         <title>{name ?? id}</title>
         <meta property="og:url" content={`https://geobrowser.io/${NavUtils.toEntity(space, id)}`} />
       </Head>
-
       <EntityPageMetadataHeader versions={versions} types={[]} />
 
-      <Spacer height={40} />
+      <Spacer height={20} />
 
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
@@ -72,7 +72,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
       </div>
       <Spacer height={40} />
       <Text as="h2" variant="mediumTitle">
-        Linked by
+        Referenced by
       </Text>
       <div className="felx-wrap flex flex-col gap-3">
         {Object.entries(linkedEntities).length === 0 ? (
@@ -86,7 +86,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
           </LayoutGroup>
         )}
       </div>
-    </div>
+    </EntityPageContentContainer>
   );
 }
 

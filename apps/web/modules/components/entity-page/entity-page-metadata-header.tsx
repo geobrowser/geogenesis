@@ -24,28 +24,32 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-text">
-        <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
-          <AvatarGroup usernames={contributors} />
-          <p className="text-text">
-            {contributors.length} {pluralize('Editor', contributors.length)}
-          </p>
-          {latestVersion && (
-            <p className="text-grey-04">
-              Last edited{' '}
-              {new Date(latestVersion.createdAt).toLocaleDateString(undefined, {
-                month: 'short',
-                day: '2-digit',
-              })}
+      {contributors.length > 0 && (
+        <div className="mb-2 flex items-center justify-between text-text">
+          <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
+            <AvatarGroup usernames={contributors} />
+            <p className="text-text">
+              {contributors.length} {pluralize('Editor', contributors.length)}
             </p>
-          )}
+            {latestVersion && (
+              <p className="text-grey-04">
+                Last edited{' '}
+                {new Date(latestVersion.createdAt).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: '2-digit',
+                })}
+              </p>
+            )}
+          </div>
+
+          <HistoryPanel>
+            {versions.map(version => (
+              <HistoryItem key={version.id} version={version} />
+            ))}
+          </HistoryPanel>
         </div>
-        <HistoryPanel>
-          {versions.map(version => (
-            <HistoryItem key={version.id} version={version} />
-          ))}
-        </HistoryPanel>
-      </div>
+      )}
+
       <ul className="flex items-center gap-1">
         {types.map(t => (
           <li key={t}>

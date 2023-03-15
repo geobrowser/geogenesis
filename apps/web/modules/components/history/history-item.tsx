@@ -2,7 +2,7 @@ import Avatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { Text } from '~/modules/design-system/text';
 import { Triple } from '~/modules/triple';
-import { Action, Version } from '~/modules/types';
+import { Version } from '~/modules/types';
 
 interface Props {
   version: Version;

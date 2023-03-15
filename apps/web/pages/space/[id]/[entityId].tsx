@@ -56,7 +56,7 @@ export default function EntityPage(props: Props) {
   );
 }
 
-const versions = [
+const mockVersions = [
   {
     id: 'alksjdalkj',
     name: 'Amended the title',
@@ -145,7 +145,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       name: Entity.name(entity.triples) ?? entityId,
       space,
       linkedEntities,
-      versions: versions,
+      versions: [],
       key: entityId,
     },
   };

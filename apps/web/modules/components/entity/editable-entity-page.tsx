@@ -18,6 +18,7 @@ import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete'
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { PageStringField } from './editable-fields';
+import { EntityPageContentContainer } from './entity-page-content-container';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
@@ -99,19 +100,17 @@ export function EditableEntityPage({
 
   return (
     <>
-      <div className="flex flex-col items-center">
-        <div className="w-full">
-          <Head>
-            <title>{name ?? id}</title>
-            <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-          </Head>
+      <EntityPageContentContainer>
+        <Head>
+          <title>{name ?? id}</title>
+          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+        </Head>
 
-          <EntityPageMetadataHeader versions={versions} types={[]} />
+        <EntityPageMetadataHeader versions={versions} types={[]} />
 
-          <Spacer height={40} />
+        <Spacer height={20} />
 
-          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-          {/*
+        {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -119,14 +118,11 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-          <Spacer height={9} />
-          <PageStringField
-            variant="body"
-            placeholder="Add a description..."
-            value={description ?? ''}
-            onChange={onDescriptionChange}
-          />
-          {/*
+        <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+
+        <Spacer height={9} />
+
+        {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -134,32 +130,39 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-          <Spacer height={12} />
-          <div className="flex justify-end sm:[&>button]:flex-grow">
-            <CopyIdButton id={id} />
+
+        <PageStringField
+          variant="body"
+          placeholder="Add a description..."
+          value={description ?? ''}
+          onChange={onDescriptionChange}
+        />
+        <Spacer height={12} />
+
+        <div className="flex justify-end sm:[&>button]:flex-grow">
+          <CopyIdButton id={id} />
+        </div>
+        <Spacer height={8} />
+        <div className="rounded border border-grey-02 bg-white">
+          <div className="flex flex-col gap-6 p-5">
+            <EntityAttributes
+              entityId={id}
+              triples={triples}
+              spaceId={space}
+              schemaTriples={schemaTriples}
+              name={name}
+              send={send}
+              hideSchema={hideSchema}
+              hiddenSchemaIds={hiddenSchemaIds}
+            />
           </div>
-          <Spacer height={8} />
-          <div className="rounded border border-grey-02 bg-white">
-            <div className="flex flex-col gap-6 p-5">
-              <EntityAttributes
-                entityId={id}
-                triples={triples}
-                spaceId={space}
-                schemaTriples={schemaTriples}
-                name={name}
-                send={send}
-                hideSchema={hideSchema}
-                hiddenSchemaIds={hiddenSchemaIds}
-              />
-            </div>
-            <div className="p-4">
-              <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-                Add triple
-              </Button>
-            </div>
+          <div className="p-4">
+            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+              Add triple
+            </Button>
           </div>
         </div>
-      </div>
+      </EntityPageContentContainer>
     </>
   );
 }
