@@ -42,7 +42,6 @@ export const Editor = ({ editable = true }: Props) => {
       editable,
       content,
       onBlur({ editor }) {
-        console.log('onBlur', editor.getJSON());
         entityStore.updateEditorBlocks(editor);
       },
     },

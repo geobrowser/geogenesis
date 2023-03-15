@@ -143,8 +143,6 @@ export class EntityStore implements IEntityStore {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
 
-      console.log('initialBlockTriples', initialBlockTriples);
-
       return pipe(
         spaceActions,
         actions => Triple.fromActions(actions, initialBlockTriples),
@@ -164,8 +162,6 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
-      console.log('blockTriples', blockTriples);
-
       return {
         type: 'doc',
         content: blockIds.map(blockId => {
@@ -175,8 +171,6 @@ export class EntityStore implements IEntityStore {
           const rowTypeTriple = blockTriples.find(
             triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
           );
-
-          console.log('rowTypeTriple', rowTypeTriple);
 
           if (rowTypeTriple) {
             const rowType = rowTypeTriple.value.id;
@@ -295,11 +289,6 @@ export class EntityStore implements IEntityStore {
         };
       });
 
-      // console.log('schemaTriples', schemaTriples);
-
-      // const globalActions = Object.values(this.ActionsStore.actions$.get()).flatMap(a => a);
-
-      // const schemaTriplesWithNames = globalActions, schemaTriples;
       this.schemaTriples$.set(schemaTriples);
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') {
@@ -427,8 +416,6 @@ export class EntityStore implements IEntityStore {
     const isTableNode = node.type === 'tableNode';
 
     if (isTableNode) {
-      console.log("isTableNode, don't create markdown triple");
-
       return null;
     }
 
@@ -461,7 +448,7 @@ export class EntityStore implements IEntityStore {
   createBlockRowTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
-    const rowTypeEntityId = node.attrs?.selectedType?.id;
+    const rowTypeEntityId = node.attrs?.selectedType?.entityId;
     const rowTypeEntityName = node.attrs?.selectedType?.entityName;
 
     if (!isTableNode) {
@@ -471,7 +458,7 @@ export class EntityStore implements IEntityStore {
     const triple = Triple.withId({
       space: this.spaceId,
       entityId: blockEntityId,
-      entityName: '',
+      entityName: this.nodeName(node),
       attributeId: SYSTEM_IDS.ROW_TYPE,
       attributeName: 'Row Type',
       value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
