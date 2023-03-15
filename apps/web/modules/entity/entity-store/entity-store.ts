@@ -1,9 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import { Editor, generateHTML, JSONContent } from '@tiptap/core';
+import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
 import { ActionsStore } from '~/modules/action';
+import { tiptapExtensions } from '~/modules/components/entity/editor/editor';
 import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
 import { ID } from '~/modules/id';
 import { INetwork } from '~/modules/services/network';
@@ -183,15 +184,13 @@ export class EntityStore implements IEntityStore {
             };
           } else {
             const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
-
+            const isSSR = typeof window === 'undefined';
+            const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
             return {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  text: html,
-                },
-              ],
+              ...json.content[0],
+              attrs: {
+                id: blockId,
+              },
             };
           }
         }),
@@ -335,6 +334,8 @@ export class EntityStore implements IEntityStore {
 
     const isUpdatedBlock = existingBlockTriple && Value.stringValue(existingBlockTriple) !== Value.stringValue(triple);
 
+    console.log('isNewBlock', isNewBlock);
+    console.log('isUpdatedBlock', isUpdatedBlock);
     if (isNewBlock) {
       this.create(triple);
     } else if (isUpdatedBlock) {

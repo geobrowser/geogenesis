@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/react';
 import classNames from 'classnames';
 import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Text } from '~/modules/design-system/text';
-import { SelectedEntityType } from '~/modules/entity';
+import { SelectedEntityType, useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { TypeDialog } from '../../filter/type-dialog';
 import { CommandSuggestionItem } from './command-items';
@@ -21,14 +21,15 @@ export interface CommandListProps {
 
 type CommandListMode = 'select-block' | 'select-table';
 
-export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, items, spaceId }, ref) => {
+export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, items }, ref) => {
+  const entityStore = useEntityStore();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<CommandListMode>('select-block');
 
   const tableItem = items.find(item => item.title === 'Table') as CommandSuggestionItem;
 
   const handleTableSelect = (selectedType: SelectedEntityType) => {
-    command({ ...tableItem, selectedType: selectedType, spaceId });
+    command({ ...tableItem, selectedType: selectedType, spaceId: entityStore.spaceId });
   };
 
   const invokeItem = (item: CommandSuggestionItem) => {
@@ -119,7 +120,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
         </>
       ) : (
         <div>
-          <TypeDialog spaceId={spaceId} handleSelect={handleTableSelect} />
+          <TypeDialog spaceId={entityStore.spaceId} handleSelect={handleTableSelect} />
         </div>
       )}
     </div>

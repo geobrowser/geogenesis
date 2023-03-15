@@ -6,6 +6,7 @@ import { useEntityStoreContext } from './entity-store-provider';
 export function useEntityPageStore() {
   const {
     create,
+    spaceId,
     triples$,
     schemaTriples$,
     blockIds$,
@@ -26,6 +27,7 @@ export function useEntityPageStore() {
   return {
     triples,
     schemaTriples,
+    spaceId,
     create,
     update,
     remove,

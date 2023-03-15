@@ -3,7 +3,6 @@ import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useMemo } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
@@ -14,36 +13,33 @@ interface Props {
   editable?: boolean;
 }
 
+export const tiptapExtensions = [
+  StarterKit,
+  ConfiguredCommandExtension,
+  TableNode,
+  Image,
+  Placeholder.configure({
+    placeholder: ({ node }) => {
+      if (node.type.name === 'heading') {
+        return 'Heading...';
+      }
+
+      return '/ to select content block or write some content...';
+    },
+  }),
+  UniqueID.configure({
+    types: ['tableNode', 'paragraph', 'heading'],
+  }),
+];
+
 export const Editor = ({ editable = true, spaceId }: Props) => {
   const entityStore = useEntityStore();
-
-  const allExtensions = useMemo(
-    () => [
-      StarterKit,
-      ConfiguredCommandExtension(spaceId),
-      TableNode,
-      Image,
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (node.type.name === 'heading') {
-            return 'Heading...';
-          }
-
-          return '/ to select content block or write some content...';
-        },
-      }),
-      UniqueID.configure({
-        types: ['tableNode', 'paragraph', 'heading'],
-      }),
-    ],
-    [spaceId]
-  );
 
   const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
 
   const editor = useEditor(
     {
-      extensions: allExtensions,
+      extensions: tiptapExtensions,
       editable,
       content,
       onBlur({ editor }) {
