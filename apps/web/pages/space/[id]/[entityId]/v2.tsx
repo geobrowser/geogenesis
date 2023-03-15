@@ -13,6 +13,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple } from '~/modules/types';
+import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../../[id]';
 
 interface Props {
@@ -41,6 +42,9 @@ export default function EntityPage(props: Props) {
   }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
+
+  console.log('initialBlockTriples', props.blockTriples);
+  console.log('initialBlockIds', props.blockIds);
 
   return (
     <EntityStoreProvider
@@ -86,6 +90,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
+  /* Storing the array of block ids as a string value since we currently do not support arrays */
   const blockIdTriples = await network.fetchTriples({
     space,
     query: '',
@@ -100,7 +105,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ],
   });
 
-  const blockIds = blockIdTriples.triples.map(triple => triple.value.id);
+  const blockIdTriple = blockIdTriples.triples[0];
+  const blockIds: string[] = blockIdTriple ? JSON.parse(Value.stringValue(blockIdTriple) || '[]') : [];
+
+  console.log('blockIds in fetch', blockIds);
 
   const blockTriples = (
     await Promise.all(

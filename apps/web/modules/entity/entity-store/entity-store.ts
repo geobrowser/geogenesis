@@ -74,7 +74,7 @@ interface IEntityStoreConfig {
   id: string;
   initialTriples: TripleType[];
   initialSchemaTriples: TripleType[];
-  initialBlockIds: string[];
+  initialBlockIdsTriple: string[];
   initialBlockTriples: TripleType[];
   ActionsStore: ActionsStore;
   name: string;
@@ -85,7 +85,7 @@ export class EntityStore implements IEntityStore {
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
-  blockIds$: Observable<string[]> = observable<string[]>([]);
+  blockIdsTriple$: Observable<TripleType | null> = observable<TripleType>([]);
   blockTriples$: ObservableComputed<TripleType[]>;
   editorJson$: ObservableComputed<JSONContent>;
   typeTriples$: ObservableComputed<TripleType[]>;
@@ -98,7 +98,7 @@ export class EntityStore implements IEntityStore {
   constructor({
     api,
     initialTriples,
-    initialBlockIds,
+    initialBlockIdsTriple,
     initialBlockTriples,
     initialSchemaTriples,
     spaceId,
@@ -114,7 +114,7 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIds$ = observable(initialBlockIds);
+    this.blockIdsTriple$ = observable(initialBlockIdsTriple);
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
@@ -156,6 +156,9 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
+      // console.log('blockIds', blockIds);
+      // console.log('blockTriples', blockTriples);
+
       return {
         type: 'doc',
         content: blockIds.map(blockId => {
@@ -186,6 +189,7 @@ export class EntityStore implements IEntityStore {
             const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
             const isSSR = typeof window === 'undefined';
             const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
+            // console.log({ html, json });
             return {
               ...json.content[0],
               attrs: {
@@ -314,46 +318,58 @@ export class EntityStore implements IEntityStore {
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
-  /* Helper function for creating, updating, or ignoring block triples. 
-  - If blockIds doesn't include the triple's entityId, it's a new block and we create it.
-  - If blockIds does include the triple's entityId and the value has changed, it's an updated block
-  - If blockIds does include the triple's entityId and the value hasn't changed, it's a duplicate and we ignore it. 
-   */
-  upsertBlockTriple = (triple: TripleType) => {
-    const blockIds = this.blockIds$.get();
+  isNewBlock = (triple: TripleType) => {
+    return !this.getBlockTriple(triple);
+  };
+
+  isUpdatedBlock = (triple: TripleType) => {
+    const existingBlockTriple = this.getBlockTriple(triple);
+
+    if (!existingBlockTriple) {
+      return false;
+    }
+
+    const updatedStringValue = Value.stringValue(existingBlockTriple) !== Value.stringValue(triple);
+    const updatedValueId = existingBlockTriple.id !== triple.id;
+
+    return updatedStringValue || updatedValueId;
+  };
+
+  getBlockTriple = ({ entityId, attributeId }: TripleType) => {
     const blockTriples = this.blockTriples$.get();
+    return blockTriples.find(t => t.entityId === entityId && t.attributeId === attributeId);
+  };
 
-    const isNewBlock = !blockIds.includes(triple.entityId);
-    const existingBlockTriple = blockTriples.find(t => {
-      const isSameEntity = t.entityId === triple.entityId;
-      const isSameAttribute = t.attributeId === triple.attributeId;
-      const isSameValueId = t.value.id === triple.value.id; // Todo: confirm that this is constant
+  /* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
+  textNodeHTML = (node: JSONContent) => {
+    return generateHTML({ type: 'doc', content: [node] }, tiptapExtensions);
+  };
 
-      return isSameEntity && isSameAttribute && isSameValueId;
-    });
+  /* Helper function for getting the human-readable, plain-text name of a node */
+  nodeName = (node: JSONContent) => {
+    const blockEntityId = node.attrs?.id;
+    const isTableNode = node.type === 'tableNode';
 
-    const isUpdatedBlock = existingBlockTriple && Value.stringValue(existingBlockTriple) !== Value.stringValue(triple);
-
-    console.log('isNewBlock', isNewBlock);
-    console.log('isUpdatedBlock', isUpdatedBlock);
-    if (isNewBlock) {
-      this.create(triple);
-    } else if (isUpdatedBlock) {
-      this.update(triple, existingBlockTriple);
+    if (isTableNode) {
+      return `Table Block ${blockEntityId}`;
+    } else {
+      const nodeHTML = this.textNodeHTML(node);
+      const nodeNameLength = 20;
+      return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
     }
   };
 
   /* Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
-  blockTypeTriple = (node: JSONContent, editor: Editor) => {
+  createBlockTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
-    const entityName = this.nodeName(node, editor);
+    const entityName = this.nodeName(node);
     const isTableNode = node.type === 'tableNode';
 
     const blockTypeValue: EntityValue = isTableNode
       ? { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' }
       : { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
 
-    return Triple.withId({
+    const triple = Triple.withId({
       space: this.spaceId,
       entityId: blockEntityId,
       entityName: entityName,
@@ -361,33 +377,20 @@ export class EntityStore implements IEntityStore {
       attributeName: 'Types',
       value: blockTypeValue,
     });
-  };
 
-  /* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
-  textNodeHTML = (node: JSONContent, editor: Editor) => {
-    return generateHTML({ type: 'doc', content: [node] }, editor.extensionManager.extensions);
-  };
+    const existingBlockTriple = this.getBlockTriple(triple);
 
-  /* Helper function for getting the human-readable, plain-text name of a node */
-  nodeName = (node: JSONContent, editor: Editor) => {
-    const blockEntityId = node.attrs?.id;
-    const isTableNode = node.type === 'tableNode';
-
-    if (isTableNode) {
-      return `Table Block ${blockEntityId}`;
-    } else {
-      const nodeHTML = this.textNodeHTML(node, editor);
-      const nodeNameLength = 20;
-      return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
+    if (!existingBlockTriple) {
+      this.create(triple);
     }
   };
 
-  /* Helper function for creating a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
-  blockNameTriple = (node: JSONContent, editor: Editor) => {
+  /* Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
+  upsertBlockNameTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
-    const entityName = this.nodeName(node, editor);
+    const entityName = this.nodeName(node);
 
-    return Triple.withId({
+    const triple = Triple.withId({
       space: this.spaceId,
       entityId: blockEntityId,
       entityName: entityName,
@@ -395,10 +398,18 @@ export class EntityStore implements IEntityStore {
       attributeName: 'Name',
       value: { id: ID.createValueId(), type: 'string', value: entityName },
     });
+
+    const existingBlockTriple = this.getBlockTriple(triple);
+
+    if (!existingBlockTriple) {
+      this.create(triple);
+    } else if (this.isUpdatedBlock(triple)) {
+      this.update(triple, existingBlockTriple);
+    }
   };
 
-  /* Helper function for creating a new block markdown content triple for TEXT_BLOCKs only  */
-  blockMarkdownTriple = (node: JSONContent, editor: Editor) => {
+  /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
+  upsertBlockMarkdownTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
 
@@ -406,12 +417,12 @@ export class EntityStore implements IEntityStore {
       return null;
     }
 
-    const nodeHTML = this.textNodeHTML(node, editor);
+    const nodeHTML = this.textNodeHTML(node);
 
-    const entityName = this.nodeName(node, editor);
+    const entityName = this.nodeName(node);
     const markdown = markdownConverter.makeMarkdown(nodeHTML);
 
-    return Triple.withId({
+    const triple = Triple.withId({
       space: this.spaceId,
       entityId: blockEntityId,
       entityName: entityName,
@@ -419,10 +430,18 @@ export class EntityStore implements IEntityStore {
       attributeName: 'Markdown Content',
       value: { id: ID.createValueId(), type: 'string', value: markdown },
     });
+
+    const existingBlockTriple = this.getBlockTriple(triple);
+
+    if (!existingBlockTriple) {
+      this.create(triple);
+    } else if (this.isUpdatedBlock(triple)) {
+      this.update(triple, existingBlockTriple);
+    }
   };
 
   /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
-  blockRowTypeTriple = (node: JSONContent) => {
+  createBlockRowTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
     const rowTypeEntityId = node.attrs?.selectedType?.id;
@@ -432,7 +451,7 @@ export class EntityStore implements IEntityStore {
       return null;
     }
 
-    return Triple.withId({
+    const triple = Triple.withId({
       space: this.spaceId,
       entityId: blockEntityId,
       entityName: '',
@@ -440,29 +459,16 @@ export class EntityStore implements IEntityStore {
       attributeName: 'Row Type',
       value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
     });
+
+    const existingBlockTriple = this.getBlockTriple(triple);
+
+    if (!existingBlockTriple) {
+      this.create(triple);
+    }
   };
 
-  /* Iterate over the content's of a TipTap editor to create or update triple blocks */
-  updateEditorBlocks = (editor: Editor) => {
-    const { content = [] } = editor.getJSON();
-
-    content.forEach(node => {
-      const blockTypeTriple = this.blockTypeTriple(node, editor);
-      const blockNameTriple = this.blockNameTriple(node, editor);
-      const blockMarkdownTriple = this.blockMarkdownTriple(node, editor);
-      const blockRowTypeTriple = this.blockRowTypeTriple(node);
-
-      if (blockTypeTriple) this.upsertBlockTriple(blockTypeTriple);
-      if (blockNameTriple) this.upsertBlockTriple(blockNameTriple);
-      if (blockMarkdownTriple) this.upsertBlockTriple(blockMarkdownTriple);
-      if (blockRowTypeTriple) this.upsertBlockTriple(blockRowTypeTriple);
-    });
-
-    // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-    const blockIds = content.map(node => node.attrs?.id);
-    this.blockIds$.set(blockIds);
-
-    const blockTriple = Triple.withId({
+  upsertBlocksTriple = (blockIds: string[]) => {
+    const triple = Triple.withId({
       space: this.spaceId,
       entityId: this.id,
       entityName: this.name,
@@ -471,6 +477,29 @@ export class EntityStore implements IEntityStore {
       value: { id: ID.createValueId(), type: 'string', value: JSON.stringify(blockIds) },
     });
 
-    this.ActionsStore.create(blockTriple);
+    const existingBlockTriple = this.getBlockTriple(triple);
+
+    if (!existingBlockTriple) {
+      this.create(triple);
+    } else if (this.isUpdatedBlock(triple)) {
+      this.update(triple, existingBlockTriple);
+    }
+  };
+
+  /* Iterate over the content's of a TipTap editor to create or update triple blocks */
+  updateEditorBlocks = (editor: Editor) => {
+    const { content = [] } = editor.getJSON();
+
+    content.forEach(node => {
+      this.createBlockTypeTriple(node);
+      this.upsertBlockNameTriple(node);
+      this.upsertBlockMarkdownTriple(node);
+      this.createBlockRowTypeTriple(node);
+    });
+
+    // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
+    const blockIds = content.map(node => node.attrs?.id);
+    this.upsertBlocksTriple(blockIds);
+    this.blockIds$.set(blockIds);
   };
 }
