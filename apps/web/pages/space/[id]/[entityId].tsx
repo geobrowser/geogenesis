@@ -15,7 +15,6 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple, Version } from '~/modules/types';
-import { makeStubTriple } from '~/modules/services/mock-network';
 
 interface Props {
   triples: Triple[];
@@ -56,38 +55,38 @@ export default function EntityPage(props: Props) {
   );
 }
 
-const mockVersions = [
-  {
-    id: 'alksjdalkj',
-    name: 'Amended the title',
-    createdBy: {
-      id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24',
-      name: 'Yaniv Tal',
-    },
-    createdAt: Date.now(),
-    actions: [
-      {
-        type: 'createTriple' as const,
-        ...makeStubTriple('Alice'),
-      },
-    ],
-  },
-  {
-    id: 'a0s7dakjhds',
-    name: 'Created a page for ending homelessness',
-    createdBy: {
-      id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F30',
-      name: 'Nate Walpole',
-    },
-    createdAt: Date.now() - 2348395873,
-    actions: [
-      {
-        type: 'createTriple' as const,
-        ...makeStubTriple('Alice'),
-      },
-    ],
-  },
-];
+// const mockVersions = [
+//   {
+//     id: 'alksjdalkj',
+//     name: 'Amended the title',
+//     createdBy: {
+//       id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24',
+//       name: 'Yaniv Tal',
+//     },
+//     createdAt: Date.now(),
+//     actions: [
+//       {
+//         type: 'createTriple' as const,
+//         ...makeStubTriple('Alice'),
+//       },
+//     ],
+//   },
+//   {
+//     id: 'a0s7dakjhds',
+//     name: 'Created a page for ending homelessness',
+//     createdBy: {
+//       id: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F30',
+//       name: 'Nate Walpole',
+//     },
+//     createdAt: Date.now() - 2348395873,
+//     actions: [
+//       {
+//         type: 'createTriple' as const,
+//         ...makeStubTriple('Alice'),
+//       },
+//     ],
+//   },
+// ];
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;

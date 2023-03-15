@@ -15,7 +15,7 @@ export default function CreateEntity({ spaceId }: Props) {
 
   return (
     <EntityStoreProvider id={newId} spaceId={spaceId} initialTriples={[]} initialSchemaTriples={[]}>
-      <EditableEntityPage id={newId} name="" space={spaceId} triples={[]} schemaTriples={[]} />
+      <EditableEntityPage versions={[]} id={newId} name="" space={spaceId} triples={[]} schemaTriples={[]} />
     </EntityStoreProvider>
   );
 }
