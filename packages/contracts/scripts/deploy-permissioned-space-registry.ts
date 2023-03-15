@@ -22,7 +22,7 @@ async function deployPermissionedSpaceRegistry() {
   console.log('Deploying on network', networkId, networkConfig)
 
   const spaceBeacon = ethers.ContractFactory.getContract(
-    '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0',
+    '0xe44be15e413169ad49fb24cbf8db192be5a9a8bf',
     Space__factory.abi
   ) as Space
 
