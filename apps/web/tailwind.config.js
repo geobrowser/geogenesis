@@ -31,6 +31,7 @@ module.exports = {
     },
     boxShadow: {
       none: 'none',
+      onboarding: '0px 0px 71.36363220214844px 0px',
       dropdown: '0px 6px 8px #60606033',
       button: '0px 1px 2px #F0F0F0',
       card: '0px 26px 45px rgba(0, 0, 0, 0.09)',

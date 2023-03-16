@@ -4,6 +4,7 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
+import { TYPES } from '@geogenesis/ids/system-ids'
 import {
   Address,
   BigDecimal,
@@ -48,6 +49,34 @@ class HandleCreateTripleActionOptions {
   createdAtBlock: BigInt
 }
 
+function addEntityTypeId(entity: GeoEntity, valueId: string): void {
+  log.debug(`Adding type ID ${valueId} to entity ${entity.id}`, [])
+  entity.typeIds = entity.typeIds.concat([valueId])
+  entity.save()
+}
+
+function removeEntityTypeId(entity: GeoEntity, valueId: string): void {
+  log.debug(`Removing type ID ${valueId} from entity ${entity.id}`, [])
+  let typeIds: string[] = []
+  for (let i = 0; i < entity.typeIds.length; i++) {
+    if (entity.typeIds[i] != valueId) {
+      typeIds.push(entity.typeIds[i])
+    }
+  }
+  entity.typeIds = typeIds
+  entity.save()
+}
+
+export function getOrCreateEntity(id: string): GeoEntity {
+  let entity = GeoEntity.load(id)
+  if (entity == null) {
+    entity = new GeoEntity(id)
+    entity.typeIds = []
+    entity.save()
+  }
+  return entity
+}
+
 export function handleCreateTripleAction(
   options: HandleCreateTripleActionOptions
 ): void {
@@ -56,12 +85,10 @@ export function handleCreateTripleAction(
   const isProtected = options.isProtected
   const createdAtBlock = options.createdAtBlock
 
-  const entity = (GeoEntity.load(fact.entityId) ||
-    new GeoEntity(fact.entityId))!
+  const entity = getOrCreateEntity(fact.entityId)
   entity.save()
 
-  const attribute = (GeoEntity.load(fact.attributeId) ||
-    new GeoEntity(fact.attributeId))!
+  const attribute = getOrCreateEntity(fact.attributeId)
   attribute.save()
 
   const tripleId = createTripleId(
@@ -95,6 +122,9 @@ export function handleCreateTripleAction(
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
+    if (attribute.id == TYPES) {
+      addEntityTypeId(entity, stringValue.id)
+    }
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
     triple.stringValue = stringValue.value
@@ -116,6 +146,9 @@ export function handleCreateTripleAction(
 
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
+    if (attribute.id == TYPES) {
+      addEntityTypeId(entity, numberValue.id)
+    }
     triple.valueType = 'NUMBER'
     triple.valueId = numberValue.id
     triple.numberValue = BigDecimal.fromString(numberValue.value)
@@ -123,6 +156,9 @@ export function handleCreateTripleAction(
 
   const entityValue = fact.value.asEntityValue()
   if (entityValue) {
+    if (attribute.id == TYPES) {
+      addEntityTypeId(entity, entityValue.id)
+    }
     triple.valueType = 'ENTITY'
     triple.valueId = entityValue.id
     triple.entityValue = entityValue.id
@@ -143,6 +179,7 @@ function handleDeleteTripleAction(
     fact.attributeId,
     fact.value
   )
+  fact.type
 
   const triple = Triple.load(tripleId)
 
@@ -151,8 +188,26 @@ function handleDeleteTripleAction(
     return
   }
 
+  if (fact.attributeId == TYPES) {
+    const entity = getOrCreateEntity(fact.entityId)
+    const stringValue = fact.value.asStringValue()
+    if (stringValue && entity) {
+      removeEntityTypeId(entity, stringValue.id)
+    }
+
+    const numberValue = fact.value.asNumberValue()
+    if (numberValue && entity) {
+      removeEntityTypeId(entity, numberValue.id)
+    }
+
+    const entityValue = fact.value.asEntityValue()
+    if (entityValue && entity) {
+      removeEntityTypeId(entity, entityValue.id)
+    }
+  }
+
   if (fact.attributeId == 'name') {
-    const entity = GeoEntity.load(fact.entityId)
+    const entity = getOrCreateEntity(fact.entityId)
 
     // Doesn't handle the situation where there's multiple name triples for a single entity
     if (entity) {
@@ -167,9 +222,7 @@ function handleDeleteTripleAction(
 }
 
 function handleCreateEntityAction(action: CreateEntityAction): void {
-  const entity = (GeoEntity.load(action.entityId) ||
-    new GeoEntity(action.entityId))!
-
+  const entity = getOrCreateEntity(action.entityId)
   entity.save()
 
   log.debug(`ACTION: Created entity: ${entity.id}`, [])

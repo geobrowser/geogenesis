@@ -10,16 +10,7 @@ export function fromColumnsAndRows(spaceId: string, entities: Entity[], columns:
     return columns.reduce((acc, column) => {
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
 
-      /* We are optional chaining here since there might not be any value type triples associated with the type attribute */
-      const columnValueTypeTriple = column.triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
-      const columnValueType = columnValueTypeTriple?.value.id;
-
-      const defaultTriple = {
-        ...Triple.emptyPlaceholder(spaceId, id, columnValueType),
-        attributeId: column.id,
-      };
-
-      const cellTriples = triplesForAttribute.length ? triplesForAttribute : [defaultTriple];
+      const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
 
       const cell = {
         columnId: column.id,

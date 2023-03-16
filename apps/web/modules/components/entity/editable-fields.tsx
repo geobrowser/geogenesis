@@ -29,6 +29,11 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
   const [localValue, setLocalValue] = React.useState(props.value || '');
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
   return (
     <textarea
       {...props}

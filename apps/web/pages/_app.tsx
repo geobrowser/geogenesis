@@ -1,26 +1,28 @@
-import * as React from 'react';
-import { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { Analytics } from '@vercel/analytics/react';
+import { useState } from 'react';
 import { configureObservablePersistence } from '@legendapp/state/persist';
 import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
 
+import { Action, useActionsStore } from '~/modules/action';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { OnboardingDialog } from '~/modules/onboarding/dialog';
 import { Providers } from '~/modules/providers';
 import { Dialog } from '~/modules/search';
 import { Main } from '~/modules/components/main';
-import { NavUtils } from '~/modules/utils';
-import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useEditable } from '~/modules/stores/use-editable';
-import { useAccessControl } from '~/modules/auth/use-access-control';
+import { NavUtils } from '~/modules/utils';
 import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 
-import '../styles/styles.css';
 import '../styles/fonts.css';
+import '../styles/styles.css';
 
 // Enable localStorage persistence
 configureObservablePersistence({
@@ -69,6 +71,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
+      <OnboardingDialog />
       <Dialog
         open={open}
         onOpenChange={setOpen}

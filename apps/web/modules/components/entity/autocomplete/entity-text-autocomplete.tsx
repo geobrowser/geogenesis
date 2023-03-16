@@ -1,6 +1,5 @@
-import * as React from 'react';
-import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
 
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Text } from '~/modules/design-system/text';
@@ -17,7 +16,7 @@ interface Props {
 }
 
 export function EntityTextAutocomplete({ placeholder, itemIds, onDone, spaceId }: Props) {
-  const { query, results, onQueryChange } = useAutocomplete(spaceId);
+  const { query, results, onQueryChange } = useAutocomplete({ spaceId });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
