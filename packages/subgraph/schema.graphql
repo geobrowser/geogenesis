@@ -83,7 +83,7 @@ type ProposedVersion @entity {
   name: String
   description: String
   author: Account
-  entity: GeoEntity!
+  entity: GeoEntity! # entity we are describing
   createdAt: BigInt! # block number
   actions: [Action!]! # All actions to be taken if this version is finalized
 }

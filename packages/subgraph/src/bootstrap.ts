@@ -20,7 +20,11 @@ import {
   VALUE_TYPE,
 } from '@geogenesis/ids/system-ids'
 import { BigInt, log } from '@graphprotocol/graph-ts'
-import { handleAction, handleCreateTripleAction } from './actions'
+import {
+  handleAction,
+  handleCreateEntityAction,
+  handleCreateTripleAction,
+} from './actions'
 
 const entities: string[] = [
   TYPES,
@@ -97,69 +101,114 @@ export function bootstrapRootSpaceCoreTypes(
 
   /* Name all of our entities */
   for (let i = 0; i < names.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
+    handleAction(
+      new CreateTripleAction(
         names[i]._0 as string,
         NAME,
         names[i]._1 as StringValue
       ),
       space,
-      isProtected: false,
-      createdAtBlock,
-    })
+      createdAtBlock
+    )
+    //handleCreateTripleAction({
+    //  fact: new CreateTripleAction(
+    //    names[i]._0 as string,
+    //    NAME,
+    //    names[i]._1 as StringValue
+    //  ),
+    //  space,
+    //  isProtected: false,
+    //  createdAtBlock,
+    //})
   }
 
   /* Create our attributes of type "attribute" */
   for (let i = 0; i < attributes.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
+    handleAction(
+      new CreateTripleAction(
         attributes[i]._0 as string,
         TYPES,
         new EntityValue(ATTRIBUTE)
       ),
       space,
-      isProtected: false,
-      createdAtBlock,
-    })
+      createdAtBlock
+    )
+    //handleCreateTripleAction({
+    //  fact: new CreateTripleAction(
+    //    attributes[i]._0 as string,
+    //    TYPES,
+    //    new EntityValue(ATTRIBUTE)
+    //  ),
+    //  space,
+    //  isProtected: false,
+    //  createdAtBlock,
+    //})
 
     /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
+    handleAction(
+      new CreateTripleAction(
         attributes[i]._0 as string,
         VALUE_TYPE,
         new EntityValue(attributes[i]._1 as string)
       ),
       space,
-      isProtected: false,
-      createdAtBlock,
-    })
+      createdAtBlock
+    )
+    //handleCreateTripleAction({
+    //  fact: new CreateTripleAction(
+    //    attributes[i]._0 as string,
+    //    VALUE_TYPE,
+    //    new EntityValue(attributes[i]._1 as string)
+    //  ),
+    //  space,
+    //  isProtected: false,
+    //  createdAtBlock,
+    //})
   }
 
   /* Create our types of type "type" */
   for (let i = 0; i < types.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
+    handleAction(
+      new CreateTripleAction(
         types[i]._0 as string,
         TYPES,
         new EntityValue(SCHEMA_TYPE)
       ),
       space,
-      isProtected: false,
-      createdAtBlock,
-    })
+      createdAtBlock
+    )
+    //handleCreateTripleAction({
+    //  fact: new CreateTripleAction(
+    //    types[i]._0 as string,
+    //    TYPES,
+    //    new EntityValue(SCHEMA_TYPE)
+    //  ),
+    //  space,
+    //  isProtected: false,
+    //  createdAtBlock,
+    //})
 
     /* Each type can have a set of attributes */
     for (let j = 0; j < types[i]._1.length; j++) {
-      handleCreateTripleAction({
-        fact: new CreateTripleAction(
+      handleAction(
+        new CreateTripleAction(
           types[i]._0 as string,
           ATTRIBUTES,
           new EntityValue(types[i]._1[j] as string)
         ),
         space,
-        isProtected: false,
-        createdAtBlock,
-      })
+        createdAtBlock
+      )
+      //handleCreateTripleAction({
+      //  fact: new CreateTripleAction(
+      //    types[i]._0 as string,
+      //    ATTRIBUTES,
+      //    new EntityValue(types[i]._1[j] as string)
+      //  ),
+      //  space,
+      //  isProtected: false,
+      //  createdAtBlock,
+      //})
     }
   }
 }
