@@ -79,7 +79,7 @@ type ActionCount @entity {
 }
 
 type ProposedVersion @entity {
-  id: ID! #entityID + txHash?
+  id: ID!
   name: String
   description: String
   author: Account
@@ -89,7 +89,7 @@ type ProposedVersion @entity {
 }
 
 type Version @entity {
-  id: ID! #entityID + version number
+  id: ID!
   name: String
   description: String
   author: Account
@@ -100,7 +100,7 @@ type Version @entity {
 
 #An action to take as part of a version
 type Action @entity {
-  id: ID! # entity + block number?
+  id: ID!
   actionType: ActionType!
 
   entity: GeoEntity!

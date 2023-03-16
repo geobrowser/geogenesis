@@ -330,7 +330,7 @@ export function getOrCreateAction(
   valueId: string | null = null,
   numberValue: string | null = null,
   stringValue: string | null = null,
-  entityValue: string | null = null // entityId
+  entityValue: string | null = null
 ): ActionEntity {
   let action = ActionEntity.load(id)
   if (action == null) {
@@ -354,137 +354,124 @@ export function handleAction(
   space: string,
   createdAtBlock: BigInt
 ): void {
-  //const createTripleAction = action.asCreateTripleAction()
-  //if (createTripleAction) {
-  //  handleCreateTripleAction({
-  //    fact: createTripleAction,
-  //    space,
-  //    isProtected: false,
-  //    createdAtBlock,
-  //  })
-  //  let entityId = createTripleAction.entityId
-  //  getOrCreateEntity(entityId)
-  //  let actionId = getOrCreateActionCount().count.toString()
-  //  let attributeId = createTripleAction.attributeId
-  //  let value = createTripleAction.value
-  //  let valueId: string = ''
+  const createTripleAction = action.asCreateTripleAction()
+  if (createTripleAction) {
+    handleCreateTripleAction({
+      fact: createTripleAction,
+      space,
+      isProtected: false,
+      createdAtBlock,
+    })
+    let entityId = createTripleAction.entityId
+    let actionId = getOrCreateActionCount().count.toString()
+    let attributeId = createTripleAction.attributeId
+    let value = createTripleAction.value
+    let valueId: string = ''
 
-  //  let entityValue = value.asEntityValue()
-  //  let entValue: string | null = null
-  //  if (entityValue != null) {
-  //    valueId = entityValue.id
-  //  }
-  //  let stringValue = value.asStringValue()
-  //  let strValue: string | null = null
-  //  if (stringValue != null) {
-  //    valueId = stringValue.id
-  //    strValue = stringValue.value
-  //  }
-  //  let numberValue = value.asNumberValue()
-  //  let numValue: string | null = null
-  //  if (numberValue != null) {
-  //    valueId = numberValue.id
-  //    numValue = numberValue.value
-  //  }
-  //  let action = getOrCreateAction(
-  //    actionId,
-  //    'CREATE',
-  //    entityId,
-  //    attributeId,
-  //    value.type.toUpperCase(),
-  //    valueId,
-  //    numValue,
-  //    strValue,
-  //    entValue
-  //  )
-  //  let proposed = createProposedVersion(
-  //    entityId + '-' + getOrCreateActionCount().count.toString(),
-  //    createdAtBlock,
-  //    [action.id],
-  //    entityId
-  //  )
-  //  let version = createVersion(
-  //    (entityId += '-' + getOrCreateActionCount().count.toString()),
-  //    proposed.id,
-  //    createdAtBlock,
-  //    entityId
-  //  )
-  //  let entity = GeoEntity.load(entityId)
-  //  if (entity != null) {
-  //    entity.version = version.id
-  //    entity.versions = entity.versions.concat([version.id])
-  //    entity.save()
-  //  }
-  //  return
-  //}
+    let entityValue = value.asEntityValue()
+    let entValue: string | null = null
+    if (entityValue != null) {
+      valueId = entityValue.id
+      entValue = entityValue.id
+    }
+    let stringValue = value.asStringValue()
+    let strValue: string | null = null
+    if (stringValue != null) {
+      valueId = stringValue.id
+      strValue = stringValue.value
+    }
+    let numberValue = value.asNumberValue()
+    let numValue: string | null = null
+    if (numberValue != null) {
+      valueId = numberValue.id
+      numValue = numberValue.value
+    }
+    let action = getOrCreateAction(
+      actionId,
+      'CREATE',
+      entityId,
+      attributeId,
+      value.type.toUpperCase(),
+      valueId,
+      numValue,
+      strValue,
+      entValue
+    )
+    let proposed = createProposedVersion(
+      entityId + '-' + getOrCreateActionCount().count.toString(),
+      createdAtBlock,
+      [action.id],
+      entityId
+    )
+    let version = createVersion(
+      entityId + '-' + getOrCreateActionCount().count.toString(),
+      proposed.id,
+      createdAtBlock,
+      entityId
+    )
+    return
+  }
 
-  //  const deleteTripleAction = action.asDeleteTripleAction()
-  //if (deleteTripleAction) {
-  //  // TODO: getOrCreateVersion
-  //  handleDeleteTripleAction(deleteTripleAction, space)
+  const deleteTripleAction = action.asDeleteTripleAction()
+  if (deleteTripleAction) {
+    handleDeleteTripleAction(deleteTripleAction, space)
 
-  //  let entityId = deleteTripleAction.entityId
-  //  getOrCreateEntity(entityId)
-  //  let actionId = getOrCreateActionCount().count.toString()
-  //  let attributeId = deleteTripleAction.attributeId
-  //  let value = deleteTripleAction.value
-  //  let valueId: string = ''
+    let entityId = deleteTripleAction.entityId
+    getOrCreateEntity(entityId)
+    let actionId = getOrCreateActionCount().count.toString()
+    let attributeId = deleteTripleAction.attributeId
+    let value = deleteTripleAction.value
+    let valueId: string = ''
 
-  //  let entityValue = value.asEntityValue()
-  //  let entValue: string | null = null
-  //  if (entityValue != null) {
-  //    valueId = entityValue.id
-  //  }
-  //  let stringValue = value.asStringValue()
-  //  let strValue: string | null = null
-  //  if (stringValue != null) {
-  //    valueId = stringValue.id
-  //    strValue = stringValue.value
-  //  }
-  //  let numberValue = value.asNumberValue()
-  //  let numValue: string | null = null
-  //  if (numberValue != null) {
-  //    valueId = numberValue.id
-  //    numValue = numberValue.value
-  //  }
-  //  let action = getOrCreateAction(
-  //    actionId,
-  //    'DELETE',
-  //    entityId,
-  //    attributeId,
-  //    value.type.toUpperCase(),
-  //    valueId,
-  //    numValue,
-  //    strValue,
-  //    entValue
-  //  )
-  //  let proposed = createProposedVersion(
-  //    (entityId += '-' + getOrCreateActionCount().count.toString()),
-  //    createdAtBlock,
-  //    [action.id],
-  //    entityId
-  //  )
-  //  let version = createVersion(
-  //    (entityId += '-' + getOrCreateActionCount().count.toString()),
-  //    proposed.id,
-  //    createdAtBlock,
-  //    entityId
-  //  )
-  //  let entity = GeoEntity.load(entityId)
-  //  if (entity != null) {
-  //    entity.version = version.id
-  //    entity.versions = entity.versions.concat([version.id])
-  //    entity.save()
-  //  }
-  //  return
-  //}
+    let entityValue = value.asEntityValue()
+    let entValue: string | null = null
+    if (entityValue != null) {
+      valueId = entityValue.id
+      entValue = entityValue.id
+    }
+    let stringValue = value.asStringValue()
+    let strValue: string | null = null
+    if (stringValue != null) {
+      valueId = stringValue.id
+      strValue = stringValue.value
+    }
+    let numberValue = value.asNumberValue()
+    let numValue: string | null = null
+    if (numberValue != null) {
+      valueId = numberValue.id
+      numValue = numberValue.value
+    }
+    let action = getOrCreateAction(
+      actionId,
+      'DELETE',
+      entityId,
+      attributeId,
+      value.type.toUpperCase(),
+      valueId,
+      numValue,
+      strValue,
+      entValue
+    )
+    let proposed = createProposedVersion(
+      entityId + '-' + getOrCreateActionCount().count.toString(),
+      createdAtBlock,
+      [action.id],
+      entityId
+    )
+    let version = createVersion(
+      entityId + '-' + getOrCreateActionCount().count.toString(),
+      proposed.id,
+      createdAtBlock,
+      entityId
+    )
+    return
+  }
 
   const createEntityAction = action.asCreateEntityAction()
   if (createEntityAction) {
     handleCreateEntityAction(createEntityAction)
 
     let entityId = createEntityAction.entityId
-    //getOrCreateEntity(entityId)
     let actionId = getOrCreateActionCount().count.toString()
 
     let action = getOrCreateAction(actionId, 'CREATE', entityId)
@@ -501,12 +488,6 @@ export function handleAction(
       createdAtBlock,
       entityId
     )
-    let entity = GeoEntity.load(entityId)
-    if (entity != null) {
-      entity.version = version.id
-      entity.versions = entity.versions.concat([version.id])
-      entity.save()
-    }
     return
   }
 
