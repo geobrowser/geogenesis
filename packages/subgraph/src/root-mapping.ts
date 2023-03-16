@@ -1,4 +1,4 @@
-import { BigInt, log } from '@graphprotocol/graph-ts'
+import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import { Space } from '../generated/schema'
 import {
   EntryAdded as RegistryEntryAdded,
@@ -15,7 +15,7 @@ export function handleRootEntryAdded(event: RegistryEntryAdded): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
-  bootstrapRootSpace(address, createdAtBlock)
+  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
 
   addEntry({
     space: address,
@@ -30,7 +30,7 @@ export function handleRoleGranted(event: RoleGranted): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
-  bootstrapRootSpace(address, createdAtBlock)
+  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
 
   addRole({
     space: address,
@@ -43,7 +43,7 @@ export function handleRoleRevoked(event: RoleRevoked): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
 
-  bootstrapRootSpace(address, createdAtBlock)
+  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
 
   removeRole({
     space: getChecksumAddress(event.address),
@@ -52,10 +52,14 @@ export function handleRoleRevoked(event: RoleRevoked): void {
   })
 }
 
-function bootstrapRootSpace(address: string, createdAtBlock: BigInt): void {
+function bootstrapRootSpace(
+  address: string,
+  createdAtBlock: BigInt,
+  author: Address
+): void {
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
-    bootstrapRootSpaceCoreTypes(address, createdAtBlock)
+    bootstrapRootSpaceCoreTypes(address, createdAtBlock, author)
     handleSpaceAdded(address, true, createdAtBlock, null)
   }
 }

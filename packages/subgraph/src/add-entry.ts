@@ -41,7 +41,7 @@ export function addEntry(params: EntryParams): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes, space, createdAtBlock)
+        const root = handleActionData(bytes, space, createdAtBlock, author)
 
         if (root) {
           entry.json = root.toJSON().toString()
@@ -55,7 +55,7 @@ export function addEntry(params: EntryParams): void {
     if (bytes) {
       entry.decoded = bytes
 
-      const root = handleActionData(bytes, space, createdAtBlock)
+      const root = handleActionData(bytes, space, createdAtBlock, author)
 
       if (root) {
         entry.json = root.toJSON().toString()
@@ -71,7 +71,8 @@ export function addEntry(params: EntryParams): void {
 function handleActionData(
   bytes: Bytes,
   space: string,
-  createdAtBlock: BigInt
+  createdAtBlock: BigInt,
+  author: Address
 ): Root | null {
   const json = JSON.parse(bytes)
 
@@ -79,15 +80,20 @@ function handleActionData(
 
   if (!root) return null
 
-  handleRoot(root, space, createdAtBlock)
+  handleRoot(root, space, createdAtBlock, author)
 
   // Return decoded root for debugging purposes
   return root
 }
 
-function handleRoot(root: Root, space: string, createdAtBlock: BigInt): void {
+function handleRoot(
+  root: Root,
+  space: string,
+  createdAtBlock: BigInt,
+  author: Address
+): void {
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
-    handleAction(action, space, createdAtBlock)
+    handleAction(action, space, createdAtBlock, author)
   }
 }

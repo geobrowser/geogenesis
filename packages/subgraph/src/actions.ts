@@ -88,21 +88,16 @@ export function getOrCreateEntity(id: string): GeoEntity {
 }
 
 function createProposedVersion(
-  versionId: string, //entityId + createdAtBlock
-  //creator: string = 'placeholder',
+  versionId: string,
   createdAt: BigInt,
   actions: string[],
-  entityId: string
+  entityId: string,
+  authorId: Address
 ): ProposedVersion {
   let version = ProposedVersion.load(versionId)
-  // if someone is creating a version
-  // this should never be null
-  //let account = Account.load(creator)
   if (version == null) {
     version = new ProposedVersion(versionId)
-    //if (account != null) {
-    //  version.author = account.id
-    //}
+    version.author = getOrCreateAccount(authorId).id
     version.actions = actions // action ids
     version.entity = entityId
     version.createdAt = createdAt
@@ -111,25 +106,28 @@ function createProposedVersion(
   return version
 }
 
-// NOTE: Add this back in VVV
-// if someone is creating a version
-// this should never be null;
-//let account = Account.load(creator)
-//if (account != null) {
-// version.author = account.id
-//}
+function getOrCreateAccount(address: Address): Account {
+  let account = Account.load(address.toHexString())
+  if (account == null) {
+    account = new Account(address.toHexString())
+    account.save()
+  }
+  return account
+}
+
 function createVersion(
   versionId: string,
-  //creator: string,
   proposedVersion: string,
   createdAt: BigInt,
-  entityId: string
+  entityId: string,
+  authorId: Address
 ): Version {
   let version = Version.load(versionId)
   let proposed = ProposedVersion.load(proposedVersion)
   let entity = getOrCreateEntity(entityId)
   if (version == null) {
     version = new Version(versionId)
+    version.author = getOrCreateAccount(authorId).id
     if (entity != null) {
       if (entity.versions.length == 0 && proposed != null) {
         version.proposedVersion = proposed.id
@@ -160,7 +158,6 @@ export function handleCreateTripleAction(
   options: HandleCreateTripleActionOptions
 ): void {
   const fact = options.fact
-  // NOTE: this is the action?
   const space = options.space
   const isProtected = options.isProtected
   const createdAtBlock = options.createdAtBlock
@@ -352,7 +349,8 @@ export function getOrCreateAction(
 export function handleAction(
   action: Action,
   space: string,
-  createdAtBlock: BigInt
+  createdAtBlock: BigInt,
+  author: Address
 ): void {
   const createTripleAction = action.asCreateTripleAction()
   if (createTripleAction) {
@@ -401,13 +399,15 @@ export function handleAction(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       createdAtBlock,
       [action.id],
-      entityId
+      entityId,
+      author
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
       createdAtBlock,
-      entityId
+      entityId,
+      author
     )
     return
   }
@@ -456,13 +456,15 @@ export function handleAction(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       createdAtBlock,
       [action.id],
-      entityId
+      entityId,
+      author
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
       createdAtBlock,
-      entityId
+      entityId,
+      author
     )
     return
   }
@@ -480,13 +482,15 @@ export function handleAction(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       createdAtBlock,
       [action.id],
-      entityId
+      entityId,
+      author
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
       createdAtBlock,
-      entityId
+      entityId,
+      author
     )
     return
   }
