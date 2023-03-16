@@ -23,7 +23,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
       <CellContent
         key={value}
         isEntity
-        href={NavUtils.toEntity(space, cell.entityId)}
+        href={NavUtils.toEntity(space, entityId)}
         isExpanded={isExpanded}
         value={value}
       />
