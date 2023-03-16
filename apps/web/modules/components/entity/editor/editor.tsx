@@ -3,6 +3,7 @@ import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { useState } from 'react';
 import { SquareButton } from '~/modules/design-system/button';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
@@ -34,20 +35,38 @@ export const tiptapExtensions = [
 export const Editor = ({ editable = true }: Props) => {
   const entityStore = useEntityStore();
 
+  const [contentLoaded, setContentLoaded] = useState(false);
   // Content must be undefined for TipTap to show the initial placeholder
   const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
 
   const editor = useEditor(
     {
       extensions: tiptapExtensions,
-      editable,
+      editable: editable,
       content,
       onBlur({ editor }) {
         entityStore.updateEditorBlocks(editor);
       },
     },
-    [editable, !!content] // Only re-initialize editor when editable content becomes available so we don't trigger flickers
+    [editable, !!content]
   );
+
+  // /*
+  //  Only set the editor's content once when editable content becomes available
+  //  or when the editor switches editable states
+
+  //  Setting the content on every render causes strange
+  //  */
+  // useEffect(() => {
+  //   setContentLoaded(false);
+  // }, [editable]);
+
+  // useEffect(() => {
+  //   if (editor && content && !contentLoaded) {
+  //     editor.commands.setContent(content);
+  //     setContentLoaded(true);
+  //   }
+  // }, [editor, content, contentLoaded]);
 
   return editor ? (
     <>

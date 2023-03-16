@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
+import { batch, computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
@@ -313,31 +313,6 @@ export class EntityStore implements IEntityStore {
   remove = (triple: TripleType) => this.ActionsStore.remove(triple);
   update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
 
-  isUpdatedBlockTriple = (triple: TripleType) => {
-    const existingBlockTriple = this.getBlockTriple(triple);
-
-    if (!existingBlockTriple) {
-      return false;
-    }
-
-    const updatedStringValue = Value.stringValue(existingBlockTriple) !== Value.stringValue(triple);
-    const updatedValueId = existingBlockTriple.id !== triple.id;
-
-    return updatedStringValue || updatedValueId;
-  };
-
-  isUpdatedBlockIdsTriple = (blockIds: string[]) => {
-    const existingBlockIdsTriple = this.blockIdsTriple$.get();
-
-    if (!existingBlockIdsTriple) {
-      return false;
-    }
-
-    const updatedStringValue = Value.stringValue(existingBlockIdsTriple) !== JSON.stringify(blockIds);
-
-    return updatedStringValue;
-  };
-
   getBlockTriple = ({ entityId, attributeId }: { entityId: string; attributeId: string }) => {
     const blockTriples = this.blockTriples$.get();
     return blockTriples.find(t => t.entityId === entityId && t.attributeId === attributeId);
@@ -360,14 +335,6 @@ export class EntityStore implements IEntityStore {
       const nodeNameLength = 20;
       return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
     }
-  };
-
-  /* 
-  Create a new backlink to the entity page that created this block.
-  That way we can navigate back to the parent entity from the block.
-  */
-  createEntityPageTriple = (node: JSONContent) => {
-    // TODO
   };
 
   /* 
@@ -407,6 +374,7 @@ export class EntityStore implements IEntityStore {
     const entityName = this.nodeName(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
+    const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== entityName;
 
     if (!existingBlockTriple) {
       this.create(
@@ -419,7 +387,7 @@ export class EntityStore implements IEntityStore {
           value: { id: ID.createValueId(), type: 'string', value: entityName },
         })
       );
-    } else if (this.isUpdatedBlockTriple(existingBlockTriple)) {
+    } else if (isUpdated) {
       this.update(
         Triple.ensureStableId({
           ...existingBlockTriple,
@@ -455,6 +423,7 @@ export class EntityStore implements IEntityStore {
     });
 
     const existingBlockTriple = this.getBlockTriple(triple);
+    const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== markdown;
 
     if (!existingBlockTriple) {
       this.create(
@@ -467,13 +436,33 @@ export class EntityStore implements IEntityStore {
           value: { id: ID.createValueId(), type: 'string', value: markdown },
         })
       );
-    } else if (this.isUpdatedBlockTriple(existingBlockTriple)) {
+    } else if (isUpdated) {
       this.update(
         Triple.ensureStableId({
           ...existingBlockTriple,
           value: { ...existingBlockTriple.value, type: 'string', value: markdown },
         }),
         existingBlockTriple
+      );
+    }
+  };
+
+  /* Helper function for creating backlinks to the parent entity  */
+  createParentEntityTriple = (node: JSONContent) => {
+    const blockEntityId = node.attrs?.id;
+
+    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.PARENT_ENTITY });
+
+    if (!existingBlockTriple) {
+      this.create(
+        Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: this.nodeName(node),
+          attributeId: SYSTEM_IDS.PARENT_ENTITY,
+          attributeName: 'Parent Entity',
+          value: { id: this.id, type: 'entity', name: this.name },
+        })
       );
     }
   };
@@ -505,8 +494,13 @@ export class EntityStore implements IEntityStore {
     }
   };
 
+  /* 
+  Helper function to create or update the block IDs on an entity
+  Since we don't currently support array value types, we store all ordered blocks as a single stringified array 
+  */
   upsertBlocksTriple = (blockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
+    const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(blockIds);
 
     if (!existingBlockTriple) {
       const triple = Triple.withId({
@@ -523,7 +517,7 @@ export class EntityStore implements IEntityStore {
       });
       this.create(triple);
       this.blockIdsTriple$.set(triple);
-    } else if (this.isUpdatedBlockIdsTriple(blockIds)) {
+    } else if (isUpdated) {
       const updatedTriple = Triple.ensureStableId({
         ...existingBlockTriple,
         value: {
@@ -541,15 +535,17 @@ export class EntityStore implements IEntityStore {
   updateEditorBlocks = (editor: Editor) => {
     const { content = [] } = editor.getJSON();
 
-    // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
     const blockIds = content.map(node => node.attrs?.id);
-    this.upsertBlocksTriple(blockIds);
+    batch(() => {
+      this.upsertBlocksTriple(blockIds);
 
-    content.forEach(node => {
-      this.createBlockRowTypeTriple(node);
-      this.createBlockTypeTriple(node);
-      this.upsertBlockNameTriple(node);
-      this.upsertBlockMarkdownTriple(node);
+      content.forEach(node => {
+        this.createParentEntityTriple(node);
+        this.createBlockRowTypeTriple(node);
+        this.createBlockTypeTriple(node);
+        this.upsertBlockNameTriple(node);
+        this.upsertBlockMarkdownTriple(node);
+      });
     });
   };
 }

@@ -65,6 +65,9 @@ export const IMAGE_BLOCK = 'f0553d4d-4838-425e-bcd7-613bd8f475a5'
 /* Example Usage: Entity -> BLOCKS -> Some_Entity_Of_Type_TEXT_BLOCK_or_TABLE_BLOCK */
 export const BLOCKS = 'beaba5cb-a677-41a8-b353-77030613fc70'
 
+/* Example Usage: Block Entity -> PARENT_ENTITY -> Some_Entity_ID */
+export const PARENT_ENTITY = 'dd4999b9-77f0-4c2b-a02b-5a26b233854e'
+
 /* Example Usage: 
 Block Entity -> TYPES -> TEXT_BLOCK
 Block Entity -> MARKDOWN_CONTENT -> "**hello world!**" */
