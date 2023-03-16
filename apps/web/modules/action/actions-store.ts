@@ -1,5 +1,7 @@
+// @ts-ignore
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
+import { persistObservable } from '@legendapp/state/persist';
 
 import { Action } from '.';
 import { INetwork } from '../services/network';
@@ -16,15 +18,17 @@ interface IActionsStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
+  deleteActions(spaceId: string, actionIds: Array<string>): void;
   publish(spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  unstagedChanges?: Array<string>;
 }
 
 interface IActionsStoreConfig {
   api: INetwork;
 }
 
-type SpaceId = string;
-type SpaceActions = Record<SpaceId, ActionType[]>;
+export type SpaceId = string;
+export type SpaceActions = Record<SpaceId, ActionType[]>;
 
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
@@ -33,13 +37,29 @@ export class ActionsStore implements IActionsStore {
   constructor({ api }: IActionsStoreConfig) {
     this.api = api;
     this.actions$ = observable<SpaceActions>({});
+
+    persistObservable(this.actions$, {
+      local: 'actions$',
+    });
   }
 
   private addActions = (spaceId: string, actions: ActionType[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
+
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? []), ...actions],
+    };
+
+    this.actions$.set(newActions);
+  };
+
+  deleteActions = (spaceId: string, actionIds: Array<string>) => {
+    const prevActions: SpaceActions = this.actions$.get() ?? {};
+
+    const newActions: SpaceActions = {
+      ...prevActions,
+      [spaceId]: [...(prevActions[spaceId] ?? [])].filter(item => !actionIds.includes(item?.id ?? item?.before?.id)),
     };
 
     this.actions$.set(newActions);
@@ -90,13 +110,20 @@ export class ActionsStore implements IActionsStore {
     });
   };
 
-  publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
+  publish = async (
+    spaceId: string,
+    signer: Signer,
+    onChangePublishState: (newState: ReviewState) => void,
+    unstagedChanges: Array<string> = []
+  ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    if (!spaceActions) return;
+    const actionsToPublish = spaceActions.filter(action => !unstagedChanges.includes(action?.id ?? action?.before?.id));
+
+    if (actionsToPublish.length < 1) return;
 
     try {
       await this.api.publish({
-        actions: Action.squashChanges(Action.unpublishedChanges(spaceActions)),
+        actions: Action.squashChanges(actionsToPublish),
         signer,
         onChangePublishState,
         space: spaceId,
@@ -107,14 +134,11 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
-    const publishedActions = spaceActions.map(a => ({
-      ...a,
-      hasBeenPublished: true,
-    }));
+    const filteredActions = spaceActions.filter(action => unstagedChanges.includes(action?.id ?? action?.before?.id));
 
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: publishedActions,
+      [spaceId]: filteredActions,
     });
 
     onChangePublishState('publish-complete');

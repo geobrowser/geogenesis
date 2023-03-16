@@ -11,10 +11,11 @@ const MotionContent = motion(DropdownPrimitive.Content);
 
 interface Props {
   trigger: React.ReactNode;
+  align?: 'end' | 'center' | 'start' | undefined;
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
 
-export const Dropdown = ({ trigger, options }: Props) => {
+export const Dropdown = ({ trigger, align = 'end', options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
@@ -36,7 +37,7 @@ export const Dropdown = ({ trigger, options }: Props) => {
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            align="end"
+            align={align}
             sideOffset={2}
             className="z-10 w-[273px] overflow-hidden rounded border border-grey-02 bg-white"
           >

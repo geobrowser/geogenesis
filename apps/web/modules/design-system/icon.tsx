@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { Close } from '~/modules/design-system/icons/close';
 import { ContractSmall } from '~/modules/design-system/icons/contract-small';
 import { Copy } from '~/modules/design-system/icons/copy';
 import { Create } from '~/modules/design-system/icons/create';
@@ -20,9 +21,11 @@ import { Trash } from '~/modules/design-system/icons/trash';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
+  | 'blank'
   | 'create'
   | 'createSmall'
   | 'publish'
+  | 'close'
   | 'eye'
   | 'expand'
   | 'expandSmall'
@@ -49,9 +52,13 @@ export const Icon = ({ icon, ...rest }: IconProps) => {
   return <Component {...rest} />;
 };
 
+const Blank = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" />;
+
 const icons: Record<IconName, React.ElementType> = {
+  blank: Blank,
   create: Create,
   createSmall: CreateSmall,
+  close: Close,
   publish: Publish,
   eye: Eye,
   expand: Expand,
