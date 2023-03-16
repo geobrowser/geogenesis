@@ -1,6 +1,7 @@
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import React from 'react';
-import { EntityTableStoreProvider } from '~/modules/entity';
+import { EntityTableStoreProvider, useEntityTable } from '~/modules/entity';
+import { Triple } from '~/modules/types';
 import { EntityTableContainer } from '../../entity-table/entity-table-container';
 
 export const TableNode = Node.create({
@@ -22,7 +23,10 @@ export const TableNode = Node.create({
 
   addAttributes() {
     return {
-      selectedType: {
+      typeId: {
+        default: null,
+      },
+      typeName: {
         default: null,
       },
       spaceId: {
@@ -41,7 +45,11 @@ export const TableNode = Node.create({
 });
 
 export const TableNodeComponent = React.memo(function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, selectedType } = node.attrs;
+  const { spaceId, typeId } = node.attrs;
+
+  /* Warning: A bit unwieldy, but less code needed: useEntityTable pulls from the parent EntityTableStoreProvider context which contains all of the types  */
+  const { types } = useEntityTable();
+  const selectedType = types.find(type => type.entityId === typeId) as Triple;
 
   return (
     <NodeViewWrapper className="react-component-with-content">

@@ -162,6 +162,8 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
+      console.log('blockTriples', blockTriples);
+
       return {
         type: 'doc',
         content: blockIds.map(blockId => {
@@ -173,14 +175,13 @@ export class EntityStore implements IEntityStore {
           );
 
           if (rowTypeTriple) {
-            const rowType = rowTypeTriple.value.id;
-
             return {
               type: 'tableNode',
               attrs: {
                 spaceId: this.spaceId,
-                id: rowTypeTriple.entityId,
-                selectedType: rowType,
+                id: blockId,
+                typeId: rowTypeTriple.value.id,
+                typeName: Value.nameOfEntityValue(rowTypeTriple),
               },
             };
           } else {
@@ -448,8 +449,10 @@ export class EntityStore implements IEntityStore {
   createBlockRowTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
-    const rowTypeEntityId = node.attrs?.selectedType?.entityId;
-    const rowTypeEntityName = node.attrs?.selectedType?.entityName;
+    const rowTypeEntityId = node.attrs?.typeId;
+    const rowTypeEntityName = node.attrs?.typeName;
+
+    console.log({ node, blockEntityId, isTableNode, rowTypeEntityId, rowTypeEntityName });
 
     if (!isTableNode) {
       return null;
@@ -502,15 +505,15 @@ export class EntityStore implements IEntityStore {
   updateEditorBlocks = (editor: Editor) => {
     const { content = [] } = editor.getJSON();
 
-    content.forEach(node => {
-      this.createBlockTypeTriple(node);
-      this.upsertBlockNameTriple(node);
-      this.upsertBlockMarkdownTriple(node);
-      this.createBlockRowTypeTriple(node);
-    });
-
     // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
     const blockIds = content.map(node => node.attrs?.id);
     this.upsertBlocksTriple(blockIds);
+
+    content.forEach(node => {
+      this.createBlockRowTypeTriple(node);
+      this.createBlockTypeTriple(node);
+      this.upsertBlockNameTriple(node);
+      this.upsertBlockMarkdownTriple(node);
+    });
   };
 }

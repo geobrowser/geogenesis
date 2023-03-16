@@ -50,7 +50,11 @@ export const commandItems: CommandSuggestionItem[] = [
         .deleteRange(range)
         .insertContent({
           type: 'tableNode',
-          attrs: { selectedType: props.selectedType, spaceId: props.spaceId },
+          attrs: {
+            typeId: props.selectedType.entityId,
+            typeName: props.selectedType.entityName,
+            spaceId: props.spaceId,
+          },
         })
         .createParagraphNear()
         .run();
