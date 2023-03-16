@@ -162,8 +162,6 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
-      console.log('blockTriples', blockTriples);
-
       return {
         type: 'doc',
         content: blockIds.map(blockId => {
@@ -186,11 +184,15 @@ export class EntityStore implements IEntityStore {
             };
           } else {
             const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
+            /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
             const isSSR = typeof window === 'undefined';
             const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
+            const nodeData = json.content[0];
+
             return {
-              ...json.content[0],
+              ...nodeData,
               attrs: {
+                ...nodeData?.attrs,
                 id: blockId,
               },
             };
@@ -324,19 +326,19 @@ export class EntityStore implements IEntityStore {
     return updatedStringValue || updatedValueId;
   };
 
-  isUpdatedBlockIdsTriple = (triple: TripleType) => {
+  isUpdatedBlockIdsTriple = (blockIds: string[]) => {
     const existingBlockIdsTriple = this.blockIdsTriple$.get();
 
     if (!existingBlockIdsTriple) {
       return false;
     }
 
-    const updatedStringValue = Value.stringValue(existingBlockIdsTriple) !== Value.stringValue(triple);
+    const updatedStringValue = Value.stringValue(existingBlockIdsTriple) !== JSON.stringify(blockIds);
 
     return updatedStringValue;
   };
 
-  getBlockTriple = ({ entityId, attributeId }: TripleType) => {
+  getBlockTriple = ({ entityId, attributeId }: { entityId: string; attributeId: string }) => {
     const blockTriples = this.blockTriples$.get();
     return blockTriples.find(t => t.entityId === entityId && t.attributeId === attributeId);
   };
@@ -360,7 +362,18 @@ export class EntityStore implements IEntityStore {
     }
   };
 
-  /* Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
+  /* 
+  Create a new backlink to the entity page that created this block.
+  That way we can navigate back to the parent entity from the block.
+  */
+  createEntityPageTriple = (node: JSONContent) => {
+    // TODO
+  };
+
+  /* 
+  Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
+  We don't support changing types of blocks, so all we need to do is create a new block with the new type
+  */
   createBlockTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const entityName = this.nodeName(node);
@@ -370,44 +383,51 @@ export class EntityStore implements IEntityStore {
       ? { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' }
       : { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
 
-    const triple = Triple.withId({
-      space: this.spaceId,
-      entityId: blockEntityId,
-      entityName: entityName,
-      attributeId: SYSTEM_IDS.TYPES,
-      attributeName: 'Types',
-      value: blockTypeValue,
-    });
-
-    const existingBlockTriple = this.getBlockTriple(triple);
+    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.TYPES });
 
     if (!existingBlockTriple) {
-      this.create(triple);
+      this.create(
+        Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.TYPES,
+          attributeName: 'Types',
+          value: blockTypeValue,
+        })
+      );
     }
   };
 
-  /* Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  */
+  /* 
+  Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  
+  */
   upsertBlockNameTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const entityName = this.nodeName(node);
 
-    const triple = Triple.withId({
-      space: this.spaceId,
-      entityId: blockEntityId,
-      entityName: entityName,
-      attributeId: SYSTEM_IDS.NAME,
-      attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: entityName },
-    });
-
-    const existingBlockTriple = this.getBlockTriple(triple);
+    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
 
     if (!existingBlockTriple) {
-      this.create(triple);
-    } else if (this.isUpdatedBlockTriple(triple)) {
-      triple.id = existingBlockTriple.id;
-      triple.value.id = existingBlockTriple.value.id;
-      this.update(triple, existingBlockTriple);
+      this.create(
+        Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: { id: ID.createValueId(), type: 'string', value: entityName },
+        })
+      );
+    } else if (this.isUpdatedBlockTriple(existingBlockTriple)) {
+      this.update(
+        Triple.ensureStableId({
+          ...existingBlockTriple,
+          entityName,
+          value: { ...existingBlockTriple.value, type: 'string', value: entityName },
+        }),
+        existingBlockTriple
+      );
     }
   };
 
@@ -437,11 +457,24 @@ export class EntityStore implements IEntityStore {
     const existingBlockTriple = this.getBlockTriple(triple);
 
     if (!existingBlockTriple) {
-      this.create(triple);
-    } else if (this.isUpdatedBlockTriple(triple)) {
-      triple.id = existingBlockTriple.id;
-      triple.value.id = existingBlockTriple.value.id;
-      this.update(triple, existingBlockTriple);
+      this.create(
+        Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
+          attributeName: 'Markdown Content',
+          value: { id: ID.createValueId(), type: 'string', value: markdown },
+        })
+      );
+    } else if (this.isUpdatedBlockTriple(existingBlockTriple)) {
+      this.update(
+        Triple.ensureStableId({
+          ...existingBlockTriple,
+          value: { ...existingBlockTriple.value, type: 'string', value: markdown },
+        }),
+        existingBlockTriple
+      );
     }
   };
 
@@ -452,52 +485,55 @@ export class EntityStore implements IEntityStore {
     const rowTypeEntityId = node.attrs?.typeId;
     const rowTypeEntityName = node.attrs?.typeName;
 
-    console.log({ node, blockEntityId, isTableNode, rowTypeEntityId, rowTypeEntityName });
-
     if (!isTableNode) {
       return null;
     }
 
-    const triple = Triple.withId({
-      space: this.spaceId,
-      entityId: blockEntityId,
-      entityName: this.nodeName(node),
-      attributeId: SYSTEM_IDS.ROW_TYPE,
-      attributeName: 'Row Type',
-      value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
-    });
-
-    const existingBlockTriple = this.getBlockTriple(triple);
+    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.ROW_TYPE });
 
     if (!existingBlockTriple) {
-      this.create(triple);
+      this.create(
+        Triple.withId({
+          space: this.spaceId,
+          entityId: blockEntityId,
+          entityName: this.nodeName(node),
+          attributeId: SYSTEM_IDS.ROW_TYPE,
+          attributeName: 'Row Type',
+          value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
+        })
+      );
     }
   };
 
   upsertBlocksTriple = (blockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
 
-    const triple = Triple.withId({
-      space: this.spaceId,
-      entityId: this.id,
-      entityName: this.name,
-      attributeId: SYSTEM_IDS.BLOCKS,
-      attributeName: 'Blocks',
-      value: {
-        id: ID.createValueId(),
-        type: 'string',
-        value: JSON.stringify(blockIds),
-      },
-    });
-
     if (!existingBlockTriple) {
+      const triple = Triple.withId({
+        space: this.spaceId,
+        entityId: this.id,
+        entityName: this.name,
+        attributeId: SYSTEM_IDS.BLOCKS,
+        attributeName: 'Blocks',
+        value: {
+          id: ID.createValueId(),
+          type: 'string',
+          value: JSON.stringify(blockIds),
+        },
+      });
       this.create(triple);
       this.blockIdsTriple$.set(triple);
-    } else if (this.isUpdatedBlockIdsTriple(triple)) {
-      triple.id = existingBlockTriple.id;
-      triple.value.id = existingBlockTriple.value.id;
-      this.update(triple, existingBlockTriple);
-      this.blockIdsTriple$.set(triple);
+    } else if (this.isUpdatedBlockIdsTriple(blockIds)) {
+      const updatedTriple = Triple.ensureStableId({
+        ...existingBlockTriple,
+        value: {
+          ...existingBlockTriple.value,
+          type: 'string',
+          value: JSON.stringify(blockIds),
+        },
+      });
+      this.update(updatedTriple, existingBlockTriple);
+      this.blockIdsTriple$.set(updatedTriple);
     }
   };
 

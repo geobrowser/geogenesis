@@ -46,7 +46,7 @@ export const Editor = ({ editable = true }: Props) => {
         entityStore.updateEditorBlocks(editor);
       },
     },
-    [editable, content]
+    [editable, !!content] // Only re-initialize editor when editable content becomes available so we don't trigger flickers
   );
 
   return editor ? (

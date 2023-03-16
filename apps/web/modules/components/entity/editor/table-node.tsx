@@ -1,5 +1,5 @@
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { EntityTableStoreProvider, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { EntityTableContainer } from '../../entity-table/entity-table-container';
@@ -49,7 +49,10 @@ export const TableNodeComponent = React.memo(function TableNodeComponent({ node 
 
   /* Warning: A bit unwieldy, but less code needed: useEntityTable pulls from the parent EntityTableStoreProvider context which contains all of the types  */
   const { types } = useEntityTable();
-  const selectedType = types.find(type => type.entityId === typeId) as Triple;
+
+  const selectedType = useMemo(() => {
+    return types.find(type => type.entityId === typeId) as Triple;
+  }, [types, typeId]);
 
   return (
     <NodeViewWrapper className="react-component-with-content">
