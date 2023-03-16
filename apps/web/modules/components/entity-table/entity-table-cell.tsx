@@ -16,14 +16,14 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
 
   if (isNameCell) {
-    const entityId = cell.triples[0].entityId;
+    const entityId = cell.entityId;
     const value = Entity.name(cell.triples) ?? entityId;
 
     return (
       <CellContent
         key={value}
         isEntity
-        href={NavUtils.toEntity(space, entityId)}
+        href={NavUtils.toEntity(space, cell.entityId)}
         isExpanded={isExpanded}
         value={value}
       />
