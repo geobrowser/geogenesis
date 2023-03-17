@@ -1,10 +1,9 @@
+import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { forwardRef } from 'react';
-import { cva } from 'class-variance-authority';
-
-import { Icon } from '~/modules/design-system/icon';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import type { IconName } from '~/modules/design-system/icon';
+import { Icon } from '~/modules/design-system/icon';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'done';

@@ -47,6 +47,12 @@ export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
 // This represents the beacon proxy for all permissionless spaces.
 export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
 
+/* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */
+export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'
+
+/* Example Usage: SF Config -> TYPES -> SPACE_CONFIGURATION */
+export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
+
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''

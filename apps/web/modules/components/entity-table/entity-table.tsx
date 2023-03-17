@@ -12,6 +12,8 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { cx } from 'class-variance-authority';
+import { useState } from 'react';
 
 import { useEditEvents } from '../entity/edit-events';
 import { useActionsStoreContext } from '~/modules/action';
@@ -20,6 +22,7 @@ import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
+import { valueTypes } from '~/modules/value-types';
 import { Text } from '../../design-system/text';
 import { Cell, Column, Row } from '../../types';
 import { TableCell } from '../table/cell';
@@ -34,21 +37,26 @@ import type { Triple as TripleType } from '../../types';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, space: string) => {
+const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
   const columnSize = 1200 / columns.length;
 
-  return columns.map(column =>
+  return columns.map((column, i) =>
     columnHelper.accessor(row => row[column.id], {
       id: column.id,
       header: () => {
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
 
+        /* Add some right padding for the last column to account for the add new column button */
+        const isLastColumn = i === columns.length - 1;
+
         return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumnHeader
-            column={column}
-            entityId={column.id}
-            spaceId={Entity.nameTriple(column.triples)?.space}
-          />
+          <div className={cx(isLastColumn ? 'pr-12' : '')}>
+            <EditableEntityTableColumnHeader
+              column={column}
+              entityId={column.id}
+              spaceId={Entity.nameTriple(column.triples)?.space}
+            />
+          </div>
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );
@@ -68,6 +76,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { create, update, remove, actions$ } = useActionsStoreContext();
+    const { columnValueType } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -75,11 +84,18 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
+    const valueType = columnValueType(cellData.columnId);
+
     const cellTriples = pipe(
       actions$.get()[space],
       actions => Triple.fromActions(actions, cellData.triples),
-      A.filter(t => t.entityId === cellData.entityId),
-      A.uniqBy(t => t.id)
+      A.filter(triple => {
+        const isRowCell = triple.entityId === cellData.entityId;
+        const isColCell = triple.attributeId === cellData.columnId;
+        const isCurrentValueType = triple.value.type === valueTypes[valueType];
+        return isRowCell && isColCell && isCurrentValueType;
+      }),
+      A.uniqBy(triple => triple.id)
     );
 
     if (isEditMode) {
@@ -101,7 +117,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       );
     } else if (cellData && !isPlaceholderCell) {
       return (
-        <EntityTableCell key={Entity.name(cellData.triples)} cell={cellData} space={space} isExpanded={isExpanded} />
+        <EntityTableCell
+          key={Entity.name(cellData.triples)}
+          cell={cellData}
+          triples={cellTriples}
+          space={space}
+          isExpanded={isExpanded}
+        />
       );
     } else {
       return null;
@@ -125,7 +147,7 @@ export function EntityTable({ rows, space, columns }: Props) {
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, space),
+    columns: formatColumns(columns, isEditMode),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

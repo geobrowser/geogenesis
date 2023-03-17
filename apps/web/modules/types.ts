@@ -47,6 +47,7 @@ export type Space = {
   admins: string[];
   attributes: Dictionary<string, string>;
   entityId: string;
+  spaceConfigEntityId: string | null;
 };
 
 export type Account = {
@@ -61,7 +62,15 @@ export type ReviewState =
   | 'publishing-contract'
   | 'publish-complete';
 
-export type FilterField = 'entity-id' | 'entity-name' | 'attribute-id' | 'attribute-name' | 'value' | 'linked-to';
+export type FilterField =
+  | 'entity-id'
+  | 'entity-name'
+  | 'attribute-id'
+  | 'attribute-name'
+  | 'value'
+  | 'linked-to'
+  | 'starts-with'
+  | 'not-space-id';
 
 export type FilterClause = {
   field: FilterField;

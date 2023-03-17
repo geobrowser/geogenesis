@@ -1,7 +1,7 @@
-import * as React from 'react';
-import { useState } from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
+import * as React from 'react';
+import { useState } from 'react';
 
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
@@ -39,7 +39,7 @@ interface Props {
 }
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
-  const autocomplete = useAutocomplete(spaceId);
+  const autocomplete = useAutocomplete({ spaceId });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
