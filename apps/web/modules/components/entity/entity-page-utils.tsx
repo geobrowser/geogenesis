@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Triple } from '~/modules/types';
 
 export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
-  /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> New triples */
+  /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
 
   const schemaAttributeIds = schemaTriples.map(schemaTriple => schemaTriple.attributeId);
 

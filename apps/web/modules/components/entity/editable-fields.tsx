@@ -92,21 +92,21 @@ interface ImageZoomProps {
   variant?: ImageVariant;
 }
 
-export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
-  const imageStyles: Record<ImageVariant, React.CSSProperties> = {
-    default: {
-      height: 80,
-    },
-    avatar: {
-      height: 44,
-      width: 44,
-    },
-    banner: {
-      height: 44,
-      width: 240,
-    },
-  };
+const imageStyles: Record<ImageVariant, React.CSSProperties> = {
+  default: {
+    height: 80,
+  },
+  avatar: {
+    height: 44,
+    width: 44,
+  },
+  banner: {
+    height: 44,
+    width: 240,
+  },
+};
 
+export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>

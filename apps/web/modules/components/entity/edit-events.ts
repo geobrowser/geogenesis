@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { emptyValue } from '~/modules/triple/triple';
 import { Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { Value } from '~/modules/value';
@@ -266,7 +265,7 @@ const listener =
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
 
-        const value = emptyValue(type);
+        const value = Triple.emptyValue(type);
 
         return triples.forEach(triple => {
           const isString = type === 'string';
