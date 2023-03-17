@@ -1,14 +1,13 @@
-import { Analytics } from '@vercel/analytics/react';
-import type { AppProps } from 'next/app';
+import * as React from 'react';
+import { useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { configureObservablePersistence } from '@legendapp/state/persist';
 import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
+import type { AppProps } from 'next/app';
 
-import { Action, useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';

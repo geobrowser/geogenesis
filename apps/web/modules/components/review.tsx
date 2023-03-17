@@ -226,6 +226,7 @@ type AttributeId = string;
 type EntityRevision = {
   id: string;
   attributeName: AttributeName;
+  currentValue?: string;
   isDiff: boolean;
   before?: Before;
   after?: After;
@@ -267,7 +268,7 @@ const getChanges = (actions: Array<any>): Changes => {
       case 'editTriple':
         changes[action.before.entityId] = {
           ...changes[action.before.entityId],
-          entityName: action.before.entityName,
+          entityName: changes[action.before.entityId]?.entityName ?? action.before.entityName,
           entityRevisions: {
             ...changes[action.before.entityId]?.entityRevisions,
             [action.before.attributeId]: {
@@ -275,7 +276,14 @@ const getChanges = (actions: Array<any>): Changes => {
               id: action.before.id,
               attributeName: action.before.attributeName,
               isDiff: true,
-              differences: diffWords(action.before.value.value, action.after.value.value),
+              currentValue:
+                changes[action.before.entityId]?.entityRevisions[action.before.attributeId].currentValue ??
+                action.before.value.value,
+              differences: diffWords(
+                changes[action.before.entityId]?.entityRevisions[action.before.attributeId].currentValue ??
+                  action.before.value.value,
+                action.after.value.value
+              ),
             },
           },
         };

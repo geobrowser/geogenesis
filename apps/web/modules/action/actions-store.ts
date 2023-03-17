@@ -1,4 +1,3 @@
-// @ts-ignore
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { persistObservable } from '@legendapp/state/persist';
@@ -19,7 +18,12 @@ interface IActionsStore {
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
   deleteActions(spaceId: string, actionIds: Array<string>): void;
-  publish(spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  publish(
+    spaceId: string,
+    signer: Signer,
+    onChangePublishState: (newState: ReviewState) => void,
+    unstagedChanges: Array<string>
+  ): void;
   unstagedChanges?: Array<string>;
 }
 
@@ -35,11 +39,13 @@ export class ActionsStore implements IActionsStore {
   actions$: Observable<SpaceActions>;
 
   constructor({ api }: IActionsStoreConfig) {
-    this.api = api;
-    this.actions$ = observable<SpaceActions>({});
+    const actions = observable<SpaceActions>({});
 
-    persistObservable(this.actions$, {
-      local: 'actions$',
+    this.api = api;
+    this.actions$ = actions;
+
+    persistObservable(actions, {
+      local: 'actions',
     });
   }
 
@@ -59,7 +65,7 @@ export class ActionsStore implements IActionsStore {
 
     const newActions: SpaceActions = {
       ...prevActions,
-      [spaceId]: [...(prevActions[spaceId] ?? [])].filter(item => !actionIds.includes(item?.id ?? item?.before?.id)),
+      [spaceId]: [...(prevActions[spaceId] ?? [])].filter((item: ActionType) => !actionIds.includes(getId(item))),
     };
 
     this.actions$.set(newActions);
@@ -117,7 +123,7 @@ export class ActionsStore implements IActionsStore {
     unstagedChanges: Array<string> = []
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const actionsToPublish = spaceActions.filter(action => !unstagedChanges.includes(action?.id ?? action?.before?.id));
+    const actionsToPublish = spaceActions.filter(action => !unstagedChanges.includes(getId(action)));
 
     if (actionsToPublish.length < 1) return;
 
@@ -134,7 +140,7 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
-    const filteredActions = spaceActions.filter(action => unstagedChanges.includes(action?.id ?? action?.before?.id));
+    const filteredActions = spaceActions.filter(action => unstagedChanges.includes(getId(action)));
 
     this.actions$.set({
       ...this.actions$.get(),
@@ -145,3 +151,13 @@ export class ActionsStore implements IActionsStore {
     await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
+
+const getId = (action: ActionType) => {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return action.id;
+    case 'editTriple':
+      return action.before.id;
+  }
+};
