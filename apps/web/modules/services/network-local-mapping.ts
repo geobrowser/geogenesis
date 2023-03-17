@@ -116,30 +116,37 @@ export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
 }
 
 export function fromNetworkActions(networkActions: NetworkAction[]): Action[] {
-  return networkActions.map(networkAction => {
+  const newActions = networkActions.map(networkAction => {
+    const value = extractActionValue(networkAction);
+
     switch (networkAction.actionType) {
-      case 'CREATE':
+      case 'CREATE': {
         return {
-          type: 'createTriple',
+          type: 'createTriple' as const,
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
           attributeId: networkAction.attribute.id,
           attributeName: networkAction.attribute.name,
-          value: extractActionValue(networkAction),
+          value,
           space: '',
         };
-      case 'DELETE':
+      }
+
+      case 'DELETE': {
         return {
-          type: 'deleteTriple',
+          type: 'deleteTriple' as const,
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
           attributeId: networkAction.attribute.id,
           attributeName: networkAction.attribute.name,
-          value: extractActionValue(networkAction),
+          value,
           space: '',
         };
+      }
     }
   });
+
+  return newActions;
 }

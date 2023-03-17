@@ -5,6 +5,7 @@ import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
 import pluralize from 'pluralize';
 import { EntityPageTypeChip } from './entity-page-type-chip';
+import { GeoDate } from '~/modules/utils';
 
 interface Props {
   versions: Array<Version>;
@@ -16,13 +17,14 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
   // use their name, if they don't have one use their wallet address.
   const contributors = pipe(
     versions,
-    A.uniqBy(v => v.author.id),
-    A.flatMap(version => version.author.name ?? version.author.id)
+    A.uniqBy(v => v.createdBy.id),
+    A.flatMap(version => version.createdBy.name ?? version.createdBy.id)
   );
 
   // We only render the first three avatars in the avatar group
   const firstThreeContributors = A.take(contributors, 3);
   const latestVersion = A.head(versions);
+  const lastEditedDate = GeoDate.fromGeoTime(latestVersion?.createdAt ?? 0);
 
   return (
     <div>
@@ -36,9 +38,9 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
             {latestVersion && (
               <p className="text-grey-04">
                 Last edited{' '}
-                {new Date(latestVersion.createdAt).toLocaleDateString(undefined, {
-                  month: 'short',
+                {lastEditedDate.toLocaleDateString(undefined, {
                   day: '2-digit',
+                  month: 'short',
                 })}
               </p>
             )}

@@ -67,3 +67,13 @@ export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[]
 export function formatShortAddress(address: string): string {
   return address.slice(0, 8) + '...' + address.slice(-6);
 }
+
+/**
+ * We return blocktime from the subgraph for createdAt and updatedAt fields.
+ * JavaScript date expects milliseconds, so we need to convert from seconds.
+ */
+export class GeoDate {
+  static fromGeoTime(value: number) {
+    return new Date(value * 1000);
+  }
+}

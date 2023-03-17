@@ -15,7 +15,7 @@ export function ReadIO(subgraphUrl: string) {
               id
               name
               createdAt
-              author {
+              createdBy {
                 id
               }
               actions {
@@ -47,6 +47,7 @@ export function ReadIO(subgraphUrl: string) {
         data: {
           versions: NetworkVersion[];
         };
+        errors: any[];
       } = await response.json();
 
       try {
@@ -60,6 +61,7 @@ export function ReadIO(subgraphUrl: string) {
         });
       } catch (e) {
         console.error(e);
+        console.error(json.errors);
         return [];
       }
     },
