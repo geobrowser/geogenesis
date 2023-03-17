@@ -277,10 +277,10 @@ const getChanges = (actions: Array<any>): Changes => {
               attributeName: action.before.attributeName,
               isDiff: true,
               currentValue:
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId].currentValue ??
+                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
                 action.before.value.value,
               differences: diffWords(
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId].currentValue ??
+                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
                   action.before.value.value,
                 action.after.value.value
               ),
