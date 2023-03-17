@@ -126,7 +126,7 @@ export type Version = {
   id: string;
   name: string;
   description?: string;
-  createdBy: {
+  author: {
     id: string;
     name?: string;
     avatarUrl?: string;

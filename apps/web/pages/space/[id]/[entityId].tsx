@@ -15,6 +15,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple, Version } from '~/modules/types';
+import { ReadIO } from '~/modules/services/io';
 
 interface Props {
   triples: Triple[];
@@ -96,7 +97,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const network = new Network(storage, config.subgraph);
 
-  const [entity, related] = await Promise.all([
+  const [entity, related, versions] = await Promise.all([
     network.fetchTriples({
       space,
       query: '',
@@ -112,6 +113,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    ReadIO(config.subgraph).versions(entityId),
   ]);
 
   const relatedEntities = await Promise.all(
@@ -136,6 +139,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       return acc;
     }, {} as Record<string, LinkedEntityGroup>);
 
+  console.log('versions', versions);
+
   return {
     props: {
       triples: entity.triples,
@@ -144,7 +149,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       name: Entity.name(entity.triples) ?? entityId,
       space,
       linkedEntities,
-      versions: [],
+      versions,
       key: entityId,
     },
   };

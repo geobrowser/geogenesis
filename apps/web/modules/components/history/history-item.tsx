@@ -3,6 +3,7 @@ import pluralize from 'pluralize';
 import { Text } from '~/modules/design-system/text';
 import { Triple } from '~/modules/triple';
 import { Version } from '~/modules/types';
+import { formatShortAddress } from '~/modules/utils';
 
 interface Props {
   version: Version;
@@ -12,7 +13,8 @@ export function HistoryItem({ version }: Props) {
   // @TODO: Make sure the actions are squashed, unique. This component may have changes
   // for an entire space or just for a single entity.
   const uniqueTripleChanges = Triple.fromActions(version.actions, []).length;
-  const truncatedVersionName = version.name.length > 36 ? `${version.name.slice(0, 36)}...` : version.name;
+  const versionName = version.name ?? version.createdAt;
+  const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
 
   return (
     <div className="cursor-pointer bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text">
@@ -21,13 +23,12 @@ export function HistoryItem({ version }: Props) {
           {truncatedVersionName}
         </Text>
       </div>
-
       <div className="flex items-center justify-between ">
         <div className="flex items-center justify-between gap-1">
           <div className="overflow-hidden rounded-xs">
-            <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
+            <Avatar size={12} square={true} variant="pixel" name={version.author.id} />
           </div>
-          <p className="text-smallButton">{version.createdBy.name ?? version.createdBy.id}</p>
+          <p className="text-smallButton">{version.author.name ?? formatShortAddress(version.author.id)}</p>
         </div>
         <div className="flex">
           <p className="text-smallButton">

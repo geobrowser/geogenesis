@@ -16,8 +16,8 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
   // use their name, if they don't have one use their wallet address.
   const contributors = pipe(
     versions,
-    A.uniqBy(v => v.createdBy.id),
-    A.flatMap(version => version.createdBy.name ?? version.createdBy.id)
+    A.uniqBy(v => v.author.id),
+    A.flatMap(version => version.author.name ?? version.author.id)
   );
 
   // We only render the first three avatars in the avatar group

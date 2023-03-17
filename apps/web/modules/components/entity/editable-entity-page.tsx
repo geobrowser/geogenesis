@@ -137,6 +137,7 @@ export function EditableEntityPage({
           value={description ?? ''}
           onChange={onDescriptionChange}
         />
+
         <Spacer height={12} />
 
         <div className="flex justify-end sm:[&>button]:flex-grow">
@@ -472,11 +473,11 @@ function EntityAttributes({
                     isPlaceholder
                       ? () => hideSchema(attributeId)
                       : () => {
-                          hideSchema(attributeId);
-                          triples
-                            .filter(triple => triple.attributeId === attributeId)
-                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
-                        }
+                        hideSchema(attributeId);
+                        triples
+                          .filter(triple => triple.attributeId === attributeId)
+                          .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
+                      }
                   }
                 />
               </div>
