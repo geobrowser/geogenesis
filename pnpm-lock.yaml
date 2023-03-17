@@ -41,7 +41,6 @@ importers:
       '@testing-library/jest-dom': ^5.16.5
       '@testing-library/react': ^13.4.0
       '@testing-library/user-event': ^14.4.3
-      '@tiptap-pro/extension-unique-id': 2.0.0-beta.237
       '@tiptap/core': 2.0.0-beta.220
       '@tiptap/extension-bubble-menu': 2.0.0-beta.220
       '@tiptap/extension-image': 2.0.0-beta.220
@@ -62,7 +61,6 @@ importers:
       '@types/react-dom': ^18.0.6
       '@types/showdown': ^2.0.0
       '@types/testing-library__jest-dom': ^5.14.5
-      '@types/turndown': ^5.0.1
       '@types/uuid': ^8.3.4
       '@typescript-eslint/eslint-plugin': ^5.46.0
       '@typescript-eslint/parser': ^5.46.0
@@ -105,7 +103,6 @@ importers:
       showdown: ^2.1.0
       tailwindcss: ^3.2.4
       tippy.js: ^6.3.7
-      turndown: ^7.1.1
       typescript: ^4.8.4
       undici: ^5.10.0
       uuid: ^9.0.0
@@ -129,7 +126,6 @@ importers:
       '@radix-ui/react-use-rect': 1.0.0_react@18.2.0
       '@tanstack/query-core': 4.3.8
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
-      '@tiptap-pro/extension-unique-id': 2.0.0-beta.237_ohumfzynigfck3hzagxvh2a4ky
       '@tiptap/core': 2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220
       '@tiptap/extension-bubble-menu': 2.0.0-beta.220_ohumfzynigfck3hzagxvh2a4ky
       '@tiptap/extension-image': 2.0.0-beta.220_7w7m52asdh3tod4ocz57yex63q
@@ -141,7 +137,6 @@ importers:
       '@tiptap/starter-kit': 2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220
       '@tiptap/suggestion': 2.0.0-beta.220_ohumfzynigfck3hzagxvh2a4ky
       '@types/showdown': 2.0.0
-      '@types/turndown': 5.0.1
       '@vercel/analytics': 0.1.6_react@18.2.0
       boring-avatars: 1.7.0
       class-variance-authority: 0.4.0_typescript@4.8.4
@@ -166,7 +161,6 @@ importers:
       react-use-measure: 2.1.1_biqbaboplfbrettd7655fr4n2y
       showdown: 2.1.0
       tippy.js: 6.3.7
-      turndown: 7.1.1
       undici: 5.11.0
       wagmi: 0.10.4_alnjoy2yz3ld5jj2ozbquoyrju
     devDependencies:
@@ -3305,17 +3299,6 @@ packages:
       '@testing-library/dom': 8.19.1
     dev: true
 
-  /@tiptap-pro/extension-unique-id/2.0.0-beta.237_ohumfzynigfck3hzagxvh2a4ky:
-    resolution: {integrity: sha512-nxh03M5ZgVwSOEgb+6+eNl5jjH6e19bWZPkaCZM/b8Ge3rrQunX9QTdUnHF/EAiGz/nXLf5PWGsPwhNQlI6B7Q==}
-    peerDependencies:
-      '@tiptap/core': ^2.0.0-beta.217
-      '@tiptap/pm': ^2.0.0-beta.217
-    dependencies:
-      '@tiptap/core': 2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220
-      '@tiptap/pm': 2.0.0-beta.220_7w7m52asdh3tod4ocz57yex63q
-      uuid: 8.3.2
-    dev: false
-
   /@tiptap/core/2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220:
     resolution: {integrity: sha512-F2Q666xJqijBU5o+GqekqseNgIEMTs6BhsLDaf9DwThhljGLS8RXKnSvQxrxLNrYEPpw39n/G3Qt8YAOk5qR6w==}
     peerDependencies:
@@ -4067,10 +4050,6 @@ packages:
 
   /@types/throttle-debounce/2.1.0:
     resolution: {integrity: sha512-5eQEtSCoESnh2FsiLTxE121IiE60hnMqcb435fShf4bpLRjEu1Eoekht23y6zXS9Ts3l+Szu3TARnTsA0GkOkQ==}
-    dev: false
-
-  /@types/turndown/5.0.1:
-    resolution: {integrity: sha512-N8Ad4e3oJxh9n9BiZx9cbe/0M3kqDpOTm2wzj13wdDUxDPjfjloWIJaquZzWE1cYTAHpjOH3rcTnXQdpEfS/SQ==}
     dev: false
 
   /@types/underscore/1.11.4:
@@ -7848,10 +7827,6 @@ packages:
       webidl-conversions: 7.0.0
     dev: true
 
-  /domino/2.1.6:
-    resolution: {integrity: sha512-3VdM/SXBZX2omc9JF9nOPCtDaYQ67BGp5CoLpIQlO2KCAPETs8TcDHacF26jXadGbvUteZzRTeos2fhID5+ucQ==}
-    dev: false
-
   /dotenv/16.0.1:
     resolution: {integrity: sha512-1K6hR6wtk2FviQ4kEiSjFiH5rpzEVi8WW0x96aztHVMhEspNpc4DVOUTEHtEva5VThQ8IaBX1Pe4gSzpVVUsKQ==}
     engines: {node: '>=12'}
@@ -10180,6 +10155,18 @@ packages:
         optional: true
     dependencies:
       debug: 4.3.1
+    dev: true
+
+  /follow-redirects/1.15.1_debug@4.3.4:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dependencies:
+      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:
@@ -16153,7 +16140,7 @@ packages:
     dependencies:
       command-exists: 1.2.9
       commander: 3.0.2
-      follow-redirects: 1.15.1_debug@4.3.1
+      follow-redirects: 1.15.1_debug@4.3.4
       fs-extra: 0.30.0
       js-sha3: 0.8.0
       memorystream: 0.3.1
@@ -17486,12 +17473,6 @@ packages:
       turbo-windows-64: 1.4.6
       turbo-windows-arm64: 1.4.6
     dev: true
-
-  /turndown/7.1.1:
-    resolution: {integrity: sha512-BEkXaWH7Wh7e9bd2QumhfAXk5g34+6QUmmWx+0q6ThaVOLuLUqsnkq35HQ5SBHSaxjSfSM7US5o4lhJNH7B9MA==}
-    dependencies:
-      domino: 2.1.6
-    dev: false
 
   /tweetnacl-util/0.15.1:
     resolution: {integrity: sha512-RKJBIj8lySrShN4w6i/BonWp2Z/uxwC3h4y7xsRrpP59ZboCd0GpEVsOnMDYLMmKBpYhb5TgHzZXy7wTfYFBRw==}

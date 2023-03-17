@@ -1,4 +1,3 @@
-import UniqueID from '@tiptap-pro/extension-unique-id';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
@@ -7,6 +6,7 @@ import { SquareButton } from '~/modules/design-system/button';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
 import { TableNode } from './table-node';
+import { UUIDExtension } from './uuid-extension';
 
 interface Props {
   editable?: boolean;
@@ -26,9 +26,7 @@ export const tiptapExtensions = [
       return '/ to select content block or write some content...';
     },
   }),
-  UniqueID.configure({
-    types: ['tableNode', 'paragraph', 'heading'],
-  }),
+  UUIDExtension,
 ];
 
 export const Editor = ({ editable = true }: Props) => {
@@ -48,7 +46,7 @@ export const Editor = ({ editable = true }: Props) => {
     },
     [
       editable,
-      !!content,
+      content,
     ] /* Only set the editor's content once when editable content becomes available or when the editor switches editable states */
   );
 

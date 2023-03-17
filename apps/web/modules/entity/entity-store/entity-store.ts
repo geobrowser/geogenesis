@@ -535,11 +535,30 @@ export class EntityStore implements IEntityStore {
   updateEditorBlocks = (editor: Editor) => {
     const { content = [] } = editor.getJSON();
 
-    const blockIds = content.map(node => node.attrs?.id);
+    console.log('original content: ', content);
+
+    const populatedContent = content
+      .filter(node => {
+        const isNonParagraph = node.type !== 'paragraph';
+        const isParagraphWithContent =
+          node.type === 'paragraph' && node.content && node.content.length > 0 && node.content[0].text;
+
+        return isNonParagraph || isParagraphWithContent;
+      })
+      .map(node => ({
+        ...node,
+        attrs: {
+          ...node.attrs,
+          id: node.attrs?.id || ID.createEntityId(),
+        },
+      }));
+
+    console.log(populatedContent);
+    const blockIds = populatedContent.map(node => node.attrs?.id);
     batch(() => {
       this.upsertBlocksTriple(blockIds);
 
-      content.forEach(node => {
+      populatedContent.forEach(node => {
         this.createParentEntityTriple(node);
         this.createBlockRowTypeTriple(node);
         this.createBlockTypeTriple(node);
