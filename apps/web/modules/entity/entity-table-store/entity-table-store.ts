@@ -222,7 +222,6 @@ export class EntityTableStore implements IEntityTableStore {
             abortController: this.abortController,
           });
 
-          // @TODO pass proper `entityId` value here
           const [orderBy, orderDirection] = await this.api.fetchSort({
             entityId: String(selectedType?.entityId),
           });

@@ -74,16 +74,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  // @TODO pass proper `entityId` value here
-  const [orderBy, orderDirection] = await network.fetchSort({ entityId: 'b60da185-ddcd-43e0-aeac-2e01cf1e638d' });
-
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
     fetchForeignTypeTriples(network, spaceId),
     network.fetchTriples({
       query: '',
-      orderBy,
-      orderDirection,
       skip: 0,
       first: DEFAULT_PAGE_SIZE,
       filter: [
@@ -116,6 +111,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     spaceId,
     params,
   });
+
+  const [orderBy, orderDirection] = await network.fetchSort({ entityId: initialSelectedType?.entityId });
 
   const { rows: serverRows } = await network.rows({
     spaceId,

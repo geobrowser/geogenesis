@@ -254,9 +254,6 @@ export class Network implements INetwork {
 
     const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
 
-    // @TODO remove console.info
-    console.info('triples:', triples);
-
     return { triples };
   };
 
@@ -670,8 +667,8 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
 }
 
 function getSortFromEntity(geoEntity: any) {
-  const sortBy = geoEntity.entityOf.find((item: any) => item.attribute.name === 'Sort By')?.stringValue;
-  const sortDirection = geoEntity.entityOf.find((item: any) => item.attribute.name === 'Sort Direction')?.stringValue;
+  const sortBy = geoEntity?.entityOf?.find((item: any) => item.attribute.name === 'Sort By')?.stringValue;
+  const sortDirection = geoEntity?.entityOf?.find((item: any) => item.attribute.name === 'Sort Direction')?.stringValue;
 
   return [sortBy, sortDirection];
 }
