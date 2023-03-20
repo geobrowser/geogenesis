@@ -47,20 +47,32 @@ export const TableNode = Node.create({
 export const TableNodeComponent = React.memo(function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId } = node.attrs;
 
-  /* Warning: A bit unwieldy, but less code needed: useEntityTable pulls from the parent EntityTableStoreProvider context which contains all of the types  */
   const { types } = useEntityTable();
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId) as Triple;
-  }, [types, typeId]);
+  }, [types.length, typeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Setting "types.length" rather than types as a dependency to prevent excessive rerendering */
 
   return (
     <NodeViewWrapper className="react-component-with-content">
       <div contentEditable="false">
-        <EntityTableStoreProvider spaceId={spaceId} initialSelectedType={selectedType}>
-          <EntityTableContainer showHeader={false} spaceId={spaceId} spaceName={''} />
-        </EntityTableStoreProvider>
+        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} />
       </div>
     </NodeViewWrapper>
+  );
+});
+
+export const TableNodeChildren = React.memo(function TableNodeComponent({
+  spaceId,
+  selectedType,
+}: {
+  spaceId: string;
+  selectedType: Triple;
+}) {
+  return (
+    <EntityTableStoreProvider spaceId={spaceId} initialSelectedType={selectedType}>
+      <EntityTableContainer showHeader={false} spaceId={spaceId} spaceName={''} />
+    </EntityTableStoreProvider>
   );
 });

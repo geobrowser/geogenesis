@@ -5,8 +5,8 @@ import StarterKit from '@tiptap/starter-kit';
 import { SquareButton } from '~/modules/design-system/button';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
+import { IdExtension } from './id-extension';
 import { TableNode } from './table-node';
-import { UUIDExtension } from './uuid-extension';
 
 interface Props {
   editable?: boolean;
@@ -19,14 +19,11 @@ export const tiptapExtensions = [
   Image,
   Placeholder.configure({
     placeholder: ({ node }) => {
-      if (node.type.name === 'heading') {
-        return 'Heading...';
-      }
-
-      return '/ to select content block or write some content...';
+      const isHeading = node.type.name === 'heading';
+      return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
-  UUIDExtension,
+  IdExtension,
 ];
 
 export const Editor = ({ editable = true }: Props) => {
@@ -41,11 +38,7 @@ export const Editor = ({ editable = true }: Props) => {
         entityStore.updateEditorBlocks(editor);
       },
     },
-    [editable, entityStore.editorJson] /* 
-    Only set the editor's content once when editable content becomes available or when the editor switches editable states
-    Because the entity-store sets the ID attribute of the editor's content, we need to re-render the editor when the editorJson changes
-    so we don't create generate new IDs and triples for the same content
-    */
+    [editable]
   );
 
   return editor ? (
