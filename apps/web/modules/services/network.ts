@@ -56,13 +56,6 @@ export type FetchEntitiesOptions = {
   abortController?: AbortController;
 };
 
-export type FetchEntitiesOptions = {
-  query?: string;
-  space?: string;
-  filter: FilterState;
-  abortController?: AbortController;
-};
-
 export type PublishOptions = {
   signer: Signer;
   actions: Action[];
@@ -70,7 +63,7 @@ export type PublishOptions = {
   onChangePublishState: (newState: ReviewState) => void;
 };
 
-type FetchSortResult = [string, OrderDirection];
+export type FetchSortResult = [string, OrderDirection];
 
 type FetchTriplesResult = { triples: TripleType[] };
 
@@ -145,16 +138,6 @@ export class Network implements INetwork {
 
     onChangePublishState('signing-wallet');
     await addEntries(contract, cids, () => onChangePublishState('publishing-contract'));
-  };
-
-  uploadFile = async (file: File): Promise<string> => {
-    const fileUri = await this.storageClient.uploadFile(file);
-    return fileUri;
-  };
-
-  fetchProfile = async (address: string, abortController?: AbortController): Promise<null> => {
-    /* Stub function */
-    return null;
   };
 
   uploadFile = async (file: File): Promise<string> => {
@@ -686,9 +669,9 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
   return eventObject;
 }
 
-function getSortFromEntity(geoEntity) {
-  const sortBy = geoEntity.entityOf.find(item => item.attribute.name === 'Sort By').stringValue;
-  const sortDirection = geoEntity.entityOf.find(item => item.attribute.name === 'Sort Direction').stringValue;
+function getSortFromEntity(geoEntity: any) {
+  const sortBy = geoEntity.entityOf.find((item: any) => item.attribute.name === 'Sort By')?.stringValue;
+  const sortDirection = geoEntity.entityOf.find((item: any) => item.attribute.name === 'Sort Direction')?.stringValue;
 
   return [sortBy, sortDirection];
 }

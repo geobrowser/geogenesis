@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 
 import { Triple } from '../types';
-import { FetchTriplesOptions, INetwork } from './network';
+import type { FetchTriplesOptions, INetwork, FetchSortResult } from './network';
 
 export const makeStubTriple = (name: string): Triple => {
   return {
@@ -77,6 +77,10 @@ export class MockNetwork implements INetwork {
   constructor({ triples = [] }: { triples: Triple[] } = { triples: [] }) {
     this.triples = triples;
   }
+
+  fetchSort = async () => {
+    return ['', 'asc'] as FetchSortResult;
+  };
 
   fetchTriples = async ({ skip, first }: FetchTriplesOptions) => {
     const triples = this.triples.slice(skip, skip + first);

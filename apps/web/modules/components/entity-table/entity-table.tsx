@@ -13,7 +13,6 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
-import { useState } from 'react';
 
 import { useEditEvents } from '../entity/edit-events';
 import { useActionsStoreContext } from '~/modules/action';
@@ -210,7 +209,7 @@ export function EntityTable({ rows, space, columns }: Props) {
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => {
-                const by = String(header?.column?.columnDef?.header?.()?.props?.children ?? '').toLowerCase();
+                const by = getBy(header);
 
                 return (
                   <th
@@ -306,3 +305,7 @@ export function EntityTable({ rows, space, columns }: Props) {
     </div>
   );
 }
+
+const getBy = (header: any) => {
+  return String(header?.column?.columnDef?.header?.()?.props?.children ?? '').toLowerCase();
+};

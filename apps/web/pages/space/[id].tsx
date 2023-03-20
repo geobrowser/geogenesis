@@ -77,9 +77,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   // @TODO pass proper `entityId` value here
   const [orderBy, orderDirection] = await network.fetchSort({ entityId: 'b60da185-ddcd-43e0-aeac-2e01cf1e638d' });
 
-  // @TODO pass proper `entityId` value here
-  const [orderBy, orderDirection] = await network.fetchSort({ entityId: 'b60da185-ddcd-43e0-aeac-2e01cf1e638d' });
-
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
     fetchForeignTypeTriples(network, spaceId),
