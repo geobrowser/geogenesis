@@ -3,8 +3,6 @@ import { useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Analytics } from '@vercel/analytics/react';
-import { configureObservablePersistence } from '@legendapp/state/persist';
-import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
 import type { AppProps } from 'next/app';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -22,11 +20,6 @@ import { Review } from '~/modules/components/review';
 
 import '../styles/fonts.css';
 import '../styles/styles.css';
-
-// Enable localStorage persistence
-configureObservablePersistence({
-  persistLocal: ObservablePersistLocalStorage,
-});
 
 function Root(props: AppProps) {
   return (

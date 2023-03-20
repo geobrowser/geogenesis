@@ -1,6 +1,7 @@
 import { Observable, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { persistObservable } from '@legendapp/state/persist';
+import { persistObservable, configureObservablePersistence } from '@legendapp/state/persist';
+import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
 
 import { Action } from '.';
 import { INetwork } from '../services/network';
@@ -33,6 +34,11 @@ interface IActionsStoreConfig {
 
 export type SpaceId = string;
 export type SpaceActions = Record<SpaceId, ActionType[]>;
+
+// Configure localStorage persistence
+configureObservablePersistence({
+  persistLocal: ObservablePersistLocalStorage,
+});
 
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
