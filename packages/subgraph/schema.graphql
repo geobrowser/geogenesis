@@ -56,7 +56,6 @@ type GeoEntity @entity {
   name: String
 
   typeIds: [String!]! # Maybe we want to make this non nullable? I think it's better like this though
-
   """
   This may not be performant. We can do all the same queries
   via triples(where: { entity: $id })) if needed.

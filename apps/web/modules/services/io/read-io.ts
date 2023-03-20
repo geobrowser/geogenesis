@@ -2,7 +2,7 @@ import { fromNetworkActions, NetworkVersion } from '../network-local-mapping';
 
 export function ReadIO(subgraphUrl: string) {
   return {
-    versions: async (entityId: string, abortController?: AbortController) => {
+    proposedVersions: async (entityId: string, abortController?: AbortController) => {
       const response = await fetch(subgraphUrl, {
         method: 'POST',
         headers: {
@@ -11,7 +11,7 @@ export function ReadIO(subgraphUrl: string) {
         signal: abortController?.signal,
         body: JSON.stringify({
           query: `query {
-            versions(where: {proposedVersion_: {entity: ${JSON.stringify(entityId)}}}) {
+            proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, first: 10, sortBy: createdAt, orderDirection: desc) {
               id
               name
               createdAt
@@ -45,15 +45,13 @@ export function ReadIO(subgraphUrl: string) {
 
       const json: {
         data: {
-          versions: NetworkVersion[];
+          proposedVersions: NetworkVersion[];
         };
         errors: any[];
       } = await response.json();
 
       try {
-        console.log('json', { json });
-
-        return json.data.versions.map(v => {
+        return json.data.proposedVersions.map(v => {
           return {
             ...v,
             actions: fromNetworkActions(v.actions),

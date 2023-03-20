@@ -114,7 +114,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    ReadIO(config.subgraph).versions(entityId),
+    ReadIO(config.subgraph).proposedVersions(entityId),
   ]);
 
   const relatedEntities = await Promise.all(

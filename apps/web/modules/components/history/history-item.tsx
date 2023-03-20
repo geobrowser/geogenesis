@@ -1,7 +1,7 @@
 import Avatar from 'boring-avatars';
 import pluralize from 'pluralize';
+import { Action } from '~/modules/action';
 import { Text } from '~/modules/design-system/text';
-import { Triple } from '~/modules/triple';
 import { Version } from '~/modules/types';
 import { formatShortAddress, GeoDate } from '~/modules/utils';
 
@@ -12,7 +12,7 @@ interface Props {
 export function HistoryItem({ version }: Props) {
   // @TODO: Make sure the actions are squashed, unique. This component may have changes
   // for an entire space or just for a single entity.
-  const uniqueTripleChanges = Triple.fromActions(version.actions, []).length;
+  const uniqueTripleChanges = Action.getChangeCount(version.actions);
   const lastEditedDate = GeoDate.fromGeoTime(version.createdAt);
   const versionName =
     version.name ??
