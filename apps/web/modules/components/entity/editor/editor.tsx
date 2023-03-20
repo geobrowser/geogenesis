@@ -32,22 +32,20 @@ export const tiptapExtensions = [
 export const Editor = ({ editable = true }: Props) => {
   const entityStore = useEntityStore();
 
-  // Content must be undefined for TipTap to show the initial placeholder
-  const content = entityStore.editorJson?.content?.length ? entityStore.editorJson : undefined;
-
   const editor = useEditor(
     {
       extensions: tiptapExtensions,
       editable: editable,
-      content,
+      content: entityStore.editorJson,
       onBlur({ editor }) {
         entityStore.updateEditorBlocks(editor);
       },
     },
-    [
-      editable,
-      content,
-    ] /* Only set the editor's content once when editable content becomes available or when the editor switches editable states */
+    [editable, entityStore.editorJson] /* 
+    Only set the editor's content once when editable content becomes available or when the editor switches editable states
+    Because the entity-store sets the ID attribute of the editor's content, we need to re-render the editor when the editorJson changes
+    so we don't create generate new IDs and triples for the same content
+    */
   );
 
   return editor ? (

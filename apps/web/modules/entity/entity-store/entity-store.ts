@@ -162,7 +162,7 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
-      return {
+      const json = {
         type: 'doc',
         content: blockIds.map(blockId => {
           const markdownTriple = blockTriples.find(
@@ -199,6 +199,20 @@ export class EntityStore implements IEntityStore {
           }
         }),
       };
+
+      if (json.content.length === 0) {
+        json.content.push({
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: '',
+            },
+          ],
+        });
+      }
+
+      return json;
     });
 
     /*
@@ -534,8 +548,6 @@ export class EntityStore implements IEntityStore {
   /* Iterate over the content's of a TipTap editor to create or update triple blocks */
   updateEditorBlocks = (editor: Editor) => {
     const { content = [] } = editor.getJSON();
-
-    console.log('original content: ', content);
 
     const populatedContent = content
       .filter(node => {

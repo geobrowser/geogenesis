@@ -10,6 +10,7 @@ export const UUIDExtension = Extension.create({
         attributes: {
           id: {
             default: null,
+            keepOnSplit: false,
           },
         },
       },
