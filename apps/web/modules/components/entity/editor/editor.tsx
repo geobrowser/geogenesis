@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { SquareButton } from '~/modules/design-system/button';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
+import { removeIdAttributes } from './editor-utils';
 import { IdExtension } from './id-extension';
 import { TableNode } from './table-node';
 
@@ -36,6 +37,9 @@ export const Editor = ({ editable = true }: Props) => {
       content: entityStore.editorJson,
       onBlur({ editor }) {
         entityStore.updateEditorBlocks(editor);
+      },
+      editorProps: {
+        transformPastedHTML: html => removeIdAttributes(html),
       },
     },
     [editable]
