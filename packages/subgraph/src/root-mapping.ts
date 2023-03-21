@@ -14,23 +14,36 @@ import { getChecksumAddress } from './get-checksum-address'
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
+  const createdAtTimestamp = event.block.timestamp
 
-  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
+  bootstrapRootSpace(
+    address,
+    createdAtBlock,
+    createdAtTimestamp,
+    event.transaction.from
+  )
 
   addEntry({
     space: address,
     index: event.params.index,
     uri: event.params.uri,
-    author: event.params.author,
+    createdBy: event.params.author,
     createdAtBlock,
+    createdAtTimestamp: event.block.timestamp,
   })
 }
 
 export function handleRoleGranted(event: RoleGranted): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
+  const createdAtTimestamp = event.block.timestamp
 
-  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
+  bootstrapRootSpace(
+    address,
+    createdAtBlock,
+    createdAtTimestamp,
+    event.transaction.from
+  )
 
   addRole({
     space: address,
@@ -42,8 +55,14 @@ export function handleRoleGranted(event: RoleGranted): void {
 export function handleRoleRevoked(event: RoleRevoked): void {
   const address = getChecksumAddress(event.address)
   const createdAtBlock = event.block.number
+  const createdAtTimestamp = event.block.timestamp
 
-  bootstrapRootSpace(address, createdAtBlock, event.transaction.from)
+  bootstrapRootSpace(
+    address,
+    createdAtBlock,
+    createdAtTimestamp,
+    event.transaction.from
+  )
 
   removeRole({
     space: getChecksumAddress(event.address),
@@ -55,11 +74,17 @@ export function handleRoleRevoked(event: RoleRevoked): void {
 function bootstrapRootSpace(
   address: string,
   createdAtBlock: BigInt,
+  createdAtTimestamp: BigInt,
   author: Address
 ): void {
   if (!Space.load(address)) {
     log.debug(`Bootstrapping space registry!`, [])
-    bootstrapRootSpaceCoreTypes(address, createdAtBlock, author)
+    bootstrapRootSpaceCoreTypes(
+      address,
+      createdAtBlock,
+      createdAtTimestamp,
+      author
+    )
     handleSpaceAdded(address, true, createdAtBlock, null)
   }
 }

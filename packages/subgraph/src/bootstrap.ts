@@ -21,10 +21,12 @@ import {
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
+  getOrCreateActionCount,
   handleAction,
   handleCreateEntityAction,
   handleCreateTripleAction,
 } from './actions'
+import { getOrCreateProposal } from './add-entry'
 
 const entities: string[] = [
   TYPES,
@@ -91,9 +93,14 @@ const types: Tuple<string, string[]>[] = [
 export function bootstrapRootSpaceCoreTypes(
   space: string,
   createdAtBlock: BigInt,
+  createdAtTimestamp: BigInt,
   author: Address
 ): void {
   log.debug(`Bootstrapping root space ${space}!`, [])
+
+  const proposalId = getOrCreateActionCount().count.toString()
+
+  getOrCreateProposal(proposalId, author.toString(), createdAtTimestamp)
 
   /* Create all of our entities */
   for (let i = 0; i < entities.length; i++) {
@@ -101,7 +108,9 @@ export function bootstrapRootSpaceCoreTypes(
       new CreateEntityAction(entities[i]),
       space,
       createdAtBlock,
-      author
+      author,
+      proposalId,
+      createdAtTimestamp
     )
   }
 
@@ -115,7 +124,9 @@ export function bootstrapRootSpaceCoreTypes(
       ),
       space,
       createdAtBlock,
-      author
+      author,
+      proposalId,
+      createdAtTimestamp
     )
   }
 
@@ -129,7 +140,9 @@ export function bootstrapRootSpaceCoreTypes(
       ),
       space,
       createdAtBlock,
-      author
+      author,
+      proposalId,
+      createdAtTimestamp
     )
 
     /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
@@ -141,7 +154,9 @@ export function bootstrapRootSpaceCoreTypes(
       ),
       space,
       createdAtBlock,
-      author
+      author,
+      proposalId,
+      createdAtTimestamp
     )
   }
 
@@ -155,7 +170,9 @@ export function bootstrapRootSpaceCoreTypes(
       ),
       space,
       createdAtBlock,
-      author
+      author,
+      proposalId,
+      createdAtTimestamp
     )
 
     /* Each type can have a set of attributes */
@@ -168,7 +185,9 @@ export function bootstrapRootSpaceCoreTypes(
         ),
         space,
         createdAtBlock,
-        author
+        author,
+        proposalId,
+        createdAtTimestamp
       )
     }
   }

@@ -21,6 +21,7 @@ import {
   Account,
   Action as ActionEntity,
   ActionCount,
+  Proposal,
 } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { createTripleId } from './id'
@@ -92,16 +93,22 @@ function createProposedVersion(
   createdAt: BigInt,
   actions: string[],
   entityId: string,
-  authorId: Address
+  createdBy: Address,
+  proposalId: string
 ): ProposedVersion {
   let version = ProposedVersion.load(versionId)
   if (version == null) {
     version = new ProposedVersion(versionId)
-    version.author = getOrCreateAccount(authorId).id
+    version.createdBy = getOrCreateAccount(createdBy).id
     version.actions = actions // action ids
     version.entity = entityId
     version.createdAt = createdAt
     version.save()
+  }
+  let proposal = Proposal.load(proposalId)
+  if (proposal != null) {
+    proposal.proposedVersions = proposal.proposedVersions.concat([versionId])
+    proposal.save()
   }
   return version
 }
@@ -120,14 +127,14 @@ function createVersion(
   proposedVersion: string,
   createdAt: BigInt,
   entityId: string,
-  authorId: Address
+  createdBy: Address
 ): Version {
   let version = Version.load(versionId)
   let proposed = ProposedVersion.load(proposedVersion)
   let entity = getOrCreateEntity(entityId)
   if (version == null) {
     version = new Version(versionId)
-    version.author = getOrCreateAccount(authorId).id
+    version.createdBy = getOrCreateAccount(createdBy).id
     if (entity != null) {
       if (entity.versions.length == 0 && proposed != null) {
         version.proposedVersion = proposed.id
@@ -248,7 +255,7 @@ export function handleCreateTripleAction(
   log.debug(`ACTION: Created triple: ${triple.id}`, [])
 }
 
-function getOrCreateActionCount(): ActionCount {
+export function getOrCreateActionCount(): ActionCount {
   let actionCount = ActionCount.load('1')
   if (actionCount == null) {
     actionCount = new ActionCount('1')
@@ -350,9 +357,14 @@ export function handleAction(
   action: Action,
   space: string,
   createdAtBlock: BigInt,
-  author: Address
+  createdBy: Address,
+  proposalId: string = '',
+  createdAt: BigInt = BigInt.fromI32(0)
 ): void {
   const createTripleAction = action.asCreateTripleAction()
+  // ~~~~~~~~~~~~~~~~~~~~
+  // CREATE TRIPLE ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   if (createTripleAction) {
     handleCreateTripleAction({
       fact: createTripleAction,
@@ -397,21 +409,25 @@ export function handleAction(
     )
     let proposed = createProposedVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
-      createdAtBlock,
+      createdAt,
       [action.id],
       entityId,
-      author
+      createdBy,
+      proposalId
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
-      createdAtBlock,
+      createdAt,
       entityId,
-      author
+      createdBy
     )
     return
   }
 
+  // ~~~~~~~~~~~~~~~~~~~~
+  // DELETE TRIPLE ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   const deleteTripleAction = action.asDeleteTripleAction()
   if (deleteTripleAction) {
     handleDeleteTripleAction(deleteTripleAction, space)
@@ -457,18 +473,22 @@ export function handleAction(
       createdAtBlock,
       [action.id],
       entityId,
-      author
+      createdBy,
+      proposalId
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
       createdAtBlock,
       entityId,
-      author
+      createdBy
     )
     return
   }
 
+  // ~~~~~~~~~~~~~~~~~~~~
+  // CREATE ENTITY ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   const createEntityAction = action.asCreateEntityAction()
   if (createEntityAction) {
     handleCreateEntityAction(createEntityAction)
@@ -483,14 +503,15 @@ export function handleAction(
       createdAtBlock,
       [action.id],
       entityId,
-      author
+      createdBy,
+      proposalId
     )
     let version = createVersion(
       entityId + '-' + getOrCreateActionCount().count.toString(),
       proposed.id,
       createdAtBlock,
       entityId,
-      author
+      createdBy
     )
     return
   }

@@ -2,8 +2,12 @@ import { Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Address, BigInt, Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
-import { LogEntry } from '../generated/schema'
-import { handleAction } from './actions'
+import { LogEntry, Proposal } from '../generated/schema'
+import {
+  getOrCreateAction,
+  getOrCreateActionCount,
+  handleAction,
+} from './actions'
 
 const IPFS_URI_SCHEME = 'ipfs://'
 
@@ -11,20 +15,24 @@ class EntryParams {
   index: BigInt
   space: string
   uri: string
-  author: Address
+  createdBy: Address
   createdAtBlock: BigInt
+  createdAtTimestamp: BigInt
 }
 
 export function addEntry(params: EntryParams): void {
   const space = params.space
   const id = `${space}:${params.index.toHex()}`
   const uri = params.uri
-  const author = params.author
+  const createdBy = params.createdBy
   const createdAtBlock = params.createdAtBlock
+  const createdAtTimestamp = params.createdAtTimestamp
+    ? params.createdAtTimestamp
+    : BigInt.fromI32(0)
 
   let entry = new LogEntry(id)
 
-  entry.author = author
+  entry.createdBy = createdBy
   entry.uri = uri
   entry.space = space
   entry.createdAtBlock = createdAtBlock
@@ -41,7 +49,13 @@ export function addEntry(params: EntryParams): void {
       entry.decoded = bytes
 
       if (entry.mimeType == 'application/json') {
-        const root = handleActionData(bytes, space, createdAtBlock, author)
+        const root = handleActionData(
+          bytes,
+          space,
+          createdAtBlock,
+          createdBy,
+          createdAtTimestamp
+        )
 
         if (root) {
           entry.json = root.toJSON().toString()
@@ -55,7 +69,13 @@ export function addEntry(params: EntryParams): void {
     if (bytes) {
       entry.decoded = bytes
 
-      const root = handleActionData(bytes, space, createdAtBlock, author)
+      const root = handleActionData(
+        bytes,
+        space,
+        createdAtBlock,
+        createdBy,
+        createdAtTimestamp
+      )
 
       if (root) {
         entry.json = root.toJSON().toString()
@@ -72,7 +92,8 @@ function handleActionData(
   bytes: Bytes,
   space: string,
   createdAtBlock: BigInt,
-  author: Address
+  createdBy: Address,
+  createdAtTimestamp: BigInt
 ): Root | null {
   const json = JSON.parse(bytes)
 
@@ -80,20 +101,51 @@ function handleActionData(
 
   if (!root) return null
 
-  handleRoot(root, space, createdAtBlock, author)
+  handleRoot(root, space, createdAtBlock, createdBy, createdAtTimestamp)
 
   // Return decoded root for debugging purposes
   return root
+}
+
+export function getOrCreateProposal(
+  id: string,
+  createdBy: string,
+  createdAt: BigInt
+): Proposal {
+  let proposal = Proposal.load(id)
+  if (!proposal) {
+    proposal = new Proposal(id)
+    proposal.status = 'APPROVED' // NOTE Hardcoding this until we have a governance mechanism
+    proposal.createdAt = createdAt
+    proposal.createdBy = createdBy
+    proposal.proposedVersions = []
+    proposal.save()
+  }
+  return proposal as Proposal
 }
 
 function handleRoot(
   root: Root,
   space: string,
   createdAtBlock: BigInt,
-  author: Address
+  createdBy: Address,
+  createdAtTimestamp: BigInt
 ): void {
+  const proposalId = getOrCreateActionCount().count.toString()
+
+  // create a proposal entity
+  getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
+
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
-    handleAction(action, space, createdAtBlock, author)
+    // modify this to add the proposed action to the proposal entity
+    handleAction(
+      action,
+      space,
+      createdAtBlock,
+      createdBy,
+      proposalId,
+      createdAtTimestamp
+    )
   }
 }

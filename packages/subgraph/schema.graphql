@@ -32,7 +32,7 @@ type LogEntry @entity {
   id: ID!
   createdAtBlock: BigInt!
   uri: String!
-  author: Bytes!
+  createdBy: Bytes!
   mimeType: String
 
   space: Space!
@@ -73,6 +73,16 @@ enum ProposalStatus {
   CANCELED
 }
 
+type Proposal @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  status: ProposalStatus! # status of the proposal
+  createdAt: BigInt! # block timestamp
+  proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal
+}
+
 type ActionCount @entity {
   id: ID! #always 1
   count: BigInt!
@@ -82,9 +92,9 @@ type ProposedVersion @entity {
   id: ID!
   name: String
   description: String
-  author: Account
+  createdBy: Account
   entity: GeoEntity! # entity we are describing
-  createdAt: BigInt! # block number
+  createdAt: BigInt! # block timestamp
   actions: [Action!]! # All actions to be taken if this version is finalized
 }
 
@@ -92,8 +102,8 @@ type Version @entity {
   id: ID!
   name: String
   description: String
-  author: Account
-  createdAt: BigInt! # block number
+  createdBy: Account
+  createdAt: BigInt! # block timestamp
   proposedVersion: ProposedVersion! # the proposed version that was finalized to make this entity
   actions: [Action!]! # All actions taken from genesis to this version
 }
