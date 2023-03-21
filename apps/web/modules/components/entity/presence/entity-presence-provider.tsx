@@ -37,7 +37,7 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   if (import.meta?.env) return null;
 
   return (
-    <EntityPresenceErrorBoundary>
+    <EntityPresenceErrorBoundary entityId={entityId} spaceId={spaceId}>
       <EntityPresenceContext.RoomProvider
         id={entityId}
         initialPresence={{ address: account.address, hasChangesToEntity: false }}
@@ -72,14 +72,16 @@ interface EntityPresenceErrorBoundaryState {
 
 interface EntityPresenceErrorBoundaryProps {
   children: React.ReactNode;
+  entityId: string;
+  spaceId: string;
 }
 
 export class EntityPresenceErrorBoundary extends Component<
   EntityPresenceErrorBoundaryProps,
   EntityPresenceErrorBoundaryState
 > {
-  constructor({ children }: Props) {
-    super({ children });
+  constructor(props: Props) {
+    super(props);
     this.state = { hasError: false };
   }
 
@@ -88,7 +90,11 @@ export class EntityPresenceErrorBoundary extends Component<
   }
 
   componentDidCatch(error: any, errorInfo: any) {
-    console.error('Error in EntityPresenceErrorBoundary', error, errorInfo);
+    console.error(
+      `Error in EntityPresenceErrorBoundary: entityId: ${this.props.entityId} spaceId: ${this.props.spaceId}`,
+      error,
+      errorInfo
+    );
   }
 
   render() {
