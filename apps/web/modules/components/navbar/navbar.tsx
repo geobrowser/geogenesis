@@ -1,6 +1,8 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
@@ -63,9 +65,8 @@ interface Props {
 }
 
 export function Navbar({ onSearchClick }: Props) {
-  const router = useRouter();
-  const asPath = router.asPath;
-  const components = asPath.split('/');
+  const asPath = usePathname();
+  const components = asPath?.split('/') ?? [];
   const { spaces } = useSpaces();
   const { pageName } = usePageName();
 

@@ -190,14 +190,19 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        triples: NetworkTriple[];
-      };
-    } = await response.json();
+    try {
+      const json: {
+        data: {
+          triples: NetworkTriple[];
+        };
+      } = await response.json();
 
-    const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
-    return { triples };
+      const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
+      return { triples };
+    } catch (e) {
+      console.error(e);
+      return { triples: [] };
+    }
   };
 
   fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {

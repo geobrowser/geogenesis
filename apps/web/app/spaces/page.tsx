@@ -1,26 +1,23 @@
 import * as React from 'react';
-import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Card } from '~/modules/design-system/card';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { Space } from '~/modules/types';
+import { getConfig } from '~/modules/config/config';
 
-interface Props {
-  spaces: Space[];
-}
-
-export default function Spaces({ spaces }: Props) {
-  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
-  useLogRocket(rootSpaceId);
+export default async function Spaces() {
+  // const appCookies = cookies();
+  // const config = Params.getConfigFromUrl(context.resolvedUrl, appCookies.get(Params.ENV_PARAM_NAME)?.value);
+  const config = getConfig('137');
+  const storage = new StorageClient(config.ipfs);
+  const network = new Network(storage, config.subgraph);
+  const spaces = await network.fetchSpaces();
 
   return (
     <div>
@@ -53,16 +50,3 @@ export default function Spaces({ spaces }: Props) {
     </div>
   );
 }
-
-export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  const storage = new StorageClient(config.ipfs);
-  const network = new Network(storage, config.subgraph);
-  const spaces = await network.fetchSpaces();
-
-  return {
-    props: {
-      spaces,
-    },
-  };
-};

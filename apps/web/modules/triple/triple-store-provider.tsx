@@ -1,6 +1,8 @@
+'use client';
+
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/router';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSelector } from '@legendapp/state/react';
 
 import { useActionsStoreContext } from '../action';
@@ -20,11 +22,8 @@ interface Props {
 export function TripleStoreProvider({ space, children, initialTriples }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
-  const router = useRouter();
-  const replace = useRef(router.replace);
-  const urlRef = useRef(router.asPath);
-
-  const basePath = router.asPath.split('?')[0];
+  const asPath = usePathname();
+  const urlRef = useRef(asPath ?? '');
 
   const store = useMemo(() => {
     const initialParams = Params.parseTripleQueryParameters(urlRef.current);
@@ -38,16 +37,10 @@ export function TripleStoreProvider({ space, children, initialTriples }: Props) 
   const filterState = useSelector<FilterState>(store.filterState$);
 
   // Update the url with query search params whenever query or page number changes
+  // @TODO: Add back url params for filterState in next 13
   useEffect(() => {
-    replace.current(
-      {
-        pathname: basePath,
-        query: Params.stringifyQueryParameters({ query, pageNumber, filterState }),
-      },
-      undefined,
-      { shallow: true, scroll: false }
-    );
-  }, [basePath, query, pageNumber, filterState]);
+    // replace.current(basePath);
+  }, []);
 
   return <TripleStoreContext.Provider value={store}>{children}</TripleStoreContext.Provider>;
 }
