@@ -5,7 +5,7 @@ import { Text } from '~/modules/design-system/text';
 import { SelectedEntityType, useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { TypeDialog } from '../../filter/type-dialog';
-import { CommandSuggestionItem } from './command-items';
+import { CommandSuggestionItem, tableCommandItem } from './command-items';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
@@ -26,16 +26,14 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<CommandListMode>('select-block');
 
-  const tableItem = items.find(item => item.title === 'Table') as CommandSuggestionItem;
-
   const handleTableSelect = (selectedType: SelectedEntityType) => {
-    command({ ...tableItem, selectedType: selectedType, spaceId: entityStore.spaceId });
+    command({ ...tableCommandItem, selectedType: selectedType, spaceId: entityStore.spaceId });
   };
 
   const invokeItem = (item: CommandSuggestionItem) => {
-    if (!item) {
-      return;
-    } else if (item.title === 'Table' && mode === 'select-block') {
+    const isTableMode = item.title === tableCommandItem.title && mode === 'select-block';
+
+    if (isTableMode) {
       setMode('select-table');
     } else {
       command(item);
@@ -57,7 +55,8 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
       }
 
       if (event.key === 'Enter') {
-        invokeItem(items[selectedIndex]);
+        const commandItem = items[selectedIndex];
+        if (commandItem) invokeItem(commandItem);
         return true;
       }
 

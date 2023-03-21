@@ -36,6 +36,7 @@ export const CommandExtension = Extension.create<{
 export const ConfiguredCommandExtension = CommandExtension.configure({
   suggestion: {
     items: ({ query }) => {
+      // Allows us to filter the suggestion items by typing immediately after opening the command menu
       return commandItems
         .filter(v => v.command)
         .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));

@@ -44,14 +44,14 @@ export const TableNode = Node.create({
   },
 });
 
-export const TableNodeComponent = React.memo(function TableNodeComponent({ node }: NodeViewRendererProps) {
+export const TableNodeComponent = function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId } = node.attrs;
 
   const { types } = useEntityTable();
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId) as Triple;
-  }, [types.length, typeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
   /* Setting "types.length" rather than types as a dependency to prevent excessive rerendering */
 
   return (
@@ -61,7 +61,7 @@ export const TableNodeComponent = React.memo(function TableNodeComponent({ node 
       </div>
     </NodeViewWrapper>
   );
-});
+};
 
 export const TableNodeChildren = React.memo(function TableNodeComponent({
   spaceId,

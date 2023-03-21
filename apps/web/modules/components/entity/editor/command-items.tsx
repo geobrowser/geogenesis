@@ -11,6 +11,27 @@ export interface CommandSuggestionItem {
   command: (props: { editor: Editor; range: Range; props?: any }) => void;
 }
 
+export const tableCommandItem: CommandSuggestionItem = {
+  icon: <EditorTable />,
+  title: 'Table',
+  command: ({ editor, range, props }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent({
+        type: 'tableNode',
+        attrs: {
+          typeId: props.selectedType.entityId,
+          typeName: props.selectedType.entityName,
+          spaceId: props.spaceId,
+        },
+      })
+      .createParagraphNear()
+      .run();
+  },
+};
+
 export const commandItems: CommandSuggestionItem[] = [
   {
     icon: <EditorText />,
@@ -40,24 +61,5 @@ export const commandItems: CommandSuggestionItem[] = [
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
     },
   },
-  {
-    icon: <EditorTable />,
-    title: 'Table',
-    command: ({ editor, range, props }) => {
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({
-          type: 'tableNode',
-          attrs: {
-            typeId: props.selectedType.entityId,
-            typeName: props.selectedType.entityName,
-            spaceId: props.spaceId,
-          },
-        })
-        .createParagraphNear()
-        .run();
-    },
-  },
+  tableCommandItem,
 ];
