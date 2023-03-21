@@ -144,6 +144,18 @@ export function handleCreateTripleAction(
     }
   }
 
+  const imageValue = fact.value.asImageValue()
+  if (imageValue) {
+    triple.valueType = 'IMAGE'
+    triple.valueId = imageValue.id
+    triple.stringValue = imageValue.value
+
+    log.debug(
+      `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${imageValue.value}`,
+      []
+    )
+  }
+
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
     if (attribute.id == TYPES) {

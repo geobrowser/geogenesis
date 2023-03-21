@@ -4,10 +4,12 @@ type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
 type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
 
+type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
+
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue;
+type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
 
 /**
  * Triple type returned by GraphQL
@@ -29,6 +31,8 @@ export function extractValue(networkTriple: NetworkTriple): Value {
   switch (networkTriple.valueType) {
     case 'STRING':
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
+    case 'IMAGE':
+      return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
     case 'ENTITY': {
@@ -60,6 +64,8 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
+    case 'IMAGE':
+      return !networkTriple.stringValue;
   }
 }
 

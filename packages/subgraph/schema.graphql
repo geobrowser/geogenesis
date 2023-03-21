@@ -87,4 +87,5 @@ enum ValueType {
   NUMBER
   STRING
   ENTITY
+  IMAGE
 }

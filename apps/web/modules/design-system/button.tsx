@@ -21,7 +21,8 @@ export const Button = forwardRef(function Button(
   const buttonClassNames = cva(
     [
       'relative inline-flex justify-center items-center border rounded focus:outline-none transition ease-in-out duration-200 tracking-[-0.17px] font-medium',
-      !small ? 'px-3 py-2 gap-2 text-[1.0625rem] leading-[1.125rem]' : 'px-1 py-0.5 gap-1.5 text-xs leading-none',
+      !small ? 'px-3 py-2 gap-2 text-[1.0625rem] leading-[1.125rem]' : 'px-1 py-1 gap-1.5 text-sm leading-none',
+      icon && small ? 'px-2' : '',
       !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
     ],
     {
