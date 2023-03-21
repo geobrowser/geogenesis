@@ -7,7 +7,7 @@ html {
 
 body {
   @apply bg-bg font-sans;
-  text-rendering: 'optimizeLegibility';
+  text-rendering: optimizeLegibility;
 }
 
 html body {
