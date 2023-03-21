@@ -1,10 +1,10 @@
 import { Metadata } from 'next';
 import { Providers } from '~/modules/providers';
 import { App } from './components/app.entry';
+import { calibre } from './styles/font';
 
 import 'react-medium-image-zoom/dist/styles.css';
-import '../styles/fonts.css';
-import '../styles/styles.css';
+import './styles/styles.css';
 
 interface Props {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ export const metadata: Metadata = {};
 
 export default function RootLayout({ children }: Props) {
   return (
-    <html lang="en">
+    <html lang="en" className={calibre.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Geo Genesis</title>
