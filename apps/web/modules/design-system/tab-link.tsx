@@ -9,15 +9,14 @@ type Props = React.ComponentPropsWithoutRef<'a'> & {
 
 export const TabLink = ({ isActive, href, className = '', ...rest }: Props) => {
   return (
-    <Link href={href}>
-      <a
-        className={cx(
-          isActive ? 'text-text' : 'text-grey-04',
-          'cursor-pointer text-mediumTitle outline-none hover:text-text',
-          className
-        )}
-        {...rest}
-      />
-    </Link>
+    <Link
+      href={href}
+      className={cx(
+        isActive ? 'text-text' : 'text-grey-04',
+        'cursor-pointer text-mediumTitle outline-none hover:text-text',
+        className
+      )}
+      {...rest}
+    />
   );
 };

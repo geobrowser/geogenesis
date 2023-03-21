@@ -151,7 +151,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 href={NavUtils.toEntity(space, triple.value.id)}
                 onClick={() => removeEntityTriple(triple)}
               >
-                <a>{Value.nameOfEntityValue(triple)}</a>
+                {Value.nameOfEntityValue(triple)}
               </DeletableChipButton>
             </div>
           ))}

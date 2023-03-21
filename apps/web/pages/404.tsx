@@ -16,12 +16,10 @@ export default function Custom404() {
         </Text>
         <Spacer height={16} />
         <Button>
-          <Link href="/spaces" passHref>
-            <a>
-              <Text variant="button" color="white">
-                Go to all spaces
-              </Text>
-            </a>
+          <Link href="/spaces">
+            <Text variant="button" color="white">
+              Go to all spaces
+            </Text>
           </Link>
         </Button>
       </div>

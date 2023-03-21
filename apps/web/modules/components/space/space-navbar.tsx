@@ -31,9 +31,7 @@ const SpaceActions = ({ spaceId }: Props) => {
             <>
               <Spacer width={12} />
               <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-                <a>
-                  <Button icon="create">New entity</Button>
-                </a>
+                <Button icon="create">New entity</Button>
               </Link>
             </>
           )}
