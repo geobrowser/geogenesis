@@ -21,12 +21,14 @@ import {
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
+  createProposedVersion,
+  createVersion,
   getOrCreateActionCount,
   handleAction,
   handleCreateEntityAction,
   handleCreateTripleAction,
 } from './actions'
-import { getOrCreateProposal } from './add-entry'
+import { getEntityId, getOrCreateProposal } from './add-entry'
 
 const entities: string[] = [
   TYPES,
@@ -94,100 +96,156 @@ export function bootstrapRootSpaceCoreTypes(
   space: string,
   createdAtBlock: BigInt,
   createdAtTimestamp: BigInt,
-  author: Address
+  createdBy: Address
 ): void {
   log.debug(`Bootstrapping root space ${space}!`, [])
 
   const proposalId = getOrCreateActionCount().count.toString()
 
-  getOrCreateProposal(proposalId, author.toString(), createdAtTimestamp)
+  getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
+
+  const entityToActionIds = new Map<string, string[]>()
 
   /* Create all of our entities */
   for (let i = 0; i < entities.length; i++) {
-    handleAction(
-      new CreateEntityAction(entities[i]),
-      space,
-      createdAtBlock,
-      author,
-      proposalId,
-      createdAtTimestamp
-    )
+    const action = new CreateEntityAction(entities[i])
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
   }
 
   /* Name all of our entities */
   for (let i = 0; i < names.length; i++) {
-    handleAction(
-      new CreateTripleAction(
-        names[i]._0 as string,
-        NAME,
-        names[i]._1 as StringValue
-      ),
-      space,
-      createdAtBlock,
-      author,
-      proposalId,
-      createdAtTimestamp
+    const action = new CreateTripleAction(
+      names[i]._0 as string,
+      NAME,
+      names[i]._1 as StringValue
     )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
   }
 
   /* Create our attributes of type "attribute" */
   for (let i = 0; i < attributes.length; i++) {
-    handleAction(
-      new CreateTripleAction(
-        attributes[i]._0 as string,
-        TYPES,
-        new EntityValue(ATTRIBUTE)
-      ),
-      space,
-      createdAtBlock,
-      author,
-      proposalId,
-      createdAtTimestamp
+    const action = new CreateTripleAction(
+      attributes[i]._0 as string,
+      TYPES,
+      new EntityValue(ATTRIBUTE)
     )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
 
-    /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
-    handleAction(
-      new CreateTripleAction(
-        attributes[i]._0 as string,
-        VALUE_TYPE,
-        new EntityValue(attributes[i]._1 as string)
-      ),
-      space,
-      createdAtBlock,
-      author,
-      proposalId,
-      createdAtTimestamp
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
+
+    const action2 = new CreateTripleAction(
+      attributes[i]._0 as string,
+      VALUE_TYPE,
+      new EntityValue(attributes[i]._1 as string)
     )
+    const entityId2 = getEntityId(action2)
+    const actionId2 = handleAction(action2, space, createdAtBlock)
+
+    if (entityId2 && actionId2) {
+      const isSet = entityToActionIds.has(entityId2)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId2)
+        entityToActionIds.set(entityId2, actions.concat([actionId2]))
+      } else {
+        entityToActionIds.set(entityId2, [actionId2])
+      }
+    }
   }
 
   /* Create our types of type "type" */
   for (let i = 0; i < types.length; i++) {
-    handleAction(
-      new CreateTripleAction(
-        types[i]._0 as string,
-        TYPES,
-        new EntityValue(SCHEMA_TYPE)
-      ),
-      space,
-      createdAtBlock,
-      author,
-      proposalId,
-      createdAtTimestamp
+    const action = new CreateTripleAction(
+      types[i]._0 as string,
+      TYPES,
+      new EntityValue(ATTRIBUTE)
     )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
 
     /* Each type can have a set of attributes */
     for (let j = 0; j < types[i]._1.length; j++) {
-      handleAction(
-        new CreateTripleAction(
-          types[i]._0 as string,
-          ATTRIBUTES,
-          new EntityValue(types[i]._1[j] as string)
-        ),
-        space,
-        createdAtBlock,
-        author,
-        proposalId,
-        createdAtTimestamp
+      const action = new CreateTripleAction(
+        types[i]._0 as string,
+        ATTRIBUTES,
+        new EntityValue(types[i]._1[j] as string)
+      )
+      const entityId = getEntityId(action)
+      const actionId = handleAction(action, space, createdAtBlock)
+
+      if (entityId && actionId) {
+        const isSet = entityToActionIds.has(entityId)
+        if (isSet) {
+          const actions = entityToActionIds.get(entityId)
+          entityToActionIds.set(entityId, actions.concat([actionId]))
+        } else {
+          entityToActionIds.set(entityId, [actionId])
+        }
+      }
+    }
+
+    // for every key in the map,
+    const entityIds = entityToActionIds.keys()
+
+    for (let i = 0; i < entityIds.length; i++) {
+      const entityId = entityIds[i]
+      const actionIds = entityToActionIds.get(entityIds[i])
+
+      let proposedVersion = createProposedVersion(
+        getOrCreateActionCount().count.toString(),
+        createdAtTimestamp,
+        actionIds,
+        entityId,
+        createdBy,
+        proposalId
+      )
+
+      createVersion(
+        entityId + '-' + getOrCreateActionCount().count.toString(),
+        proposedVersion.id,
+        createdAtTimestamp,
+        entityId,
+        createdBy
       )
     }
   }

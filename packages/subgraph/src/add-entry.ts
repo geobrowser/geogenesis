@@ -1,9 +1,11 @@
-import { Root } from '@geogenesis/action-schema/assembly'
+import { Action, Root } from '@geogenesis/action-schema/assembly'
 import { DataURI } from '@geogenesis/data-uri/assembly'
 import { Address, BigInt, Bytes, ipfs, log } from '@graphprotocol/graph-ts'
 import { JSON } from 'assemblyscript-json/assembly'
 import { LogEntry, Proposal } from '../generated/schema'
 import {
+  createProposedVersion,
+  createVersion,
   getOrCreateAction,
   getOrCreateActionCount,
   handleAction,
@@ -124,6 +126,19 @@ export function getOrCreateProposal(
   return proposal as Proposal
 }
 
+export function getEntityId(action: Action): string | null {
+  let asCreateTripleAction = action.asCreateTripleAction()
+  if (asCreateTripleAction) return asCreateTripleAction.entityId
+
+  let asDeleteTripleAction = action.asDeleteTripleAction()
+  if (asDeleteTripleAction) return asDeleteTripleAction.entityId
+
+  let asCreateEntityAction = action.asCreateEntityAction()
+  if (asCreateEntityAction) return asCreateEntityAction.entityId
+
+  return null
+}
+
 function handleRoot(
   root: Root,
   space: string,
@@ -136,16 +151,57 @@ function handleRoot(
   // create a proposal entity
   getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
 
+  // entityId -> actions
+  let actionsByEntity: Map<string, Action[]> = new Map()
+
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
-    // modify this to add the proposed action to the proposal entity
-    handleAction(
-      action,
-      space,
-      createdAtBlock,
+    let entityId = getEntityId(action)
+    if (entityId) {
+      //let actions = actionsByEntity.get(entityId)
+      const isSet = actionsByEntity.has(entityId)
+      if (isSet) {
+        const actions = actionsByEntity.get(entityId)
+        actionsByEntity.set(entityId, actions.concat([action]))
+      } else {
+        actionsByEntity.set(entityId, [action])
+      }
+    }
+  }
+
+  // handle each entity's actions
+  let entityIds = actionsByEntity.keys()
+
+  for (let i = 0; i < entityIds.length; i++) {
+    let entityId = entityIds[i]
+
+    if (actionsByEntity.has(entityId) == false) continue
+    let actions = actionsByEntity.get(entityId)
+    let actionIds: string[] = []
+
+    if (actions) {
+      for (let j = 0; j < actions.length; j++) {
+        const action = actions[j]
+        let actionId = handleAction(action, space, createdAtBlock)
+        if (actionId) actionIds = actionIds.concat([actionId])
+      }
+    }
+
+    let proposedVersion = createProposedVersion(
+      getOrCreateActionCount().count.toString(),
+      createdAtTimestamp,
+      actionIds,
+      entityId,
       createdBy,
-      proposalId,
-      createdAtTimestamp
+      proposalId
+    )
+
+    createVersion(
+      entityId + '-' + getOrCreateActionCount().count.toString(),
+      proposedVersion.id,
+      createdAtTimestamp,
+      entityId,
+      createdBy
     )
   }
 }

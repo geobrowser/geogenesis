@@ -88,7 +88,7 @@ export function getOrCreateEntity(id: string): GeoEntity {
   return entity
 }
 
-function createProposedVersion(
+export function createProposedVersion(
   versionId: string,
   createdAt: BigInt,
   actions: string[],
@@ -122,7 +122,7 @@ function getOrCreateAccount(address: Address): Account {
   return account
 }
 
-function createVersion(
+export function createVersion(
   versionId: string,
   proposedVersion: string,
   createdAt: BigInt,
@@ -356,11 +356,8 @@ export function getOrCreateAction(
 export function handleAction(
   action: Action,
   space: string,
-  createdAtBlock: BigInt,
-  createdBy: Address,
-  proposalId: string = '',
-  createdAt: BigInt = BigInt.fromI32(0)
-): void {
+  createdAtBlock: BigInt
+): string | null {
   const createTripleAction = action.asCreateTripleAction()
   // ~~~~~~~~~~~~~~~~~~~~
   // CREATE TRIPLE ACTION
@@ -407,22 +404,7 @@ export function handleAction(
       strValue,
       entValue
     )
-    let proposed = createProposedVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      createdAt,
-      [action.id],
-      entityId,
-      createdBy,
-      proposalId
-    )
-    let version = createVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      proposed.id,
-      createdAt,
-      entityId,
-      createdBy
-    )
-    return
+    return action.id
   }
 
   // ~~~~~~~~~~~~~~~~~~~~
@@ -468,22 +450,7 @@ export function handleAction(
       strValue,
       entValue
     )
-    let proposed = createProposedVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      createdAtBlock,
-      [action.id],
-      entityId,
-      createdBy,
-      proposalId
-    )
-    let version = createVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      proposed.id,
-      createdAtBlock,
-      entityId,
-      createdBy
-    )
-    return
+    return action.id
   }
 
   // ~~~~~~~~~~~~~~~~~~~~
@@ -498,23 +465,10 @@ export function handleAction(
 
     let action = getOrCreateAction(actionId, 'CREATE', entityId)
 
-    let proposed = createProposedVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      createdAtBlock,
-      [action.id],
-      entityId,
-      createdBy,
-      proposalId
-    )
-    let version = createVersion(
-      entityId + '-' + getOrCreateActionCount().count.toString(),
-      proposed.id,
-      createdAtBlock,
-      entityId,
-      createdBy
-    )
-    return
+    return action.id
   }
+
+  return null
 
   log.debug(`Unhandled action '${action.type}'`, [])
 }
