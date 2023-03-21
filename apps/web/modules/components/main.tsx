@@ -23,8 +23,8 @@ export const Main = ({ children }: MainProps) => {
   );
 };
 
-const transition = { type: 'spring', duration: 1.2, bounce: 0 };
+const transition = { type: 'spring', duration: 0.6, bounce: 0 };
 
 const variants = {
-  animate: (open: boolean) => ({ scale: open ? 0.875 : 1, opacity: open ? 0 : 1 }),
+  animate: (open: boolean) => ({ scale: open ? 0.95 : 1, opacity: open ? 0 : 1 }),
 };

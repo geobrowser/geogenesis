@@ -491,4 +491,4 @@ const statusVariants = {
   visible: { opacity: 1, y: '0%' },
 };
 
-const transition = { type: 'spring', duration: 1.2, bounce: 0 };
+const transition = { type: 'spring', duration: 0.6, bounce: 0 };
