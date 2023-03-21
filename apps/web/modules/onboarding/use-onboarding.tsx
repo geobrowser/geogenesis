@@ -1,3 +1,5 @@
+'use client';
+
 import { observable } from '@legendapp/state';
 import { useAccount } from 'wagmi';
 

@@ -1,8 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { cookies } from 'next/headers';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
@@ -11,28 +10,18 @@ import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modu
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Row, Triple } from '~/modules/types';
 
 interface Props {
-  spaceId: string;
-  spaceName?: string;
-  spaceImage: string | null;
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
-  initialColumns: Column[];
-  initialRows: Row[];
+  params: { id: string };
+  searchParams: { env?: string };
 }
 
-export default function EntitiesPage({
-  spaceId,
-  spaceName,
-  spaceImage,
-  initialColumns,
-  initialSelectedType,
-  initialRows,
-  initialTypes,
-}: Props) {
-  useLogRocket(spaceId);
+export default async function SpacePage({ params, searchParams }: Props) {
+  const spaceId = params.id;
+  const { spaceName, spaceImage, initialColumns, initialRows, initialSelectedType, initialTypes } = await getTableData(
+    spaceId,
+    searchParams.env
+  );
 
   return (
     <div>
@@ -43,6 +32,7 @@ export default function EntitiesPage({
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
 
       <Spacer height={34} />
+
       <SpaceNavbar spaceId={spaceId} />
 
       <EntityTableStoreProvider
@@ -63,12 +53,17 @@ export default function EntitiesPage({
   );
 }
 
-export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const spaceId = context.params?.id as string;
-  const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  const storage = new StorageClient(config.ipfs);
+export const getTableData = async (spaceId: string, env?: string | undefined) => {
+  // @TODO: Get initial params from url and pass through rest of function
+  // const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
+  const appCookies = cookies();
+  const config = Params.getConfigFromUrl(
+    // @TODO: Pass searchParams instead of full url
+    `https://whatever.com?env=${env}`,
+    appCookies.get(Params.ENV_PARAM_NAME)?.value
+  );
 
+  const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
@@ -97,41 +92,42 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
 
-  const initialSelectedType =
-    initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
+  const initialSelectedType = initialTypes.find(t => t.entityId === defaultTypeId) || initialTypes[0] || null;
 
   const typeId = initialSelectedType?.entityId;
 
   const params = {
-    ...initialParams,
+    // ...initialParams,
+    query: '',
+    pageNumber: 1,
+    filterState: [],
     first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    skip: 50,
+    // skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeId,
   };
 
-  const { columns } = await network.columns({
-    spaceId,
-    params,
-  });
-
-  const { rows: serverRows } = await network.rows({
-    spaceId,
-    params,
-  });
+  const [{ columns }, { rows: serverRows }] = await Promise.all([
+    network.columns({
+      spaceId,
+      params,
+    }),
+    network.rows({
+      spaceId,
+      params,
+    }),
+  ]);
 
   const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
 
   return {
-    props: {
-      spaceId,
-      spaceName,
-      spaceImage,
-      initialSelectedType,
-      initialForeignTypes,
-      initialColumns: columns,
-      initialRows: rows,
-      initialTypes,
-    },
+    spaceId,
+    spaceName,
+    spaceImage,
+    initialSelectedType,
+    initialColumns: columns,
+    initialRows: rows,
+    initialTypes,
   };
 };
 

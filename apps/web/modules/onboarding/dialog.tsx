@@ -1,8 +1,10 @@
+'use client';
+
+import * as React from 'react';
 import { observer } from '@legendapp/state/react';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import Confetti from 'js-confetti';
-import * as React from 'react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 

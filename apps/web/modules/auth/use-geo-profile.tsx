@@ -1,3 +1,5 @@
+'use client';
+
 import { useAccount } from 'wagmi';
 import { useHydrated } from '../hooks/use-hydrated';
 

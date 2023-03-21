@@ -1,3 +1,5 @@
+'use client';
+
 import { computed, ObservableComputed } from '@legendapp/state';
 
 import { Services } from '../services';

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Triple } from '~/modules/types';
-import EntityPage from '~/pages/space/[id]/[entityId]';
+import EntityPage from '~/pages/spacev1/[id]/[entityId]';
 
 const scalarDescriptionTriple: Triple = {
   id: '1',

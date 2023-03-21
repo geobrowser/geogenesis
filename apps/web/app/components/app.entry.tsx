@@ -1,7 +1,7 @@
 'use client';
 
 import { Analytics } from '@vercel/analytics/react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Action, useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -14,12 +14,10 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 
 export function App({ children }: { children: React.ReactNode }) {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  console.log(searchParams);
 
-  // const { id: spaceId } = searchParams.query as { id: string | undefined };
   const { setEditable, editable } = useEditable();
+  // @ TODO: Fix parsing segment from URL to pass to useAccessControl
   const { isEditor, isAdmin, isEditorController } = useAccessControl();
   const [open, setOpen] = useState(false);
 

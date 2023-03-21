@@ -116,14 +116,18 @@ export function getAdvancedQueryParams(filterState: FilterState): Record<FilterF
  */
 export function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
   const params = new URLSearchParams(url.split('?')[1]);
-  const env: AppEnv = params.get('env') as AppEnv;
+  const env: AppEnv | undefined = params.get('env') as AppEnv | undefined;
+  const validCookie = cookie && cookie in Config.options;
+  const validEnvParam = env && env in Config.options;
 
-  if (!(cookie && cookie in Config.options) && !(env in Config.options)) {
+  if (!(validCookie || validEnvParam)) {
     console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);
     return Config.options[Config.DEFAULT_ENV];
   }
 
   // Default to the environment if it's set, otherwise use the cookie
-  const config = Config.options[env ?? cookie];
-  return Config.getConfig(config.chainId);
+  // const envToUse = env ?? cookie;
+  // const config = Config.options[envToUse as AppEnv];
+  const config = Config.options[Config.DEFAULT_ENV];
+  return config;
 }

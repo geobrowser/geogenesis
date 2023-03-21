@@ -1,3 +1,5 @@
+'use client';
+
 import { useRect } from '@radix-ui/react-use-rect';
 import * as React from 'react';
 import { useRef } from 'react';

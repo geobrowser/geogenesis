@@ -1,3 +1,5 @@
+'use client';
+
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, G, pipe, S } from '@mobily/ts-belt';

@@ -1,3 +1,5 @@
+'use client';
+
 import { Signer } from 'ethers';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';

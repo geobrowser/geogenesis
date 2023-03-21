@@ -1,3 +1,6 @@
+'use client';
+// Class components only work in client components
+
 import * as React from 'react';
 
 import { Text } from '~/modules/design-system/text';

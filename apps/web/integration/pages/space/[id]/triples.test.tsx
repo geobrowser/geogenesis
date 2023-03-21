@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';
-import TriplesPage from '~/pages/space/[id]/triples';
+import TriplesPage from '~/pages/spacev1/[id]/triples';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {

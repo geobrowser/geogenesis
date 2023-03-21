@@ -1,7 +1,6 @@
 'use client';
 
-import { useSelector } from '@legendapp/state/react';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 
@@ -32,13 +31,13 @@ export function EntityTableStoreProvider({
   initialTypes,
 }: Props) {
   const { network } = Services.useServices();
-  const router = useRouter();
   const SpaceStore = useSpaceStore();
   const ActionsStore = useActionsStoreContext();
-  const replace = useRef(router.replace);
-  const urlRef = useRef(router.asPath);
+  const pathname = usePathname();
 
-  const basePath = router.asPath.split('?')[0];
+  console.log(pathname);
+
+  const urlRef = useRef(pathname ?? '');
 
   const store = useMemo(() => {
     const initialParams = Params.parseEntityTableQueryParameters(urlRef.current);
@@ -55,25 +54,25 @@ export function EntityTableStoreProvider({
     });
   }, [network, spaceId, initialRows, initialSelectedType, initialColumns, initialTypes, ActionsStore, SpaceStore]);
 
-  const query = useSelector(store.query$);
-  const pageNumber = useSelector(store.pageNumber$);
-  const selectedType = useSelector(store.selectedType$);
-  const typeId = selectedType ? selectedType.entityId : '';
+  // const query = useSelector(store.query$);
+  // const pageNumber = useSelector(store.pageNumber$);
+  // const selectedType = useSelector(store.selectedType$);
+  // const typeId = selectedType ? selectedType.entityId : '';
 
   // Legendstate has a hard time inferring observable array contents
-  const filterState = useSelector<FilterState>(store.filterState$);
+  // const filterState = useSelector<FilterState>(store.filterState$);
 
-  // Update the url with query search params whenever query or page number changes
-  useEffect(() => {
-    replace.current(
-      {
-        pathname: basePath,
-        query: Params.stringifyEntityTableParameters({ query, pageNumber, filterState, typeId }),
-      },
-      undefined,
-      { shallow: true, scroll: false }
-    );
-  }, [basePath, query, pageNumber, filterState, typeId]);
+  // @TODO: Server components - Update the url with query search params whenever query or page number changes
+  // useEffect(() => {
+  //   replace.current(
+  //     {
+  //       pathname: basePath,
+  //       query: Params.stringifyEntityTableParameters({ query, pageNumber, filterState, typeId }),
+  //     },
+  //     undefined,
+  //     { shallow: true, scroll: false }
+  //   );
+  // }, [basePath, query, pageNumber, filterState, typeId]);
 
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }

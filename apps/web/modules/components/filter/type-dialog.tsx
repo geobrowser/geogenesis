@@ -1,3 +1,5 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';

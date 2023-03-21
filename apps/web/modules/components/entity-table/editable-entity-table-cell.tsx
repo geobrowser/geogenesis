@@ -1,3 +1,5 @@
+'use client';
+
 import { memo } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { Entity, useEntityTable } from '~/modules/entity';

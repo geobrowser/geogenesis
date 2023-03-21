@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
 import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';

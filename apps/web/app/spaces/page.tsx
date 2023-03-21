@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Head from 'next/head';
+import { cookies } from 'next/headers';
 
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
@@ -10,14 +11,20 @@ import { Text } from '~/modules/design-system/text';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { getConfig } from '~/modules/config/config';
+import { Params } from '~/modules/params';
 
-export default async function Spaces() {
-  // const appCookies = cookies();
-  // const config = Params.getConfigFromUrl(context.resolvedUrl, appCookies.get(Params.ENV_PARAM_NAME)?.value);
-  const config = getConfig('137');
+export default async function Spaces({ searchParams: { env } }: { searchParams: { env?: string } }) {
+  const appCookies = cookies();
+  const config = Params.getConfigFromUrl(
+    // @TODO: Pass searchParams instead of full url
+    `https://whatever.com?env=${env}`,
+    appCookies.get(Params.ENV_PARAM_NAME)?.value
+  );
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
+
+  console.log('env', env);
 
   return (
     <div>

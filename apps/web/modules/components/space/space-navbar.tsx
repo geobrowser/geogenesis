@@ -1,6 +1,8 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
@@ -42,21 +44,21 @@ const SpaceActions = ({ spaceId }: Props) => {
 };
 
 export const SpaceNavbar = ({ spaceId }: Props) => {
-  const { route, query } = useRouter();
+  const pathname = usePathname();
 
-  const tabEntitiesSelected = !route.includes('/triples');
-  const tabTriplesSelected = route.includes('/triples');
+  const tabEntitiesSelected = !pathname?.includes('/triples');
+  const tabTriplesSelected = pathname?.includes('/triples');
 
   const tabs = [
     {
       name: 'Entities',
       href: `/space/${spaceId}`,
-      selected: tabEntitiesSelected,
+      selected: Boolean(tabEntitiesSelected),
     },
     {
       name: 'Triples',
-      href: `/space/${query.id}/triples`,
-      selected: tabTriplesSelected,
+      href: `/space/${spaceId}/triples`,
+      selected: Boolean(tabTriplesSelected),
     },
   ];
 
