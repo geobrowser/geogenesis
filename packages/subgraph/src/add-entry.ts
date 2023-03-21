@@ -86,6 +86,10 @@ function handleActionData(
 }
 
 function handleRoot(root: Root, space: string, createdAtBlock: BigInt): void {
+  // group actions by entity
+  // create ProposedVersion for each entity->actions group
+  // Create Proposal with Proposed versions
+
   for (let i = 0; i < root.actions.length; i++) {
     const action = root.actions[i]
 

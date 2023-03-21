@@ -35,8 +35,6 @@ export function EntityTableStoreProvider({
   const ActionsStore = useActionsStoreContext();
   const pathname = usePathname();
 
-  console.log(pathname);
-
   const urlRef = useRef(pathname ?? '');
 
   const store = useMemo(() => {

@@ -1,3 +1,5 @@
+'use client';
+
 import cx from 'classnames';
 import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
@@ -181,14 +183,17 @@ function LinkedEntityCard({
   return (
     <ResizableContainer>
       <div className="duraiton-150 overflow-hidden rounded border border-grey-02 transition-colors ease-in-out hover:border-text hover:[&>a]:border-text">
-        <Link href={NavUtils.toEntity(space, entityGroup.id)} className="flex justify-between gap-5 p-4 align-top [&>div]:flex [&>div]:items-start [&>div]:gap-4 [&>img]:rounded">
-            <Text as="h2" variant="cardEntityTitle">
-              {entityGroup.name ?? entityGroup.id}
-            </Text>
-            {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
-            <div className="mt-[6px]">
-              <RightArrowDiagonal color="grey-04" />
-            </div>
+        <Link
+          href={NavUtils.toEntity(space, entityGroup.id)}
+          className="flex justify-between gap-5 p-4 align-top [&>div]:flex [&>div]:items-start [&>div]:gap-4 [&>img]:rounded"
+        >
+          <Text as="h2" variant="cardEntityTitle">
+            {entityGroup.name ?? entityGroup.id}
+          </Text>
+          {/* Wrap in a div so the svg doesn't get scaled by dynamic flexbox */}
+          <div className="mt-[6px]">
+            <RightArrowDiagonal color="grey-04" />
+          </div>
         </Link>
         {description && (
           <div className="bg-bg p-4 pt-0">

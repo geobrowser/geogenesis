@@ -1,6 +1,7 @@
+'use client';
+
 import * as React from 'react';
 import { useMemo } from 'react';
-import type { GetServerSideProps } from 'next';
 
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { EntityStoreProvider } from '~/modules/entity';
@@ -10,7 +11,7 @@ interface Props {
   spaceId: string;
 }
 
-export default function CreateEntity({ spaceId }: Props) {
+export default function CreateEntityPageClient({ spaceId }: Props) {
   const newId = useMemo(() => ID.createEntityId(), []);
 
   return (
@@ -19,14 +20,3 @@ export default function CreateEntity({ spaceId }: Props) {
     </EntityStoreProvider>
   );
 }
-
-export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const spaceId = context.query.id as string;
-
-  return {
-    props: {
-      spaceId,
-      key: spaceId,
-    },
-  };
-};

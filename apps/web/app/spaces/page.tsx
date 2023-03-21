@@ -10,7 +10,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { getConfig } from '~/modules/config/config';
 import { Params } from '~/modules/params';
 
 export default async function Spaces({ searchParams: { env } }: { searchParams: { env?: string } }) {
@@ -23,8 +22,6 @@ export default async function Spaces({ searchParams: { env } }: { searchParams: 
   const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
-
-  console.log('env', env);
 
   return (
     <div>

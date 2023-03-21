@@ -17,7 +17,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const { setEditable, editable } = useEditable();
-  // @ TODO: Fix parsing segment from URL to pass to useAccessControl
+  // @TODO: Fix parsing segment from URL to pass to useAccessControl
   const { isEditor, isAdmin, isEditorController } = useAccessControl();
   const [open, setOpen] = useState(false);
 
@@ -58,6 +58,7 @@ export function App({ children }: { children: React.ReactNode }) {
         {children}
         <Analytics />
       </main>
+      {/* @TODO: Pass correct spaceId */}
       <GlobalFlowBar spaceId={''} />
     </>
   );

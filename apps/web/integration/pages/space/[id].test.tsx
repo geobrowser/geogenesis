@@ -1,9 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';
-import SpacePage from '~/pages/space/[id]';
+import SpacePage from '~/app/space/[id]/page';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {

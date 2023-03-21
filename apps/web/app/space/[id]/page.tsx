@@ -13,15 +13,13 @@ import { StorageClient } from '~/modules/services/storage';
 
 interface Props {
   params: { id: string };
-  searchParams: { env?: string };
+  searchParams: { env?: string; query?: string; pageNumber?: number; filterState?: string; typeId?: string | null };
 }
 
 export default async function SpacePage({ params, searchParams }: Props) {
   const spaceId = params.id;
-  const { spaceName, spaceImage, initialColumns, initialRows, initialSelectedType, initialTypes } = await getTableData(
-    spaceId,
-    searchParams.env
-  );
+  const { spaceName, spaceImage, initialColumns, initialRows, initialSelectedType, initialTypes } =
+    await getEntityTableData(spaceId, searchParams, searchParams.env);
 
   return (
     <div>
@@ -53,7 +51,7 @@ export default async function SpacePage({ params, searchParams }: Props) {
   );
 }
 
-export const getTableData = async (spaceId: string, env?: string | undefined) => {
+export const getEntityTableData = async (spaceId: string, tableParams: Props['searchParams'], env?: string) => {
   // @TODO: Get initial params from url and pass through rest of function
   // const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
   const appCookies = cookies();
@@ -92,18 +90,19 @@ export const getTableData = async (spaceId: string, env?: string | undefined) =>
 
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
 
-  const initialSelectedType = initialTypes.find(t => t.entityId === defaultTypeId) || initialTypes[0] || null;
+  const initialSelectedType =
+    initialTypes.find(t => t.entityId === (tableParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
   const typeId = initialSelectedType?.entityId;
 
   const params = {
-    // ...initialParams,
+    ...tableParams,
     query: '',
-    pageNumber: 1,
+    pageNumber: 0,
+    // @TODO: Fix filterState parsing from url
     filterState: [],
     first: DEFAULT_PAGE_SIZE,
-    skip: 50,
-    // skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    skip: tableParams?.pageNumber ?? 0 * DEFAULT_PAGE_SIZE,
     typeId,
   };
 
