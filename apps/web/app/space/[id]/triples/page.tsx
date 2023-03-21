@@ -38,7 +38,7 @@ export default async function TriplesPage({ params, searchParams }: Props) {
   );
 }
 
-export const getTriplesTableData = async (spaceId: string, tripleTableParams: Props['searchParams'], env?: string) => {
+const getTriplesTableData = async (spaceId: string, tripleTableParams: Props['searchParams'], env?: string) => {
   const appCookies = cookies();
   const config = Params.getConfigFromUrl(
     // @TODO: Pass searchParams instead of full url

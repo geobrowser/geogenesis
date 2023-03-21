@@ -51,7 +51,7 @@ export default async function SpacePage({ params, searchParams }: Props) {
   );
 }
 
-export const getEntityTableData = async (spaceId: string, tableParams: Props['searchParams'], env?: string) => {
+const getEntityTableData = async (spaceId: string, tableParams: Props['searchParams'], env?: string) => {
   // @TODO: Get initial params from url and pass through rest of function
   // const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
   const appCookies = cookies();
@@ -130,7 +130,7 @@ export const getEntityTableData = async (spaceId: string, tableParams: Props['se
   };
 };
 
-export const fetchForeignTypeTriples = async (network: INetwork, spaceId: string) => {
+const fetchForeignTypeTriples = async (network: INetwork, spaceId: string) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
@@ -170,7 +170,7 @@ export const fetchForeignTypeTriples = async (network: INetwork, spaceId: string
   return foreignTypes.flatMap(foreignType => foreignType.triples);
 };
 
-export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
+const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
 
   const { triples } = await network.fetchTriples({

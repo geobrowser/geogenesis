@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';
 import { Triple } from '~/modules/types';
-import EntityPage from '~/pages/spacev1/[id]/[entityId]';
+import { EntityPageClient as EntityPage } from '~/app/space/[id]/[entityId]/entity-page';
 
 const scalarDescriptionTriple: Triple = {
   id: '1',
@@ -38,7 +38,7 @@ describe('Entity page', () => {
   it('Renders page name', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" spaceId="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -51,7 +51,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[scalarDescriptionTriple]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -68,7 +68,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[genericAttribute]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -85,7 +85,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[{ ...genericAttribute, attributeName: null }]}
           schemaTriples={[]}
           linkedEntities={{}}
@@ -99,7 +99,7 @@ describe('Entity page', () => {
   it('Renders empty linked entities', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage id="1" name="Banana" spaceId="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
       </Providers>
     );
 
@@ -112,7 +112,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -135,7 +135,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -160,7 +160,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
@@ -190,7 +190,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           triples={[]}
           schemaTriples={[]}
           linkedEntities={{
