@@ -16,7 +16,6 @@ describe('Editable Entity Page', () => {
         <EntityStoreProvider
           id={'1'}
           spaceId={'1'}
-          name="Banana"
           initialBlockIdsTriple={null}
           initialBlockTriples={[]}
           initialTriples={[]}
@@ -49,7 +48,6 @@ describe('Editable Entity Page', () => {
         <EntityStoreProvider
           id={'1'}
           spaceId={'1'}
-          name="Banana"
           initialBlockIdsTriple={null}
           initialBlockTriples={[]}
           initialTriples={[]}

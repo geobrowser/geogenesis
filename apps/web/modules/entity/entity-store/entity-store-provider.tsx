@@ -16,13 +16,11 @@ interface Props {
   initialSchemaTriples: Triple[];
   initialBlockIdsTriple: Triple | null;
   initialBlockTriples: Triple[];
-  name: string;
 }
 
 export function EntityStoreProvider({
   id,
   spaceId,
-  name,
   children,
   initialBlockIdsTriple,
   initialBlockTriples,
@@ -35,7 +33,6 @@ export function EntityStoreProvider({
   const store = useMemo(() => {
     return new EntityStore({
       api: network,
-      name,
       spaceId,
       initialBlockIdsTriple,
       initialBlockTriples,
@@ -47,7 +44,6 @@ export function EntityStoreProvider({
   }, [
     network,
     spaceId,
-    name,
     initialBlockTriples,
     initialTriples,
     initialBlockIdsTriple,

@@ -16,7 +16,6 @@ export default function CreateEntity({ spaceId }: Props) {
     <EntityStoreProvider
       id={newId}
       spaceId={spaceId}
-      name=""
       initialTriples={[]}
       initialSchemaTriples={[]}
       initialBlockTriples={[]}

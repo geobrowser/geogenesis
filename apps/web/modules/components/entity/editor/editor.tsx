@@ -36,6 +36,10 @@ export const Editor = ({ editable = true }: Props) => {
       editable: editable,
       content: entityStore.editorJson,
       onBlur({ editor }) {
+        /* 
+        Responsible for converting all editor blocks to triples
+        Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
+        */
         entityStore.updateEditorBlocks(editor);
       },
       editorProps: {
@@ -45,12 +49,14 @@ export const Editor = ({ editable = true }: Props) => {
     [editable]
   );
 
+  const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
+
   return editor ? (
     <>
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
-          <SquareButton onClick={() => editor.chain().focus().insertContent('/').run()} icon="plus" />
+          <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
     </>

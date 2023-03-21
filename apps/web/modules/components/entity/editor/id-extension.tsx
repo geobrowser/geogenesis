@@ -19,6 +19,10 @@ export const IdExtension = Extension.create({
     ];
   },
   onBlur() {
+    /* 
+      Responsible for setting the "id" attribute on all news nodes
+      Fires before the Editor's onBlur event which saves the editor blocks to the entity store
+    */
     const { view, state } = this.editor;
     const { tr, doc } = state;
 

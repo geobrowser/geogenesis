@@ -11,6 +11,7 @@ import { INetwork } from '~/modules/services/network';
 import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as TripleType } from '~/modules/types';
 import { Value } from '~/modules/value';
+import { Entity } from '..';
 
 const markdownConverter = new showdown.Converter();
 
@@ -77,7 +78,6 @@ interface IEntityStoreConfig {
   initialBlockIdsTriple: TripleType | null;
   initialBlockTriples: TripleType[];
   ActionsStore: ActionsStore;
-  name: string;
 }
 
 export class EntityStore implements IEntityStore {
@@ -94,7 +94,7 @@ export class EntityStore implements IEntityStore {
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
-  name: string;
+  name: ObservableComputed<string>;
 
   constructor({
     api,
@@ -105,13 +105,11 @@ export class EntityStore implements IEntityStore {
     spaceId,
     id,
     ActionsStore,
-    name,
   }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
     this.id = id;
     this.api = api;
-    this.name = name;
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
@@ -137,6 +135,10 @@ export class EntityStore implements IEntityStore {
             triples
           )
       );
+    });
+
+    this.name = computed(() => {
+      return Entity.name(this.triples$.get()) || '';
     });
 
     this.blockTriples$ = computed(() => {
@@ -475,7 +477,7 @@ export class EntityStore implements IEntityStore {
           entityName: this.nodeName(node),
           attributeId: SYSTEM_IDS.PARENT_ENTITY,
           attributeName: 'Parent Entity',
-          value: { id: this.id, type: 'entity', name: this.name },
+          value: { id: this.id, type: 'entity', name: this.name.get() },
         })
       );
     }
@@ -520,7 +522,7 @@ export class EntityStore implements IEntityStore {
       const triple = Triple.withId({
         space: this.spaceId,
         entityId: this.id,
-        entityName: this.name,
+        entityName: this.name.get(),
         attributeId: SYSTEM_IDS.BLOCKS,
         attributeName: 'Blocks',
         value: {

@@ -44,7 +44,6 @@ export default function EntityPage(props: Props) {
   return (
     <EntityStoreProvider
       id={props.id}
-      name={props.name}
       spaceId={props.space}
       initialTriples={props.triples}
       initialSchemaTriples={props.schemaTriples}
