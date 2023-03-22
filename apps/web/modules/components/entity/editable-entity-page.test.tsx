@@ -27,6 +27,7 @@ describe('Editable Entity Page', () => {
             id="1"
             name="Banana"
             space="1"
+            versions={[]}
             triples={[]}
             schemaTriples={[
               { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
@@ -69,6 +70,7 @@ describe('Editable Entity Page', () => {
             id="1"
             name="Banana"
             space="1"
+            versions={[]}
             triples={[]}
             schemaTriples={[
               {

@@ -122,4 +122,8 @@ export class MockNetwork implements INetwork {
   uploadFile = async () => {
     return '';
   };
+
+  fetchProposedVersions = async () => {
+    return [];
+  };
 }

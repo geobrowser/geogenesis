@@ -1,4 +1,4 @@
-import { Action, Entity, Space, Triple, Value } from '../types';
+import { Action, Entity, OmitStrict, Space, Triple, Value, Version } from '../types';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -23,11 +23,20 @@ export type NetworkTriple = NetworkValue & {
   space: Space;
 };
 
+export type NetworkAction = OmitStrict<NetworkTriple, 'space' | 'isProtected'> &
+  NetworkValue & {
+    actionType: 'CREATE' | 'DELETE';
+  };
+
 export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
-export function extractValue(networkTriple: NetworkTriple): Value {
+export type NetworkVersion = Version & {
+  actions: NetworkAction[];
+};
+
+export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {
   switch (networkTriple.valueType) {
     case 'STRING':
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
@@ -40,6 +49,24 @@ export function extractValue(networkTriple: NetworkTriple): Value {
         type: 'entity',
         id: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
+      };
+    }
+  }
+}
+
+export function extractActionValue(networkAction: NetworkAction): Value {
+  switch (networkAction.valueType) {
+    case 'STRING':
+      return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'IMAGE':
+      return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'NUMBER':
+      return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
+    case 'ENTITY': {
+      return {
+        type: 'entity',
+        id: networkAction.entityValue?.id ?? null,
+        name: networkAction.entityValue?.name ?? null,
       };
     }
   }
@@ -94,4 +121,40 @@ export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
       };
     })
     .flatMap(triple => (triple ? [triple] : []));
+}
+
+export function fromNetworkActions(networkActions: NetworkAction[], spaceId: string): Action[] {
+  const newActions = networkActions.map(networkAction => {
+    const value = extractActionValue(networkAction);
+
+    switch (networkAction.actionType) {
+      case 'CREATE': {
+        return {
+          type: 'createTriple' as const,
+          id: networkAction.id,
+          entityId: networkAction.entity.id,
+          entityName: networkAction.entity.name,
+          attributeId: networkAction.attribute.id,
+          attributeName: networkAction.attribute.name,
+          value,
+          space: spaceId,
+        };
+      }
+
+      case 'DELETE': {
+        return {
+          type: 'deleteTriple' as const,
+          id: networkAction.id,
+          entityId: networkAction.entity.id,
+          entityName: networkAction.entity.name,
+          attributeId: networkAction.attribute.id,
+          attributeName: networkAction.attribute.name,
+          value,
+          space: spaceId,
+        };
+      }
+    }
+  });
+
+  return newActions;
 }

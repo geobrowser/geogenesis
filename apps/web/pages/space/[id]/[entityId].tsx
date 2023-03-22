@@ -1,5 +1,6 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
+import Head from 'next/head';
 
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -13,11 +14,14 @@ import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { Triple } from '~/modules/types';
+import { Triple, Version } from '~/modules/types';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { NavUtils } from '~/modules/utils';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
@@ -38,20 +42,27 @@ export default function EntityPage(props: Props) {
   }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
-  // const renderEditablePage = true;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.space}
-      initialTriples={props.triples}
-      initialSchemaTriples={props.schemaTriples}
-      initialBlockIdsTriple={null}
-      initialBlockTriples={[]}
-    >
-      <Page {...props} />
-    </EntityStoreProvider>
+    <>
+      <Head>
+        <title>{props.name ?? props.id}</title>
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
+      </Head>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.space}
+        initialTriples={props.triples}
+        initialSchemaTriples={props.schemaTriples}
+        initialBlockIdsTriple={null}
+        initialBlockTriples={[]}
+      >
+        <EntityPageContentContainer>
+          <Page {...props} />
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </>
   );
 }
 
@@ -59,11 +70,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  const storage = new StorageClient(config.ipfs);
 
+  const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
 
-  const [entity, related] = await Promise.all([
+  const [entity, related, versions] = await Promise.all([
     network.fetchTriples({
       space,
       query: '',
@@ -79,6 +90,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    network.fetchProposedVersions(entityId, space),
   ]);
 
   const relatedEntities = await Promise.all(
@@ -111,6 +124,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       name: Entity.name(entity.triples) ?? entityId,
       space,
       linkedEntities,
+      versions,
       key: entityId,
     },
   };

@@ -6,7 +6,7 @@ import { useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Column, Row } from '../../types';
 import { EntityOthersToast } from '../entity/presence/entity-others-toast';
-import { EntityPresenceProvider } from '../entity/presence/entity-presence-provider';
+import { SpacePresenceProvider } from '../entity/presence/entity-presence-provider';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';
@@ -91,9 +91,9 @@ export const EntityTableContainer = memo(function EntityTableContainer({
         </PageNumberContainer>
       </PageContainer>
       {isEditor && editable && (
-        <EntityPresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
+        <SpacePresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
           <EntityOthersToast />
-        </EntityPresenceProvider>
+        </SpacePresenceProvider>
       )}
     </EntityTableErrorBoundary>
   );

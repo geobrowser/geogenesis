@@ -14,50 +14,50 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
-import { Triple } from '~/modules/types';
+import { Triple, Version } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
-import { CopyIdButton } from './copy-id';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
+import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
+import { EntityTypeChipGroup } from './entity-type-chip-group';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
   linkedEntities: Record<string, LinkedEntityGroup>;
 }
 
-export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples }: Props) {
+export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples, versions }: Props) {
   const description = Entity.description(triples);
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
+  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
 
   return (
-    <div>
-      <Head>
-        <title>{name ?? id}</title>
-        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-      </Head>
+    <>
+      <EntityPageMetadataHeader versions={versions} />
+      <Spacer height={16} />
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
       </Truncate>
+      <Spacer height={40} />
+      <EntityTypeChipGroup types={types} />
+      <Spacer height={40} />
+
       {description && (
         <>
-          <Spacer height={16} />
           <Text as="p" color="grey-04">
             {description}
           </Text>
+          <Spacer height={60} />
         </>
       )}
-      <Spacer height={16} />
-      <div className="flex justify-end sm:[&>button]:flex-grow">
-        <CopyIdButton id={id} />
-      </div>
-      <Spacer height={8} />
 
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
@@ -66,11 +66,11 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
       </div>
       <Spacer height={40} />
       <Text as="h2" variant="mediumTitle">
-        Linked by
+        Referenced by
       </Text>
       <div className="felx-wrap flex flex-col gap-3">
         {Object.entries(linkedEntities).length === 0 ? (
-          <Text color="grey-04">There are no other entities that are linking to this entity.</Text>
+          <Text color="grey-04">There are no other entities that are referencing {name}.</Text>
         ) : (
           <LayoutGroup>
             <Spacer height={12} />
@@ -80,7 +80,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
           </LayoutGroup>
         )}
       </div>
-    </div>
+    </>
   );
 }
 

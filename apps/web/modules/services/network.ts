@@ -3,6 +3,7 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
+import { queries } from './io';
 import { ROOT_SPACE_IMAGE } from '../constants';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE } from '../triple';
@@ -16,8 +17,15 @@ import {
   ReviewState,
   Space,
   Triple as TripleType,
+  Version,
 } from '../types';
-import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
+import {
+  fromNetworkActions,
+  fromNetworkTriples,
+  NetworkEntity,
+  NetworkTriple,
+  NetworkVersion,
+} from './network-local-mapping';
 import { IStorageClient } from './storage';
 
 function getActionFromChangeStatus(action: Action) {
@@ -88,6 +96,7 @@ export interface INetwork {
   fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
+  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -535,6 +544,39 @@ export class Network implements INetwork {
     }));
 
     return { columns: [...defaultColumns, ...schemaColumns] };
+  };
+
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: queries.proposedVersionsQuery(entityId),
+      }),
+    });
+
+    const json: {
+      data: {
+        proposedVersions: NetworkVersion[];
+      };
+      errors: any[];
+    } = await response.json();
+
+    try {
+      return json.data.proposedVersions.map(v => {
+        return {
+          ...v,
+          actions: fromNetworkActions(v.actions, spaceId),
+        };
+      });
+    } catch (e) {
+      console.error(e);
+      console.error(json.errors);
+      return [];
+    }
   };
 }
 

@@ -42,6 +42,8 @@ export function types(triples: TripleType[], currentSpace?: string): { id: strin
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
+  console.log('groupedTypeTriples', groupedTypeTriples);
+
   return Object.entries(groupedTypeTriples)
     .flatMap(([, triples]) => {
       if (triples.length === 1) {

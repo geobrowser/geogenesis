@@ -19,8 +19,7 @@ import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
 import { Upload } from '~/modules/design-system/icons/upload';
-
-import type { ColorName } from '~/modules/design-system/theme/colors';
+import { History } from './icons/history';
 import { EditorH1 } from './icons/editor-h1';
 import { EditorH2 } from './icons/editor-h2';
 import { EditorH3 } from './icons/editor-h3';
@@ -29,6 +28,7 @@ import { EditorTable } from './icons/editor-table';
 import { EditorText } from './icons/editor-text';
 import { Image } from './icons/image';
 import { Plus } from './icons/plus';
+import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
   | 'create'
@@ -54,6 +54,7 @@ export type IconName =
   | 'text'
   | 'rightArrowLongSmall'
   | 'search'
+  | 'history'
   | 'editorH1'
   | 'editorH2'
   | 'editorH3'
@@ -93,6 +94,7 @@ const icons: Record<IconName, React.ElementType> = {
   plus: Plus,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
+  history: History,
   editorH1: EditorH1,
   editorH2: EditorH2,
   editorH3: EditorH3,
