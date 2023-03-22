@@ -113,7 +113,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    network.fetchProposedVersions(entityId),
+    network.fetchProposedVersions(entityId, space),
   ]);
 
   const relatedEntities = await Promise.all(

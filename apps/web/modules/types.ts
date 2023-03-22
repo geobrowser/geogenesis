@@ -132,5 +132,5 @@ export type Version = {
     avatarUrl?: string;
   };
   createdAt: number;
-  actions: Array<Action>;
+  actions: Action[];
 };

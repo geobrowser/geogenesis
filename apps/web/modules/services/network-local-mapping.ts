@@ -50,7 +50,7 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
   }
 }
 
-export function extractActionValue(networkAction: NetworkAction) {
+export function extractActionValue(networkAction: NetworkAction): Value {
   switch (networkAction.valueType) {
     case 'STRING':
       return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
@@ -115,7 +115,7 @@ export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
     .flatMap(triple => (triple ? [triple] : []));
 }
 
-export function fromNetworkActions(networkActions: NetworkAction[]): Action[] {
+export function fromNetworkActions(networkActions: NetworkAction[], spaceId: string): Action[] {
   const newActions = networkActions.map(networkAction => {
     const value = extractActionValue(networkAction);
 
@@ -129,7 +129,7 @@ export function fromNetworkActions(networkActions: NetworkAction[]): Action[] {
           attributeId: networkAction.attribute.id,
           attributeName: networkAction.attribute.name,
           value,
-          space: '',
+          space: spaceId,
         };
       }
 
@@ -142,12 +142,11 @@ export function fromNetworkActions(networkActions: NetworkAction[]): Action[] {
           attributeId: networkAction.attribute.id,
           attributeName: networkAction.attribute.name,
           value,
-          space: '',
+          space: spaceId,
         };
       }
     }
   });
 
-  // @TODO: Fix the type mismatch
   return newActions;
 }

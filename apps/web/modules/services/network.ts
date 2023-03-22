@@ -96,7 +96,7 @@ export interface INetwork {
   fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
-  fetchProposedVersions: (entityId: string, abortController?: AbortController) => Promise<Version[]>;
+  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -546,7 +546,7 @@ export class Network implements INetwork {
     return { columns: [...defaultColumns, ...schemaColumns] };
   };
 
-  fetchProposedVersions = async (entityId: string, abortController?: AbortController) => {
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -569,7 +569,7 @@ export class Network implements INetwork {
       return json.data.proposedVersions.map(v => {
         return {
           ...v,
-          actions: fromNetworkActions(v.actions),
+          actions: fromNetworkActions(v.actions, spaceId),
         };
       });
     } catch (e) {
