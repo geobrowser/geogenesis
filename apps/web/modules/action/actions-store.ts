@@ -1,4 +1,4 @@
-import { Observable, observable } from '@legendapp/state';
+import { Observable, observable, computed } from '@legendapp/state';
 import { Signer } from 'ethers';
 import { persistObservable, configureObservablePersistence } from '@legendapp/state/persist';
 import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
@@ -18,14 +18,14 @@ interface IActionsStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
-  deleteActions(spaceId: string, actionIds: Array<string>): void;
+  actionIdsToDelete(spaceId: string, actionIds: Array<string>): void;
   publish(
     spaceId: string,
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Array<string>
+    unstagedChanges: Record<string, unknown>
   ): void;
-  unstagedChanges?: Array<string>;
+  unstagedChanges?: Record<string, unknown>;
 }
 
 interface IActionsStoreConfig {
@@ -43,12 +43,18 @@ configureObservablePersistence({
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
   actions$: Observable<SpaceActions>;
+  allActions$;
+  allSpacesWithActions$;
 
   constructor({ api }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
 
     this.api = api;
     this.actions$ = actions;
+    this.allActions$ = computed(() => Object.values(this.actions$.get()).flatMap(actions => actions) ?? []);
+    this.allSpacesWithActions$ = computed(
+      () => Object.keys(this.actions$.get()).filter(spaceId => this.actions$.get()[spaceId].length > 0) ?? []
+    );
 
     persistObservable(actions, {
       local: 'actions',
@@ -66,7 +72,7 @@ export class ActionsStore implements IActionsStore {
     this.actions$.set(newActions);
   };
 
-  deleteActions = (spaceId: string, actionIds: Array<string>) => {
+  actionIdsToDelete = (spaceId: string, actionIds: Array<string>) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
 
     const newActions: SpaceActions = {
@@ -126,16 +132,16 @@ export class ActionsStore implements IActionsStore {
     spaceId: string,
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Array<string> = []
+    unstagedChanges: Record<string, unknown>
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const actionsToPublish = spaceActions.filter(action => !unstagedChanges.includes(getId(action)));
+    const actionsToPublish = spaceActions.filter(action => !(getId(action) in unstagedChanges));
 
     if (actionsToPublish.length < 1) return;
 
     try {
       await this.api.publish({
-        actions: Action.squashChanges(actionsToPublish),
+        actions: Action.unpublishedChanges(Action.squashChanges(actionsToPublish)),
         signer,
         onChangePublishState,
         space: spaceId,
@@ -146,11 +152,15 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
-    const filteredActions = spaceActions.filter(action => unstagedChanges.includes(getId(action)));
+    const publishedActions = actionsToPublish.map(action => ({
+      ...action,
+      hasBeenPublished: true,
+    }));
+    const unstagedActions = spaceActions.filter(action => getId(action) in unstagedChanges);
 
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: filteredActions,
+      [spaceId]: [...publishedActions, ...unstagedActions],
     });
 
     onChangePublishState('publish-complete');

@@ -11,7 +11,7 @@ const MotionContent = motion(DropdownPrimitive.Content);
 
 interface Props {
   trigger: React.ReactNode;
-  align?: 'end' | 'center' | 'start' | undefined;
+  align?: 'end' | 'center' | 'start';
   options: { label: React.ReactNode; sublabel?: string; value: string; disabled: boolean; onClick: () => void }[];
 }
 

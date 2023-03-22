@@ -1,27 +1,34 @@
-/* eslint-disable no-unsafe-optional-chaining */
 import * as React from 'react';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import cx from 'classnames';
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { cva } from 'class-variance-authority';
 import { useSigner } from 'wagmi';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
 
+import { Action as ActionNamespace } from '../action';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
 import { useReview } from '~/modules/review';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
-import type { Action, ReviewState } from '../types';
+import { useLocalStorage } from '../hooks/use-local-storage';
+import { Services } from '../services';
+import type { Action, ReviewState, Space } from '../types';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
 
+  const onClose = () => {
+    setIsReviewOpen(false);
+  };
+
   return (
-    <Dialog.Root open={isReviewOpen} onOpenChange={setIsReviewOpen} modal={true}>
+    <Dialog.Root open={isReviewOpen} onOpenChange={onClose} modal={true}>
       <Dialog.Portal forceMount>
         <AnimatePresence>
           {isReviewOpen && (
@@ -32,10 +39,7 @@ export const Review = () => {
                 animate="visible"
                 exit="hidden"
                 transition={transition}
-                className={cx(
-                  'fixed inset-0 z-100 flex flex-col justify-between',
-                  !isReviewOpen && 'pointer-events-none'
-                )}
+                className={cx('bg-gray-02 fixed inset-0 z-100 h-full w-full', !isReviewOpen && 'pointer-events-none')}
               >
                 <ReviewChanges />
               </motion.div>
@@ -58,51 +62,48 @@ const ReviewChanges = () => {
       setIsReviewOpen(false);
       return;
     }
-
     setActiveSpace(allSpacesWithActions[0] ?? '');
   }, [allSpacesWithActions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Options for space selector dropdown
-  const options = useMemo(
-    () =>
-      allSpacesWithActions.map(spaceId => ({
-        value: spaceId,
-        label: (
-          <span className="inline-flex items-center gap-2 text-button text-text ">
-            <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-              <img
-                src={
-                  spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-                  'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-                }
-                className="absolute inset-0 h-full w-full object-cover object-center"
-                alt=""
-              />
-            </span>
-            <span>{spaces.find(({ id }) => id === spaceId)?.attributes.name}</span>
-          </span>
-        ),
-        disabled: activeSpace === spaceId,
-        onClick: () => setActiveSpace(spaceId),
-      })),
-    [activeSpace, allSpacesWithActions] // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const options = allSpacesWithActions.map(spaceId => ({
+    value: spaceId,
+    label: (
+      <span className="inline-flex items-center gap-2 text-button text-text ">
+        <span className="relative h-4 w-4 overflow-hidden rounded-sm">
+          <img
+            src={getSpaceImage(spaces, spaceId)}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            alt=""
+          />
+        </span>
+        <span>{spaces.find(({ id }) => id === spaceId)?.attributes.name}</span>
+      </span>
+    ),
+    disabled: activeSpace === spaceId,
+    onClick: () => setActiveSpace(spaceId),
+  }));
 
   // Proposal state
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
   const [proposalName, setProposalName] = useState<string>('');
   const isReadyToPublish = proposalName.length > 3;
-  const [unstagedChanges, setUnstagedChanges] = useState<Array<string>>([]);
+  const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actions, publish } = useActionsStore(activeSpace);
-  const changes = useChanges(actions);
+  const changes = useChanges(ActionNamespace.unpublishedChanges(actions));
+
+  // @TODO remove console.info
+  console.info('changes:', changes);
 
   // Publishing logic
   const { data: signer } = useSigner();
-  const handlePublish = useCallback(async () => {
+  const handlePublish = async () => {
     if (!activeSpace || !signer) return;
-
     await publish(activeSpace, signer, setReviewState, unstagedChanges);
-  }, [activeSpace, signer, publish, unstagedChanges]);
+  };
+
+  // @TODO remove console.info
+  console.info('activeSpace:', activeSpace);
 
   return (
     <>
@@ -116,10 +117,7 @@ const ReviewChanges = () => {
                 <span className="inline-flex items-center gap-2 text-button text-text ">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <img
-                      src={
-                        spaces.find(({ id }) => id === activeSpace)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-                        'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-                      }
+                      src={getSpaceImage(spaces, activeSpace)}
                       className="absolute inset-0 h-full w-full object-cover object-center"
                       alt=""
                     />
@@ -133,10 +131,7 @@ const ReviewChanges = () => {
                     <span className="inline-flex items-center gap-2">
                       <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                         <img
-                          src={
-                            spaces.find(({ id }) => id === activeSpace)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-                            'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-                          }
+                          src={getSpaceImage(spaces, activeSpace)}
                           className="absolute inset-0 h-full w-full object-cover object-center"
                           alt=""
                         />
@@ -157,7 +152,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="h-[calc(100vh-4rem)] overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
+      <div className="mt-4 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="flex flex-col gap-16">
             <div className="flex flex-col gap-2">
@@ -174,6 +169,7 @@ const ReviewChanges = () => {
               <RevisedEntity
                 key={key}
                 spaceId={activeSpace}
+                entityId={key}
                 entityName={changes[key].entityName}
                 entityRevisions={changes[key].entityRevisions}
                 unstagedChanges={unstagedChanges}
@@ -237,14 +233,18 @@ type AttributeName = string;
 type Before = string[];
 type After = string[];
 
-const useChanges = (actions: Array<any>) => {
-  return useMemo(() => getChanges(actions as Array<Action>), [actions]);
+const useChanges = (actions: Array<Action>) => {
+  return useMemo(() => getChanges(actions), [actions]);
 };
 
+// using `any` because TypeScript isn't handling the `Action` type properly
 const getChanges = (actions: Array<any>): Changes => {
   const changes: Changes = {};
 
   actions.forEach(action => {
+    // @TODO remove console.info
+    console.info('action:', action);
+
     switch (action.type) {
       case 'createTriple':
         changes[action.entityId] = {
@@ -268,7 +268,7 @@ const getChanges = (actions: Array<any>): Changes => {
       case 'editTriple':
         changes[action.before.entityId] = {
           ...changes[action.before.entityId],
-          entityName: changes[action.before.entityId]?.entityName ?? action.before.entityName,
+          entityName: changes[action.before.entityId]?.entityName || action.before.entityName,
           entityRevisions: {
             ...changes[action.before.entityId]?.entityRevisions,
             [action.before.attributeId]: {
@@ -326,26 +326,41 @@ const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'publishing-con
 
 type RevisedEntityProps = {
   spaceId: string;
+  entityId: string;
   entityName: EntityName;
   entityRevisions: EntityRevisions;
-  unstagedChanges: Array<string>;
-  setUnstagedChanges: (value: Array<string>) => void;
+  unstagedChanges: Record<string, unknown>;
+  setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
 const RevisedEntity = ({
   spaceId,
+  entityId,
   entityName,
   entityRevisions,
   unstagedChanges,
   setUnstagedChanges,
 }: RevisedEntityProps) => {
-  const { deleteActions } = useActionsStore(spaceId);
+  const [isLoading, setIsLoading] = useState(true);
+  const [entity, setEntity] = useState<any>(null);
+  const { actionIdsToDelete } = useActionsStore(spaceId);
+  const { network } = Services.useServices();
 
-  const handleDeleteEdits = useCallback(() => {
+  useEffect(() => {
+    async function fetchEntity() {
+      const entity = await network.fetchEntity(entityId);
+      setEntity(entity);
+      setIsLoading(false);
+    }
+
+    fetchEntity();
+  }, [network, entityId, setEntity]);
+
+  const handleDeleteEdits = () => {
     const allActions = Object.values(entityRevisions).map(item => item.id);
 
-    deleteActions(spaceId, allActions);
-  }, [spaceId, entityRevisions, deleteActions]);
+    actionIdsToDelete(spaceId, allActions);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -361,19 +376,38 @@ const RevisedEntity = ({
                 <Panel.Section key={attributeId}>
                   <div className="text-bodySemibold">{attributeName}</div>
                   <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body')}>
-                    {!isDiff
-                      ? before?.map(item => (
+                    {!isDiff ? (
+                      <>
+                        {isLoading ? (
+                          <Skeleton />
+                        ) : (
+                          <>
+                            {entity.triples
+                              .filter(
+                                (item: any) => item.attributeId === attributeId && !before?.includes(item.value.name)
+                              )
+                              .map((triple: any) => (
+                                <Chip key={triple.id} status="unchanged">
+                                  {triple.value.name}
+                                </Chip>
+                              ))}
+                          </>
+                        )}
+                        {before?.map(item => (
                           <Chip key={item} status="removed">
                             {item}
                           </Chip>
+                        ))}
+                      </>
+                    ) : (
+                      differences
+                        ?.filter(item => !item.added)
+                        ?.map((difference: Difference, index: number) => (
+                          <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
+                            {difference.value}
+                          </span>
                         ))
-                      : differences
-                          ?.filter(item => !item.added)
-                          ?.map((difference: Difference, index: number) => (
-                            <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
-                              {difference.value}
-                            </span>
-                          ))}
+                    )}
                   </div>
                 </Panel.Section>
               );
@@ -388,7 +422,7 @@ const RevisedEntity = ({
           <Panel>
             {Object.keys(entityRevisions).map(attributeId => {
               const { id, attributeName, isDiff, before, after, differences } = entityRevisions[attributeId];
-              const unstaged = unstagedChanges.includes(id);
+              const unstaged = id in unstagedChanges;
 
               return (
                 <Panel.Section key={attributeId}>
@@ -396,6 +430,24 @@ const RevisedEntity = ({
                   <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body', unstaged && 'opacity-25')}>
                     {!isDiff ? (
                       <>
+                        {isLoading ? (
+                          <Skeleton />
+                        ) : (
+                          <>
+                            {entity.triples
+                              .filter(
+                                (item: any) =>
+                                  item.attributeId === attributeId &&
+                                  !before?.includes(item.value.name) &&
+                                  !after?.includes(item.value.name)
+                              )
+                              .map((triple: any) => (
+                                <Chip key={triple.id} status="unchanged">
+                                  {triple.value.name}
+                                </Chip>
+                              ))}
+                          </>
+                        )}
                         {before?.map(item => (
                           <Chip key={item} status="removed">
                             {item}
@@ -411,21 +463,23 @@ const RevisedEntity = ({
                       differences
                         ?.filter(item => !item.removed)
                         ?.map((difference: Difference, index: number) => (
-                          <span key={index} className={cx(difference.added && 'bg-green/10')}>
+                          <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
                             {difference.value}
                           </span>
                         ))
                     )}
                   </div>
                   <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
-                    <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
+                    <SquareButton icon="trash" onClick={() => actionIdsToDelete(spaceId, [id])} />
                     <SquareButton
                       icon={unstaged ? 'blank' : 'tick'}
                       onClick={() => {
                         if (unstaged) {
-                          setUnstagedChanges(unstagedChanges.filter(actionId => actionId !== id));
+                          const newUnstagedChanges = { ...unstagedChanges };
+                          delete newUnstagedChanges[id];
+                          setUnstagedChanges({ ...newUnstagedChanges });
                         } else {
-                          setUnstagedChanges([...unstagedChanges, id]);
+                          setUnstagedChanges({ ...unstagedChanges, [id]: null });
                         }
                       }}
                     />
@@ -440,13 +494,21 @@ const RevisedEntity = ({
   );
 };
 
+const Skeleton = () => {
+  return (
+    <div className="inline-flex min-h-[1.5rem] items-center rounded-sm bg-white px-2 py-1 text-grey-04 shadow-inner shadow-text">
+      Loading...
+    </div>
+  );
+};
+
 type PanelProps = {
   children: React.ReactNode;
 };
 
 const Panel = ({ children }: PanelProps) => {
   return (
-    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-card">
+    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-big">
       {children}
     </div>
   );
@@ -467,19 +529,28 @@ type ChipProps = {
 };
 
 const Chip = ({ status = 'unchanged', children }: ChipProps) => {
-  return (
-    <span
-      className={cx(
-        status === 'added' && 'bg-green/10',
-        status === 'removed' && 'bg-grey-02 line-through',
-        status === 'unchanged' && 'bg-white',
-        'inline-flex min-h-[1.5rem] items-center rounded-sm px-2 py-1 text-left text-metadataMedium shadow-inner shadow-text'
-      )}
-    >
-      {children}
-    </span>
+  const chip = cva(
+    'inline-flex min-h-[1.5rem] items-center rounded-sm px-2 py-1 text-left text-metadataMedium shadow-inner shadow-text',
+    {
+      variants: {
+        status: {
+          added: 'bg-successTertiary',
+          removed: 'bg-grey-02 line-through',
+          unchanged: 'bg-white',
+        },
+      },
+    }
   );
+
+  return <span className={chip({ status })}>{children}</span>;
 };
+
+function getSpaceImage(spaces: Space[], spaceId: string): string {
+  return (
+    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
+    'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
+  );
+}
 
 const reviewVariants = {
   hidden: { y: '100%' },
@@ -487,8 +558,8 @@ const reviewVariants = {
 };
 
 const statusVariants = {
-  hidden: { opacity: 0, y: '50%' },
-  visible: { opacity: 1, y: '0%' },
+  hidden: { opacity: 0, y: '-4px' },
+  visible: { opacity: 1, y: '0px' },
 };
 
 const transition = { type: 'spring', duration: 0.5, bounce: 0 };

@@ -77,12 +77,13 @@ function App({ Component, pageProps }: AppProps) {
       />
       <Main>
         <Component {...pageProps} />
-        <Analytics />
       </Main>
+      {/* These are client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <FlowBar />
         <Review />
       </ClientOnly>
+      <Analytics />
     </>
   );
 }

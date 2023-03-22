@@ -1,8 +1,6 @@
-import { useMemo } from 'react';
 import { useSelector } from '@legendapp/state/react';
 
 import { useActionsStoreContext } from './actions-store-provider';
-import type { Action } from '../types';
 
 /**
  * Hook to consume state/effects from the global ActionsStore.
@@ -11,16 +9,11 @@ import type { Action } from '../types';
  * on a dev route or the root /spaces page.
  */
 export function useActionsStore(spaceId?: string) {
-  const { actions$, publish, clear, create, update, remove, deleteActions } = useActionsStoreContext();
+  const { actions$, allActions$, allSpacesWithActions$, publish, clear, create, update, remove, actionIdsToDelete } =
+    useActionsStoreContext();
   const actions = useSelector(actions$);
-  const allActions: Array<Action> = useMemo(
-    () => Object.entries(actions).flatMap(([, actions]) => actions) ?? [],
-    [actions]
-  );
-  const allSpacesWithActions: Array<string> = useMemo(
-    () => Object.keys(actions).filter(spaceId => actions[spaceId].length > 0) ?? [],
-    [actions]
-  );
+  const allActions = useSelector(allActions$);
+  const allSpacesWithActions = useSelector(allSpacesWithActions$);
 
   if (!spaceId) {
     return {
@@ -32,7 +25,7 @@ export function useActionsStore(spaceId?: string) {
       create,
       update,
       remove,
-      deleteActions,
+      actionIdsToDelete,
     };
   }
 
@@ -45,6 +38,6 @@ export function useActionsStore(spaceId?: string) {
     create,
     update,
     remove,
-    deleteActions,
+    actionIdsToDelete,
   };
 }

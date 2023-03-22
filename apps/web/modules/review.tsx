@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { useState, useCallback, createContext, useContext } from 'react';
+import { useState, createContext, useContext } from 'react';
 
 type ReviewState = {
   isReviewOpen: boolean;
   setIsReviewOpen: (value: boolean) => void;
-  toggleIsReviewOpen: () => void;
   activeSpace: string;
   setActiveSpace: (value: string) => void;
   isReadyToPublish: boolean;
@@ -14,7 +13,6 @@ type ReviewState = {
 const initialReviewState = {
   isReviewOpen: false,
   setIsReviewOpen: (value: boolean) => null,
-  toggleIsReviewOpen: () => null,
   activeSpace: '',
   setActiveSpace: (value: string) => null,
   isReadyToPublish: false,
@@ -29,22 +27,14 @@ type ReviewProviderProps = {
 
 export const ReviewProvider = ({ children }: ReviewProviderProps) => {
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
-
-  const toggleIsReviewOpen = useCallback(() => {
-    setIsReviewOpen(!isReviewOpen);
-  }, [isReviewOpen]);
-
   const [activeSpace, setActiveSpace] = useState<string>('');
-
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
 
   return (
     <ReviewContext.Provider
       value={{
-        ...initialReviewState,
         isReviewOpen,
         setIsReviewOpen,
-        toggleIsReviewOpen,
         activeSpace,
         setActiveSpace,
         isReadyToPublish,
