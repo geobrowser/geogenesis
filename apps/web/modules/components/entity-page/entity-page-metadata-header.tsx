@@ -8,10 +8,9 @@ import { GeoDate } from '~/modules/utils';
 
 interface Props {
   versions: Array<Version>;
-  types: Array<string>;
 }
 
-export function EntityPageMetadataHeader({ versions, types }: Props) {
+export function EntityPageMetadataHeader({ versions }: Props) {
   // Parse all contributors to this page uniquely by their id. Try and
   // use their name, if they don't have one use their wallet address.
   const contributors = pipe(
@@ -35,7 +34,7 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
   return (
     <div>
       {contributors.length > 0 && (
-        <div className="mb-2 flex items-center justify-between text-text">
+        <div className="flex items-center justify-between text-text">
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
             <AvatarGroup usernames={firstThreeContributors} />
             <p className="text-text">
@@ -51,14 +50,6 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
           </HistoryPanel>
         </div>
       )}
-
-      <ul className="flex items-center gap-1">
-        {types.map(t => (
-          <li key={t}>
-            <EntityPageTypeChip typeName={t} />
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

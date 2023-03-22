@@ -16,6 +16,8 @@ import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple, Version } from '~/modules/types';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { NavUtils } from '~/modules/utils';
+import Head from 'next/head';
 
 interface Props {
   triples: Triple[];
@@ -44,16 +46,22 @@ export default function EntityPage(props: Props) {
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.space}
-      initialTriples={props.triples}
-      initialSchemaTriples={props.schemaTriples}
-    >
-      <EntityPageContentContainer>
-        <Page {...props} />
-      </EntityPageContentContainer>
-    </EntityStoreProvider>
+    <>
+      <Head>
+        <title>{props.name ?? props.id}</title>
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
+      </Head>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.space}
+        initialTriples={props.triples}
+        initialSchemaTriples={props.schemaTriples}
+      >
+        <EntityPageContentContainer>
+          <Page {...props} />
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </>
   );
 }
 

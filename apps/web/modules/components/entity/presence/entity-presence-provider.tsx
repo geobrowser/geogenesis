@@ -95,8 +95,6 @@ function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityCha
   const hasChangesToEntity = Action.getChangeCount(Action.forEntityId(actions, entityId)) > 0;
 
   useEffect(() => {
-    console.log('hasChangesToEntity', hasChangesToEntity);
-
     updateMyPresence({ address, hasChangesToEntity });
   }, [actions, entityId, hasChangesToEntity]);
 

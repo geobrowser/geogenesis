@@ -17,10 +17,10 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
-import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
 import { PageImageField, PageStringField } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
+import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
@@ -64,6 +64,8 @@ export function EditableEntityPage({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
+  const types = Entity.types(triples).flatMap(t => (t.name ? [t.name] : []));
+  console.log('triples', triples);
 
   const send = useEditEvents({
     context: {
@@ -103,49 +105,20 @@ export function EditableEntityPage({
 
   return (
     <>
-      <Head>
-        <title>{name ?? id}</title>
-        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-      </Head>
-
-      <EntityPageMetadataHeader versions={versions} types={[]} />
-
-      <Spacer height={20} />
-
-      {/*
-          StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
-          textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
-          of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
-          readable entity page visually align.
-
-          You'll notice that this Spacer in readable-entity-page will have a larger value.
-        */}
+      <EntityPageMetadataHeader versions={versions} />
+      <Spacer height={16} />
       <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-
-      <Spacer height={9} />
-
-      {/*
-          StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
-          textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
-          of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
-          readable entity page visually align.
-
-          You'll notice that this Spacer in readable-entity-page will have a larger value.
-        */}
-
+      <Spacer height={40} />
+      <EntityTypeChipGroup types={types} />
+      <Spacer height={40} />
       <PageStringField
         variant="body"
         placeholder="Add a description..."
         value={description ?? ''}
         onChange={onDescriptionChange}
       />
+      <Spacer height={60} />
 
-      <Spacer height={12} />
-
-      <div className="flex justify-end sm:[&>button]:flex-grow">
-        <CopyIdButton id={id} />
-      </div>
-      <Spacer height={8} />
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes

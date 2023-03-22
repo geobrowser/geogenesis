@@ -16,11 +16,11 @@ import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
 import { Triple, Version } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
-import { CopyIdButton } from './copy-id';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
+import { EntityTypeChipGroup } from './entity-type-chip-group';
 
 interface Props {
   triples: Triple[];
@@ -35,35 +35,31 @@ interface Props {
 export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples, versions }: Props) {
   const description = Entity.description(triples);
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
+  const types = Entity.types(triples).flatMap(t => (t.name ? [t.name] : []));
+  console.log('types', types);
 
   return (
     <>
-      <Head>
-        <title>{name ?? id}</title>
-        <meta property="og:url" content={`https://geobrowser.io/${NavUtils.toEntity(space, id)}`} />
-      </Head>
-      <EntityPageMetadataHeader versions={versions} types={[]} />
-
-      <Spacer height={20} />
-
+      <EntityPageMetadataHeader versions={versions} />
+      <Spacer height={16} />
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
       </Truncate>
+      <Spacer height={40} />
+      <EntityTypeChipGroup types={types} />
+      <Spacer height={40} />
+
       {description && (
         <>
-          <Spacer height={16} />
           <Text as="p" color="grey-04">
             {description}
           </Text>
+          <Spacer height={60} />
         </>
       )}
-      <Spacer height={16} />
-      <div className="flex justify-end sm:[&>button]:flex-grow">
-        <CopyIdButton id={id} />
-      </div>
-      <Spacer height={8} />
+
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} space={space} />
