@@ -53,7 +53,13 @@ export default function EntityPage(props: Props) {
       initialBlockIdsTriple={props.blockIdsTriple}
       initialBlockTriples={props.blockTriples}
     >
-      <EntityTableStoreProvider spaceId={props.space} initialTypes={props.initialTypes}>
+      <EntityTableStoreProvider
+        spaceId={props.space}
+        initialTypes={props.initialTypes}
+        initialColumns={[]}
+        initialRows={[]}
+        initialSelectedType={null}
+      >
         {renderEditablePage ? (
           <div>
             <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>

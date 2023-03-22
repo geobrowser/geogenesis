@@ -37,10 +37,10 @@ interface IEntityTableStoreConfig {
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
-  initialRows?: Row[];
-  initialSelectedType?: TripleType | null;
-  initialTypes?: TripleType[];
-  initialColumns?: Column[];
+  initialRows: Row[];
+  initialSelectedType: TripleType | null;
+  initialTypes: TripleType[];
+  initialColumns: Column[];
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
 }
@@ -89,10 +89,10 @@ export class EntityTableStore implements IEntityTableStore {
   constructor({
     api,
     spaceId,
-    initialRows = [],
-    initialSelectedType = null,
-    initialColumns = [],
-    initialTypes = [],
+    initialRows,
+    initialSelectedType,
+    initialColumns,
+    initialTypes,
     ActionsStore,
     SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,

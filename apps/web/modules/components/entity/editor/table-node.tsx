@@ -71,7 +71,13 @@ export const TableNodeChildren = React.memo(function TableNodeComponent({
   selectedType: Triple;
 }) {
   return (
-    <EntityTableStoreProvider spaceId={spaceId} initialSelectedType={selectedType}>
+    <EntityTableStoreProvider
+      spaceId={spaceId}
+      initialSelectedType={selectedType}
+      initialRows={[]}
+      initialColumns={[]}
+      initialTypes={[]}
+    >
       <EntityTableContainer showHeader={false} spaceId={spaceId} spaceName={''} />
     </EntityTableStoreProvider>
   );
