@@ -64,8 +64,7 @@ export function EditableEntityPage({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
-  const types = Entity.types(triples).flatMap(t => (t.name ? [t.name] : []));
-  console.log('triples', triples);
+  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
 
   const send = useEditEvents({
     context: {

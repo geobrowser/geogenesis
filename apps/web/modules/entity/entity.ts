@@ -56,11 +56,9 @@ export function types(triples: TripleType[], currentSpace?: string): { id: strin
       // want to show the Triples/Types from the current Space if there are multiple Types
       // with the same name assigned to this Entity.
       if (triples.length > 1) {
-        return (
-          triples
-            // .filter(triple => triple.space === currentSpace)
-            .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []))
-        );
+        return triples
+          .filter(triple => triple.space === currentSpace)
+          .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
       }
 
       return [];

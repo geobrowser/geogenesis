@@ -35,8 +35,7 @@ interface Props {
 export function ReadableEntityPage({ triples, id, name, space, linkedEntities, schemaTriples, versions }: Props) {
   const description = Entity.description(triples);
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples).flatMap(t => (t.name ? [t.name] : []));
-  console.log('types', types);
+  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
 
   return (
     <>
