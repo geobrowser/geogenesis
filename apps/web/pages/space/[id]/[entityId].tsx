@@ -15,7 +15,6 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple, Version } from '~/modules/types';
-import { ReadIO } from '~/modules/services/io';
 
 interface Props {
   triples: Triple[];
@@ -93,8 +92,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  const storage = new StorageClient(config.ipfs);
 
+  const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
 
   const [entity, related, versions] = await Promise.all([
@@ -114,7 +113,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    ReadIO(config.subgraph).proposedVersions(entityId),
+    network.fetchProposedVersions(entityId),
   ]);
 
   const relatedEntities = await Promise.all(
@@ -138,8 +137,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
       return acc;
     }, {} as Record<string, LinkedEntityGroup>);
-
-  console.log('versions', versions);
 
   return {
     props: {

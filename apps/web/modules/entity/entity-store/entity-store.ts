@@ -199,11 +199,6 @@ export class EntityStore implements IEntityStore {
         };
       });
 
-      // console.log('schemaTriples', schemaTriples);
-
-      // const globalActions = Object.values(this.ActionsStore.actions$.get()).flatMap(a => a);
-
-      // const schemaTriplesWithNames = globalActions, schemaTriples;
       this.schemaTriples$.set(schemaTriples);
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') {

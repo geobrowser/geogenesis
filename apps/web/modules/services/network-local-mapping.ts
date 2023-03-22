@@ -148,5 +148,6 @@ export function fromNetworkActions(networkActions: NetworkAction[]): Action[] {
     }
   });
 
+  // @TODO: Fix the type mismatch
   return newActions;
 }
