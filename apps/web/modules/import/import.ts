@@ -1,8 +1,8 @@
 import { parse as parseCSV } from 'papaparse';
 
+import { ID } from '../id';
 import { Triple } from '../triple';
 import { Triple as TripleType, Value } from '../types';
-import { ID } from '../id';
 
 export function readFileAsText(file: File) {
   return new Promise<string>(resolve => {
@@ -39,6 +39,8 @@ function createValueId(value: Value): string {
       return `s~${value.value}`;
     case 'number':
       return `n~${value.value}`;
+    case 'image':
+      return `i~${value.value}`;
   }
 }
 

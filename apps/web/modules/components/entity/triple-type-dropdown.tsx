@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { useState } from 'react';
+import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import * as React from 'react';
+import { useState } from 'react';
 
 import { SquareButton } from '~/modules/design-system/button';
 import type { IconName } from '~/modules/design-system/icon';

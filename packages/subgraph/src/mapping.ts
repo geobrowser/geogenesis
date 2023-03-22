@@ -18,8 +18,9 @@ export function handleEntryAdded(event: EntryAdded): void {
     space: address,
     index: event.params.index,
     uri: event.params.uri,
-    author: event.params.author,
+    createdBy: event.params.author,
     createdAtBlock: event.block.number,
+    createdAtTimestamp: event.block.timestamp,
   })
 }
 

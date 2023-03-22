@@ -18,6 +18,8 @@ import { Search } from '~/modules/design-system/icons/search';
 import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
+import { Upload } from '~/modules/design-system/icons/upload';
+
 import type { ColorName } from '~/modules/design-system/theme/colors';
 import { EditorH1 } from './icons/editor-h1';
 import { EditorH2 } from './icons/editor-h2';
@@ -25,6 +27,7 @@ import { EditorH3 } from './icons/editor-h3';
 import { EditorImage } from './icons/editor-image';
 import { EditorTable } from './icons/editor-table';
 import { EditorText } from './icons/editor-text';
+import { Image } from './icons/image';
 import { Plus } from './icons/plus';
 
 export type IconName =
@@ -34,7 +37,9 @@ export type IconName =
   | 'close'
   | 'eye'
   | 'expand'
+  | 'entity'
   | 'expandSmall'
+  | 'upload'
   | 'contractSmall'
   | 'filter'
   | 'trash'
@@ -44,6 +49,8 @@ export type IconName =
   | 'preset'
   | 'relation'
   | 'plus'
+  | 'string'
+  | 'image'
   | 'text'
   | 'rightArrowLongSmall'
   | 'search'
@@ -80,6 +87,7 @@ const icons: Record<IconName, React.ElementType> = {
   facts: Facts,
   copy: Copy,
   preset: Preset,
+  entity: Relation,
   relation: Relation,
   text: Text,
   plus: Plus,
@@ -91,4 +99,7 @@ const icons: Record<IconName, React.ElementType> = {
   editorImage: EditorImage,
   editorTable: EditorTable,
   editorText: EditorText,
+  string: Text,
+  image: Image,
+  upload: Upload,
 };

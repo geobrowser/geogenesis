@@ -85,6 +85,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
+
         return isRowCell && isColCell && isCurrentValueType;
       }),
       A.uniqBy(triple => triple.id)
