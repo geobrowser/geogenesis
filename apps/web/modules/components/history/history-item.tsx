@@ -38,7 +38,7 @@ export function HistoryItem({ version }: Props) {
   const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
 
   return (
-    <div className="cursor-pointer bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text">
+    <div className="bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text">
       <div className="flex items-center justify-between">
         <Text as="h1" variant="metadataMedium" className="mb-2">
           {truncatedVersionName}
