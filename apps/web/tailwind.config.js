@@ -11,6 +11,7 @@ module.exports = {
       ctaHover: '#002FD9',
       ctaTertiary: '#F0F3FF',
       purple: '#6833FF',
+      black: '#000000',
       pink: '#FE31C5',
       bg: '#FBFBFB',
       'grey-01': '#F6F6F6',

@@ -18,8 +18,11 @@ import { Search } from '~/modules/design-system/icons/search';
 import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
-import type { ColorName } from '~/modules/design-system/theme/colors';
+import { Upload } from '~/modules/design-system/icons/upload';
 import { History } from './icons/history';
+import { Image } from './icons/image';
+
+import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
   | 'create'
@@ -28,7 +31,9 @@ export type IconName =
   | 'close'
   | 'eye'
   | 'expand'
+  | 'entity'
   | 'expandSmall'
+  | 'upload'
   | 'contractSmall'
   | 'filter'
   | 'trash'
@@ -37,6 +42,8 @@ export type IconName =
   | 'copy'
   | 'preset'
   | 'relation'
+  | 'string'
+  | 'image'
   | 'text'
   | 'rightArrowLongSmall'
   | 'search'
@@ -68,9 +75,13 @@ const icons: Record<IconName, React.ElementType> = {
   facts: Facts,
   copy: Copy,
   preset: Preset,
+  entity: Relation,
   relation: Relation,
   text: Text,
+  string: Text,
+  image: Image,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
   history: History,
+  upload: Upload,
 };

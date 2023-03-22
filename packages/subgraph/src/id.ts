@@ -1,6 +1,9 @@
 import { Value } from '@geogenesis/action-schema/assembly'
 
 function createValueId(value: Value): string {
+  const imageValue = value.asImageValue()
+  if (imageValue) return imageValue.id
+
   const stringValue = value.asStringValue()
   if (stringValue) return stringValue.id
 

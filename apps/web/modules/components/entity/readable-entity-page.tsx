@@ -1,10 +1,9 @@
-import * as React from 'react';
-import { useState } from 'react';
 import cx from 'classnames';
+import { LayoutGroup } from 'framer-motion';
 import Head from 'next/head';
 import Link from 'next/link';
-import { LayoutGroup } from 'framer-motion';
 import pluralize from 'pluralize';
+import { useState } from 'react';
 
 import { SmallButton } from '~/modules/design-system/button';
 import { LinkableChip } from '~/modules/design-system/chip';
@@ -18,6 +17,7 @@ import { Entity } from '~/modules/entity';
 import { Triple, Version } from '~/modules/types';
 import { groupBy, NavUtils, partition } from '~/modules/utils';
 import { CopyIdButton } from './copy-id';
+import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
@@ -120,6 +120,30 @@ function EntityAttributes({
 }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
+  const tripleToEditableField = (triple: Triple) => {
+    switch (triple.value.type) {
+      case 'string':
+        return (
+          <Text key={`string-${triple.value.id}`} as="p">
+            {triple.value.value}
+          </Text>
+        );
+      case 'image':
+        return <ImageZoom key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
+      case 'entity': {
+        return (
+          <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>
+            <LinkableChip href={NavUtils.toEntity(space, triple.value.id)}>
+              {triple.value.name || triple.value.id}
+            </LinkableChip>
+          </div>
+        );
+      }
+      case 'number':
+        return null;
+    }
+  };
+
   return (
     <>
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
@@ -132,19 +156,7 @@ function EntityAttributes({
               Have to do some janky layout stuff instead of being able to just use gap since we want different
               height between the attribute name and the attribute value for entities vs strings
             */}
-            {triples.map(triple =>
-              triple.value.type === 'entity' ? (
-                <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>
-                  <LinkableChip href={NavUtils.toEntity(space, triple.value.id)}>
-                    {triple.value.name || triple.value.id}
-                  </LinkableChip>
-                </div>
-              ) : (
-                <Text key={`string-${triple.value.id}`} as="p">
-                  {triple.value.value}
-                </Text>
-              )
-            )}
+            {triples.map(tripleToEditableField)}
           </div>
         </div>
       ))}

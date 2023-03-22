@@ -216,7 +216,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
         <div className="flex justify-center pb-4">
           {avatar ? (
             <div
-              className="border-black rounded border-8 bg-cover bg-center"
+              className="rounded border-8 border-black bg-cover bg-center"
               style={{
                 backgroundImage: `url(${avatar})`,
                 height: 154,

@@ -12,7 +12,17 @@ import {
   log,
   store,
 } from '@graphprotocol/graph-ts'
-import { GeoEntity, Space, Triple } from '../generated/schema'
+import {
+  GeoEntity,
+  Space,
+  Triple,
+  Version,
+  ProposedVersion,
+  Account,
+  Action as ActionEntity,
+  ActionCount,
+  Proposal,
+} from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { createTripleId } from './id'
 
@@ -72,9 +82,83 @@ export function getOrCreateEntity(id: string): GeoEntity {
   if (entity == null) {
     entity = new GeoEntity(id)
     entity.typeIds = []
+    entity.versions = []
     entity.save()
   }
   return entity
+}
+
+export function createProposedVersion(
+  versionId: string,
+  createdAt: BigInt,
+  actions: string[],
+  entityId: string,
+  createdBy: Address,
+  proposalId: string
+): ProposedVersion {
+  let version = ProposedVersion.load(versionId)
+  if (version == null) {
+    version = new ProposedVersion(versionId)
+    version.createdBy = getOrCreateAccount(createdBy).id
+    version.actions = actions // action ids
+    version.entity = entityId
+    version.createdAt = createdAt
+    version.save()
+  }
+  let proposal = Proposal.load(proposalId)
+  if (proposal != null) {
+    proposal.proposedVersions = proposal.proposedVersions.concat([versionId])
+    proposal.save()
+  }
+  return version
+}
+
+function getOrCreateAccount(address: Address): Account {
+  let account = Account.load(address.toHexString())
+  if (account == null) {
+    account = new Account(address.toHexString())
+    account.save()
+  }
+  return account
+}
+
+export function createVersion(
+  versionId: string,
+  proposedVersion: string,
+  createdAt: BigInt,
+  entityId: string,
+  createdBy: Address
+): Version {
+  let version = Version.load(versionId)
+  let proposed = ProposedVersion.load(proposedVersion)
+  let entity = getOrCreateEntity(entityId)
+  if (version == null) {
+    version = new Version(versionId)
+    version.createdBy = getOrCreateAccount(createdBy).id
+    if (entity != null) {
+      if (entity.versions.length == 0 && proposed != null) {
+        version.proposedVersion = proposed.id
+        version.actions = proposed.actions
+      } else if (entity.versions.length > 0 && proposed != null) {
+        let lastVersion = Version.load(
+          entity.versions[entity.versions.length - 1]
+        )
+        if (lastVersion != null) {
+          version.actions = lastVersion.actions.concat(proposed.actions)
+          version.proposedVersion = proposed.id
+        }
+      } else {
+        log.debug(`No proposed version found for ${versionId}`, [])
+        version.actions = []
+      }
+      entity.version = version.id
+      entity.versions = entity.versions.concat([version.id])
+      entity.save()
+    }
+    version.createdAt = createdAt
+    version.save()
+  }
+  return version
 }
 
 export function handleCreateTripleAction(
@@ -116,8 +200,10 @@ export function handleCreateTripleAction(
   const triple = (existing || new Triple(tripleId))!
   triple.isProtected = isProtected
   triple.entity = entity.id
+
   triple.attribute = attribute.id
-  triple.valueType = fact.value.type
+  //NOTE: Maybe delete this
+  triple.valueType = fact.value.type.toUpperCase()
   triple.space = space
 
   const stringValue = fact.value.asStringValue()
@@ -142,6 +228,18 @@ export function handleCreateTripleAction(
     if (attribute.id == 'space') {
       handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
     }
+  }
+
+  const imageValue = fact.value.asImageValue()
+  if (imageValue) {
+    triple.valueType = 'IMAGE'
+    triple.valueId = imageValue.id
+    triple.stringValue = imageValue.value
+
+    log.debug(
+      `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${imageValue.value}`,
+      []
+    )
   }
 
   const numberValue = fact.value.asNumberValue()
@@ -169,6 +267,17 @@ export function handleCreateTripleAction(
   log.debug(`ACTION: Created triple: ${triple.id}`, [])
 }
 
+export function getOrCreateActionCount(): ActionCount {
+  let actionCount = ActionCount.load('1')
+  if (actionCount == null) {
+    actionCount = new ActionCount('1')
+    actionCount.count = BigInt.fromI32(0)
+  }
+  actionCount.count = actionCount.count.plus(BigInt.fromI32(1))
+  actionCount.save()
+  return actionCount
+}
+
 function handleDeleteTripleAction(
   fact: DeleteTripleAction,
   space: string
@@ -179,7 +288,6 @@ function handleDeleteTripleAction(
     fact.attributeId,
     fact.value
   )
-  fact.type
 
   const triple = Triple.load(tripleId)
 
@@ -191,6 +299,7 @@ function handleDeleteTripleAction(
   if (fact.attributeId == TYPES) {
     const entity = getOrCreateEntity(fact.entityId)
     const stringValue = fact.value.asStringValue()
+
     if (stringValue && entity) {
       removeEntityTypeId(entity, stringValue.id)
     }
@@ -221,19 +330,50 @@ function handleDeleteTripleAction(
   log.debug(`ACTION: Deleted triple: ${tripleId}`, [])
 }
 
-function handleCreateEntityAction(action: CreateEntityAction): void {
+export function handleCreateEntityAction(action: CreateEntityAction): void {
   const entity = getOrCreateEntity(action.entityId)
   entity.save()
 
   log.debug(`ACTION: Created entity: ${entity.id}`, [])
 }
 
+export function getOrCreateAction(
+  id: string,
+  actionType: string,
+  entityId: string,
+  attributeId: string | null = null,
+  valueType: string | null = null,
+  valueId: string | null = null,
+  numberValue: string | null = null,
+  stringValue: string | null = null,
+  entityValue: string | null = null
+): ActionEntity {
+  let action = ActionEntity.load(id)
+  if (action == null) {
+    action = new ActionEntity(id)
+    action.actionType = actionType
+    action.entity = entityId
+    if (attributeId) action.attribute = attributeId
+    if (valueType) action.valueType = valueType
+    if (valueId) action.valueId = valueId
+    if (numberValue) action.numberValue = BigDecimal.fromString(numberValue)
+    if (stringValue) action.stringValue = stringValue
+    if (entityValue) action.entityValue = entityValue
+    action.save()
+  }
+
+  return action
+}
+
 export function handleAction(
   action: Action,
   space: string,
   createdAtBlock: BigInt
-): void {
+): string | null {
   const createTripleAction = action.asCreateTripleAction()
+  // ~~~~~~~~~~~~~~~~~~~~
+  // CREATE TRIPLE ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   if (createTripleAction) {
     handleCreateTripleAction({
       fact: createTripleAction,
@@ -241,20 +381,106 @@ export function handleAction(
       isProtected: false,
       createdAtBlock,
     })
-    return
+    let entityId = createTripleAction.entityId
+    let actionId = getOrCreateActionCount().count.toString()
+    let attributeId = createTripleAction.attributeId
+    let value = createTripleAction.value
+    let valueId: string = ''
+
+    let entityValue = value.asEntityValue()
+    let entValue: string | null = null
+    if (entityValue != null) {
+      valueId = entityValue.id
+      entValue = entityValue.id
+    }
+    let stringValue = value.asStringValue()
+    let strValue: string | null = null
+    if (stringValue != null) {
+      valueId = stringValue.id
+      strValue = stringValue.value
+    }
+    let numberValue = value.asNumberValue()
+    let numValue: string | null = null
+    if (numberValue != null) {
+      valueId = numberValue.id
+      numValue = numberValue.value
+    }
+    let action = getOrCreateAction(
+      actionId,
+      'CREATE',
+      entityId,
+      attributeId,
+      value.type.toUpperCase(),
+      valueId,
+      numValue,
+      strValue,
+      entValue
+    )
+    return action.id
   }
 
+  // ~~~~~~~~~~~~~~~~~~~~
+  // DELETE TRIPLE ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   const deleteTripleAction = action.asDeleteTripleAction()
   if (deleteTripleAction) {
     handleDeleteTripleAction(deleteTripleAction, space)
-    return
+
+    let entityId = deleteTripleAction.entityId
+    getOrCreateEntity(entityId)
+    let actionId = getOrCreateActionCount().count.toString()
+    let attributeId = deleteTripleAction.attributeId
+    let value = deleteTripleAction.value
+    let valueId: string = ''
+
+    let entityValue = value.asEntityValue()
+    let entValue: string | null = null
+    if (entityValue != null) {
+      valueId = entityValue.id
+      entValue = entityValue.id
+    }
+    let stringValue = value.asStringValue()
+    let strValue: string | null = null
+    if (stringValue != null) {
+      valueId = stringValue.id
+      strValue = stringValue.value
+    }
+    let numberValue = value.asNumberValue()
+    let numValue: string | null = null
+    if (numberValue != null) {
+      valueId = numberValue.id
+      numValue = numberValue.value
+    }
+    let action = getOrCreateAction(
+      actionId,
+      'DELETE',
+      entityId,
+      attributeId,
+      value.type.toUpperCase(),
+      valueId,
+      numValue,
+      strValue,
+      entValue
+    )
+    return action.id
   }
 
+  // ~~~~~~~~~~~~~~~~~~~~
+  // CREATE ENTITY ACTION
+  // ~~~~~~~~~~~~~~~~~~~~
   const createEntityAction = action.asCreateEntityAction()
   if (createEntityAction) {
     handleCreateEntityAction(createEntityAction)
-    return
+
+    let entityId = createEntityAction.entityId
+    let actionId = getOrCreateActionCount().count.toString()
+
+    let action = getOrCreateAction(actionId, 'CREATE', entityId)
+
+    return action.id
   }
+
+  return null
 
   log.debug(`Unhandled action '${action.type}'`, [])
 }

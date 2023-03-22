@@ -30,9 +30,7 @@ export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId 
   };
 }
 
-// New, empty triples should generate unique triple IDs so they are distinguishable from
-// other newly created triples locally.
-export function empty(spaceId: string, entityId: string, type: TripleValueType = 'string'): Triple {
+export function emptyValue(type: TripleValueType): Value {
   const tripleValue: Record<TripleValueType, Value> = {
     string: {
       id: ID.createValueId(),
@@ -49,13 +47,24 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
       type: 'number',
       value: '',
     } as NumberValue,
+    image: {
+      id: ID.createValueId(),
+      type: 'image',
+      value: '',
+    },
   };
 
+  return tripleValue[type];
+}
+
+// New, empty triples should generate unique triple IDs so they are distinguishable from
+// other newly created triples locally.
+export function empty(spaceId: string, entityId: string, type: TripleValueType = 'string'): Triple {
   const emptyTriple: OmitStrict<Triple, 'id'> = {
     entityId: entityId,
     attributeId: '',
     attributeName: '',
-    value: tripleValue[type],
+    value: emptyValue(type),
     space: spaceId,
     entityName: '',
   };

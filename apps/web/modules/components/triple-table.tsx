@@ -1,5 +1,3 @@
-import * as React from 'react';
-import { memo, useState } from 'react';
 import {
   ColumnDef,
   createColumnHelper,
@@ -9,11 +7,13 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { memo, useState } from 'react';
 
 import { LinkableChip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
+import { ImageZoom } from './entity/editable-fields';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from './table/styles';
@@ -74,6 +74,10 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'entity') {
           return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
+        }
+
+        if (value.type === 'image') {
+          return <ImageZoom imageSrc={value.value} variant="avatar" />;
         }
 
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;

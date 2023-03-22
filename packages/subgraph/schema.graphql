@@ -32,7 +32,7 @@ type LogEntry @entity {
   id: ID!
   createdAtBlock: BigInt!
   uri: String!
-  author: Bytes!
+  createdBy: Bytes!
   mimeType: String
 
   space: Space!
@@ -61,6 +61,73 @@ type GeoEntity @entity {
   via triples(where: { entity: $id })) if needed.
   """
   entityOf: [Triple!]! @derivedFrom(field: "entity")
+
+  version: Version # The version number of the entity
+  versions: [Version!]! # All versions an entity has had
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+type Proposal @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  status: ProposalStatus! # status of the proposal
+  createdAt: BigInt! # block timestamp
+  proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal
+}
+
+type ActionCount @entity {
+  id: ID! #always 1
+  count: BigInt!
+}
+
+type ProposedVersion @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  entity: GeoEntity! # entity we are describing
+  createdAt: BigInt! # block timestamp
+  actions: [Action!]! # All actions to be taken if this version is finalized
+}
+
+type Version @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  createdAt: BigInt! # block timestamp
+  proposedVersion: ProposedVersion! # the proposed version that was finalized to make this entity
+  actions: [Action!]! # All actions taken from genesis to this version
+}
+
+#An action to take as part of a version
+type Action @entity {
+  id: ID!
+  actionType: ActionType!
+
+  entity: GeoEntity!
+
+  # the rest of these are all nullable because we create entity action
+  # lacks these fields
+  attribute: GeoEntity
+  valueType: ValueType
+  valueId: String
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+}
+
+enum ActionType {
+  CREATE
+  DELETE
 }
 
 """
@@ -86,4 +153,5 @@ enum ValueType {
   NUMBER
   STRING
   ENTITY
+  IMAGE
 }

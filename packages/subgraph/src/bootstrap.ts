@@ -9,6 +9,7 @@ import {
   ATTRIBUTES,
   DESCRIPTION,
   FOREIGN_TYPES,
+  IMAGE,
   IMAGE_ATTRIBUTE,
   NAME,
   RELATION,
@@ -19,8 +20,16 @@ import {
   TYPES,
   VALUE_TYPE,
 } from '@geogenesis/ids/system-ids'
-import { BigInt, log } from '@graphprotocol/graph-ts'
-import { handleAction, handleCreateTripleAction } from './actions'
+import { Address, BigInt, log } from '@graphprotocol/graph-ts'
+import {
+  createProposedVersion,
+  createVersion,
+  getOrCreateActionCount,
+  handleAction,
+  handleCreateEntityAction,
+  handleCreateTripleAction,
+} from './actions'
+import { getEntityId, getOrCreateProposal } from './add-entry'
 
 const entities: string[] = [
   TYPES,
@@ -29,8 +38,8 @@ const entities: string[] = [
   VALUE_TYPE,
   RELATION,
   TEXT,
+  IMAGE,
   IMAGE_ATTRIBUTE,
-  DESCRIPTION,
   DESCRIPTION,
   NAME,
   SPACE,
@@ -54,6 +63,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: VALUE_TYPE, _1: new StringValue(VALUE_TYPE, 'Value type') },
   { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
+  { _0: IMAGE, _1: new StringValue(TEXT, 'Image') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
   {
@@ -79,6 +89,7 @@ const attributes: Tuple<string, string>[] = [
 const types: Tuple<string, string[]>[] = [
   { _0: TEXT, _1: [] },
   { _0: RELATION, _1: [] },
+  { _0: IMAGE, _1: [] },
   { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
   { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
   { _0: SPACE_CONFIGURATION, _1: [FOREIGN_TYPES] },
@@ -86,80 +97,159 @@ const types: Tuple<string, string[]>[] = [
 
 export function bootstrapRootSpaceCoreTypes(
   space: string,
-  createdAtBlock: BigInt
+  createdAtBlock: BigInt,
+  createdAtTimestamp: BigInt,
+  createdBy: Address
 ): void {
   log.debug(`Bootstrapping root space ${space}!`, [])
 
+  const proposalId = getOrCreateActionCount().count.toString()
+
+  getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
+
+  const entityToActionIds = new Map<string, string[]>()
+
   /* Create all of our entities */
   for (let i = 0; i < entities.length; i++) {
-    handleAction(new CreateEntityAction(entities[i]), space, createdAtBlock)
+    const action = new CreateEntityAction(entities[i])
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
   }
 
   /* Name all of our entities */
   for (let i = 0; i < names.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
-        names[i]._0 as string,
-        NAME,
-        names[i]._1 as StringValue
-      ),
-      space,
-      isProtected: false,
-      createdAtBlock,
-    })
+    const action = new CreateTripleAction(
+      names[i]._0 as string,
+      NAME,
+      names[i]._1 as StringValue
+    )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
   }
 
   /* Create our attributes of type "attribute" */
   for (let i = 0; i < attributes.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
-        attributes[i]._0 as string,
-        TYPES,
-        new EntityValue(ATTRIBUTE)
-      ),
-      space,
-      isProtected: false,
-      createdAtBlock,
-    })
+    const action = new CreateTripleAction(
+      attributes[i]._0 as string,
+      TYPES,
+      new EntityValue(ATTRIBUTE)
+    )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
 
-    /* Each attribute can have a value type of TEXT or RELATION, more coming soon... */
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
-        attributes[i]._0 as string,
-        VALUE_TYPE,
-        new EntityValue(attributes[i]._1 as string)
-      ),
-      space,
-      isProtected: false,
-      createdAtBlock,
-    })
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
+
+    const action2 = new CreateTripleAction(
+      attributes[i]._0 as string,
+      VALUE_TYPE,
+      new EntityValue(attributes[i]._1 as string)
+    )
+    const entityId2 = getEntityId(action2)
+    const actionId2 = handleAction(action2, space, createdAtBlock)
+
+    if (entityId2 && actionId2) {
+      const isSet = entityToActionIds.has(entityId2)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId2)
+        entityToActionIds.set(entityId2, actions.concat([actionId2]))
+      } else {
+        entityToActionIds.set(entityId2, [actionId2])
+      }
+    }
   }
 
   /* Create our types of type "type" */
   for (let i = 0; i < types.length; i++) {
-    handleCreateTripleAction({
-      fact: new CreateTripleAction(
-        types[i]._0 as string,
-        TYPES,
-        new EntityValue(SCHEMA_TYPE)
-      ),
-      space,
-      isProtected: false,
-      createdAtBlock,
-    })
+    const action = new CreateTripleAction(
+      types[i]._0 as string,
+      TYPES,
+      new EntityValue(ATTRIBUTE)
+    )
+    const entityId = getEntityId(action)
+    const actionId = handleAction(action, space, createdAtBlock)
+
+    if (entityId && actionId) {
+      const isSet = entityToActionIds.has(entityId)
+      if (isSet) {
+        const actions = entityToActionIds.get(entityId)
+        entityToActionIds.set(entityId, actions.concat([actionId]))
+      } else {
+        entityToActionIds.set(entityId, [actionId])
+      }
+    }
 
     /* Each type can have a set of attributes */
     for (let j = 0; j < types[i]._1.length; j++) {
-      handleCreateTripleAction({
-        fact: new CreateTripleAction(
-          types[i]._0 as string,
-          ATTRIBUTES,
-          new EntityValue(types[i]._1[j] as string)
-        ),
-        space,
-        isProtected: false,
-        createdAtBlock,
-      })
+      const action = new CreateTripleAction(
+        types[i]._0 as string,
+        ATTRIBUTES,
+        new EntityValue(types[i]._1[j] as string)
+      )
+      const entityId = getEntityId(action)
+      const actionId = handleAction(action, space, createdAtBlock)
+
+      if (entityId && actionId) {
+        const isSet = entityToActionIds.has(entityId)
+        if (isSet) {
+          const actions = entityToActionIds.get(entityId)
+          entityToActionIds.set(entityId, actions.concat([actionId]))
+        } else {
+          entityToActionIds.set(entityId, [actionId])
+        }
+      }
+    }
+
+    // for every key in the map,
+    const entityIds = entityToActionIds.keys()
+
+    for (let i = 0; i < entityIds.length; i++) {
+      const entityId = entityIds[i]
+      const actionIds = entityToActionIds.get(entityIds[i])
+
+      let proposedVersion = createProposedVersion(
+        getOrCreateActionCount().count.toString(),
+        createdAtTimestamp,
+        actionIds,
+        entityId,
+        createdBy,
+        proposalId
+      )
+
+      createVersion(
+        entityId + '-' + getOrCreateActionCount().count.toString(),
+        proposedVersion.id,
+        createdAtTimestamp,
+        entityId,
+        createdBy
+      )
     }
   }
 }

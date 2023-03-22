@@ -18,6 +18,9 @@ export const SCHEMA_TYPE = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
 export const VALUE_TYPE = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8'
 
+/* Example Usage: Thumbnail -> VALUE_TYPE -> IMAGE */
+export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
+
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 

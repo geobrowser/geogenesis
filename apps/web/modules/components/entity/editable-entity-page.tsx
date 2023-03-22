@@ -5,20 +5,21 @@ import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
+import { IconName } from '~/modules/design-system/icon';
+import { Image } from '~/modules/design-system/icons/image';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Entity as EntityType, Triple as TripleType, Version } from '~/modules/types';
+import { Entity as EntityType, Triple as TripleType, TripleValueType, Version } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { CopyIdButton } from './copy-id';
 import { useEditEvents } from './edit-events';
-import { PageStringField } from './editable-fields';
-import { EntityPageContentContainer } from './entity-page-content-container';
+import { PageImageField, PageStringField } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
@@ -217,7 +218,7 @@ function EntityAttributes({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
 
-  const onChangeTripleType = (type: 'string' | 'entity', triples: TripleType[]) => {
+  const onChangeTripleType = (type: TripleValueType, triples: TripleType[]) => {
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
@@ -299,6 +300,25 @@ function EntityAttributes({
     });
   };
 
+  const uploadImage = (triple: TripleType, imageSrc: string) => {
+    send({
+      type: 'UPLOAD_IMAGE',
+      payload: {
+        triple,
+        imageSrc,
+      },
+    });
+  };
+
+  const removeImage = (triple: TripleType) => {
+    send({
+      type: 'REMOVE_IMAGE',
+      payload: {
+        triple,
+      },
+    });
+  };
+
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     send({
       type: 'EDIT_ENTITY_NAME',
@@ -329,10 +349,25 @@ function EntityAttributes({
             variant="body"
             placeholder="Add value..."
             aria-label={triple.placeholder ? 'placeholder-text-field' : 'text-field'}
+            value={triple.placeholder ? '' : triple.value.value}
             onChange={e => {
               triple.placeholder
                 ? createStringTripleFromPlaceholder(triple, e.target.value)
                 : updateValue(triple, e.target.value);
+            }}
+          />
+        );
+      case 'image':
+        return (
+          <PageImageField
+            key={triple.attributeId}
+            variant="avatar"
+            imageSrc={triple.value.value}
+            onImageChange={imageSrc => {
+              uploadImage(triple, imageSrc);
+            }}
+            onImageRemove={() => {
+              removeImage(triple);
             }}
           />
         );
@@ -409,6 +444,9 @@ function EntityAttributes({
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
+
+        const tripleType: TripleValueType = triples[0].value.type || 'string';
+
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
@@ -441,7 +479,7 @@ function EntityAttributes({
               <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
                   <TripleTypeDropdown
-                    value={isEntityGroup ? 'relation' : 'text'}
+                    value={tripleType as IconName}
                     options={[
                       {
                         label: (
@@ -451,7 +489,7 @@ function EntityAttributes({
                             Text
                           </div>
                         ),
-                        value: 'text',
+                        value: 'string',
                         onClick: () => onChangeTripleType('string', triples),
                         disabled: !isEntityGroup,
                       },
@@ -463,8 +501,20 @@ function EntityAttributes({
                             Relation
                           </div>
                         ),
-                        value: 'relation',
+                        value: 'entity',
                         onClick: () => onChangeTripleType('entity', triples),
+                        disabled: Boolean(isEntityGroup),
+                      },
+                      {
+                        label: (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <Image />
+                            <Spacer width={8} />
+                            Image
+                          </div>
+                        ),
+                        value: 'image',
+                        onClick: () => onChangeTripleType('image', triples),
                         disabled: Boolean(isEntityGroup),
                       },
                     ]}

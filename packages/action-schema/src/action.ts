@@ -37,9 +37,15 @@ interface StringValue {
   value: string
 }
 
+interface ImageValue {
+  type: 'image'
+  id: string
+  value: string
+}
+
 interface EntityValue {
   type: 'entity'
   id: string
 }
 
-type Value = NumberValue | StringValue | EntityValue
+type Value = NumberValue | StringValue | EntityValue | ImageValue
