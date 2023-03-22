@@ -58,6 +58,8 @@ export function extractActionValue(networkAction: NetworkAction): Value {
   switch (networkAction.valueType) {
     case 'STRING':
       return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'IMAGE':
+      return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
     case 'ENTITY': {
