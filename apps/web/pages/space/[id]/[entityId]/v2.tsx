@@ -1,12 +1,11 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
-
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
+import { Editor } from '~/modules/components/entity/editor/editor';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
@@ -14,6 +13,8 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple } from '~/modules/types';
+import { Value } from '~/modules/value';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../../[id]';
 
 interface Props {
   triples: Triple[];
@@ -21,13 +22,17 @@ interface Props {
   id: string;
   name: string;
   space: string;
+  blockTriples: Triple[];
+  blockIdsTriple: Triple;
   linkedEntities: Record<string, LinkedEntityGroup>;
+  initialTypes: Triple[];
 }
 
 export default function EntityPage(props: Props) {
   const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.space);
   const { editable } = useEditable();
+
   useLogRocket(props.space);
 
   // This is a janky way to set the name in the navbar until we have nested layouts
@@ -38,8 +43,6 @@ export default function EntityPage(props: Props) {
   }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
-  // const renderEditablePage = true;
-  const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
     <EntityStoreProvider
@@ -47,10 +50,30 @@ export default function EntityPage(props: Props) {
       spaceId={props.space}
       initialTriples={props.triples}
       initialSchemaTriples={props.schemaTriples}
-      initialBlockIdsTriple={null}
-      initialBlockTriples={[]}
+      initialBlockIdsTriple={props.blockIdsTriple}
+      initialBlockTriples={props.blockTriples}
     >
-      <Page {...props} />
+      <EntityTableStoreProvider
+        spaceId={props.space}
+        initialTypes={props.initialTypes}
+        initialColumns={[]}
+        initialRows={[]}
+        initialSelectedType={null}
+      >
+        {renderEditablePage ? (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor />
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor editable={false} />
+          </div>
+        )}
+      </EntityTableStoreProvider>
     </EntityStoreProvider>
   );
 }
@@ -62,6 +85,45 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
 
   const network = new Network(storage, config.subgraph);
+
+  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
+    fetchSpaceTypeTriples(network, space),
+    fetchForeignTypeTriples(network, space),
+  ]);
+
+  const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
+
+  /* Storing the array of block ids as a string value since we currently do not support arrays */
+  const blockIdTriples = await network.fetchTriples({
+    space,
+    query: '',
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: entityId },
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BLOCKS,
+      },
+    ],
+  });
+
+  const blockIdsTriple = blockIdTriples.triples[0] || null;
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+
+  const blockTriples = (
+    await Promise.all(
+      blockIds.map(blockId => {
+        return network.fetchTriples({
+          space,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: blockId }],
+        });
+      })
+    )
+  ).flatMap(block => block.triples);
 
   const [entity, related] = await Promise.all([
     network.fetchTriples({
@@ -110,8 +172,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       id: entityId,
       name: Entity.name(entity.triples) ?? entityId,
       space,
+      initialTypes,
       linkedEntities,
       key: entityId,
+      blockIdsTriple,
+      blockTriples,
     },
   };
 };

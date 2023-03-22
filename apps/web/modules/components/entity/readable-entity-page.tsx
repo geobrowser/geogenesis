@@ -58,6 +58,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
         <CopyIdButton id={id} />
       </div>
       <Spacer height={8} />
+
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} space={space} />

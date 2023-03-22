@@ -133,6 +133,7 @@ export function EditableEntityPage({
             <CopyIdButton id={id} />
           </div>
           <Spacer height={8} />
+
           <div className="rounded border border-grey-02 bg-white">
             <div className="flex flex-col gap-6 p-5">
               <EntityAttributes

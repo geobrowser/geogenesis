@@ -130,7 +130,7 @@ interface Props {
   rows: Row[];
 }
 
-export function EntityTable({ rows, space, columns }: Props) {
+export const EntityTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -221,4 +221,4 @@ export function EntityTable({ rows, space, columns }: Props) {
       </table>
     </div>
   );
-}
+};

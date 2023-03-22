@@ -16,6 +16,8 @@ describe('Editable Entity Page', () => {
         <EntityStoreProvider
           id={'1'}
           spaceId={'1'}
+          initialBlockIdsTriple={null}
+          initialBlockTriples={[]}
           initialTriples={[]}
           initialSchemaTriples={[
             { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
@@ -46,6 +48,8 @@ describe('Editable Entity Page', () => {
         <EntityStoreProvider
           id={'1'}
           spaceId={'1'}
+          initialBlockIdsTriple={null}
+          initialBlockTriples={[]}
           initialTriples={[]}
           initialSchemaTriples={[
             {
