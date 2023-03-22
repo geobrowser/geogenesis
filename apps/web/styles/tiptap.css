@@ -1,0 +1,62 @@
+.ProseMirror .tiptap-block {
+  position: relative;
+}
+
+.ProseMirror .tiptap-block .tiptap-menu-trigger {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ProseMirror .tiptap-block:hover .tiptap-menu-trigger {
+  opacity: 1;
+}
+
+.ProseMirror .tiptap-menu-trigger {
+  position: absolute;
+  padding-right: 24px;
+  left: -32px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Display Placeholders on every new line. */
+.ProseMirror .is-empty::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Display a Placeholder only for the first line in an empty editor. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+.ProseMirror h1 {
+  @apply text-largeTitle;
+}
+
+.ProseMirror h2 {
+  @apply text-mediumTitle;
+}
+
+.ProseMirror h3 {
+  @apply text-smallTitle;
+}
+
+.ProseMirror p {
+  @apply text-body;
+}
+
+.ProseMirror > * {
+  margin-bottom: 16px;
+}

@@ -18,6 +18,7 @@ import { NavUtils } from '~/modules/utils';
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
+import '../styles/tiptap.css';
 
 function Root(props: AppProps) {
   return (

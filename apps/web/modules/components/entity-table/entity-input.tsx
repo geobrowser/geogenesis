@@ -4,7 +4,7 @@ import { useRef } from 'react';
 
 import { useEntityTable } from '~/modules/entity';
 import { Input } from '../../design-system/input';
-import { TypeDialog } from '../filter/type-dialog';
+import { TypeDialogPopover } from '../filter/type-dialog-popover';
 
 interface Props {
   spaceId: string;
@@ -21,7 +21,7 @@ export function EntityInput({ spaceId }: Props) {
 
   return (
     <div ref={inputContainerRef} className="relative flex w-full gap-4 overflow-hidden sm:flex-col sm:gap-1">
-      <TypeDialog inputContainerWidth={Math.min(inputRect?.width || 0, 678)} spaceId={spaceId} />
+      <TypeDialogPopover inputContainerWidth={Math.min(inputRect?.width || 0, 678)} spaceId={spaceId} />
       <div className="relative w-full sm:ml-0">
         <Input withSearchIcon placeholder="Search entities..." value={entityTableStore.query} onChange={onChange} />
       </div>

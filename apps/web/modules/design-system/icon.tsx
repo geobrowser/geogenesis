@@ -20,8 +20,14 @@ import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
 import { Upload } from '~/modules/design-system/icons/upload';
 import { History } from './icons/history';
+import { EditorH1 } from './icons/editor-h1';
+import { EditorH2 } from './icons/editor-h2';
+import { EditorH3 } from './icons/editor-h3';
+import { EditorImage } from './icons/editor-image';
+import { EditorTable } from './icons/editor-table';
+import { EditorText } from './icons/editor-text';
 import { Image } from './icons/image';
-
+import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
@@ -42,12 +48,19 @@ export type IconName =
   | 'copy'
   | 'preset'
   | 'relation'
+  | 'plus'
   | 'string'
   | 'image'
   | 'text'
   | 'rightArrowLongSmall'
   | 'search'
-  | 'history';
+  | 'history'
+  | 'editorH1'
+  | 'editorH2'
+  | 'editorH3'
+  | 'editorText'
+  | 'editorImage'
+  | 'editorTable';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -78,10 +91,17 @@ const icons: Record<IconName, React.ElementType> = {
   entity: Relation,
   relation: Relation,
   text: Text,
-  string: Text,
-  image: Image,
+  plus: Plus,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
   history: History,
+  editorH1: EditorH1,
+  editorH2: EditorH2,
+  editorH3: EditorH3,
+  editorImage: EditorImage,
+  editorTable: EditorTable,
+  editorText: EditorText,
+  string: Text,
+  image: Image,
   upload: Upload,
 };

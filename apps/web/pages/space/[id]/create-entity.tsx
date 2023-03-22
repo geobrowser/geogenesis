@@ -1,6 +1,5 @@
-import * as React from 'react';
-import { useMemo } from 'react';
 import type { GetServerSideProps } from 'next';
+import { useMemo } from 'react';
 
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { EntityStoreProvider } from '~/modules/entity';
@@ -14,7 +13,14 @@ export default function CreateEntity({ spaceId }: Props) {
   const newId = useMemo(() => ID.createEntityId(), []);
 
   return (
-    <EntityStoreProvider id={newId} spaceId={spaceId} initialTriples={[]} initialSchemaTriples={[]}>
+    <EntityStoreProvider
+      id={newId}
+      spaceId={spaceId}
+      initialTriples={[]}
+      initialSchemaTriples={[]}
+      initialBlockTriples={[]}
+      initialBlockIdsTriple={null}
+    >
       <EditableEntityPage versions={[]} id={newId} name="" space={spaceId} triples={[]} schemaTriples={[]} />
     </EntityStoreProvider>
   );

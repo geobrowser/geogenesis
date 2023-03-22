@@ -1,37 +1,38 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
-import Head from 'next/head';
-
+import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
+import { Editor } from '~/modules/components/entity/editor/editor';
 import { LinkedEntityGroup } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { Triple, Version } from '~/modules/types';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { NavUtils } from '~/modules/utils';
+import { Triple } from '~/modules/types';
+import { Value } from '~/modules/value';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../../[id]';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
-  versions: Version[];
   id: string;
   name: string;
   space: string;
+  blockTriples: Triple[];
+  blockIdsTriple: Triple;
   linkedEntities: Record<string, LinkedEntityGroup>;
+  initialTypes: Triple[];
 }
 
 export default function EntityPage(props: Props) {
   const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.space);
   const { editable } = useEditable();
+
   useLogRocket(props.space);
 
   // This is a janky way to set the name in the navbar until we have nested layouts
@@ -42,27 +43,38 @@ export default function EntityPage(props: Props) {
   }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
-  const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <>
-      <Head>
-        <title>{props.name ?? props.id}</title>
-        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
-      </Head>
-      <EntityStoreProvider
-        id={props.id}
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.space}
+      initialTriples={props.triples}
+      initialSchemaTriples={props.schemaTriples}
+      initialBlockIdsTriple={props.blockIdsTriple}
+      initialBlockTriples={props.blockTriples}
+    >
+      <EntityTableStoreProvider
         spaceId={props.space}
-        initialTriples={props.triples}
-        initialSchemaTriples={props.schemaTriples}
-        initialBlockIdsTriple={null}
-        initialBlockTriples={[]}
+        initialTypes={props.initialTypes}
+        initialColumns={[]}
+        initialRows={[]}
+        initialSelectedType={null}
       >
-        <EntityPageContentContainer>
-          <Page {...props} />
-        </EntityPageContentContainer>
-      </EntityStoreProvider>
-    </>
+        {renderEditablePage ? (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Editable TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor />
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-2xl font-bold">{props.name} Read-Only TipTap Editor</h2>
+            <div>Entity ID: {props.id}</div>
+            <Editor editable={false} />
+          </div>
+        )}
+      </EntityTableStoreProvider>
+    </EntityStoreProvider>
   );
 }
 
@@ -70,11 +82,50 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-
   const storage = new StorageClient(config.ipfs);
+
   const network = new Network(storage, config.subgraph);
 
-  const [entity, related, versions] = await Promise.all([
+  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
+    fetchSpaceTypeTriples(network, space),
+    fetchForeignTypeTriples(network, space),
+  ]);
+
+  const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
+
+  /* Storing the array of block ids as a string value since we currently do not support arrays */
+  const blockIdTriples = await network.fetchTriples({
+    space,
+    query: '',
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: entityId },
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BLOCKS,
+      },
+    ],
+  });
+
+  const blockIdsTriple = blockIdTriples.triples[0] || null;
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+
+  const blockTriples = (
+    await Promise.all(
+      blockIds.map(blockId => {
+        return network.fetchTriples({
+          space,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: blockId }],
+        });
+      })
+    )
+  ).flatMap(block => block.triples);
+
+  const [entity, related] = await Promise.all([
     network.fetchTriples({
       space,
       query: '',
@@ -90,8 +141,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-
-    network.fetchProposedVersions(entityId, space),
   ]);
 
   const relatedEntities = await Promise.all(
@@ -123,9 +172,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       id: entityId,
       name: Entity.name(entity.triples) ?? entityId,
       space,
+      initialTypes,
       linkedEntities,
-      versions,
       key: entityId,
+      blockIdsTriple,
+      blockTriples,
     },
   };
 };
