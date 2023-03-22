@@ -9,7 +9,7 @@ interface Props {
 
 const MotionContent = motion(PopoverContent);
 
-export function Panel({ children, trigger }: Props) {
+export function Menu({ children, trigger }: Props) {
   const [open, setOpen] = useState(false);
 
   // @TODO: accessibility for button focus states
