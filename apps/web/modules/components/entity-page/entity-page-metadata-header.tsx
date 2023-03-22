@@ -1,6 +1,5 @@
 import { Version } from '~/modules/types';
-import { HistoryItem } from '../history';
-import { HistoryPanel } from '../history/history-panel';
+import { HistoryItem, HistoryPanel } from '../history';
 import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
 import pluralize from 'pluralize';
@@ -24,7 +23,14 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
   // We only render the first three avatars in the avatar group
   const firstThreeContributors = A.take(contributors, 3);
   const latestVersion = A.head(versions);
-  const lastEditedDate = GeoDate.fromGeoTime(latestVersion?.createdAt ?? 0);
+
+  // This will default to the beginning of UNIX time if there are no versions
+  // We don't render the last edited date if there are no versions anyway.
+  // e.g. Mar 12
+  const lastEditedDate = GeoDate.fromGeoTime(latestVersion?.createdAt ?? 0).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+  });
 
   return (
     <div>
@@ -35,15 +41,7 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
             <p className="text-text">
               {contributors.length} {pluralize('Editor', contributors.length)}
             </p>
-            {latestVersion && (
-              <p className="text-grey-04">
-                Last edited{' '}
-                {lastEditedDate.toLocaleDateString(undefined, {
-                  day: '2-digit',
-                  month: 'short',
-                })}
-              </p>
-            )}
+            {latestVersion && <p className="text-grey-04">Last edited {lastEditedDate}</p>}
           </div>
 
           <HistoryPanel>

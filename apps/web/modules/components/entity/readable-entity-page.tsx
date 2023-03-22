@@ -21,7 +21,6 @@ import { CopyIdButton } from './copy-id';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { LinkedEntityGroup } from './types';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
-import { EntityPageContentContainer } from './entity-page-content-container';
 
 interface Props {
   triples: Triple[];
@@ -38,7 +37,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
   return (
-    <EntityPageContentContainer>
+    <>
       <Head>
         <title>{name ?? id}</title>
         <meta property="og:url" content={`https://geobrowser.io/${NavUtils.toEntity(space, id)}`} />
@@ -86,7 +85,7 @@ export function ReadableEntityPage({ triples, id, name, space, linkedEntities, s
           </LayoutGroup>
         )}
       </div>
-    </EntityPageContentContainer>
+    </>
   );
 }
 

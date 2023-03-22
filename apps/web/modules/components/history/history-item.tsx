@@ -10,17 +10,31 @@ interface Props {
 }
 
 export function HistoryItem({ version }: Props) {
-  // @TODO: Make sure the actions are squashed, unique. This component may have changes
-  // for an entire space or just for a single entity.
+  // We want to group together all changes to the same property into a single
+  // change count. i.e., a proposed change may have multiple action taken on
+  // the same triple, we want to make sure that only renders as a single change.
   const uniqueTripleChanges = Action.getChangeCount(version.actions);
   const lastEditedDate = GeoDate.fromGeoTime(version.createdAt);
-  const versionName =
-    version.name ??
-    `${formatShortAddress(version.createdBy.id)} – ${new Date(lastEditedDate).toLocaleDateString(undefined, {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })}`;
+
+  // e.g. Mar 12, 2023
+  const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // e.g. 13:41
+  const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  // Older versions from before we added proposal names may not have a name, so we fall back to
+  // an address – date format.
+  const versionName = version.name ?? `${formatShortAddress(version.createdBy.id)} – ${formattedLastEditedDate}`;
+
+  // Names might be very long, so we truncate to make it work with the menu UI
   const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
 
   return (
@@ -39,18 +53,8 @@ export function HistoryItem({ version }: Props) {
         </div>
         <div className="flex">
           <p className="text-smallButton">
-            {uniqueTripleChanges} {pluralize('edit', uniqueTripleChanges)} ·{' '}
-            {new Date(lastEditedDate).toLocaleDateString(undefined, {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-            })}{' '}
-            ·{' '}
-            {new Date(lastEditedDate).toLocaleTimeString(undefined, {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })}
+            {uniqueTripleChanges} {pluralize('edit', uniqueTripleChanges)} · {formattedLastEditedDate} ·{' '}
+            {lastEditedTime}
           </p>
         </div>
       </div>

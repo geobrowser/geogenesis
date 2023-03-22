@@ -20,6 +20,8 @@ import { useEditEvents } from './edit-events';
 import { PageStringField } from './editable-fields';
 import { EntityPageContentContainer } from './entity-page-content-container';
 import { sortEntityPageTriples } from './entity-page-utils';
+import { EntityOthersToast } from './presence/entity-others-toast';
+import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 interface Props {
@@ -100,17 +102,16 @@ export function EditableEntityPage({
 
   return (
     <>
-      <EntityPageContentContainer>
-        <Head>
-          <title>{name ?? id}</title>
-          <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
-        </Head>
+      <Head>
+        <title>{name ?? id}</title>
+        <meta property="og:url" content={`https://geobrowser.io/spaces/${id}`} />
+      </Head>
 
-        <EntityPageMetadataHeader versions={versions} types={[]} />
+      <EntityPageMetadataHeader versions={versions} types={[]} />
 
-        <Spacer height={20} />
+      <Spacer height={20} />
 
-        {/*
+      {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -118,11 +119,11 @@ export function EditableEntityPage({
 
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
-        <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+      <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
 
-        <Spacer height={9} />
+      <Spacer height={9} />
 
-        {/*
+      {/*
           StringField uses a textarea to handle wrapping input text to multiple lines. We need to auto-resize the
           textarea so its size grows with the text. There is no way to ensure the line-heights match the new height
           of the textarea, so we have to manually subtract below the textarea so the editable entity page and the
@@ -131,39 +132,41 @@ export function EditableEntityPage({
           You'll notice that this Spacer in readable-entity-page will have a larger value.
         */}
 
-        <PageStringField
-          variant="body"
-          placeholder="Add a description..."
-          value={description ?? ''}
-          onChange={onDescriptionChange}
-        />
+      <PageStringField
+        variant="body"
+        placeholder="Add a description..."
+        value={description ?? ''}
+        onChange={onDescriptionChange}
+      />
 
-        <Spacer height={12} />
+      <Spacer height={12} />
 
-        <div className="flex justify-end sm:[&>button]:flex-grow">
-          <CopyIdButton id={id} />
+      <div className="flex justify-end sm:[&>button]:flex-grow">
+        <CopyIdButton id={id} />
+      </div>
+      <Spacer height={8} />
+      <div className="rounded border border-grey-02 bg-white">
+        <div className="flex flex-col gap-6 p-5">
+          <EntityAttributes
+            entityId={id}
+            triples={triples}
+            spaceId={space}
+            schemaTriples={schemaTriples}
+            name={name}
+            send={send}
+            hideSchema={hideSchema}
+            hiddenSchemaIds={hiddenSchemaIds}
+          />
         </div>
-        <Spacer height={8} />
-        <div className="rounded border border-grey-02 bg-white">
-          <div className="flex flex-col gap-6 p-5">
-            <EntityAttributes
-              entityId={id}
-              triples={triples}
-              spaceId={space}
-              schemaTriples={schemaTriples}
-              name={name}
-              send={send}
-              hideSchema={hideSchema}
-              hiddenSchemaIds={hiddenSchemaIds}
-            />
-          </div>
-          <div className="p-4">
-            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-              Add triple
-            </Button>
-          </div>
+        <div className="p-4">
+          <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+            Add triple
+          </Button>
         </div>
-      </EntityPageContentContainer>
+      </div>
+      <EntityPresenceProvider entityId={id} spaceId={space}>
+        <EntityOthersToast />
+      </EntityPresenceProvider>
     </>
   );
 }
@@ -473,11 +476,11 @@ function EntityAttributes({
                     isPlaceholder
                       ? () => hideSchema(attributeId)
                       : () => {
-                        hideSchema(attributeId);
-                        triples
-                          .filter(triple => triple.attributeId === attributeId)
-                          .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
-                      }
+                          hideSchema(attributeId);
+                          triples
+                            .filter(triple => triple.attributeId === attributeId)
+                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
+                        }
                   }
                 />
               </div>
