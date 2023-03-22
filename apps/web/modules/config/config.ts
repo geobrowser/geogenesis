@@ -34,8 +34,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '137',
     rpc: 'https://polygon-rpc.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    // subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
-    subgraph: 'https://api.thegraph.com/subgraphs/name/mercuricchloride/geo-testnet',
+    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
   },
 };
 
