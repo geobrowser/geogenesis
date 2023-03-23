@@ -3,8 +3,8 @@ import { HistoryItem, HistoryPanel } from '../history';
 import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
 import pluralize from 'pluralize';
-import { EntityPageTypeChip } from './entity-page-type-chip';
 import { GeoDate } from '~/modules/utils';
+import { Avatar } from '~/modules/avatar';
 
 interface Props {
   versions: Array<Version>;
@@ -16,11 +16,12 @@ export function EntityPageMetadataHeader({ versions }: Props) {
   const contributors = pipe(
     versions,
     A.uniqBy(v => v.createdBy.id),
-    A.flatMap(version => version.createdBy.name ?? version.createdBy.id)
+    A.flatMap(version => version.createdBy)
   );
 
-  // We only render the first three avatars in the avatar group
-  const firstThreeContributors = A.take(contributors, 3);
+  // We only render the most recent three avatars in the avatar group and
+  // render them in reverse order
+  const lastThreeContributors = A.take(contributors, 3).reverse();
   const latestVersion = A.head(versions);
 
   // This will default to the beginning of UNIX time if there are no versions
@@ -31,12 +32,27 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     month: 'short',
   });
 
+  // We restrict how many versions we render in the history panel. We don't
+  // restrict on the subgraph since it would result in an inaccurate contributor
+  // count since we would only have queried the most recent 10 versions.
+  const mostRecentVersions = A.take(versions, 10);
+
   return (
     <div>
       {contributors.length > 0 && (
         <div className="flex items-center justify-between text-text">
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
-            <AvatarGroup usernames={firstThreeContributors} />
+            <AvatarGroup>
+              {lastThreeContributors.map((contributor, i) => (
+                <AvatarGroup.Item>
+                  <Avatar
+                    alt={`Avatar for ${contributor.name ?? contributor.id}`}
+                    avatarUrl={contributor.avatarUrl}
+                    value={contributor.name ?? contributor.id}
+                  />
+                </AvatarGroup.Item>
+              ))}
+            </AvatarGroup>
             <p className="text-text">
               {contributors.length} {pluralize('Editor', contributors.length)}
             </p>
@@ -44,7 +60,7 @@ export function EntityPageMetadataHeader({ versions }: Props) {
           </div>
 
           <HistoryPanel>
-            {versions.map(version => (
+            {mostRecentVersions.map(version => (
               <HistoryItem key={version.id} version={version} />
             ))}
           </HistoryPanel>

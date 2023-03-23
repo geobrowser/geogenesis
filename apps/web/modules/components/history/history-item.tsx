@@ -1,9 +1,9 @@
-import Avatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { Action } from '~/modules/action';
 import { Text } from '~/modules/design-system/text';
 import { Version } from '~/modules/types';
 import { formatShortAddress, GeoDate } from '~/modules/utils';
+import { Avatar } from '~/modules/avatar';
 
 interface Props {
   version: Version;
@@ -46,8 +46,12 @@ export function HistoryItem({ version }: Props) {
       </div>
       <div className="flex items-center justify-between ">
         <div className="flex items-center justify-between gap-1">
-          <div className="overflow-hidden rounded-xs">
-            <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            <Avatar
+              alt={`Avatar for ${version.createdBy.name ?? version.createdBy.id}`}
+              avatarUrl={version.createdBy.avatarUrl}
+              value={version.createdBy.name ?? version.createdBy.id}
+            />
           </div>
           <p className="text-smallButton">{version.createdBy.name ?? formatShortAddress(version.createdBy.id)}</p>
         </div>

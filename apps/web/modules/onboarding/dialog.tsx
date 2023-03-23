@@ -1,5 +1,6 @@
 import { observer } from '@legendapp/state/react';
 import { Command } from 'cmdk';
+import BoringAvatar from 'boring-avatars';
 import { AnimatePresence, motion } from 'framer-motion';
 import Confetti from 'js-confetti';
 import * as React from 'react';
@@ -7,7 +8,6 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
-import { Avatar } from '../avatar';
 import { Button, SquareButton } from '../design-system/button';
 import { Text } from '../design-system/text';
 import { Services } from '../services';
@@ -224,7 +224,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
               }}
             />
           ) : (
-            <Avatar size={154} value={address} />
+            <BoringAvatar size={154} name={address} variant="pixel" />
           )}
         </div>
         <div className="flex justify-center">

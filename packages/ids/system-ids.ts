@@ -30,6 +30,10 @@ export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
+export const AVATAR_ATTRIBUTE = '85ae56a3-aa6f-4dd3-a1d0-3027d3c64810'
+
+export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
+
 /**
  * Addresses for important contracts on Polygon mainnet.
  *

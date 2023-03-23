@@ -11,9 +11,6 @@ type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
 
-/**
- * Triple type returned by GraphQL
- */
 export type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
@@ -32,8 +29,14 @@ export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
-export type NetworkVersion = Version & {
+export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
   actions: NetworkAction[];
+
+  // The NetworkVersion does not have a name or avatar associated
+  // with the createdBy field
+  createdBy: {
+    id: string;
+  };
 };
 
 export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {
@@ -134,8 +137,10 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
-          attributeId: networkAction.attribute.id,
-          attributeName: networkAction.attribute.name,
+          // @TODO why can these be null? Let's investigate when
+          // we tackle review UI for comparing versions
+          attributeId: networkAction.attribute?.id ?? '',
+          attributeName: networkAction.attribute?.name ?? '',
           value,
           space: spaceId,
         };
@@ -147,8 +152,10 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
-          attributeId: networkAction.attribute.id,
-          attributeName: networkAction.attribute.name,
+          // @TODO why can these be null? Let's investigate when
+          // we tackle review UI for comparing versions
+          attributeId: networkAction.attribute?.id ?? '',
+          attributeName: networkAction.attribute?.name ?? '',
           value,
           space: spaceId,
         };
