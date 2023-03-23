@@ -28,3 +28,32 @@ export const proposedVersionsQuery = (entityId: string) => `query {
     }
   }
 }`;
+
+export const profileQuery = (address: string) => `query {
+  geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(address)}}) {
+    id
+    name
+    entityOf {
+      id
+      stringValue
+      valueId
+      valueType
+      numberValue
+      space {
+        id
+      }
+      entityValue {
+        id
+        name
+      }
+      attribute {
+        id
+        name
+      }
+      entity {
+        id
+        name
+      }
+    }
+  }
+}`;

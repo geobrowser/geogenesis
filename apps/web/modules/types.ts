@@ -132,11 +132,13 @@ export type Version = {
   id: string;
   name: string;
   description?: string;
-  createdBy: {
-    id: string;
-    name?: string;
-    avatarUrl?: string;
-  };
+  createdBy: Profile;
   createdAt: number;
   actions: Action[];
+};
+
+export type Profile = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
 };

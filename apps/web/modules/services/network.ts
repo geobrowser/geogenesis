@@ -14,6 +14,7 @@ import {
   Entity as EntityType,
   FilterField,
   FilterState,
+  Profile,
   ReviewState,
   Space,
   Triple as TripleType,
@@ -27,6 +28,7 @@ import {
   NetworkVersion,
 } from './network-local-mapping';
 import { IStorageClient } from './storage';
+import { A } from '@mobily/ts-belt';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -93,8 +95,8 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
-  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
+  fetchProfile: (address: string, abortController?: AbortController) => Promise<Profile | null>;
+  fetchEntity: (id: string, name?: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
@@ -136,11 +138,6 @@ export class Network implements INetwork {
   uploadFile = async (file: File): Promise<string> => {
     const fileUri = await this.storageClient.uploadFile(file);
     return fileUri;
-  };
-
-  fetchProfile = async (address: string, abortController?: AbortController): Promise<null> => {
-    /* Stub function */
-    return null;
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
@@ -209,7 +206,7 @@ export class Network implements INetwork {
     return { triples };
   };
 
-  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
+  fetchEntity = async (id: string, name?: string, abortController?: AbortController): Promise<EntityType | null> => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -566,9 +563,25 @@ export class Network implements INetwork {
     } = await response.json();
 
     try {
-      return json.data.proposedVersions.map(v => {
+      // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
+      // of the user and fetch the Profile for the user with the matching wallet address.
+      const maybeProfiles = await Promise.all(json.data.proposedVersions.map(v => this.fetchProfile(v.createdBy.id)));
+
+      // Create a map of wallet address -> profile so we can look it up when creating the application
+      // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
+      // of the user who created the ProposedVersion.
+      const profiles = maybeProfiles
+        .flatMap(author => (author ? [author] : []))
+        .reduce<Record<string, Profile>>((acc, author, i) => {
+          acc[json.data.proposedVersions[i].createdBy.id] = author;
+          return acc;
+        }, {});
+
+      return json.data.proposedVersions.map((v, i) => {
         return {
           ...v,
+          // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
+          createdBy: profiles[v.createdBy.id] ?? v.createdBy,
           actions: fromNetworkActions(v.actions, spaceId),
         };
       });
@@ -576,6 +589,68 @@ export class Network implements INetwork {
       console.error(e);
       console.error(json.errors);
       return [];
+    }
+  };
+
+  fetchProfile = async (address: string, abortController?: AbortController): Promise<Profile | null> => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      // @TEMP: Right now we are fetching profiles based on the wallet address which is
+      // the name of the entity. There _shouldn't_ be multiple wallets with the same name/address.
+      body: JSON.stringify({
+        query: queries.profileQuery(address),
+      }),
+    });
+
+    if (response.status >= 400) return null;
+
+    const json: {
+      data: {
+        geoEntities: NetworkEntity[];
+      };
+      errors: any[];
+    } = await response.json();
+
+    try {
+      // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
+      // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.
+      const maybeWallets = await Promise.all(json.data.geoEntities.map(e => this.fetchEntity(e.id)));
+      const wallets = maybeWallets.flatMap(entity => (entity ? [entity] : []));
+
+      // We take the first wallet for a given address since there should only be one while in closed alpha.
+      const wallet = A.head(wallets);
+
+      if (!wallet) {
+        return null;
+      }
+
+      // We have a backlink from a Wallet entity to a Person entity. We need to fetch the Person entity
+      // to access profile attributes like the Avatar.
+      const personTriple = wallet?.triples.find(t => t.attributeId === SYSTEM_IDS.PERSON_ATTRIBUTE);
+      const personEntityId = personTriple?.value.id ?? null;
+
+      if (!personEntityId) {
+        return null;
+      }
+
+      const maybePerson = await this.fetchEntity(personEntityId);
+
+      const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
+      const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
+
+      return {
+        id: maybePerson?.id ?? '',
+        name: maybePerson?.name ?? null,
+        avatarUrl: avatarUrl,
+      };
+    } catch (e) {
+      console.error(e);
+      console.error(json.errors);
+      return null;
     }
   };
 }

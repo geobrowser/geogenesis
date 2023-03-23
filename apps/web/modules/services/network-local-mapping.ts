@@ -11,9 +11,6 @@ type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
 
-/**
- * Triple type returned by GraphQL
- */
 export type NetworkTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
@@ -32,8 +29,14 @@ export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
-export type NetworkVersion = Version & {
+export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
   actions: NetworkAction[];
+
+  // The NetworkVersion does not have a name or avatar associated
+  // with the createdBy field
+  createdBy: {
+    id: string;
+  };
 };
 
 export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {

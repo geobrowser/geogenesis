@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Avatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { Action } from '~/modules/action';
@@ -46,8 +47,17 @@ export function HistoryItem({ version }: Props) {
       </div>
       <div className="flex items-center justify-between ">
         <div className="flex items-center justify-between gap-1">
-          <div className="overflow-hidden rounded-xs">
-            <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            {version.createdBy.avatarUrl ? (
+              <Image
+                objectFit="cover"
+                layout="fill"
+                src={version.createdBy.avatarUrl}
+                alt={`Avatar for ${version.createdBy.name ?? version.createdBy.id}`}
+              />
+            ) : (
+              <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
+            )}
           </div>
           <p className="text-smallButton">{version.createdBy.name ?? formatShortAddress(version.createdBy.id)}</p>
         </div>
