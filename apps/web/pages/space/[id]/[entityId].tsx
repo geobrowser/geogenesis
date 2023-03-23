@@ -85,19 +85,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     network.fetchProposedVersions(entityId, space),
   ]);
 
-  // @TODO: throw 404
   if (!entity)
     return {
-      props: {
-        triples: [],
-        schemaTriples: [],
-        id: entityId,
-        name: entityId,
-        space,
-        referencedByEntities: [],
-        versions,
-        key: entityId,
-      },
+      notFound: true,
     };
 
   const spaces = await network.fetchSpaces();
