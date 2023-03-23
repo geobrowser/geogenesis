@@ -101,7 +101,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
-    console.log('entity', e);
 
     return {
       id: e.id,
