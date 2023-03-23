@@ -11,7 +11,7 @@ import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modu
 import { Params } from '~/modules/params';
 import { INetwork, Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Row, Triple } from '~/modules/types';
+import { Column, Row, Space, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;
@@ -72,19 +72,25 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const network = new Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
-  const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+
+  if (!space)
+    return {
+      notFound: true,
+    };
+
+  const spaceImage = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
-    fetchForeignTypeTriples(network, spaceId),
+    fetchForeignTypeTriples(network, space),
     network.fetchTriples({
       query: '',
       skip: 0,
       first: DEFAULT_PAGE_SIZE,
       filter: [
-        { field: 'entity-id', value: space?.entityId ?? '' },
+        { field: 'entity-id', value: space.entityId ?? '' },
         {
           field: 'attribute-id',
           value: SYSTEM_IDS.DEFAULT_TYPE,
@@ -135,18 +141,14 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   };
 };
 
-export const fetchForeignTypeTriples = async (network: INetwork, spaceId: string) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-  const spaces = await network.fetchSpaces();
-  const space = spaces.find(s => s.id === spaceId);
-
-  if (!space?.spaceConfigEntityId) {
+export const fetchForeignTypeTriples = async (network: INetwork, space: Space) => {
+  if (!space.spaceConfigEntityId) {
     return [];
   }
 
   const foreignTypesFromSpaceConfig = await network.fetchTriples({
     query: '',
-    space: spaceId,
+    space: space.id,
     skip: 0,
     first: DEFAULT_PAGE_SIZE,
     filter: [
