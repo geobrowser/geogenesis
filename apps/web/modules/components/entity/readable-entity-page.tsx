@@ -130,14 +130,9 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
 
 function ReferencedByEntity({ referencedByEntity }: { referencedByEntity: ReferencedByEntity }) {
   const [isHovered, hover] = React.useState(false);
-  const { spaces } = useSpaces();
-  // @TODO: Add image to space in server fetch
-  const space = spaces.find(s => s.id === referencedByEntity.spaceId);
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME];
-  const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
   return (
-    <Link href={NavUtils.toEntity(referencedByEntity.spaceId, referencedByEntity.id)} passHref>
+    <Link href={NavUtils.toEntity(referencedByEntity.space.id, referencedByEntity.id)} passHref>
       <a onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} className="relative">
         <div className="flex items-center justify-between">
           <Text as="h3" variant="metadataMedium">
@@ -153,10 +148,10 @@ function ReferencedByEntity({ referencedByEntity }: { referencedByEntity: Refere
         <div className="flex items-center">
           <div className="flex items-center gap-1">
             <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-              <Image layout="fill" objectFit="cover" src={spaceImage ?? ''} />
+              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image ?? ''} />
             </span>
             <Text as="p" variant="footnoteMedium">
-              {spaceName}
+              {referencedByEntity.space.name}
             </Text>
           </div>
           <Spacer width={8} />

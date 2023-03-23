@@ -2,5 +2,9 @@ export type ReferencedByEntity = {
   id: string;
   name: string | null;
   types: { id: string; name: string | null }[];
-  spaceId: string;
+  space: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
 };

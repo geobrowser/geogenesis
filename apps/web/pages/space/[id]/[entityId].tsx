@@ -16,6 +16,7 @@ import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { NavUtils } from '~/modules/utils';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 
 interface Props {
   triples: Triple[];
@@ -99,14 +100,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       },
     };
 
+  const spaces = await network.fetchSpaces();
+
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    const space = spaces.find(s => s.id === spaceId);
+    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
 
     return {
       id: e.id,
       name: e.name,
       types: e.types,
-      spaceId,
+      space: {
+        id: spaceId,
+        name: spaceName,
+        image: spaceImage,
+      },
     };
   });
 
