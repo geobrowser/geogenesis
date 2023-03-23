@@ -1,4 +1,3 @@
-import Head from 'next/head';
 import * as React from 'react';
 
 import { SYSTEM_IDS } from '~/../../packages/ids';

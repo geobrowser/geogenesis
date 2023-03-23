@@ -6,7 +6,7 @@ import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
-import { LinkedEntityGroup } from '~/modules/components/entity/types';
+import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
@@ -25,7 +25,7 @@ interface Props {
   id: string;
   name: string;
   space: string;
-  linkedEntities: Record<string, LinkedEntityGroup>;
+  referencedByEntities: ReferencedByEntity[];
 }
 
 export default function EntityPage(props: Props) {
@@ -83,47 +83,34 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'entity-id', value: entityId }],
     }),
 
-    network.fetchTriples({
+    network.fetchEntities({
       space,
       query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
     network.fetchProposedVersions(entityId, space),
   ]);
 
-  const relatedEntities = await Promise.all(
-    related.triples.map(triple =>
-      network.fetchTriples({
-        space,
-        query: '',
-        skip: 0,
-        first: DEFAULT_PAGE_SIZE,
-        filter: [{ field: 'entity-id', value: triple.entityId }],
-      })
-    )
-  );
+  const referencedByEntities: ReferencedByEntity[] = related.map(e => {
+    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
 
-  const linkedEntities: Record<string, LinkedEntityGroup> = relatedEntities
-    .flatMap(entity => entity.triples)
-    .reduce((acc, triple) => {
-      if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
-      acc[triple.entityId].id = triple.entityId;
-      acc[triple.entityId].name = triple.entityName;
-      acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
-      return acc;
-    }, {} as Record<string, LinkedEntityGroup>);
+    return {
+      id: e.id,
+      name: e.name,
+      types: e.types,
+      spaceId,
+    };
+  });
 
   return {
     props: {
       triples: entity.triples,
-      schemaTriples: [] /* Todo: Fetch schema triples for entity if entity has a type */,
+      schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
       name: Entity.name(entity.triples) ?? entityId,
       space,
-      linkedEntities,
+      referencedByEntities,
       versions,
       key: entityId,
     },

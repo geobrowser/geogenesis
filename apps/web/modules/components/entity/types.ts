@@ -1,7 +1,6 @@
-import { Triple } from '~/modules/types';
-
-export type LinkedEntityGroup = {
-  triples: Triple[];
-  name: string | null;
+export type ReferencedByEntity = {
   id: string;
+  name: string | null;
+  types: { id: string; name: string | null }[];
+  spaceId: string;
 };

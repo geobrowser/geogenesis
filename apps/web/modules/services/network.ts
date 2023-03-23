@@ -365,25 +365,32 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const { startEntities, containEntities } = json.data;
+    if (!response.ok) return [];
 
-    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+    try {
+      const { startEntities, containEntities } = json.data;
 
-    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
-      const triples = fromNetworkTriples(result.entityOf);
-      const nameTriple = Entity.nameTriple(triples);
+      const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
 
-      return {
-        id: result.id,
-        name: result.name,
-        description: Entity.description(triples),
-        nameTripleSpace: nameTriple?.space,
-        types: Entity.types(triples, space),
-        triples,
-      };
-    });
+      const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+        const triples = fromNetworkTriples(result.entityOf);
+        const nameTriple = Entity.nameTriple(triples);
 
-    return sortedResultsWithTypesAndDescription;
+        return {
+          id: result.id,
+          name: result.name,
+          description: Entity.description(triples),
+          nameTripleSpace: nameTriple?.space,
+          types: Entity.types(triples, space),
+          triples,
+        };
+      });
+
+      return sortedResultsWithTypesAndDescription;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   };
 
   fetchSpaces = async () => {
