@@ -1,5 +1,5 @@
 export const proposedVersionsQuery = (entityId: string) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, first: 10, orderBy: createdAt, orderDirection: desc) {
+  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, orderBy: createdAt, orderDirection: desc) {
     id
     name
     createdAt

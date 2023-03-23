@@ -34,6 +34,9 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     month: 'short',
   });
 
+  // We restrict how many versions we render in the history panel
+  const mostRecentVersions = A.take(versions, 10);
+
   return (
     <div>
       {contributors.length > 0 && (
@@ -62,7 +65,7 @@ export function EntityPageMetadataHeader({ versions }: Props) {
           </div>
 
           <HistoryPanel>
-            {versions.map(version => (
+            {mostRecentVersions.map(version => (
               <HistoryItem key={version.id} version={version} />
             ))}
           </HistoryPanel>
