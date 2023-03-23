@@ -13,7 +13,6 @@ import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
-import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Triple, Version } from '~/modules/types';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { NavUtils } from '~/modules/utils';
@@ -75,16 +74,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const network = new Network(storage, config.subgraph);
 
   const [entity, related, versions] = await Promise.all([
-    network.fetchTriples({
-      space,
-      query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
-      filter: [{ field: 'entity-id', value: entityId }],
-    }),
+    network.fetchEntity(entityId),
 
     network.fetchEntities({
-      space,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
@@ -92,8 +84,24 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     network.fetchProposedVersions(entityId, space),
   ]);
 
+  // @TODO: throw 404
+  if (!entity)
+    return {
+      props: {
+        triples: [],
+        schemaTriples: [],
+        id: entityId,
+        name: entityId,
+        space,
+        referencedByEntities: [],
+        versions,
+        key: entityId,
+      },
+    };
+
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    console.log('entity', e);
 
     return {
       id: e.id,
@@ -108,7 +116,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       triples: entity.triples,
       schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
-      name: Entity.name(entity.triples) ?? entityId,
+      name: entity.name ?? entityId,
       space,
       referencedByEntities,
       versions,

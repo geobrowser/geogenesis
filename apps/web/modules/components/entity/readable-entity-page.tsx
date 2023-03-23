@@ -1,4 +1,6 @@
+import * as React from 'react';
 import Link from 'next/link';
+
 import { LinkableChip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -14,9 +16,9 @@ import { ReferencedByEntity } from './types';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import Image from 'next/image';
-import { Icon } from '~/modules/design-system/icon';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
+import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 
 interface Props {
   triples: Triple[];
@@ -57,7 +59,7 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
 
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes entityId={id} triples={sortedTriples} space={space} />
+          <EntityAttributes entityId={id} triples={sortedTriples} />
         </div>
       </div>
       <Spacer height={40} />
@@ -85,15 +87,7 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
   );
 }
 
-function EntityAttributes({
-  entityId,
-  triples,
-  space,
-}: {
-  entityId: string;
-  triples: Props['triples'];
-  space: Props['space'];
-}) {
+function EntityAttributes({ entityId, triples }: { entityId: string; triples: Props['triples'] }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const tripleToEditableField = (triple: Triple) => {
@@ -108,8 +102,8 @@ function EntityAttributes({
         return <ImageZoom key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
       case 'entity': {
         return (
-          <div key={`entity-${triple.value.id}`} style={{ marginTop: 4 }}>
-            <LinkableChip href={NavUtils.toEntity(space, triple.value.id)}>
+          <div key={`entity-${triple.value.id}`} className="mt-1">
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
               {triple.value.name || triple.value.id}
             </LinkableChip>
           </div>
@@ -135,6 +129,7 @@ function EntityAttributes({
 }
 
 function ReferencedByEntity({ referencedByEntity }: { referencedByEntity: ReferencedByEntity }) {
+  const [isHovered, hover] = React.useState(false);
   const { spaces } = useSpaces();
   // @TODO: Add image to space in server fetch
   const space = spaces.find(s => s.id === referencedByEntity.spaceId);
@@ -142,18 +137,25 @@ function ReferencedByEntity({ referencedByEntity }: { referencedByEntity: Refere
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
   return (
-    <Link href={NavUtils.toEntity(referencedByEntity.id, referencedByEntity.spaceId)} passHref>
-      <a>
-        <Text as="h3" variant="metadataMedium">
-          {referencedByEntity.name}
-        </Text>
+    <Link href={NavUtils.toEntity(referencedByEntity.spaceId, referencedByEntity.id)} passHref>
+      <a onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} className="relative">
+        <div className="flex items-center justify-between">
+          <Text as="h3" variant="metadataMedium">
+            {referencedByEntity.name}
+          </Text>
+          {isHovered && (
+            <div className="absolute right-0 animate-fade-in transition-opacity duration-100">
+              <RightArrowDiagonal color="grey-04" />
+            </div>
+          )}
+        </div>
         <Spacer height={8} />
         <div className="flex items-center">
           <div className="flex items-center gap-1">
             <span className="relative h-3 w-3 overflow-hidden rounded-xs">
               <Image layout="fill" objectFit="cover" src={spaceImage ?? ''} />
             </span>
-            <Text as="p" variant="footnote">
+            <Text as="p" variant="footnoteMedium">
               {spaceName}
             </Text>
           </div>

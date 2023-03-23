@@ -52,7 +52,6 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query?: string;
-  space?: string;
   filter: FilterState;
   abortController?: AbortController;
 };
@@ -270,7 +269,7 @@ export class Network implements INetwork {
     };
   };
 
-  fetchEntities = async ({ space, query, filter, abortController }: FetchEntitiesOptions) => {
+  fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -381,7 +380,7 @@ export class Network implements INetwork {
           name: result.name,
           description: Entity.description(triples),
           nameTripleSpace: nameTriple?.space,
-          types: Entity.types(triples, space),
+          types: Entity.types(triples, nameTriple?.space),
           triples,
         };
       });
