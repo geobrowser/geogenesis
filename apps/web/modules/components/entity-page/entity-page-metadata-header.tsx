@@ -21,8 +21,9 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     A.flatMap(version => version.createdBy)
   );
 
-  // We only render the first three avatars in the avatar group
-  const firstThreeContributors = A.take(contributors, 3);
+  // We only render the most recent three avatars in the avatar group and
+  // render them in reverse order
+  const lastThreeContributors = A.take(contributors, 3).reverse();
   const latestVersion = A.head(versions);
 
   // This will default to the beginning of UNIX time if there are no versions
@@ -39,8 +40,8 @@ export function EntityPageMetadataHeader({ versions }: Props) {
         <div className="flex items-center justify-between text-text">
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
             <AvatarGroup>
-              {firstThreeContributors.map((contributor, i) => (
-                <AvatarGroup.Item first={i === 0} key={i}>
+              {lastThreeContributors.map((contributor, i) => (
+                <AvatarGroup.Item>
                   {contributor.avatarUrl ? (
                     <Image
                       objectFit="cover"

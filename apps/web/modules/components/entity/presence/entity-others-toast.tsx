@@ -64,7 +64,7 @@ export function EntityOthersToast() {
           <div className="flex items-center gap-2">
             <AvatarGroup>
               {editorsAvatars.map((e, i) => (
-                <AvatarGroup.Item key={e.id} first={i === 0}>
+                <AvatarGroup.Item key={e.id}>
                   <BoringAvatar size={12} variant="pixel" name={e.presence.address ?? ''} />
                 </AvatarGroup.Item>
               ))}

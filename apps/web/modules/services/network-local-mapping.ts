@@ -137,8 +137,10 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
-          attributeId: networkAction.attribute.id,
-          attributeName: networkAction.attribute.name,
+          // @TODO why can these be null? Let's investigate when
+          // we tackle review UI for comparing versions
+          attributeId: networkAction.attribute?.id ?? '',
+          attributeName: networkAction.attribute?.name ?? '',
           value,
           space: spaceId,
         };
@@ -150,8 +152,10 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
           id: networkAction.id,
           entityId: networkAction.entity.id,
           entityName: networkAction.entity.name,
-          attributeId: networkAction.attribute.id,
-          attributeName: networkAction.attribute.name,
+          // @TODO why can these be null? Let's investigate when
+          // we tackle review UI for comparing versions
+          attributeId: networkAction.attribute?.id ?? '',
+          attributeName: networkAction.attribute?.name ?? '',
           value,
           space: spaceId,
         };

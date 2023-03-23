@@ -95,7 +95,7 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchProfile: (address: string, abortController?: AbortController) => Promise<Profile | null>;
+  fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchEntity: (id: string, name?: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
@@ -570,14 +570,9 @@ export class Network implements INetwork {
       // Create a map of wallet address -> profile so we can look it up when creating the application
       // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
       // of the user who created the ProposedVersion.
-      const profiles = maybeProfiles
-        .flatMap(author => (author ? [author] : []))
-        .reduce<Record<string, Profile>>((acc, author, i) => {
-          acc[json.data.proposedVersions[i].createdBy.id] = author;
-          return acc;
-        }, {});
+      const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-      return json.data.proposedVersions.map((v, i) => {
+      const result = json.data.proposedVersions.map((v, i) => {
         return {
           ...v,
           // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
@@ -585,6 +580,8 @@ export class Network implements INetwork {
           actions: fromNetworkActions(v.actions, spaceId),
         };
       });
+
+      return result;
     } catch (e) {
       console.error(e);
       console.error(json.errors);
@@ -592,7 +589,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchProfile = async (address: string, abortController?: AbortController): Promise<Profile | null> => {
+  fetchProfile = async (address: string, abortController?: AbortController): Promise<[string, Profile] | null> => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -642,11 +639,14 @@ export class Network implements INetwork {
       const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
       const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
 
-      return {
-        id: maybePerson?.id ?? '',
-        name: maybePerson?.name ?? null,
-        avatarUrl: avatarUrl,
-      };
+      return [
+        address,
+        {
+          id: maybePerson?.id ?? '',
+          name: maybePerson?.name ?? null,
+          avatarUrl: avatarUrl,
+        },
+      ];
     } catch (e) {
       console.error(e);
       console.error(json.errors);
