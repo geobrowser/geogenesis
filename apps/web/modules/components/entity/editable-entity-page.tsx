@@ -368,7 +368,7 @@ function EntityAttributes({
         return (
           <div key={`entity-${triple.value.id}`}>
             <DeletableChipButton
-              href={NavUtils.toEntity(spaceId, triple.value.id)}
+              href={NavUtils.toEntity(triple.space, triple.value.id)}
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               {triple.value.name || triple.value.id}
