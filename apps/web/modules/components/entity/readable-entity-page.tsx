@@ -44,7 +44,7 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
           {name}
         </Text>
       </Truncate>
-      <Spacer height={40} />
+      <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
 
