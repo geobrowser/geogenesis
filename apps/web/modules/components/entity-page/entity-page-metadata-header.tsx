@@ -34,7 +34,9 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     month: 'short',
   });
 
-  // We restrict how many versions we render in the history panel
+  // We restrict how many versions we render in the history panel. We don't
+  // restrict on the subgraph since it would result in an inaccurate contributor
+  // count since we would only have queried the most recent 10 versions.
   const mostRecentVersions = A.take(versions, 10);
 
   return (
