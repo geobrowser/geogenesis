@@ -77,7 +77,7 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
             <Spacer height={20} />
             <div className="flex flex-col gap-6">
               {referencedByEntities.map(referencedByEntity => (
-                <ReferencedByEntity key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+                <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
               ))}
             </div>
           </>
@@ -128,7 +128,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
   );
 }
 
-function ReferencedByEntity({ referencedByEntity }: { referencedByEntity: ReferencedByEntity }) {
+function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: ReferencedByEntity }) {
   const [isHovered, hover] = React.useState(false);
 
   return (
