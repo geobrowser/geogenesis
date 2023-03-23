@@ -37,13 +37,13 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
 
   return (
     <>
-      <EntityPageMetadataHeader versions={versions} />
-      <Spacer height={16} />
       <Truncate maxLines={3} shouldTruncate>
         <Text as="h1" variant="mainPage">
           {name}
         </Text>
       </Truncate>
+      <Spacer height={16} />
+      <EntityPageMetadataHeader versions={versions} />
       <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />

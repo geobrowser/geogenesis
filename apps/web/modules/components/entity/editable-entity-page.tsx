@@ -103,9 +103,9 @@ export function EditableEntityPage({
 
   return (
     <>
-      <EntityPageMetadataHeader versions={versions} />
-      <Spacer height={16} />
       <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+      <Spacer height={16} />
+      <EntityPageMetadataHeader versions={versions} />
       <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
