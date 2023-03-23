@@ -1,18 +1,21 @@
-import BoringAvatar from 'boring-avatars';
 import clsx from 'classnames';
 
 interface Props {
-  usernames: string[];
+  children: React.ReactNode;
 }
 
-export function AvatarGroup({ usernames }: Props) {
+export function AvatarGroup({ children }: Props) {
+  return <ul className="flex items-center -space-x-2">{children}</ul>;
+}
+
+function AvatarGroupItem({ children, first }: Props & { first?: boolean }) {
   return (
-    <ul className="flex items-center -space-x-2">
-      {usernames.map((username, i) => (
-        <li key={username} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
-          <BoringAvatar size={16} name={username} variant="pixel" />
-        </li>
-      ))}
-    </ul>
+    <li
+      className={clsx('relative box-content h-3 w-3 overflow-hidden rounded-full', { 'border border-white': !first })}
+    >
+      {children}
+    </li>
   );
 }
+
+AvatarGroup.Item = AvatarGroupItem;

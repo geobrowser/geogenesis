@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useState } from 'react';
-import clsx from 'classnames';
 import BoringAvatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { useAccount } from 'wagmi';
@@ -14,6 +13,7 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { AvatarGroup } from '~/modules/design-system/avatar-group';
 
+// Formatting for this truncated address differs from the one in utils
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
@@ -24,6 +24,7 @@ export function EntityOthersToast() {
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
+  // @TODO: Fetch all user profiles on the client
   // Include me in the list of editors
   const editors = [
     ...others,
@@ -61,7 +62,13 @@ export function EntityOthersToast() {
           className="fixed right-8 bottom-8 w-60 rounded border border-grey-02 bg-white p-3 shadow-lg"
         >
           <div className="flex items-center gap-2">
-            <AvatarGroup usernames={editorsAvatars.map(e => e.presence.address ?? '')} />
+            <AvatarGroup>
+              {editorsAvatars.map((e, i) => (
+                <AvatarGroup.Item key={e.id} first={i === 0}>
+                  <BoringAvatar size={12} variant="pixel" name={e.presence.address ?? ''} />
+                </AvatarGroup.Item>
+              ))}
+            </AvatarGroup>
             <Text variant="metadataMedium">
               {editorsCount >= 3 ? '3+' : editorsCount} {pluralize('user', editorsCount)}{' '}
               {editorsCount > 1 ? 'are' : 'is'} editing now

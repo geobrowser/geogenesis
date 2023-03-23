@@ -1,10 +1,12 @@
+import BoringAvatar from 'boring-avatars';
+import clsx from 'classnames';
 import { Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
 import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
 import pluralize from 'pluralize';
-import { EntityPageTypeChip } from './entity-page-type-chip';
 import { GeoDate } from '~/modules/utils';
+import Image from 'next/image';
 
 interface Props {
   versions: Array<Version>;
@@ -16,7 +18,7 @@ export function EntityPageMetadataHeader({ versions }: Props) {
   const contributors = pipe(
     versions,
     A.uniqBy(v => v.createdBy.id),
-    A.flatMap(version => version.createdBy.name ?? version.createdBy.id)
+    A.flatMap(version => version.createdBy)
   );
 
   // We only render the first three avatars in the avatar group
@@ -36,7 +38,22 @@ export function EntityPageMetadataHeader({ versions }: Props) {
       {contributors.length > 0 && (
         <div className="flex items-center justify-between text-text">
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
-            <AvatarGroup usernames={firstThreeContributors} />
+            <AvatarGroup>
+              {firstThreeContributors.map((contributor, i) => (
+                <AvatarGroup.Item first={i === 0} key={i}>
+                  {contributor.avatarUrl ? (
+                    <Image
+                      objectFit="cover"
+                      layout="fill"
+                      src={contributor.avatarUrl}
+                      alt={`Avatar for ${contributor.name ?? contributor.id}`}
+                    />
+                  ) : (
+                    <BoringAvatar size={12} square={true} variant="pixel" name={contributor.name ?? contributor.id} />
+                  )}
+                </AvatarGroup.Item>
+              ))}
+            </AvatarGroup>
             <p className="text-text">
               {contributors.length} {pluralize('Editor', contributors.length)}
             </p>

@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Avatar from 'boring-avatars';
+import BoringAvatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { Action } from '~/modules/action';
 import { Text } from '~/modules/design-system/text';
@@ -56,7 +56,7 @@ export function HistoryItem({ version }: Props) {
                 alt={`Avatar for ${version.createdBy.name ?? version.createdBy.id}`}
               />
             ) : (
-              <Avatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
+              <BoringAvatar size={12} square={true} variant="pixel" name={version.createdBy.id} />
             )}
           </div>
           <p className="text-smallButton">{version.createdBy.name ?? formatShortAddress(version.createdBy.id)}</p>
