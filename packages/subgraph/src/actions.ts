@@ -4,7 +4,7 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
 } from '@geogenesis/action-schema/assembly'
-import { TYPES } from '@geogenesis/ids/system-ids'
+import { NAME, SPACE, TYPES } from '@geogenesis/ids/system-ids'
 import {
   Address,
   BigDecimal,
@@ -215,7 +215,7 @@ export function handleCreateTripleAction(
     triple.valueId = stringValue.id
     triple.stringValue = stringValue.value
 
-    if (attribute.id == 'name') {
+    if (attribute.id == NAME) {
       entity.name = stringValue.value
       entity.save()
     }
@@ -225,7 +225,7 @@ export function handleCreateTripleAction(
       []
     )
 
-    if (attribute.id == 'space') {
+    if (attribute.id == SPACE) {
       handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
     }
   }
