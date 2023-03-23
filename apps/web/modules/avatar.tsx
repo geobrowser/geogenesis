@@ -1,9 +1,16 @@
 import BoringAvatar from 'boring-avatars';
+import Image from 'next/image';
 
-export const Avatar = ({ value, size = '100%' }: { value: string; size?: number | string }) => {
-  return (
-    <div className="inline-block rounded border-4">
-      <BoringAvatar size={size} square={true} name={value} variant="pixel" />
-    </div>
+interface Props {
+  avatarUrl?: string | null;
+  value?: string;
+  alt?: string;
+}
+
+export const Avatar = ({ value, avatarUrl, alt }: Props) => {
+  return avatarUrl ? (
+    <Image objectFit="cover" layout="fill" src={avatarUrl} alt={alt} />
+  ) : (
+    <BoringAvatar size={12} square={true} variant="pixel" name={value} />
   );
 };

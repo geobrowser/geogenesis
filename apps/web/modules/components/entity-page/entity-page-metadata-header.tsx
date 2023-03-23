@@ -1,12 +1,10 @@
-import BoringAvatar from 'boring-avatars';
-import clsx from 'classnames';
 import { Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
 import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
 import pluralize from 'pluralize';
 import { GeoDate } from '~/modules/utils';
-import Image from 'next/image';
+import { Avatar } from '~/modules/avatar';
 
 interface Props {
   versions: Array<Version>;
@@ -47,16 +45,11 @@ export function EntityPageMetadataHeader({ versions }: Props) {
             <AvatarGroup>
               {lastThreeContributors.map((contributor, i) => (
                 <AvatarGroup.Item>
-                  {contributor.avatarUrl ? (
-                    <Image
-                      objectFit="cover"
-                      layout="fill"
-                      src={contributor.avatarUrl}
-                      alt={`Avatar for ${contributor.name ?? contributor.id}`}
-                    />
-                  ) : (
-                    <BoringAvatar size={12} square={true} variant="pixel" name={contributor.name ?? contributor.id} />
-                  )}
+                  <Avatar
+                    alt={`Avatar for ${contributor.name ?? contributor.id}`}
+                    avatarUrl={contributor.avatarUrl}
+                    value={contributor.name ?? contributor.id}
+                  />
                 </AvatarGroup.Item>
               ))}
             </AvatarGroup>
