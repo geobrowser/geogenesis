@@ -3,6 +3,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SquareButton } from '~/modules/design-system/button';
+import { Spacer } from '~/modules/design-system/spacer';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
@@ -61,6 +62,13 @@ export const Editor = ({ editable = true }: Props) => {
           <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
+
+      {/* 
+        Right now this component adds its own space below it. It's only used on the
+        entity page so this styling is universal. Eventually we want the callsite
+        to provide layout styling and not the component itself.
+       */}
+      <Spacer height={60} />
     </div>
   );
 };

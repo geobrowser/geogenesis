@@ -63,6 +63,10 @@ h3 {
   @apply text-body;
 }
 
+.ProseMirror strong {
+  @apply font-semibold;
+}
+
 .ProseMirror > * {
   margin-bottom: 16px;
 }
