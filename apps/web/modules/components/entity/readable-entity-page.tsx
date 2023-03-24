@@ -17,6 +17,7 @@ import Image from 'next/image';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
+import { Editor } from './editor/editor';
 
 interface Props {
   triples: Triple[];
@@ -54,14 +55,9 @@ export function ReadableEntityPage({
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
 
-      {description && (
-        <>
-          <Text as="p" color="grey-04">
-            {description}
-          </Text>
-          <Spacer height={60} />
-        </>
-      )}
+      <Editor editable={false} />
+
+      <Spacer height={60} />
 
       <div className="rounded border border-grey-02 bg-white">
         <div className="flex flex-col gap-6 p-5">

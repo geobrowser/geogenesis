@@ -49,16 +49,18 @@ export const Editor = ({ editable = true }: Props) => {
     [editable]
   );
 
+  if (!editor) return null;
+
   const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
 
-  return editor ? (
-    <>
+  return (
+    <div>
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
           <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
-    </>
-  ) : null;
+    </div>
+  );
 };

@@ -41,6 +41,12 @@
   outline: none;
 }
 
+.ProseMirror h1,
+h2,
+h3 {
+  @apply mt-10;
+}
+
 .ProseMirror h1 {
   @apply text-largeTitle;
 }

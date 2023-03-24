@@ -56,7 +56,7 @@ export default function EntityPage(props: Props) {
     <>
       <Head>
         <title>{props.name ?? props.id}</title>
-        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
       </Head>
       <EntityStoreProvider
         id={props.id}
