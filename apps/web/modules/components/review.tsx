@@ -8,6 +8,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import produce from 'immer';
 
 import { Action as ActionNamespace } from '../action';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
@@ -18,7 +19,7 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
-import type { Action, ReviewState, Space } from '../types';
+import type { Action, CreateTripleAction, DeleteTripleAction, Entity, ReviewState, Space } from '../types';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -89,8 +90,8 @@ const ReviewChanges = () => {
   const [proposalName, setProposalName] = useState<string>('');
   const isReadyToPublish = proposalName.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
-  const { actions, publish } = useActionsStore(activeSpace);
-  const changes = useChanges(ActionNamespace.unpublishedChanges(actions));
+  const { actionsFromSpace, publish } = useActionsStore(activeSpace);
+  const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
   // Publishing logic
   const { data: signer } = useSigner();
@@ -233,77 +234,100 @@ const useChanges = (actions: Array<Action>) => {
   return useMemo(() => getChanges(actions), [actions]);
 };
 
-// using `any` because TypeScript isn't handling the `Action` type properly
-const getChanges = (actions: Array<any>): Changes => {
+const getChanges = (actions: Array<Action>): Changes => {
   const changes: Changes = {};
 
-  actions.forEach(action => {
+  // @TODO cleanup with immer produce function
+  actions.forEach((action: Action) => {
     switch (action.type) {
-      case 'createTriple':
+      case 'createTriple': {
+        const actionValue = getActionValue(action);
+        if (!actionValue) break;
+
         changes[action.entityId] = {
           ...changes[action.entityId],
-          entityName: action.entityName,
+          entityName: action.entityName ?? '',
           entityRevisions: {
             ...changes[action.entityId]?.entityRevisions,
             [action.attributeId]: {
               ...changes[action.entityId]?.entityRevisions[action.attributeId],
               id: action.id,
-              attributeName: action.attributeName,
+              attributeName: action.attributeName ?? '',
               isDiff: false,
-              after: [
-                ...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []),
-                action.value.name,
-              ],
+              after: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []), actionValue],
             },
           },
         };
+
         break;
-      case 'editTriple':
+      }
+
+      case 'editTriple': {
+        const beforeActionValue = getActionValue(action.before);
+        const afterActionValue = getActionValue(action.after);
+        if (!beforeActionValue || !afterActionValue) break;
+
         changes[action.before.entityId] = {
           ...changes[action.before.entityId],
-          entityName: changes[action.before.entityId]?.entityName || action.before.entityName,
+          entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
           entityRevisions: {
             ...changes[action.before.entityId]?.entityRevisions,
             [action.before.attributeId]: {
               ...changes[action.before.entityId]?.entityRevisions[action.before.attributeId],
               id: action.before.id,
-              attributeName: action.before.attributeName,
+              attributeName: action.before.attributeName ?? '',
               isDiff: true,
               currentValue:
                 changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
-                action.before.value.value,
+                beforeActionValue,
               differences: diffWords(
                 changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
-                  action.before.value.value,
-                action.after.value.value
+                  beforeActionValue,
+                afterActionValue
               ),
             },
           },
         };
+
         break;
-      case 'deleteTriple':
+      }
+
+      case 'deleteTriple': {
+        const actionValue = getActionValue(action);
+        if (!actionValue) break;
+
         changes[action.entityId] = {
           ...changes[action.entityId],
-          entityName: action.entityName,
+          entityName: action.entityName ?? '',
           entityRevisions: {
             ...changes[action.entityId]?.entityRevisions,
             [action.attributeId]: {
               ...changes[action.entityId]?.entityRevisions[action.attributeId],
               id: action.id,
-              attributeName: action.attributeName,
+              attributeName: action.attributeName ?? '',
               isDiff: false,
-              before: [
-                ...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []),
-                action.value.name,
-              ],
+              before: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []), actionValue],
             },
           },
         };
+
         break;
+      }
     }
   });
 
   return changes;
+};
+
+const getActionValue = (action: CreateTripleAction | DeleteTripleAction): string | null => {
+  switch (action.value.type) {
+    case 'number':
+      return action.value.value;
+    case 'string':
+      return action.value.value;
+    case 'entity':
+      return action.value.name;
+  }
 };
 
 const message: Record<ReviewState, string> = {
@@ -335,9 +359,9 @@ const RevisedEntity = ({
   setUnstagedChanges,
 }: RevisedEntityProps) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [entity, setEntity] = useState<any>(null);
+  const [entity, setEntity] = useState<Entity | null>(null);
   const [renderedEntityName, setRenderedEntityName] = useState<string>(() => entityName || 'Loading...');
-  const { actionIdsToDelete } = useActionsStore(spaceId);
+  const { deleteActions } = useActionsStore(spaceId);
   const { network } = Services.useServices();
 
   useEffect(() => {
@@ -354,7 +378,7 @@ const RevisedEntity = ({
 
   const handleDeleteEdits = () => {
     const allActions = Object.values(entityRevisions).map(item => item.id);
-    actionIdsToDelete(spaceId, allActions);
+    deleteActions(spaceId, allActions);
   };
 
   return (
@@ -465,7 +489,7 @@ const RevisedEntity = ({
                     )}
                   </div>
                   <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
-                    <SquareButton icon="trash" onClick={() => actionIdsToDelete(spaceId, [id])} />
+                    <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
                     <SquareButton
                       icon={unstaged ? 'blank' : 'tick'}
                       onClick={() => {
@@ -561,7 +585,7 @@ const reviewVariants = {
 };
 
 const statusVariants = {
-  hidden: { opacity: 0, y: '-4px' },
+  hidden: { opacity: 0, y: '4px' },
   visible: { opacity: 1, y: '0px' },
 };
 

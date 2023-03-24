@@ -79,6 +79,7 @@ function App({ Component, pageProps }: AppProps) {
       <Main>
         <Component {...pageProps} />
       </Main>
+      {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <FlowBar />
         <Review />

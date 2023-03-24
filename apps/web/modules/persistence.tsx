@@ -5,21 +5,22 @@ import { useActionsStore } from './action';
 import { useLocalStorage } from './hooks/use-local-storage';
 
 export const Persistence = () => {
-  const [isInitialRender, setIsInitialRender] = useState(true);
-  const { rawActions, restore } = useActionsStore();
+  const [isInitialRender, setIsInitialRender] = useState<boolean>(true);
+  const { actions, restore } = useActionsStore();
   const [storedActions, setStoredActions] = useLocalStorage('storedActions', {});
 
   // Restore actions on first render, save actions each render thereafter
-  // note: finely tuned dependency array is used to prevent infinite rerenders
   useEffect(() => {
     if (isInitialRender) {
       console.info('🔃 restoring actions');
       restore(storedActions);
     } else {
       console.info('💾 saving actions');
-      setStoredActions(rawActions);
+      setStoredActions(actions);
     }
-  }, [isInitialRender, rawActions]); // eslint-disable-line react-hooks/exhaustive-deps
+    // note: finely tuned dependency because `storedActions` is only used on initial render
+    // no need to save stored actions a second time when storedactions are updated
+  }, [isInitialRender, actions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setIsInitialRender(false);

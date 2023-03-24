@@ -19,7 +19,7 @@ export function useActionsStore(spaceId?: string) {
     create,
     update,
     remove,
-    actionIdsToDelete,
+    deleteActions,
   } = useActionsStoreContext();
   const actions = useSelector(actions$);
   const allActions = useSelector(allActions$);
@@ -27,8 +27,8 @@ export function useActionsStore(spaceId?: string) {
 
   if (!spaceId) {
     return {
-      actions: [],
-      rawActions: actions,
+      actions,
+      actionsFromSpace: [],
       allActions,
       allSpacesWithActions,
       restore,
@@ -37,13 +37,13 @@ export function useActionsStore(spaceId?: string) {
       create,
       update,
       remove,
-      actionIdsToDelete,
+      deleteActions,
     };
   }
 
   return {
-    actions: actions[spaceId] ?? [],
-    rawActions: actions,
+    actions,
+    actionsFromSpace: actions[spaceId] ?? [],
     allActions,
     allSpacesWithActions,
     restore,
@@ -52,6 +52,6 @@ export function useActionsStore(spaceId?: string) {
     create,
     update,
     remove,
-    actionIdsToDelete,
+    deleteActions,
   };
 }

@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import pluralize from 'pluralize';
+import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Action, useActionsStore } from '~/modules/action';
 import { Button } from '~/modules/design-system/button';
 import { useReview } from '~/modules/review';
-import { A, D, pipe } from '@mobily/ts-belt';
 
 export const FlowBar = () => {
   const { allActions, allSpacesWithActions } = useActionsStore();
@@ -57,10 +57,10 @@ export const FlowBar = () => {
 };
 
 const flowVariants = {
-  hidden: { opacity: 0, y: '-4px' },
+  hidden: { opacity: 0, y: '4px' },
   visible: (custom: boolean) => ({
     opacity: custom ? 1 : 0,
-    y: custom ? '0px' : '-4px',
+    y: custom ? '0px' : '4px',
     transition: {
       type: 'spring',
       duration: 0.5,

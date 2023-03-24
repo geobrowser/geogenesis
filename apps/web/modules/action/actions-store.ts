@@ -18,7 +18,7 @@ interface IActionsStore {
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
-  actionIdsToDelete(spaceId: string, actionIds: Array<string>): void;
+  deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
   publish(
     spaceId: string,
     signer: Signer,
@@ -71,12 +71,14 @@ export class ActionsStore implements IActionsStore {
     this.actions$.set(spaceActions);
   };
 
-  actionIdsToDelete = (spaceId: string, actionIds: Array<string>) => {
+  deleteActions = (spaceId: string, actionIdsToDelete: Array<string>) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
 
     const newActions: SpaceActions = {
       ...prevActions,
-      [spaceId]: [...(prevActions[spaceId] ?? [])].filter((item: ActionType) => !actionIds.includes(getId(item))),
+      [spaceId]: [...(prevActions[spaceId] ?? [])].filter(
+        (item: ActionType) => !actionIdsToDelete.includes(getId(item))
+      ),
     };
 
     this.actions$.set(newActions);
