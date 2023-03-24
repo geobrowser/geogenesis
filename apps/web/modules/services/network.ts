@@ -260,6 +260,12 @@ export class Network implements INetwork {
       }),
     });
 
+    if (!response.ok) {
+      console.error(`Unable to fetch entity, entityId: ${id}`);
+      console.error(`Failed fetch entity response text: ${await response.text()}`);
+      return null;
+    }
+
     try {
       const json: {
         data: {
