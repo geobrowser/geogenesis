@@ -52,7 +52,6 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query?: string;
-  space?: string;
   filter: FilterState;
   abortController?: AbortController;
 };
@@ -270,7 +269,7 @@ export class Network implements INetwork {
     };
   };
 
-  fetchEntities = async ({ space, query, filter, abortController }: FetchEntitiesOptions) => {
+  fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -365,25 +364,32 @@ export class Network implements INetwork {
       };
     } = await response.json();
 
-    const { startEntities, containEntities } = json.data;
+    if (!response.ok) return [];
 
-    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+    try {
+      const { startEntities, containEntities } = json.data;
 
-    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
-      const triples = fromNetworkTriples(result.entityOf);
-      const nameTriple = Entity.nameTriple(triples);
+      const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
 
-      return {
-        id: result.id,
-        name: result.name,
-        description: Entity.description(triples),
-        nameTripleSpace: nameTriple?.space,
-        types: Entity.types(triples, space),
-        triples,
-      };
-    });
+      const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+        const triples = fromNetworkTriples(result.entityOf);
+        const nameTriple = Entity.nameTriple(triples);
 
-    return sortedResultsWithTypesAndDescription;
+        return {
+          id: result.id,
+          name: result.name,
+          description: Entity.description(triples),
+          nameTripleSpace: nameTriple?.space,
+          types: Entity.types(triples, nameTriple?.space),
+          triples,
+        };
+      });
+
+      return sortedResultsWithTypesAndDescription;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   };
 
   fetchSpaces = async () => {

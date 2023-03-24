@@ -74,7 +74,7 @@ export function Navbar({ onSearchClick }: Props) {
 
   const spaceId = components?.[2]?.split('?')[0];
   return (
-    <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+    <nav className="flex w-full items-center justify-between gap-1 border-b border-divider bg-white py-1 px-4 md:py-3 md:px-4">
       <div className="flex max-w-[40%] items-center gap-8 overflow-hidden md:max-w-full md:gap-4 [&>a:last-child]:max-w-[99%] [&>a:last-child]:overflow-hidden md:[&>a:nth-of-type(3)]:hidden md:[&>span:nth-of-type(2)]:hidden">
         <Link href="/" passHref>
           <a>
@@ -118,7 +118,7 @@ export function Navbar({ onSearchClick }: Props) {
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
         <DebugActions spaceId={spaceId ?? ''} />
       </div>
-    </div>
+    </nav>
   );
 }
 

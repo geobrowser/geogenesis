@@ -1,4 +1,3 @@
-import Head from 'next/head';
 import * as React from 'react';
 
 import { SYSTEM_IDS } from '~/../../packages/ids';
@@ -104,10 +103,10 @@ export function EditableEntityPage({
 
   return (
     <>
-      <EntityPageMetadataHeader versions={versions} />
-      <Spacer height={16} />
       <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-      <Spacer height={40} />
+      <Spacer height={16} />
+      <EntityPageMetadataHeader versions={versions} />
+      <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
       <PageStringField
@@ -369,7 +368,7 @@ function EntityAttributes({
         return (
           <div key={`entity-${triple.value.id}`}>
             <DeletableChipButton
-              href={NavUtils.toEntity(spaceId, triple.value.id)}
+              href={NavUtils.toEntity(triple.space, triple.value.id)}
               onClick={() => removeOrResetEntityTriple(triple)}
             >
               {triple.value.name || triple.value.id}

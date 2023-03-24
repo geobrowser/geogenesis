@@ -8,7 +8,7 @@ import { Text } from '~/modules/design-system/text';
 export default function Custom404() {
   return (
     <div className="relative flex min-h-[75vh] flex-col items-center justify-center">
-      <div>
+      <div className="z-10 flex flex-col items-center">
         <img src="/404.svg" alt="Image of a 404 error." />
         <Spacer height={24} />
         <Text as="h1" variant="bodySemibold">

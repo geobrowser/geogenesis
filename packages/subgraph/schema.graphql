@@ -78,6 +78,7 @@ type Proposal @entity {
   name: String
   description: String
   createdBy: Account
+  # @TODO: Add space to Action
   status: ProposalStatus! # status of the proposal
   createdAt: BigInt! # block timestamp
   proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal
@@ -114,6 +115,7 @@ type Action @entity {
   actionType: ActionType!
 
   entity: GeoEntity!
+  # @TODO: Add space to Action
 
   # the rest of these are all nullable because we create entity action
   # lacks these fields

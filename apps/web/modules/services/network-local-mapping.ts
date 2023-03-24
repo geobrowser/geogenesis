@@ -86,7 +86,7 @@ export function getActionFromChangeStatus(action: Action) {
   }
 }
 
-function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
+function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction): boolean {
   switch (networkTriple.valueType) {
     case 'STRING':
       return !networkTriple.stringValue;
@@ -99,14 +99,14 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple): boolean {
   }
 }
 
-function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple): boolean {
+function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple | NetworkAction): boolean {
   return !networkTriple.attribute || !networkTriple.attribute.id;
 }
 
 export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
   return networkTriples
     .map(networkTriple => {
-      // There's an edge-case bug where the entityValue can be null even though it should be an object.
+      // There's an edge-case bug where the value can be null even though it should be an object.
       // Right now we're not doing any triple validation, but once we do we will no longer be indexing
       // empty triples.
       if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
@@ -127,41 +127,46 @@ export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
 }
 
 export function fromNetworkActions(networkActions: NetworkAction[], spaceId: string): Action[] {
-  const newActions = networkActions.map(networkAction => {
-    const value = extractActionValue(networkAction);
-
-    switch (networkAction.actionType) {
-      case 'CREATE': {
-        return {
-          type: 'createTriple' as const,
-          id: networkAction.id,
-          entityId: networkAction.entity.id,
-          entityName: networkAction.entity.name,
-          // @TODO why can these be null? Let's investigate when
-          // we tackle review UI for comparing versions
-          attributeId: networkAction.attribute?.id ?? '',
-          attributeName: networkAction.attribute?.name ?? '',
-          value,
-          space: spaceId,
-        };
+  const newActions = networkActions
+    .map(networkAction => {
+      // There's an edge-case bug where the value can be null even though it should be an object.
+      // Right now we're not doing any triple validation, but once we do we will no longer be indexing
+      // empty triples.
+      if (networkTripleHasEmptyValue(networkAction) || networkTripleHasEmptyAttribute(networkAction)) {
+        return null;
       }
 
-      case 'DELETE': {
-        return {
-          type: 'deleteTriple' as const,
-          id: networkAction.id,
-          entityId: networkAction.entity.id,
-          entityName: networkAction.entity.name,
-          // @TODO why can these be null? Let's investigate when
-          // we tackle review UI for comparing versions
-          attributeId: networkAction.attribute?.id ?? '',
-          attributeName: networkAction.attribute?.name ?? '',
-          value,
-          space: spaceId,
-        };
+      const value = extractActionValue(networkAction);
+
+      switch (networkAction.actionType) {
+        case 'CREATE': {
+          return {
+            type: 'createTriple' as const,
+            id: networkAction.id,
+            entityId: networkAction.entity.id,
+            entityName: networkAction.entity.name,
+            attributeId: networkAction.attribute.id,
+            attributeName: networkAction.attribute.name,
+            value,
+            space: spaceId,
+          };
+        }
+
+        case 'DELETE': {
+          return {
+            type: 'deleteTriple' as const,
+            id: networkAction.id,
+            entityId: networkAction.entity.id,
+            entityName: networkAction.entity.name,
+            attributeId: networkAction.attribute.id,
+            attributeName: networkAction.attribute.name,
+            value,
+            space: spaceId,
+          };
+        }
       }
-    }
-  });
+    })
+    .flatMap(action => (action ? [action] : []));
 
   return newActions;
 }
