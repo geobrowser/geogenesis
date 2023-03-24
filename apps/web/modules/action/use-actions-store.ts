@@ -9,8 +9,18 @@ import { useActionsStoreContext } from './actions-store-provider';
  * on a dev route or the root /spaces page.
  */
 export function useActionsStore(spaceId?: string) {
-  const { actions$, allActions$, allSpacesWithActions$, publish, clear, create, update, remove, actionIdsToDelete } =
-    useActionsStoreContext();
+  const {
+    actions$,
+    allActions$,
+    allSpacesWithActions$,
+    restore,
+    publish,
+    clear,
+    create,
+    update,
+    remove,
+    actionIdsToDelete,
+  } = useActionsStoreContext();
   const actions = useSelector(actions$);
   const allActions = useSelector(allActions$);
   const allSpacesWithActions = useSelector(allSpacesWithActions$);
@@ -18,8 +28,10 @@ export function useActionsStore(spaceId?: string) {
   if (!spaceId) {
     return {
       actions: [],
+      rawActions: actions,
       allActions,
       allSpacesWithActions,
+      restore,
       publish,
       clear,
       create,
@@ -31,8 +43,10 @@ export function useActionsStore(spaceId?: string) {
 
   return {
     actions: actions[spaceId] ?? [],
+    rawActions: actions,
     allActions,
     allSpacesWithActions,
+    restore,
     publish,
     clear,
     create,

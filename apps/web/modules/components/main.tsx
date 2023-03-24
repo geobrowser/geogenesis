@@ -26,5 +26,14 @@ export const Main = ({ children }: MainProps) => {
 const transition = { type: 'spring', duration: 0.5, bounce: 0 };
 
 const variants = {
-  animate: (open: boolean) => ({ scale: open ? 0.95 : 1, opacity: open ? 0 : 1 }),
+  animate: (open: boolean) => ({
+    scale: open ? 0.95 : 1,
+    opacity: open ? 0 : 1,
+    transition: {
+      type: 'spring',
+      duration: 0.5,
+      bounce: 0,
+      delay: open ? 0.5 : 0,
+    },
+  }),
 };

@@ -1,7 +1,5 @@
 import { Observable, observable, computed } from '@legendapp/state';
 import { Signer } from 'ethers';
-import { persistObservable, configureObservablePersistence } from '@legendapp/state/persist';
-import { ObservablePersistLocalStorage } from '@legendapp/state/persist-plugins/local-storage';
 
 import { Action } from '.';
 import { INetwork } from '../services/network';
@@ -13,8 +11,10 @@ import {
   ReviewState,
   Triple as TripleType,
 } from '../types';
+import { makeOptionalComputed } from '../utils';
 
 interface IActionsStore {
+  restore(spaceActions: SpaceActions): void;
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
@@ -35,11 +35,6 @@ interface IActionsStoreConfig {
 export type SpaceId = string;
 export type SpaceActions = Record<SpaceId, ActionType[]>;
 
-// Configure localStorage persistence
-configureObservablePersistence({
-  persistLocal: ObservablePersistLocalStorage,
-});
-
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
   actions$: Observable<SpaceActions>;
@@ -51,14 +46,14 @@ export class ActionsStore implements IActionsStore {
 
     this.api = api;
     this.actions$ = actions;
-    this.allActions$ = computed(() => Object.values(this.actions$.get()).flatMap(actions => actions) ?? []);
-    this.allSpacesWithActions$ = computed(
-      () => Object.keys(this.actions$.get()).filter(spaceId => this.actions$.get()[spaceId].length > 0) ?? []
+    this.allActions$ = makeOptionalComputed(
+      [],
+      computed(() => Object.values(this.actions$.get()).flatMap(actions => actions) ?? [])
     );
-
-    persistObservable(actions, {
-      local: 'actions',
-    });
+    this.allSpacesWithActions$ = makeOptionalComputed(
+      [],
+      computed(() => Object.keys(this.actions$.get()).filter(spaceId => this.actions$.get()[spaceId].length > 0) ?? [])
+    );
   }
 
   private addActions = (spaceId: string, actions: ActionType[]) => {
@@ -70,6 +65,10 @@ export class ActionsStore implements IActionsStore {
     };
 
     this.actions$.set(newActions);
+  };
+
+  restore = (spaceActions: SpaceActions) => {
+    this.actions$.set(spaceActions);
   };
 
   actionIdsToDelete = (spaceId: string, actionIds: Array<string>) => {

@@ -17,6 +17,7 @@ import { NavUtils } from '~/modules/utils';
 import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
+import { Persistence } from '~/modules/persistence';
 
 import '../styles/fonts.css';
 import '../styles/styles.css';
@@ -78,10 +79,10 @@ function App({ Component, pageProps }: AppProps) {
       <Main>
         <Component {...pageProps} />
       </Main>
-      {/* These are client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <FlowBar />
         <Review />
+        <Persistence />
       </ClientOnly>
       <Analytics />
     </>

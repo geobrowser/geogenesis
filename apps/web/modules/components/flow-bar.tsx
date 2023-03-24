@@ -9,7 +9,7 @@ import { useReview } from '~/modules/review';
 
 export const FlowBar = () => {
   const { allActions, allSpacesWithActions } = useActionsStore();
-  const { setIsReviewOpen } = useReview();
+  const { isReviewOpen, setIsReviewOpen } = useReview();
 
   const actionsCount = Action.getChangeCount(allActions);
 
@@ -33,6 +33,7 @@ export const FlowBar = () => {
           animate="visible"
           exit="hidden"
           transition={transition}
+          custom={!isReviewOpen}
           className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
         >
           <div className="inline-flex items-center font-medium">
@@ -53,7 +54,16 @@ export const FlowBar = () => {
 
 const flowVariants = {
   hidden: { opacity: 0, y: '-4px' },
-  visible: { opacity: 1, y: '0px' },
+  visible: (custom: boolean) => ({
+    opacity: custom ? 1 : 0,
+    y: custom ? '0px' : '-4px',
+    transition: {
+      type: 'spring',
+      duration: 0.5,
+      bounce: 0,
+      delay: custom ? 0.5 : 0,
+    },
+  }),
 };
 
 const transition = { type: 'spring', duration: 0.5, bounce: 0 };

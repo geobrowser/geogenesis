@@ -39,7 +39,7 @@ export const Review = () => {
                 animate="visible"
                 exit="hidden"
                 transition={transition}
-                className={cx('bg-gray-02 fixed inset-0 z-100 h-full w-full', !isReviewOpen && 'pointer-events-none')}
+                className={cx('fixed inset-0 z-100 h-full w-full bg-grey-02', !isReviewOpen && 'pointer-events-none')}
               >
                 <ReviewChanges />
               </motion.div>
@@ -92,18 +92,12 @@ const ReviewChanges = () => {
   const { actions, publish } = useActionsStore(activeSpace);
   const changes = useChanges(ActionNamespace.unpublishedChanges(actions));
 
-  // @TODO remove console.info
-  console.info('changes:', changes);
-
   // Publishing logic
   const { data: signer } = useSigner();
   const handlePublish = async () => {
     if (!activeSpace || !signer) return;
     await publish(activeSpace, signer, setReviewState, unstagedChanges);
   };
-
-  // @TODO remove console.info
-  console.info('activeSpace:', activeSpace);
 
   return (
     <>
@@ -147,12 +141,12 @@ const ReviewChanges = () => {
           )}
         </div>
         <div>
-          <Button onClick={handlePublish} icon="publish" disabled={!isReadyToPublish}>
+          <Button onClick={handlePublish} disabled={!isReadyToPublish}>
             Publish
           </Button>
         </div>
       </div>
-      <div className="mt-4 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
+      <div className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="flex flex-col gap-16">
             <div className="flex flex-col gap-2">
@@ -165,17 +159,19 @@ const ReviewChanges = () => {
                 className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
               />
             </div>
-            {Object.keys(changes).map((key: string) => (
-              <RevisedEntity
-                key={key}
-                spaceId={activeSpace}
-                entityId={key}
-                entityName={changes[key].entityName}
-                entityRevisions={changes[key].entityRevisions}
-                unstagedChanges={unstagedChanges}
-                setUnstagedChanges={setUnstagedChanges}
-              />
-            ))}
+            <div className="-mt-10 flex flex-col divide-y divide-grey-02">
+              {Object.keys(changes).map((key: string) => (
+                <RevisedEntity
+                  key={key}
+                  spaceId={activeSpace}
+                  entityId={key}
+                  entityName={changes[key].entityName}
+                  entityRevisions={changes[key].entityRevisions}
+                  unstagedChanges={unstagedChanges}
+                  setUnstagedChanges={setUnstagedChanges}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -242,9 +238,6 @@ const getChanges = (actions: Array<any>): Changes => {
   const changes: Changes = {};
 
   actions.forEach(action => {
-    // @TODO remove console.info
-    console.info('action:', action);
-
     switch (action.type) {
       case 'createTriple':
         changes[action.entityId] = {
@@ -343,28 +336,30 @@ const RevisedEntity = ({
 }: RevisedEntityProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [entity, setEntity] = useState<any>(null);
+  const [renderedEntityName, setRenderedEntityName] = useState<string>(() => entityName || 'Loading...');
   const { actionIdsToDelete } = useActionsStore(spaceId);
   const { network } = Services.useServices();
 
   useEffect(() => {
-    async function fetchEntity() {
-      const entity = await network.fetchEntity(entityId);
-      setEntity(entity);
+    async function fetchRemoteEntity() {
+      const newEntity = await network.fetchEntity(entityId);
+      const newEntityName = renderedEntityName !== 'Loading...' ? renderedEntityName : newEntity?.name ?? 'Not found';
+      setRenderedEntityName(newEntityName);
+      setEntity(newEntity);
       setIsLoading(false);
     }
 
-    fetchEntity();
-  }, [network, entityId, setEntity]);
+    fetchRemoteEntity();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteEdits = () => {
     const allActions = Object.values(entityRevisions).map(item => item.id);
-
     actionIdsToDelete(spaceId, allActions);
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="text-mediumTitle">{entityName}</div>
+    <div className="flex flex-col gap-4 py-10">
+      <div className="-mt-1 text-mediumTitle">{renderedEntityName}</div>
       <div className="grid grid-cols-2 items-start gap-8">
         <div className="flex flex-col gap-2">
           <div className="text-body">Current version</div>
@@ -382,11 +377,11 @@ const RevisedEntity = ({
                           <Skeleton />
                         ) : (
                           <>
-                            {entity.triples
-                              .filter(
+                            {entity?.triples
+                              ?.filter(
                                 (item: any) => item.attributeId === attributeId && !before?.includes(item.value.name)
                               )
-                              .map((triple: any) => (
+                              ?.map((triple: any) => (
                                 <Chip key={triple.id} status="unchanged">
                                   {triple.value.name}
                                 </Chip>
@@ -434,14 +429,14 @@ const RevisedEntity = ({
                           <Skeleton />
                         ) : (
                           <>
-                            {entity.triples
-                              .filter(
+                            {entity?.triples
+                              ?.filter(
                                 (item: any) =>
                                   item.attributeId === attributeId &&
                                   !before?.includes(item.value.name) &&
                                   !after?.includes(item.value.name)
                               )
-                              .map((triple: any) => (
+                              ?.map((triple: any) => (
                                 <Chip key={triple.id} status="unchanged">
                                   {triple.value.name}
                                 </Chip>
@@ -508,7 +503,7 @@ type PanelProps = {
 
 const Panel = ({ children }: PanelProps) => {
   return (
-    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-big">
+    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-light">
       {children}
     </div>
   );
@@ -554,7 +549,15 @@ function getSpaceImage(spaces: Space[], spaceId: string): string {
 
 const reviewVariants = {
   hidden: { y: '100%' },
-  visible: { y: '0%' },
+  visible: {
+    y: '0%',
+    transition: {
+      type: 'spring',
+      duration: 0.5,
+      bounce: 0,
+      delay: 0.5,
+    },
+  },
 };
 
 const statusVariants = {
