@@ -195,7 +195,14 @@ export class Network implements INetwork {
       }),
     });
 
-    if (!response.ok) return { triples: [] };
+    if (!response.ok) {
+      console.error(
+        `Unable to fetch triples, space: ${space} query: ${query} skip: ${skip} first: ${first} filter: ${filter}`
+      );
+      console.error(`Failed fetch triples response text: ${await response.text()}`);
+      return { triples: [] };
+    }
+
     try {
       const json: {
         data: {
@@ -372,7 +379,11 @@ export class Network implements INetwork {
       }),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
+      console.error(`Failed fetch entities response text: ${await response.text()}`);
+      return [];
+    }
 
     try {
       const json: {
@@ -583,7 +594,11 @@ export class Network implements INetwork {
       }),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
+      console.error(`Failed proposed versions fetch response text: ${await response.text()}`);
+      return [];
+    }
 
     const json: {
       data: {
@@ -613,7 +628,7 @@ export class Network implements INetwork {
 
       return result;
     } catch (e) {
-      console.log(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
+      console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
       console.error(e);
       console.error(json.errors);
       return [];
@@ -634,7 +649,11 @@ export class Network implements INetwork {
       }),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(`Unable to fetch profile for address: ${address}`);
+      console.error(`Failed fetch profile response text: ${await response.text()}`);
+      return null;
+    }
 
     const json: {
       data: {
@@ -679,6 +698,7 @@ export class Network implements INetwork {
         },
       ];
     } catch (e) {
+      console.error(`Unable to fetch profile for address: ${address}`);
       console.error(e);
       console.error(json.errors);
       return null;
