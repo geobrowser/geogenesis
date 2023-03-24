@@ -50,6 +50,8 @@ export const Editor = ({ editable = true }: Props) => {
     [editable]
   );
 
+  if (!editable && entityStore.blockIds.length === 0) return null;
+
   if (!editor) return null;
 
   const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
