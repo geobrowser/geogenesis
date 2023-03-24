@@ -42,8 +42,8 @@
 }
 
 .ProseMirror h1,
-h2,
-h3 {
+.ProseMirror h2,
+.ProseMirror h3 {
   @apply mt-10;
 }
 

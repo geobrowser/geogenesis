@@ -13,7 +13,6 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
 import { intersperse, titleCase } from '~/modules/utils';
-import { DebugActions } from '../debug/debug-actions';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
 
@@ -116,7 +115,6 @@ export function Navbar({ onSearchClick }: Props) {
         <DiscordLink />
         <Spacer width={16} />
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
-        <DebugActions spaceId={spaceId ?? ''} />
       </div>
     </nav>
   );
