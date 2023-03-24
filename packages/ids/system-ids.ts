@@ -44,7 +44,7 @@ export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
 // This represents the beacon proxy for the first set of deployed permissioned spaces.
 // We should use this beacon proxy for all new permissioned spaces.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =
-  '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0'
+  '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
 
 // This represents the Space contract acting as the registry for all permissioned spaces.
 // This is the address for the Root Space.
