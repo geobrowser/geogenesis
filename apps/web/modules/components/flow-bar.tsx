@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import pluralize from 'pluralize';
-import { groupBy } from '../utils';
 
 import { Action, useActionsStore } from '~/modules/action';
 import { Button } from '~/modules/design-system/button';
 import { useReview } from '~/modules/review';
+import { A, D, pipe } from '@mobily/ts-belt';
 
 export const FlowBar = () => {
   const { allActions, allSpacesWithActions } = useActionsStore();
@@ -13,12 +13,16 @@ export const FlowBar = () => {
 
   const actionsCount = Action.getChangeCount(allActions);
 
-  const entitiesCount = Object.keys(
-    groupBy(Action.squashChanges(allActions), action => {
+  const entitiesCount = pipe(
+    allActions,
+    actions => Action.squashChanges(actions),
+    A.groupBy(action => {
       if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
       return action.after.entityId;
-    })
-  ).length;
+    }),
+    D.keys,
+    A.length
+  );
 
   const spacesCount = allSpacesWithActions.length;
 
