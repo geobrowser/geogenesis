@@ -95,7 +95,7 @@ export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
-  fetchEntity: (id: string, name?: string, abortController?: AbortController) => Promise<EntityType | null>;
+  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
@@ -195,17 +195,26 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        triples: NetworkTriple[];
-      };
-    } = await response.json();
+    if (!response.ok) return { triples: [] };
+    try {
+      const json: {
+        data: {
+          triples: NetworkTriple[];
+        };
+      } = await response.json();
 
-    const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
-    return { triples };
+      const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
+      return { triples };
+    } catch (e) {
+      console.error(
+        `Unable to fetch triples, space: ${space} query: ${query} skip: ${skip} first: ${first} filter: ${filter}`
+      );
+      console.error(e);
+      return { triples: [] };
+    }
   };
 
-  fetchEntity = async (id: string, name?: string, abortController?: AbortController): Promise<EntityType | null> => {
+  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -244,29 +253,35 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        geoEntity: NetworkEntity;
+    try {
+      const json: {
+        data: {
+          geoEntity: NetworkEntity;
+        };
+      } = await response.json();
+
+      const entity = json.data.geoEntity;
+
+      if (!entity) {
+        return null;
+      }
+
+      const triples = fromNetworkTriples(entity.entityOf);
+      const nameTriple = Entity.nameTriple(triples);
+
+      return {
+        id: entity.id,
+        name: entity.name,
+        description: Entity.description(triples),
+        nameTripleSpace: nameTriple?.space,
+        types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
+        triples,
       };
-    } = await response.json();
-
-    const entity = json.data.geoEntity;
-
-    if (!entity) {
+    } catch (e) {
+      console.error(`Unable to fetch entity, entityId: ${id}`);
+      console.error(e);
       return null;
     }
-
-    const triples = fromNetworkTriples(entity.entityOf);
-    const nameTriple = Entity.nameTriple(triples);
-
-    return {
-      id: entity.id,
-      name: entity.name,
-      description: Entity.description(triples),
-      nameTripleSpace: nameTriple?.space,
-      types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
-      triples,
-    };
   };
 
   fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
@@ -357,16 +372,16 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        startEntities: NetworkEntity[];
-        containEntities: NetworkEntity[];
-      };
-    } = await response.json();
-
     if (!response.ok) return [];
 
     try {
+      const json: {
+        data: {
+          startEntities: NetworkEntity[];
+          containEntities: NetworkEntity[];
+        };
+      } = await response.json();
+
       const { startEntities, containEntities } = json.data;
 
       const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
@@ -387,6 +402,7 @@ export class Network implements INetwork {
 
       return sortedResultsWithTypesAndDescription;
     } catch (e) {
+      console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
       console.error(e);
       return [];
     }
@@ -437,45 +453,51 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        spaces: {
-          id: string;
-          isRootSpace: boolean;
-          admins: Account[];
-          editors: Account[];
-          editorControllers: Account[];
-          entity?: {
+    try {
+      const json: {
+        data: {
+          spaces: {
             id: string;
-            entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
-          };
-        }[];
-      };
-    } = await spacesResponse.json();
+            isRootSpace: boolean;
+            admins: Account[];
+            editors: Account[];
+            editorControllers: Account[];
+            entity?: {
+              id: string;
+              entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
+            };
+          }[];
+        };
+      } = await spacesResponse.json();
 
-    const spaces = json.data.spaces.map((space): Space => {
-      const attributes = Object.fromEntries(
-        space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
-      );
+      const spaces = json.data.spaces.map((space): Space => {
+        const attributes = Object.fromEntries(
+          space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
+        );
 
-      if (space.isRootSpace) {
-        attributes.name = 'Root';
-        attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
-      }
+        if (space.isRootSpace) {
+          attributes.name = 'Root';
+          attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
+        }
 
-      return {
-        id: space.id,
-        isRootSpace: space.isRootSpace,
-        admins: space.admins.map(account => account.id),
-        editorControllers: space.editorControllers.map(account => account.id),
-        editors: space.editors.map(account => account.id),
-        entityId: space.entity?.id || '',
-        attributes,
-        spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
-      };
-    });
+        return {
+          id: space.id,
+          isRootSpace: space.isRootSpace,
+          admins: space.admins.map(account => account.id),
+          editorControllers: space.editorControllers.map(account => account.id),
+          editors: space.editors.map(account => account.id),
+          entityId: space.entity?.id || '',
+          attributes,
+          spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
+        };
+      });
 
-    return spaces;
+      return spaces;
+    } catch (e) {
+      console.error('Unable to fetch spaces');
+      console.error(e);
+      return [];
+    }
   };
 
   rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
@@ -561,6 +583,8 @@ export class Network implements INetwork {
       }),
     });
 
+    if (!response.ok) return [];
+
     const json: {
       data: {
         proposedVersions: NetworkVersion[];
@@ -589,6 +613,7 @@ export class Network implements INetwork {
 
       return result;
     } catch (e) {
+      console.log(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
       console.error(e);
       console.error(json.errors);
       return [];
@@ -609,7 +634,7 @@ export class Network implements INetwork {
       }),
     });
 
-    if (response.status >= 400) return null;
+    if (!response.ok) return null;
 
     const json: {
       data: {
