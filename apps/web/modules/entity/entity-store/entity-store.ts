@@ -184,21 +184,21 @@ export class EntityStore implements IEntityStore {
                 typeName: Value.nameOfEntityValue(rowTypeTriple),
               },
             };
-          } else {
-            const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
-            /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
-            const isSSR = typeof window === 'undefined';
-            const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
-            const nodeData = json.content[0];
-
-            return {
-              ...nodeData,
-              attrs: {
-                ...nodeData?.attrs,
-                id: blockId,
-              },
-            };
           }
+
+          const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
+          /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
+          const isSSR = typeof window === 'undefined';
+          const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
+          const nodeData = json.content[0];
+
+          return {
+            ...nodeData,
+            attrs: {
+              ...nodeData?.attrs,
+              id: blockId,
+            },
+          };
         }),
       };
 
@@ -346,11 +346,11 @@ export class EntityStore implements IEntityStore {
 
     if (isTableNode) {
       return `Table Block ${blockEntityId}`;
-    } else {
-      const nodeHTML = this.textNodeHTML(node);
-      const nodeNameLength = 20;
-      return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
     }
+
+    const nodeHTML = this.textNodeHTML(node);
+    const nodeNameLength = 20;
+    return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
   };
 
   /* 

@@ -18,6 +18,7 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
 import { PageImageField, PageStringField } from './editable-fields';
+import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { EntityOthersToast } from './presence/entity-others-toast';
@@ -30,13 +31,13 @@ interface Props {
   versions: Version[];
   id: string;
   name: string;
-  space: string;
+  spaceId: string;
 }
 
 export function EditableEntityPage({
   id,
   name: serverName,
-  space,
+  spaceId,
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
   versions,
@@ -51,7 +52,7 @@ export function EditableEntityPage({
     hiddenSchemaIds,
   } = useEntityStore();
 
-  const { actions } = useActionsStore(space);
+  const { actions } = useActionsStore(spaceId);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -63,12 +64,12 @@ export function EditableEntityPage({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
-  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 
   const send = useEditEvents({
     context: {
       entityId: id,
-      spaceId: space,
+      spaceId,
       entityName: name,
     },
     api: {
@@ -109,12 +110,9 @@ export function EditableEntityPage({
       <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
-      <PageStringField
-        variant="body"
-        placeholder="Add a description..."
-        value={description ?? ''}
-        onChange={onDescriptionChange}
-      />
+
+      <Editor editable={true} />
+
       <Spacer height={60} />
 
       <div className="rounded border border-grey-02 bg-white">
@@ -122,7 +120,7 @@ export function EditableEntityPage({
           <EntityAttributes
             entityId={id}
             triples={triples}
-            spaceId={space}
+            spaceId={spaceId}
             schemaTriples={schemaTriples}
             name={name}
             send={send}
@@ -136,7 +134,7 @@ export function EditableEntityPage({
           </Button>
         </div>
       </div>
-      <EntityPresenceProvider entityId={id} spaceId={space}>
+      <EntityPresenceProvider entityId={id} spaceId={spaceId}>
         <EntityOthersToast />
       </EntityPresenceProvider>
     </>

@@ -24,14 +24,22 @@ interface Props {
   versions: Version[];
   id: string;
   name: string;
-  space: string;
+  spaceId: string;
   referencedByEntities: ReferencedByEntity[];
 }
 
-export function ReadableEntityPage({ triples, id, name, space, referencedByEntities, schemaTriples, versions }: Props) {
+export function ReadableEntityPage({
+  triples,
+  id,
+  name,
+  spaceId,
+  referencedByEntities,
+  schemaTriples,
+  versions,
+}: Props) {
   const description = Entity.description(triples);
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 
   return (
     <>
