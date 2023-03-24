@@ -85,11 +85,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     network.fetchProposedVersions(entityId, space),
   ]);
 
-  if (!entity)
-    return {
-      notFound: true,
-    };
-
   const spaces = await network.fetchSpaces();
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
@@ -112,10 +107,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   return {
     props: {
-      triples: entity.triples,
+      triples: entity?.triples ?? [],
       schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
-      name: entity.name ?? entityId,
+      name: entity?.name ?? entityId,
       space,
       referencedByEntities,
       versions,
