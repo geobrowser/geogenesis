@@ -13,8 +13,6 @@ import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { ReferencedByEntity } from './types';
-import { useSpaces } from '~/modules/spaces/use-spaces';
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import Image from 'next/image';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
