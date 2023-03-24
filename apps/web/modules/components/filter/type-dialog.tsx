@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { motion } from 'framer-motion';
 import { useState } from 'react';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -37,7 +36,6 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
   const { editable } = useEditable();
   const { spaces } = useSpaces();
 
-  // Using a controlled state to enable exit animations with framer-motion
   const [entityName, setEntityName] = useState('');
   const [mode, setMode] = useState<TypeDialogMode>('current-space');
 
@@ -100,9 +98,9 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
         <Text variant="smallButton">{mode === 'current-space' ? 'All types' : 'Add type from another space'}</Text>
         {mode === 'foreign-space' ? <TextButton onClick={() => updateMode('current-space')}>Back</TextButton> : null}
       </div>
-      <motion.div layout="position" className="px-2">
+      <div className="px-2">
         <Input value={entityName} onChange={e => handleSearchChange(e.currentTarget.value)} />
-      </motion.div>
+      </div>
       <ResultsList className="max-h-96 overflow-y-auto px-0">
         {mode === 'current-space'
           ? filteredTypes.map(type => (
