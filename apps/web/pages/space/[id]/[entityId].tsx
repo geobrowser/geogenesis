@@ -67,7 +67,6 @@ export default function EntityPage(props: Props) {
       >
         <EntityPageTableBlockStoreProvider
           spaceId={props.spaceId}
-          initialTypes={props.initialTypes}
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
