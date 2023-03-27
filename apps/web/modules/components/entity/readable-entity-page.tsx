@@ -38,7 +38,7 @@ export function ReadableEntityPage({
   schemaTriples,
   versions,
 }: Props) {
-  const description = Entity.description(triples);
+
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
   const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 

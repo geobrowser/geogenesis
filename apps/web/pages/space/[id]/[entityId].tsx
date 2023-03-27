@@ -2,7 +2,6 @@ import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
 import Head from 'next/head';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
@@ -14,12 +13,13 @@ import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { NavUtils } from '~/modules/utils';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../[id]';
+import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 
 interface Props {
   triples: Triple[];
@@ -40,7 +40,6 @@ export default function EntityPage(props: Props) {
   const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
-  useLogRocket(props.spaceId);
 
   // This is a janky way to set the name in the navbar until we have nested layouts
   // and the navbar can query the name itself in a nice way.
@@ -66,7 +65,7 @@ export default function EntityPage(props: Props) {
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
-        <EntityTableStoreProvider
+        <EntityPageTableBlockStoreProvider
           spaceId={props.spaceId}
           initialTypes={props.initialTypes}
           initialColumns={[]}
@@ -76,7 +75,7 @@ export default function EntityPage(props: Props) {
           <EntityPageContentContainer>
             <Page {...props} />
           </EntityPageContentContainer>
-        </EntityTableStoreProvider>
+        </EntityPageTableBlockStoreProvider>
       </EntityStoreProvider>
     </>
   );

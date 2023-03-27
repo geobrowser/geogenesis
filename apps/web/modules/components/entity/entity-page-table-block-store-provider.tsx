@@ -1,14 +1,13 @@
-import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
+import { EntityTableStore } from '~/modules/entity';
 import { useSpaceStore } from '~/modules/spaces/space-store';
 import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, FilterState, Row, Triple } from '../../types';
-import { EntityTableStore } from './entity-table-store';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
@@ -21,7 +20,8 @@ interface Props {
   initialTypes: Triple[];
 }
 
-export function EntityTableStoreProvider({
+// @TODO: how does this work if there's multiple tables on a page?
+export function EntityPageTableBlockStoreProvider({
   spaceId,
   children,
   initialRows,
@@ -33,10 +33,7 @@ export function EntityTableStoreProvider({
   const router = useRouter();
   const SpaceStore = useSpaceStore();
   const ActionsStore = useActionsStoreContext();
-  const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
-
-  const basePath = router.asPath.split('?')[0];
 
   const store = useMemo(() => {
     const initialParams = Params.parseEntityTableQueryParameters(urlRef.current);
@@ -53,31 +50,10 @@ export function EntityTableStoreProvider({
     });
   }, [network, spaceId, initialRows, initialSelectedType, initialColumns, initialTypes, ActionsStore, SpaceStore]);
 
-  const query = useSelector(store.query$);
-  const pageNumber = useSelector(store.pageNumber$);
-  const selectedType = useSelector(store.selectedType$);
-  const typeId = selectedType ? selectedType.entityId : '';
-
-  // Legendstate has a hard time inferring observable array contents
-  const filterState = useSelector<FilterState>(store.filterState$);
-
-  // Update the url with query search params whenever query or page number changes
-  // @TODO: This should not run on entity pages
-  useEffect(() => {
-    replace.current(
-      {
-        pathname: basePath,
-        query: Params.stringifyEntityTableParameters({ query, pageNumber, filterState, typeId }),
-      },
-      undefined,
-      { shallow: true, scroll: false }
-    );
-  }, [basePath, query, pageNumber, JSON.stringify(filterState), typeId]);
-
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }
 
-export function useEntityTableStore() {
+export function useEntityPageTableBlockStore() {
   const value = useContext(EntityTableStoreContext);
 
   if (!value) {
