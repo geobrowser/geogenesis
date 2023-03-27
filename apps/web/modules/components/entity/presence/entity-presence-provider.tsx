@@ -96,7 +96,7 @@ function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityCha
 
   useEffect(() => {
     updateMyPresence({ address, hasChangesToEntity });
-  }, [actionsFromSpace, entityId, hasChangesToEntity, address, updateMyPresence]);
+  }, [hasChangesToEntity, address, updateMyPresence]);
 
   return <>{children}</>;
 }

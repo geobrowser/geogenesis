@@ -91,9 +91,6 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
 
-  // @TODO remove console.info
-  console.info('actionsFromSpace:', actionsFromSpace);
-
   const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
   // Publishing logic
@@ -330,6 +327,8 @@ const getActionValue = (action: CreateTripleAction | DeleteTripleAction): string
       return action.value.value;
     case 'entity':
       return action.value.name;
+    case 'image':
+      return action.value.value;
   }
 };
 
