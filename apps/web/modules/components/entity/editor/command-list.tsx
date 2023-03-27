@@ -80,7 +80,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
               <button
                 className={classNames(
                   `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
-                  'hover:bg-gray-200 flex flex items-center gap-2 rounded p-1'
+                  'hover:bg-gray-200 flex items-center gap-2 rounded p-1'
                 )}
                 key={index}
                 data-index={index}

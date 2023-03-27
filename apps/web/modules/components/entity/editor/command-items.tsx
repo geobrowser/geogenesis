@@ -61,5 +61,5 @@ export const commandItems: CommandSuggestionItem[] = [
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
     },
   },
-  tableCommandItem,
+  // tableCommandItem,
 ];

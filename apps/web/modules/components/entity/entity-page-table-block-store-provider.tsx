@@ -21,6 +21,7 @@ interface Props {
 }
 
 // @TODO: how does this work if there's multiple tables on a page?
+// Should it store an object of multiple stores?
 export function EntityPageTableBlockStoreProvider({
   spaceId,
   children,
