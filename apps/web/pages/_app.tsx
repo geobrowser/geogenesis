@@ -19,8 +19,10 @@ import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
 
+import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
+import '../styles/tiptap.css';
 
 function Root(props: AppProps) {
   return (

@@ -18,6 +18,9 @@ export const SCHEMA_TYPE = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
 export const VALUE_TYPE = 'ee26ef23-f7f1-4eb6-b742-3b0fa38c1fd8'
 
+/* Example Usage: Thumbnail -> VALUE_TYPE -> IMAGE */
+export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
+
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
@@ -26,6 +29,10 @@ export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
+
+export const AVATAR_ATTRIBUTE = '85ae56a3-aa6f-4dd3-a1d0-3027d3c64810'
+
+export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
 
 /**
  * Addresses for important contracts on Polygon mainnet.
@@ -37,7 +44,7 @@ export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 // This represents the beacon proxy for the first set of deployed permissioned spaces.
 // We should use this beacon proxy for all new permissioned spaces.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =
-  '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0'
+  '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
 
 // This represents the Space contract acting as the registry for all permissioned spaces.
 // This is the address for the Root Space.
@@ -52,6 +59,31 @@ export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'
 
 /* Example Usage: SF Config -> TYPES -> SPACE_CONFIGURATION */
 export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
+
+/* Example Usage: Block Entity -> TYPES -> TABLE_BLOCK */
+export const TABLE_BLOCK = '88d59252-17ae-4d9a-a367-24710129eb47'
+
+/* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
+export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320'
+
+/* Example Usage: Block Entity -> TYPES -> IMAGE_BLOCK */
+export const IMAGE_BLOCK = 'f0553d4d-4838-425e-bcd7-613bd8f475a5'
+
+/* Example Usage: Entity -> BLOCKS -> Some_Entity_Of_Type_TEXT_BLOCK_or_TABLE_BLOCK */
+export const BLOCKS = 'beaba5cb-a677-41a8-b353-77030613fc70'
+
+/* Example Usage: Block Entity -> PARENT_ENTITY -> Some_Entity_ID */
+export const PARENT_ENTITY = 'dd4999b9-77f0-4c2b-a02b-5a26b233854e'
+
+/* Example Usage: 
+Block Entity -> TYPES -> TEXT_BLOCK
+Block Entity -> MARKDOWN_CONTENT -> "**hello world!**" */
+export const MARKDOWN_CONTENT = 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4'
+
+/* Example Usage: 
+Block Entity -> TYPES -> TABLE_BLOCK
+Block Entity -> ROW_TYPE -> Some_Type_ID */
+export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
 
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.

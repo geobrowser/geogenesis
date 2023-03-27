@@ -38,7 +38,15 @@ describe('Entity page', () => {
   it('Renders page name', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage
+          id="1"
+          name="Banana"
+          space="1"
+          versions={[]}
+          triples={[]}
+          schemaTriples={[]}
+          referencedByEntities={[]}
+        />
       </Providers>
     );
 
@@ -52,9 +60,10 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[scalarDescriptionTriple]}
           schemaTriples={[]}
-          linkedEntities={{}}
+          referencedByEntities={[]}
         />
       </Providers>
     );
@@ -69,9 +78,10 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[genericAttribute]}
           schemaTriples={[]}
-          linkedEntities={{}}
+          referencedByEntities={[]}
         />
       </Providers>
     );
@@ -86,9 +96,10 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[{ ...genericAttribute, attributeName: null }]}
           schemaTriples={[]}
-          linkedEntities={{}}
+          referencedByEntities={[]}
         />
       </Providers>
     );
@@ -99,11 +110,19 @@ describe('Entity page', () => {
   it('Renders empty linked entities', () => {
     render(
       <Providers>
-        <EntityPage id="1" name="Banana" space="1" triples={[]} schemaTriples={[]} linkedEntities={{}} />
+        <EntityPage
+          id="1"
+          name="Banana"
+          space="1"
+          versions={[]}
+          triples={[]}
+          schemaTriples={[]}
+          referencedByEntities={[]}
+        />
       </Providers>
     );
 
-    expect(screen.getByText('There are no other entities that are linking to this entity.')).toBeInTheDocument();
+    expect(screen.getByText('There are no entities referencing Banana.')).toBeInTheDocument();
   });
 
   it('Renders linked entity', () => {
@@ -113,112 +132,36 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           space="1"
+          versions={[]}
           triples={[]}
           schemaTriples={[]}
-          linkedEntities={{
-            '1': {
-              triples: [scalarDescriptionTriple],
-              name: 'Apple',
+          referencedByEntities={[
+            {
               id: '1',
+              name: 'Apple',
+              types: [
+                {
+                  id: '1',
+                  name: 'Fruit Type',
+                },
+                {
+                  id: '2',
+                  name: 'Other Type',
+                },
+              ],
+              space: {
+                id: '3',
+                name: 'Fruit',
+                image: null,
+              },
             },
-          }}
+          ]}
         />
       </Providers>
     );
 
     expect(screen.getByText('Apple')).toBeInTheDocument();
-  });
-
-  it('Does not render linked entity description if empty', () => {
-    render(
-      <Providers>
-        <EntityPage
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[]}
-          schemaTriples={[]}
-          linkedEntities={{
-            '1': {
-              triples: [],
-              name: 'Apple',
-              id: '1',
-            },
-          }}
-        />
-      </Providers>
-    );
-
-    expect(screen.queryByText('Description of a Banana')).not.toBeInTheDocument();
-  });
-
-  it('Renders correct linked entity triple counts', async () => {
-    userEvent.setup();
-
-    render(
-      <Providers>
-        <EntityPage
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[]}
-          schemaTriples={[]}
-          linkedEntities={{
-            '1': {
-              triples: [makeStubTriple('Alice'), makeStubTriple('Bob')],
-              name: 'Apple',
-              id: '1',
-            },
-          }}
-        />
-      </Providers>
-    );
-
-    expect(screen.getByText('2 values')).toBeInTheDocument();
-    expect(screen.getByText('Show 2 more values')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('Show 2 more values'));
-    expect(screen.queryByText('Show 2 more values')).not.toBeInTheDocument();
-    expect(screen.queryByText('Hide 2 more values')).toBeInTheDocument();
-  });
-
-  it('Renders correct linked entity triple counts when one is linked to the main entity', async () => {
-    userEvent.setup();
-
-    render(
-      <Providers>
-        <EntityPage
-          id="1"
-          name="Banana"
-          space="1"
-          triples={[]}
-          schemaTriples={[]}
-          linkedEntities={{
-            '2': {
-              triples: [
-                {
-                  ...makeStubTriple('Alice'),
-                  value: {
-                    type: 'entity',
-                    id: '1',
-                    name: 'Alice',
-                  },
-                },
-                makeStubTriple('Bob'),
-              ],
-              name: 'Apple',
-              id: '2',
-            },
-          }}
-        />
-      </Providers>
-    );
-
-    expect(screen.getByText('2 values')).toBeInTheDocument();
-    expect(screen.getByText('Show 1 more value')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('Show 1 more value'));
-    expect(screen.queryByText('Show 1 more value')).not.toBeInTheDocument();
-    expect(screen.queryByText('Hide 1 more value')).toBeInTheDocument();
+    expect(screen.getByText('Fruit Type')).toBeInTheDocument();
+    expect(screen.getByText('Other Type')).toBeInTheDocument();
   });
 });

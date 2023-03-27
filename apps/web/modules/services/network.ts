@@ -3,6 +3,7 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
+import { queries } from './io';
 import { ROOT_SPACE_IMAGE } from '../constants';
 import { Entity, InitialEntityTableStoreParams } from '../entity';
 import { DEFAULT_PAGE_SIZE } from '../triple';
@@ -13,12 +14,21 @@ import {
   Entity as EntityType,
   FilterField,
   FilterState,
+  Profile,
   ReviewState,
   Space,
   Triple as TripleType,
+  Version,
 } from '../types';
-import { fromNetworkTriples, NetworkEntity, NetworkTriple } from './network-local-mapping';
+import {
+  fromNetworkActions,
+  fromNetworkTriples,
+  NetworkEntity,
+  NetworkTriple,
+  NetworkVersion,
+} from './network-local-mapping';
 import { IStorageClient } from './storage';
+import { A } from '@mobily/ts-belt';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -42,7 +52,6 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query?: string;
-  space?: string;
   filter: FilterState;
   abortController?: AbortController;
 };
@@ -85,9 +94,10 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
-  fetchProfile: (address: string, abortController?: AbortController) => Promise<null>;
+  fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
+  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -127,11 +137,6 @@ export class Network implements INetwork {
   uploadFile = async (file: File): Promise<string> => {
     const fileUri = await this.storageClient.uploadFile(file);
     return fileUri;
-  };
-
-  fetchProfile = async (address: string, abortController?: AbortController): Promise<null> => {
-    /* Stub function */
-    return null;
   };
 
   fetchTriples = async ({ space, query, skip, first, filter, abortController }: FetchTriplesOptions) => {
@@ -190,14 +195,30 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        triples: NetworkTriple[];
-      };
-    } = await response.json();
+    if (!response.ok) {
+      console.error(
+        `Unable to fetch triples, space: ${space} query: ${query} skip: ${skip} first: ${first} filter: ${filter}`
+      );
+      console.error(`Failed fetch triples response text: ${await response.text()}`);
+      return { triples: [] };
+    }
 
-    const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
-    return { triples };
+    try {
+      const json: {
+        data: {
+          triples: NetworkTriple[];
+        };
+      } = await response.json();
+
+      const triples = fromNetworkTriples(json.data.triples.filter(triple => !triple.isProtected));
+      return { triples };
+    } catch (e) {
+      console.error(
+        `Unable to fetch triples, space: ${space} query: ${query} skip: ${skip} first: ${first} filter: ${filter}`
+      );
+      console.error(e);
+      return { triples: [] };
+    }
   };
 
   fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
@@ -239,32 +260,44 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        geoEntity: NetworkEntity;
-      };
-    } = await response.json();
-
-    const entity = json.data.geoEntity;
-
-    if (!entity) {
+    if (!response.ok) {
+      console.error(`Unable to fetch entity, entityId: ${id}`);
+      console.error(`Failed fetch entity response text: ${await response.text()}`);
       return null;
     }
 
-    const triples = fromNetworkTriples(entity.entityOf);
-    const nameTriple = Entity.nameTriple(triples);
+    try {
+      const json: {
+        data: {
+          geoEntity: NetworkEntity;
+        };
+      } = await response.json();
 
-    return {
-      id: entity.id,
-      name: entity.name,
-      description: Entity.description(triples),
-      nameTripleSpace: nameTriple?.space,
-      types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
-      triples,
-    };
+      const entity = json.data.geoEntity;
+
+      if (!entity) {
+        return null;
+      }
+
+      const triples = fromNetworkTriples(entity.entityOf);
+      const nameTriple = Entity.nameTriple(triples);
+
+      return {
+        id: entity.id,
+        name: entity.name,
+        description: Entity.description(triples),
+        nameTripleSpace: nameTriple?.space,
+        types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
+        triples,
+      };
+    } catch (e) {
+      console.error(`Unable to fetch entity, entityId: ${id}`);
+      console.error(e);
+      return null;
+    }
   };
 
-  fetchEntities = async ({ space, query, filter, abortController }: FetchEntitiesOptions) => {
+  fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -352,32 +385,44 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        startEntities: NetworkEntity[];
-        containEntities: NetworkEntity[];
-      };
-    } = await response.json();
+    if (!response.ok) {
+      console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
+      console.error(`Failed fetch entities response text: ${await response.text()}`);
+      return [];
+    }
 
-    const { startEntities, containEntities } = json.data;
+    try {
+      const json: {
+        data: {
+          startEntities: NetworkEntity[];
+          containEntities: NetworkEntity[];
+        };
+      } = await response.json();
 
-    const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+      const { startEntities, containEntities } = json.data;
 
-    const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
-      const triples = fromNetworkTriples(result.entityOf);
-      const nameTriple = Entity.nameTriple(triples);
+      const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
 
-      return {
-        id: result.id,
-        name: result.name,
-        description: Entity.description(triples),
-        nameTripleSpace: nameTriple?.space,
-        types: Entity.types(triples, space),
-        triples,
-      };
-    });
+      const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+        const triples = fromNetworkTriples(result.entityOf);
+        const nameTriple = Entity.nameTriple(triples);
 
-    return sortedResultsWithTypesAndDescription;
+        return {
+          id: result.id,
+          name: result.name,
+          description: Entity.description(triples),
+          nameTripleSpace: nameTriple?.space,
+          types: Entity.types(triples, nameTriple?.space),
+          triples,
+        };
+      });
+
+      return sortedResultsWithTypesAndDescription;
+    } catch (e) {
+      console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
+      console.error(e);
+      return [];
+    }
   };
 
   fetchSpaces = async () => {
@@ -425,45 +470,51 @@ export class Network implements INetwork {
       }),
     });
 
-    const json: {
-      data: {
-        spaces: {
-          id: string;
-          isRootSpace: boolean;
-          admins: Account[];
-          editors: Account[];
-          editorControllers: Account[];
-          entity?: {
+    try {
+      const json: {
+        data: {
+          spaces: {
             id: string;
-            entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
-          };
-        }[];
-      };
-    } = await spacesResponse.json();
+            isRootSpace: boolean;
+            admins: Account[];
+            editors: Account[];
+            editorControllers: Account[];
+            entity?: {
+              id: string;
+              entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
+            };
+          }[];
+        };
+      } = await spacesResponse.json();
 
-    const spaces = json.data.spaces.map((space): Space => {
-      const attributes = Object.fromEntries(
-        space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
-      );
+      const spaces = json.data.spaces.map((space): Space => {
+        const attributes = Object.fromEntries(
+          space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
+        );
 
-      if (space.isRootSpace) {
-        attributes.name = 'Root';
-        attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
-      }
+        if (space.isRootSpace) {
+          attributes.name = 'Root';
+          attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
+        }
 
-      return {
-        id: space.id,
-        isRootSpace: space.isRootSpace,
-        admins: space.admins.map(account => account.id),
-        editorControllers: space.editorControllers.map(account => account.id),
-        editors: space.editors.map(account => account.id),
-        entityId: space.entity?.id || '',
-        attributes,
-        spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
-      };
-    });
+        return {
+          id: space.id,
+          isRootSpace: space.isRootSpace,
+          admins: space.admins.map(account => account.id),
+          editorControllers: space.editorControllers.map(account => account.id),
+          editors: space.editors.map(account => account.id),
+          entityId: space.entity?.id || '',
+          attributes,
+          spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
+        };
+      });
 
-    return spaces;
+      return spaces;
+    } catch (e) {
+      console.error('Unable to fetch spaces');
+      console.error(e);
+      return [];
+    }
   };
 
   rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
@@ -535,6 +586,129 @@ export class Network implements INetwork {
     }));
 
     return { columns: [...defaultColumns, ...schemaColumns] };
+  };
+
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: queries.proposedVersionsQuery(entityId),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
+      console.error(`Failed proposed versions fetch response text: ${await response.text()}`);
+      return [];
+    }
+
+    const json: {
+      data: {
+        proposedVersions: NetworkVersion[];
+      };
+      errors: any[];
+    } = await response.json();
+
+    try {
+      // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
+      // of the user and fetch the Profile for the user with the matching wallet address.
+      const maybeProfiles = await Promise.all(json.data.proposedVersions.map(v => this.fetchProfile(v.createdBy.id)));
+
+      // Create a map of wallet address -> profile so we can look it up when creating the application
+      // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
+      // of the user who created the ProposedVersion.
+      const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
+
+      const result = json.data.proposedVersions.map((v, i) => {
+        return {
+          ...v,
+          // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
+          createdBy: profiles[v.createdBy.id] ?? v.createdBy,
+          actions: fromNetworkActions(v.actions, spaceId),
+        };
+      });
+
+      return result;
+    } catch (e) {
+      console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
+      console.error(e);
+      console.error(json.errors);
+      return [];
+    }
+  };
+
+  fetchProfile = async (address: string, abortController?: AbortController): Promise<[string, Profile] | null> => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      // @TEMP: Right now we are fetching profiles based on the wallet address which is
+      // the name of the entity. There _shouldn't_ be multiple wallets with the same name/address.
+      body: JSON.stringify({
+        query: queries.profileQuery(address),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch profile for address: ${address}`);
+      console.error(`Failed fetch profile response text: ${await response.text()}`);
+      return null;
+    }
+
+    const json: {
+      data: {
+        geoEntities: NetworkEntity[];
+      };
+      errors: any[];
+    } = await response.json();
+
+    try {
+      // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
+      // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.
+      const maybeWallets = await Promise.all(json.data.geoEntities.map(e => this.fetchEntity(e.id)));
+      const wallets = maybeWallets.flatMap(entity => (entity ? [entity] : []));
+
+      // We take the first wallet for a given address since there should only be one while in closed alpha.
+      const wallet = A.head(wallets);
+
+      if (!wallet) {
+        return null;
+      }
+
+      // We have a backlink from a Wallet entity to a Person entity. We need to fetch the Person entity
+      // to access profile attributes like the Avatar.
+      const personTriple = wallet?.triples.find(t => t.attributeId === SYSTEM_IDS.PERSON_ATTRIBUTE);
+      const personEntityId = personTriple?.value.id ?? null;
+
+      if (!personEntityId) {
+        return null;
+      }
+
+      const maybePerson = await this.fetchEntity(personEntityId);
+
+      const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
+      const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
+
+      return [
+        address,
+        {
+          id: maybePerson?.id ?? '',
+          name: maybePerson?.name ?? null,
+          avatarUrl: avatarUrl,
+        },
+      ];
+    } catch (e) {
+      console.error(`Unable to fetch profile for address: ${address}`);
+      console.error(e);
+      console.error(json.errors);
+      return null;
+    }
   };
 }
 

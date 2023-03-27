@@ -85,6 +85,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
+
         return isRowCell && isColCell && isCurrentValueType;
       }),
       A.uniqBy(triple => triple.id)
@@ -129,7 +130,7 @@ interface Props {
   rows: Row[];
 }
 
-export function EntityTable({ rows, space, columns }: Props) {
+export const EntityTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -220,4 +221,4 @@ export function EntityTable({ rows, space, columns }: Props) {
       </table>
     </div>
   );
-}
+};

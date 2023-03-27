@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType } from '~/modules/types';
+import { Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { valueTypeNames, valueTypes } from '~/modules/value-types';
@@ -29,6 +29,19 @@ export type EditEvent =
       type: 'CREATE_NEW_TRIPLE';
     }
   | {
+      type: 'UPLOAD_IMAGE';
+      payload: {
+        triple: TripleType;
+        imageSrc: string;
+      };
+    }
+  | {
+      type: 'REMOVE_IMAGE';
+      payload: {
+        triple: TripleType;
+      };
+    }
+  | {
       type: 'CHANGE_COLUMN_VALUE_TYPE';
       payload: {
         valueTypeTriple: TripleType;
@@ -39,7 +52,7 @@ export type EditEvent =
   | {
       type: 'CHANGE_TRIPLE_TYPE';
       payload: {
-        type: 'string' | 'entity';
+        type: TripleValueType;
         triples: TripleType[];
       };
     }
@@ -97,6 +110,14 @@ export type EditEvent =
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE';
       payload: {
         value: string;
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
+      type: 'CREATE_IMAGE_TRIPLE_WITH_VALUE';
+      payload: {
+        imageSrc: string;
         attributeId: string;
         attributeName: string;
       };
@@ -208,10 +229,10 @@ const listener =
           valueTypeTriple
         );
 
-        const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
-        const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+        const currentType = cellTriples[0]?.value.type;
+        const isRelationFromRelationToText = currentType === 'entity' && valueType === SYSTEM_IDS.TEXT;
 
-        if (isTextValueType) {
+        if (isRelationFromRelationToText) {
           // Handles the case when the column is changed from relation to text.
           // Former entities values join into one string value separated by a comma
           // e.g. San Francisco and New York entities transform into a single string value "San Francisco, New York"
@@ -237,25 +258,27 @@ const listener =
               })
             );
           });
-        } else if (isRelationValueType) {
-          // Handles the case when the column is changed from text to relation.
-          return cellTriples.forEach(triple => remove(triple));
         } else {
-          return;
+          return cellTriples.forEach(triple => remove(triple));
         }
       }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
 
+        const value = Triple.emptyValue(type);
+
         return triples.forEach(triple => {
+          const isString = type === 'string';
+          const isImage = type === 'image';
+
+          const retainTripleValueId = isString || isImage;
+
+          const newValue = retainTripleValueId ? { ...value, id: triple.value.id } : value;
+
           update(
             Triple.ensureStableId({
               ...triple,
-              value: {
-                ...(type === 'entity'
-                  ? { type: 'entity', id: '', name: '' }
-                  : { type: 'string', id: triple.value.id, value: '' }),
-              },
+              value: newValue,
             }),
             triple
           );
@@ -374,6 +397,27 @@ const listener =
         );
       }
 
+      case 'CREATE_IMAGE_TRIPLE_WITH_VALUE': {
+        const { imageSrc, attributeId, attributeName } = event.payload;
+
+        if (!imageSrc) return;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId,
+            attributeName,
+            value: {
+              type: 'image',
+              id: ID.createValueId(),
+              value: imageSrc,
+            },
+          })
+        );
+      }
+
       case 'CREATE_ENTITY_TRIPLE_WITH_VALUE': {
         const { entityId, entityName, attributeId, attributeName } = event.payload;
 
@@ -446,6 +490,32 @@ const listener =
             placeholder: false,
             value: { ...triple.value, type: 'string', value },
           },
+          triple
+        );
+      }
+
+      case 'REMOVE_IMAGE': {
+        const { triple } = event.payload;
+        const newValue = { ...triple.value, value: '' };
+
+        return update(
+          Triple.ensureStableId({
+            ...triple,
+            value: newValue,
+          }),
+          triple
+        );
+      }
+
+      case 'UPLOAD_IMAGE': {
+        const { imageSrc, triple } = event.payload;
+        const newValue = { ...triple.value, value: imageSrc };
+
+        return update(
+          Triple.ensureStableId({
+            ...triple,
+            value: newValue,
+          }),
           triple
         );
       }

@@ -38,7 +38,6 @@ class EntityAutocomplete {
           this.loading$.set(true);
           const networkEntities = await api.fetchEntities({
             query,
-            space: spaceId,
             abortController: this.abortController,
             filter,
           });

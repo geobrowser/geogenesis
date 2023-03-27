@@ -1,28 +1,31 @@
-import * as React from 'react';
-import { useEffect } from 'react';
 import type { GetServerSideProps } from 'next';
+import { useEffect } from 'react';
+import Head from 'next/head';
 
 import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
-import { LinkedEntityGroup } from '~/modules/components/entity/types';
+import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
-import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { Triple } from '~/modules/types';
+import { Triple, Version } from '~/modules/types';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { NavUtils } from '~/modules/utils';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
+  versions: Version[];
   id: string;
   name: string;
   space: string;
-  linkedEntities: Record<string, LinkedEntityGroup>;
+  referencedByEntities: ReferencedByEntity[];
 }
 
 export default function EntityPage(props: Props) {
@@ -39,18 +42,27 @@ export default function EntityPage(props: Props) {
   }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
-  // const renderEditablePage = true;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
-    <EntityStoreProvider
-      id={props.id}
-      spaceId={props.space}
-      initialTriples={props.triples}
-      initialSchemaTriples={props.schemaTriples}
-    >
-      <Page {...props} />
-    </EntityStoreProvider>
+    <>
+      <Head>
+        <title>{props.name ?? props.id}</title>
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
+      </Head>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.space}
+        initialTriples={props.triples}
+        initialSchemaTriples={props.schemaTriples}
+        initialBlockIdsTriple={null}
+        initialBlockTriples={[]}
+      >
+        <EntityPageContentContainer>
+          <Page {...props} />
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </>
   );
 }
 
@@ -58,58 +70,50 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const space = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  const storage = new StorageClient(config.ipfs);
 
+  const storage = new StorageClient(config.ipfs);
   const network = new Network(storage, config.subgraph);
 
-  const [entity, related] = await Promise.all([
-    network.fetchTriples({
-      space,
-      query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
-      filter: [{ field: 'entity-id', value: entityId }],
-    }),
+  const [entity, related, versions] = await Promise.all([
+    network.fetchEntity(entityId),
 
-    network.fetchTriples({
-      space,
+    network.fetchEntities({
       query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
       filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    network.fetchProposedVersions(entityId, space),
   ]);
 
-  const relatedEntities = await Promise.all(
-    related.triples.map(triple =>
-      network.fetchTriples({
-        space,
-        query: '',
-        skip: 0,
-        first: DEFAULT_PAGE_SIZE,
-        filter: [{ field: 'entity-id', value: triple.entityId }],
-      })
-    )
-  );
+  const spaces = await network.fetchSpaces();
 
-  const linkedEntities: Record<string, LinkedEntityGroup> = relatedEntities
-    .flatMap(entity => entity.triples)
-    .reduce((acc, triple) => {
-      if (!acc[triple.entityId]) acc[triple.entityId] = { triples: [], name: null, id: triple.entityId };
-      acc[triple.entityId].id = triple.entityId;
-      acc[triple.entityId].name = triple.entityName;
-      acc[triple.entityId].triples = [...acc[triple.entityId].triples, triple]; // Duplicates?
-      return acc;
-    }, {} as Record<string, LinkedEntityGroup>);
+  const referencedByEntities: ReferencedByEntity[] = related.map(e => {
+    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    const space = spaces.find(s => s.id === spaceId);
+    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+
+    return {
+      id: e.id,
+      name: e.name,
+      types: e.types,
+      space: {
+        id: spaceId,
+        name: spaceName,
+        image: spaceImage,
+      },
+    };
+  });
 
   return {
     props: {
-      triples: entity.triples,
-      schemaTriples: [] /* Todo: Fetch schema triples for entity if entity has a type */,
+      triples: entity?.triples ?? [],
+      schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
-      name: Entity.name(entity.triples) ?? entityId,
+      name: entity?.name ?? entityId,
       space,
-      linkedEntities,
+      referencedByEntities,
+      versions,
       key: entityId,
     },
   };
