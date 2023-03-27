@@ -8,7 +8,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
-import produce from 'immer';
 
 import { Action as ActionNamespace } from '../action';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
@@ -64,7 +63,7 @@ const ReviewChanges = () => {
       return;
     }
     setActiveSpace(allSpacesWithActions[0] ?? '');
-  }, [allSpacesWithActions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen]);
 
   // Options for space selector dropdown
   const options = allSpacesWithActions.map(spaceId => ({
@@ -207,7 +206,7 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
   );
 };
 
-type Changes = Record<EntityId, Change>;
+export type Changes = Record<EntityId, Change>;
 
 type EntityId = string;
 type Change = { entityName: EntityName; entityRevisions: EntityRevisions };
@@ -234,7 +233,7 @@ const useChanges = (actions: Array<Action>) => {
   return useMemo(() => getChanges(actions), [actions]);
 };
 
-const getChanges = (actions: Array<Action>): Changes => {
+export const getChanges = (actions: Array<Action>): Changes => {
   const changes: Changes = {};
 
   // @TODO cleanup with immer produce function
