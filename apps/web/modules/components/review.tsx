@@ -90,6 +90,10 @@ const ReviewChanges = () => {
   const isReadyToPublish = proposalName.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
+
+  // @TODO remove console.info
+  console.info('actionsFromSpace:', actionsFromSpace);
+
   const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
   // Publishing logic

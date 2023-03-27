@@ -1,11 +1,11 @@
 import { describe, expect } from 'vitest';
 
-import { makeStubTriple } from '~/modules/services/mock-network';
+import { makeStubTriple, makeStubRelationAttribute } from '~/modules/services/mock-network';
 import { getChanges } from '~/modules/components/review';
 import type { Action } from '~/modules/types';
 import type { Changes } from '~/modules/components/review';
 
-const ACTIONS: Array<Action> = [
+const STRING_ACTIONS: Array<Action> = [
   {
     type: 'createTriple',
     ...makeStubTriple('Devin'),
@@ -28,7 +28,7 @@ const ACTIONS: Array<Action> = [
   },
 ];
 
-const CHANGES: Changes = {
+const STRING_CHANGES: Changes = {
   Devin: {
     entityName: 'Devin',
     entityRevisions: {
@@ -75,9 +75,52 @@ const CHANGES: Changes = {
   },
 };
 
-describe('Actions to changes transformer', () => {
+const ENTITY_ACTIONS: Array<Action> = [
+  {
+    type: 'createTriple',
+    ...makeStubRelationAttribute('Devin'),
+  },
+  {
+    type: 'deleteTriple',
+    ...makeStubRelationAttribute('Bob'),
+  },
+];
+
+const ENTITY_CHANGES: Changes = {
+  Devin: {
+    entityName: 'Devin',
+    entityRevisions: {
+      attribute: {
+        id: 'Devin',
+        attributeName: 'Types',
+        isDiff: false,
+        after: ['Text'],
+      },
+    },
+  },
+  Bob: {
+    entityName: 'Bob',
+    entityRevisions: {
+      attribute: {
+        id: 'Bob',
+        attributeName: 'Types',
+        isDiff: false,
+        before: ['Text'],
+      },
+    },
+  },
+};
+
+describe('Actions to changes transformer (string values)', () => {
   it('Generates changes from actions', () => {
-    const changes = getChanges(ACTIONS);
-    expect(changes).toEqual(CHANGES);
+    const changes = getChanges(STRING_ACTIONS);
+    expect(changes).toEqual(STRING_CHANGES);
+  });
+});
+
+describe('Actions to changes transformer (entity values)', () => {
+  it('Generates changes from actions', () => {
+    const changes = getChanges(ENTITY_ACTIONS);
+    expect(changes).toEqual(ENTITY_CHANGES);
   });
 });
