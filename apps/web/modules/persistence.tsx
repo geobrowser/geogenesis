@@ -8,12 +8,6 @@ import type { SpaceActions } from './action/actions-store';
 export const Persistence = () => {
   const [isInitialRender, setIsInitialRender] = useState<boolean>(true);
   const { actions, restore } = useActionsStore();
-
-  const unpublishedActions: SpaceActions = {};
-  Object.keys(actions).forEach(key => {
-    unpublishedActions[key] = actions[key].filter(a => !a.hasBeenPublished);
-  });
-
   const [storedActions, setStoredActions] = useLocalStorage('storedActions', {});
 
   // Restore actions on first render, save actions each render thereafter
@@ -23,10 +17,14 @@ export const Persistence = () => {
       restore(storedActions);
     } else {
       console.info('💾 saving actions');
+      const unpublishedActions: SpaceActions = {};
+      Object.keys(actions).forEach(key => {
+        unpublishedActions[key] = actions[key].filter(a => !a.hasBeenPublished);
+      });
       setStoredActions(unpublishedActions);
     }
     // note: finely tuned dependency because `storedActions` is only used on initial render
-    // no need to save stored actions a second time when storedactions are updated
+    // no need to save stored actions a second time when `storedAactions` are updated
   }, [isInitialRender, actions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
