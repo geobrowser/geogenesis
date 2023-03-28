@@ -20,7 +20,7 @@ jobs:
       # @TODO For some reason docker isn't reading lockfile correctly. Will fix
       # when we add more subgraph integration tests. Right now they're not very
       # useful anyway.
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
 
       - uses: docker-practice/actions-setup-docker@master
 
