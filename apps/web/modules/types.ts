@@ -94,10 +94,14 @@ export type EditTripleAction = {
   after: CreateTripleAction;
 } & Publishable;
 
+// We associate an ID with actions locally so we can diff and merge them as they change locally.
 type Identifiable = {
   id: string;
 };
 
+// We keep published actions optimistically in the store. It can take a while for the blockchain
+// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+// We keep the published actions so we can continue to render them locally while the backend catches up.
 type Publishable = {
   hasBeenPublished?: boolean;
 };
