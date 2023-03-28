@@ -11,10 +11,11 @@ export const FlowBar = () => {
   const { allActions, allSpacesWithActions } = useActionsStore();
   const { isReviewOpen, setIsReviewOpen } = useReview();
 
-  const actionsCount = Action.getChangeCount(allActions);
+  const allUnpublishedActions = allActions.filter(a => !a.hasBeenPublished);
+  const actionsCount = Action.getChangeCount(allUnpublishedActions);
 
   const entitiesCount = pipe(
-    allActions,
+    allUnpublishedActions,
     actions => Action.squashChanges(actions),
     A.groupBy(action => {
       if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
