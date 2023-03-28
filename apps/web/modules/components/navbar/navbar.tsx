@@ -71,9 +71,8 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
-  const spaceId = components?.[2]?.split('?')[0];
   return (
-    <nav className="flex w-full items-center justify-between gap-1 border-b border-divider bg-white py-1 px-4 md:py-3 md:px-4">
+    <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
       <div className="flex max-w-[40%] items-center gap-8 overflow-hidden md:max-w-full md:gap-4 [&>a:last-child]:max-w-[99%] [&>a:last-child]:overflow-hidden md:[&>a:nth-of-type(3)]:hidden md:[&>span:nth-of-type(2)]:hidden">
         <Link href="/" passHref>
           <a>

@@ -56,7 +56,7 @@ export function ReadableEntityPage({
 
       <Editor editable={false} />
 
-      <div className="rounded border border-grey-02 bg-white">
+      <div className="rounded border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} />
         </div>
