@@ -31,6 +31,7 @@ import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
+  | 'blank'
   | 'create'
   | 'createSmall'
   | 'publish'
@@ -73,7 +74,10 @@ export const Icon = ({ icon, ...rest }: IconProps) => {
   return <Component {...rest} />;
 };
 
+const Blank = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" />;
+
 const icons: Record<IconName, React.ElementType> = {
+  blank: Blank,
   create: Create,
   createSmall: CreateSmall,
   close: Close,

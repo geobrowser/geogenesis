@@ -29,17 +29,17 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   spaceId,
   entityId,
 }: Props) {
-  const { actions, create, update, remove } = useActionsStore(spaceId);
+  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
   const { unpublishedColumns } = useEntityTable();
 
   const localTriples = pipe(
-    Triple.fromActions(actions, column.triples),
+    Triple.fromActions(actionsFromSpace, column.triples),
     A.filter(t => t.entityId === column.id),
     A.uniqBy(t => t.id)
   );
 
   const localCellTriples = pipe(
-    Triple.fromActions(actions, []),
+    Triple.fromActions(actionsFromSpace, []),
     A.filter(triple => triple.attributeId === column.id)
   );
 

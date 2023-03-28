@@ -21,6 +21,7 @@ module.exports = {
       divider: '#F0F0F0',
       orange: '#FFA134',
       green: '#2ACE9D',
+      successTertiary: '#D4F5EB',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
     },
@@ -80,6 +81,11 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        shimmer: {
+          '100%': {
+            transform: 'translateX(100%)',
+          },
         },
       },
       fontSize: {
