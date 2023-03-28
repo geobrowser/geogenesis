@@ -1,6 +1,7 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
 import Head from 'next/head';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
@@ -14,10 +15,8 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '../[id]';
 import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 
@@ -98,7 +97,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   ]);
 
   const spaces = await network.fetchSpaces();
-  const space = spaces.find(s => s.id === spaceId);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
@@ -119,6 +117,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   });
 
   /* Storing the array of block ids as a string value since we currently do not support arrays */
+  // @TODO: the Block triple for the entity should already be fetched in the entity query above
   const blockIdTriples = await network.fetchTriples({
     space: spaceId,
     query: '',
@@ -152,14 +151,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     )
   ).flatMap(block => block.triples);
 
-  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
-    // TODO: Import these from somewhere else or do this on the client
-    fetchSpaceTypeTriples(network, spaceId),
-    space ? fetchForeignTypeTriples(network, space) : Promise.resolve([]),
-  ]);
-
-  const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
-
   return {
     props: {
       triples: entity?.triples ?? [],
@@ -173,7 +164,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       // For entity page editor
       blockIdsTriple,
       blockTriples,
-      initialTypes,
     },
   };
 };

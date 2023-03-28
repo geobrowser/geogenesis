@@ -62,7 +62,6 @@ export function EntityTableStoreProvider({
   const filterState = useSelector<FilterState>(store.filterState$);
 
   // Update the url with query search params whenever query or page number changes
-  // @TODO: This should not run on entity pages
   useEffect(() => {
     replace.current(
       {

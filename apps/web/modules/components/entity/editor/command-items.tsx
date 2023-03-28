@@ -61,5 +61,6 @@ export const commandItems: CommandSuggestionItem[] = [
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
     },
   },
+  // For now we aren't allowing table blocks until we work on migrating tables to the new design
   // tableCommandItem,
 ];

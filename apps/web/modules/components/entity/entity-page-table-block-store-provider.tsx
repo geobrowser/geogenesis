@@ -17,6 +17,13 @@ interface Props {
   initialColumns: Column[];
 }
 
+// This component is used to wrap table blocks in the entity page
+// and provide store context for the table to load and edit data
+// for that specific table block.
+//
+// It works similarly to the EntityTableStoreProvider, but it's
+// scoped specifically for table blocks and will have unique behavior
+// in the future.
 // @TODO: how does this work if there's multiple tables on a page?
 // Should it store an object of multiple stores?
 export function EntityPageTableBlockStoreProvider({
