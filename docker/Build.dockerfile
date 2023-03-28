@@ -23,5 +23,5 @@ ENV TURBO_REMOTE_ONLY=true
 
 COPY . .
 
-RUN pnpm install --recursive --offline --frozen-lockfile
+RUN pnpm install --recursive --frozen-lockfile
 RUN pnpm build
