@@ -86,7 +86,7 @@ export class EntityStore implements IEntityStore {
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
   blockIds$: ObservableComputed<string[]>;
-  blockIdsTriple$: Observable<TripleType | null> = observable<TripleType | null>(null);
+  blockIdsTriple$: ObservableComputed<TripleType | null>;
   blockTriples$: ObservableComputed<TripleType[]>;
   editorJson$: ObservableComputed<JSONContent>;
   typeTriples$: ObservableComputed<TripleType[]>;
@@ -113,10 +113,18 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIdsTriple$ = observable(initialBlockIdsTriple);
+    this.blockIdsTriple$ = computed(() => {
+      const localBlockIdsForEntity = Triple.fromActions(ActionsStore.actions$.get()[spaceId], [])
+        .filter(t => t.entityId === id)
+        .find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
+
+      // Favor the local version of the blockIdsTriple if it exists
+      return localBlockIdsForEntity ?? initialBlockIdsTriple;
+    });
 
     this.blockIds$ = computed(() => {
       const blockIdsTriple = this.blockIdsTriple$.get();
+
       return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
     });
 
@@ -142,6 +150,7 @@ export class EntityStore implements IEntityStore {
     });
 
     this.blockTriples$ = computed(() => {
+      // @TODO: Fetch remote block triples
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
 
@@ -532,7 +541,6 @@ export class EntityStore implements IEntityStore {
         },
       });
       this.create(triple);
-      this.blockIdsTriple$.set(triple);
     } else if (isUpdated) {
       const updatedTriple = Triple.ensureStableId({
         ...existingBlockTriple,
@@ -543,7 +551,6 @@ export class EntityStore implements IEntityStore {
         },
       });
       this.update(updatedTriple, existingBlockTriple);
-      this.blockIdsTriple$.set(updatedTriple);
     }
   };
 
