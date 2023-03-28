@@ -85,5 +85,5 @@ export function NavbarActions({ spaceId }: Props) {
     },
   ];
 
-  return <Dropdown trigger={editable ? 'Edit mode' : 'Browse mode'} align="end" options={options} />;
+  return <Dropdown trigger={editable ? 'Edit mode' : 'Browse mode'} options={options} />;
 }
