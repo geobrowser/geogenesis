@@ -24,7 +24,7 @@ export const Persistence = () => {
       setStoredActions(unpublishedActions);
     }
     // note: finely tuned dependency because `storedActions` is only used on initial render
-    // no need to save stored actions a second time when `storedAactions` are updated
+    // no need to save stored actions a second time when `storedActions` are updated
   }, [isInitialRender, actions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
