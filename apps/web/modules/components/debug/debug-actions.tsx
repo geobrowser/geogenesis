@@ -11,15 +11,15 @@ export const DebugActions = ({
   containerWidth?: number;
   className?: string;
 }) => {
-  const { actions } = useActionsStore(spaceId);
+  const { actionsFromSpace } = useActionsStore(spaceId);
   /* A useful component for debugging triple data - generates a button which opens a popover containing nicely formatted triple data*/
   if (process.env.NODE_ENV !== 'development' || !spaceId) return null;
 
   return (
     <DebugPopover containerWidth={containerWidth} className={className}>
-      Action Count: {actions.length}
+      Action Count: {actionsFromSpace.length}
       <div className="whitespace-wrap max-h-screen space-y-8 overflow-y-auto pb-24 font-mono font-normal">
-        {actions.map((action, i) => (
+        {actionsFromSpace.map((action, i) => (
           <div key={i}>
             {Object.entries(action).map(([key, value]) => (
               <div key={key} className="flex items-center whitespace-normal">

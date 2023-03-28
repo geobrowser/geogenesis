@@ -1,4 +1,4 @@
-import { Observable, observable } from '@legendapp/state';
+import { Observable, observable, computed } from '@legendapp/state';
 import { Signer } from 'ethers';
 
 import { Action } from '.';
@@ -11,35 +11,74 @@ import {
   ReviewState,
   Triple as TripleType,
 } from '../types';
+import { makeOptionalComputed } from '../utils';
 
 interface IActionsStore {
+  restore(spaceActions: SpaceActions): void;
   create(triple: TripleType): void;
   update(triple: TripleType, oldTriple: TripleType): void;
   remove(triple: TripleType): void;
-  publish(spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void): void;
+  deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
+  publish(
+    spaceId: string,
+    signer: Signer,
+    onChangePublishState: (newState: ReviewState) => void,
+    unstagedChanges: Record<string, unknown>
+  ): void;
+  unstagedChanges?: Record<string, unknown>;
 }
 
 interface IActionsStoreConfig {
   api: INetwork;
 }
 
-type SpaceId = string;
-type SpaceActions = Record<SpaceId, ActionType[]>;
+export type SpaceId = string;
+export type SpaceActions = Record<SpaceId, ActionType[]>;
 
 export class ActionsStore implements IActionsStore {
   private api: INetwork;
   actions$: Observable<SpaceActions>;
+  allActions$;
+  allSpacesWithActions$;
 
   constructor({ api }: IActionsStoreConfig) {
+    const actions = observable<SpaceActions>({});
+
     this.api = api;
-    this.actions$ = observable<SpaceActions>({});
+    this.actions$ = actions;
+    this.allActions$ = makeOptionalComputed(
+      [],
+      computed(() => Object.values(this.actions$.get()).flatMap(actions => actions) ?? [])
+    );
+    this.allSpacesWithActions$ = makeOptionalComputed(
+      [],
+      computed(() => Object.keys(this.actions$.get()).filter(spaceId => this.actions$.get()[spaceId].length > 0) ?? [])
+    );
   }
 
   private addActions = (spaceId: string, actions: ActionType[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
+
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? []), ...actions],
+    };
+
+    this.actions$.set(newActions);
+  };
+
+  restore = (spaceActions: SpaceActions) => {
+    this.actions$.set(spaceActions);
+  };
+
+  deleteActions = (spaceId: string, actionIdsToDelete: Array<string>) => {
+    const prevActions: SpaceActions = this.actions$.get() ?? {};
+
+    const newActions: SpaceActions = {
+      ...prevActions,
+      [spaceId]: [...(prevActions[spaceId] ?? [])].filter(
+        (item: ActionType) => !actionIdsToDelete.includes(getId(item))
+      ),
     };
 
     this.actions$.set(newActions);
@@ -90,13 +129,20 @@ export class ActionsStore implements IActionsStore {
     });
   };
 
-  publish = async (spaceId: string, signer: Signer, onChangePublishState: (newState: ReviewState) => void) => {
+  publish = async (
+    spaceId: string,
+    signer: Signer,
+    onChangePublishState: (newState: ReviewState) => void,
+    unstagedChanges: Record<string, unknown>
+  ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    if (!spaceActions) return;
+    const actionsToPublish = spaceActions.filter(action => !(getId(action) in unstagedChanges));
+
+    if (actionsToPublish.length < 1) return;
 
     try {
       await this.api.publish({
-        actions: Action.unpublishedChanges(spaceActions),
+        actions: Action.unpublishedChanges(Action.squashChanges(actionsToPublish)),
         signer,
         onChangePublishState,
         space: spaceId,
@@ -107,17 +153,28 @@ export class ActionsStore implements IActionsStore {
       return;
     }
 
-    const publishedActions = spaceActions.map(a => ({
-      ...a,
+    const publishedActions = actionsToPublish.map(action => ({
+      ...action,
       hasBeenPublished: true,
     }));
+    const unstagedActions = spaceActions.filter(action => getId(action) in unstagedChanges);
 
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: publishedActions,
+      [spaceId]: [...publishedActions, ...unstagedActions],
     });
 
     onChangePublishState('publish-complete');
     await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
+
+const getId = (action: ActionType) => {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return action.id;
+    case 'editTriple':
+      return action.before.id;
+  }
+};

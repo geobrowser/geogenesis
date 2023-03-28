@@ -41,10 +41,8 @@ export default function EntitiesPage({
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
-
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
-
       <EntityTableStoreProvider
         spaceId={spaceId}
         initialRows={initialRows}

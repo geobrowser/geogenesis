@@ -90,13 +90,13 @@ interface HasEntityChangesProps extends Props {
 }
 
 function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityChangesProps) {
-  const { actions } = useActionsStore(spaceId);
+  const { actionsFromSpace } = useActionsStore(spaceId);
   const updateMyPresence = EntityPresenceContext.useUpdateMyPresence();
-  const hasChangesToEntity = Action.getChangeCount(Action.forEntityId(actions, entityId)) > 0;
+  const hasChangesToEntity = Action.getChangeCount(Action.forEntityId(actionsFromSpace, entityId)) > 0;
 
   useEffect(() => {
     updateMyPresence({ address, hasChangesToEntity });
-  }, [actions, entityId, hasChangesToEntity]);
+  }, [hasChangesToEntity, address, updateMyPresence]);
 
   return <>{children}</>;
 }

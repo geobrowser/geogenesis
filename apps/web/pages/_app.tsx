@@ -1,19 +1,23 @@
-import { Analytics } from '@vercel/analytics/react';
-import type { AppProps } from 'next/app';
+import * as React from 'react';
+import { useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import type { AppProps } from 'next/app';
 
-import { Action, useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { FlowBar } from '~/modules/components/flow-bar';
 import { Navbar } from '~/modules/components/navbar/navbar';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';
 import { Providers } from '~/modules/providers';
 import { Dialog } from '~/modules/search';
+import { Main } from '~/modules/components/main';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
+import { ClientOnly } from '~/modules/components/client-only';
+import { FlowBar } from '~/modules/components/flow-bar';
+import { Review } from '~/modules/components/review';
+import { Persistence } from '~/modules/persistence';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
@@ -74,22 +78,17 @@ function App({ Component, pageProps }: AppProps) {
         }}
         spaceId=""
       />
-      <main className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+      <Main>
         <Component {...pageProps} />
-        <Analytics />
-      </main>
-      <GlobalFlowBar spaceId={spaceId ?? ''} />
+      </Main>
+      {/* Client-side rendered due to `window.localStorage` usage */}
+      <ClientOnly>
+        <FlowBar />
+        <Review />
+        <Persistence />
+      </ClientOnly>
+      <Analytics />
     </>
-  );
-}
-
-function GlobalFlowBar({ spaceId }: { spaceId: string }) {
-  const { actions, publish, clear } = useActionsStore(spaceId);
-
-  return (
-    <div className="relative flex flex-col items-center">
-      <FlowBar actions={Action.unpublishedChanges(actions)} onClear={clear} onPublish={publish} spaceId={spaceId} />
-    </div>
   );
 }
 

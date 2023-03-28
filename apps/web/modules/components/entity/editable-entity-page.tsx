@@ -52,17 +52,15 @@ export function EditableEntityPage({
     hiddenSchemaIds,
   } = useEntityStore();
 
-  const { actions } = useActionsStore(spaceId);
+  const { actionsFromSpace } = useActionsStore(spaceId);
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && actions.length === 0 ? serverTriples : localTriples;
+  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
   const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
 
   const nameTriple = Entity.nameTriple(triples);
 
-  const descriptionTriple = Entity.descriptionTriple(triples);
-  const description = Entity.description(triples);
   const name = Entity.name(triples) ?? serverName;
   const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 
@@ -85,17 +83,6 @@ export function EditableEntityPage({
       payload: {
         name: e.target.value,
         triple: nameTriple,
-      },
-    });
-  };
-
-  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    send({
-      type: 'EDIT_ENTITY_DESCRIPTION',
-      payload: {
-        name,
-        description: e.target.value,
-        triple: descriptionTriple,
       },
     });
   };

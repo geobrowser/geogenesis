@@ -1,4 +1,6 @@
-import { ColorName, colors } from '~/modules/design-system/theme/colors';
+import * as React from 'react';
+
+import { colors, ColorName } from '~/modules/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;
