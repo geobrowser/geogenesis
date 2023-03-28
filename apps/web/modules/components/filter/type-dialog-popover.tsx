@@ -40,15 +40,15 @@ export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
       <AnimatePresence mode="wait">
         {open ? (
           <MotionContent
-            forceMount={true} // We force mounting so we can control exit animations through framer-motion
-            initial={{ opacity: 0, y: -10 }}
-            exit={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            forceMount // We force mounting so we can control exit animations through framer-motion
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            className="z-100 w-full self-start rounded border border-grey-02 bg-white shadow-button md:mx-auto md:w-[98vw]"
+            className="z-100 w-full origin-top-left self-start rounded border border-grey-02 bg-white shadow-button md:mx-auto md:w-[98vw]"
             style={{ width: `calc(${inputContainerWidth}px / 2)` }}
             align="start"
             sideOffset={8}
