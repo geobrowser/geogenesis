@@ -47,6 +47,12 @@
   @apply mt-10;
 }
 
+.ProseMirror > h1:first-child,
+.ProseMirror > h2:first-child,
+.ProseMirror > h3:first-child {
+  @apply mt-0;
+}
+
 .ProseMirror h1 {
   @apply text-largeTitle;
 }
