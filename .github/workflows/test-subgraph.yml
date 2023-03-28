@@ -17,7 +17,10 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
+      # @TODO For some reason docker isn't reading lockfile correctly. Will fix
+      # when we add more subgraph integration tests. Right now they're not very
+      # useful anyway.
+      - run: pnpm install
 
       - uses: docker-practice/actions-setup-docker@master
 
