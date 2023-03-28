@@ -23,5 +23,7 @@ ENV TURBO_REMOTE_ONLY=true
 
 COPY . .
 
-RUN pnpm install --recursive --frozen-lockfile
+# Ideally we should be using a frozen-lockfile, but the current version of pnpm (7.30.5)
+# is causing issues with detecting lockfile state.
+RUN pnpm install --recursive
 RUN pnpm build
