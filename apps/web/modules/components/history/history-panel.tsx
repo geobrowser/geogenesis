@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { Icon } from '~/modules/design-system/icon';
 import { Menu } from '~/modules/design-system/menu';
 

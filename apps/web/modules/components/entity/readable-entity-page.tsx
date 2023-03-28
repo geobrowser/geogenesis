@@ -38,7 +38,6 @@ export function ReadableEntityPage({
   schemaTriples,
   versions,
 }: Props) {
-
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
   const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 
@@ -94,15 +93,20 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
     switch (triple.value.type) {
       case 'string':
         return (
-          <Text key={`string-${triple.value.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
             {triple.value.value}
           </Text>
         );
       case 'image':
-        return <ImageZoom key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
+        return (
+          <ImageZoom
+            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
+            imageSrc={triple.value.value}
+          />
+        );
       case 'entity': {
         return (
-          <div key={`entity-${triple.value.id}`} className="mt-1">
+          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
             <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
               {triple.value.name || triple.value.id}
             </LinkableChip>
