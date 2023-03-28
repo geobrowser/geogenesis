@@ -7,8 +7,6 @@ import { GeoDate } from '~/modules/utils';
 import { Avatar } from '~/modules/avatar';
 
 interface Props {
-  // @TODO: For some reason versions is causing a hydration mismatch when
-  // refreshing the [entityId] page
   versions: Array<Version>;
 }
 

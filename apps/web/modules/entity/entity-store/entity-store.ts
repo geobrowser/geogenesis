@@ -150,7 +150,6 @@ export class EntityStore implements IEntityStore {
     });
 
     this.blockTriples$ = computed(() => {
-      // @TODO: Fetch remote block triples
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
 

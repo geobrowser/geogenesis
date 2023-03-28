@@ -23,7 +23,6 @@ import { EntityPageContentContainer } from '~/modules/components/entity/entity-p
 
 interface Props {
   triples: Triple[];
-  schemaTriples: Triple[];
   versions: Version[];
   id: string;
   name: string;
@@ -60,7 +59,7 @@ export default function EntityPage(props: Props) {
         id={props.id}
         spaceId={props.spaceId}
         initialTriples={props.triples}
-        initialSchemaTriples={props.schemaTriples}
+        initialSchemaTriples={[]}
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
@@ -71,7 +70,7 @@ export default function EntityPage(props: Props) {
           initialSelectedType={null}
         >
           <EntityPageContentContainer>
-            <Page {...props} />
+            <Page {...props} schemaTriples={[]} />
           </EntityPageContentContainer>
         </EntityPageTableBlockStoreProvider>
       </EntityStoreProvider>
@@ -164,7 +163,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   return {
     props: {
       triples: entity?.triples ?? [],
-      schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
       name: entity?.name ?? entityId,
       spaceId,

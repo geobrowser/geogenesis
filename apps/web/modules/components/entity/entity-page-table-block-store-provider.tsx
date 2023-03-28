@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
 import { EntityTableStore } from '~/modules/entity';
 import { useSpaceStore } from '~/modules/spaces/space-store';
 import { Services } from '../../services';
-import { Column, FilterState, Row, Triple } from '../../types';
+import { Column, Row, Triple } from '../../types';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
