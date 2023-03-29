@@ -18,12 +18,12 @@ import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
+import { useReview } from '~/modules/review';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
-import { useReview } from '~/modules/review';
 
 function Root(props: AppProps) {
   return (
