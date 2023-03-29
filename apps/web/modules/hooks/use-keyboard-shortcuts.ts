@@ -1,15 +1,18 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 interface Shortcut {
   key: KeyboardEvent['key'];
   callback: () => void;
 }
 
-export function useKeyboardShortcuts(shortcuts: Shortcut[], deps: any[]) {
-  useEffect(() => {
-    const shortcutMap = new Map(shortcuts.map((shortcut: Shortcut) => [shortcut.key, shortcut.callback]));
+export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
+  const shortcutMap = useMemo(
+    () => new Map(shortcuts.map((shortcut: Shortcut) => [shortcut.key, shortcut.callback])),
+    [shortcuts]
+  );
 
-    const down = (e: KeyboardEvent) => {
+  const down = useCallback(
+    (e: KeyboardEvent) => {
       // MacOS
       if (e.metaKey && shortcutMap.has(e.key)) {
         shortcutMap.get(e.key)?.();
@@ -19,9 +22,12 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[], deps: any[]) {
       if (e.ctrlKey && shortcutMap.has(e.key)) {
         shortcutMap.get(e.key)?.();
       }
-    };
+    },
+    [shortcutMap]
+  );
 
+  useEffect(() => {
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
-  }, deps);
+  }, [down]);
 }

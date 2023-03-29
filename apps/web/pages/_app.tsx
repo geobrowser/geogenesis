@@ -23,6 +23,7 @@ import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
+import { useReview } from '~/modules/review';
 
 function Root(props: AppProps) {
   return (
@@ -44,13 +45,19 @@ function App({ Component, pageProps }: AppProps) {
   const { setEditable, editable } = useEditable();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
+  const { isReviewOpen, setIsReviewOpen } = useReview();
 
-  useKeyboardShortcuts(
-    [
+  // Ideally memoization happens in the useKeyboardShortcuts hook
+  const memoizedShortcuts = React.useMemo(
+    () => [
       // Toggle the menu when ⌘ + / is pressed
       {
         key: '/',
         callback: () => setOpen(open => !open),
+      },
+      {
+        key: '.',
+        callback: () => setIsReviewOpen(!isReviewOpen),
       },
       // Toggle edit mode when ⌘ + e is pressed
       {
@@ -60,8 +67,10 @@ function App({ Component, pageProps }: AppProps) {
         },
       },
     ],
-    [editable, open, isEditor]
+    [editable, isEditor, isAdmin, isEditorController, setOpen, setEditable, setIsReviewOpen, isReviewOpen]
   );
+
+  useKeyboardShortcuts(memoizedShortcuts);
 
   return (
     <>
