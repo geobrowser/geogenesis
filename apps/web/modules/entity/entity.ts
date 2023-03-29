@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
+import { Value } from '~/modules/value';
 import { Triple } from '../triple';
 import { Action, Entity, Triple as TripleType } from '../types';
 import { groupBy } from '../utils';
@@ -144,4 +145,28 @@ export function mergeActionsWithEntities(actions: Record<string, Action[]>, netw
     },
     entitiesFromTriples
   );
+}
+
+/**
+ * This function traverses through all the triples associated with an entity and attempts to find the avatar URL of the entity.
+ */
+export function avatar(triples: TripleType[] | undefined): string | null {
+  if (!triples) return null;
+
+  const avatarTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
+  const avatarUrl = avatarTriple !== undefined ? Value.imageValue(avatarTriple) : null;
+
+  return avatarUrl;
+}
+
+/**
+ * This function traverses through all the triples associated with an entity and attempts to find the cover URL of the entity.
+ */
+export function cover(triples: TripleType[] | undefined): string | null {
+  if (!triples) return null;
+
+  const coverTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
+  const coverUrl = coverTriple !== undefined ? Value.imageValue(coverTriple) : null;
+
+  return coverUrl;
 }
