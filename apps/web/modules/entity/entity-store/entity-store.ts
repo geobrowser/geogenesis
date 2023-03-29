@@ -86,7 +86,7 @@ export class EntityStore implements IEntityStore {
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
   blockIds$: ObservableComputed<string[]>;
-  blockIdsTriple$: Observable<TripleType | null> = observable<TripleType | null>(null);
+  blockIdsTriple$: ObservableComputed<TripleType | null>;
   blockTriples$: ObservableComputed<TripleType[]>;
   editorJson$: ObservableComputed<JSONContent>;
   typeTriples$: ObservableComputed<TripleType[]>;
@@ -113,10 +113,18 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIdsTriple$ = observable(initialBlockIdsTriple);
+    this.blockIdsTriple$ = computed(() => {
+      const localBlockIdsForEntity = Triple.fromActions(ActionsStore.actions$.get()[spaceId], [])
+        .filter(t => t.entityId === id)
+        .find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
+
+      // Favor the local version of the blockIdsTriple if it exists
+      return localBlockIdsForEntity ?? initialBlockIdsTriple;
+    });
 
     this.blockIds$ = computed(() => {
       const blockIdsTriple = this.blockIdsTriple$.get();
+
       return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
     });
 
@@ -184,21 +192,21 @@ export class EntityStore implements IEntityStore {
                 typeName: Value.nameOfEntityValue(rowTypeTriple),
               },
             };
-          } else {
-            const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
-            /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
-            const isSSR = typeof window === 'undefined';
-            const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
-            const nodeData = json.content[0];
-
-            return {
-              ...nodeData,
-              attrs: {
-                ...nodeData?.attrs,
-                id: blockId,
-              },
-            };
           }
+
+          const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
+          /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
+          const isSSR = typeof window === 'undefined';
+          const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
+          const nodeData = json.content[0];
+
+          return {
+            ...nodeData,
+            attrs: {
+              ...nodeData?.attrs,
+              id: blockId,
+            },
+          };
         }),
       };
 
@@ -346,11 +354,11 @@ export class EntityStore implements IEntityStore {
 
     if (isTableNode) {
       return `Table Block ${blockEntityId}`;
-    } else {
-      const nodeHTML = this.textNodeHTML(node);
-      const nodeNameLength = 20;
-      return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
     }
+
+    const nodeHTML = this.textNodeHTML(node);
+    const nodeNameLength = 20;
+    return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
   };
 
   /* 
@@ -532,7 +540,6 @@ export class EntityStore implements IEntityStore {
         },
       });
       this.create(triple);
-      this.blockIdsTriple$.set(triple);
     } else if (isUpdated) {
       const updatedTriple = Triple.ensureStableId({
         ...existingBlockTriple,
@@ -543,7 +550,6 @@ export class EntityStore implements IEntityStore {
         },
       });
       this.update(updatedTriple, existingBlockTriple);
-      this.blockIdsTriple$.set(updatedTriple);
     }
   };
 

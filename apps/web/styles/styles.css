@@ -6,7 +6,7 @@ html {
 }
 
 body {
-  @apply bg-bg;
+  @apply bg-white;
   font-family: Calibre, sans-serif;
   text-rendering: optimizeLegibility;
 }

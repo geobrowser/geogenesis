@@ -44,7 +44,7 @@ export function EntityPageMetadataHeader({ versions }: Props) {
           <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
             <AvatarGroup>
               {lastThreeContributors.map((contributor, i) => (
-                <AvatarGroup.Item>
+                <AvatarGroup.Item key={i}>
                   <Avatar
                     alt={`Avatar for ${contributor.name ?? contributor.id}`}
                     avatarUrl={contributor.avatarUrl}

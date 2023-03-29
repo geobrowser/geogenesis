@@ -1,24 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
-import { makeStubTriple } from '~/modules/services/mock-network';
 import { Triple } from '~/modules/types';
 import EntityPage from '~/pages/space/[id]/[entityId]';
-
-const scalarDescriptionTriple: Triple = {
-  id: '1',
-  entityId: '1',
-  space: '1',
-  attributeId: 'Description',
-  attributeName: 'Description',
-  entityName: 'Banana',
-  value: {
-    id: '1',
-    type: 'string',
-    value: 'Description of a Banana',
-  },
-};
 
 const genericAttribute: Triple = {
   id: '1',
@@ -41,34 +25,18 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           versions={[]}
           triples={[]}
           schemaTriples={[]}
           referencedByEntities={[]}
+          blockTriples={[]}
+          blockIdsTriple={null}
         />
       </Providers>
     );
 
     expect(screen.getByText('Banana')).toBeInTheDocument();
-  });
-
-  it('Renders entity description from description that is a string type', () => {
-    render(
-      <Providers>
-        <EntityPage
-          id="1"
-          name="Banana"
-          space="1"
-          versions={[]}
-          triples={[scalarDescriptionTriple]}
-          schemaTriples={[]}
-          referencedByEntities={[]}
-        />
-      </Providers>
-    );
-
-    expect(screen.queryAllByText('Description of a Banana').length).toEqual(2);
   });
 
   it('Renders entity triples', () => {
@@ -77,11 +45,13 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           versions={[]}
           triples={[genericAttribute]}
           schemaTriples={[]}
           referencedByEntities={[]}
+          blockTriples={[]}
+          blockIdsTriple={null}
         />
       </Providers>
     );
@@ -95,11 +65,13 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           versions={[]}
           triples={[{ ...genericAttribute, attributeName: null }]}
           schemaTriples={[]}
           referencedByEntities={[]}
+          blockTriples={[]}
+          blockIdsTriple={null}
         />
       </Providers>
     );
@@ -113,11 +85,13 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           versions={[]}
           triples={[]}
           schemaTriples={[]}
           referencedByEntities={[]}
+          blockTriples={[]}
+          blockIdsTriple={null}
         />
       </Providers>
     );
@@ -131,7 +105,7 @@ describe('Entity page', () => {
         <EntityPage
           id="1"
           name="Banana"
-          space="1"
+          spaceId="1"
           versions={[]}
           triples={[]}
           schemaTriples={[]}
@@ -156,6 +130,8 @@ describe('Entity page', () => {
               },
             },
           ]}
+          blockTriples={[]}
+          blockIdsTriple={null}
         />
       </Providers>
     );

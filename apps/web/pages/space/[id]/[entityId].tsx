@@ -1,8 +1,8 @@
 import type { GetServerSideProps } from 'next';
 import { useEffect } from 'react';
 import Head from 'next/head';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
@@ -14,25 +14,29 @@ import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { NavUtils } from '~/modules/utils';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
+import { Value } from '~/modules/value';
+import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 
 interface Props {
   triples: Triple[];
-  schemaTriples: Triple[];
   versions: Version[];
   id: string;
   name: string;
-  space: string;
+  spaceId: string;
   referencedByEntities: ReferencedByEntity[];
+
+  // For the page editor
+  blockTriples: Triple[];
+  blockIdsTriple: Triple | null;
 }
 
 export default function EntityPage(props: Props) {
   const { setPageName } = usePageName();
-  const { isEditor } = useAccessControl(props.space);
+  const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
-  useLogRocket(props.space);
 
   // This is a janky way to set the name in the navbar until we have nested layouts
   // and the navbar can query the name itself in a nice way.
@@ -48,26 +52,33 @@ export default function EntityPage(props: Props) {
     <>
       <Head>
         <title>{props.name ?? props.id}</title>
-        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.space, props.id)}`} />
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
       </Head>
       <EntityStoreProvider
         id={props.id}
-        spaceId={props.space}
+        spaceId={props.spaceId}
         initialTriples={props.triples}
-        initialSchemaTriples={props.schemaTriples}
-        initialBlockIdsTriple={null}
-        initialBlockTriples={[]}
+        initialSchemaTriples={[]}
+        initialBlockIdsTriple={props.blockIdsTriple}
+        initialBlockTriples={props.blockTriples}
       >
-        <EntityPageContentContainer>
-          <Page {...props} />
-        </EntityPageContentContainer>
+        <EntityPageTableBlockStoreProvider
+          spaceId={props.spaceId}
+          initialColumns={[]}
+          initialRows={[]}
+          initialSelectedType={null}
+        >
+          <EntityPageContentContainer>
+            <Page {...props} schemaTriples={[]} />
+          </EntityPageContentContainer>
+        </EntityPageTableBlockStoreProvider>
       </EntityStoreProvider>
     </>
   );
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const space = context.query.id as string;
+  const spaceId = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
@@ -82,7 +93,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    network.fetchProposedVersions(entityId, space),
+    network.fetchProposedVersions(entityId, spaceId),
   ]);
 
   const spaces = await network.fetchSpaces();
@@ -105,16 +116,54 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     };
   });
 
+  /* Storing the array of block ids as a string value since we currently do not support arrays */
+  // @TODO: the Block triple for the entity should already be fetched in the entity query above
+  const blockIdTriples = await network.fetchTriples({
+    space: spaceId,
+    query: '',
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: entityId },
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BLOCKS,
+      },
+    ],
+  });
+
+  const blockIdsTriple = blockIdTriples.triples[0] || null;
+
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+
+  // @TODO: Try and use fetchEntity instead
+  const blockTriples = (
+    await Promise.all(
+      blockIds.map(blockId => {
+        return network.fetchTriples({
+          space: spaceId,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: blockId }],
+        });
+      })
+    )
+  ).flatMap(block => block.triples);
+
   return {
     props: {
       triples: entity?.triples ?? [],
-      schemaTriples: [] /* @TODO: Fetch schema triples for entity if entity has a type */,
       id: entityId,
       name: entity?.name ?? entityId,
-      space,
+      spaceId,
       referencedByEntities,
       versions,
       key: entityId,
+
+      // For entity page editor
+      blockIdsTriple,
+      blockTriples,
     },
   };
 };

@@ -41,6 +41,18 @@
   outline: none;
 }
 
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  @apply mt-10;
+}
+
+.ProseMirror > h1:first-child,
+.ProseMirror > h2:first-child,
+.ProseMirror > h3:first-child {
+  @apply mt-0;
+}
+
 .ProseMirror h1 {
   @apply text-largeTitle;
 }
@@ -55,6 +67,10 @@
 
 .ProseMirror p {
   @apply text-body;
+}
+
+.ProseMirror strong {
+  @apply font-semibold;
 }
 
 .ProseMirror > * {

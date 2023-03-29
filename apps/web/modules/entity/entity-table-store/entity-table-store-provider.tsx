@@ -71,7 +71,7 @@ export function EntityTableStoreProvider({
       undefined,
       { shallow: true, scroll: false }
     );
-  }, [basePath, query, pageNumber, filterState, typeId]);
+  }, [basePath, query, pageNumber, JSON.stringify(filterState), typeId]);
 
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }

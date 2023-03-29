@@ -1,6 +1,7 @@
+import * as React from 'react';
+
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
 
 interface Props {
   children: React.ReactNode;
@@ -10,15 +11,13 @@ interface Props {
 const MotionContent = motion(PopoverContent);
 
 export function Menu({ children, trigger }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = React.useState(false);
 
   // @TODO: accessibility for button focus states
   return (
-    <Root open={open} onOpenChange={setOpen}>
-      <Trigger>
-        <button>{trigger}</button>
-      </Trigger>
-      <AnimatePresence mode="wait">
+    <Root onOpenChange={setOpen} open={open}>
+      <Trigger>{trigger}</Trigger>
+      <AnimatePresence>
         {open && (
           <MotionContent
             forceMount

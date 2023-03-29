@@ -25,7 +25,7 @@ interface Props {
 //
 // One workaround is to track which entities a user has made changes to, but
 // for now we can just show all editors currently in the space.
-export function SpacePresenceProvider({ children, entityId }: Props) {
+export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
   const account = useAccount();
 
   // HACK (baiirun)
@@ -43,7 +43,7 @@ export function SpacePresenceProvider({ children, entityId }: Props) {
   if (import.meta?.env) return null;
 
   return (
-    <EntityPresenceErrorBoundary>
+    <EntityPresenceErrorBoundary entityId={entityId} spaceId={spaceId}>
       <EntityPresenceContext.RoomProvider
         id={entityId}
         initialPresence={{ address: account.address, hasChangesToEntity: true }}
@@ -72,7 +72,7 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   if (import.meta?.env) return null;
 
   return (
-    <EntityPresenceErrorBoundary>
+    <EntityPresenceErrorBoundary entityId={entityId} spaceId={spaceId}>
       <EntityPresenceContext.RoomProvider
         id={entityId}
         initialPresence={{ address: account.address, hasChangesToEntity: false }}
@@ -107,14 +107,16 @@ interface EntityPresenceErrorBoundaryState {
 
 interface EntityPresenceErrorBoundaryProps {
   children: React.ReactNode;
+  entityId: string;
+  spaceId: string;
 }
 
 export class EntityPresenceErrorBoundary extends Component<
   EntityPresenceErrorBoundaryProps,
   EntityPresenceErrorBoundaryState
 > {
-  constructor({ children }: Props) {
-    super({ children });
+  constructor(props: Props) {
+    super(props);
     this.state = { hasError: false };
   }
 
@@ -123,7 +125,11 @@ export class EntityPresenceErrorBoundary extends Component<
   }
 
   componentDidCatch(error: any, errorInfo: any) {
-    console.error('Error in EntityPresenceErrorBoundary', error, errorInfo);
+    console.error(
+      `Error in EntityPresenceErrorBoundary, entityId: ${this.props.entityId} spaceId: ${this.props.spaceId}`,
+      error,
+      errorInfo
+    );
   }
 
   render() {

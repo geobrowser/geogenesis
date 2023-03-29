@@ -17,6 +17,7 @@ import Image from 'next/image';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
+import { Editor } from './editor/editor';
 
 interface Props {
   triples: Triple[];
@@ -24,14 +25,21 @@ interface Props {
   versions: Version[];
   id: string;
   name: string;
-  space: string;
+  spaceId: string;
   referencedByEntities: ReferencedByEntity[];
 }
 
-export function ReadableEntityPage({ triples, id, name, space, referencedByEntities, schemaTriples, versions }: Props) {
-  const description = Entity.description(triples);
+export function ReadableEntityPage({
+  triples,
+  id,
+  name,
+  spaceId,
+  referencedByEntities,
+  schemaTriples,
+  versions,
+}: Props) {
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples, space).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
 
   return (
     <>
@@ -46,16 +54,9 @@ export function ReadableEntityPage({ triples, id, name, space, referencedByEntit
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
 
-      {description && (
-        <>
-          <Text as="p" color="grey-04">
-            {description}
-          </Text>
-          <Spacer height={60} />
-        </>
-      )}
+      <Editor editable={false} />
 
-      <div className="rounded border border-grey-02 bg-white">
+      <div className="rounded border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} />
         </div>
@@ -92,15 +93,20 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
     switch (triple.value.type) {
       case 'string':
         return (
-          <Text key={`string-${triple.value.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
             {triple.value.value}
           </Text>
         );
       case 'image':
-        return <ImageZoom key={`image-${triple.value.id}`} imageSrc={triple.value.value} />;
+        return (
+          <ImageZoom
+            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
+            imageSrc={triple.value.value}
+          />
+        );
       case 'entity': {
         return (
-          <div key={`entity-${triple.value.id}`} className="mt-1">
+          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
             <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
               {triple.value.name || triple.value.id}
             </LinkableChip>
