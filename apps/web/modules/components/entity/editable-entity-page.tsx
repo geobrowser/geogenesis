@@ -92,7 +92,12 @@ export function EditableEntityPage({
   return (
     <>
       <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-      <Spacer height={16} />
+      {/* 
+        This height differs from the readable page height due to how we're using an expandable textarea for editing
+        the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
+        have to manually adjust the spacing here to remove the layout shift.
+      */}
+      <Spacer height={9.5} />
       <EntityPageMetadataHeader versions={versions} />
       <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
