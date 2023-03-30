@@ -19,8 +19,6 @@ import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { avatar, cover } from '~/modules/entity/entity';
 
 interface Props {
   triples: Triple[];
@@ -29,8 +27,8 @@ interface Props {
   name: string;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
-  avatarUrl: string | null;
-  coverUrl: string | null;
+  serverAvatarUrl: string | null;
+  serverCoverUrl: string | null;
 
   // For the page editor
   blockTriples: Triple[];
@@ -58,7 +56,6 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
       </Head>
-      <Intro avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
       <EntityStoreProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -73,52 +70,12 @@ export default function EntityPage(props: Props) {
           initialRows={[]}
           initialSelectedType={null}
         >
-          <EntityPageContentContainer>
-            <Page {...props} schemaTriples={[]} />
-          </EntityPageContentContainer>
+          <Page {...props} schemaTriples={[]} />
         </EntityPageTableBlockStoreProvider>
       </EntityStoreProvider>
     </>
   );
 }
-
-type IntroProps = {
-  avatarUrl: string | null;
-  coverUrl: string | null;
-};
-
-const Intro = ({ avatarUrl, coverUrl }: IntroProps) => {
-  if (coverUrl) {
-    return (
-      <div className="relative mx-auto mb-[80px] h-[320px] w-[1192px]">
-        <div className="h-full w-full overflow-hidden rounded bg-grey-01">
-          <img src={coverUrl} className="h-full w-full object-cover" alt="" />
-        </div>
-        {avatarUrl && (
-          <div className="absolute bottom-0 left-0 right-0">
-            <div className="mx-auto w-[784px]">
-              <div className="h-[80px] w-[80px] translate-y-1/2 overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
-                <img src={avatarUrl} className="h-full w-full object-cover" alt="" />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (avatarUrl) {
-    return (
-      <div className="mx-auto w-[784px]">
-        <div className="h-[80px] w-[80px] overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
-          <img src={avatarUrl} className="h-full w-full object-cover" alt="" />
-        </div>
-      </div>
-    );
-  }
-
-  return <React.Fragment />;
-};
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.query.id as string;
@@ -138,8 +95,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
     network.fetchProposedVersions(entityId, spaceId),
   ]);
-  const avatarUrl = avatar(entity?.triples);
-  const coverUrl = cover(entity?.triples);
+  const serverAvatarUrl = Entity.avatar(entity?.triples);
+  const serverCoverUrl = Entity.cover(entity?.triples);
 
   const spaces = await network.fetchSpaces();
 
@@ -205,8 +162,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       referencedByEntities,
       versions,
       key: entityId,
-      avatarUrl,
-      coverUrl,
+      serverAvatarUrl,
+      serverCoverUrl,
 
       // For entity page editor
       blockIdsTriple,

@@ -3,7 +3,7 @@ import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Value } from '~/modules/value';
 import { Triple } from '../triple';
-import { Action, Entity, Triple as TripleType } from '../types';
+import { Action, Entity as EntityType, Triple as TripleType } from '../types';
 import { groupBy } from '../utils';
 
 /**
@@ -91,7 +91,7 @@ export function valueTypeId(triples: TripleType[]): string | null {
 /**
  * This function takes an array of triples and maps them to an array of Entity types.
  */
-export function entitiesFromTriples(triples: TripleType[]): Entity[] {
+export function entitiesFromTriples(triples: TripleType[]): EntityType[] {
   return pipe(
     triples,
     A.groupBy(triple => triple.entityId),
@@ -120,7 +120,10 @@ export function entitiesFromTriples(triples: TripleType[]): Entity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(actions: Record<string, Action[]>, networkEntities: Entity[]): Entity[] {
+export function mergeActionsWithEntities(
+  actions: Record<string, Action[]>,
+  networkEntities: EntityType[]
+): EntityType[] {
   return pipe(
     actions,
     D.values,
