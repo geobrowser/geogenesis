@@ -692,7 +692,7 @@ export class Network implements INetwork {
 
       const maybePerson = await this.fetchEntity(personEntityId);
 
-      const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.PERSON_AVATAR_ATTRIBUTE);
+      const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
       const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
 
       return [
