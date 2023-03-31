@@ -1,20 +1,24 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
 import { IconButton } from '~/modules/design-system/button';
-import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
+import { ChevronRight } from '~/modules/design-system/icons/chevron-right';
+import { Context } from '~/modules/design-system/icons/context';
 import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
+import { Menu } from '~/modules/design-system/menu';
 import { Spacer } from '~/modules/design-system/spacer';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
-import { intersperse, titleCase } from '~/modules/utils';
+import { titleCase } from '~/modules/utils';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
+import { NavbarBreadcrumb } from './navbar-breadcrumb';
+import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 
 type GetComponentRouteConfig = {
   components: string[];
@@ -40,6 +44,7 @@ function getComponentRoute({
   const component = components[index];
   const path = components.slice(0, index + 1).join('/');
 
+  // Remove any query params
   const componentName = component.split('?')?.[0];
 
   switch (components[1]) {
@@ -71,6 +76,24 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
+  // @TODO:
+  // Only show the most current breadcrumb
+  // Menu component to show all other breadcrumbs
+  // - [ ] Detect which _level_ we are in
+  // - [ ] Breadcrumb item component for Menu
+  // - [ ] Menu component – We want to switch the icon depending on if the menu is open or not
+  // - [ ] Close menu on click
+  console.log('last component', A.last(components));
+  console.log('all component', components);
+
+  const activeBreadcrumb = A.last(components);
+  const activeBreadcrumbName = activeBreadcrumb?.split('?')[0];
+
+  const isHomePage = components.length === 1 && components[0] === '';
+  const isSpacePage = components.length === 2 && components[1] === 'space';
+  const isEntityPage = components.length === 3 && components[1] === 'space';
+  // 404?
+
   return (
     <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
       <div className="flex max-w-[40%] items-center gap-8 overflow-hidden md:max-w-full md:gap-4 [&>a:last-child]:max-w-[99%] [&>a:last-child]:overflow-hidden md:[&>a:nth-of-type(3)]:hidden md:[&>span:nth-of-type(2)]:hidden">
@@ -80,31 +103,26 @@ export function Navbar({ onSearchClick }: Props) {
           </a>
         </Link>
         <div className="flex items-center gap-2 overflow-hidden">
-          {intersperse(
-            components.map((component, index) => {
+          <Menu align="start" trigger={<Context color="grey-04" />}>
+            {components.map((component, index) => {
               if (index === 0) return null; // skip the "Geo" part
               const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
 
               return (
-                <LinkableBreadcrumb
-                  isNested={index < components.length - 1}
-                  shouldTruncate={index === 3}
-                  key={index}
-                  href={path}
-                  img={img}
-                >
+                // @TODO: Close menu on click
+                <NavbarLinkMenuItem key={index + path} onClick={() => router.push(path)} img={img}>
                   {title}
-                </LinkableBreadcrumb>
+                </NavbarLinkMenuItem>
               );
-            }),
-            ({ index }) => {
-              if (index === 1) return null; // skip the "Geo" part
-              return (
-                <span key={`separator-${index}`} style={{ rotate: '270deg' }}>
-                  <ChevronDownSmall color="grey-03" />
-                </span>
-              );
-            }
+            })}
+          </Menu>
+
+          <ChevronRight color="grey-03" />
+
+          {activeBreadcrumb && (
+            <NavbarBreadcrumb href={activeBreadcrumb} img={spaceImages[activeBreadcrumbName ?? ''] ?? '/facts.svg'}>
+              {spaceNames[activeBreadcrumbName ?? ''] ?? pageName ?? ''}
+            </NavbarBreadcrumb>
           )}
         </div>
       </div>
