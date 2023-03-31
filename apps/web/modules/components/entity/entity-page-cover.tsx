@@ -11,7 +11,7 @@ export const EntityPageCover = ({ avatarUrl, coverUrl }: EntityPageCoverProps) =
 
   if (coverUrl) {
     return (
-      <div className="relative mx-auto mb-[80px] h-[320px] w-full max-w-[1192px]">
+      <div className="relative mx-auto mb-20 h-[320px] w-full max-w-[1192px]">
         <div className="relative h-full w-full overflow-hidden rounded bg-grey-01">
           <Image src={coverUrl} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
         </div>
@@ -30,7 +30,7 @@ export const EntityPageCover = ({ avatarUrl, coverUrl }: EntityPageCoverProps) =
 
   if (avatarUrl) {
     return (
-      <div className="mx-auto w-[784px]">
+      <div className="mx-auto mb-10 w-[784px]">
         <div className="relative h-[80px] w-[80px] overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
           <Image src={avatarUrl} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
         </div>
