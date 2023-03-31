@@ -29,7 +29,9 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
-  // @TODO: This is all super hacky, there should be a better way of doing this
+  // @TODO: This is all super hacky, there should be a better way of doing this.
+  // If we migrate to Next 13 with nested routes we should be able to clean up
+  // a lot of this since we will know the route structure more explicitly.
   const activeBreadcrumb = A.last(components);
   const activeBreadcrumbName = activeBreadcrumb?.split('?')[0];
 
@@ -65,7 +67,11 @@ export function Navbar({ onSearchClick }: Props) {
 
             <ChevronRight color="grey-03" />
 
-            {activeBreadcrumb && !isHomePage && (
+            {/* 
+              The activeBreadcrumb really only doesn't exist when on the home page,
+              but TypeScript doesn't know that with the current implementation.
+            */}
+            {activeBreadcrumb && (
               <NavbarBreadcrumb href={activeBreadcrumb} img={getActiveImage()}>
                 {getActiveName().slice(0, 48) + (getActiveName().length > 48 ? '...' : '')}
               </NavbarBreadcrumb>
