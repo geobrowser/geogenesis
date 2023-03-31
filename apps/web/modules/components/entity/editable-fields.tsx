@@ -69,8 +69,6 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
         // This aligns the bottom of the text area with the sum of line heights * number of lines
         // for body text.
         ref.current.style.height = `${ref.current.scrollHeight - 4}px`;
-      } else {
-        ref.current.style.height = `${ref.current.scrollHeight - 3}px`;
       }
     }
   });
