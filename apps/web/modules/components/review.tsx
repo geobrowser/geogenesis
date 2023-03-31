@@ -337,11 +337,11 @@ const message: Record<ReviewState, string> = {
   reviewing: '',
   'publishing-ipfs': 'Uploading changes to IPFS',
   'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to the blockchain',
+  'publishing-contract': 'Adding your changes to The Graph',
   'publish-complete': 'Changes published!',
 };
 
-const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'publishing-contract'];
+const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
 
 type RevisedEntityProps = {
   spaceId: string;
