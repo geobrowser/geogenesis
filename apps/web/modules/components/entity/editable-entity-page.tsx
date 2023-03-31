@@ -100,7 +100,6 @@ export function EditableEntityPage({
   return (
     <>
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-      <Spacer height={40} />
       <EntityPageContentContainer>
         <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
         {/* 

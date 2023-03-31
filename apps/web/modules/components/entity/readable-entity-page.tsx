@@ -52,7 +52,6 @@ export function ReadableEntityPage({
   return (
     <>
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-      <Spacer height={40} />
       <EntityPageContentContainer>
         <Truncate maxLines={3} shouldTruncate>
           <Text as="h1" variant="mainPage">
