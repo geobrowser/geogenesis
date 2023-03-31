@@ -1,5 +1,7 @@
+import * as React from 'react';
+import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import React, { useMemo } from 'react';
+
 import { EntityTableStoreProvider, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { EntityTableContainer } from '../../entity-table/entity-table-container';

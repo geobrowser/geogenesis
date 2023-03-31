@@ -1,6 +1,8 @@
-import { Editor } from '@tiptap/react';
-import classNames from 'classnames';
+import * as React from 'react';
 import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import cx from 'classnames';
+import { Editor } from '@tiptap/react';
+
 import { Text } from '~/modules/design-system/text';
 import { SelectedEntityType, useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
@@ -10,6 +12,7 @@ import { CommandSuggestionItem, tableCommandItem } from './command-items';
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
 }
+
 export interface CommandListProps {
   items: CommandSuggestionItem[];
   initialTypes: Triple[];
@@ -74,11 +77,10 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
           <Text variant="smallButton" className="p-1">
             Select content block
           </Text>
-
           {items.length ? (
             items.map(({ title, icon }, index) => (
               <button
-                className={classNames(
+                className={cx(
                   `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
                   'hover:bg-gray-200 flex items-center gap-2 rounded p-1'
                 )}
