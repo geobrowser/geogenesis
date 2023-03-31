@@ -29,16 +29,7 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
-  // @TODO:
-  // Only show the most current breadcrumb
-  // Menu component to show all other breadcrumbs
-  // - [ ] Detect which _level_ we are in
-  // - [ ] Breadcrumb item component for Menu
-  // - [ ] Menu component – We want to switch the icon depending on if the menu is open or not
-  // - [ ] Close menu on click
-  console.log('last component', A.last(components));
-  console.log('all component', components);
-
+  // @TODO: This is all super hacky, there should be a better way of doing this
   const activeBreadcrumb = A.last(components);
   const activeBreadcrumbName = activeBreadcrumb?.split('?')[0];
 
