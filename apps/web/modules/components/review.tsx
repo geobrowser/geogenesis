@@ -341,7 +341,7 @@ const message: Record<ReviewState, string> = {
   'publish-complete': 'Changes published!',
 };
 
-const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'publishing-contract'];
+const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
 
 type RevisedEntityProps = {
   spaceId: string;
