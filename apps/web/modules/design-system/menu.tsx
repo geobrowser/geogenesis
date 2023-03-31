@@ -7,6 +7,8 @@ import { cva } from 'class-variance-authority';
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   align?: 'start' | 'center' | 'end';
 }
 
@@ -25,12 +27,10 @@ const contentStyles = cva(
   }
 );
 
-export function Menu({ children, trigger, align = 'end' }: Props) {
-  const [open, setOpen] = React.useState(false);
-
+export function Menu({ children, trigger, open, onOpenChange, align = 'end' }: Props) {
   // @TODO: accessibility for button focus states
   return (
-    <Root onOpenChange={setOpen} open={open}>
+    <Root onOpenChange={onOpenChange} open={open}>
       <Trigger>{trigger}</Trigger>
       <AnimatePresence>
         {open && (

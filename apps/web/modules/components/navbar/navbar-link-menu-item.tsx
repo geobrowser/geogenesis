@@ -14,7 +14,7 @@ export function NavbarLinkMenuItem({ children, onClick, img }: NavbarLinkMenuIte
     <button onClick={onClick} className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg">
       {img && (
         <>
-          <div className="relative h-4 w-4 rounded-sm">
+          <div className="relative h-4 w-4 overflow-hidden rounded-sm">
             <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
           </div>
           <Spacer width={8} />
