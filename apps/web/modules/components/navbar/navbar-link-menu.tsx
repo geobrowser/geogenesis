@@ -45,7 +45,6 @@ export function NavbarLinkMenu() {
         });
 
         return (
-          // @TODO: Close menu on click
           <NavbarLinkMenuItem key={index + path} onClick={() => onClick(path)} img={img}>
             {title.slice(0, 36) + (title.length > 36 ? '...' : '')}
           </NavbarLinkMenuItem>
