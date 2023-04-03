@@ -12,13 +12,12 @@ import { ResizableContainer } from '../design-system/resizable-container';
 
 interface Props {
   onDone: (result: Entity) => void;
-  spaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function Dialog({ onDone, spaceId, open, onOpenChange }: Props) {
-  const autocomplete = useAutocomplete({ spaceId });
+export function Dialog({ onDone, open, onOpenChange }: Props) {
+  const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
 
   if (!open) return null;

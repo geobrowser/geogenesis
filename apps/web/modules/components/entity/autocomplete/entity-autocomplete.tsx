@@ -36,11 +36,10 @@ const MotionContent = motion(StyledContent);
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
-  spaceId: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
-  const autocomplete = useAutocomplete({ spaceId });
+export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
+  const autocomplete = useAutocomplete();
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
