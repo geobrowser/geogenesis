@@ -560,23 +560,14 @@ export class EntityStore implements IEntityStore {
         block.triples.forEach(t => this.remove(t));
       });
 
-      // TODO: There may still be local triples to delete
+      // Delete any local triples associated with the deleted block entities
       const localTriplesForAllDeletedBlocks = pipe(
         this.ActionsStore.allActions$.get(),
         actions => Triple.fromActions(actions, []),
-        t => {
-          console.log('t');
-          return t;
-        },
         triples => triples.filter(t => removedBlockIds.includes(t.entityId))
       );
 
       localTriplesForAllDeletedBlocks.forEach(t => this.remove(t));
-
-      console.log('localTriplesForAllDeletedBlocks', localTriplesForAllDeletedBlocks);
-      console.log('prevBlockIds', prevBlockIds);
-      console.log('removedBlockIds', removedBlockIds);
-      console.log('remoteBlocks', remoteBlocks);
 
       // We delete the existingBlockTriple if the page content is completely empty
       if (newBlockIds.length === 0) {
