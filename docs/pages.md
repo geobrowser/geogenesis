@@ -107,7 +107,7 @@ Since blocks are entities, any other entity (such as entity pages) can reference
 
 Blocks are "owned" by a parent entity, so only the parent entity can completely delete a block. We should also cascade update all pages that reference the block that was deleted.
 
-_Note: Right now this is all only enforced by Geo Genesis' UI. There is no mechanism for enforcing this behavior in the protocol itself._
+_Note: Right now this is all only enforced by Geo Genesis' UI. There is no mechanism for enforcing this behavior in the protocol itself._ **Additionally, right now Geo Genesis does not have a way to tranclude blocks into other pages from the UI, so handling cascading block deletions isn't a large concern.**
 
 <br/>
 
