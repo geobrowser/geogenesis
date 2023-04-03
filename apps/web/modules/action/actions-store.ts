@@ -142,7 +142,7 @@ export class ActionsStore implements IActionsStore {
 
     try {
       await this.api.publish({
-        actions: Action.unpublishedChanges(Action.squashChanges(actionsToPublish)),
+        actions: Action.prepareActionsForPublishing(actionsToPublish),
         signer,
         onChangePublishState,
         space: spaceId,

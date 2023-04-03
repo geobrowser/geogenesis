@@ -1,3 +1,4 @@
+import { pipe } from '@mobily/ts-belt';
 import { Action, Action as ActionType } from '~/modules/types';
 
 export function forEntityId(actions: ActionType[], entityId: string) {
@@ -122,4 +123,8 @@ export function squashChanges(actions: Action[]) {
 
 export function unpublishedChanges(actions: Action[]) {
   return actions.filter(a => !a.hasBeenPublished);
+}
+
+export function prepareActionsForPublishing(actions: Action[]) {
+  return pipe(actions, unpublishedChanges, squashChanges);
 }

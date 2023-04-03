@@ -11,7 +11,7 @@ export const FlowBar = () => {
   const { allActions, allSpacesWithActions } = useActionsStore();
   const { isReviewOpen, setIsReviewOpen } = useReview();
 
-  const allUnpublishedActions = allActions.filter(a => !a.hasBeenPublished);
+  const allUnpublishedActions = Action.unpublishedChanges(allActions);
   const actionsCount = Action.getChangeCount(allUnpublishedActions);
 
   const entitiesCount = pipe(
