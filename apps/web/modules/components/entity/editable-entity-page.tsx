@@ -120,7 +120,6 @@ export function EditableEntityPage({
             <EntityAttributes
               entityId={id}
               triples={triples}
-              spaceId={spaceId}
               schemaTriples={schemaTriples}
               name={name}
               send={send}
@@ -147,7 +146,6 @@ function EntityAttributes({
   triples,
   schemaTriples = [],
   name,
-  spaceId,
   send,
   hideSchema,
   hiddenSchemaIds,
@@ -157,7 +155,6 @@ function EntityAttributes({
   schemaTriples: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
-  spaceId: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
 }) {
@@ -358,7 +355,6 @@ function EntityAttributes({
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
                   .map(triple => triple.value.id)}
-                spaceId={spaceId}
               />
             </div>
           );
@@ -428,7 +424,6 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
-                spaceId={spaceId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -443,7 +438,6 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(triple => triple.value.id)}
-                  spaceId={spaceId}
                 />
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">
