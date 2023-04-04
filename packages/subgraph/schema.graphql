@@ -79,6 +79,7 @@ type Proposal @entity {
   description: String
   createdBy: Account
   # @TODO: Add space to Action
+  space: String!
   status: ProposalStatus! # status of the proposal
   createdAt: BigInt! # block timestamp
   proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal

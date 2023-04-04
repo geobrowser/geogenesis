@@ -140,7 +140,7 @@ export function bootstrapRootSpaceCoreTypes(
 
   const proposalId = getOrCreateActionCount().count.toString()
 
-  getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
+  getOrCreateProposal(proposalId, createdBy, createdAtTimestamp, space)
 
   const entityToActionIds = new Map<string, string[]>()
 
