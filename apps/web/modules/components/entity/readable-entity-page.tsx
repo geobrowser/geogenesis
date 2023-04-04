@@ -53,9 +53,7 @@ export function ReadableEntityPage({
       <Spacer height={24} />
       <EntityTypeChipGroup types={types} />
       <Spacer height={40} />
-
       <Editor editable={false} />
-
       <div className="rounded border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes entityId={id} triples={sortedTriples} />
