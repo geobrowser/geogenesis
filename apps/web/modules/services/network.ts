@@ -557,8 +557,8 @@ export class Network implements INetwork {
     });
 
     if (!response.ok) {
-      // console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
-      // console.error(`Failed proposed versions fetch response text: ${await response.text()}`);
+      console.error(`Unable to fetch proposals, spaceId: ${spaceId}`);
+      console.error(`Failed proposed proposals fetch response text: ${await response.text()}`);
       return [];
     }
 
@@ -607,7 +607,7 @@ export class Network implements INetwork {
 
       return result;
     } catch (e) {
-      // console.error(`Unable to fetch proposed versions, entityId: ${entityId} spaceId: ${spaceId}`);
+      console.error(`Unable to fetch proposals, spaceId: ${spaceId}`);
       console.error(e);
       console.error(json.errors);
       return [];
