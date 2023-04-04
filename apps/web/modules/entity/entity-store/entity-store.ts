@@ -183,8 +183,11 @@ export class EntityStore implements IEntityStore {
             triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
           );
           const imageTriple = blockTriples.find(
-            triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_BLOCK
+            triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_ATTRIBUTE
           );
+
+          // @TODO remove console.info
+          console.info('imageTriple:', imageTriple);
 
           if (imageTriple) {
             return {
@@ -192,7 +195,7 @@ export class EntityStore implements IEntityStore {
               attrs: {
                 spaceId: this.spaceId,
                 id: blockId,
-                src: getImageValue(imageTriple),
+                src: Triple.getValue(imageTriple),
                 alt: '',
                 title: '',
               },
@@ -533,8 +536,8 @@ export class EntityStore implements IEntityStore {
     }
   };
 
-  /* Helper function for upserting a new block image triple for IMAGE_BLOCKs only  */
-  upsertBlockImageTriple = (node: JSONContent) => {
+  /* Helper function for creating a new block image triple for IMAGE_BLOCKs only  */
+  createBlockImageTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isImageNode = node.type === 'image';
 
@@ -542,23 +545,18 @@ export class EntityStore implements IEntityStore {
       return null;
     }
 
-    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.IMAGE_BLOCK });
     const { src } = node.attrs;
 
-    if (!existingBlockTriple) {
-      this.create(
-        Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: this.nodeName(node),
-          attributeId: SYSTEM_IDS.IMAGE_BLOCK,
-          attributeName: 'Image',
-          value: { id: ID.createValueId(), type: 'image', value: src },
-        })
-      );
-    } else {
-      // @TODO handle update case?
-    }
+    this.create(
+      Triple.withId({
+        space: this.spaceId,
+        entityId: blockEntityId,
+        entityName: this.nodeName(node),
+        attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
+        attributeName: 'Image',
+        value: { id: ID.createValueId(), type: 'image', value: src },
+      })
+    );
   };
 
   /*
@@ -618,14 +616,12 @@ export class EntityStore implements IEntityStore {
         this.createBlockRowTypeTriple(node);
         this.createBlockTypeTriple(node);
         this.upsertBlockNameTriple(node);
-        this.upsertBlockImageTriple(node);
         this.upsertBlockMarkdownTriple(node);
+        this.createBlockImageTriple(node);
       });
     });
   };
 }
-
-const getImageValue = (imageTriple: any) => imageTriple?.value?.value ?? '';
 
 const getBlockTypeValue = (nodeType?: string): EntityValue => {
   switch (nodeType) {

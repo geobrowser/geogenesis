@@ -123,3 +123,18 @@ export function squashChanges(actions: Action[]) {
 export function unpublishedChanges(actions: Action[]) {
   return actions.filter(a => !a.hasBeenPublished);
 }
+
+export const getValue = (action: Action): string | null => {
+  const checkedAction = action.type === 'editTriple' ? action.after : action;
+
+  switch (checkedAction.value.type) {
+    case 'number':
+      return checkedAction.value.value;
+    case 'string':
+      return checkedAction.value.value;
+    case 'entity':
+      return checkedAction.value.name;
+    case 'image':
+      return checkedAction.value.value;
+  }
+};
