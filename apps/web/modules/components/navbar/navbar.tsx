@@ -51,6 +51,13 @@ export function Navbar({ onSearchClick }: Props) {
     return '';
   };
 
+  const getActiveLink = () => {
+    if (isHomePage) return '/spaces';
+    if (isSpacePage) return `/space/${activeBreadcrumbName ?? ''}`;
+    if (isEntityPage) return `/space/${components[2]}`;
+    return '';
+  };
+
   return (
     <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
       <div className="flex items-center gap-8 md:gap-4">
@@ -70,7 +77,7 @@ export function Navbar({ onSearchClick }: Props) {
               but TypeScript doesn't know that with the current implementation.
             */}
             {activeBreadcrumb && (
-              <NavbarBreadcrumb href={activeBreadcrumb} img={getActiveImage()}>
+              <NavbarBreadcrumb href={getActiveLink()} img={getActiveImage()}>
                 {getActiveName().slice(0, 48) + (getActiveName().length > 48 ? '...' : '')}
               </NavbarBreadcrumb>
             )}
