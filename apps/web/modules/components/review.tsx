@@ -93,14 +93,6 @@ const ReviewChanges = () => {
 
   const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
-  // Force review changes UI to close when there are no active changes
-  useEffect(() => {
-    if (Object.keys(changes).length === 0) {
-      setIsReviewOpen(false);
-      return;
-    }
-  }, [changes, setIsReviewOpen]);
-
   // Publishing logic
   const { data: signer } = useSigner();
   const handlePublish = async () => {
