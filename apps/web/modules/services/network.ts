@@ -25,6 +25,7 @@ import {
   fromNetworkActions,
   fromNetworkTriples,
   NetworkEntity,
+  NetworkProposal,
   NetworkTriple,
   NetworkVersion,
 } from './network-local-mapping';
@@ -564,18 +565,7 @@ export class Network implements INetwork {
 
     const json: {
       data: {
-        proposals: {
-          id: string;
-          createdBy: {
-            id: string;
-          };
-          createdAt: number;
-          name?: string;
-          description?: string;
-          space: string;
-          status: 'APPROVED';
-          proposedVersions: NetworkVersion[];
-        }[];
+        proposals: NetworkProposal[];
       };
       errors: any[];
     } = await response.json();
@@ -593,12 +583,14 @@ export class Network implements INetwork {
       const result: Proposal[] = json.data.proposals.map(p => {
         return {
           ...p,
-
+          name: p.name ?? '',
+          description: p.description ?? '',
           // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-          createdBy: profiles[p.createdBy?.id] ?? { id: p.createdBy.id },
+          createdBy: profiles[p.createdBy.id] ?? p.createdBy,
           proposedVersions: p.proposedVersions.map(v => {
             return {
               ...v,
+              createdBy: profiles[v.createdBy.id] ?? v.createdBy,
               actions: fromNetworkActions(v.actions, spaceId),
             };
           }),
