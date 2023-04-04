@@ -9,7 +9,6 @@ import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Spacer } from '~/modules/design-system/spacer';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { usePageName } from '~/modules/stores/use-page-name';
 import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
@@ -24,7 +23,6 @@ export function Navbar({ onSearchClick }: Props) {
   const asPath = router.asPath;
   const components = asPath.split('/');
   const { spaces } = useSpaces();
-  const { pageName } = usePageName();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
@@ -42,14 +40,14 @@ export function Navbar({ onSearchClick }: Props) {
   const getActiveImage = () => {
     if (isHomePage) return '/spaces.png';
     if (isSpacePage) return spaceImages[activeBreadcrumbName ?? ''] ?? '';
-    if (isEntityPage) return '/facts.svg';
+    if (isEntityPage) return spaceImages[components[2]] ?? '';
     return '/spaces.png';
   };
 
   const getActiveName = () => {
     if (isHomePage) return 'Spaces';
     if (isSpacePage) return spaceNames[activeBreadcrumbName ?? ''] ?? '';
-    if (isEntityPage) return pageName ?? '';
+    if (isEntityPage) return spaceNames[components[2]] ?? '';
     return '';
   };
 
