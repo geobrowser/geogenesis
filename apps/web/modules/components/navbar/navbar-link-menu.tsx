@@ -6,7 +6,6 @@ import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Context } from '~/modules/design-system/icons/context';
 import { Menu } from '~/modules/design-system/menu';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { usePageName } from '~/modules/stores/use-page-name';
 import { Dictionary } from '~/modules/types';
 import { titleCase } from '~/modules/utils';
 import { NavbarLinkMenuItem } from './navbar-link-menu-item';
@@ -16,7 +15,6 @@ export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
   const { spaces } = useSpaces();
-  const { pageName } = usePageName();
 
   const components = router.asPath.split('/');
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
@@ -35,13 +33,13 @@ export function NavbarLinkMenu() {
       trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
     >
       {components.map((component, index) => {
-        if (index === 0) return null; // skip the "Geo" part
+        if (index === 0 || index === 3) return null; // skip the "Geo" part
         const { path, title, img } = getComponentRoute({
           components,
           index,
           spaceNames,
           spaceImages,
-          pageName,
+          pageName: '',
         });
 
         return (

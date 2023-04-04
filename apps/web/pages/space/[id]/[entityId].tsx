@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { useEffect } from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
@@ -13,7 +12,6 @@ import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
-import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
@@ -36,16 +34,8 @@ interface Props {
 }
 
 export default function EntityPage(props: Props) {
-  const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
-
-  // This is a janky way to set the name in the navbar until we have nested layouts
-  // and the navbar can query the name itself in a nice way.
-  useEffect(() => {
-    if (props.name !== props.id) setPageName(props.name);
-    return () => setPageName('');
-  }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;

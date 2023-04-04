@@ -112,9 +112,14 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: { id: string; name: string | null }[];
+  types: EntityType[];
   triples: Triple[];
   nameTripleSpace?: string;
+};
+
+export type EntityType = {
+  id: string;
+  name: string | null;
 };
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
