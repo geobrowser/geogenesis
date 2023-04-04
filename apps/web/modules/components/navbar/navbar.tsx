@@ -3,13 +3,11 @@ import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-import { IconButton } from '~/modules/design-system/button';
 import { ChevronRight } from '~/modules/design-system/icons/chevron-right';
-import { Discord } from '~/modules/design-system/icons/discord';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
+import { Icon } from '~/modules/design-system/icon';
 import { Spacer } from '~/modules/design-system/spacer';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
@@ -37,6 +35,8 @@ export function Navbar({ onSearchClick }: Props) {
   const isSpacePage = components.length === 3 && components[1] === 'space';
   const isEntityPage = components.length === 4 && components[1] === 'space';
 
+  // We always want to return the Space as the active breadcrumb on the /[entityId]
+  // and /[id] pages.
   const getActiveImage = () => {
     if (isHomePage) return '/spaces.png';
     if (isSpacePage) return spaceImages[activeBreadcrumbName ?? ''] ?? '';
@@ -79,24 +79,13 @@ export function Navbar({ onSearchClick }: Props) {
       </div>
 
       <div className="flex items-center sm:hidden">
-        <IconButton onClick={onSearchClick} icon="search" />
-        <Spacer width={16} />
-        <DiscordLink />
+        <button className="flex items-center gap-2 text-grey-04 hover:text-text" onClick={onSearchClick}>
+          <Icon icon="search" />
+          <p className="text-input">Search</p>
+        </button>
         <Spacer width={16} />
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
       </div>
     </nav>
-  );
-}
-
-function DiscordLink() {
-  return (
-    <ExternalLink href="https://discord.gg/axFtvyxRNQ">
-      <div className="flex w-[105px] items-center text-button text-grey-04 transition-all duration-150 ease-in-out hover:text-text">
-        <Discord />
-        <Spacer width={8} />
-        <p>Geo Discord</p>
-      </div>
-    </ExternalLink>
   );
 }
