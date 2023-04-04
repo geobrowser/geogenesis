@@ -7,7 +7,9 @@ import {
 import {
   ATTRIBUTE,
   ATTRIBUTES,
+  AVATAR_ATTRIBUTE,
   BLOCKS,
+  COVER_ATTRIBUTE,
   DESCRIPTION,
   FOREIGN_TYPES,
   IMAGE,
@@ -33,8 +35,6 @@ import {
   createVersion,
   getOrCreateActionCount,
   handleAction,
-  handleCreateEntityAction,
-  handleCreateTripleAction,
 } from './actions'
 import { getEntityId, getOrCreateProposal } from './add-entry'
 
@@ -95,6 +95,8 @@ const names: Tuple<string, StringValue>[] = [
     _1: new StringValue(MARKDOWN_CONTENT, 'Markdown Content'),
   },
   { _0: ROW_TYPE, _1: new StringValue(ROW_TYPE, 'Row Type') },
+  { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
+  { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -124,6 +126,8 @@ const types: Tuple<string, string[]>[] = [
   { _0: IMAGE_BLOCK, _1: [IMAGE_ATTRIBUTE, PARENT_ENTITY] },
   { _0: TABLE_BLOCK, _1: [ROW_TYPE, PARENT_ENTITY] },
   { _0: TEXT_BLOCK, _1: [MARKDOWN_CONTENT, PARENT_ENTITY] },
+  { _0: AVATAR_ATTRIBUTE, _1: [IMAGE] },
+  { _0: COVER_ATTRIBUTE, _1: [IMAGE] },
 ]
 
 export function bootstrapRootSpaceCoreTypes(
