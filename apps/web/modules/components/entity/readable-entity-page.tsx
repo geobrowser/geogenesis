@@ -12,7 +12,6 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
-import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { ReferencedByEntity } from './types';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
@@ -58,10 +57,8 @@ export function ReadableEntityPage({
             {name}
           </Text>
         </Truncate>
-        <Spacer height={16} />
-        <EntityPageMetadataHeader versions={versions} />
-        <Spacer height={24} />
-        <EntityTypeChipGroup types={types} />
+        <Spacer height={12} />
+        <EntityPageMetadataHeader versions={versions} types={types} />
         <Spacer height={40} />
         <Editor editable={false} />
         <div className="rounded border border-grey-02 shadow-button">
