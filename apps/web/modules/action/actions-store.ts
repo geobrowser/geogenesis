@@ -52,7 +52,12 @@ export class ActionsStore implements IActionsStore {
     );
     this.allSpacesWithActions$ = makeOptionalComputed(
       [],
-      computed(() => Object.keys(this.actions$.get()).filter(spaceId => this.actions$.get()[spaceId].length > 0) ?? [])
+      computed(
+        () =>
+          Object.keys(this.actions$.get()).filter(
+            spaceId => Action.unpublishedChanges(this.actions$.get()[spaceId]).length > 0
+          ) ?? []
+      )
     );
   }
 
