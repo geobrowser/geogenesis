@@ -324,64 +324,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: `query {
-          startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(
-            query
-          )}, entityOf_: {${entityOfWhere}}}) {
-            id,
-            name
-            entityOf {
-              id
-              stringValue
-              valueId
-              valueType
-              numberValue
-              space {
-                id
-              }
-              entityValue {
-                id
-                name
-              }
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-            }
-          }
-          containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(
-            query
-          )}, entityOf_: {${entityOfWhere}}}) {
-            id,
-            name,
-            entityOf {
-              id
-              stringValue
-              valueId
-              valueType
-              numberValue
-              space {
-                id
-              }
-              entityValue {
-                id
-                name
-              }
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-            }
-          }
-        }`,
+        query: queries.entitiesQuery(query, entityOfWhere),
       }),
     });
 
@@ -417,7 +360,19 @@ export class Network implements INetwork {
         };
       });
 
-      return sortedResultsWithTypesAndDescription;
+      // We filter block entities so we don't clutter entity search results with block entities.
+      // Eventually we might want to let the caller handle the filtering instead of doing it
+      // at the network level here.
+      //
+      // We could also do this filter at the top of the algorithm so we don't apply the extra
+      // transformations onto entities that we are going to filter out.
+      return sortedResultsWithTypesAndDescription.filter(result => {
+        return !(
+          result.types.some(t => t.id === SYSTEM_IDS.TEXT_BLOCK) ||
+          result.types.some(t => t.id === SYSTEM_IDS.TABLE_BLOCK) ||
+          result.types.some(t => t.id === SYSTEM_IDS.IMAGE_BLOCK)
+        );
+      });
     } catch (e) {
       console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
       console.error(e);
