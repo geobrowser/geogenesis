@@ -44,7 +44,7 @@ export function ReadableEntityPage({
   serverCoverUrl,
 }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
   const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
   const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 

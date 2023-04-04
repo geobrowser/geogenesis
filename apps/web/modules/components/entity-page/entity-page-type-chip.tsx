@@ -1,7 +1,15 @@
+import Link from 'next/link';
+import { EntityType } from '~/modules/types';
+import { NavUtils } from '~/modules/utils';
+
 interface Props {
-  typeName: string;
+  type: EntityType;
 }
 
-export function EntityPageTypeChip({ typeName }: Props) {
-  return <div className="rounded-sm bg-divider px-1 text-footnoteMedium text-grey-04">{typeName}</div>;
+export function EntityPageTypeChip({ type }: Props) {
+  return (
+    <Link href={NavUtils.toEntity(type.spaceId, type.id)} passHref>
+      <a className="rounded-sm bg-divider px-1 text-footnoteMedium text-grey-04">{type.name ?? type.id}</a>
+    </Link>
+  );
 }

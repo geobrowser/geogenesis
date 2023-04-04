@@ -3,7 +3,7 @@ import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Value } from '~/modules/value';
 import { Triple } from '../triple';
-import { Action, Entity as EntityType, Triple as TripleType } from '../types';
+import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '../types';
 import { groupBy } from '../utils';
 
 /**
@@ -20,12 +20,12 @@ import { groupBy } from '../utils';
  * We currently only handle description triples whose value is a StringValue. If the value
  * is an EntityValue we assume it's not valid and don't attempt to parse it to render in the UI.
  */
-export function description(triples: TripleType[]): string | null {
+export function description(triples: ITriple[]): string | null {
   const triple = descriptionTriple(triples);
   return triple?.value.type === 'string' ? triple.value.value : null;
 }
 
-export function descriptionTriple(triples: TripleType[]): TripleType | undefined {
+export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(
     triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION || triple.attributeName === SYSTEM_IDS.DESCRIPTION
   );
@@ -39,7 +39,7 @@ export function descriptionTriple(triples: TripleType[]): TripleType | undefined
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: TripleType[], currentSpace?: string): { id: string; name: string | null }[] {
+export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
@@ -47,7 +47,7 @@ export function types(triples: TripleType[], currentSpace?: string): { id: strin
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
+          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name, spaceId: triple.space } : []
         );
       }
 
@@ -57,32 +57,36 @@ export function types(triples: TripleType[], currentSpace?: string): { id: strin
       if (triples.length > 1) {
         return triples
           .filter(triple => triple.space === currentSpace)
-          .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
+          .flatMap(triple =>
+            triple.value.type === 'entity'
+              ? { id: triple.value.id, name: triple.value.name, spaceId: triple.space }
+              : []
+          );
       }
 
       return [];
     })
-    .flatMap(name => (name ? name : []));
+    .flatMap(type => (type ? type : []));
 }
 
 /**
  * This function traverses through all the triples associated with an entity and attempts
  * to find the name of the entity.
  */
-export function name(triples: TripleType[]): string | null {
+export function name(triples: ITriple[]): string | null {
   const triple = nameTriple(triples);
   return triple?.value.type === 'string' ? triple?.value.value : null;
 }
 
-export function nameTriple(triples: TripleType[]): TripleType | undefined {
+export function nameTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
-export function valueTypeTriple(triples: TripleType[]): TripleType | undefined {
+export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
 
-export function valueTypeId(triples: TripleType[]): string | null {
+export function valueTypeId(triples: ITriple[]): string | null {
   // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
   const triple = valueTypeTriple(triples);
   return triple?.value.type === 'entity' ? triple?.value.id : null;
@@ -91,7 +95,7 @@ export function valueTypeId(triples: TripleType[]): string | null {
 /**
  * This function takes an array of triples and maps them to an array of Entity types.
  */
-export function entitiesFromTriples(triples: TripleType[]): EntityType[] {
+export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
   return pipe(
     triples,
     A.groupBy(triple => triple.entityId),
@@ -101,7 +105,7 @@ export function entitiesFromTriples(triples: TripleType[]): EntityType[] {
       // We can do array operations like .concat or .slice to coerce the triples
       // array to a mutable version, but casting is cheaper performance-wise as
       // entitiesFromTriples may be used in performance-heavy situations.
-      const mutableTriples = triples as unknown as TripleType[];
+      const mutableTriples = triples as unknown as ITriple[];
 
       return {
         id: entityId,
@@ -120,10 +124,7 @@ export function entitiesFromTriples(triples: TripleType[]): EntityType[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(
-  actions: Record<string, Action[]>,
-  networkEntities: EntityType[]
-): EntityType[] {
+export function mergeActionsWithEntities(actions: Record<string, Action[]>, networkEntities: IEntity[]): IEntity[] {
   return pipe(
     actions,
     D.values,
@@ -153,7 +154,7 @@ export function mergeActionsWithEntities(
 /**
  * This function traverses through all the triples associated with an entity and attempts to find the avatar URL of the entity.
  */
-export function avatar(triples: TripleType[] | undefined): string | null {
+export function avatar(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
 
   const avatarTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
@@ -165,7 +166,7 @@ export function avatar(triples: TripleType[] | undefined): string | null {
 /**
  * This function traverses through all the triples associated with an entity and attempts to find the cover URL of the entity.
  */
-export function cover(triples: TripleType[] | undefined): string | null {
+export function cover(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
 
   const coverTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);

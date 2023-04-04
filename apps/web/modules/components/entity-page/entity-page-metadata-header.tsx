@@ -1,11 +1,11 @@
-import { Version } from '~/modules/types';
+import { EntityType, Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
 import { A, pipe } from '@mobily/ts-belt';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 
 interface Props {
   versions: Array<Version>;
-  types: Array<string>;
+  types: Array<EntityType>;
 }
 
 export function EntityPageMetadataHeader({ versions, types }: Props) {
@@ -28,8 +28,8 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
         <div className="flex items-center justify-between text-text">
           <ul className="flex items-center gap-1">
             {types.map(t => (
-              <li key={t}>
-                <EntityPageTypeChip typeName={t} />
+              <li key={t.id}>
+                <EntityPageTypeChip type={t} />
               </li>
             ))}
           </ul>

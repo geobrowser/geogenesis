@@ -67,7 +67,7 @@ export function EditableEntityPage({
   const nameTriple = Entity.nameTriple(triples);
 
   const name = Entity.name(triples) ?? serverName;
-  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
   const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
   const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 
