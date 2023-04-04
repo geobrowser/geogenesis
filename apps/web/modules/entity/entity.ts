@@ -47,7 +47,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name, spaceId: triple.space } : []
+          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
         );
       }
 
@@ -57,11 +57,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
       if (triples.length > 1) {
         return triples
           .filter(triple => triple.space === currentSpace)
-          .flatMap(triple =>
-            triple.value.type === 'entity'
-              ? { id: triple.value.id, name: triple.value.name, spaceId: triple.space }
-              : []
-          );
+          .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
       }
 
       return [];

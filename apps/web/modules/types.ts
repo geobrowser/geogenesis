@@ -120,7 +120,6 @@ export type Entity = {
 export type EntityType = {
   id: string;
   name: string | null;
-  spaceId: string;
 };
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
