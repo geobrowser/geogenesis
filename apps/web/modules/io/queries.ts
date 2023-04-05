@@ -56,7 +56,7 @@ export const entitiesQuery = (query: string | undefined, entityOfWhere: string) 
 }`;
 
 export const proposalsQuery = (spaceId: string) => `query {
-  proposals(first: 5, where: {space: ${JSON.stringify(spaceId)}}, orderBy: createdAt, orderDirection: desc) {
+  proposals(first: 10, where: {space: ${JSON.stringify(spaceId)}}, orderBy: createdAt, orderDirection: desc) {
     id
     name
     description
@@ -97,7 +97,7 @@ export const proposalsQuery = (spaceId: string) => `query {
 }`;
 
 export const proposedVersionsQuery = (entityId: string) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, orderBy: createdAt, orderDirection: desc, first: 5) {
+  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, orderBy: createdAt, orderDirection: desc, first: 10) {
     id
     name
     createdAt
