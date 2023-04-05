@@ -583,8 +583,8 @@ export class Network implements INetwork {
       const result: Proposal[] = json.data.proposals.map(p => {
         return {
           ...p,
-          name: p.name ?? '',
-          description: p.description ?? '',
+          name: p.name,
+          description: p.description,
           // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
           createdBy: profiles[p.createdBy.id] ?? p.createdBy,
           proposedVersions: p.proposedVersions.map(v => {
@@ -641,7 +641,7 @@ export class Network implements INetwork {
       // of the user who created the ProposedVersion.
       const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-      const result = json.data.proposedVersions.map((v, i) => {
+      const result = json.data.proposedVersions.map(v => {
         return {
           ...v,
           // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { useState } from 'react';
 
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -16,7 +15,6 @@ interface Props {
 }
 
 export function Triples({ spaceId, initialTriples }: Props) {
-  const [showPredefinedQueries, setShowPredefinedQueries] = useState(true);
   const tripleStore = useTriples();
 
   return (

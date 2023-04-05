@@ -2,6 +2,7 @@ import { EntityType, Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
 import { A, pipe } from '@mobily/ts-belt';
 import { EntityPageTypeChip } from './entity-page-type-chip';
+import { Action } from '~/modules/action';
 
 interface Props {
   versions: Array<Version>;
@@ -30,8 +31,14 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
 
         {contributors.length > 0 && (
           <HistoryPanel>
-            {versions.map(version => (
-              <HistoryItem key={version.id} version={version} />
+            {versions.map(v => (
+              <HistoryItem
+                key={v.id}
+                changeCount={Action.getChangeCount(v.actions)}
+                createdAt={v.createdAt}
+                createdBy={v.createdBy}
+                name={v.name}
+              />
             ))}
           </HistoryPanel>
         )}

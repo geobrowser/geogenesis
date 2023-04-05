@@ -148,8 +148,8 @@ export type Proposal = {
 
 export type Version = {
   id: string;
-  name: string;
-  description?: string;
+  name: string | null;
+  description: string | null;
   createdBy: Profile;
   createdAt: number;
   actions: Action[];
