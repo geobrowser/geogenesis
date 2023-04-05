@@ -1,20 +1,21 @@
 import pluralize from 'pluralize';
-import { Action } from '~/modules/action';
 import { Text } from '~/modules/design-system/text';
-import { Version } from '~/modules/types';
 import { formatShortAddress, GeoDate } from '~/modules/utils';
 import { Avatar } from '~/modules/avatar';
+import { Profile } from '~/modules/types';
 
 interface Props {
-  version: Version;
-}
-
-export function HistoryItem({ version }: Props) {
   // We want to group together all changes to the same property into a single
   // change count. i.e., a proposed change may have multiple action taken on
   // the same triple, we want to make sure that only renders as a single change.
-  const uniqueTripleChanges = Action.getChangeCount(version.actions);
-  const lastEditedDate = GeoDate.fromGeoTime(version.createdAt);
+  changeCount: number;
+  createdAt: number;
+  createdBy: Profile;
+  name: string | null;
+}
+
+export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) {
+  const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023
   const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
@@ -32,7 +33,7 @@ export function HistoryItem({ version }: Props) {
 
   // Older versions from before we added proposal names may not have a name, so we fall back to
   // an address – date format.
-  const versionName = version.name ?? `${formatShortAddress(version.createdBy.id)} – ${formattedLastEditedDate}`;
+  const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
 
   // Names might be very long, so we truncate to make it work with the menu UI
   const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
@@ -48,17 +49,16 @@ export function HistoryItem({ version }: Props) {
         <div className="flex items-center justify-between gap-1">
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
             <Avatar
-              alt={`Avatar for ${version.createdBy.name ?? version.createdBy.id}`}
-              avatarUrl={version.createdBy.avatarUrl}
-              value={version.createdBy.name ?? version.createdBy.id}
+              alt={`Avatar for ${createdBy.name ?? createdBy.id}`}
+              avatarUrl={createdBy.avatarUrl}
+              value={createdBy.name ?? createdBy.id}
             />
           </div>
-          <p className="text-smallButton">{version.createdBy.name ?? formatShortAddress(version.createdBy.id)}</p>
+          <p className="text-smallButton">{createdBy.name ?? formatShortAddress(createdBy.id)}</p>
         </div>
         <div className="flex">
           <p className="text-smallButton">
-            {uniqueTripleChanges} {pluralize('edit', uniqueTripleChanges)} · {formattedLastEditedDate} ·{' '}
-            {lastEditedTime}
+            {changeCount} {pluralize('edit', changeCount)} · {formattedLastEditedDate} · {lastEditedTime}
           </p>
         </div>
       </div>

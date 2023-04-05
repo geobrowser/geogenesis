@@ -137,10 +137,19 @@ export interface Cell {
 
 export type Row = Record<string, Cell>;
 
+export type Proposal = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  proposedVersions: Version[];
+};
+
 export type Version = {
   id: string;
-  name: string;
-  description?: string;
+  name: string | null;
+  description: string | null;
   createdBy: Profile;
   createdAt: number;
   actions: Action[];

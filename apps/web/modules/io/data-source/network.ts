@@ -15,6 +15,7 @@ import {
   FilterField,
   FilterState,
   Profile,
+  Proposal,
   ReviewState,
   Space,
   Triple as TripleType,
@@ -24,6 +25,7 @@ import {
   fromNetworkActions,
   fromNetworkTriples,
   NetworkEntity,
+  NetworkProposal,
   NetworkTriple,
   NetworkVersion,
 } from './network-local-mapping';
@@ -543,6 +545,67 @@ export class Network implements INetwork {
     return { columns: [...defaultColumns, ...schemaColumns] };
   };
 
+  fetchProposals = async (spaceId: string, abortController?: AbortController) => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: queries.proposalsQuery(spaceId),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch proposals, spaceId: ${spaceId}`);
+      console.error(`Failed proposed proposals fetch response text: ${await response.text()}`);
+      return [];
+    }
+
+    const json: {
+      data: {
+        proposals: NetworkProposal[];
+      };
+      errors: any[];
+    } = await response.json();
+
+    try {
+      // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
+      // of the user and fetch the Profile for the user with the matching wallet address.
+      const maybeProfiles = await Promise.all(json.data.proposals.map(v => this.fetchProfile(v.createdBy?.id)));
+
+      // Create a map of wallet address -> profile so we can look it up when creating the application
+      // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
+      // of the user who created the ProposedVersion.
+      const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
+
+      const result: Proposal[] = json.data.proposals.map(p => {
+        return {
+          ...p,
+          name: p.name,
+          description: p.description,
+          // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
+          createdBy: profiles[p.createdBy.id] ?? p.createdBy,
+          proposedVersions: p.proposedVersions.map(v => {
+            return {
+              ...v,
+              createdBy: profiles[v.createdBy.id] ?? v.createdBy,
+              actions: fromNetworkActions(v.actions, spaceId),
+            };
+          }),
+        };
+      });
+
+      return result;
+    } catch (e) {
+      console.error(`Unable to fetch proposals, spaceId: ${spaceId}`);
+      console.error(e);
+      console.error(json.errors);
+      return [];
+    }
+  };
+
   fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
@@ -578,7 +641,7 @@ export class Network implements INetwork {
       // of the user who created the ProposedVersion.
       const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-      const result = json.data.proposedVersions.map((v, i) => {
+      const result = json.data.proposedVersions.map(v => {
         return {
           ...v,
           // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
