@@ -138,7 +138,7 @@ export const getValue = (action: Action): string | null => {
     case 'string':
       return checkedAction.value.value;
     case 'entity':
-      return checkedAction.value.name;
+      return checkedAction.value.id;
     case 'image':
       return checkedAction.value.value;
   }
