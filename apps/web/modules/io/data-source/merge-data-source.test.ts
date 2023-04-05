@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { CreateTripleAction, StringValue, Triple } from '~/modules/types';
-import { MockNetwork, makeStubTriple } from './mock-network';
+import { MockNetwork, makeStubTriple } from '../mocks/mock-network';
 import { Merged as MergeDataSource } from './merged';
 
 describe('MergeDataSource merges local triples with network triples', () => {

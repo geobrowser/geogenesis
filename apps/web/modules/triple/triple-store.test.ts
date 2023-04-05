@@ -2,12 +2,12 @@ import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 
 import { ActionsStore } from '../action';
-import { makeStubTriple, MockNetwork } from '../io/data-source/mock-network';
+import { MockNetworkData } from '../io/';
 import { TripleStore } from './triple-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
-    const network = new MockNetwork();
+    const network = new MockNetworkData.MockNetwork();
     const store = new TripleStore({
       api: network,
       space: 's',
@@ -18,8 +18,8 @@ describe('TripleStore', () => {
   });
 
   it('Computes triples from page size', async () => {
-    const initialTriples = [makeStubTriple('Alice')];
-    const network = new MockNetwork({ triples: initialTriples });
+    const initialTriples = [MockNetworkData.makeStubTriple('Alice')];
+    const network = new MockNetworkData.MockNetwork({ triples: initialTriples });
 
     const store = new TripleStore({
       api: network,
@@ -31,6 +31,6 @@ describe('TripleStore', () => {
 
     await when(() => store.triples$.get().length > 0);
 
-    expect(store.triples$.get()).toStrictEqual([makeStubTriple('Alice')]);
+    expect(store.triples$.get()).toStrictEqual([MockNetworkData.makeStubTriple('Alice')]);
   });
 });

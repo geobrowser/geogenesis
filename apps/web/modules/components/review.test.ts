@@ -1,6 +1,6 @@
-import { describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { makeStubTriple, makeStubRelationAttribute } from '~/modules/io/data-source/mock-network';
+import { MockNetworkData } from '~/modules/io';
 import { getChanges } from '~/modules/components/review';
 import type { Action } from '~/modules/types';
 import type { Changes } from '~/modules/components/review';
@@ -8,23 +8,23 @@ import type { Changes } from '~/modules/components/review';
 const STRING_ACTIONS: Array<Action> = [
   {
     type: 'createTriple',
-    ...makeStubTriple('Devin'),
+    ...MockNetworkData.makeStubTriple('Devin'),
   },
   {
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
   },
   {
     type: 'deleteTriple',
-    ...makeStubTriple('Bob'),
+    ...MockNetworkData.makeStubTriple('Bob'),
   },
 ];
 
@@ -78,11 +78,11 @@ const STRING_CHANGES: Changes = {
 const ENTITY_ACTIONS: Array<Action> = [
   {
     type: 'createTriple',
-    ...makeStubRelationAttribute('Devin'),
+    ...MockNetworkData.makeStubRelationAttribute('Devin'),
   },
   {
     type: 'deleteTriple',
-    ...makeStubRelationAttribute('Bob'),
+    ...MockNetworkData.makeStubRelationAttribute('Bob'),
   },
 ];
 

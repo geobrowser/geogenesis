@@ -1,6 +1,6 @@
-import { describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { makeStubTriple } from '~/modules/io/data-source/mock-network';
+import { MockNetworkData } from '~/modules/io';
 import { Action as ActionType } from '~/modules/types';
 import { getChangeCount, unpublishedChanges } from './action';
 
@@ -8,23 +8,23 @@ import { getChangeCount, unpublishedChanges } from './action';
 const basicActions: ActionType[] = [
   {
     type: 'createTriple',
-    ...makeStubTriple('Devin'),
+    ...MockNetworkData.makeStubTriple('Devin'),
   },
   {
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
   },
   {
     type: 'deleteTriple',
-    ...makeStubTriple('Bob'),
+    ...MockNetworkData.makeStubTriple('Bob'),
   },
 ];
 
@@ -33,11 +33,11 @@ const multipleEditsToSameTriple: ActionType[] = [
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
   },
@@ -45,12 +45,12 @@ const multipleEditsToSameTriple: ActionType[] = [
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:3', value: 'Alice-3' },
     },
   },
@@ -59,23 +59,23 @@ const multipleEditsToSameTriple: ActionType[] = [
 const createEditDeleteSameTriple: ActionType[] = [
   {
     type: 'createTriple',
-    ...makeStubTriple('Devin'),
+    ...MockNetworkData.makeStubTriple('Devin'),
   },
   {
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Devin'),
+      ...MockNetworkData.makeStubTriple('Devin'),
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Devin'),
+      ...MockNetworkData.makeStubTriple('Devin'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
   },
   {
     type: 'deleteTriple',
-    ...makeStubTriple('Devin'),
+    ...MockNetworkData.makeStubTriple('Devin'),
   },
 ];
 
@@ -99,17 +99,17 @@ describe('Action counts', () => {
 const publishedAndUnpublishedActions: ActionType[] = [
   {
     type: 'createTriple',
-    ...makeStubTriple('Alice'),
+    ...MockNetworkData.makeStubTriple('Alice'),
   },
   {
     type: 'editTriple',
     before: {
       type: 'deleteTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
     },
     after: {
       type: 'createTriple',
-      ...makeStubTriple('Alice'),
+      ...MockNetworkData.makeStubTriple('Alice'),
       value: { type: 'string', id: 'string:2', value: 'Alice-2' },
     },
     hasBeenPublished: true,

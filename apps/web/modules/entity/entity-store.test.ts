@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { ActionsStore } from '../action';
-import { makeStubTextAttribute, makeStubTripleWithType, MockNetwork } from '../io/data-source/mock-network';
+import { MockNetworkData } from '../io';
 import { createInitialDefaultTriples, EntityStore } from './entity-store/entity-store';
 
 describe('EntityStore', () => {
   it('Initializes to defaults', async () => {
-    const network = new MockNetwork();
+    const network = new MockNetworkData.MockNetwork();
     const store = new EntityStore({
       id: 'e',
       api: network,
@@ -14,6 +14,8 @@ describe('EntityStore', () => {
       initialTriples: [],
       initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
+      initialBlockIdsTriple: null,
+      initialBlockTriples: [],
     });
 
     const defaultTriples = createInitialDefaultTriples('s', 'e');
@@ -29,11 +31,11 @@ describe('EntityStore', () => {
   });
 
   it('Returns schema placeholders for text attributes', async () => {
-    const typeTriple = makeStubTripleWithType('SomeTypeId');
-    const textAttribute = makeStubTextAttribute('Nickname');
+    const typeTriple = MockNetworkData.makeStubTripleWithType('SomeTypeId');
+    const textAttribute = MockNetworkData.makeStubTextAttribute('Nickname');
     const initialEntityStoreTriples = [typeTriple];
 
-    const network = new MockNetwork({ triples: [textAttribute] });
+    const network = new MockNetworkData.MockNetwork({ triples: [textAttribute] });
 
     const store = new EntityStore({
       id: 'e',
@@ -42,6 +44,8 @@ describe('EntityStore', () => {
       initialTriples: initialEntityStoreTriples,
       initialSchemaTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
+      initialBlockIdsTriple: null,
+      initialBlockTriples: [],
     });
 
     expect(store.schemaTriples$.get()).toHaveLength(3);

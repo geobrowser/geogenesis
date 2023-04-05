@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EntityStoreProvider } from '~/modules/entity';
 import { Providers } from '~/modules/providers';
-import { makeStubTriple } from '~/modules/io/data-source/mock-network';
+import { MockNetworkData } from '~/modules/io';
 import { EditableEntityPage } from './editable-entity-page';
 
 describe('Editable Entity Page', () => {
@@ -14,23 +14,35 @@ describe('Editable Entity Page', () => {
     render(
       <Providers>
         <EntityStoreProvider
-          id={'1'}
-          spaceId={'1'}
+          id="1"
+          spaceId="1"
           initialBlockIdsTriple={null}
           initialBlockTriples={[]}
           initialTriples={[]}
           initialSchemaTriples={[
-            { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
+            {
+              ...MockNetworkData.makeStubTriple('Schema'),
+              attributeName: 'Schema',
+              attributeId: 'Schema',
+              placeholder: true,
+            },
           ]}
         >
           <EditableEntityPage
             id="1"
             name="Banana"
-            space="1"
+            spaceId="1"
             versions={[]}
             triples={[]}
+            serverAvatarUrl={null}
+            serverCoverUrl={null}
             schemaTriples={[
-              { ...makeStubTriple('Schema'), attributeName: 'Schema', attributeId: 'Schema', placeholder: true },
+              {
+                ...MockNetworkData.makeStubTriple('Schema'),
+                attributeName: 'Schema',
+                attributeId: 'Schema',
+                placeholder: true,
+              },
             ]}
           />
         </EntityStoreProvider>
@@ -47,14 +59,14 @@ describe('Editable Entity Page', () => {
     render(
       <Providers>
         <EntityStoreProvider
-          id={'1'}
-          spaceId={'1'}
+          id="1"
+          spaceId="1"
           initialBlockIdsTriple={null}
           initialBlockTriples={[]}
           initialTriples={[]}
           initialSchemaTriples={[
             {
-              ...makeStubTriple('Schema'),
+              ...MockNetworkData.makeStubTriple('Schema'),
               attributeName: 'Schema',
               attributeId: 'Schema',
               value: {
@@ -69,12 +81,14 @@ describe('Editable Entity Page', () => {
           <EditableEntityPage
             id="1"
             name="Banana"
-            space="1"
+            spaceId="1"
             versions={[]}
             triples={[]}
+            serverAvatarUrl={null}
+            serverCoverUrl={null}
             schemaTriples={[
               {
-                ...makeStubTriple('Schema'),
+                ...MockNetworkData.makeStubTriple('Schema'),
                 attributeName: 'Schema',
                 attributeId: 'Schema',
                 value: {

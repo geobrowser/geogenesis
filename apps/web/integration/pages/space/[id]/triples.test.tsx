@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
-import { makeStubTriple } from '~/modules/io/data-source/mock-network';
+import { MockNetworkData } from '~/modules/io';
 import TriplesPage from '~/pages/space/[id]/triples';
 
 describe('Space page', () => {
@@ -30,7 +30,12 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[makeStubTriple('Alice')]} />
+        <TriplesPage
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTriples={[MockNetworkData.makeStubTriple('Alice')]}
+        />
       </Providers>
     );
 

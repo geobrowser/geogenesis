@@ -3,7 +3,7 @@ import { observable } from '@legendapp/state';
 import { Entity } from '../../entity';
 
 import { Triple } from '../../types';
-import { FetchTriplesOptions, INetwork } from './network';
+import { FetchTriplesOptions, INetwork } from '../data-source/network';
 
 export const makeStubTriple = (name: string): Triple => {
   return {
