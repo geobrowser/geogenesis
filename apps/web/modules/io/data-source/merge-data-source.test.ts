@@ -1,9 +1,9 @@
-import { describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { CreateTripleAction, StringValue, Triple } from '~/modules/types';
-import { MockNetwork, makeStubTriple } from '../mock-network';
-import { MergeDataSource } from './merge-data-source';
+import { MockNetwork, makeStubTriple } from './mock-network';
+import { Merged as MergeDataSource } from './merged';
 
 describe('MergeDataSource merges local triples with network triples', () => {
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -56,7 +56,6 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entities = await mergedNetwork.fetchEntities({
-      space: stubTriple.space,
       query: '',
       filter: [],
     });
@@ -85,7 +84,6 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     const mergedNetwork = new MergeDataSource({ api, store });
     const entities = await mergedNetwork.fetchEntities({
-      space: stubTriple.space,
       query: 'Bob',
       filter: [],
     });

@@ -1,6 +1,6 @@
 import { describe, expect } from 'vitest';
 
-import { makeStubTriple, makeStubRelationAttribute } from '~/modules/services/mock-network';
+import { makeStubTriple, makeStubRelationAttribute } from '~/modules/io/data-source/mock-network';
 import { getChanges } from '~/modules/components/review';
 import type { Action } from '~/modules/types';
 import type { Changes } from '~/modules/components/review';

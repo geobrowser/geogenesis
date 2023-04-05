@@ -2,7 +2,7 @@ import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 
 import { ActionsStore } from '../action';
-import { makeStubTriple, MockNetwork } from '../services/mock-network';
+import { makeStubTriple, MockNetwork } from '../io/data-source/mock-network';
 import { TripleStore } from './triple-store';
 
 describe('TripleStore', () => {

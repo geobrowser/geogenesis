@@ -1,18 +1,16 @@
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import { A, G, pipe, S } from '@mobily/ts-belt';
+import { A, S } from '@mobily/ts-belt';
 import { useMemo } from 'react';
 
 import { Services } from '~/modules/services';
-import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 import { ActionsStore, useActionsStoreContext } from '../action';
-import { Entity } from '../entity';
-import { MergeDataSource } from '../services/io/merge-data-source';
 import { Entity as EntityType, FilterState } from '../types';
+import { MergedData, NetworkData } from '~/modules/io';
 
 interface EntityAutocompleteOptions {
-  api: INetwork;
+  api: NetworkData.INetwork;
   spaceId?: string;
   ActionsStore: ActionsStore;
   filter?: FilterState;
@@ -23,10 +21,10 @@ class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
-  mergedDataSource: MergeDataSource;
+  mergedDataSource: MergedData;
 
   constructor({ api, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
-    this.mergedDataSource = new MergeDataSource({ api, store: ActionsStore });
+    this.mergedDataSource = new MergedData({ api, store: ActionsStore });
 
     this.results$ = makeOptionalComputed(
       [],

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ActionsStore } from '../action';
-import { makeStubTextAttribute, makeStubTripleWithType, MockNetwork } from '../services/mock-network';
+import { makeStubTextAttribute, makeStubTripleWithType, MockNetwork } from '../io/data-source/mock-network';
 import { createInitialDefaultTriples, EntityStore } from './entity-store/entity-store';
 
 describe('EntityStore', () => {

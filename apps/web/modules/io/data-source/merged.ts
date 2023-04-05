@@ -3,7 +3,7 @@ import { ActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { OmitStrict, Version } from '~/modules/types';
-import { INetwork } from '../network';
+import { INetwork } from './network';
 
 interface MergeDataSourceOptions {
   api: INetwork;
@@ -12,7 +12,7 @@ interface MergeDataSourceOptions {
 
 interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile'> {}
 
-export class MergeDataSource implements IMergeDataSource {
+export class Merged implements IMergeDataSource {
   private api: INetwork;
   private store: ActionsStore;
 

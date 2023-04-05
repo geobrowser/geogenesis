@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EntityStoreProvider } from '~/modules/entity';
 import { Providers } from '~/modules/providers';
-import { makeStubTriple } from '~/modules/services/mock-network';
+import { makeStubTriple } from '~/modules/io/data-source/mock-network';
 import { EditableEntityPage } from './editable-entity-page';
 
 describe('Editable Entity Page', () => {

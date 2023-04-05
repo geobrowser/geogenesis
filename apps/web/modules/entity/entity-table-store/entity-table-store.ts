@@ -8,7 +8,7 @@ import { ID } from '~/modules/id';
 import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
-import { INetwork } from '../../services/network';
+import { NetworkData } from '~/modules/io';
 import { Column, FilterState, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
@@ -33,7 +33,7 @@ interface IEntityTableStore {
 }
 
 interface IEntityTableStoreConfig {
-  api: INetwork;
+  api: NetworkData.INetwork;
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
@@ -63,7 +63,7 @@ export function initialFilterState(): FilterState {
 }
 
 export class EntityTableStore implements IEntityTableStore {
-  private api: INetwork;
+  private api: NetworkData.INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   unpublishedColumns$: ObservableComputed<Column[]>;

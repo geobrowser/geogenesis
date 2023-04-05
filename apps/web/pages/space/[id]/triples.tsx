@@ -9,7 +9,7 @@ import { Triples } from '~/modules/components/triples';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Params } from '~/modules/params';
-import { Network } from '~/modules/services/network';
+import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { DEFAULT_PAGE_SIZE, TripleStoreProvider } from '~/modules/triple';
 import { Triple } from '~/modules/types';
@@ -48,7 +48,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new Network(storage, config.subgraph);
+  const network = new NetworkData.Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
