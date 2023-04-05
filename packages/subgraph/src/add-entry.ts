@@ -6,6 +6,7 @@ import { LogEntry, Proposal } from '../generated/schema'
 import {
   createProposedVersion,
   createVersion,
+  getOrCreateAccount,
   getOrCreateAction,
   getOrCreateActionCount,
   handleAction,
@@ -111,16 +112,18 @@ function handleActionData(
 
 export function getOrCreateProposal(
   id: string,
-  createdBy: string,
-  createdAt: BigInt
+  createdBy: Address,
+  createdAt: BigInt,
+  space: string
 ): Proposal {
   let proposal = Proposal.load(id)
   if (!proposal) {
     proposal = new Proposal(id)
     proposal.status = 'APPROVED' // NOTE Hardcoding this until we have a governance mechanism
     proposal.createdAt = createdAt
-    proposal.createdBy = createdBy
+    proposal.createdBy = getOrCreateAccount(createdBy).id
     proposal.proposedVersions = []
+    proposal.space = space
     proposal.save()
   }
   return proposal as Proposal
@@ -149,7 +152,7 @@ function handleRoot(
   const proposalId = getOrCreateActionCount().count.toString()
 
   // create a proposal entity
-  getOrCreateProposal(proposalId, createdBy.toString(), createdAtTimestamp)
+  getOrCreateProposal(proposalId, createdBy, createdAtTimestamp, space)
 
   // entityId -> actions
   let actionsByEntity: Map<string, Action[]> = new Map()

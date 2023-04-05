@@ -113,7 +113,7 @@ export function createProposedVersion(
   return version
 }
 
-function getOrCreateAccount(address: Address): Account {
+export function getOrCreateAccount(address: Address): Account {
   let account = Account.load(address.toHexString())
   if (account == null) {
     account = new Account(address.toHexString())

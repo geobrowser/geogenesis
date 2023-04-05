@@ -2,6 +2,7 @@ import { EntityType, Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
 import { A, pipe } from '@mobily/ts-belt';
 import { EntityPageTypeChip } from './entity-page-type-chip';
+import { Action } from '~/modules/action';
 
 interface Props {
   versions: Array<Version>;
@@ -17,29 +18,28 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
     A.flatMap(version => version.createdBy)
   );
 
-  // We restrict how many versions we render in the history panel. We don't
-  // restrict on the subgraph since it would result in an inaccurate contributor
-  // count since we would only have queried the most recent 10 versions.
-  const mostRecentVersions = A.take(versions, 10);
-
   return (
-    <div>
-      {contributors.length > 0 && (
-        <div className="flex items-center justify-between text-text">
-          <ul className="flex items-center gap-1">
-            {types.map(t => (
-              <li key={t.id}>
-                <EntityPageTypeChip type={t} />
-              </li>
-            ))}
-          </ul>
+    <div className="flex items-center justify-between text-text">
+      <ul className="flex items-center gap-1">
+        {types.map(t => (
+          <li key={t.id}>
+            <EntityPageTypeChip type={t} />
+          </li>
+        ))}
+      </ul>
 
-          <HistoryPanel>
-            {mostRecentVersions.map(version => (
-              <HistoryItem key={version.id} version={version} />
-            ))}
-          </HistoryPanel>
-        </div>
+      {contributors.length > 0 && (
+        <HistoryPanel>
+          {versions.map(v => (
+            <HistoryItem
+              key={v.id}
+              changeCount={Action.getChangeCount(v.actions)}
+              createdAt={v.createdAt}
+              createdBy={v.createdBy}
+              name={v.name}
+            />
+          ))}
+        </HistoryPanel>
       )}
     </div>
   );

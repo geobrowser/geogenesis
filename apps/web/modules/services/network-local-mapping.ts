@@ -39,6 +39,19 @@ export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
   };
 };
 
+export type NetworkProposal = {
+  id: string;
+  createdBy: {
+    id: string;
+  };
+  createdAt: number;
+  name: string | null;
+  description: string | null;
+  space: string;
+  status: 'APPROVED';
+  proposedVersions: NetworkVersion[];
+};
+
 export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {
   switch (networkTriple.valueType) {
     case 'STRING':
