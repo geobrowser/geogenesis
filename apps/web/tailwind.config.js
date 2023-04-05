@@ -11,6 +11,7 @@ module.exports = {
       ctaHover: '#002FD9',
       ctaTertiary: '#F0F3FF',
       purple: '#6833FF',
+      black: '#000000',
       pink: '#FE31C5',
       bg: '#FBFBFB',
       'grey-01': '#F6F6F6',
@@ -20,11 +21,13 @@ module.exports = {
       divider: '#F0F0F0',
       orange: '#FFA134',
       green: '#2ACE9D',
+      successTertiary: '#D4F5EB',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
     },
     borderRadius: {
       none: '0',
+      xs: '2px',
       sm: '4px',
       DEFAULT: '6px',
       full: '9999px',
@@ -78,6 +81,11 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        shimmer: {
+          '100%': {
+            transform: 'translateX(100%)',
+          },
         },
       },
       fontSize: {

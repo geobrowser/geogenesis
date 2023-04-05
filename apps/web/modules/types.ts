@@ -6,7 +6,7 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image';
 
 export type NumberValue = {
   type: 'number';
@@ -26,7 +26,13 @@ export type EntityValue = {
   name: string | null;
 };
 
-export type Value = NumberValue | StringValue | EntityValue;
+export type ImageValue = {
+  type: 'image';
+  id: string;
+  value: string;
+};
+
+export type Value = NumberValue | StringValue | EntityValue | ImageValue;
 
 export type Triple = {
   id: string;
@@ -88,10 +94,14 @@ export type EditTripleAction = {
   after: CreateTripleAction;
 } & Publishable;
 
+// We associate an ID with actions locally so we can diff and merge them as they change locally.
 type Identifiable = {
   id: string;
 };
 
+// We keep published actions optimistically in the store. It can take a while for the blockchain
+// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+// We keep the published actions so we can continue to render them locally while the backend catches up.
 type Publishable = {
   hasBeenPublished?: boolean;
 };
@@ -102,9 +112,14 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: { id: string; name: string | null }[];
+  types: EntityType[];
   triples: Triple[];
   nameTripleSpace?: string;
+};
+
+export type EntityType = {
+  id: string;
+  name: string | null;
 };
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
@@ -121,3 +136,18 @@ export interface Cell {
 }
 
 export type Row = Record<string, Cell>;
+
+export type Version = {
+  id: string;
+  name: string;
+  description?: string;
+  createdBy: Profile;
+  createdAt: number;
+  actions: Action[];
+};
+
+export type Profile = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+};

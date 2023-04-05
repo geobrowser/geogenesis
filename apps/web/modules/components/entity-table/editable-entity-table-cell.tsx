@@ -5,11 +5,10 @@ import { NavUtils } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { DeletableChipButton } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
-import { DebugTriples } from '../debug/debug-triples';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { TableStringField } from '../entity/editable-fields';
+import { TableImageField, TableStringField } from '../entity/editable-fields';
 
 interface Props {
   cell: Cell;
@@ -54,10 +53,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const firstTriple = triples[0];
   const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
+  const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
-  const isEmptyText = isTextValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
 
   const removeEntityTriple = (triple: Triple) => {
@@ -92,6 +91,36 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
+  const uploadImage = (triple: Triple, imageSrc: string) => {
+    send({
+      type: 'UPLOAD_IMAGE',
+      payload: {
+        triple,
+        imageSrc,
+      },
+    });
+  };
+
+  const createImageWithValue = (imageSrc: string) => {
+    send({
+      type: 'CREATE_IMAGE_TRIPLE_WITH_VALUE',
+      payload: {
+        imageSrc,
+        attributeId,
+        attributeName: cellColumnName,
+      },
+    });
+  };
+
+  const removeImage = (triple: Triple) => {
+    send({
+      type: 'REMOVE_IMAGE',
+      payload: {
+        triple,
+      },
+    });
+  };
+
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
       type: 'UPDATE_VALUE',
@@ -113,13 +142,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex w-full flex-wrap gap-2">
       {isPopulatedRelation && (
         <>
           {triples.map(triple => (
             <div key={`entity-${triple.value.id}`}>
               <DeletableChipButton
-                href={NavUtils.toEntity(space, triple.value.id)}
+                href={NavUtils.toEntity(triple.space, triple.value.id)}
                 onClick={() => removeEntityTriple(triple)}
               >
                 <a>{Value.nameOfEntityValue(triple)}</a>
@@ -128,7 +157,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           ))}
 
           <EntityAutocompleteDialog
-            spaceId={space}
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
             entityValueIds={entityValueTriples.map(t => t.value.id)}
           />
@@ -137,7 +165,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
       {isEmptyRelation && (
         <EntityTextAutocomplete
-          spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
@@ -148,7 +175,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         <TableStringField
           placeholder="Add value..."
           onBlur={e =>
-            isEmptyText
+            isEmptyCell
               ? createStringTripleWithValue(e.target.value)
               : updateStringTripleValue(firstTriple, e.target.value)
           }
@@ -156,7 +183,20 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      <DebugTriples triples={triples} className="absolute right-0" />
+      {isImageValueType && (
+        <TableImageField
+          imageSrc={Value.imageValue(firstTriple) || ''}
+          variant="avatar"
+          onImageChange={imageSrc => {
+            isEmptyCell ? createImageWithValue(imageSrc) : uploadImage(firstTriple, imageSrc);
+          }}
+          onImageRemove={() => {
+            removeImage(firstTriple);
+          }}
+        />
+      )}
+
+      {/* <DebugTriples triples={triples} className="absolute" /> */}
     </div>
   );
 });

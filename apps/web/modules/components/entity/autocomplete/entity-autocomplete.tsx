@@ -24,6 +24,7 @@ const StyledContent = (props: ContentProps) => {
       className="z-[1] flex h-full w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02 md:mx-auto md:w-[98vw]"
       align="start"
       avoidCollisions={false}
+      // We force  so we can control exit animations through framer-motion
       forceMount={true}
       {...props}
     />
@@ -35,11 +36,10 @@ const MotionContent = motion(StyledContent);
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
-  spaceId: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Props) {
-  const autocomplete = useAutocomplete({ spaceId });
+export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
+  const autocomplete = useAutocomplete();
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
@@ -54,7 +54,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, spaceId }: Pr
       <AnimatePresence mode="wait">
         {open ? (
           <MotionContent
-            // We force mounting so we can control exit animations through framer-motion
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}

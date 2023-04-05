@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
@@ -5,7 +6,7 @@ import { useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Column, Row } from '../../types';
 import { EntityOthersToast } from '../entity/presence/entity-others-toast';
-import { EntityPresenceProvider } from '../entity/presence/entity-presence-provider';
+import { SpacePresenceProvider } from '../entity/presence/entity-presence-provider';
 import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';
@@ -15,11 +16,17 @@ import { EntityTableErrorBoundary } from './entity-table-error-boundary';
 interface Props {
   spaceId: string;
   spaceName?: string;
-  initialRows: Row[];
-  initialColumns: Column[];
+  initialRows?: Row[];
+  initialColumns?: Column[];
+  showHeader?: boolean;
 }
 
-export function EntityTableContainer({ spaceId, initialColumns, initialRows }: Props) {
+export const EntityTableContainer = memo(function EntityTableContainer({
+  spaceId,
+  initialColumns = [],
+  initialRows = [],
+  showHeader = true,
+}: Props) {
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -27,9 +34,13 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
   return (
     <EntityTableErrorBoundary spaceId={spaceId} typeId={entityTableStore.selectedType?.entityId ?? ''}>
       <PageContainer>
-        <Spacer height={20} />
-        <EntityInput spaceId={spaceId} />
-        <Spacer height={12} />
+        {showHeader && (
+          <>
+            <Spacer height={20} />
+            <EntityInput spaceId={spaceId} />
+            <Spacer height={12} />
+          </>
+        )}
         {/*
         Using a container to wrap the table to make styling borders around
         the table easier. Otherwise we need to do some pseudoselector shenanigans
@@ -80,10 +91,10 @@ export function EntityTableContainer({ spaceId, initialColumns, initialRows }: P
         </PageNumberContainer>
       </PageContainer>
       {isEditor && editable && (
-        <EntityPresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
+        <SpacePresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
           <EntityOthersToast />
-        </EntityPresenceProvider>
+        </SpacePresenceProvider>
       )}
     </EntityTableErrorBoundary>
   );
-}
+});

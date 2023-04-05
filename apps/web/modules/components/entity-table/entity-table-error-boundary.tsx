@@ -13,13 +13,8 @@ interface Props {
 }
 
 export class EntityTableErrorBoundary extends React.Component<Props, State> {
-  private typeId: string;
-  private spaceId: string;
-
-  constructor({ typeId, spaceId, children }: Props) {
-    super({ typeId, spaceId, children });
-    this.typeId = typeId;
-    this.spaceId = spaceId;
+  constructor(props: Props) {
+    super(props);
     this.state = { hasError: false };
   }
 
@@ -31,7 +26,7 @@ export class EntityTableErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: any, errorInfo: any) {
     // You can also log the error to an error reporting service
     console.error(
-      `Error in EntityTableErrorBoundary in space: ${this.spaceId}, typeId: ${this.typeId}`,
+      `Error in EntityTableErrorBoundary in space: ${this.props.spaceId}, typeId: ${this.props.typeId}`,
       error,
       errorInfo
     );

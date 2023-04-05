@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useState } from 'react';
-import clsx from 'classnames';
 import BoringAvatar from 'boring-avatars';
 import pluralize from 'pluralize';
 import { useAccount } from 'wagmi';
@@ -12,7 +11,9 @@ import { SmallButton } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { AvatarGroup } from '~/modules/design-system/avatar-group';
 
+// Formatting for this truncated address differs from the one in utils
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
@@ -23,6 +24,7 @@ export function EntityOthersToast() {
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
 
+  // @TODO: Fetch all user profiles on the client
   // Include me in the list of editors
   const editors = [
     ...others,
@@ -60,13 +62,13 @@ export function EntityOthersToast() {
           className="fixed right-8 bottom-8 w-60 rounded border border-grey-02 bg-white p-3 shadow-lg"
         >
           <div className="flex items-center gap-2">
-            <ul className="flex items-center -space-x-1">
-              {editorsAvatars.map((editor, i) => (
-                <li key={editor.id} className={clsx({ 'rounded-full border border-white': i !== 0 })}>
-                  <BoringAvatar size={16} name={editor.presence.address} variant="pixel" />
-                </li>
+            <AvatarGroup>
+              {editorsAvatars.map((e, i) => (
+                <AvatarGroup.Item key={e.id}>
+                  <BoringAvatar size={12} variant="pixel" name={e.presence.address ?? ''} />
+                </AvatarGroup.Item>
               ))}
-            </ul>
+            </AvatarGroup>
             <Text variant="metadataMedium">
               {editorsCount >= 3 ? '3+' : editorsCount} {pluralize('user', editorsCount)}{' '}
               {editorsCount > 1 ? 'are' : 'is'} editing now
@@ -101,7 +103,6 @@ export function EntityOthersToast() {
             <span style={{ rotate: isExpanded ? '180deg' : '0deg' }}>
               <ChevronDownSmall color="grey-04" />
             </span>
-            <Spacer width={6} />
             {isExpanded ? `Hide ${pluralize('editor', editorsCount)}` : `View ${pluralize('editor', editorsCount)}`}
           </SmallButton>
         </motion.div>

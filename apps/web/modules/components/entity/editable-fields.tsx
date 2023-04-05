@@ -1,6 +1,9 @@
-import * as React from 'react';
-import { useEffect, useRef } from 'react';
 import { cva } from 'class-variance-authority';
+import * as React from 'react';
+import { ChangeEvent, useEffect, useRef } from 'react';
+import Zoom from 'react-medium-image-zoom';
+import { SmallButton, SquareButton } from '~/modules/design-system/button';
+import { Services } from '~/modules/services';
 
 const textareaStyles = cva(
   'w-full h-full resize-none bg-transparent overflow-hidden m-0 p-0 placeholder:text-grey-02 focus:outline-none',
@@ -65,7 +68,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
       if (props.variant === 'body') {
         // This aligns the bottom of the text area with the sum of line heights * number of lines
         // for body text.
-        ref.current.style.height = ref.current.scrollHeight - 4 + 'px';
+        ref.current.style.height = `${ref.current.scrollHeight - 4}px`;
       }
     }
   });
@@ -79,5 +82,144 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
       value={props.value}
       className={textareaStyles({ variant: props.variant })}
     />
+  );
+}
+
+type ImageVariant = 'avatar' | 'banner' | 'default';
+
+interface ImageZoomProps {
+  imageSrc: string;
+  variant?: ImageVariant;
+}
+
+const imageStyles: Record<ImageVariant, React.CSSProperties> = {
+  default: {
+    height: 80,
+  },
+  avatar: {
+    height: 44,
+    width: 44,
+  },
+  banner: {
+    height: 44,
+    width: 240,
+  },
+};
+
+export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
+  return (
+    <Zoom>
+      <div className="relative" style={imageStyles[variant]}>
+        <img src={imageSrc} className="h-full rounded object-cover" />
+      </div>
+    </Zoom>
+  );
+}
+
+interface ImageFieldProps {
+  imageSrc?: string;
+  onImageChange: (imageSrc: string) => void;
+  onImageRemove: () => void;
+  variant?: ImageVariant;
+  horizontal?: boolean;
+}
+
+export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const { network } = Services.useServices();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const file = e.target.files[0];
+      const imageSrc = await network.uploadFile(file);
+      onImageChange(imageSrc);
+    }
+  };
+
+  return (
+    <div>
+      {imageSrc && (
+        <div className="pt-1">
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      )}
+
+      <div className="flex justify-center gap-2 pt-2">
+        <label htmlFor="avatar-file">
+          <SmallButton onClick={handleFileInputClick} icon="upload">
+            Upload
+          </SmallButton>
+        </label>
+        {imageSrc && <SquareButton onClick={onImageRemove} icon="trash" />}
+      </div>
+
+      <input
+        ref={fileInputRef}
+        accept="image/png, image/jpeg"
+        id="avatar-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+export function TableImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const { network } = Services.useServices();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleFileInputClick = () => {
+    // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const file = e.target.files[0];
+      const imageSrc = await network.uploadFile(file);
+      onImageChange(imageSrc);
+    }
+  };
+
+  return (
+    <div className="group flex w-full justify-between">
+      {imageSrc ? (
+        <div>
+          <ImageZoom variant={variant} imageSrc={imageSrc} />
+        </div>
+      ) : (
+        <label htmlFor="avatar-file">
+          <SmallButton onClick={handleFileInputClick} icon="upload">
+            Upload
+          </SmallButton>
+        </label>
+      )}
+
+      {imageSrc && (
+        <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <label htmlFor="avatar-file">
+            <SquareButton onClick={handleFileInputClick} icon="upload" />
+          </label>
+          <SquareButton onClick={onImageRemove} icon="trash" />
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        accept="image/png, image/jpeg"
+        id="avatar-file"
+        onChange={handleChange}
+        type="file"
+        className="hidden"
+      />
+    </div>
   );
 }

@@ -2,6 +2,8 @@ import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
+import { IconName } from '~/modules/design-system/icon';
+import { Image } from '~/modules/design-system/icons/image';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -12,7 +14,6 @@ import { valueTypes } from '~/modules/value-types';
 import { DebugTriples } from '../debug/debug-triples';
 import { useEditEvents } from '../entity/edit-events';
 import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
-
 interface Props {
   column: Column;
   // This spaceId is the spaceId of the attribute, not the current space.
@@ -28,17 +29,17 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   spaceId,
   entityId,
 }: Props) {
-  const { actions, create, update, remove } = useActionsStore(spaceId);
+  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
   const { unpublishedColumns } = useEntityTable();
 
   const localTriples = pipe(
-    Triple.fromActions(actions, column.triples),
+    Triple.fromActions(actionsFromSpace, column.triples),
     A.filter(t => t.entityId === column.id),
     A.uniqBy(t => t.id)
   );
 
   const localCellTriples = pipe(
-    Triple.fromActions(actions, []),
+    Triple.fromActions(actionsFromSpace, []),
     A.filter(triple => triple.attributeId === column.id)
   );
 
@@ -67,7 +68,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const valueType = Entity.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
 
-  const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 
   const onChangeTripleType = (valueType: keyof typeof valueTypes) => {
@@ -96,7 +96,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
       {isUnpublished && (
         <TripleTypeDropdown
-          value={isTextValueType ? 'text' : 'relation'}
+          value={valueTypes[valueType] as IconName}
           options={[
             {
               label: (
@@ -106,9 +106,9 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Text
                 </div>
               ),
-              value: 'text',
-              disabled: false,
+              value: 'string',
               onClick: () => onChangeTripleType(SYSTEM_IDS.TEXT),
+              disabled: false,
             },
             {
               label: (
@@ -118,9 +118,21 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Relation
                 </div>
               ),
-              value: 'relation',
-              disabled: false,
+              value: 'entity',
               onClick: () => onChangeTripleType(SYSTEM_IDS.RELATION),
+              disabled: false,
+            },
+            {
+              label: (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Image />
+                  <Spacer width={8} />
+                  Image
+                </div>
+              ),
+              value: 'image',
+              onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
+              disabled: false,
             },
           ]}
         />

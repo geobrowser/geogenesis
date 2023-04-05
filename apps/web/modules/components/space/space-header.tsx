@@ -12,20 +12,18 @@ interface Props {
 
 export function SpaceHeader({ spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
   return (
-    <div className="flex w-full items-center justify-between">
-      <div className="flex items-center gap-5">
-        <div className="relative h-14 w-14 overflow-hidden rounded">
-          <Image
-            objectFit="cover"
-            layout="fill"
-            src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
-            alt={`Cover image for ${spaceName}`}
-          />
-        </div>
-        <Text variant="mainPage" as="h1">
-          {spaceName}
-        </Text>
+    <div className="flex items-center gap-5">
+      <div className="relative h-14 w-14 overflow-hidden rounded">
+        <Image
+          objectFit="cover"
+          layout="fill"
+          src={spaceImage ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
+          alt={`Cover image for ${spaceName}`}
+        />
       </div>
+      <Text variant="mainPage" as="h1">
+        {spaceName}
+      </Text>
     </div>
   );
 }

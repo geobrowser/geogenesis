@@ -3,6 +3,7 @@ import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { NavUtils } from '../../utils';
+import { ImageZoom } from '../entity/editable-fields';
 import { CellContent } from '../table/cell-content';
 
 interface Props {
@@ -16,7 +17,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
 
   if (isNameCell) {
-    const entityId = cell.triples[0].entityId;
+    const entityId = cell.entityId;
     const value = Entity.name(cell.triples) ?? entityId;
 
     return (
@@ -38,6 +39,9 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
                 {value.name ?? value.id}
               </LinkableChip>
             );
+          }
+          if (value.type === 'image') {
+            return <ImageZoom key={value.id} imageSrc={value.value} variant="avatar" />;
           } else {
             return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
           }

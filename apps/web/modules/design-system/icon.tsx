@@ -18,16 +18,29 @@ import { Search } from '~/modules/design-system/icons/search';
 import { Text } from '~/modules/design-system/icons/text';
 import { Tick } from '~/modules/design-system/icons/tick';
 import { Trash } from '~/modules/design-system/icons/trash';
+import { Upload } from '~/modules/design-system/icons/upload';
+import { History } from './icons/history';
+import { EditorH1 } from './icons/editor-h1';
+import { EditorH2 } from './icons/editor-h2';
+import { EditorH3 } from './icons/editor-h3';
+import { EditorImage } from './icons/editor-image';
+import { EditorTable } from './icons/editor-table';
+import { EditorText } from './icons/editor-text';
+import { Image } from './icons/image';
+import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 
 export type IconName =
+  | 'blank'
   | 'create'
   | 'createSmall'
   | 'publish'
   | 'close'
   | 'eye'
   | 'expand'
+  | 'entity'
   | 'expandSmall'
+  | 'upload'
   | 'contractSmall'
   | 'filter'
   | 'trash'
@@ -36,9 +49,19 @@ export type IconName =
   | 'copy'
   | 'preset'
   | 'relation'
+  | 'plus'
+  | 'string'
+  | 'image'
   | 'text'
   | 'rightArrowLongSmall'
-  | 'search';
+  | 'search'
+  | 'history'
+  | 'editorH1'
+  | 'editorH2'
+  | 'editorH3'
+  | 'editorText'
+  | 'editorImage'
+  | 'editorTable';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -51,7 +74,10 @@ export const Icon = ({ icon, ...rest }: IconProps) => {
   return <Component {...rest} />;
 };
 
+const Blank = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" />;
+
 const icons: Record<IconName, React.ElementType> = {
+  blank: Blank,
   create: Create,
   createSmall: CreateSmall,
   close: Close,
@@ -66,8 +92,20 @@ const icons: Record<IconName, React.ElementType> = {
   facts: Facts,
   copy: Copy,
   preset: Preset,
+  entity: Relation,
   relation: Relation,
   text: Text,
+  plus: Plus,
   rightArrowLongSmall: RightArrowLongSmall,
   search: Search,
+  history: History,
+  editorH1: EditorH1,
+  editorH2: EditorH2,
+  editorH3: EditorH3,
+  editorImage: EditorImage,
+  editorTable: EditorTable,
+  editorText: EditorText,
+  string: Text,
+  image: Image,
+  upload: Upload,
 };

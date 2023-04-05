@@ -6,9 +6,9 @@ html {
 }
 
 body {
-  @apply bg-bg;
+  @apply bg-white;
   font-family: Calibre, sans-serif;
-  text-rendering: 'optimizeLegibility';
+  text-rendering: optimizeLegibility;
 }
 
 html body {
@@ -68,3 +68,14 @@ textarea::placeholder {
 @tailwind components;
 
 @tailwind utilities;
+
+[data-rmiz-btn-unzoom] {
+  /* This is the default unzoom button for the react-medium-image-zoom package*/
+  /* It's styled differently than the rest of our site and animates jankily, so hiding for now */
+  display: none;
+}
+
+[data-rmiz-modal-overlay='visible'] {
+  /* This is the background color of the overlay for the react-medium-image-zoom package*/
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}

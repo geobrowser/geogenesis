@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { useState } from 'react';
+import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import * as React from 'react';
+import { useState } from 'react';
 
 import { SquareButton } from '~/modules/design-system/button';
 import type { IconName } from '~/modules/design-system/icon';
@@ -26,17 +26,17 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
       <AnimatePresence>
         {open && (
           <MotionContent
-            forceMount={true} // We force mounting so we can control exit animations through framer-motion
-            initial={{ opacity: 0, y: -10 }}
-            exit={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            forceMount // We force mounting so we can control exit animations through framer-motion
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{
               duration: 0.1,
               ease: 'easeInOut',
             }}
             align="end"
             sideOffset={2}
-            className="z-10 w-[160px] self-end overflow-hidden rounded border border-grey-02 bg-white"
+            className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded border border-grey-02 bg-white"
           >
             <DropdownPrimitive.Group className="overflow-hidden rounded">
               {options.map((option, index) => (

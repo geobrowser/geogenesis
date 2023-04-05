@@ -1,62 +1,16 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-import { ZERO_WIDTH_SPACE } from '~/modules/constants';
-import { LinkableBreadcrumb } from '~/modules/design-system/breadcrumb';
-import { IconButton } from '~/modules/design-system/button';
-import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
-import { Discord } from '~/modules/design-system/icons/discord';
+import { ChevronRight } from '~/modules/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
+import { Icon } from '~/modules/design-system/icon';
 import { Spacer } from '~/modules/design-system/spacer';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { usePageName } from '~/modules/stores/use-page-name';
-import { Dictionary } from '~/modules/types';
-import { intersperse, titleCase } from '~/modules/utils';
-import { DebugActions } from '../debug/debug-actions';
-import { ExternalLink } from '../external-link';
 import { NavbarActions } from './navbar-actions';
-
-type GetComponentRouteConfig = {
-  components: string[];
-  index: number;
-  spaceNames: Dictionary<string, string>;
-  spaceImages: Dictionary<string, string>;
-  pageName: string;
-};
-
-type ComponentRoute = {
-  title: string;
-  path: string;
-  img: string | null;
-};
-
-function getComponentRoute({
-  components,
-  index,
-  spaceNames,
-  spaceImages,
-  pageName,
-}: GetComponentRouteConfig): ComponentRoute {
-  const component = components[index];
-  const path = components.slice(0, index + 1).join('/');
-
-  const componentName = component.split('?')?.[0];
-
-  switch (components[1]) {
-    case 'space':
-      switch (index) {
-        case 1:
-          return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
-        case 2:
-          return { path, title: spaceNames[componentName] ?? ZERO_WIDTH_SPACE, img: spaceImages[componentName] ?? '' };
-        case 3:
-          return { path, title: pageName || titleCase(componentName), img: '/facts.svg' };
-      }
-  }
-
-  return { path, title: titleCase(component), img: '/spaces.png' };
-}
+import { NavbarBreadcrumb } from './navbar-breadcrumb';
+import { NavbarLinkMenu } from './navbar-link-menu';
 
 interface Props {
   onSearchClick: () => void;
@@ -67,69 +21,78 @@ export function Navbar({ onSearchClick }: Props) {
   const asPath = router.asPath;
   const components = asPath.split('/');
   const { spaces } = useSpaces();
-  const { pageName } = usePageName();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
-  const spaceId = components?.[2]?.split('?')[0];
+  // @TODO: This is all super hacky, there should be a better way of doing this.
+  // If we migrate to Next 13 with nested routes we should be able to clean up
+  // a lot of this since we will know the route structure more explicitly.
+  const activeBreadcrumb = A.last(components);
+  const activeBreadcrumbName = activeBreadcrumb?.split('?')[0];
+
+  const isHomePage = components.length === 2 && components[1] === 'spaces';
+  const isSpacePage = components.length === 3 && components[1] === 'space';
+  const isEntityPage = components.length === 4 && components[1] === 'space';
+
+  // We always want to return the Space as the active breadcrumb on the /[entityId]
+  // and /[id] pages.
+  const getActiveImage = () => {
+    if (isHomePage) return '/spaces.png';
+    if (isSpacePage) return spaceImages[activeBreadcrumbName ?? ''] ?? '';
+    if (isEntityPage) return spaceImages[components[2]] ?? '';
+    return '/spaces.png';
+  };
+
+  const getActiveName = () => {
+    if (isHomePage) return 'Spaces';
+    if (isSpacePage) return spaceNames[activeBreadcrumbName ?? ''] ?? '';
+    if (isEntityPage) return spaceNames[components[2]] ?? '';
+    return '';
+  };
+
+  const getActiveLink = () => {
+    if (isHomePage) return '/spaces';
+    if (isSpacePage) return `/space/${activeBreadcrumbName ?? ''}`;
+    if (isEntityPage) return `/space/${components[2]}`;
+    return '';
+  };
+
   return (
-    <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
-      <div className="flex max-w-[40%] items-center gap-8 overflow-hidden md:max-w-full md:gap-4 [&>a:last-child]:max-w-[99%] [&>a:last-child]:overflow-hidden md:[&>a:nth-of-type(3)]:hidden md:[&>span:nth-of-type(2)]:hidden">
+    <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
+      <div className="flex items-center gap-8 md:gap-4">
         <Link href="/" passHref>
           <a>
             <GeoLogoLarge />
           </a>
         </Link>
-        <div className="flex items-center gap-2 overflow-hidden">
-          {intersperse(
-            components.map((component, index) => {
-              if (index === 0) return null; // skip the "Geo" part
-              const { path, title, img } = getComponentRoute({ components, index, spaceNames, spaceImages, pageName });
+        {!isHomePage && (
+          <div className="flex items-center gap-2">
+            <NavbarLinkMenu />
 
-              return (
-                <LinkableBreadcrumb
-                  isNested={index < components.length - 1}
-                  shouldTruncate={index === 3}
-                  key={index}
-                  href={path}
-                  img={img}
-                >
-                  {title}
-                </LinkableBreadcrumb>
-              );
-            }),
-            ({ index }) => {
-              if (index === 1) return null; // skip the "Geo" part
-              return (
-                <span key={`separator-${index}`} style={{ rotate: '270deg' }}>
-                  <ChevronDownSmall color="grey-03" />
-                </span>
-              );
-            }
-          )}
-        </div>
+            <ChevronRight color="grey-03" />
+
+            {/* 
+              The activeBreadcrumb really only doesn't exist when on the home page,
+              but TypeScript doesn't know that with the current implementation.
+            */}
+            {activeBreadcrumb && (
+              <NavbarBreadcrumb href={getActiveLink()} img={getActiveImage()}>
+                {getActiveName().slice(0, 48) + (getActiveName().length > 48 ? '...' : '')}
+              </NavbarBreadcrumb>
+            )}
+          </div>
+        )}
       </div>
-      <div className="flex items-center">
-        <IconButton onClick={onSearchClick} icon="search" />
-        <Spacer width={16} />
-        <DiscordLink />
+
+      <div className="flex items-center sm:hidden">
+        <button className="flex items-center gap-2 text-grey-04 hover:text-text" onClick={onSearchClick}>
+          <Icon icon="search" />
+          <p className="text-input">Search</p>
+        </button>
         <Spacer width={16} />
         <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
-        <DebugActions spaceId={spaceId ?? ''} />
       </div>
-    </div>
-  );
-}
-
-function DiscordLink() {
-  return (
-    <ExternalLink href="https://discord.gg/axFtvyxRNQ">
-      <div className="flex w-[105px] items-center text-button text-grey-04 transition-all duration-150 ease-in-out hover:text-text">
-        <Discord />
-        <Spacer width={8} />
-        <p>Geo Discord</p>
-      </div>
-    </ExternalLink>
+    </nav>
   );
 }
