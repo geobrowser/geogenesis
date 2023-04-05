@@ -1,7 +1,8 @@
-import { cva } from 'class-variance-authority';
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
+import { cva } from 'class-variance-authority';
 import Zoom from 'react-medium-image-zoom';
+
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
 

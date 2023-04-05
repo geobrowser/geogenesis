@@ -1,7 +1,8 @@
 import { Extension, findChildren } from '@tiptap/core';
+
 import { ID } from '~/modules/id';
 
-const nodeTypes = ['heading', 'paragraph', 'tableNode'];
+const nodeTypes = ['heading', 'paragraph', 'tableNode', 'image'];
 
 export const IdExtension = Extension.create({
   priority: 1000000,
@@ -19,7 +20,7 @@ export const IdExtension = Extension.create({
     ];
   },
   onBlur() {
-    /* 
+    /*
       Responsible for setting the "id" attribute on all news nodes
       Fires before the Editor's onBlur event which saves the editor blocks to the entity store
     */

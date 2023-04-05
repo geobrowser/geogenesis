@@ -18,7 +18,7 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
-import type { Action, CreateTripleAction, DeleteTripleAction, Entity, ReviewState, Space } from '../types';
+import type { Action, Entity, ReviewState, Space } from '../types';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -241,7 +241,7 @@ export const getChanges = (actions: Array<Action>): Changes => {
   actions.forEach((action: Action) => {
     switch (action.type) {
       case 'createTriple': {
-        const actionValue = getActionValue(action);
+        const actionValue = ActionNamespace.getValue(action);
         if (!actionValue) break;
 
         changes[action.entityId] = {
@@ -263,8 +263,8 @@ export const getChanges = (actions: Array<Action>): Changes => {
       }
 
       case 'editTriple': {
-        const beforeActionValue = getActionValue(action.before);
-        const afterActionValue = getActionValue(action.after);
+        const beforeActionValue = ActionNamespace.getValue(action.before);
+        const afterActionValue = ActionNamespace.getValue(action.after);
         if (!beforeActionValue || !afterActionValue) break;
 
         changes[action.before.entityId] = {
@@ -293,7 +293,7 @@ export const getChanges = (actions: Array<Action>): Changes => {
       }
 
       case 'deleteTriple': {
-        const actionValue = getActionValue(action);
+        const actionValue = ActionNamespace.getValue(action);
         if (!actionValue) break;
 
         changes[action.entityId] = {
@@ -317,19 +317,6 @@ export const getChanges = (actions: Array<Action>): Changes => {
   });
 
   return changes;
-};
-
-const getActionValue = (action: CreateTripleAction | DeleteTripleAction): string | null => {
-  switch (action.value.type) {
-    case 'number':
-      return action.value.value;
-    case 'string':
-      return action.value.value;
-    case 'entity':
-      return action.value.name;
-    case 'image':
-      return action.value.value;
-  }
 };
 
 const message: Record<ReviewState, string> = {

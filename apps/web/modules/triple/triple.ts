@@ -182,3 +182,16 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
     return newTriple;
   });
 }
+
+export const getValue = (triple: Triple): string | null => {
+  switch (triple.value.type) {
+    case 'number':
+      return triple.value.value;
+    case 'string':
+      return triple.value.value;
+    case 'entity':
+      return triple.value.id;
+    case 'image':
+      return triple.value.value;
+  }
+};

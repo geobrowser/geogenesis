@@ -3,6 +3,7 @@ import { batch, computed, Observable, observable, ObservableComputed, observe } 
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
+
 import { ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/entity/editor/editor';
 import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
@@ -181,6 +182,22 @@ export class EntityStore implements IEntityStore {
           const rowTypeTriple = blockTriples.find(
             triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
           );
+          const imageTriple = blockTriples.find(
+            triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_ATTRIBUTE
+          );
+
+          if (imageTriple) {
+            return {
+              type: 'image',
+              attrs: {
+                spaceId: this.spaceId,
+                id: blockId,
+                src: Triple.getValue(imageTriple),
+                alt: '',
+                title: '',
+              },
+            };
+          }
 
           if (rowTypeTriple) {
             return {
@@ -361,18 +378,15 @@ export class EntityStore implements IEntityStore {
     return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
   };
 
-  /* 
+  /*
   Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   We don't support changing types of blocks, so all we need to do is create a new block with the new type
   */
   createBlockTypeTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const entityName = this.nodeName(node);
-    const isTableNode = node.type === 'tableNode';
 
-    const blockTypeValue: EntityValue = isTableNode
-      ? { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' }
-      : { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+    const blockTypeValue: EntityValue = getBlockTypeValue(node.type);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.TYPES });
 
@@ -390,8 +404,8 @@ export class EntityStore implements IEntityStore {
     }
   };
 
-  /* 
-  Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK  
+  /*
+  Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
@@ -426,9 +440,10 @@ export class EntityStore implements IEntityStore {
   /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
   upsertBlockMarkdownTriple = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
+    const isImageNode = node.type === 'image';
     const isTableNode = node.type === 'tableNode';
 
-    if (isTableNode) {
+    if (isImageNode || isTableNode) {
       return null;
     }
 
@@ -518,9 +533,32 @@ export class EntityStore implements IEntityStore {
     }
   };
 
-  /* 
+  /* Helper function for creating a new block image triple for IMAGE_BLOCKs only  */
+  createBlockImageTriple = (node: JSONContent) => {
+    const blockEntityId = node.attrs?.id;
+    const isImageNode = node.type === 'image';
+
+    if (!isImageNode || !node.attrs?.src) {
+      return null;
+    }
+
+    const { src } = node.attrs;
+
+    this.create(
+      Triple.withId({
+        space: this.spaceId,
+        entityId: blockEntityId,
+        entityName: this.nodeName(node),
+        attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
+        attributeName: 'Image',
+        value: { id: ID.createValueId(), type: 'image', value: src },
+      })
+    );
+  };
+
+  /*
   Helper function to create or update the block IDs on an entity
-  Since we don't currently support array value types, we store all ordered blocks as a single stringified array 
+  Since we don't currently support array value types, we store all ordered blocks as a single stringified array
   */
   upsertBlocksTriple = async (newBlockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
@@ -614,7 +652,21 @@ export class EntityStore implements IEntityStore {
         this.createBlockTypeTriple(node);
         this.upsertBlockNameTriple(node);
         this.upsertBlockMarkdownTriple(node);
+        this.createBlockImageTriple(node);
       });
     });
   };
 }
+
+const getBlockTypeValue = (nodeType?: string): EntityValue => {
+  switch (nodeType) {
+    case 'paragraph':
+      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+    case 'image':
+      return { id: SYSTEM_IDS.IMAGE_BLOCK, type: 'entity', name: 'Image Block' };
+    case 'tableNode':
+      return { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' };
+    default:
+      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+  }
+};
