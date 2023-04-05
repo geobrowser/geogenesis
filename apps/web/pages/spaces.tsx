@@ -2,7 +2,6 @@ import * as React from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
 import { Email } from '~/modules/components/onboarding-carousel/email';
 import { SYSTEM_IDS } from '@geogenesis/ids';
@@ -19,9 +18,6 @@ interface Props {
 }
 
 export default function Spaces({ spaces }: Props) {
-  const rootSpaceId = spaces.find(space => space.isRootSpace)?.id ?? '';
-  useLogRocket(rootSpaceId);
-
   return (
     <div>
       <Head>
