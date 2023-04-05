@@ -19,30 +19,28 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between text-text">
-        <ul className="flex items-center gap-1">
-          {types.map(t => (
-            <li key={t.id}>
-              <EntityPageTypeChip type={t} />
-            </li>
-          ))}
-        </ul>
+    <div className="flex items-center justify-between text-text">
+      <ul className="flex items-center gap-1">
+        {types.map(t => (
+          <li key={t.id}>
+            <EntityPageTypeChip type={t} />
+          </li>
+        ))}
+      </ul>
 
-        {contributors.length > 0 && (
-          <HistoryPanel>
-            {versions.map(v => (
-              <HistoryItem
-                key={v.id}
-                changeCount={Action.getChangeCount(v.actions)}
-                createdAt={v.createdAt}
-                createdBy={v.createdBy}
-                name={v.name}
-              />
-            ))}
-          </HistoryPanel>
-        )}
-      </div>
+      {contributors.length > 0 && (
+        <HistoryPanel>
+          {versions.map(v => (
+            <HistoryItem
+              key={v.id}
+              changeCount={Action.getChangeCount(v.actions)}
+              createdAt={v.createdAt}
+              createdBy={v.createdBy}
+              name={v.name}
+            />
+          ))}
+        </HistoryPanel>
+      )}
     </div>
   );
 }

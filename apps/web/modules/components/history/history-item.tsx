@@ -5,6 +5,9 @@ import { Avatar } from '~/modules/avatar';
 import { Profile } from '~/modules/types';
 
 interface Props {
+  // We want to group together all changes to the same property into a single
+  // change count. i.e., a proposed change may have multiple action taken on
+  // the same triple, we want to make sure that only renders as a single change.
   changeCount: number;
   createdAt: number;
   createdBy: Profile;
@@ -12,13 +15,6 @@ interface Props {
 }
 
 export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) {
-  // We want to group together all changes to the same property into a single
-  // change count. i.e., a proposed change may have multiple action taken on
-  // the same triple, we want to make sure that only renders as a single change.
-  // const uniqueTripleChanges = Action.getChangeCount(
-  //   proposal.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-  // );
-
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023
@@ -35,7 +31,7 @@ export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) 
     hour12: false,
   });
 
-  // Older Proposals from before we added proposal names may not have a name, so we fall back to
+  // Older versions from before we added proposal names may not have a name, so we fall back to
   // an address – date format.
   const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
 
