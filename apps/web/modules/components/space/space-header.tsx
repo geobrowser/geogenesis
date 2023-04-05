@@ -46,7 +46,9 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
       </div>
 
       <HistoryPanel>
-        {!isLoadingProposals ? (
+        {isLoadingProposals ? (
+          <HistoryLoading />
+        ) : (
           proposals.map(p => (
             <HistoryItem
               key={p.id}
@@ -58,8 +60,6 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
               )}
             />
           ))
-        ) : (
-          <HistoryLoading />
         )}
       </HistoryPanel>
     </div>

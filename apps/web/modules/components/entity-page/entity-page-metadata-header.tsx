@@ -36,7 +36,9 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: Props) {
       </ul>
 
       <HistoryPanel>
-        {!isLoadingVersions ? (
+        {isLoadingVersions ? (
+          <HistoryLoading />
+        ) : (
           versions.map(v => (
             <HistoryItem
               key={v.id}
@@ -46,8 +48,6 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: Props) {
               name={v.name}
             />
           ))
-        ) : (
-          <HistoryLoading />
         )}
       </HistoryPanel>
     </div>
