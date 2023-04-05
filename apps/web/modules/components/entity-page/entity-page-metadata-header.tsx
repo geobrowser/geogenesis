@@ -1,16 +1,14 @@
-import { Version } from '~/modules/types';
+import { EntityType, Version } from '~/modules/types';
 import { HistoryItem, HistoryPanel } from '../history';
-import { AvatarGroup } from '~/modules/design-system/avatar-group';
 import { A, pipe } from '@mobily/ts-belt';
-import pluralize from 'pluralize';
-import { GeoDate } from '~/modules/utils';
-import { Avatar } from '~/modules/avatar';
+import { EntityPageTypeChip } from './entity-page-type-chip';
 
 interface Props {
   versions: Array<Version>;
+  types: Array<EntityType>;
 }
 
-export function EntityPageMetadataHeader({ versions }: Props) {
+export function EntityPageMetadataHeader({ versions, types }: Props) {
   // Parse all contributors to this page uniquely by their id. Try and
   // use their name, if they don't have one use their wallet address.
   const contributors = pipe(
@@ -18,19 +16,6 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     A.uniqBy(v => v.createdBy.id),
     A.flatMap(version => version.createdBy)
   );
-
-  // We only render the most recent three avatars in the avatar group and
-  // render them in reverse order
-  const lastThreeContributors = A.take(contributors, 3).reverse();
-  const latestVersion = A.head(versions);
-
-  // This will default to the beginning of UNIX time if there are no versions
-  // We don't render the last edited date if there are no versions anyway.
-  // e.g. Mar 12
-  const lastEditedDate = GeoDate.fromGeoTime(latestVersion?.createdAt ?? 0).toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: 'short',
-  });
 
   // We restrict how many versions we render in the history panel. We don't
   // restrict on the subgraph since it would result in an inaccurate contributor
@@ -41,23 +26,13 @@ export function EntityPageMetadataHeader({ versions }: Props) {
     <div>
       {contributors.length > 0 && (
         <div className="flex items-center justify-between text-text">
-          <div className="flex items-center justify-between gap-2 text-breadcrumb text-text">
-            <AvatarGroup>
-              {lastThreeContributors.map((contributor, i) => (
-                <AvatarGroup.Item key={i}>
-                  <Avatar
-                    alt={`Avatar for ${contributor.name ?? contributor.id}`}
-                    avatarUrl={contributor.avatarUrl}
-                    value={contributor.name ?? contributor.id}
-                  />
-                </AvatarGroup.Item>
-              ))}
-            </AvatarGroup>
-            <p className="text-text">
-              {contributors.length} {pluralize('Editor', contributors.length)}
-            </p>
-            {latestVersion && <p className="text-grey-04">Last edited {lastEditedDate}</p>}
-          </div>
+          <ul className="flex items-center gap-1">
+            {types.map(t => (
+              <li key={t.id}>
+                <EntityPageTypeChip type={t} />
+              </li>
+            ))}
+          </ul>
 
           <HistoryPanel>
             {mostRecentVersions.map(version => (

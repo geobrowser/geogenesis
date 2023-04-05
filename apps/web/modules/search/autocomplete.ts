@@ -23,7 +23,7 @@ class EntityAutocomplete {
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
 
-  constructor({ api, spaceId, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
+  constructor({ api, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -76,20 +76,19 @@ class EntityAutocomplete {
   };
 }
 
-interface AutocompleteProps {
-  spaceId?: string;
+interface AutocompleteOptions {
   filter?: FilterState;
 }
 
-export function useAutocomplete({ spaceId, filter }: AutocompleteProps) {
+export function useAutocomplete({ filter = [] }: AutocompleteOptions = {}) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network, spaceId, ActionsStore, filter });
+    return new EntityAutocomplete({ api: network, ActionsStore, filter });
     // Typically we wouldn't want to stringify a dependency array value, but since
     // we know that the FilterState object is small we know it won't create a performance issue.
-  }, [network, spaceId, ActionsStore, JSON.stringify(filter)]);
+  }, [network, ActionsStore, JSON.stringify(filter)]);
 
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);

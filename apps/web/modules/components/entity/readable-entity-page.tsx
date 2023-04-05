@@ -1,4 +1,5 @@
 import * as React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 import { LinkableChip } from '~/modules/design-system/chip';
@@ -11,13 +12,13 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
-import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { ReferencedByEntity } from './types';
-import Image from 'next/image';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { Editor } from './editor/editor';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { EntityPageCover } from './entity-page-cover';
 
 interface Props {
   triples: Triple[];
@@ -27,6 +28,8 @@ interface Props {
   name: string;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
+  serverAvatarUrl: string | null;
+  serverCoverUrl: string | null;
 }
 
 export function ReadableEntityPage({
@@ -37,49 +40,54 @@ export function ReadableEntityPage({
   referencedByEntities,
   schemaTriples,
   versions,
+  serverAvatarUrl,
+  serverCoverUrl,
 }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
+  const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
+  const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 
   return (
     <>
-      <Truncate maxLines={3} shouldTruncate>
-        <Text as="h1" variant="mainPage">
-          {name}
-        </Text>
-      </Truncate>
-      <Spacer height={16} />
-      <EntityPageMetadataHeader versions={versions} />
-      <Spacer height={24} />
-      <EntityTypeChipGroup types={types} />
-      <Spacer height={40} />
-      <Editor editable={false} />
-      <div className="rounded border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes entityId={id} triples={sortedTriples} />
+      <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+      <EntityPageContentContainer>
+        <Truncate maxLines={3} shouldTruncate>
+          <Text as="h1" variant="mainPage">
+            {name}
+          </Text>
+        </Truncate>
+        <Spacer height={12} />
+        <EntityPageMetadataHeader versions={versions} types={types} />
+        <Spacer height={40} />
+        <Editor editable={false} />
+        <div className="rounded border border-grey-02 shadow-button">
+          <div className="flex flex-col gap-6 p-5">
+            <EntityAttributes entityId={id} triples={sortedTriples} />
+          </div>
         </div>
-      </div>
-      <Spacer height={40} />
-      <Text as="h2" variant="mediumTitle">
-        Referenced by
-      </Text>
-      <div className="flex flex-col flex-wrap">
-        {referencedByEntities.length === 0 ? (
-          <>
-            <Spacer height={12} />
-            <Text color="grey-04">There are no entities referencing {name}.</Text>
-          </>
-        ) : (
-          <>
-            <Spacer height={20} />
-            <div className="flex flex-col gap-6">
-              {referencedByEntities.map(referencedByEntity => (
-                <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+        <Spacer height={40} />
+        <Text as="h2" variant="mediumTitle">
+          Referenced by
+        </Text>
+        <div className="flex flex-col flex-wrap">
+          {referencedByEntities.length === 0 ? (
+            <>
+              <Spacer height={12} />
+              <Text color="grey-04">There are no entities referencing {name}.</Text>
+            </>
+          ) : (
+            <>
+              <Spacer height={20} />
+              <div className="flex flex-col gap-6">
+                {referencedByEntities.map(referencedByEntity => (
+                  <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </EntityPageContentContainer>
     </>
   );
 }

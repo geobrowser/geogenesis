@@ -20,10 +20,11 @@ import { useEditEvents } from './edit-events';
 import { PageImageField, PageStringField } from './editable-fields';
 import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
-import { EntityTypeChipGroup } from './entity-type-chip-group';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { EntityPageCover } from './entity-page-cover';
 
 interface Props {
   triples: TripleType[];
@@ -32,6 +33,8 @@ interface Props {
   id: string;
   name: string;
   spaceId: string;
+  serverAvatarUrl: string | null;
+  serverCoverUrl: string | null;
 }
 
 export function EditableEntityPage({
@@ -41,6 +44,8 @@ export function EditableEntityPage({
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
   versions,
+  serverAvatarUrl,
+  serverCoverUrl,
 }: Props) {
   const {
     triples: localTriples,
@@ -62,7 +67,9 @@ export function EditableEntityPage({
   const nameTriple = Entity.nameTriple(triples);
 
   const name = Entity.name(triples) ?? serverName;
-  const types = Entity.types(triples, spaceId).flatMap(t => (t.name ? [t.name] : []));
+  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
+  const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
+  const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 
   const send = useEditEvents({
     context: {
@@ -91,34 +98,38 @@ export function EditableEntityPage({
 
   return (
     <>
-      <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-      <Spacer height={16} />
-      <EntityPageMetadataHeader versions={versions} />
-      <Spacer height={24} />
-      <EntityTypeChipGroup types={types} />
-      <Spacer height={40} />
+      <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+      <EntityPageContentContainer>
+        <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+        {/* 
+        This height differs from the readable page height due to how we're using an expandable textarea for editing
+        the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
+        have to manually adjust the spacing here to remove the layout shift.
+      */}
+        <Spacer height={5.5} />
+        <EntityPageMetadataHeader versions={versions} types={types} />
+        <Spacer height={40} />
+        <Editor editable={true} />
 
-      <Editor editable={true} />
-
-      <div className="rounded border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes
-            entityId={id}
-            triples={triples}
-            spaceId={spaceId}
-            schemaTriples={schemaTriples}
-            name={name}
-            send={send}
-            hideSchema={hideSchema}
-            hiddenSchemaIds={hiddenSchemaIds}
-          />
+        <div className="rounded border border-grey-02 shadow-button">
+          <div className="flex flex-col gap-6 p-5">
+            <EntityAttributes
+              entityId={id}
+              triples={triples}
+              schemaTriples={schemaTriples}
+              name={name}
+              send={send}
+              hideSchema={hideSchema}
+              hiddenSchemaIds={hiddenSchemaIds}
+            />
+          </div>
+          <div className="p-4">
+            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+              Add triple
+            </Button>
+          </div>
         </div>
-        <div className="p-4">
-          <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-            Add triple
-          </Button>
-        </div>
-      </div>
+      </EntityPageContentContainer>
       <EntityPresenceProvider entityId={id} spaceId={spaceId}>
         <EntityOthersToast />
       </EntityPresenceProvider>
@@ -131,7 +142,6 @@ function EntityAttributes({
   triples,
   schemaTriples = [],
   name,
-  spaceId,
   send,
   hideSchema,
   hiddenSchemaIds,
@@ -141,7 +151,6 @@ function EntityAttributes({
   schemaTriples: TripleType[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
-  spaceId: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
 }) {
@@ -342,7 +351,6 @@ function EntityAttributes({
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
                   .map(triple => triple.value.id)}
-                spaceId={spaceId}
               />
             </div>
           );
@@ -412,7 +420,6 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
-                spaceId={spaceId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -427,7 +434,6 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(triple => triple.value.id)}
-                  spaceId={spaceId}
                 />
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">

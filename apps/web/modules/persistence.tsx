@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 
-import { useActionsStore } from './action';
+import { Action, useActionsStore } from './action';
 import { useLocalStorage } from './hooks/use-local-storage';
 import type { SpaceActions } from './action/actions-store';
 
@@ -17,10 +17,15 @@ export const Persistence = () => {
       restore(storedActions);
     } else {
       console.info('💾 saving actions');
-      const unpublishedActions: SpaceActions = {};
-      Object.keys(actions).forEach(key => {
-        unpublishedActions[key] = actions[key].filter(a => !a.hasBeenPublished);
-      });
+
+      // We don't want to store actions that have been published, otherwise the local storage
+      // will grow infinitely. Additionally, we don't want to store the intermediate steps
+      // taken on triples. We only care about the first state and the last state.
+      const unpublishedActions = Object.entries(actions).reduce((acc, [spaceId, spaceActions]) => {
+        acc[spaceId] = Action.prepareActionsForPublishing(spaceActions);
+        return acc;
+      }, {} as SpaceActions);
+
       setStoredActions(unpublishedActions);
     }
     // note: finely tuned dependency because `storedActions` is only used on initial render

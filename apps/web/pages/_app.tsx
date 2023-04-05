@@ -85,7 +85,6 @@ function App({ Component, pageProps }: AppProps) {
           router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
           setOpen(false);
         }}
-        spaceId=""
       />
       <Main>
         <Component {...pageProps} />

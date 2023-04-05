@@ -560,9 +560,9 @@ export class EntityStore implements IEntityStore {
   Helper function to create or update the block IDs on an entity
   Since we don't currently support array value types, we store all ordered blocks as a single stringified array
   */
-  upsertBlocksTriple = (blockIds: string[]) => {
+  upsertBlocksTriple = async (newBlockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
-    const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(blockIds);
+    const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(newBlockIds);
 
     if (!existingBlockTriple) {
       const triple = Triple.withId({
@@ -574,21 +574,59 @@ export class EntityStore implements IEntityStore {
         value: {
           id: ID.createValueId(),
           type: 'string',
-          value: JSON.stringify(blockIds),
+          value: JSON.stringify(newBlockIds),
         },
       });
-      this.create(triple);
-    } else if (isUpdated) {
-      const updatedTriple = Triple.ensureStableId({
-        ...existingBlockTriple,
-        value: {
-          ...existingBlockTriple.value,
-          type: 'string',
-          value: JSON.stringify(blockIds),
-        },
-      });
-      this.update(updatedTriple, existingBlockTriple);
+
+      return this.create(triple);
     }
+
+    if (!isUpdated) return;
+
+    // If a block is deleted we want to make sure that we delete the block entity as well.
+    // The block entity might exist remotely, so we need to fetch all the triple associated
+    // with that block entity in order to delete them all.
+    //
+    // Additionally,there may be local triples associated with the block entity that we need
+    // to delete.
+    const prevBlockIds = this.blockIds$.get();
+
+    // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
+    const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
+
+    // Fetch all the subgraph data for all the deleted block entities.
+    const maybeRemoteBlocks = await Promise.all(removedBlockIds.map(async blockId => this.api.fetchEntity(blockId)));
+    const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
+
+    // To delete an entity we delete all of its triples
+    remoteBlocks.forEach(block => {
+      block.triples.forEach(t => this.remove(t));
+    });
+
+    // Delete any local triples associated with the deleted block entities
+    const localTriplesForDeletedBlocks = pipe(
+      this.ActionsStore.allActions$.get(),
+      actions => Triple.fromActions(actions, []),
+      triples => triples.filter(t => removedBlockIds.includes(t.entityId))
+    );
+
+    localTriplesForDeletedBlocks.forEach(t => this.remove(t));
+
+    // We delete the existingBlockTriple if the page content is completely empty
+    if (newBlockIds.length === 0) {
+      return this.remove(existingBlockTriple);
+    }
+
+    const updatedTriple = Triple.ensureStableId({
+      ...existingBlockTriple,
+      value: {
+        ...existingBlockTriple.value,
+        type: 'string',
+        value: JSON.stringify(newBlockIds),
+      },
+    });
+
+    return this.update(updatedTriple, existingBlockTriple);
   };
 
   /* Iterate over the content's of a TipTap editor to create or update triple blocks */

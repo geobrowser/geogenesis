@@ -1,7 +1,9 @@
+import { EntityType } from '~/modules/types';
+
 interface Props {
-  typeName: string;
+  type: EntityType;
 }
 
-export function EntityPageTypeChip({ typeName }: Props) {
-  return <div className="rounded-sm bg-divider px-2 py-1 text-metadata">{typeName}</div>;
+export function EntityPageTypeChip({ type }: Props) {
+  return <div className="rounded-sm bg-divider px-1 text-footnoteMedium text-grey-04">{type.name ?? type.id}</div>;
 }

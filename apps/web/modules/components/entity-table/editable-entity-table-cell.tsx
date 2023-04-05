@@ -148,7 +148,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           {triples.map(triple => (
             <div key={`entity-${triple.value.id}`}>
               <DeletableChipButton
-                href={NavUtils.toEntity(space, triple.value.id)}
+                href={NavUtils.toEntity(triple.space, triple.value.id)}
                 onClick={() => removeEntityTriple(triple)}
               >
                 <a>{Value.nameOfEntityValue(triple)}</a>
@@ -157,7 +157,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           ))}
 
           <EntityAutocompleteDialog
-            spaceId={space}
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
             entityValueIds={entityValueTriples.map(t => t.value.id)}
           />
@@ -166,7 +165,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
       {isEmptyRelation && (
         <EntityTextAutocomplete
-          spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}

@@ -4,8 +4,8 @@ export const NAME = 'name'
 export const SPACE = 'space'
 export const ATTRIBUTE = 'attribute'
 
-/* 
-  Example Usage: Rhonda Patrick -> TYPES -> Person 
+/*
+  Example Usage: Rhonda Patrick -> TYPES -> Person
   Note that we should probably convert "type" to "types" or a UUID in the future.
   */
 export const TYPES = 'type'
@@ -30,29 +30,11 @@ export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
-export const AVATAR_ATTRIBUTE = '85ae56a3-aa6f-4dd3-a1d0-3027d3c64810'
-
 export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
 
-/**
- * Addresses for important contracts on Polygon mainnet.
- *
- * Note: If you want to test deployments on a different network (e.g. local or Mumbai),
- * you can update these addresses to point to the correct contracts on that network.
- */
+export const AVATAR_ATTRIBUTE = '235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133'
 
-// This represents the beacon proxy for the first set of deployed permissioned spaces.
-// We should use this beacon proxy for all new permissioned spaces.
-export const PERMISSIONED_SPACE_BEACON_ADDRESS =
-  '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
-
-// This represents the Space contract acting as the registry for all permissioned spaces.
-// This is the address for the Root Space.
-export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
-  '0x170b749413328ac9a94762031a7A05b00c1D2e34'
-
-// This represents the beacon proxy for all permissionless spaces.
-export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
+export const COVER_ATTRIBUTE = '34f53507-2e6b-42c5-a844-43981a77cfa2'
 
 /* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */
 export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'
@@ -75,23 +57,43 @@ export const BLOCKS = 'beaba5cb-a677-41a8-b353-77030613fc70'
 /* Example Usage: Block Entity -> PARENT_ENTITY -> Some_Entity_ID */
 export const PARENT_ENTITY = 'dd4999b9-77f0-4c2b-a02b-5a26b233854e'
 
-/* Example Usage: 
+/* Example Usage:
 Block Entity -> TYPES -> TEXT_BLOCK
 Block Entity -> MARKDOWN_CONTENT -> "**hello world!**" */
 export const MARKDOWN_CONTENT = 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4'
 
-/* Example Usage: 
+/* Example Usage:
 Block Entity -> TYPES -> TABLE_BLOCK
 Block Entity -> ROW_TYPE -> Some_Type_ID */
 export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
+
+/**
+ * Addresses for important contracts on Polygon mainnet.
+ *
+ * Note: If you want to test deployments on a different network (e.g. local or Mumbai),
+ * you can update these addresses to point to the correct contracts on that network.
+ */
+
+// This represents the beacon proxy for the first set of deployed permissioned spaces.
+// We should use this beacon proxy for all new permissioned spaces.
+export const PERMISSIONED_SPACE_BEACON_ADDRESS =
+  '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
+
+// This represents the Space contract acting as the registry for all permissioned spaces.
+// This is the address for the Root Space.
+export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
+  '0x170b749413328ac9a94762031a7A05b00c1D2e34'
+
+// This represents the beacon proxy for all permissionless spaces.
+export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
 
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
 
-/** 
+/**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
-  Going forward we need to make sure all new permissionless and permissioned spaces are deployed using 
+  Going forward we need to make sure all new permissionless and permissioned spaces are deployed using
   a single Beacon for each type rather than creating a new beacon every time we deploy new spaces.
 
   See packages/contracts/.openzepplin/polygon.json for metadata on the deployed beacons.

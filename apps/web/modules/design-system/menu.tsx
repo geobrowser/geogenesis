@@ -2,20 +2,35 @@ import * as React from 'react';
 
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
+import { cva } from 'class-variance-authority';
 
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  align?: 'start' | 'center' | 'end';
 }
 
 const MotionContent = motion(PopoverContent);
 
-export function Menu({ children, trigger }: Props) {
-  const [open, setOpen] = React.useState(false);
+const contentStyles = cva(
+  'z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded border border-grey-02 shadow-lg',
+  {
+    variants: {
+      align: {
+        start: 'origin-top-left',
+        center: 'origin-top',
+        end: 'origin-top-right',
+      },
+    },
+  }
+);
 
+export function Menu({ children, trigger, open, onOpenChange, align = 'end' }: Props) {
   // @TODO: accessibility for button focus states
   return (
-    <Root onOpenChange={setOpen} open={open}>
+    <Root onOpenChange={onOpenChange} open={open}>
       <Trigger>{trigger}</Trigger>
       <AnimatePresence>
         {open && (
@@ -28,9 +43,9 @@ export function Menu({ children, trigger }: Props) {
               duration: 0.1,
               ease: 'easeInOut',
             }}
-            align="end"
+            align={align}
             sideOffset={8}
-            className="z-10 w-[360px] origin-top-right divide-y divide-grey-02 overflow-hidden rounded border border-grey-02 shadow-lg"
+            className={contentStyles({ align })}
           >
             {children}
           </MotionContent>

@@ -1,5 +1,5 @@
+import * as React from 'react';
 import type { GetServerSideProps } from 'next';
-import { useEffect } from 'react';
 import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
@@ -12,13 +12,11 @@ import { Params } from '~/modules/params';
 import { Network } from '~/modules/services/network';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
-import { usePageName } from '~/modules/stores/use-page-name';
 import { Triple, Version } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 
 interface Props {
   triples: Triple[];
@@ -27,6 +25,8 @@ interface Props {
   name: string;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
+  serverAvatarUrl: string | null;
+  serverCoverUrl: string | null;
 
   // For the page editor
   blockTriples: Triple[];
@@ -34,16 +34,8 @@ interface Props {
 }
 
 export default function EntityPage(props: Props) {
-  const { setPageName } = usePageName();
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
-
-  // This is a janky way to set the name in the navbar until we have nested layouts
-  // and the navbar can query the name itself in a nice way.
-  useEffect(() => {
-    if (props.name !== props.id) setPageName(props.name);
-    return () => setPageName('');
-  }, [props.name, props.id, setPageName]);
 
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
@@ -68,9 +60,7 @@ export default function EntityPage(props: Props) {
           initialRows={[]}
           initialSelectedType={null}
         >
-          <EntityPageContentContainer>
-            <Page {...props} schemaTriples={[]} />
-          </EntityPageContentContainer>
+          <Page {...props} schemaTriples={[]} />
         </EntityPageTableBlockStoreProvider>
       </EntityStoreProvider>
     </>
@@ -95,6 +85,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
     network.fetchProposedVersions(entityId, spaceId),
   ]);
+  const serverAvatarUrl = Entity.avatar(entity?.triples);
+  const serverCoverUrl = Entity.cover(entity?.triples);
 
   const spaces = await network.fetchSpaces();
 
@@ -160,6 +152,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       referencedByEntities,
       versions,
       key: entityId,
+      serverAvatarUrl,
+      serverCoverUrl,
 
       // For entity page editor
       blockIdsTriple,
