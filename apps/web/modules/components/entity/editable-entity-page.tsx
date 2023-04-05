@@ -29,7 +29,6 @@ import { EntityPageCover } from './entity-page-cover';
 interface Props {
   triples: TripleType[];
   schemaTriples: TripleType[];
-  versions: Version[];
   id: string;
   name: string;
   spaceId: string;
@@ -43,7 +42,6 @@ export function EditableEntityPage({
   spaceId,
   schemaTriples: serverSchemaTriples,
   triples: serverTriples,
-  versions,
   serverAvatarUrl,
   serverCoverUrl,
 }: Props) {
@@ -107,7 +105,7 @@ export function EditableEntityPage({
         have to manually adjust the spacing here to remove the layout shift.
       */}
         <Spacer height={5.5} />
-        <EntityPageMetadataHeader versions={versions} types={types} />
+        <EntityPageMetadataHeader id={id} spaceId={spaceId} types={types} />
         <Spacer height={40} />
         <Editor editable={true} />
 

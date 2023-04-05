@@ -15,7 +15,6 @@ import { Column, Proposal, Row, Space, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;
-  proposals: Proposal[];
   spaceName?: string;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
@@ -28,7 +27,6 @@ export default function EntitiesPage({
   spaceId,
   spaceName,
   spaceImage,
-  proposals,
   initialColumns,
   initialSelectedType,
   initialRows,
@@ -42,7 +40,7 @@ export default function EntitiesPage({
         <title>{spaceName ?? spaceId}</title>
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
       </Head>
-      <SpaceHeader proposals={proposals} spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
+      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
       <EntityTableStoreProvider
@@ -82,7 +80,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
 
-  const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples, proposals] = await Promise.all([
+  const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(network, spaceId),
     fetchForeignTypeTriples(network, space),
     network.fetchTriples({
@@ -97,7 +95,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         },
       ],
     }),
-    network.fetchProposals(spaceId),
   ]);
 
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
@@ -133,7 +130,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceId,
       spaceName,
       spaceImage,
-      proposals,
       initialSelectedType,
       initialForeignTypes,
       initialColumns: columns,

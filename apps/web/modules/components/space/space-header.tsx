@@ -3,18 +3,32 @@ import Image from 'next/image';
 
 import { Text } from '~/modules/design-system/text';
 import { ZERO_WIDTH_SPACE } from '../../constants';
-import { HistoryPanel, HistoryItem } from '../history';
-import { Action as IAction, Proposal } from '~/modules/types';
+import { HistoryPanel, HistoryItem, HistoryLoading } from '../history';
+import { Action as IAction } from '~/modules/types';
 import { Action } from '~/modules/action';
+import { Services } from '~/modules/services';
+import { useQuery } from '@tanstack/react-query';
 
 interface Props {
   spaceId: string;
-  proposals: Proposal[];
   spaceName?: string;
   spaceImage: string | null;
 }
 
-export function SpaceHeader({ spaceImage, proposals, spaceName = ZERO_WIDTH_SPACE }: Props) {
+export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
+  const { network } = Services.useServices();
+
+  const {
+    data: proposals,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: [`space-proposals-for-space-${spaceId}`],
+    queryFn: async () => network.fetchProposals(spaceId),
+  });
+
+  const isLoadingProposals = !proposals || isLoading || error;
+
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-5">
@@ -31,9 +45,9 @@ export function SpaceHeader({ spaceImage, proposals, spaceName = ZERO_WIDTH_SPAC
         </Text>
       </div>
 
-      {proposals.length > 0 && (
-        <HistoryPanel>
-          {proposals.map(p => (
+      <HistoryPanel>
+        {!isLoadingProposals ? (
+          proposals.map(p => (
             <HistoryItem
               key={p.id}
               name={p.name}
@@ -43,9 +57,11 @@ export function SpaceHeader({ spaceImage, proposals, spaceName = ZERO_WIDTH_SPAC
                 p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
               )}
             />
-          ))}
-        </HistoryPanel>
-      )}
+          ))
+        ) : (
+          <HistoryLoading />
+        )}
+      </HistoryPanel>
     </div>
   );
 }

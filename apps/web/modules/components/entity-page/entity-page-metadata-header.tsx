@@ -1,22 +1,29 @@
-import { EntityType, Version } from '~/modules/types';
-import { HistoryItem, HistoryPanel } from '../history';
-import { A, pipe } from '@mobily/ts-belt';
+import { EntityType } from '~/modules/types';
+import { HistoryItem, HistoryLoading, HistoryPanel } from '../history';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 import { Action } from '~/modules/action';
+import { useQuery } from '@tanstack/react-query';
+import { Services } from '~/modules/services';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 
 interface Props {
-  versions: Array<Version>;
+  id: string;
+  spaceId: string;
   types: Array<EntityType>;
 }
 
-export function EntityPageMetadataHeader({ versions, types }: Props) {
-  // Parse all contributors to this page uniquely by their id. Try and
-  // use their name, if they don't have one use their wallet address.
-  const contributors = pipe(
-    versions,
-    A.uniqBy(v => v.createdBy.id),
-    A.flatMap(version => version.createdBy)
-  );
+export function EntityPageMetadataHeader({ id, spaceId, types }: Props) {
+  const { network } = Services.useServices();
+  const {
+    data: versions,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: [`entity-versions-for-entityId-${id}`],
+    queryFn: async () => network.fetchProposedVersions(id, spaceId),
+  });
+
+  const isLoadingVersions = !versions || isLoading || error;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -28,9 +35,9 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
         ))}
       </ul>
 
-      {contributors.length > 0 && (
-        <HistoryPanel>
-          {versions.map(v => (
+      <HistoryPanel>
+        {!isLoadingVersions ? (
+          versions.map(v => (
             <HistoryItem
               key={v.id}
               changeCount={Action.getChangeCount(v.actions)}
@@ -38,9 +45,11 @@ export function EntityPageMetadataHeader({ versions, types }: Props) {
               createdBy={v.createdBy}
               name={v.name}
             />
-          ))}
-        </HistoryPanel>
-      )}
+          ))
+        ) : (
+          <HistoryLoading />
+        )}
+      </HistoryPanel>
     </div>
   );
 }

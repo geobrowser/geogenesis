@@ -7,7 +7,7 @@ interface Props {
   duration?: number;
 }
 
-export function ResizableContainer({ children, duration = 0.1 }: Props) {
+export function ResizableContainer({ children, duration = 0.15 }: Props) {
   const [ref, { height }] = useMeasure();
 
   return (
