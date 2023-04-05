@@ -150,7 +150,6 @@ importers:
       react-use-measure: 2.1.1_biqbaboplfbrettd7655fr4n2y
       showdown: 2.1.0
       tippy.js: 6.3.7
-      undici: 5.11.0
       wagmi: 0.9.6_fkqw57kir4xfoqprois7hapgvi
     devDependencies:
       '@babel/core': 7.19.6
