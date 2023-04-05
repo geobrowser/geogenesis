@@ -10,7 +10,7 @@ import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modu
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Proposal, Row, Space, Triple } from '~/modules/types';
+import { Column, Row, Space, Triple } from '~/modules/types';
 
 interface Props {
   spaceId: string;

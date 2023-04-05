@@ -9,7 +9,7 @@ describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} proposals={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
@@ -20,7 +20,7 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} proposals={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
@@ -35,7 +35,6 @@ describe('Space page', () => {
           spaceName="Banana"
           spaceImage={null}
           initialTriples={[MockNetworkData.makeStubTriple('Alice')]}
-          proposals={[]}
         />
       </Providers>
     );
@@ -49,7 +48,7 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} proposals={[]} />
+        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
       </Providers>
     );
 
