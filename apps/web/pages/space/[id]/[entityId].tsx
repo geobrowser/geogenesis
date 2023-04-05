@@ -9,7 +9,7 @@ import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-
 import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
-import { Network } from '~/modules/services/network';
+import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple, Version } from '~/modules/types';
@@ -73,7 +73,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new Network(storage, config.subgraph);
+  const network = new NetworkData.Network(storage, config.subgraph);
 
   const [entity, related, versions] = await Promise.all([
     network.fetchEntity(entityId),

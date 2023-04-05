@@ -1,8 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
+import { Entity } from '../../entity';
 
-import { Triple } from '../types';
-import { FetchTriplesOptions, INetwork } from './network';
+import { Triple } from '../../types';
+import { FetchTriplesOptions, INetwork } from '../data-source/network';
 
 export const makeStubTriple = (name: string): Triple => {
   return {
@@ -95,11 +96,13 @@ export class MockNetwork implements INetwork {
   };
 
   fetchEntities = async () => {
-    return [];
+    return Entity.entitiesFromTriples(this.triples);
   };
 
-  fetchEntity = async () => {
-    return { id: '', triples: [], name: null, description: null, types: [] };
+  fetchEntity = async (id: string) => {
+    const entity = Entity.entitiesFromTriples(this.triples).find(e => e.id === id);
+    if (!entity) return null;
+    return entity;
   };
 
   columns = async () => {

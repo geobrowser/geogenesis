@@ -9,7 +9,7 @@ import { SpaceNavbar } from '~/modules/components/space/space-navbar';
 import { Spacer } from '~/modules/design-system/spacer';
 import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
-import { INetwork, Network } from '~/modules/services/network';
+import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Proposal, Row, Space, Triple } from '~/modules/types';
 
@@ -69,7 +69,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
 
-  const network = new Network(storage, config.subgraph);
+  const network = new NetworkData.Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
 
@@ -143,7 +143,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   };
 };
 
-export const fetchForeignTypeTriples = async (network: INetwork, space: Space) => {
+export const fetchForeignTypeTriples = async (network: NetworkData.INetwork, space: Space) => {
   if (!space.spaceConfigEntityId) {
     return [];
   }
@@ -179,7 +179,7 @@ export const fetchForeignTypeTriples = async (network: INetwork, space: Space) =
   return foreignTypes.flatMap(foreignType => foreignType.triples);
 };
 
-export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string) => {
+export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, spaceId: string) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
 
   const { triples } = await network.fetchTriples({

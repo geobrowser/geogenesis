@@ -1,17 +1,16 @@
 import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import { A, G, pipe, S } from '@mobily/ts-belt';
+import { A, S } from '@mobily/ts-belt';
 import { useMemo } from 'react';
 
 import { Services } from '~/modules/services';
-import { INetwork } from '~/modules/services/network';
 import { makeOptionalComputed } from '~/modules/utils';
 import { ActionsStore, useActionsStoreContext } from '../action';
-import { Entity } from '../entity';
 import { Entity as EntityType, FilterState } from '../types';
+import { MergedData, NetworkData } from '~/modules/io';
 
 interface EntityAutocompleteOptions {
-  api: INetwork;
+  api: NetworkData.INetwork;
   spaceId?: string;
   ActionsStore: ActionsStore;
   filter?: FilterState;
@@ -22,8 +21,11 @@ class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
+  mergedDataSource: MergedData;
 
   constructor({ api, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
+    this.mergedDataSource = new MergedData({ api, store: ActionsStore });
+
     this.results$ = makeOptionalComputed(
       [],
       computed(async () => {
@@ -36,33 +38,13 @@ class EntityAutocomplete {
           if (query.length === 0) return [];
 
           this.loading$.set(true);
-          const networkEntities = await api.fetchEntities({
+          const entities = await this.mergedDataSource.fetchEntities({
             query,
             abortController: this.abortController,
             filter,
           });
-
-          const localEntities = pipe(
-            ActionsStore.actions$.get(),
-            actions => Entity.mergeActionsWithEntities(actions, networkEntities),
-            A.filter(e => {
-              if (!G.isString(e.name)) {
-                return false;
-              }
-
-              const lowerName = e.name.toLowerCase();
-              return lowerName.startsWith(query.toLowerCase()) || lowerName.includes(query.toLowerCase());
-            })
-          );
-
-          // We want to favor the local version of an entity if it exists on the network already.
-          const localEntityIds = new Set(localEntities.map(e => e.id));
-          this.loading$.set(true);
-
-          // This will put the local entities first, and then the network entities that don't exist locally.
-          // This might not be the ideal UX.
-
-          return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
+          this.loading$.set(false);
+          return entities;
         } catch (e) {
           console.log("Couldn't fetch entities", e);
           return [];

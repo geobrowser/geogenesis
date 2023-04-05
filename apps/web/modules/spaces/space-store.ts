@@ -1,20 +1,20 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 
 import { Services } from '../services';
-import { INetwork } from '../services/network';
+import { NetworkData } from '~/modules/io';
 import { Space } from '../types';
 import { makeOptionalComputed } from '../utils';
 
 type SpacesAccounts = Record<string, string[]>;
 
 export class SpaceStore {
-  private api: INetwork;
+  private api: NetworkData.INetwork;
   spaces$: ObservableComputed<Space[]>;
   admins$: ObservableComputed<SpacesAccounts>;
   editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
-  constructor({ api }: { api: INetwork }) {
+  constructor({ api }: { api: NetworkData.INetwork }) {
     this.api = api;
 
     this.spaces$ = makeOptionalComputed(

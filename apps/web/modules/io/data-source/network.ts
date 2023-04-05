@@ -1,12 +1,12 @@
 import { Root } from '@geogenesis/action-schema';
+import { A } from '@mobily/ts-belt';
 import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
-import { queries } from './io';
-import { ROOT_SPACE_IMAGE } from '../constants';
-import { Entity, InitialEntityTableStoreParams } from '../entity';
-import { DEFAULT_PAGE_SIZE } from '../triple';
+import { ROOT_SPACE_IMAGE } from '~/modules/constants';
+import { Entity, InitialEntityTableStoreParams } from '~/modules/entity';
+import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import {
   Account,
   Action,
@@ -20,7 +20,7 @@ import {
   Space,
   Triple as TripleType,
   Version,
-} from '../types';
+} from '~/modules/types';
 import {
   fromNetworkActions,
   fromNetworkTriples,
@@ -29,8 +29,8 @@ import {
   NetworkTriple,
   NetworkVersion,
 } from './network-local-mapping';
-import { IStorageClient } from './storage';
-import { A } from '@mobily/ts-belt';
+import { IStorageClient } from '~/modules/services/storage';
+import * as queries from '../queries';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {

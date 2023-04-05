@@ -1,33 +1,20 @@
 import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import pluralize from 'pluralize';
-import { A, D, pipe } from '@mobily/ts-belt';
 
-import { Action, useActionsStore } from '~/modules/action';
 import { Button } from '~/modules/design-system/button';
 import { useReview } from '~/modules/review';
+import { LocalData } from '~/modules/io';
 
 export const FlowBar = () => {
-  const { allActions, allSpacesWithActions } = useActionsStore();
   const { isReviewOpen, setIsReviewOpen } = useReview();
+  const { entities, triples, spaces } = LocalData.useLocalStore();
 
-  const allUnpublishedActions = Action.unpublishedChanges(allActions);
-  const actionsCount = Action.getChangeCount(allUnpublishedActions);
+  const entitiesCount = entities.length;
+  const changesCount = triples.length;
+  const spacesCount = spaces.length;
 
-  const entitiesCount = pipe(
-    allUnpublishedActions,
-    actions => Action.squashChanges(actions),
-    A.groupBy(action => {
-      if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
-      return action.after.entityId;
-    }),
-    D.keys,
-    A.length
-  );
-
-  const spacesCount = allSpacesWithActions.length;
-
-  if (actionsCount === 0) return null;
+  if (changesCount === 0) return null;
 
   return (
     <AnimatePresence>
@@ -42,14 +29,14 @@ export const FlowBar = () => {
           className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
         >
           <div className="inline-flex items-center font-medium">
-            <span>{pluralize('edit', actionsCount, true)}</span>
+            <span>{pluralize('edit', changesCount, true)}</span>
             <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
             <span>
               {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
             </span>
           </div>
           <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-            Review {pluralize('edit', actionsCount, false)}
+            Review {pluralize('edit', changesCount, false)}
           </Button>
         </motion.div>
       </div>

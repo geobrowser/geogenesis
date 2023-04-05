@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
-import { makeStubTriple } from '~/modules/services/mock-network';
+import { MockNetworkData } from '~/modules/io';
 import SpacePage from '~/pages/space/[id]';
 
 describe('Space page', () => {
@@ -52,7 +52,7 @@ describe('Space page', () => {
           spaceName="Banana"
           spaceImage={null}
           initialTypes={[]}
-          initialColumns={[{ id: '1', triples: [makeStubTriple('Alice')] }]}
+          initialColumns={[{ id: '1', triples: [MockNetworkData.makeStubTriple('Alice')] }]}
           initialRows={[
             {
               '1': {

@@ -1,4 +1,4 @@
-import { Action, Entity, OmitStrict, Space, Triple, Value, Version } from '../types';
+import { Action, Entity, OmitStrict, Space, Triple, Value, Version } from '~/modules/types';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 

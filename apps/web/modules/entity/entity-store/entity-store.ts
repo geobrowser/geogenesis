@@ -8,7 +8,7 @@ import { ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/entity/editor/editor';
 import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
 import { ID } from '~/modules/id';
-import { INetwork } from '~/modules/services/network';
+import { NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as TripleType } from '~/modules/types';
 import { Value } from '~/modules/value';
@@ -71,7 +71,7 @@ export const createInitialDefaultTriples = (spaceId: string, entityId: string): 
 const DEFAULT_PAGE_SIZE = 100;
 
 interface IEntityStoreConfig {
-  api: INetwork;
+  api: NetworkData.INetwork;
   spaceId: string;
   id: string;
   initialTriples: TripleType[];
@@ -82,7 +82,7 @@ interface IEntityStoreConfig {
 }
 
 export class EntityStore implements IEntityStore {
-  private api: INetwork;
+  private api: NetworkData.INetwork;
   id: string;
   spaceId: string;
   triples$: ObservableComputed<TripleType[]>;
