@@ -1,5 +1,5 @@
 import { pipe } from '@mobily/ts-belt';
-import { Action, Action as ActionType } from '~/modules/types';
+import { Action, Action as ActionType, CreateTripleAction, DeleteTripleAction } from '~/modules/types';
 
 export function forEntityId(actions: ActionType[], entityId: string) {
   return actions.filter(a => {
@@ -141,5 +141,14 @@ export const getValue = (action: Action): string | null => {
       return checkedAction.value.id;
     case 'image':
       return checkedAction.value.value;
+  }
+};
+
+export const getName = (action: CreateTripleAction | DeleteTripleAction): string | null => {
+  switch (action.value.type) {
+    case 'entity':
+      return action.value.name;
+    default:
+      return null;
   }
 };

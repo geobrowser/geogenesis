@@ -237,11 +237,10 @@ const useChanges = (actions: Array<Action>) => {
 export const getChanges = (actions: Array<Action>): Changes => {
   const changes: Changes = {};
 
-  // @TODO cleanup with immer produce function
   actions.forEach((action: Action) => {
     switch (action.type) {
       case 'createTriple': {
-        const actionValue = ActionNamespace.getValue(action);
+        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
         if (!actionValue) break;
 
         changes[action.entityId] = {
@@ -263,8 +262,8 @@ export const getChanges = (actions: Array<Action>): Changes => {
       }
 
       case 'editTriple': {
-        const beforeActionValue = ActionNamespace.getValue(action.before);
-        const afterActionValue = ActionNamespace.getValue(action.after);
+        const beforeActionValue = ActionNamespace.getName(action.before) ?? ActionNamespace.getValue(action.before);
+        const afterActionValue = ActionNamespace.getName(action.after) ?? ActionNamespace.getValue(action.after);
         if (!beforeActionValue || !afterActionValue) break;
 
         changes[action.before.entityId] = {
@@ -293,7 +292,7 @@ export const getChanges = (actions: Array<Action>): Changes => {
       }
 
       case 'deleteTriple': {
-        const actionValue = ActionNamespace.getValue(action);
+        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
         if (!actionValue) break;
 
         changes[action.entityId] = {
