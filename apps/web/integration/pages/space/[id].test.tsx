@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { makeStubTriple } from '~/modules/services/mock-network';
@@ -17,6 +16,7 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
+          proposals={[]}
         />
       </Providers>
     );
@@ -36,6 +36,7 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
+          proposals={[]}
         />
       </Providers>
     );
@@ -62,6 +63,7 @@ describe('Space page', () => {
             },
           ]}
           initialSelectedType={null}
+          proposals={[]}
         />
       </Providers>
     );
