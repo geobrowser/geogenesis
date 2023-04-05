@@ -2,7 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 
-import { useLogRocket } from '~/modules/analytics/use-logrocket';
 import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
 import { SpaceHeader } from '~/modules/components/space/space-header';
 import { SpaceNavbar } from '~/modules/components/space/space-navbar';
@@ -34,8 +33,6 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
-  useLogRocket(spaceId);
-
   return (
     <div>
       <Head>
