@@ -186,9 +186,6 @@ export class EntityStore implements IEntityStore {
             triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_ATTRIBUTE
           );
 
-          // @TODO remove console.info
-          console.info('imageTriple:', imageTriple);
-
           if (imageTriple) {
             return {
               type: 'image',

@@ -190,7 +190,7 @@ export const getValue = (triple: Triple): string | null => {
     case 'string':
       return triple.value.value;
     case 'entity':
-      return triple.value.name;
+      return triple.value.id;
     case 'image':
       return triple.value.value;
   }
