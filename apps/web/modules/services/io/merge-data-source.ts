@@ -2,7 +2,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { ActionsStore } from '~/modules/action';
 import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
-import { OmitStrict } from '~/modules/types';
+import { OmitStrict, Version } from '~/modules/types';
 import { INetwork } from '../network';
 
 interface MergeDataSourceOptions {
@@ -110,7 +110,16 @@ export class MergeDataSource implements IMergeDataSource {
   columns = async (options: Parameters<INetwork['columns']>[0]) => this.api.columns(options);
   rows = async (options: Parameters<INetwork['rows']>[0]) => this.api.rows(options);
 
+  // Right now we can't create local spaces, so we just return the network spaces.
   fetchSpaces = async () => this.api.fetchSpaces();
 
   fetchProfile = async () => null;
+
+  fetchProposedVersions = async (
+    entityId: string,
+    spaceId: string,
+    abortController?: AbortController | undefined
+  ): Promise<Version[]> => {
+    return this.api.fetchProposedVersions(entityId, spaceId, abortController);
+  };
 }
