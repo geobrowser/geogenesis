@@ -7,7 +7,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
-import { Triple, Version } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';

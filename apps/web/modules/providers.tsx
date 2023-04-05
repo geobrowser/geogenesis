@@ -12,15 +12,15 @@ const queryClient = new QueryClient();
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider>
-        <Services.Provider>
-          <ActionsStoreProvider>
-            <LocalData.LocalStoreProvider>
-              <ReviewProvider>{children}</ReviewProvider>
-            </LocalData.LocalStoreProvider>
-          </ActionsStoreProvider>
-        </Services.Provider>
-      </WalletProvider>
+      <Services.Provider>
+        <ActionsStoreProvider>
+          <LocalData.LocalStoreProvider>
+            <ReviewProvider>
+              <WalletProvider>{children}</WalletProvider>
+            </ReviewProvider>
+          </LocalData.LocalStoreProvider>
+        </ActionsStoreProvider>
+      </Services.Provider>
     </QueryClientProvider>
   );
 }

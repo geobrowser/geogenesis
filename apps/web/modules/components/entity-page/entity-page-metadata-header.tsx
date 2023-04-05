@@ -4,7 +4,6 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 import { Action } from '~/modules/action';
 import { useQuery } from '@tanstack/react-query';
 import { Services } from '~/modules/services';
-import { ResizableContainer } from '~/modules/design-system/resizable-container';
 
 interface Props {
   id: string;
