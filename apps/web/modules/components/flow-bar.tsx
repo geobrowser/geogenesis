@@ -8,11 +8,11 @@ import { LocalData } from '~/modules/io';
 
 export const FlowBar = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
-  const { entities, triples, spaces } = LocalData.useLocalStore();
+  const { unpublishedEntities, unpublishedTriples, unpublishedSpaces } = LocalData.useLocalStore();
 
-  const entitiesCount = entities.length;
-  const changesCount = triples.length;
-  const spacesCount = spaces.length;
+  const entitiesCount = unpublishedEntities.length;
+  const changesCount = unpublishedTriples.length;
+  const spacesCount = unpublishedSpaces.length;
 
   if (changesCount === 0) return null;
 
