@@ -78,6 +78,9 @@ export const commandItems: CommandSuggestionItem[] = [
       input.onchange = async (e: any) => {
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
+
+        // It doesn't really matter which configuration we use here since all IPFS
+        // nodes are essentially production.
         const chainId = Config.options.production.chainId;
         const config = Config.getConfig(chainId);
         const storageClient = new StorageClient(config.ipfs);

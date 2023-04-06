@@ -7,7 +7,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Entity } from '~/modules/entity';
-import { Triple, Version } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
@@ -23,7 +23,6 @@ import { EntityPageCover } from './entity-page-cover';
 interface Props {
   triples: Triple[];
   schemaTriples: Triple[];
-  versions: Version[];
   id: string;
   name: string;
   spaceId: string;
@@ -39,7 +38,6 @@ export function ReadableEntityPage({
   spaceId,
   referencedByEntities,
   schemaTriples,
-  versions,
   serverAvatarUrl,
   serverCoverUrl,
 }: Props) {
@@ -58,7 +56,7 @@ export function ReadableEntityPage({
           </Text>
         </Truncate>
         <Spacer height={12} />
-        <EntityPageMetadataHeader versions={versions} types={types} />
+        <EntityPageMetadataHeader id={id} spaceId={spaceId} types={types} />
         <Spacer height={40} />
         <Editor editable={false} />
         <div className="rounded border border-grey-02 shadow-button">

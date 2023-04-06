@@ -22,7 +22,6 @@ export default function CreateEntity({ spaceId }: Props) {
       initialBlockIdsTriple={null}
     >
       <EditableEntityPage
-        versions={[]}
         id={newId}
         name=""
         spaceId={spaceId}

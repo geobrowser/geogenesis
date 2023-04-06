@@ -100,6 +100,7 @@ export interface INetwork {
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
+  fetchProposals: (spaceId: string, abortController?: AbortController) => Promise<Proposal[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;

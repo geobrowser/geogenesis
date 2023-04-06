@@ -12,7 +12,7 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
-import { Triple, Version } from '~/modules/types';
+import { Triple } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
@@ -20,7 +20,6 @@ import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/e
 
 interface Props {
   triples: Triple[];
-  versions: Version[];
   id: string;
   name: string;
   spaceId: string;
@@ -75,15 +74,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
 
-  const [entity, related, versions] = await Promise.all([
+  const [entity, related] = await Promise.all([
     network.fetchEntity(entityId),
 
     network.fetchEntities({
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-
-    network.fetchProposedVersions(entityId, spaceId),
   ]);
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
@@ -150,7 +147,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       name: entity?.name ?? entityId,
       spaceId,
       referencedByEntities,
-      versions,
       key: entityId,
       serverAvatarUrl,
       serverCoverUrl,

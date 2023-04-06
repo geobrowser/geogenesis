@@ -16,7 +16,6 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
-          proposals={[]}
         />
       </Providers>
     );
@@ -36,7 +35,6 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
-          proposals={[]}
         />
       </Providers>
     );
@@ -63,7 +61,6 @@ describe('Space page', () => {
             },
           ]}
           initialSelectedType={null}
-          proposals={[]}
         />
       </Providers>
     );

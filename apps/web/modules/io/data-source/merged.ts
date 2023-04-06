@@ -115,11 +115,16 @@ export class Merged implements IMergeDataSource {
 
   fetchProfile = async () => null;
 
+  // Proposed versions are server only
   fetchProposedVersions = async (
     entityId: string,
     spaceId: string,
-    abortController?: AbortController | undefined
+    abortController?: AbortController
   ): Promise<Version[]> => {
     return this.api.fetchProposedVersions(entityId, spaceId, abortController);
   };
+
+  // Proposals are server only
+  fetchProposals = async (spaceId: string, abortController?: AbortController) =>
+    this.api.fetchProposals(spaceId, abortController);
 }
