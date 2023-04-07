@@ -113,14 +113,14 @@ const ENTITY_CHANGES: Changes = {
 
 describe('Actions to changes transformer (string values)', () => {
   it('Generates changes from actions', () => {
-    const changes = getChanges(STRING_ACTIONS);
+    const [changes] = getChanges(STRING_ACTIONS);
     expect(changes).toEqual(STRING_CHANGES);
   });
 });
 
 describe('Actions to changes transformer (entity values)', () => {
   it('Generates changes from actions', () => {
-    const changes = getChanges(ENTITY_ACTIONS);
+    const [changes] = getChanges(ENTITY_ACTIONS);
     expect(changes).toEqual(ENTITY_CHANGES);
   });
 });

@@ -89,9 +89,10 @@ const ReviewChanges = () => {
   const [proposalName, setProposalName] = useState<string>('');
   const isReadyToPublish = proposalName.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
-  const { actionsFromSpace, publish } = useActionsStore(activeSpace);
+  const { actionsFromSpace, publish, clear } = useActionsStore(activeSpace);
+  const clearActions = () => clear(activeSpace);
 
-  const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
+  const [changes, errors] = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
   // Publishing logic
   const { data: signer } = useSigner();
@@ -173,6 +174,19 @@ const ReviewChanges = () => {
                 />
               ))}
             </div>
+            {errors.length > 0 && (
+              <div className="flex flex-col gap-4 pt-16">
+                <div className="text-body">Developer notes</div>
+                {errors.map((error, index) => (
+                  <ErrorCard key={index} error={error} />
+                ))}
+                <div>
+                  <Button variant="tertiary" icon="trash" onClick={clearActions}>
+                    Delete all actions
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -230,18 +244,25 @@ type AttributeName = string;
 type Before = string[];
 type After = string[];
 
-const useChanges = (actions: Array<Action>) => {
+type Errors = Array<Error>;
+type Error = Record<'message', string>;
+
+const useChanges = (actions: Array<Action>): [Changes, Errors] => {
   return useMemo(() => getChanges(actions), [actions]);
 };
 
-export const getChanges = (actions: Array<Action>): Changes => {
+export const getChanges = (actions: Array<Action>): [Changes, Errors] => {
   const changes: Changes = {};
+  const errors: Errors = [];
 
   actions.forEach((action: Action) => {
     switch (action.type) {
       case 'createTriple': {
         const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
-        if (!actionValue) break;
+        if (!actionValue) {
+          errors.push({ message: JSON.stringify(action, null, 2) });
+          break;
+        }
 
         changes[action.entityId] = {
           ...changes[action.entityId],
@@ -264,7 +285,10 @@ export const getChanges = (actions: Array<Action>): Changes => {
       case 'editTriple': {
         const beforeActionValue = ActionNamespace.getName(action.before) ?? ActionNamespace.getValue(action.before);
         const afterActionValue = ActionNamespace.getName(action.after) ?? ActionNamespace.getValue(action.after);
-        if (!beforeActionValue || !afterActionValue) break;
+        if (!beforeActionValue || !afterActionValue) {
+          errors.push({ message: JSON.stringify(action, null, 2) });
+          break;
+        }
 
         changes[action.before.entityId] = {
           ...changes[action.before.entityId],
@@ -293,7 +317,10 @@ export const getChanges = (actions: Array<Action>): Changes => {
 
       case 'deleteTriple': {
         const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
-        if (!actionValue) break;
+        if (!actionValue) {
+          errors.push({ message: JSON.stringify(action, null, 2) });
+          break;
+        }
 
         changes[action.entityId] = {
           ...changes[action.entityId],
@@ -315,7 +342,7 @@ export const getChanges = (actions: Array<Action>): Changes => {
     }
   });
 
-  return changes;
+  return [changes, errors];
 };
 
 const message: Record<ReviewState, string> = {
@@ -550,6 +577,19 @@ const Chip = ({ status = 'unchanged', children }: ChipProps) => {
   );
 
   return <span className={chip({ status })}>{children}</span>;
+};
+
+type ErrorCardProps = { error: Error };
+
+const ErrorCard = ({ error }: ErrorCardProps) => {
+  return (
+    <div className="overflow-hidden rounded-r border border-grey-02 font-mono shadow-light">
+      <div className="border-l-[6px] border-l-orange bg-white p-4">
+        <div className="text-sm font-bold uppercase text-text">Warning: unsupported action</div>
+        <div className="mt-1 text-xs text-grey-04">{error.message}</div>
+      </div>
+    </div>
+  );
 };
 
 function getSpaceImage(spaces: Space[], spaceId: string): string {
