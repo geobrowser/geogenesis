@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import { Button } from '~/modules/design-system/button';
+import { useEditable } from '~/modules/stores/use-editable';
 import { useReview } from '~/modules/review';
 import { LocalData } from '~/modules/io';
 
 export const FlowBar = () => {
+  const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useReview();
   const { unpublishedEntities, unpublishedTriples, unpublishedSpaces } = LocalData.useLocalStore();
 
@@ -14,7 +16,7 @@ export const FlowBar = () => {
   const changesCount = unpublishedTriples.length;
   const spacesCount = unpublishedSpaces.length;
 
-  if (changesCount === 0) return null;
+  if (!editable || changesCount === 0) return null;
 
   return (
     <AnimatePresence>
