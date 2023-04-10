@@ -102,6 +102,10 @@ function handleActionData(
 
   const root = Root.fromJSON(json)
 
+  if (root) {
+    log.debug(`Decoded root: ${root.toJSON().toString()}`, [])
+  }
+
   if (!root) return null
 
   handleRoot(root, space, createdAtBlock, createdBy, createdAtTimestamp)
@@ -114,7 +118,8 @@ export function getOrCreateProposal(
   id: string,
   createdBy: Address,
   createdAt: BigInt,
-  space: string
+  space: string,
+  proposalName: string
 ): Proposal {
   let proposal = Proposal.load(id)
   if (!proposal) {
@@ -124,6 +129,7 @@ export function getOrCreateProposal(
     proposal.createdBy = getOrCreateAccount(createdBy).id
     proposal.proposedVersions = []
     proposal.space = space
+    proposal.name = proposalName
     proposal.save()
   }
   return proposal as Proposal
@@ -151,8 +157,16 @@ function handleRoot(
 ): void {
   const proposalId = getOrCreateActionCount().count.toString()
 
+  const proposalName = root.name
+
   // create a proposal entity
-  getOrCreateProposal(proposalId, createdBy, createdAtTimestamp, space)
+  getOrCreateProposal(
+    proposalId,
+    createdBy,
+    createdAtTimestamp,
+    space,
+    proposalName
+  )
 
   // entityId -> actions
   let actionsByEntity: Map<string, Action[]> = new Map()
@@ -196,7 +210,8 @@ function handleRoot(
       actionIds,
       entityId,
       createdBy,
-      proposalId
+      proposalId,
+      proposalName
     )
 
     createVersion(
@@ -204,7 +219,8 @@ function handleRoot(
       proposedVersion.id,
       createdAtTimestamp,
       entityId,
-      createdBy
+      createdBy,
+      proposalName
     )
   }
 }
