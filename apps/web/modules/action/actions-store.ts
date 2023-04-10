@@ -23,7 +23,9 @@ interface IActionsStore {
     spaceId: string,
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Record<string, unknown>
+    unstagedChanges: Record<string, unknown>,
+    name: string,
+    description?: string
   ): void;
   unstagedChanges?: Record<string, unknown>;
 }
@@ -138,7 +140,9 @@ export class ActionsStore implements IActionsStore {
     spaceId: string,
     signer: Signer,
     onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Record<string, unknown>
+    unstagedChanges: Record<string, unknown>,
+    name: string,
+    description: string | undefined = undefined
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     const actionsToPublish = spaceActions.filter(action => !(getId(action) in unstagedChanges));
@@ -151,6 +155,8 @@ export class ActionsStore implements IActionsStore {
         signer,
         onChangePublishState,
         space: spaceId,
+        name,
+        description,
       });
     } catch (e) {
       console.error(e);
