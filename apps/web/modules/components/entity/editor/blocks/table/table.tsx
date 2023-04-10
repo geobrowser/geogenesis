@@ -14,24 +14,25 @@ import { useState } from 'react';
 
 import { useActionsStoreContext } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
 import { valueTypes } from '~/modules/value-types';
-import { Text } from '../../design-system/text';
-import { Cell, Column, Row } from '../../types';
-import { TableCell } from '../table/cell';
-import { EmptyTableText } from '../table/styles';
-import { AddNewColumn } from './add-new-column';
-import { EditableEntityTableCell } from './editable-entity-table-cell';
-import { EditableEntityTableColumnHeader } from './editable-entity-table-column-header';
-import { EntityTableCell } from './entity-table-cell';
+import { useEntityTableBlock } from './entity-page-table-block-store-provider';
+import { EditableEntityTableColumnHeader } from '~/modules/components/entity-table/editable-entity-table-column-header';
+import { Text } from '~/modules/design-system/text';
+import { Cell, Column, Row } from '~/modules/types';
+import { EditableEntityTableCell } from '~/modules/components/entity-table/editable-entity-table-cell';
+import { EntityTableCell } from '~/modules/components/entity-table/entity-table-cell';
+import { AddNewColumn } from '~/modules/components/entity-table/add-new-column';
+import { EmptyTableText } from '~/modules/components/table/styles';
+import { TableCell } from '~/modules/components/table/cell';
 
 const columnHelper = createColumnHelper<Row>();
 
 const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
-  const columnSize = 1200 / columns.length;
+  const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
     columnHelper.accessor(row => row[column.id], {
@@ -54,7 +55,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
           <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
         );
       },
-      size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
+      size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
     })
   );
 };
@@ -73,7 +74,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columnValueType } = useEntityTable();
+    const { columnValueType } = useEntityTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -139,7 +140,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { selectedType } = useEntityTable();
+  const { selectedType } = useEntityTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
@@ -152,7 +153,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: DEFAULT_PAGE_SIZE,
+        pageSize: 10,
       },
     },
     meta: {

@@ -91,6 +91,5 @@ export const commandItems: CommandSuggestionItem[] = [
       input.click();
     },
   },
-  // For now we aren't allowing table blocks until we work on migrating tables to the new design
-  // tableCommandItem,
+  tableCommandItem,
 ];

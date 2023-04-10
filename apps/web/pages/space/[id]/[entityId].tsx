@@ -7,7 +7,7 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, EntityTableStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
@@ -16,7 +16,6 @@ import { Triple } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
-import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
 
 interface Props {
   triples: Triple[];
@@ -30,6 +29,8 @@ interface Props {
   // For the page editor
   blockTriples: Triple[];
   blockIdsTriple: Triple | null;
+
+  spaceTypes: Triple[];
 }
 
 export default function EntityPage(props: Props) {
@@ -45,23 +46,24 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
       </Head>
-      <EntityStoreProvider
-        id={props.id}
+      <EntityTableStoreProvider
+        initialColumns={[]}
+        initialRows={[]}
+        initialTypes={props.spaceTypes}
+        initialSelectedType={null}
         spaceId={props.spaceId}
-        initialTriples={props.triples}
-        initialSchemaTriples={[]}
-        initialBlockIdsTriple={props.blockIdsTriple}
-        initialBlockTriples={props.blockTriples}
       >
-        <EntityPageTableBlockStoreProvider
+        <EntityStoreProvider
+          id={props.id}
           spaceId={props.spaceId}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
+          initialTriples={props.triples}
+          initialSchemaTriples={[]}
+          initialBlockIdsTriple={props.blockIdsTriple}
+          initialBlockTriples={props.blockTriples}
         >
           <Page {...props} schemaTriples={[]} />
-        </EntityPageTableBlockStoreProvider>
-      </EntityStoreProvider>
+        </EntityStoreProvider>
+      </EntityTableStoreProvider>
     </>
   );
 }
@@ -74,13 +76,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
 
-  const [entity, related] = await Promise.all([
+  const [entity, related, spaceTypes] = await Promise.all([
     network.fetchEntity(entityId),
 
     network.fetchEntities({
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    fetchSpaceTypeTriples(network, spaceId),
   ]);
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
@@ -154,6 +158,28 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       // For entity page editor
       blockIdsTriple,
       blockTriples,
+
+      spaceTypes,
     },
   };
+};
+
+export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, spaceId: string) => {
+  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
+
+  const { triples } = await network.fetchTriples({
+    query: '',
+    space: spaceId,
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+      {
+        field: 'linked-to',
+        value: SYSTEM_IDS.SCHEMA_TYPE,
+      },
+    ],
+  });
+
+  return triples;
 };
