@@ -137,7 +137,6 @@ export class Network implements INetwork {
         version: '0.0.1',
         actions: chunk.flatMap(getActionFromChangeStatus),
         name,
-        description,
       };
 
       const cidString = await this.storageClient.uploadObject(root);
