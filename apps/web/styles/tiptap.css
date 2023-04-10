@@ -73,6 +73,10 @@
   @apply font-semibold;
 }
 
+.ProseMirror img {
+  @apply rounded;
+}
+
 .ProseMirror > * {
   margin-bottom: 16px;
 }
