@@ -102,10 +102,6 @@ function handleActionData(
 
   const root = Root.fromJSON(json)
 
-  if (root) {
-    log.debug(`Decoded root: ${root.toJSON().toString()}`, [])
-  }
-
   if (!root) return null
 
   handleRoot(root, space, createdAtBlock, createdBy, createdAtTimestamp)
@@ -119,7 +115,7 @@ export function getOrCreateProposal(
   createdBy: Address,
   createdAt: BigInt,
   space: string,
-  proposalName: string
+  proposalName: string | null
 ): Proposal {
   let proposal = Proposal.load(id)
   if (!proposal) {
@@ -157,7 +153,10 @@ function handleRoot(
 ): void {
   const proposalId = getOrCreateActionCount().count.toString()
 
-  const proposalName = root.name
+  let proposalName = ''
+  if (root.name != '') {
+    proposalName = root.name
+  }
 
   // create a proposal entity
   getOrCreateProposal(

@@ -218,14 +218,16 @@ export function generateObjectType(
           } else {
             if (name != 'Root') {
               result += `const ${property} = __${property}.valueOf()`
-            } else {
-              result += `let ${property}: string
+            } else if (name == 'Root' && property == 'name') {
+              result += `let ${property}: string | null
             if (__${property} != null) {
               ${property} = __${property}.valueOf()
             } else {
               ${property} = ''
             }
             `
+            } else {
+              result += `const ${property} = __${property}.valueOf()`
             }
           }
 

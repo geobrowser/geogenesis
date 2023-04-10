@@ -95,7 +95,7 @@ export function createProposedVersion(
   entityId: string,
   createdBy: Address,
   proposalId: string,
-  proposalName: string
+  proposalName: string | null
 ): ProposedVersion {
   let version = ProposedVersion.load(versionId)
   if (version == null) {
@@ -130,7 +130,7 @@ export function createVersion(
   createdAt: BigInt,
   entityId: string,
   createdBy: Address,
-  proposalName: string
+  proposalName: string | null
 ): Version {
   let version = Version.load(versionId)
   let proposed = ProposedVersion.load(proposedVersion)
