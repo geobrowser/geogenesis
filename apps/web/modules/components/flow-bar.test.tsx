@@ -80,7 +80,7 @@ describe('Flow Bar', () => {
       api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
-    render(
+    const { debug } = render(
       <Providers>
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />
@@ -117,5 +117,25 @@ describe('Flow Bar', () => {
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();
+
+    // Multiple changes to the same entity should show the correct count
+    act(() => {
+      // Passing the previous entityId as a parameter to add this triple to the same entity
+      const newTriple = MockNetworkData.makeStubTriple('Bob', 'Alice');
+      store.create(newTriple);
+    });
+
+    expect(screen.queryByText('2 edits')).toBeInTheDocument();
+    expect(screen.queryByText('1 entity in 1 space')).toBeInTheDocument();
+
+    // Changes to multiple entities should show the correct count
+    act(() => {
+      // Passing the previous entityId as a parameter to add this triple to the same entity
+      const newTriple = MockNetworkData.makeStubTriple('Charlie');
+      store.create(newTriple);
+    });
+
+    expect(screen.queryByText('3 edits')).toBeInTheDocument();
+    expect(screen.queryByText('2 entities in 1 space')).toBeInTheDocument();
   });
 });
