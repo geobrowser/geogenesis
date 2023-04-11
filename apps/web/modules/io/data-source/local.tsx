@@ -92,7 +92,7 @@ export function useLocalStoreContext() {
   const value = useContext(LocalStoreContext);
 
   if (!value) {
-    throw new Error(`Missing ActionsStoreProvider`);
+    throw new Error(`Missing LocalStoreProvider`);
   }
 
   return value;

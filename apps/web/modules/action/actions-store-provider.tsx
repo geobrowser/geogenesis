@@ -4,7 +4,7 @@ import { createContext, useContext, useMemo } from 'react';
 import { Services } from '../services';
 import { ActionsStore } from './actions-store';
 
-const ActionsStoreContext = createContext<ActionsStore | undefined>(undefined);
+export const ActionsStoreContext = createContext<ActionsStore | undefined>(undefined);
 
 interface Props {
   children: React.ReactNode;

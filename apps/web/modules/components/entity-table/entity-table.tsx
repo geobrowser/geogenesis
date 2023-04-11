@@ -67,7 +67,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const editable = table.options.meta?.editable;
     const isEditor = table.options.meta?.isEditor;
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const { create, update, remove, actions$ } = useActionsStoreContext();
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const { columnValueType } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
