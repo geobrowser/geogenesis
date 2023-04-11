@@ -22,6 +22,7 @@ interface Props {
   triples: Triple[];
   id: string;
   name: string;
+  serverDescription: string | null;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
   serverAvatarUrl: string | null;
@@ -35,7 +36,6 @@ interface Props {
 export default function EntityPage(props: Props) {
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
-  const description = Entity.description(props.triples);
 
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
@@ -50,9 +50,9 @@ export default function EntityPage(props: Props) {
         {props.serverCoverUrl && (
           <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
         )}
-        {description && <meta property="description" content={description} />}
-        {description && <meta property="og:description" content={description} />}
-        {description && <meta name="twitter:description" content={description} />}
+        {props.serverDescription && <meta property="description" content={props.serverDescription} />}
+        {props.serverDescription && <meta property="og:description" content={props.serverDescription} />}
+        {props.serverDescription && <meta name="twitter:description" content={props.serverDescription} />}
       </Head>
       <EntityStoreProvider
         id={props.id}
@@ -157,6 +157,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       spaceId,
       referencedByEntities,
       key: entityId,
+      serverDescription: Entity.description(entity?.triples ?? []),
       serverAvatarUrl,
       serverCoverUrl,
 
