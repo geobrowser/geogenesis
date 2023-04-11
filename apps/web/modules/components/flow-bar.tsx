@@ -5,18 +5,30 @@ import pluralize from 'pluralize';
 import { Button } from '~/modules/design-system/button';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useReview } from '~/modules/review';
-import { LocalData } from '~/modules/io';
+import { Action, useActionsStore } from '../action';
+import { A, D, pipe } from '@mobily/ts-belt';
 
 export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useReview();
-  const { unpublishedEntities, unpublishedTriples, unpublishedSpaces } = LocalData.useLocalStore();
+  const { allActions, allSpacesWithActions } = useActionsStore();
 
-  const entitiesCount = unpublishedEntities.length;
-  const changesCount = unpublishedTriples.length;
-  const spacesCount = unpublishedSpaces.length;
+  const allUnpublishedSquashedActions = Action.prepareActionsForPublishing(allActions);
+  const actionsCount = allUnpublishedSquashedActions.length;
 
-  if (!editable || changesCount === 0) return null;
+  const entitiesCount = pipe(
+    allUnpublishedSquashedActions,
+    A.groupBy(action => {
+      if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
+      return action.after.entityId;
+    }),
+    D.keys,
+    A.length
+  );
+
+  const spacesCount = allSpacesWithActions.length;
+
+  if (actionsCount === 0 || !editable) return null;
 
   return (
     <AnimatePresence>
@@ -31,14 +43,14 @@ export const FlowBar = () => {
           className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
         >
           <div className="inline-flex items-center font-medium">
-            <span>{pluralize('edit', changesCount, true)}</span>
+            <span>{pluralize('edit', actionsCount, true)}</span>
             <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
             <span>
               {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
             </span>
           </div>
           <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-            Review {pluralize('edit', changesCount, false)}
+            Review {pluralize('edit', actionsCount, false)}
           </Button>
         </motion.div>
       </div>
