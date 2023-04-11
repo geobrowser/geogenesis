@@ -216,9 +216,9 @@ export function generateObjectType(
               return null
             }`
           } else {
-            if (name != 'Root') {
+            if (name !== 'Root') {
               result += `const ${property} = __${property}.valueOf()`
-            } else if (name == 'Root' && property == 'name') {
+            } else if (name === 'Root' && property === 'name') {
               result += `let ${property}: string | null
             if (__${property} != null) {
               ${property} = __${property}.valueOf()
