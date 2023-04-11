@@ -35,7 +35,10 @@ export default function EntitiesPage({
     <div>
       <Head>
         <title>{spaceName ?? spaceId}</title>
+        <meta property="og:title" content={spaceName} />
         <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
+        {spaceImage && <meta property="og:image" content={spaceImage} />}
+        {spaceImage && <meta name="twitter:image" content={spaceImage} />}
       </Head>
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
