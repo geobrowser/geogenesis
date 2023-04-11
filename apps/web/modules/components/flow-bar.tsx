@@ -26,9 +26,6 @@ export const FlowBar = () => {
     A.length
   );
 
-  console.log('allActions', allActions);
-  console.log('editable', editable);
-
   const spacesCount = allSpacesWithActions.length;
 
   if (actionsCount === 0 || !editable) return null;
