@@ -13,13 +13,13 @@ export const EntityPageCover = ({ avatarUrl, coverUrl }: EntityPageCoverProps) =
     return (
       <div className="relative mx-auto mb-20 h-[320px] w-full max-w-[1192px]">
         <div className="relative h-full w-full overflow-hidden rounded bg-grey-01">
-          <Image src={coverUrl} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
+          <Image src={coverUrl} layout="fill" objectFit="cover" priority className="h-full w-full" alt="" />
         </div>
         {avatarUrl && (
           <div className="absolute bottom-0 left-0 right-0">
             <div className="mx-auto w-full max-w-[784px]">
               <div className="relative h-[80px] w-[80px] translate-y-1/2 overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
-                <Image src={avatarUrl} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
+                <Image src={avatarUrl} layout="fill" objectFit="cover" priority className="h-full w-full" alt="" />
               </div>
             </div>
           </div>
