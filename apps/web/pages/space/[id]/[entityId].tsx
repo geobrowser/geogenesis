@@ -35,6 +35,7 @@ interface Props {
 export default function EntityPage(props: Props) {
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
+  const description = Entity.description(props.triples);
 
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
@@ -49,6 +50,8 @@ export default function EntityPage(props: Props) {
         {props.serverCoverUrl && (
           <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
         )}
+        {description && <meta property="og:description" content={description} />}
+        {description && <meta name="twitter:description" content={description} />}
       </Head>
       <EntityStoreProvider
         id={props.id}
