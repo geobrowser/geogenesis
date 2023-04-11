@@ -61,7 +61,7 @@ export function Navbar({ onSearchClick }: Props) {
   return (
     <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
       <div className="flex items-center gap-8 md:gap-4">
-        <Link href="/" passHref>
+        <Link href="/spaces" passHref>
           <a>
             <GeoLogoLarge />
           </a>
@@ -72,7 +72,7 @@ export function Navbar({ onSearchClick }: Props) {
 
             <ChevronRight color="grey-03" />
 
-            {/* 
+            {/*
               The activeBreadcrumb really only doesn't exist when on the home page,
               but TypeScript doesn't know that with the current implementation.
             */}
