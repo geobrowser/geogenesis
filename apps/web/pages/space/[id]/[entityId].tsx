@@ -43,7 +43,12 @@ export default function EntityPage(props: Props) {
     <>
       <Head>
         <title>{props.name ?? props.id}</title>
+        <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
+        {props.serverCoverUrl && <meta property="og:image" content={props.serverCoverUrl} />}
+        {props.serverCoverUrl && (
+          <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
+        )}
       </Head>
       <EntityStoreProvider
         id={props.id}
