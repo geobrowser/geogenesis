@@ -91,6 +91,7 @@ async function main() {
         },
       },
     ],
+    // name: 'Legacy space deployment',
   }
 
   await addEntry(

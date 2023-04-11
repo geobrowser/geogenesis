@@ -65,7 +65,7 @@ services:
     environment:
       DEVNET_URL: http://devnet:8545
       DEVNET_CHAIN_ID: '31337'
-    command: pnpm --filter contracts run deploy:local
+    command: pnpm --filter @geogenesis/contracts run deploy:local
     volumes:
       - shared-volume:/app
     depends_on:

@@ -13,6 +13,7 @@ it('validates', () => {
         value: { type: 'number', value: '42', id: 'v' },
       },
     ],
+    name: 'Test proposal',
   }
 
   const ok = ActionSchema.validate(data)

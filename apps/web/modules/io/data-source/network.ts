@@ -63,6 +63,8 @@ export type PublishOptions = {
   actions: Action[];
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
+  name: string;
+  description?: string;
 };
 
 type FetchTriplesResult = { triples: TripleType[] };
@@ -112,7 +114,14 @@ const UPLOAD_CHUNK_SIZE = 2000;
 export class Network implements INetwork {
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
-  publish = async ({ actions, signer, onChangePublishState, space }: PublishOptions): Promise<void> => {
+  publish = async ({
+    actions,
+    signer,
+    onChangePublishState,
+    space,
+    name,
+    description = undefined,
+  }: PublishOptions): Promise<void> => {
     const contract = Space__factory.connect(space, signer);
 
     onChangePublishState('publishing-ipfs');
@@ -127,6 +136,7 @@ export class Network implements INetwork {
         type: 'root',
         version: '0.0.1',
         actions: chunk.flatMap(getActionFromChangeStatus),
+        name,
       };
 
       const cidString = await this.storageClient.uploadObject(root);

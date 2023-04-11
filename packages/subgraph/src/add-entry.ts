@@ -114,7 +114,8 @@ export function getOrCreateProposal(
   id: string,
   createdBy: Address,
   createdAt: BigInt,
-  space: string
+  space: string,
+  proposalName: string | null
 ): Proposal {
   let proposal = Proposal.load(id)
   if (!proposal) {
@@ -124,6 +125,7 @@ export function getOrCreateProposal(
     proposal.createdBy = getOrCreateAccount(createdBy).id
     proposal.proposedVersions = []
     proposal.space = space
+    proposal.name = proposalName
     proposal.save()
   }
   return proposal as Proposal
@@ -151,8 +153,23 @@ function handleRoot(
 ): void {
   const proposalId = getOrCreateActionCount().count.toString()
 
+  // HACK: Right now the Root JSON parser returns '' for the same
+  // if it does not exist in the object during parsing. Ideally
+  // it should return null since that better represents the absence
+  // of the name property.
+  let proposalName = ''
+  if (root.name != '') {
+    proposalName = root.name
+  }
+
   // create a proposal entity
-  getOrCreateProposal(proposalId, createdBy, createdAtTimestamp, space)
+  getOrCreateProposal(
+    proposalId,
+    createdBy,
+    createdAtTimestamp,
+    space,
+    proposalName
+  )
 
   // entityId -> actions
   let actionsByEntity: Map<string, Action[]> = new Map()
@@ -196,7 +213,8 @@ function handleRoot(
       actionIds,
       entityId,
       createdBy,
-      proposalId
+      proposalId,
+      proposalName
     )
 
     createVersion(
@@ -204,7 +222,8 @@ function handleRoot(
       proposedVersion.id,
       createdAtTimestamp,
       entityId,
-      createdBy
+      createdBy,
+      proposalName
     )
   }
 }

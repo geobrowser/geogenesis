@@ -46,6 +46,7 @@ const root: Root = {
       },
     },
   ],
+  name: 'Test',
 }
 
 ;(async () => {

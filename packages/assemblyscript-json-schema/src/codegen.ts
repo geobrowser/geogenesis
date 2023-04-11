@@ -193,7 +193,7 @@ export function generateObjectType(
           }
           if (__${property} == null) {
             log.debug("${name}.fromJSON(): __${property} is null", [])
-            return null
+            ${name === 'Root' && property === 'name' ? '' : 'return null'}
           }
           `
           if (valueSchemaType === 'array') {
@@ -216,7 +216,19 @@ export function generateObjectType(
               return null
             }`
           } else {
-            result += `const ${property} = __${property}.valueOf()`
+            if (name !== 'Root') {
+              result += `const ${property} = __${property}.valueOf()`
+            } else if (name === 'Root' && property === 'name') {
+              result += `let ${property}: string | null
+            if (__${property} != null) {
+              ${property} = __${property}.valueOf()
+            } else {
+              ${property} = ''
+            }
+            `
+            } else {
+              result += `const ${property} = __${property}.valueOf()`
+            }
           }
 
           return result.trim()

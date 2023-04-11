@@ -140,7 +140,13 @@ export function bootstrapRootSpaceCoreTypes(
 
   const proposalId = getOrCreateActionCount().count.toString()
 
-  getOrCreateProposal(proposalId, createdBy, createdAtTimestamp, space)
+  getOrCreateProposal(
+    proposalId,
+    createdBy,
+    createdAtTimestamp,
+    space,
+    `Creating initial types for ${space}`
+  )
 
   const entityToActionIds = new Map<string, string[]>()
 
@@ -275,7 +281,8 @@ export function bootstrapRootSpaceCoreTypes(
         actionIds,
         entityId,
         createdBy,
-        proposalId
+        proposalId,
+        `Creating initial types for ${space}`
       )
 
       createVersion(
@@ -283,7 +290,8 @@ export function bootstrapRootSpaceCoreTypes(
         proposedVersion.id,
         createdAtTimestamp,
         entityId,
-        createdBy
+        createdBy,
+        `Creating initial types for ${space}`
       )
     }
   }
