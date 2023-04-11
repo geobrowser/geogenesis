@@ -153,6 +153,10 @@ function handleRoot(
 ): void {
   const proposalId = getOrCreateActionCount().count.toString()
 
+  // HACK: Right now the Root JSON parser returns '' for the same
+  // if it does not exist in the object during parsing. Ideally
+  // it should return null since that better represents the absence
+  // of the name property.
   let proposalName = ''
   if (root.name != '') {
     proposalName = root.name
