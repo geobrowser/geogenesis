@@ -50,6 +50,7 @@ export default function EntityPage(props: Props) {
         {props.serverCoverUrl && (
           <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
         )}
+        {description && <meta property="description" content={description} />}
         {description && <meta property="og:description" content={description} />}
         {description && <meta name="twitter:description" content={description} />}
       </Head>
