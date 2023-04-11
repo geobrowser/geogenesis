@@ -22,7 +22,7 @@ interface Props {
   triples: Triple[];
   id: string;
   name: string;
-  serverDescription: string | null;
+  description: string | null;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
   serverAvatarUrl: string | null;
@@ -50,9 +50,9 @@ export default function EntityPage(props: Props) {
         {props.serverCoverUrl && (
           <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
         )}
-        {props.serverDescription && <meta property="description" content={props.serverDescription} />}
-        {props.serverDescription && <meta property="og:description" content={props.serverDescription} />}
-        {props.serverDescription && <meta name="twitter:description" content={props.serverDescription} />}
+        {props.description && <meta property="description" content={props.description} />}
+        {props.description && <meta property="og:description" content={props.description} />}
+        {props.description && <meta name="twitter:description" content={props.description} />}
       </Head>
       <EntityStoreProvider
         id={props.id}
@@ -154,10 +154,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       triples: entity?.triples ?? [],
       id: entityId,
       name: entity?.name ?? entityId,
+      description: Entity.description(entity?.triples ?? []),
       spaceId,
       referencedByEntities,
       key: entityId,
-      serverDescription: Entity.description(entity?.triples ?? []),
       serverAvatarUrl,
       serverCoverUrl,
 
