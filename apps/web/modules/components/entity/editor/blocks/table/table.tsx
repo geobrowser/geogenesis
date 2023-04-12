@@ -19,7 +19,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
 import { valueTypes } from '~/modules/value-types';
-import { useEntityTableBlock } from './entity-page-table-block-store-provider';
+import { useTableBlock } from './table-block-store-provider';
 import { EditableEntityTableColumnHeader } from '~/modules/components/entity-table/editable-entity-table-column-header';
 import { Text } from '~/modules/design-system/text';
 import { Cell, Column, Row } from '~/modules/types';
@@ -28,6 +28,7 @@ import { EntityTableCell } from '~/modules/components/entity-table/entity-table-
 import { AddNewColumn } from '~/modules/components/entity-table/add-new-column';
 import { EmptyTableText } from '~/modules/components/table/styles';
 import { TableCell } from '~/modules/components/table/cell';
+import { columnName, columnValueType } from './utils';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -75,7 +76,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columnValueType, columnName } = useEntityTableBlock();
+    const { columns } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -83,7 +84,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const valueType = columnValueType(cellData.columnId);
+    const valueType = columnValueType(cellData.columnId, columns);
 
     const cellTriples = pipe(
       actions$.get()[space],
@@ -114,7 +115,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           remove={remove}
           space={space}
           valueType={valueType}
-          columnName={columnName(cellData.columnId)}
+          columnName={columnName(cellData.columnId, columns)}
         />
       );
     } else if (cellData && !isPlaceholderCell) {
@@ -143,7 +144,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { selectedType, unpublishedColumns } = useEntityTableBlock();
+  const { type, unpublishedColumns } = useTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
@@ -185,7 +186,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
             </tr>
           ))}
         </thead>
-        {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
+        {editable && type && <AddNewColumn space={space} selectedType={type} />}
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>

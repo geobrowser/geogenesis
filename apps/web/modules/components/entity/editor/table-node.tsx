@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
 import { Triple } from '~/modules/types';
-import { EntityPageTableBlockStoreProvider } from './blocks/table/entity-page-table-block-store-provider';
+import { TableBlockStoreProvider } from './blocks/table/table-block-store-provider';
 import { TableBlock } from './blocks/table/table-block';
 import { useTypesStore } from '~/modules/type/types-store';
 
@@ -48,30 +48,34 @@ export const TableNode = Node.create({
 });
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, typeId } = node.attrs;
+  const { spaceId, typeId, id } = node.attrs;
   const { types } = useTypesStore();
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId) as Triple;
   }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  console.log('types', types);
-  console.log('selectedType', selectedType);
-  console.log('typeId', typeId);
-
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} />
+        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} entityId={id} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({ spaceId, selectedType }: { spaceId: string; selectedType: Triple }) {
+function TableNodeChildren({
+  spaceId,
+  selectedType,
+  entityId,
+}: {
+  spaceId: string;
+  selectedType: Triple;
+  entityId: string;
+}) {
   return (
-    <EntityPageTableBlockStoreProvider spaceId={spaceId} initialSelectedType={selectedType}>
-      <TableBlock spaceId={spaceId} />
-    </EntityPageTableBlockStoreProvider>
+    <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+      <TableBlock spaceId={spaceId} entityId={entityId} />
+    </TableBlockStoreProvider>
   );
 }

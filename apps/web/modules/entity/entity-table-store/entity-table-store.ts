@@ -60,6 +60,15 @@ export function initialFilterState(): FilterState {
   ];
 }
 
+/**
+ * The EntityTableStore handles state and logic for the EntityTable component that
+ * gets rendered on the /spaces/[id] route. For now it duplicated a lot of functionality
+ * that we have in the TableBlockStore as well. Eventually the EntityTable will be
+ * de-emphasized in the product and we will be able to migrate a lot of the implementation
+ * from the TableBlockStore to here.
+ *
+ * For now we are fine with the duplication.
+ */
 export class EntityTableStore implements IEntityTableStore {
   private api: NetworkData.INetwork;
   rows$: ObservableComputed<Row[]>;
