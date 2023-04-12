@@ -5,7 +5,7 @@ import { Text } from '~/modules/design-system/text';
 import { SelectedEntityType } from '~/modules/entity';
 import { ResultItem, ResultsList } from '../../../autocomplete/results-list';
 import { Spacer } from '~/modules/design-system/spacer';
-import { useTypesStore } from '~/modules/types/types-store';
+import { useTypesStore } from '~/modules/type/types-store';
 
 interface Props {
   handleSelect: (type: SelectedEntityType) => void;

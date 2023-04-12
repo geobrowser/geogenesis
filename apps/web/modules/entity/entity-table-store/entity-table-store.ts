@@ -4,7 +4,6 @@ import { A, pipe } from '@mobily/ts-belt';
 import produce from 'immer';
 
 import { ActionsStore } from '~/modules/action';
-import { ID } from '~/modules/id';
 import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
@@ -12,6 +11,7 @@ import { NetworkData } from '~/modules/io';
 import { Column, FilterState, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
+import { CreateType } from '~/modules/type';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 
@@ -416,69 +416,15 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   createForeignType = (foreignType: TripleType) => {
-    const spaceConfigEntityId = this.space$.spaceConfigEntityId.get() || ID.createEntityId();
-
-    if (!this.space$.get()?.spaceConfigEntityId) {
-      const spaceConfigNameTriple = Triple.withId({
-        space: this.spaceId,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
-      });
-
-      const spaceConfigTypeTriple = Triple.withId({
-        space: this.spaceId,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
-      });
-
-      this.ActionsStore.create(spaceConfigNameTriple);
-      this.ActionsStore.create(spaceConfigTypeTriple);
-    }
-
-    const spaceConfigForeignTypeTriple = Triple.withId({
-      space: this.spaceId,
-      entityId: spaceConfigEntityId,
-      entityName: 'Space Configuration',
-      attributeId: SYSTEM_IDS.FOREIGN_TYPES,
-      attributeName: 'Foreign Types',
-      value: { id: foreignType.entityId, type: 'entity', name: foreignType.entityName },
-    });
-
-    this.ActionsStore.create(spaceConfigForeignTypeTriple);
+    CreateType.createForeignType(
+      foreignType,
+      this.spaceId,
+      this.space$.spaceConfigEntityId.get(),
+      this.ActionsStore.create
+    );
   };
 
   createType = (entityName: string) => {
-    /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
-    const entityId = ID.createEntityId();
-    const nameTriple = Triple.withId({
-      space: this.spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.NAME,
-      attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: entityName },
-    });
-    const typeTriple = Triple.withId({
-      space: this.spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.TYPES,
-      attributeName: 'Types',
-      value: {
-        id: SYSTEM_IDS.SCHEMA_TYPE,
-        type: 'entity',
-        name: 'Type',
-      },
-    });
-    this.ActionsStore.create(nameTriple);
-    this.ActionsStore.create(typeTriple);
-
-    return typeTriple;
+    return CreateType.createType(entityName, this.spaceId, this.ActionsStore.create);
   };
 }
