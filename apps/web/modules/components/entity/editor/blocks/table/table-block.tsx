@@ -1,7 +1,6 @@
 import * as React from 'react';
 import BoringAvatar from 'boring-avatars';
 
-import { Text } from '~/modules/design-system/text';
 import { useTableBlock } from './table-block-store-provider';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
@@ -77,13 +76,11 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 
   return editable && isEditor ? (
     <input
-      defaultValue={blockEntity?.name ?? ''}
+      defaultValue={blockEntity?.name ?? undefined}
       placeholder="Enter a name for this table..."
       className="w-full appearance-none text-smallTitle text-text outline-none placeholder:text-grey-03"
     />
   ) : (
-    <Text as="h3" variant="smallTitle">
-      {blockEntity?.name ?? 'Undefined'}
-    </Text>
+    <h4 className="text-smallTitle">{blockEntity?.name}</h4>
   );
 }
