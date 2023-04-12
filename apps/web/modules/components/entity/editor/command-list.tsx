@@ -70,7 +70,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
   return (
     <div
       ref={containerRef}
-      className="items shadow-xl relative flex w-80 flex-col overflow-y-auto rounded bg-white p-1 shadow-card"
+      className="items shadow-xl relative flex w-80 flex-col overflow-y-auto rounded bg-white shadow-card"
     >
       {mode === 'select-block' ? (
         <>
@@ -81,15 +81,15 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
             items.map(({ title, icon }, index) => (
               <button
                 className={cx(
-                  `item ${index === selectedIndex ? 'is-selected bg-grey-02' : ''}`,
-                  'hover:bg-gray-200 flex items-center gap-2 rounded p-1'
+                  `item ${index === selectedIndex ? 'is-selected bg-grey-01' : ''}`,
+                  'flex w-full items-center gap-2 p-1 hover:bg-grey-01'
                 )}
                 key={index}
                 data-index={index}
                 onMouseOver={() => setSelectedIndex(index)}
                 onClick={() => invokeItem(items[selectedIndex])}
               >
-                <div className="grid h-9 w-9 place-items-center rounded bg-divider">{icon}</div>
+                <div className="grid h-9 w-9 place-items-center bg-divider">{icon}</div>
                 <Text variant="metadataMedium">{title}</Text>
               </button>
             ))
@@ -98,9 +98,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
           )}
         </>
       ) : (
-        <div>
-          <TableBlockTypePicker handleSelect={handleTableSelect} />
-        </div>
+        <TableBlockTypePicker handleSelect={handleTableSelect} />
       )}
     </div>
   );

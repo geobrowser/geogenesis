@@ -26,7 +26,7 @@ export function TableBlockTypePicker({ handleSelect }: Props) {
       <div className="px-2">
         <Input value={entityName} onChange={e => setEntityName(e.currentTarget.value)} />
       </div>
-      <ResultsList className="max-h-96 overflow-y-auto px-0">
+      <ResultsList className="max-h-96 overflow-y-auto">
         {filteredTypes.map(type => (
           <ResultItem onClick={() => handleSelect(type)} key={type.id}>
             {type.entityName}
