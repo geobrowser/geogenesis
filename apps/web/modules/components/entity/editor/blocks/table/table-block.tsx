@@ -5,19 +5,16 @@ import { Spacer } from '~/modules/design-system/spacer';
 
 interface Props {
   spaceId: string;
-  entityId: string;
 }
 
-export function TableBlock({ spaceId, entityId }: Props) {
-  const { columns, rows } = useTableBlock();
-
-  console.log('entityId', entityId);
+export function TableBlock({ spaceId }: Props) {
+  const { columns, rows, blockEntity } = useTableBlock();
 
   return (
     <div>
       <div>
         <Text as="h3" variant="smallTitle">
-          Table name
+          {blockEntity?.name ?? 'Undefined'}
         </Text>
         <Spacer height={8} />
       </div>

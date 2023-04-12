@@ -4,9 +4,9 @@ import { createContext, useContext, useMemo } from 'react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Triple as ITriple, Row } from '~/modules/types';
+import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
-import { NetworkData } from '~/modules/io';
+import { MergedData, NetworkData } from '~/modules/io';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -46,10 +46,12 @@ interface ITableBlockStoreConfig {
 export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
+  MergedData: MergedData;
   pageNumber$: Observable<number> = observable(0);
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
   type$: Observable<ITriple>;
+  blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   abortController: AbortController = new AbortController();
 
@@ -57,6 +59,12 @@ export class TableBlockStore {
     this.api = api;
     this.ActionsStore = ActionsStore;
     this.type$ = observable(selectedType);
+    this.MergedData = new MergedData({ api, store: ActionsStore });
+
+    this.blockEntity$ = makeOptionalComputed(
+      null,
+      computed(() => this.MergedData.fetchEntity(entityId))
+    );
 
     const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], triples: [] },
@@ -248,12 +256,13 @@ export function useTableBlockStore() {
 }
 
 export function useTableBlock() {
-  const { rows$, pageNumber$, columns$, type$, unpublishedColumns$ } = useTableBlockStore();
+  const { rows$, pageNumber$, columns$, type$, unpublishedColumns$, blockEntity$ } = useTableBlockStore();
   const type = useSelector(type$);
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const pageNumber = useSelector(pageNumber$);
+  const blockEntity = useSelector(blockEntity$);
 
   return {
     type,
@@ -261,5 +270,6 @@ export function useTableBlock() {
     columns,
     unpublishedColumns,
     pageNumber,
+    blockEntity,
   };
 }

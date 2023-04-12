@@ -75,7 +75,7 @@ function TableNodeChildren({
 }) {
   return (
     <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
-      <TableBlock spaceId={spaceId} entityId={entityId} />
+      <TableBlock spaceId={spaceId} />
     </TableBlockStoreProvider>
   );
 }
