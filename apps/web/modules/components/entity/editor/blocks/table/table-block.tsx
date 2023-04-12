@@ -1,23 +1,37 @@
+import * as React from 'react';
+import BoringAvatar from 'boring-avatars';
+
 import { Text } from '~/modules/design-system/text';
 import { useTableBlock } from './table-block-store-provider';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Context } from '~/modules/design-system/icons/context';
-import { Search } from '~/modules/design-system/icons/search';
 import { Icon } from '~/modules/design-system/icon';
+import { colors } from '~/modules/design-system/theme/colors';
 
 interface Props {
   spaceId: string;
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { columns, rows } = useTableBlock();
+  const { columns, rows, blockEntity } = useTableBlock();
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <EditableTitle spaceId={spaceId} />
+      <div className="mb-2 flex items-center justify-between py-1">
+        <div className="flex w-full items-center gap-2">
+          <span className="overflow-hidden rounded">
+            <BoringAvatar
+              size={16}
+              square={true}
+              variant="bauhaus"
+              name={blockEntity?.name ?? 'Untitled'}
+              colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+            />
+          </span>
+
+          <EditableTitle spaceId={spaceId} />
+        </div>
         <div className="flex items-center gap-5">
           <span
             title="Table block filtering coming soon"
