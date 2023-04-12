@@ -195,8 +195,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           }}
         />
       )}
-
-      {/* <DebugTriples triples={triples} className="absolute" /> */}
     </div>
   );
 });

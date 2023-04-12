@@ -11,9 +11,9 @@ import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { Column } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
-import { DebugTriples } from '../debug/debug-triples';
 import { useEditEvents } from '../entity/edit-events';
 import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
+
 interface Props {
   column: Column;
   // This spaceId is the spaceId of the attribute, not the current space.
@@ -138,7 +138,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
           ]}
         />
       )}
-      <DebugTriples triples={triples} className="-mt-3.5 h-3" />
     </div>
   );
 });
