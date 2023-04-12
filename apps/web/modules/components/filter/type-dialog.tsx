@@ -109,7 +109,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
                 {type.entityName}
               </ResultItem>
             ))
-          : filteredAutocompleteResults.map((result, i) => (
+          : filteredAutocompleteResults.map(result => (
               <ResultContent
                 key={result.id}
                 onClick={() => {

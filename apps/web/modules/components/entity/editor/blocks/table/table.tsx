@@ -31,7 +31,7 @@ import { TableCell } from '~/modules/components/table/cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
+const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedColumns: Column[]) => {
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
@@ -46,6 +46,7 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean) => {
         return isEditMode && !isNameColumn ? (
           <div className={cx(isLastColumn ? 'pr-12' : '')}>
             <EditableEntityTableColumnHeader
+              unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
               spaceId={Entity.nameTriple(column.triples)?.space}
@@ -74,7 +75,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columnValueType } = useEntityTableBlock();
+    const { columnValueType, columnName } = useEntityTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -112,6 +113,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           update={update}
           remove={remove}
           space={space}
+          valueType={valueType}
+          columnName={columnName(cellData.columnId)}
         />
       );
     } else if (cellData && !isPlaceholderCell) {
@@ -136,16 +139,16 @@ interface Props {
   rows: Row[];
 }
 
-export const EntityTable = ({ rows, space, columns }: Props) => {
+export const TableBlockTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { selectedType } = useEntityTableBlock();
+  const { selectedType, unpublishedColumns } = useEntityTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode),
+    columns: formatColumns(columns, isEditMode, unpublishedColumns),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

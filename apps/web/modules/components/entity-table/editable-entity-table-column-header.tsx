@@ -7,7 +7,7 @@ import { Image } from '~/modules/design-system/icons/image';
 import { Relation } from '~/modules/design-system/icons/relation';
 import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
-import { Entity, useEntityTable } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { Column } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
@@ -22,15 +22,16 @@ interface Props {
   // name in sync.
   spaceId?: string;
   entityId: string;
+  unpublishedColumns: Column[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
   column,
   spaceId,
   entityId,
+  unpublishedColumns,
 }: Props) {
   const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
-  const { unpublishedColumns } = useEntityTable();
 
   const localTriples = pipe(
     Triple.fromActions(actionsFromSpace, column.triples),

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { SYSTEM_IDS } from '~/../../packages/ids';
-import { Entity, useEntityTable } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { NavUtils } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { DeletableChipButton } from '../../design-system/chip';
@@ -17,6 +17,8 @@ interface Props {
   create: (triple: Triple) => void;
   update: (triple: Triple, oldTriple: Triple) => void;
   remove: (triple: Triple) => void;
+  valueType: string;
+  columnName: string;
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -26,8 +28,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   create,
   update,
   remove,
+  columnName,
+  valueType,
 }: Props) {
-  const { columnValueType, columnName } = useEntityTable();
   const send = useEditEvents({
     context: {
       entityId: cell.entityId,
@@ -45,9 +48,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const attributeId = cell.columnId;
 
   const entityValueTriples = triples.filter(t => t.value.type === 'entity');
-
-  const valueType = columnValueType(cell.columnId);
-  const cellColumnName = columnName(cell.columnId);
 
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   const firstTriple = triples[0];
@@ -73,7 +73,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {
         attributeId,
-        attributeName: cellColumnName,
+        attributeName: columnName,
         entityId: linkedEntity.id,
         entityName: linkedEntity.name || '',
       },
@@ -85,7 +85,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
       payload: {
         attributeId,
-        attributeName: cellColumnName,
+        attributeName: columnName,
         value,
       },
     });
@@ -107,7 +107,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       payload: {
         imageSrc,
         attributeId,
-        attributeName: cellColumnName,
+        attributeName: columnName,
       },
     });
   };
