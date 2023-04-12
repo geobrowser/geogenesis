@@ -18,7 +18,6 @@ interface Props {
   initialRows: Row[];
   initialSelectedType: Triple | null;
   initialColumns: Column[];
-  initialTypes: Triple[];
 }
 
 export function EntityTableStoreProvider({
@@ -27,7 +26,6 @@ export function EntityTableStoreProvider({
   initialRows,
   initialSelectedType,
   initialColumns,
-  initialTypes,
 }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
@@ -47,11 +45,10 @@ export function EntityTableStoreProvider({
       initialRows,
       initialSelectedType,
       initialColumns,
-      initialTypes,
       ActionsStore,
       SpaceStore,
     });
-  }, [network, spaceId, initialRows, initialSelectedType, initialColumns, initialTypes, ActionsStore, SpaceStore]);
+  }, [network, spaceId, initialRows, initialSelectedType, initialColumns, ActionsStore, SpaceStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

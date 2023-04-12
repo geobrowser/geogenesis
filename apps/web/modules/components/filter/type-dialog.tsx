@@ -12,11 +12,11 @@ import { Entity } from '~/modules/types';
 import { Spacer } from '../../design-system/spacer';
 import { Text } from '../../design-system/text';
 import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/results-list';
+import { useTypesStore } from '~/modules/type/types-store';
 
 interface Props {
   handleSelect: (type: SelectedEntityType) => void;
   spaceId: string;
-  types: SelectedEntityType[];
 }
 
 type TypeDialogMode = 'current-space' | 'foreign-space';
@@ -32,6 +32,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
       },
     ],
   });
+  const typesStore = useTypesStore();
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -40,7 +41,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
   const [entityName, setEntityName] = useState('');
   const [mode, setMode] = useState<TypeDialogMode>('current-space');
 
-  const filteredTypes = entityTableStore.types.filter(type =>
+  const filteredTypes = typesStore.types.filter(type =>
     (type.entityName || '').toLowerCase().includes(entityName.toLowerCase())
   );
 
@@ -79,7 +80,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
     handleSelect(newType);
   };
 
-  const spaceTypeIds = entityTableStore.types.map(type => type.entityId);
+  const spaceTypeIds = typesStore.types.map(type => type.entityId);
 
   // Prevent non-types or current space types from showing up in the autocomplete results
   const filteredAutocompleteResults = autocomplete.results.filter(result => {

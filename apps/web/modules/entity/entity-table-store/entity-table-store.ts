@@ -18,7 +18,6 @@ export type SelectedType = { id: string; entityId: string; entityName: string | 
 interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
-  types$: ObservableComputed<SelectedType[]>;
   selectedType$: Observable<SelectedType | null>;
   pageNumber$: Observable<number>;
   query$: ObservableComputed<string>;
@@ -39,7 +38,6 @@ interface IEntityTableStoreConfig {
   pageSize?: number;
   initialRows: Row[];
   initialSelectedType: TripleType | null;
-  initialTypes: TripleType[];
   initialColumns: Column[];
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
@@ -70,12 +68,7 @@ export class EntityTableStore implements IEntityTableStore {
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<SelectedType | null>;
-  // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-  // uses the entityId and entityName, so we filter out the rest of the data when adding
-  // a foreign type. This makes it so we don't have to query the network or check local
-  // actions for the entity whose entityId === t.value.id
-  types$: ObservableComputed<SelectedType[]>;
-  localForeignTypes$: ObservableComputed<{ id: string; entityId: string; entityName: string }[]>;
+
   query$: ObservableComputed<string>;
   space$: ObservableComputed<Space | undefined>;
   filterState$: Observable<FilterState>;
@@ -92,7 +85,6 @@ export class EntityTableStore implements IEntityTableStore {
     initialRows,
     initialSelectedType,
     initialColumns,
-    initialTypes,
     ActionsStore,
     SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
@@ -106,86 +98,6 @@ export class EntityTableStore implements IEntityTableStore {
     this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
-    this.localForeignTypes$ = observable<{ id: string; entityId: string; entityName: string }[]>([]);
-
-    this.localForeignTypes$ = makeOptionalComputed(
-      [],
-      computed(() => {
-        const space = this.space$.get();
-
-        if (!space) {
-          return [];
-        }
-
-        const spaceActions = this.ActionsStore.actions$.get()[spaceId] ?? [];
-        const triplesFromSpaceActions = Triple.fromActions(spaceActions, []);
-
-        const spaceConfigId = space.spaceConfigEntityId;
-
-        if (!spaceConfigId) {
-          const localSpaceConfigId = triplesFromSpaceActions.find(
-            t => t.value.type === 'entity' && t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
-          )?.entityId;
-
-          const localForeignTriples = pipe(
-            this.ActionsStore.actions$.get(),
-            actions => Triple.fromActions(actions[spaceId], []),
-            A.filter(t => t.entityId === localSpaceConfigId),
-            A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-            // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-            // uses the entityId and entityName, so we filter out the rest of the data. This
-            // makes it so we don't have to query the network or check local actions for the
-            // entity whose entityId === t.value.id
-            A.map(t => ({
-              id: t.id,
-              entityId: t.value.type === 'entity' ? t.value.id : '',
-              entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
-            }))
-          );
-
-          return localForeignTriples;
-        }
-
-        const localForeignTypes = pipe(
-          this.ActionsStore.actions$.get(),
-          actions => Triple.fromActions(actions[spaceId], []),
-          A.filter(t => t.entityId === spaceConfigId),
-          A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-          // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-          // uses the entityId and entityName, so we filter out the rest of the data. This
-          // makes it so we don't have to query the network or check local actions for the
-          // entity whose entityId === t.value.id
-          A.map(t => ({
-            id: t.id,
-            entityId: t.value.type === 'entity' ? t.value.id : '',
-            entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
-          }))
-        );
-
-        return localForeignTypes;
-      })
-    );
-
-    this.types$ = computed(() => {
-      const globalActions = ActionsStore.actions$.get()[spaceId] || [];
-      const actions = globalActions.filter(a => {
-        const isCreate =
-          a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-        const isDelete =
-          a.type === 'deleteTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-        const isRemove =
-          a.type === 'editTriple' &&
-          a.before.attributeId === SYSTEM_IDS.TYPES &&
-          a.before.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-
-        return isCreate || isDelete || isRemove;
-      });
-
-      const localForeignTypes = this.localForeignTypes$.get();
-
-      const triplesFromActions = Triple.fromActions(actions, initialTypes);
-      return [...Triple.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
-    });
 
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
