@@ -5,7 +5,7 @@ import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNod
 import { Triple } from '~/modules/types';
 import { EntityPageTableBlockStoreProvider } from './blocks/table/entity-page-table-block-store-provider';
 import { TableBlock } from './blocks/table/table-block';
-import { useTypesStore } from '~/modules/stores/types-store';
+import { useTypesStore } from '~/modules/types/types-store';
 
 export const TableNode = Node.create({
   name: 'tableNode',

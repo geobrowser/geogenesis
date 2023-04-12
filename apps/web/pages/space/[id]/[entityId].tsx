@@ -16,7 +16,7 @@ import { Space, Triple } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
-import { TypesStoreProvider } from '~/modules/stores/types-store';
+import { TypesStoreProvider } from '~/modules/types/types-store';
 
 interface Props {
   triples: Triple[];
