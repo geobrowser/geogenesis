@@ -7,7 +7,7 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider, EntityTableStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';

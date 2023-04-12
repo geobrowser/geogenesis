@@ -40,7 +40,6 @@ export function EntityPageTableBlockStoreProvider({ spaceId, children, initialSe
       spaceId,
       initialRows: [],
       initialSelectedType,
-      initialTypes: [],
       initialColumns: [],
       ActionsStore,
       SpaceStore,
@@ -75,7 +74,6 @@ export function useEntityTableBlock() {
     hydrated$,
     selectedType$,
     columns$,
-    types$,
     unpublishedColumns$,
     columnValueType,
     setFilterState,
@@ -83,7 +81,6 @@ export function useEntityTableBlock() {
   } = useEntityPageTableBlockStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
-  const types = useSelector(types$);
   const hydrated = useSelector(hydrated$);
   const selectedType = useSelector(selectedType$);
   const pageNumber = useSelector(pageNumber$);
@@ -96,7 +93,6 @@ export function useEntityTableBlock() {
     rows,
     columns,
     unpublishedColumns,
-    types,
     query,
     hydrated,
     selectedType,
