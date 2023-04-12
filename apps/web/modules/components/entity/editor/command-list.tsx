@@ -6,8 +6,8 @@ import { Editor } from '@tiptap/react';
 import { Text } from '~/modules/design-system/text';
 import { SelectedEntityType, useEntityStore } from '~/modules/entity';
 import { Triple } from '~/modules/types';
-import { TypeDialog } from '../../filter/type-dialog';
 import { CommandSuggestionItem, tableCommandItem } from './command-items';
+import { TableBlockTypePicker } from './blocks/table/table-block-type-picker';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;
@@ -99,7 +99,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
         </>
       ) : (
         <div>
-          <TypeDialog spaceId={entityStore.spaceId} handleSelect={handleTableSelect} />
+          <TableBlockTypePicker handleSelect={handleTableSelect} />
         </div>
       )}
     </div>

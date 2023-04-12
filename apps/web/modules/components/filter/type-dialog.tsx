@@ -16,6 +16,7 @@ import { ResultContent, ResultItem, ResultsList } from '../entity/autocomplete/r
 interface Props {
   handleSelect: (type: SelectedEntityType) => void;
   spaceId: string;
+  types: SelectedEntityType[];
 }
 
 type TypeDialogMode = 'current-space' | 'foreign-space';

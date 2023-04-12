@@ -12,10 +12,11 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
-import { Triple } from '~/modules/types';
+import { Space, Triple } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
+import { TypesStoreProvider } from '~/modules/stores/types-store';
 
 interface Props {
   triples: Triple[];
@@ -32,6 +33,7 @@ interface Props {
   blockIdsTriple: Triple | null;
 
   spaceTypes: Triple[];
+  space: Space | null;
 }
 
 export default function EntityPage(props: Props) {
@@ -55,13 +57,7 @@ export default function EntityPage(props: Props) {
         {props.description && <meta property="og:description" content={props.description} />}
         {props.description && <meta name="twitter:description" content={props.description} />}
       </Head>
-      <EntityTableStoreProvider
-        initialColumns={[]}
-        initialRows={[]}
-        initialTypes={props.spaceTypes}
-        initialSelectedType={null}
-        spaceId={props.spaceId}
-      >
+      <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
         <EntityStoreProvider
           id={props.id}
           spaceId={props.spaceId}
@@ -72,7 +68,7 @@ export default function EntityPage(props: Props) {
         >
           <Page {...props} schemaTriples={[]} />
         </EntityStoreProvider>
-      </EntityTableStoreProvider>
+      </TypesStoreProvider>
     </>
   );
 }
@@ -164,6 +160,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       key: entityId,
       serverAvatarUrl,
       serverCoverUrl,
+
+      space: spaces.find(s => s.id === spaceId) ?? null,
 
       // For entity page editor
       blockIdsTriple,

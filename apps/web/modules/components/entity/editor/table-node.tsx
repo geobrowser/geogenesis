@@ -2,10 +2,10 @@ import * as React from 'react';
 import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
-import { EntityTableStoreProvider, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { EntityPageTableBlockStoreProvider } from './blocks/table/entity-page-table-block-store-provider';
 import { TableBlock } from './blocks/table/table-block';
+import { useTypesStore } from '~/modules/stores/types-store';
 
 export const TableNode = Node.create({
   name: 'tableNode',
@@ -49,7 +49,7 @@ export const TableNode = Node.create({
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId } = node.attrs;
-  const { types } = useEntityTable();
+  const { types } = useTypesStore();
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId) as Triple;

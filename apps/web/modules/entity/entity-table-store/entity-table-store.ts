@@ -75,10 +75,10 @@ export class EntityTableStore implements IEntityTableStore {
   // a foreign type. This makes it so we don't have to query the network or check local
   // actions for the entity whose entityId === t.value.id
   types$: ObservableComputed<SelectedType[]>;
+  localForeignTypes$: ObservableComputed<{ id: string; entityId: string; entityName: string }[]>;
   query$: ObservableComputed<string>;
   space$: ObservableComputed<Space | undefined>;
   filterState$: Observable<FilterState>;
-  localForeignTypes$: ObservableComputed<{ id: string; entityId: string; entityName: string }[]>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   spaceId: string;
