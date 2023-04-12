@@ -5,10 +5,10 @@ import { Entity } from '../../entity';
 import { Triple } from '../../types';
 import { FetchTriplesOptions, INetwork } from '../data-source/network';
 
-export const makeStubTriple = (name: string): Triple => {
+export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
     id: name,
-    entityId: name,
+    entityId: entityId ?? name,
     entityName: name,
     attributeId: 'name',
     attributeName: 'Name',

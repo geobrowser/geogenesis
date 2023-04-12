@@ -2,6 +2,7 @@ export interface Root {
   type: 'root'
   version: string
   actions: Action[]
+  name?: string
 }
 
 type Action = CreateEntityAction | CreateTripleAction | DeleteTripleAction

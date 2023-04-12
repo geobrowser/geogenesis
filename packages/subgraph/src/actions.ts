@@ -94,7 +94,8 @@ export function createProposedVersion(
   actions: string[],
   entityId: string,
   createdBy: Address,
-  proposalId: string
+  proposalId: string,
+  proposalName: string | null
 ): ProposedVersion {
   let version = ProposedVersion.load(versionId)
   if (version == null) {
@@ -103,6 +104,7 @@ export function createProposedVersion(
     version.actions = actions // action ids
     version.entity = entityId
     version.createdAt = createdAt
+    version.name = proposalName
     version.save()
   }
   let proposal = Proposal.load(proposalId)
@@ -127,7 +129,8 @@ export function createVersion(
   proposedVersion: string,
   createdAt: BigInt,
   entityId: string,
-  createdBy: Address
+  createdBy: Address,
+  proposalName: string | null
 ): Version {
   let version = Version.load(versionId)
   let proposed = ProposedVersion.load(proposedVersion)
@@ -156,6 +159,7 @@ export function createVersion(
       entity.save()
     }
     version.createdAt = createdAt
+    version.name = proposalName
     version.save()
   }
   return version

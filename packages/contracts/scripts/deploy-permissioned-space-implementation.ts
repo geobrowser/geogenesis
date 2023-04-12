@@ -66,6 +66,7 @@ async function deployPermissionedSpaceImplementation() {
         },
       },
     ],
+    name: 'Permissioned space deployment',
   }
 
   await addEntry(

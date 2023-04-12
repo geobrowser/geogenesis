@@ -19,6 +19,7 @@ import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
 import type { Action, Entity, ReviewState, Space } from '../types';
+import type { SpaceId } from '../action/actions-store';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -49,6 +50,13 @@ export const Review = () => {
       </Dialog.Portal>
     </Dialog.Root>
   );
+};
+
+type Proposals = Record<SpaceId, Proposal>;
+
+type Proposal = {
+  name: string;
+  description: string;
 };
 
 const ReviewChanges = () => {
@@ -86,18 +94,19 @@ const ReviewChanges = () => {
 
   // Proposal state
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
-  const [proposalName, setProposalName] = useState<string>('');
-  const isReadyToPublish = proposalName.length > 3;
+  const [proposals, setProposals] = useLocalStorage<Proposals>('proposals', {});
+  const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
+  const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
-
   const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
   // Publishing logic
   const { data: signer } = useSigner();
   const handlePublish = async () => {
     if (!activeSpace || !signer) return;
-    await publish(activeSpace, signer, setReviewState, unstagedChanges);
+    await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
+    setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
   };
 
   return (
@@ -150,13 +159,18 @@ const ReviewChanges = () => {
       <div className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="flex flex-col gap-16">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col">
               <div className="text-body">Proposal name</div>
               <input
                 type="text"
-                value={proposalName}
-                onChange={({ currentTarget }) => setProposalName(currentTarget.value)}
-                placeholder="Describe your proposal..."
+                value={proposals[activeSpace]?.name ?? ''}
+                onChange={({ currentTarget }) =>
+                  setProposals({
+                    ...proposals,
+                    [activeSpace]: { ...proposals[activeSpace], name: currentTarget.value },
+                  })
+                }
+                placeholder="Name your proposal..."
                 className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
               />
             </div>

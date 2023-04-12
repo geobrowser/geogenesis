@@ -75,6 +75,7 @@ async function deployPermissionlessSpaceImplementation() {
         },
       },
     ],
+    name: 'Permissionless space deployment',
   }
 
   await addEntry(
