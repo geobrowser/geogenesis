@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import cx from 'classnames';
 import { cva } from 'class-variance-authority';
 import { useSigner } from 'wagmi';
@@ -8,8 +8,9 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import { useQuery } from '@tanstack/react-query';
 
-import { Action as ActionNamespace } from '../action';
+import { Action } from '../action';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
@@ -18,8 +19,8 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
-import type { Action, Entity, ReviewState, Space } from '../types';
-import type { SpaceId } from '../action/actions-store';
+import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
+import type { INetwork } from '../io/data-source/network';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -52,6 +53,7 @@ export const Review = () => {
   );
 };
 
+type SpaceId = string;
 type Proposals = Record<SpaceId, Proposal>;
 
 type Proposal = {
@@ -99,7 +101,8 @@ const ReviewChanges = () => {
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
-  const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
+  const actions = Action.unpublishedChanges(actionsFromSpace);
+  const [changes, isLoading] = useChanges(actions, activeSpace);
 
   // Publishing logic
   const { data: signer } = useSigner();
@@ -108,6 +111,13 @@ const ReviewChanges = () => {
     await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
     setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
   };
+
+  if (isLoading || typeof changes !== 'object') {
+    return null;
+  }
+
+  // @TODO remove console.info
+  console.info('changes:', changes);
 
   return (
     <>
@@ -182,6 +192,7 @@ const ReviewChanges = () => {
                   entityId={key}
                   entityName={changes[key].entityName}
                   entityRevisions={changes[key].entityRevisions}
+                  blockRevisions={changes[key].blockRevisions}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
@@ -224,7 +235,11 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
 export type Changes = Record<EntityId, Change>;
 
 type EntityId = string;
-type Change = { entityName: EntityName; entityRevisions: EntityRevisions };
+type Change = {
+  entityName: EntityName;
+  entityRevisions?: EntityRevisions;
+  blockRevisions?: EntityRevisions;
+};
 
 type EntityName = string;
 type EntityRevisions = Record<AttributeId, EntityRevision>;
@@ -244,26 +259,30 @@ type AttributeName = string;
 type Before = string[];
 type After = string[];
 
-const useChanges = (actions: Array<Action>) => {
-  return useMemo(() => getChanges(actions), [actions]);
+const useChanges = (actions: Array<ActionType>, spaceId: string) => {
+  const { network } = Services.useServices();
+  const { data: changes, isLoading } = useQuery<Changes>({
+    queryKey: [`${spaceId}-changes`],
+    queryFn: async () => getChanges(actions, network),
+  });
+  return [changes, isLoading];
 };
 
-export const getChanges = (actions: Array<Action>): Changes => {
+export const getChanges = async (actions: Array<ActionType>, network: INetwork): Promise<Changes> => {
   const changes: Changes = {};
-
-  actions.forEach((action: Action) => {
+  const parsedActions = Action.squashChanges(actions);
+  parsedActions.forEach((action: ActionType) => {
     switch (action.type) {
       case 'createTriple': {
-        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
+        const actionValue = Action.getName(action) ?? Action.getValue(action);
         if (!actionValue) break;
-
         changes[action.entityId] = {
           ...changes[action.entityId],
           entityName: action.entityName ?? '',
           entityRevisions: {
             ...changes[action.entityId]?.entityRevisions,
             [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions[action.attributeId],
+              ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
               id: action.id,
               attributeName: action.attributeName ?? '',
               isDiff: false,
@@ -271,51 +290,45 @@ export const getChanges = (actions: Array<Action>): Changes => {
             },
           },
         };
-
         break;
       }
-
       case 'editTriple': {
-        const beforeActionValue = ActionNamespace.getName(action.before) ?? ActionNamespace.getValue(action.before);
-        const afterActionValue = ActionNamespace.getName(action.after) ?? ActionNamespace.getValue(action.after);
+        const beforeActionValue = Action.getName(action.before) ?? Action.getValue(action.before);
+        const afterActionValue = Action.getName(action.after) ?? Action.getValue(action.after);
         if (!beforeActionValue || !afterActionValue) break;
-
         changes[action.before.entityId] = {
           ...changes[action.before.entityId],
           entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
           entityRevisions: {
             ...changes[action.before.entityId]?.entityRevisions,
             [action.before.attributeId]: {
-              ...changes[action.before.entityId]?.entityRevisions[action.before.attributeId],
+              ...changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId],
               id: action.before.id,
               attributeName: action.before.attributeName ?? '',
               isDiff: true,
               currentValue:
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
+                changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
                 beforeActionValue,
               differences: diffWords(
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
+                changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
                   beforeActionValue,
                 afterActionValue
               ),
             },
           },
         };
-
         break;
       }
-
       case 'deleteTriple': {
-        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
+        const actionValue = Action.getName(action) ?? Action.getValue(action);
         if (!actionValue) break;
-
         changes[action.entityId] = {
           ...changes[action.entityId],
           entityName: action.entityName ?? '',
           entityRevisions: {
             ...changes[action.entityId]?.entityRevisions,
             [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions[action.attributeId],
+              ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
               id: action.id,
               attributeName: action.attributeName ?? '',
               isDiff: false,
@@ -323,12 +336,48 @@ export const getChanges = (actions: Array<Action>): Changes => {
             },
           },
         };
-
         break;
       }
     }
   });
-
+  const blockTypes = ['Text Block', 'Image Block', 'Markdown Content'];
+  const blockEntities: Array<[string, string]> = [];
+  for await (const entityId of Object.keys(changes)) {
+    if (
+      changes[entityId] &&
+      changes[entityId]?.entityRevisions !== undefined &&
+      Object.keys(changes[entityId].entityRevisions ?? {}).length > 0
+    ) {
+      for await (const attributeId of Object.keys(changes[entityId].entityRevisions ?? {})) {
+        if (changes[entityId]?.entityRevisions?.[attributeId].attributeName === 'Parent Entity') {
+          const parentEntityId = changes[entityId]?.entityRevisions?.[attributeId].id.split(':').slice(-1)[0];
+          const childEntityId = entityId;
+          if (parentEntityId) {
+            blockEntities.push([parentEntityId, childEntityId]);
+          }
+        } else if (blockTypes.includes(changes[entityId]?.entityRevisions?.[attributeId]?.attributeName ?? '')) {
+          const fullEntity = await network.fetchEntity(entityId);
+          const parentEntityId = fullEntity?.triples
+            .find(triple => triple.attributeName === 'Parent Entity')
+            ?.id.split(':')
+            .slice(-1)[0];
+          const childEntityId = entityId;
+          if (parentEntityId) {
+            blockEntities.push([parentEntityId, childEntityId]);
+          }
+        }
+      }
+    }
+  }
+  blockEntities.forEach(([parentEntityId, childEntityId]) => {
+    changes[parentEntityId] = {
+      ...changes[parentEntityId],
+      blockRevisions: { ...changes[parentEntityId]?.blockRevisions, ...changes[childEntityId]?.entityRevisions },
+    };
+  });
+  blockEntities.forEach(([, childEntityId]) => {
+    delete changes[childEntityId];
+  });
   return changes;
 };
 
@@ -347,7 +396,8 @@ type RevisedEntityProps = {
   spaceId: string;
   entityId: string;
   entityName: EntityName;
-  entityRevisions: EntityRevisions;
+  entityRevisions?: EntityRevisions;
+  blockRevisions?: EntityRevisions;
   unstagedChanges: Record<string, unknown>;
   setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
@@ -357,11 +407,12 @@ const RevisedEntity = ({
   entityId,
   entityName,
   entityRevisions,
+  blockRevisions,
   unstagedChanges,
   setUnstagedChanges,
 }: RevisedEntityProps) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [entity, setEntity] = useState<Entity | null>(null);
+  const [entity, setEntity] = useState<EntityType | null>(null);
   const [renderedEntityName, setRenderedEntityName] = useState<string>(() => entityName || 'Loading...');
   const { deleteActions } = useActionsStore(spaceId);
   const { network } = Services.useServices();
@@ -379,18 +430,48 @@ const RevisedEntity = ({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteEdits = () => {
-    const allActions = Object.values(entityRevisions).map(item => item.id);
-    deleteActions(spaceId, allActions);
+    if (entityRevisions && Object.values(entityRevisions).length > 0) {
+      const allActions = Object.values(entityRevisions).map(item => item.id);
+      deleteActions(spaceId, allActions);
+    }
   };
+
+  const numberOfRows = getRows(entityRevisions, blockRevisions);
 
   return (
     <div className="flex flex-col gap-4 py-10">
       <div className="-mt-1 text-mediumTitle">{renderedEntityName}</div>
-      <div className="grid grid-cols-2 items-start gap-8">
-        <div className="flex flex-col gap-2">
-          <div className="text-body">Current version</div>
+      <div
+        className="grid w-full grid-flow-col grid-cols-2 items-start gap-8"
+        style={{ gridTemplateRows: `repeat(${numberOfRows}, auto` }}
+      >
+        <div className="text-body">Current version</div>
+        {blockRevisions &&
+          Object.keys(blockRevisions).length > 0 &&
+          Object.keys(blockRevisions).map(blockId => {
+            if (blockId === 'type' || blockId === 'name') return null;
+
+            const { attributeName, differences } = blockRevisions[blockId];
+
+            return (
+              <div key={attributeName} className="relative">
+                <div className="text-body">
+                  {differences
+                    ?.filter(item => !item.added)
+                    ?.map((difference: Difference, index: number) => (
+                      <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
+                        {difference.value}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            );
+          })}
+        {entityRevisions && Object.keys(entityRevisions).length > 0 && (
           <Panel>
             {Object.keys(entityRevisions).map(attributeId => {
+              if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
               const { attributeName, isDiff, before, differences } = entityRevisions[attributeId];
 
               return (
@@ -434,14 +515,53 @@ const RevisedEntity = ({
               );
             })}
           </Panel>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="text-body">Your proposed edits</div>
+          <SmallButton onClick={handleDeleteEdits}>Delete edits</SmallButton>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="text-body">Your proposed edits</div>
-            <SmallButton onClick={handleDeleteEdits}>Delete edits</SmallButton>
-          </div>
+        {blockRevisions &&
+          Object.keys(blockRevisions).length > 0 &&
+          Object.keys(blockRevisions).map(blockId => {
+            if (blockId === 'type' || blockId === 'name') return null;
+
+            const { id, differences } = blockRevisions[blockId];
+            const unstaged = id in unstagedChanges;
+
+            return (
+              <div key={id} className="relative">
+                <div className={cx('text-body', unstaged && 'opacity-25')}>
+                  {differences
+                    ?.filter(item => !item.removed)
+                    ?.map((difference: Difference, index: number) => (
+                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                        {difference.value}
+                      </span>
+                    ))}
+                </div>
+                <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
+                  <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
+                  <SquareButton
+                    icon={unstaged ? 'blank' : 'tick'}
+                    onClick={() => {
+                      if (unstaged) {
+                        const newUnstagedChanges = { ...unstagedChanges };
+                        delete newUnstagedChanges[id];
+                        setUnstagedChanges({ ...newUnstagedChanges });
+                      } else {
+                        setUnstagedChanges({ ...unstagedChanges, [id]: null });
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        {entityRevisions && Object.keys(entityRevisions).length > 0 && (
           <Panel>
             {Object.keys(entityRevisions).map(attributeId => {
+              if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
               const { id, attributeName, isDiff, before, after, differences } = entityRevisions[attributeId];
               const unstaged = id in unstagedChanges;
 
@@ -509,7 +629,7 @@ const RevisedEntity = ({
               );
             })}
           </Panel>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -529,7 +649,7 @@ type PanelProps = {
 
 const Panel = ({ children }: PanelProps) => {
   return (
-    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-light">
+    <div className="h-full divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-light">
       {children}
     </div>
   );
@@ -571,6 +691,17 @@ function getSpaceImage(spaces: Space[], spaceId: string): string {
     spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
     'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
   );
+}
+
+function getRows(entityRevisions?: EntityRevisions, blockRevisions?: EntityRevisions) {
+  let rows = 1;
+  if (entityRevisions) {
+    rows = rows + 1;
+  }
+  if (blockRevisions) {
+    rows = rows + Object.keys(blockRevisions).filter(id => id !== 'name' && id !== 'type').length;
+  }
+  return rows;
 }
 
 const reviewVariants = {

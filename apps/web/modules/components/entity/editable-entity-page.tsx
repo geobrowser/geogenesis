@@ -1,6 +1,6 @@
 import * as React from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -11,7 +11,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Entity as EntityType, Triple as TripleType, TripleValueType, Version } from '~/modules/types';
+import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
@@ -99,7 +99,7 @@ export function EditableEntityPage({
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
       <EntityPageContentContainer>
         <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-        {/* 
+        {/*
         This height differs from the readable page height due to how we're using an expandable textarea for editing
         the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
         have to manually adjust the spacing here to remove the layout shift.
@@ -403,6 +403,8 @@ function EntityAttributes({
         )}
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
