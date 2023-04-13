@@ -7,7 +7,7 @@ import { useAccessControl } from '~/modules/auth/use-access-control';
 import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
 import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity, EntityStoreProvider, useEntityStore } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
@@ -17,6 +17,16 @@ import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { TypesStoreProvider } from '~/modules/type/types-store';
+import { Truncate } from '~/modules/design-system/truncate';
+import { Text } from '~/modules/design-system/text';
+import { Spacer } from '~/modules/design-system/spacer';
+import { EntityPageMetadataHeader } from '~/modules/components/entity-page/entity-page-metadata-header';
+import { Editor } from '~/modules/components/editor/editor';
+import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { PageStringField } from '~/modules/components/entity/editable-fields';
+import { useActionsStore } from '~/modules/action';
+import { useEditEvents } from '~/modules/components/entity/edit-events';
 
 interface Props {
   triples: Triple[];
@@ -43,6 +53,9 @@ export default function EntityPage(props: Props) {
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
+  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+
   return (
     <>
       <Head>
@@ -57,6 +70,7 @@ export default function EntityPage(props: Props) {
         {props.description && <meta property="og:description" content={props.description} />}
         {props.description && <meta name="twitter:description" content={props.description} />}
       </Head>
+
       <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
         <EntityStoreProvider
           id={props.id}
@@ -66,10 +80,92 @@ export default function EntityPage(props: Props) {
           initialBlockIdsTriple={props.blockIdsTriple}
           initialBlockTriples={props.blockTriples}
         >
-          <Page {...props} schemaTriples={[]} />
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+
+          <EntityPageContentContainer>
+            <EditableTitle spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <Page {...props} />
+          </EntityPageContentContainer>
         </EntityStoreProvider>
       </TypesStoreProvider>
     </>
+  );
+}
+
+function EditableTitle({
+  spaceId,
+  entityId,
+  name: serverName,
+  triples: serverTriples,
+}: {
+  spaceId: string;
+  entityId: string;
+  name: string;
+  triples: Triple[];
+}) {
+  const { triples: localTriples, update, create, remove } = useEntityStore();
+  const { editable } = useEditable();
+  const { isEditor } = useAccessControl(spaceId);
+  const { actionsFromSpace } = useActionsStore(spaceId);
+
+  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
+
+  const nameTriple = Entity.nameTriple(triples);
+  const name = Entity.name(triples) ?? serverName;
+  const types = Entity.types(triples) ?? [];
+
+  const isEditing = editable && isEditor;
+
+  const send = useEditEvents({
+    context: {
+      entityId,
+      spaceId,
+      entityName: name,
+    },
+    api: {
+      create,
+      update,
+      remove,
+    },
+  });
+
+  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    send({
+      type: 'EDIT_ENTITY_NAME',
+      payload: {
+        name: e.target.value,
+        triple: nameTriple,
+      },
+    });
+  };
+
+  return (
+    <div>
+      {isEditing ? (
+        <div>
+          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+          {/* 
+            This height differs from the readable page height due to how we're using an expandable textarea for editing
+            the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
+            have to manually adjust the spacing here to remove the layout shift.
+          */}
+          <Spacer height={5.5} />
+        </div>
+      ) : (
+        <div>
+          <Truncate maxLines={3} shouldTruncate>
+            <Text as="h1" variant="mainPage">
+              {name}
+            </Text>
+          </Truncate>
+          <Spacer height={12} />
+        </div>
+      )}
+
+      <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
+      <Spacer height={40} />
+      <Editor editable={isEditing} />
+    </div>
   );
 }
 

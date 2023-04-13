@@ -5,87 +5,56 @@ import Link from 'next/link';
 import { LinkableChip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
-import { Truncate } from '~/modules/design-system/truncate';
-import { Entity } from '~/modules/entity';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
-import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from './types';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
-import { Editor } from '../editor/editor';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { EntityPageCover } from './entity-page-cover';
+import { useEntityStore } from '~/modules/entity';
 
 interface Props {
   triples: Triple[];
-  schemaTriples: Triple[];
   id: string;
   name: string;
-  spaceId: string;
   referencedByEntities: ReferencedByEntity[];
-  serverAvatarUrl: string | null;
-  serverCoverUrl: string | null;
 }
 
-export function ReadableEntityPage({
-  triples,
-  id,
-  name,
-  spaceId,
-  referencedByEntities,
-  schemaTriples,
-  serverAvatarUrl,
-  serverCoverUrl,
-}: Props) {
+export function ReadableEntityPage({ triples, id, name, referencedByEntities }: Props) {
+  const { schemaTriples } = useEntityStore();
+
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
-  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
-  const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
-  const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 
   return (
     <>
-      <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-      <EntityPageContentContainer>
-        <Truncate maxLines={3} shouldTruncate>
-          <Text as="h1" variant="mainPage">
-            {name}
-          </Text>
-        </Truncate>
-        <Spacer height={12} />
-        <EntityPageMetadataHeader id={id} spaceId={spaceId} types={types} />
-        <Spacer height={40} />
-        <Editor editable={false} />
-        <div className="rounded border border-grey-02 shadow-button">
-          <div className="flex flex-col gap-6 p-5">
-            <EntityAttributes entityId={id} triples={sortedTriples} />
-          </div>
+      <div className="rounded border border-grey-02 shadow-button">
+        <div className="flex flex-col gap-6 p-5">
+          <EntityAttributes entityId={id} triples={sortedTriples} />
         </div>
-        <Spacer height={40} />
-        <Text as="h2" variant="mediumTitle">
-          Referenced by
-        </Text>
-        <div className="flex flex-col flex-wrap">
-          {referencedByEntities.length === 0 ? (
-            <>
-              <Spacer height={12} />
-              <Text color="grey-04">There are no entities referencing {name}.</Text>
-            </>
-          ) : (
-            <>
-              <Spacer height={20} />
-              <div className="flex flex-col gap-6">
-                {referencedByEntities.map(referencedByEntity => (
-                  <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </EntityPageContentContainer>
+      </div>
+      <Spacer height={40} />
+      <Text as="h2" variant="mediumTitle">
+        Referenced by
+      </Text>
+      <div className="flex flex-col flex-wrap">
+        {referencedByEntities.length === 0 ? (
+          <>
+            <Spacer height={12} />
+            <Text color="grey-04">There are no entities referencing {name}.</Text>
+          </>
+        ) : (
+          <>
+            <Spacer height={20} />
+            <div className="flex flex-col gap-6">
+              {referencedByEntities.map(referencedByEntity => (
+                <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }
