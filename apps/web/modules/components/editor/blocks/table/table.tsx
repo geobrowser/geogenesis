@@ -19,7 +19,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/triple';
 import { NavUtils } from '~/modules/utils';
 import { valueTypes } from '~/modules/value-types';
-import { useTableBlock } from './table-block-store-provider';
+import { useTableBlock } from './table-block-store';
 import { EditableEntityTableColumnHeader } from '~/modules/components/entity-table/editable-entity-table-column-header';
 import { Text } from '~/modules/design-system/text';
 import { Cell, Column, Row } from '~/modules/types';

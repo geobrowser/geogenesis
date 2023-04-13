@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
 import { Triple } from '~/modules/types';
-import { TableBlockStoreProvider } from './blocks/table/table-block-store-provider';
+import { TableBlockStoreProvider } from './blocks/table/table-block-store';
 import { TableBlock } from './blocks/table/table-block';
 import { useTypesStore } from '~/modules/type/types-store';
 

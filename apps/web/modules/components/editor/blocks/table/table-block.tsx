@@ -1,7 +1,7 @@
 import * as React from 'react';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock } from './table-block-store-provider';
+import { useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
