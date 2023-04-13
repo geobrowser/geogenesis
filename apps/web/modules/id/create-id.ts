@@ -14,7 +14,7 @@ export function createTripleId(triple: OmitStrict<Triple, 'id'>): string {
   return `${triple.space}:${triple.entityId}:${triple.attributeId}:${triple.value.id}`;
 }
 
-export function createTripleWithId(triple: Triple): Triple {
+export function createTripleWithId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
     id: createTripleId(triple),
     entityId: triple.entityId,
