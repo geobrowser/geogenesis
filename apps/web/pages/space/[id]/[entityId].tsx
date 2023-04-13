@@ -187,6 +187,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
     fetchSpaceTypeTriples(network, spaceId),
   ]);
+
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
 
@@ -210,27 +211,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     };
   });
 
-  /* Storing the array of block ids as a string value since we currently do not support arrays */
-  // @TODO: the Block triple for the entity should already be fetched in the entity query above
-  const blockIdTriples = await network.fetchTriples({
-    space: spaceId,
-    query: '',
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'entity-id', value: entityId },
-      {
-        field: 'attribute-id',
-        value: SYSTEM_IDS.BLOCKS,
-      },
-    ],
-  });
-
-  const blockIdsTriple = blockIdTriples.triples[0] || null;
-
+  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
 
-  // @TODO: Try and use fetchEntity instead
+  // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
+  // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
+  // the entire entity for each block so the query isn't dependenent on the space and we have the types
+  // associated with each block entity (TableBlock, TextBlock, etc.)
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
