@@ -83,7 +83,7 @@ export default function EntityPage(props: Props) {
           <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
 
           <EntityPageContentContainer>
-            <EditableTitle spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
             <Page {...props} />
           </EntityPageContentContainer>
         </EntityStoreProvider>
@@ -92,7 +92,7 @@ export default function EntityPage(props: Props) {
   );
 }
 
-function EditableTitle({
+function EditableHeading({
   spaceId,
   entityId,
   name: serverName,
