@@ -48,6 +48,8 @@ export class TableBlockStore {
   ActionsStore: ActionsStore;
   MergedData: MergedData;
   pageNumber$: Observable<number> = observable(0);
+  hasPreviousPage$: ObservableComputed<boolean>;
+  hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
   type$: Observable<ITriple>;
@@ -67,7 +69,7 @@ export class TableBlockStore {
     );
 
     const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [], triples: [] },
+      { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
           this.abortController.abort();
@@ -99,6 +101,7 @@ export class TableBlockStore {
           return {
             columns: serverColumns,
             rows: serverRows.slice(0, PAGE_SIZE),
+            hasNextPage: serverRows.length > PAGE_SIZE,
           };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
@@ -107,7 +110,7 @@ export class TableBlockStore {
           }
 
           // TODO: Real error handling
-          return { columns: [], rows: [], triples: [], hasNextPage: false };
+          return { columns: [], rows: [], hasNextPage: false };
         }
       })
     );
@@ -201,7 +204,29 @@ export class TableBlockStore {
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType.entityId);
     });
+
+    this.hasNextPage$ = computed(() => {
+      return networkData$.get().hasNextPage;
+    });
+
+    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
   }
+
+  setPage = (page: number | 'next' | 'previous') => {
+    switch (page) {
+      case 'next':
+        this.pageNumber$.set(this.pageNumber$.get() + 1);
+        break;
+      case 'previous': {
+        const previousPageNumber = this.pageNumber$.get() - 1;
+        if (previousPageNumber < 0) return;
+        this.pageNumber$.set(previousPageNumber);
+        break;
+      }
+      default:
+        this.pageNumber$.set(page);
+    }
+  };
 }
 
 const TableBlockStoreContext = createContext<TableBlockStore | undefined>(undefined);
@@ -256,12 +281,24 @@ export function useTableBlockStore() {
 }
 
 export function useTableBlock() {
-  const { rows$, pageNumber$, columns$, type$, unpublishedColumns$, blockEntity$ } = useTableBlockStore();
+  const {
+    rows$,
+    pageNumber$,
+    columns$,
+    type$,
+    unpublishedColumns$,
+    blockEntity$,
+    hasNextPage$,
+    hasPreviousPage$,
+    setPage,
+  } = useTableBlockStore();
   const type = useSelector(type$);
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const pageNumber = useSelector(pageNumber$);
+  const hasNextPage = useSelector(hasNextPage$);
+  const hasPreviousPage = useSelector(hasPreviousPage$);
   const blockEntity = useSelector(blockEntity$);
 
   return {
@@ -270,6 +307,9 @@ export function useTableBlock() {
     columns,
     unpublishedColumns,
     pageNumber,
+    hasNextPage,
+    hasPreviousPage,
+    setPage,
     blockEntity,
   };
 }

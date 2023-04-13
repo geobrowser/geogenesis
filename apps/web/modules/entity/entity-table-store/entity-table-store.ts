@@ -119,7 +119,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [], triples: [] },
+      { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
           this.abortController.abort();
@@ -154,6 +154,7 @@ export class EntityTableStore implements IEntityTableStore {
           return {
             columns: serverColumns,
             rows: serverRows.slice(0, pageSize),
+            hasNextPage: serverRows.length > pageSize,
           };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
@@ -162,12 +163,13 @@ export class EntityTableStore implements IEntityTableStore {
           }
 
           // TODO: Real error handling
-          return { columns: [], rows: [], triples: [], hasNextPage: false };
+          return { columns: [], rows: [], hasNextPage: false };
         }
       })
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(
@@ -272,8 +274,6 @@ export class EntityTableStore implements IEntityTableStore {
         return rows;
       })
     );
-
-    this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
   }
 
   columnValueType = (columnId: string): string => {

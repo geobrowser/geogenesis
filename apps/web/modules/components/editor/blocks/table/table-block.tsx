@@ -9,13 +9,17 @@ import { Icon } from '~/modules/design-system/icon';
 import { colors } from '~/modules/design-system/theme/colors';
 import { useActionsStore } from '~/modules/action';
 import { TableBlockSdk } from '../sdk';
+import { PageNumberContainer } from '~/modules/components/table/styles';
+import { NextButton, PageNumber, PreviousButton } from '~/modules/components/table/table-pagination';
+import { Spacer } from '~/modules/design-system/spacer';
+import { Text } from '~/modules/design-system/text';
 
 interface Props {
   spaceId: string;
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { columns, rows, blockEntity } = useTableBlock();
+  const { columns, rows, blockEntity, hasNextPage, hasPreviousPage, setPage, pageNumber } = useTableBlock();
 
   return (
     <div>
@@ -67,6 +71,44 @@ export function TableBlock({ spaceId }: Props) {
       <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
         <TableBlockTable space={spaceId} columns={columns} rows={rows} />
       </div>
+
+      <Spacer height={12} />
+
+      <PageNumberContainer>
+        {pageNumber > 1 && (
+          <>
+            <PageNumber number={1} onClick={() => setPage(0)} />
+            {pageNumber > 2 ? (
+              <>
+                <Spacer width={16} />
+                <Text color="grey-03" variant="metadataMedium">
+                  ...
+                </Text>
+                <Spacer width={16} />
+              </>
+            ) : (
+              <Spacer width={4} />
+            )}
+          </>
+        )}
+        {hasPreviousPage && (
+          <>
+            <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
+            <Spacer width={4} />
+          </>
+        )}
+        <PageNumber isActive number={pageNumber + 1} />
+        {hasNextPage && (
+          <>
+            <Spacer width={4} />
+            <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
+          </>
+        )}
+        <Spacer width={32} />
+        <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
+        <Spacer width={12} />
+        <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
+      </PageNumberContainer>
     </div>
   );
 }
