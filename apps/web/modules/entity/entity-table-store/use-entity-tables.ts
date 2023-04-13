@@ -20,9 +20,7 @@ export const useEntityTable = () => {
     selectedType$,
     columns$,
     unpublishedColumns$,
-    columnValueType,
     setFilterState,
-    columnName,
     createForeignType,
     createType,
   } = useEntityTableStore();
@@ -50,8 +48,6 @@ export const useEntityTable = () => {
     setPreviousPage,
     setSelectedType,
     pageNumber,
-    columnValueType,
-    columnName,
     hasPreviousPage,
     hasNextPage,
     filterState,

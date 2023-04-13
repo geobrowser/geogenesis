@@ -27,6 +27,7 @@ import { AddNewColumn } from './add-new-column';
 import { EditableEntityTableCell } from './editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from './editable-entity-table-column-header';
 import { EntityTableCell } from './entity-table-cell';
+import { columnName, columnValueType } from '../editor/blocks/table/utils';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -71,10 +72,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { create, update, remove, actions$ } = useActionsStoreContext();
-
     // We know that cell is rendered as a React component by react-table
+
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columnValueType, columnName } = useEntityTable();
+    const { columns } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -82,7 +83,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
-    const valueType = columnValueType(cellData.columnId);
+    const valueType = columnValueType(cellData.columnId, columns);
 
     const cellTriples = pipe(
       actions$.get()[space],
@@ -113,7 +114,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           remove={remove}
           space={space}
           valueType={valueType}
-          columnName={columnName(cellData.columnId)}
+          columnName={columnName(cellData.columnId, columns)}
         />
       );
     } else if (cellData && !isPlaceholderCell) {

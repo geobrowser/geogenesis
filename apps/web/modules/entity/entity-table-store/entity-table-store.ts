@@ -28,7 +28,6 @@ interface IEntityTableStore {
   SpaceStore: SpaceStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
-  columnValueType: (columnId: string) => string;
 }
 
 interface IEntityTableStoreConfig {
@@ -275,28 +274,6 @@ export class EntityTableStore implements IEntityTableStore {
       })
     );
   }
-
-  columnValueType = (columnId: string): string => {
-    const column = this.columns$.get().find(c => c.id === columnId);
-
-    if (!column) {
-      // Typescript defensive programming
-      return SYSTEM_IDS.TEXT;
-    }
-
-    return Entity.valueTypeId(column.triples) ?? SYSTEM_IDS.TEXT;
-  };
-
-  columnName = (columnId: string): string => {
-    const column = this.columns$.get().find(c => c.id === columnId);
-
-    if (!column) {
-      // Typescript defensive programming
-      return '';
-    }
-
-    return Entity.name(column.triples) || '';
-  };
 
   setQuery = (query: string) => {
     this.setFilterState(

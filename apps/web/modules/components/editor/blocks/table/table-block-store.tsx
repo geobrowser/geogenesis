@@ -245,14 +245,8 @@ interface Props {
 // for that specific table block.
 //
 // It works similarly to the EntityTableStoreProvider, but it's
-// scoped specifically for table blocks and will have unique behavior
-// in the future.
-//
-// @TODO
-// 1. Reference to the configuration entity for the table block
-// 2. New store implementation (instead of EntityTableStore). This is
-//    so we explore new implementation for the table block that differs
-//    from the entity page table.
+// scoped specifically for table blocks since it has functionality
+// unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
