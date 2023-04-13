@@ -18,7 +18,7 @@ import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
 import { PageImageField, PageStringField } from './editable-fields';
-import { Editor } from './editor/editor';
+import { Editor } from '../editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';

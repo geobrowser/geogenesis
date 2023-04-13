@@ -16,7 +16,7 @@ import { ReferencedByEntity } from './types';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
-import { Editor } from './editor/editor';
+import { Editor } from '../editor/editor';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EntityPageCover } from './entity-page-cover';
 

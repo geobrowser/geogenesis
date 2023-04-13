@@ -5,8 +5,8 @@ import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
 
 import { ActionsStore } from '~/modules/action';
-import { tiptapExtensions } from '~/modules/components/entity/editor/editor';
-import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
+import { tiptapExtensions } from '~/modules/components/editor/editor';
+import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
 import { NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';

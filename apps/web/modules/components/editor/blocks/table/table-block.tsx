@@ -1,6 +1,5 @@
 import * as React from 'react';
 import BoringAvatar from 'boring-avatars';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { useTableBlock } from './table-block-store-provider';
 import { TableBlockTable } from './table';
@@ -8,9 +7,8 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Icon } from '~/modules/design-system/icon';
 import { colors } from '~/modules/design-system/theme/colors';
-import { Entity } from '~/modules/entity';
 import { useActionsStore } from '~/modules/action';
-import { ID } from '~/modules/id';
+import { TableBlockSdk } from '../sdk';
 
 interface Props {
   spaceId: string;
@@ -79,23 +77,8 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
   const { isEditor } = useAccessControl(spaceId);
   const { blockEntity } = useTableBlock();
 
-  const nameTriple = Entity.nameTriple(blockEntity?.triples ?? []);
-
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!blockEntity) return;
-    if (!nameTriple)
-      return create(
-        ID.createTripleWithId({
-          attributeId: SYSTEM_IDS.NAME,
-          entityId: blockEntity.id,
-          entityName: e.currentTarget.value,
-          attributeName: 'Name',
-          space: blockEntity.nameTripleSpace ?? '',
-          value: { type: 'string', id: ID.createValueId(), value: e.currentTarget.value },
-        })
-      );
-
-    update({ ...nameTriple, value: { ...nameTriple.value, type: 'string', value: e.currentTarget.value } }, nameTriple);
+    TableBlockSdk.setName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
   };
 
   return editable && isEditor ? (
