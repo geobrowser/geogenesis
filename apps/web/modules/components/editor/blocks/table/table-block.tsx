@@ -78,7 +78,7 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
   const { blockEntity } = useTableBlock();
 
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    TableBlockSdk.setName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
+    TableBlockSdk.upsertName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
   };
 
   return editable && isEditor ? (
