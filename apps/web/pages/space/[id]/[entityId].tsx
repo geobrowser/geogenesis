@@ -177,7 +177,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
 
-  const [entity, related, spaceTypes] = await Promise.all([
+  const spaces = await network.fetchSpaces();
+  const space = spaces.find(s => s.id === spaceId) ?? null;
+
+  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
     network.fetchEntity(entityId),
 
     network.fetchEntities({
@@ -186,12 +189,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
 
     fetchSpaceTypeTriples(network, spaceId),
+    space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
-
-  const spaces = await network.fetchSpaces();
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
@@ -244,13 +246,12 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       serverAvatarUrl,
       serverCoverUrl,
 
-      space: spaces.find(s => s.id === spaceId) ?? null,
-
       // For entity page editor
       blockIdsTriple,
       blockTriples,
 
-      spaceTypes,
+      space,
+      spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     },
   };
 };
@@ -273,4 +274,40 @@ export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, space
   });
 
   return triples;
+};
+
+export const fetchForeignTypeTriples = async (network: NetworkData.INetwork, space: Space) => {
+  if (!space.spaceConfigEntityId) {
+    return [];
+  }
+
+  const foreignTypesFromSpaceConfig = await network.fetchTriples({
+    query: '',
+    space: space.id,
+    skip: 0,
+    first: DEFAULT_PAGE_SIZE,
+    filter: [
+      { field: 'entity-id', value: space.spaceConfigEntityId },
+      { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
+    ],
+  });
+
+  const foreignTypesIds = foreignTypesFromSpaceConfig.triples.map(triple => triple.value.id);
+
+  const foreignTypes = await Promise.all(
+    foreignTypesIds.map(entityId =>
+      network.fetchTriples({
+        query: '',
+        skip: 0,
+        first: DEFAULT_PAGE_SIZE,
+        filter: [
+          { field: 'entity-id', value: entityId },
+          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+          { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
+        ],
+      })
+    )
+  );
+
+  return foreignTypes.flatMap(foreignType => foreignType.triples);
 };
