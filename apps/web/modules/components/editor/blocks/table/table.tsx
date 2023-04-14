@@ -25,7 +25,6 @@ import { Text } from '~/modules/design-system/text';
 import { Cell, Column, Row } from '~/modules/types';
 import { EditableEntityTableCell } from '~/modules/components/entity-table/editable-entity-table-cell';
 import { EntityTableCell } from '~/modules/components/entity-table/entity-table-cell';
-import { AddNewColumn } from '~/modules/components/entity-table/add-new-column';
 import { EmptyTableText } from '~/modules/components/table/styles';
 import { TableCell } from '~/modules/components/table/cell';
 import { columnName, columnValueType } from './utils';
@@ -186,7 +185,6 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
             </tr>
           ))}
         </thead>
-        {editable && type && <AddNewColumn space={space} selectedType={type} />}
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
