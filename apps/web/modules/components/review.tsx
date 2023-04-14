@@ -251,7 +251,9 @@ const useChanges = (actions: Array<Action>) => {
 export const getChanges = (actions: Array<Action>): Changes => {
   const changes: Changes = {};
 
-  actions.forEach((action: Action) => {
+  const squashedActions = ActionNamespace.prepareActionsForPublishing(actions);
+
+  squashedActions.forEach((action: Action) => {
     switch (action.type) {
       case 'createTriple': {
         const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);

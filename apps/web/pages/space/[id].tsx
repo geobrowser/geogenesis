@@ -11,9 +11,10 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Space, Triple } from '~/modules/types';
+import { TypesStoreProvider } from '~/modules/type/types-store';
 
 interface Props {
-  spaceId: string;
+  space: Space;
   spaceName?: string;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
@@ -23,7 +24,7 @@ interface Props {
 }
 
 export default function EntitiesPage({
-  spaceId,
+  space,
   spaceName,
   spaceImage,
   initialColumns,
@@ -34,29 +35,30 @@ export default function EntitiesPage({
   return (
     <div>
       <Head>
-        <title>{spaceName ?? spaceId}</title>
+        <title>{spaceName ?? space.id}</title>
         <meta property="og:title" content={spaceName} />
-        <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
+        <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
         {spaceImage && <meta property="og:image" content={spaceImage} />}
         {spaceImage && <meta name="twitter:image" content={spaceImage} />}
       </Head>
-      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
+      <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
-      <SpaceNavbar spaceId={spaceId} />
-      <EntityTableStoreProvider
-        spaceId={spaceId}
-        initialRows={initialRows}
-        initialSelectedType={initialSelectedType}
-        initialColumns={initialColumns}
-        initialTypes={initialTypes}
-      >
-        <EntityTableContainer
-          spaceId={spaceId}
-          spaceName={spaceName}
-          initialColumns={initialColumns}
+      <SpaceNavbar spaceId={space.id} />
+      <TypesStoreProvider initialTypes={initialTypes} space={space}>
+        <EntityTableStoreProvider
+          spaceId={space.id}
           initialRows={initialRows}
-        />
-      </EntityTableStoreProvider>
+          initialSelectedType={initialSelectedType}
+          initialColumns={initialColumns}
+        >
+          <EntityTableContainer
+            spaceId={space.id}
+            spaceName={spaceName}
+            initialColumns={initialColumns}
+            initialRows={initialRows}
+          />
+        </EntityTableStoreProvider>
+      </TypesStoreProvider>
     </div>
   );
 }
@@ -127,7 +129,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   return {
     props: {
-      spaceId,
+      space,
       spaceName,
       spaceImage,
       initialSelectedType,

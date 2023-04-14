@@ -21,15 +21,7 @@ export default function CreateEntity({ spaceId }: Props) {
       initialBlockTriples={[]}
       initialBlockIdsTriple={null}
     >
-      <EditableEntityPage
-        id={newId}
-        name=""
-        spaceId={spaceId}
-        triples={[]}
-        schemaTriples={[]}
-        serverAvatarUrl={null}
-        serverCoverUrl={null}
-      />
+      <EditableEntityPage id={newId} name="" spaceId={spaceId} triples={[]} />
     </EntityStoreProvider>
   );
 }

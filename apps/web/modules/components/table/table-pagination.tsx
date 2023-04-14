@@ -32,7 +32,7 @@ export function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
 
   return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
+    <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <LeftArrowLong color={color} />
       <Spacer width={8} />
       <Text color={color} variant="smallButton">
@@ -46,7 +46,7 @@ export function NextButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'ctaPrimary';
 
   return (
-    <TextButton disabled={isDisabled} onClick={onClick}>
+    <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <Text color={color} variant="smallButton">
         Next
       </Text>

@@ -80,7 +80,7 @@ describe('Flow Bar', () => {
       api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
-    const { debug } = render(
+    render(
       <Providers>
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />

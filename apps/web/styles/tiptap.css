@@ -80,3 +80,7 @@
 .ProseMirror > * {
   margin-bottom: 16px;
 }
+
+.ProseMirror .node-tableNode {
+  @apply mt-8;
+}
