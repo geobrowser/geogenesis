@@ -17,9 +17,10 @@ export function upsertName({
     update: (triple: ITriple, oldTriple: ITriple) => void;
   };
 }) {
+  if (!blockEntity) return;
+
   const nameTriple = Entity.nameTriple(blockEntity?.triples ?? []);
 
-  if (!blockEntity) return;
   if (!nameTriple)
     return api.create(
       Triple.withId({
