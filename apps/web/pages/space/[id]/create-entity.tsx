@@ -49,7 +49,7 @@ export function CreateEntityContent({ spaceId, newId }: { spaceId: string; newId
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
       <EntityPageContentContainer>
         <EditableHeading spaceId={spaceId} entityId={newId} name="" triples={triples} />
-        <EditableEntityPage id={newId} name="" spaceId={spaceId} triples={[]} />
+        <EditableEntityPage id={newId} name="" spaceId={spaceId} triples={triples} />
       </EntityPageContentContainer>
     </>
   );
