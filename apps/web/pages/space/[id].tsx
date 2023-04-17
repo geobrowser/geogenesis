@@ -12,6 +12,7 @@ import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Space, Triple } from '~/modules/types';
 import { TypesStoreProvider } from '~/modules/type/types-store';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 
 interface Props {
   space: Space;
@@ -139,60 +140,4 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialTypes,
     },
   };
-};
-
-export const fetchForeignTypeTriples = async (network: NetworkData.INetwork, space: Space) => {
-  if (!space.spaceConfigEntityId) {
-    return [];
-  }
-
-  const foreignTypesFromSpaceConfig = await network.fetchTriples({
-    query: '',
-    space: space.id,
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'entity-id', value: space.spaceConfigEntityId },
-      { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
-    ],
-  });
-
-  const foreignTypesIds = foreignTypesFromSpaceConfig.triples.map(triple => triple.value.id);
-
-  const foreignTypes = await Promise.all(
-    foreignTypesIds.map(entityId =>
-      network.fetchTriples({
-        query: '',
-        skip: 0,
-        first: DEFAULT_PAGE_SIZE,
-        filter: [
-          { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-          { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
-        ],
-      })
-    )
-  );
-
-  return foreignTypes.flatMap(foreignType => foreignType.triples);
-};
-
-export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, spaceId: string) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-
-  const { triples } = await network.fetchTriples({
-    query: '',
-    space: spaceId,
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      {
-        field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
-      },
-    ],
-  });
-
-  return triples;
 };
