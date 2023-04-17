@@ -141,6 +141,8 @@ export const getValue = (action: Action): string | null => {
       return checkedAction.value.id;
     case 'image':
       return checkedAction.value.value;
+    case 'date':
+      return checkedAction.value.value;
   }
 };
 

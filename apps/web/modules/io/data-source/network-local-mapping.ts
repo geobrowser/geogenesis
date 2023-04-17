@@ -9,6 +9,8 @@ type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
+type NetworkDateValue = { valueType: 'DATE'; dateValue: number };
+
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
 
 export type NetworkTriple = NetworkValue & {

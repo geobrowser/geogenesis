@@ -289,6 +289,8 @@ function EntityAttributes({
         );
       case 'number':
         return null;
+      case 'date':
+        return <p>Hello date</p>;
       case 'entity':
         if (isEmptyEntity) {
           return (

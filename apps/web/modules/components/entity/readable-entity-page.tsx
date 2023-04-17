@@ -77,6 +77,8 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
             imageSrc={triple.value.value}
           />
         );
+      case 'date':
+        return <p>Hello date</p>;
       case 'entity': {
         return (
           <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">

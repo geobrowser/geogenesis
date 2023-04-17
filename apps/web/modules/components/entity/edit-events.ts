@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType, TripleValueType } from '~/modules/types';
+import { ImageValue, Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { valueTypeNames, valueTypes } from '~/modules/value-types';
@@ -496,7 +496,7 @@ const listener =
 
       case 'REMOVE_IMAGE': {
         const { triple } = event.payload;
-        const newValue = { ...triple.value, value: '' };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: '' };
 
         return update(
           Triple.ensureStableId({
@@ -509,7 +509,7 @@ const listener =
 
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
-        const newValue = { ...triple.value, value: imageSrc };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: imageSrc };
 
         return update(
           Triple.ensureStableId({

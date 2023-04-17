@@ -101,6 +101,8 @@ const ReviewChanges = () => {
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
   const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
 
+  console.log('actions', ActionNamespace.prepareActionsForPublishing(actionsFromSpace));
+
   // Publishing logic
   const { data: signer } = useSigner();
   const handlePublish = async () => {

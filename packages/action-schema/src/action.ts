@@ -49,4 +49,10 @@ interface EntityValue {
   id: string
 }
 
-type Value = NumberValue | StringValue | EntityValue | ImageValue
+interface DateValue {
+  type: 'date'
+  id: string
+  value: string
+}
+
+type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue

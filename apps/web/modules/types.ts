@@ -6,7 +6,7 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date';
 
 export type NumberValue = {
   type: 'number';
@@ -32,7 +32,13 @@ export type ImageValue = {
   value: string;
 };
 
-export type Value = NumberValue | StringValue | EntityValue | ImageValue;
+export type DateValue = {
+  type: 'date';
+  id: string;
+  value: string;
+};
+
+export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue;
 
 export type Triple = {
   id: string;
