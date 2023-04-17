@@ -9,9 +9,9 @@ type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkDateValue = { valueType: 'DATE'; dateValue: number };
+type NetworkDateValue = { valueType: 'DATE'; numberValue: number };
 
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
+type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue | NetworkDateValue;
 
 export type NetworkTriple = NetworkValue & {
   id: string;
@@ -62,13 +62,14 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
       return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY': {
+    case 'ENTITY':
       return {
         type: 'entity',
         id: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
-    }
+    case 'DATE':
+      return { type: 'date', id: networkTriple.valueId, value: networkTriple.numberValue.toString() };
   }
 }
 
@@ -80,13 +81,14 @@ export function extractActionValue(networkAction: NetworkAction): Value {
       return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
-    case 'ENTITY': {
+    case 'ENTITY':
       return {
         type: 'entity',
         id: networkAction.entityValue?.id ?? null,
         name: networkAction.entityValue?.name ?? null,
       };
-    }
+    case 'DATE':
+      return { type: 'date', id: networkAction.valueId, value: networkAction.numberValue.toString() };
   }
 }
 
@@ -111,6 +113,8 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction
       return !networkTriple.entityValue;
     case 'IMAGE':
       return !networkTriple.stringValue;
+    case 'DATE':
+      return !networkTriple.numberValue;
   }
 }
 
