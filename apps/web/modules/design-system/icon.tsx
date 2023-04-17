@@ -65,7 +65,8 @@ export type IconName =
   | 'editorImage'
   | 'editorTable'
   | 'context'
-  | 'filterTable';
+  | 'filterTable'
+  | 'date';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -114,4 +115,5 @@ const icons: Record<IconName, React.ElementType> = {
   upload: Upload,
   context: Context,
   filterTable: FilterTable,
+  date: FilterTable,
 };

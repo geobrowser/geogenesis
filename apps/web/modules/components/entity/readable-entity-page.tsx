@@ -7,7 +7,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
-import { ImageZoom } from './editable-fields';
+import { DateField, ImageZoom } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { ReferencedByEntity } from './types';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
@@ -78,7 +78,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
           />
         );
       case 'date':
-        return <p>Hello date</p>;
+        return <DateField />;
       case 'entity': {
         return (
           <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">

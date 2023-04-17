@@ -5,6 +5,7 @@ import Zoom from 'react-medium-image-zoom';
 
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
+import { Divider } from '~/modules/design-system/divider';
 
 const textareaStyles = cva(
   'w-full h-full resize-none bg-transparent overflow-hidden m-0 p-0 placeholder:text-grey-02 focus:outline-none',
@@ -221,6 +222,41 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
         type="file"
         className="hidden"
       />
+    </div>
+  );
+}
+
+interface DateFieldProps {
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  variant?: 'body' | 'tableCell';
+}
+
+const dateFieldProps = cva('flex-1 w-full placeholder:text-grey-02 focus:outline-none tabular-nums', {
+  variants: {
+    variant: {
+      body: 'text-body',
+      tableCell: 'text-tableCell',
+    },
+  },
+  defaultVariants: {
+    variant: 'body',
+  },
+});
+
+export function DateField(props: DateFieldProps) {
+  return (
+    <div className="flex max-w-[196px] items-center justify-between gap-[1ch]">
+      <input placeholder="MM" className={dateFieldProps({ variant: props.variant })} style={{ flex: 2 }} />
+      <span style={{ flex: 1 }} className="text-grey-02">
+        |
+      </span>
+      <input placeholder="DD" className={dateFieldProps({ variant: props.variant })} style={{ flex: 2 }} />
+      <span style={{ flex: 1 }} className="text-grey-02">
+        |
+      </span>
+      <input placeholder="YYYY" className={dateFieldProps({ variant: props.variant })} style={{ flex: 4 }} />
     </div>
   );
 }

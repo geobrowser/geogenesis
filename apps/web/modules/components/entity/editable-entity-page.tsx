@@ -16,7 +16,7 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
-import { PageImageField, PageStringField } from './editable-fields';
+import { DateField, PageImageField, PageStringField } from './editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
@@ -290,7 +290,7 @@ function EntityAttributes({
       case 'number':
         return null;
       case 'date':
-        return <p>Hello date</p>;
+        return <DateField onChange={e => console.log(e.currentTarget.value)} placeholder="Add value..." />;
       case 'entity':
         if (isEmptyEntity) {
           return (
@@ -430,6 +430,18 @@ function EntityAttributes({
                         ),
                         value: 'image',
                         onClick: () => onChangeTripleType('image', triples),
+                        disabled: Boolean(isEntityGroup),
+                      },
+                      {
+                        label: (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <Image />
+                            <Spacer width={8} />
+                            Date
+                          </div>
+                        ),
+                        value: 'date',
+                        onClick: () => onChangeTripleType('date', triples),
                         disabled: Boolean(isEntityGroup),
                       },
                     ]}

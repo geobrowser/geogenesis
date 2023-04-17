@@ -8,7 +8,7 @@ import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { TableImageField, TableStringField } from '../entity/editable-fields';
+import { DateField, TableImageField, TableStringField } from '../entity/editable-fields';
 
 interface Props {
   cell: Cell;
@@ -54,6 +54,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
+  const isDateValueType = valueType === 'date';
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
@@ -195,6 +196,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           }}
         />
       )}
+
+      {isDateValueType && <DateField />}
     </div>
   );
 });
