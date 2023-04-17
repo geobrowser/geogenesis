@@ -31,28 +31,28 @@ export const tiptapExtensions = [
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
-  const entityStore = useEntityStore();
+  const { editorJson, updateEditorBlocks, blockIds } = useEntityStore();
 
   const editor = useEditor(
     {
       extensions: tiptapExtensions,
       editable: editable,
-      content: entityStore.editorJson,
+      content: editorJson,
       onBlur({ editor }) {
         /*
         Responsible for converting all editor blocks to triples
         Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
         */
-        entityStore.updateEditorBlocks(editor);
+        updateEditorBlocks(editor);
       },
       editorProps: {
         transformPastedHTML: html => removeIdAttributes(html),
       },
     },
-    [editable]
+    [editable, editorJson, updateEditorBlocks]
   );
 
-  if (!editable && entityStore.blockIds.length === 0) return null;
+  if (!editable && blockIds.length === 0) return null;
 
   if (!editor) return null;
 
