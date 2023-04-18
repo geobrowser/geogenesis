@@ -249,12 +249,33 @@ const dateFieldProps = cva('w-full placeholder:text-grey-02 focus:outline-none t
   },
 });
 
+const labelStyles = cva('text-footnote', {
+  variants: {
+    active: {
+      true: 'text-text',
+      false: 'text-grey-02',
+    },
+  },
+  defaultVariants: {
+    active: false,
+  },
+});
+
 export function DateField(props: DateFieldProps) {
+  const [day, setDay] = React.useState('');
+  const [month, setMonth] = React.useState('');
+  const [year, setYear] = React.useState('');
+
   return (
     <div className="flex max-w-[160px] gap-3">
       <div className="flex w-full flex-col" style={{ flex: 2 }}>
-        <input placeholder="MM" className={dateFieldProps({ variant: props.variant })} />
-        <span className="text-footnote text-grey-02">Month</span>
+        <input
+          value={month}
+          onChange={e => setMonth(e.currentTarget.value)}
+          placeholder="MM"
+          className={dateFieldProps({ variant: props.variant })}
+        />
+        <span className={labelStyles({ active: month !== '' })}>Month</span>
       </div>
 
       <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
@@ -262,8 +283,13 @@ export function DateField(props: DateFieldProps) {
       </span>
 
       <div className="flex flex-col items-center" style={{ flex: 2 }}>
-        <input placeholder="DD" className={dateFieldProps({ variant: props.variant, centered: true })} />
-        <span className="text-footnote text-grey-02">Day</span>
+        <input
+          value={day}
+          onChange={e => setDay(e.currentTarget.value)}
+          placeholder="DD"
+          className={dateFieldProps({ variant: props.variant, centered: true })}
+        />
+        <span className={labelStyles({ active: day !== '' })}>Day</span>
       </div>
 
       <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
@@ -271,8 +297,13 @@ export function DateField(props: DateFieldProps) {
       </span>
 
       <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
-        <input placeholder="YYYY" className={dateFieldProps({ variant: props.variant, centered: true })} />
-        <span className="text-footnote text-grey-02">Year</span>
+        <input
+          value={year}
+          onChange={e => setYear(e.currentTarget.value)}
+          placeholder="YYYY"
+          className={dateFieldProps({ variant: props.variant, centered: true })}
+        />
+        <span className={labelStyles({ active: year !== '' })}>Year</span>
       </div>
     </div>
   );
