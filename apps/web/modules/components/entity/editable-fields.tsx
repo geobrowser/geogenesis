@@ -233,30 +233,47 @@ interface DateFieldProps {
   variant?: 'body' | 'tableCell';
 }
 
-const dateFieldProps = cva('flex-1 w-full placeholder:text-grey-02 focus:outline-none tabular-nums', {
+const dateFieldProps = cva('w-full placeholder:text-grey-02 focus:outline-none tabular-nums', {
   variants: {
     variant: {
       body: 'text-body',
       tableCell: 'text-tableCell',
     },
+    centered: {
+      true: 'text-center',
+    },
   },
   defaultVariants: {
     variant: 'body',
+    centered: false,
   },
 });
 
 export function DateField(props: DateFieldProps) {
   return (
-    <div className="flex max-w-[196px] items-center justify-between gap-[1ch]">
-      <input placeholder="MM" className={dateFieldProps({ variant: props.variant })} style={{ flex: 2 }} />
-      <span style={{ flex: 1 }} className="text-grey-02">
-        |
+    <div className="flex max-w-[160px] gap-3">
+      <div className="flex w-full flex-col" style={{ flex: 2 }}>
+        <input placeholder="MM" className={dateFieldProps({ variant: props.variant })} />
+        <span className="text-footnote text-grey-02">Month</span>
+      </div>
+
+      <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
+        /
       </span>
-      <input placeholder="DD" className={dateFieldProps({ variant: props.variant })} style={{ flex: 2 }} />
-      <span style={{ flex: 1 }} className="text-grey-02">
-        |
+
+      <div className="flex flex-col items-center" style={{ flex: 2 }}>
+        <input placeholder="DD" className={dateFieldProps({ variant: props.variant, centered: true })} />
+        <span className="text-footnote text-grey-02">Day</span>
+      </div>
+
+      <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
+        /
       </span>
-      <input placeholder="YYYY" className={dateFieldProps({ variant: props.variant })} style={{ flex: 4 }} />
+
+      <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
+        <input placeholder="YYYY" className={dateFieldProps({ variant: props.variant, centered: true })} />
+        <span className="text-footnote text-grey-02">Year</span>
+      </div>
     </div>
   );
 }
