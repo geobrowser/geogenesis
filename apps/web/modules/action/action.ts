@@ -129,19 +129,26 @@ export function prepareActionsForPublishing(actions: Action[]) {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
 
-export const getValue = (action: Action): string | null => {
+export const getValue = (action: Action, fallback: unknown = false) => {
   const checkedAction = action.type === 'editTriple' ? action.after : action;
+  let value: string | null;
 
   switch (checkedAction.value.type) {
     case 'number':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
     case 'string':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
     case 'entity':
-      return checkedAction.value.id;
+      value = checkedAction.value.id;
+      break;
     case 'image':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
   }
+
+  return fallback !== false ? value ?? fallback : value;
 };
 
 export const getName = (action: CreateTripleAction | DeleteTripleAction): string | null => {

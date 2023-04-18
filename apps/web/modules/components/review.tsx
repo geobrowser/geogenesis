@@ -11,6 +11,7 @@ import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
 
 import { Action } from '../action';
+import { Change } from '../change';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
@@ -21,6 +22,7 @@ import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { INetwork } from '../io/data-source/network';
+import type { Changes } from '../change';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -116,9 +118,6 @@ const ReviewChanges = () => {
     return null;
   }
 
-  // @TODO remove console.info
-  console.info('changes:', changes);
-
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -185,7 +184,11 @@ const ReviewChanges = () => {
               />
             </div>
             <div className="-mt-10 flex flex-col divide-y divide-grey-02">
-              {Object.keys(changes).map((key: string) => (
+              <div>
+                <div>WORKSPACE</div>
+                <div>hi!</div>
+              </div>
+              {/* {Object.keys(changes).map((key: string) => (
                 <RevisedEntity
                   key={key}
                   spaceId={activeSpace}
@@ -196,7 +199,7 @@ const ReviewChanges = () => {
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
-              ))}
+              ))} */}
             </div>
           </div>
         </div>
@@ -232,14 +235,14 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
   );
 };
 
-export type Changes = Record<EntityId, Change>;
+// export type Changes = Record<EntityId, ChangeType>;
 
-type EntityId = string;
-type Change = {
-  entityName: EntityName;
-  entityRevisions?: EntityRevisions;
-  blockRevisions?: EntityRevisions;
-};
+// type EntityId = string;
+// type ChangeType = {
+//   entityName: EntityName;
+//   entityRevisions?: EntityRevisions;
+//   blockRevisions?: EntityRevisions;
+// };
 
 type EntityName = string;
 type EntityRevisions = Record<AttributeId, EntityRevision>;
@@ -261,125 +264,128 @@ type After = string[];
 
 const useChanges = (actions: Array<ActionType>, spaceId: string) => {
   const { network } = Services.useServices();
-  const { data: changes, isLoading } = useQuery<Changes>({
+  const { data: changes, isLoading } = useQuery({
     queryKey: [`${spaceId}-changes`],
-    queryFn: async () => getChanges(actions, network),
+    queryFn: async () => Change.fromActions(actions, network),
   });
+
   return [changes, isLoading];
 };
 
-export const getChanges = async (actions: Array<ActionType>, network: INetwork): Promise<Changes> => {
-  const changes: Changes = {};
-  const parsedActions = Action.squashChanges(actions);
-  parsedActions.forEach((action: ActionType) => {
-    switch (action.type) {
-      case 'createTriple': {
-        const actionValue = Action.getName(action) ?? Action.getValue(action);
-        if (!actionValue) break;
-        changes[action.entityId] = {
-          ...changes[action.entityId],
-          entityName: action.entityName ?? '',
-          entityRevisions: {
-            ...changes[action.entityId]?.entityRevisions,
-            [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
-              id: action.id,
-              attributeName: action.attributeName ?? '',
-              isDiff: false,
-              after: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []), actionValue],
-            },
-          },
-        };
-        break;
-      }
-      case 'editTriple': {
-        const beforeActionValue = Action.getName(action.before) ?? Action.getValue(action.before);
-        const afterActionValue = Action.getName(action.after) ?? Action.getValue(action.after);
-        if (!beforeActionValue || !afterActionValue) break;
-        changes[action.before.entityId] = {
-          ...changes[action.before.entityId],
-          entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
-          entityRevisions: {
-            ...changes[action.before.entityId]?.entityRevisions,
-            [action.before.attributeId]: {
-              ...changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId],
-              id: action.before.id,
-              attributeName: action.before.attributeName ?? '',
-              isDiff: true,
-              currentValue:
-                changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
-                beforeActionValue,
-              differences: diffWords(
-                changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
-                  beforeActionValue,
-                afterActionValue
-              ),
-            },
-          },
-        };
-        break;
-      }
-      case 'deleteTriple': {
-        const actionValue = Action.getName(action) ?? Action.getValue(action);
-        if (!actionValue) break;
-        changes[action.entityId] = {
-          ...changes[action.entityId],
-          entityName: action.entityName ?? '',
-          entityRevisions: {
-            ...changes[action.entityId]?.entityRevisions,
-            [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
-              id: action.id,
-              attributeName: action.attributeName ?? '',
-              isDiff: false,
-              before: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []), actionValue],
-            },
-          },
-        };
-        break;
-      }
-    }
-  });
-  const blockTypes = ['Text Block', 'Image Block', 'Markdown Content'];
-  const blockEntities: Array<[string, string]> = [];
-  for await (const entityId of Object.keys(changes)) {
-    if (
-      changes[entityId] &&
-      changes[entityId]?.entityRevisions !== undefined &&
-      Object.keys(changes[entityId].entityRevisions ?? {}).length > 0
-    ) {
-      for await (const attributeId of Object.keys(changes[entityId].entityRevisions ?? {})) {
-        if (changes[entityId]?.entityRevisions?.[attributeId].attributeName === 'Parent Entity') {
-          const parentEntityId = changes[entityId]?.entityRevisions?.[attributeId].id.split(':').slice(-1)[0];
-          const childEntityId = entityId;
-          if (parentEntityId) {
-            blockEntities.push([parentEntityId, childEntityId]);
-          }
-        } else if (blockTypes.includes(changes[entityId]?.entityRevisions?.[attributeId]?.attributeName ?? '')) {
-          const fullEntity = await network.fetchEntity(entityId);
-          const parentEntityId = fullEntity?.triples
-            .find(triple => triple.attributeName === 'Parent Entity')
-            ?.id.split(':')
-            .slice(-1)[0];
-          const childEntityId = entityId;
-          if (parentEntityId) {
-            blockEntities.push([parentEntityId, childEntityId]);
-          }
-        }
-      }
-    }
-  }
-  blockEntities.forEach(([parentEntityId, childEntityId]) => {
-    changes[parentEntityId] = {
-      ...changes[parentEntityId],
-      blockRevisions: { ...changes[parentEntityId]?.blockRevisions, ...changes[childEntityId]?.entityRevisions },
-    };
-  });
-  blockEntities.forEach(([, childEntityId]) => {
-    delete changes[childEntityId];
-  });
-  return changes;
-};
+// export const legacyGetChanges = async (actions: Array<ActionType>, network: INetwork): Promise<any> => {
+//   const changes: any = {};
+//   const parsedActions = Action.squashChanges(actions);
+
+//   parsedActions.forEach((action: ActionType) => {
+//     switch (action.type) {
+//       case 'createTriple': {
+//         const actionValue = Action.getName(action) ?? Action.getValue(action);
+//         if (!actionValue) break;
+//         changes[action.entityId] = {
+//           ...changes[action.entityId],
+//           entityName: action.entityName ?? '',
+//           entityRevisions: {
+//             ...changes[action.entityId]?.entityRevisions,
+//             [action.attributeId]: {
+//               ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
+//               id: action.id,
+//               attributeName: action.attributeName ?? '',
+//               isDiff: false,
+//               after: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []), actionValue],
+//             },
+//           },
+//         };
+//         break;
+//       }
+//       case 'editTriple': {
+//         const beforeActionValue = Action.getName(action.before) ?? Action.getValue(action.before);
+//         const afterActionValue = Action.getName(action.after) ?? Action.getValue(action.after);
+//         if (!beforeActionValue || !afterActionValue) break;
+//         changes[action.before.entityId] = {
+//           ...changes[action.before.entityId],
+//           entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
+//           entityRevisions: {
+//             ...changes[action.before.entityId]?.entityRevisions,
+//             [action.before.attributeId]: {
+//               ...changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId],
+//               id: action.before.id,
+//               attributeName: action.before.attributeName ?? '',
+//               isDiff: true,
+//               currentValue:
+//                 changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
+//                 beforeActionValue,
+//               differences: diffWords(
+//                 changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
+//                   beforeActionValue,
+//                 afterActionValue
+//               ),
+//             },
+//           },
+//         };
+//         break;
+//       }
+//       case 'deleteTriple': {
+//         const actionValue = Action.getName(action) ?? Action.getValue(action);
+//         if (!actionValue) break;
+//         changes[action.entityId] = {
+//           ...changes[action.entityId],
+//           entityName: action.entityName ?? '',
+//           entityRevisions: {
+//             ...changes[action.entityId]?.entityRevisions,
+//             [action.attributeId]: {
+//               ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
+//               id: action.id,
+//               attributeName: action.attributeName ?? '',
+//               isDiff: false,
+//               before: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []), actionValue],
+//             },
+//           },
+//         };
+//         break;
+//       }
+//     }
+//   });
+//   const blockTypes = ['Text Block', 'Image Block', 'Markdown Content'];
+//   const blockEntities: Array<[string, string]> = [];
+//   for await (const entityId of Object.keys(changes)) {
+//     if (
+//       changes[entityId] &&
+//       changes[entityId]?.entityRevisions !== undefined &&
+//       Object.keys(changes[entityId].entityRevisions ?? {}).length > 0
+//     ) {
+//       for await (const attributeId of Object.keys(changes[entityId].entityRevisions ?? {})) {
+//         if (changes[entityId]?.entityRevisions?.[attributeId].attributeName === 'Parent Entity') {
+//           const parentEntityId = changes[entityId]?.entityRevisions?.[attributeId].id.split(':').slice(-1)[0];
+//           const childEntityId = entityId;
+//           if (parentEntityId) {
+//             blockEntities.push([parentEntityId, childEntityId]);
+//           }
+//         } else if (blockTypes.includes(changes[entityId]?.entityRevisions?.[attributeId]?.attributeName ?? '')) {
+//           const fullEntity = await network.fetchEntity(entityId);
+//           const parentEntityId = fullEntity?.triples
+//             .find(triple => triple.attributeName === 'Parent Entity')
+//             ?.id.split(':')
+//             .slice(-1)[0];
+//           const childEntityId = entityId;
+//           if (parentEntityId) {
+//             blockEntities.push([parentEntityId, childEntityId]);
+//           }
+//         }
+//       }
+//     }
+//   }
+//   blockEntities.forEach(([parentEntityId, childEntityId]) => {
+//     changes[parentEntityId] = {
+//       ...changes[parentEntityId],
+//       blockRevisions: { ...changes[parentEntityId]?.blockRevisions, ...changes[childEntityId]?.entityRevisions },
+//     };
+//   });
+//   blockEntities.forEach(([, childEntityId]) => {
+//     delete changes[childEntityId];
+//   });
+
+//   return changes;
+// };
 
 const message: Record<ReviewState, string> = {
   idle: '',
@@ -539,7 +545,7 @@ const RevisedEntity = ({
                       </span>
                     ))}
                 </div>
-                <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
+                <div className="my-4 inline-flex items-center gap-2">
                   <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
                   <SquareButton
                     icon={unstaged ? 'blank' : 'tick'}

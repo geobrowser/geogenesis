@@ -34,8 +34,8 @@ importers:
       '@radix-ui/react-select': ^1.1.1
       '@radix-ui/react-use-rect': ^1.0.0
       '@tailwindcss/line-clamp': ^0.4.2
-      '@tanstack/query-core': ^4.27.0
-      '@tanstack/react-query': ^4.28.0
+      '@tanstack/query-core': ^4.29.1
+      '@tanstack/react-query': ^4.29.3
       '@tanstack/react-table': ^8.5.13
       '@testing-library/dom': ^8.19.1
       '@testing-library/jest-dom': ^5.16.5
@@ -107,7 +107,7 @@ importers:
       '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
       '@geogenesis/ids': link:../../packages/ids
-      '@legendapp/state': 0.23.2_iajsct2xsxyl6zti6n7ank7qpq
+      '@legendapp/state': 0.23.2_z4e4gwqpn7lxtyk3zfw4oqqnsi
       '@liveblocks/client': 1.0.0
       '@liveblocks/react': 1.0.0_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
@@ -117,8 +117,8 @@ importers:
       '@radix-ui/react-popover': 1.0.2_rj7ozvcq3uehdlnj3cbwzbi5ce
       '@radix-ui/react-select': 1.1.1_rj7ozvcq3uehdlnj3cbwzbi5ce
       '@radix-ui/react-use-rect': 1.0.0_react@18.2.0
-      '@tanstack/query-core': 4.27.0
-      '@tanstack/react-query': 4.28.0_biqbaboplfbrettd7655fr4n2y
+      '@tanstack/query-core': 4.29.1
+      '@tanstack/react-query': 4.29.3_biqbaboplfbrettd7655fr4n2y
       '@tanstack/react-table': 8.5.15_biqbaboplfbrettd7655fr4n2y
       '@tiptap/core': 2.0.0-beta.220_@tiptap+pm@2.0.0-beta.220
       '@tiptap/extension-bubble-menu': 2.0.0-beta.220_ohumfzynigfck3hzagxvh2a4ky
@@ -150,7 +150,7 @@ importers:
       react-use-measure: 2.1.1_biqbaboplfbrettd7655fr4n2y
       showdown: 2.1.0
       tippy.js: 6.3.7
-      wagmi: 0.9.6_fkqw57kir4xfoqprois7hapgvi
+      wagmi: 0.9.6_obhlcxmk2vws4eapq2hnql4qhm
     devDependencies:
       '@babel/core': 7.19.6
       '@next/bundle-analyzer': 12.3.1
@@ -1843,7 +1843,7 @@ packages:
     resolution: {integrity: sha512-TQ21IjcZOw/scqypaVFY3jHVqI7X7Hta3qN/us6FvTol3AY06UmrhhXGww0E9xHmAbdX241ddwXEiMBSQZFr9g==}
     dev: false
 
-  /@legendapp/state/0.23.2_iajsct2xsxyl6zti6n7ank7qpq:
+  /@legendapp/state/0.23.2_z4e4gwqpn7lxtyk3zfw4oqqnsi:
     resolution: {integrity: sha512-GKJqAOe5eLuDDiAAbXCV5Wf88w7Br4k15g50nOc70m0451LsyxRTmOv7ALFhnhZpD05AHD9CVJSC/90epHJc6Q==}
     peerDependencies:
       '@tanstack/react-query': ^4.14.6
@@ -1860,7 +1860,7 @@ packages:
       react-native-mmkv:
         optional: true
     dependencies:
-      '@tanstack/react-query': 4.28.0_biqbaboplfbrettd7655fr4n2y
+      '@tanstack/react-query': 4.29.3_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
     dev: false
 
@@ -3014,39 +3014,39 @@ packages:
       tailwindcss: 3.2.4_postcss@8.4.21
     dev: true
 
-  /@tanstack/query-core/4.27.0:
-    resolution: {integrity: sha512-sm+QncWaPmM73IPwFlmWSKPqjdTXZeFf/7aEmWh00z7yl2FjqophPt0dE1EHW9P1giMC5rMviv7OUbSDmWzXXA==}
+  /@tanstack/query-core/4.29.1:
+    resolution: {integrity: sha512-vkPewLEG8ua0efo3SsVT0BcBtkq5RZX8oPhDAyKL+k/rdOYSQTEocfGEXSaBwIwsXeOGBUpfKqI+UmHvNqdWXg==}
     dev: false
 
-  /@tanstack/query-persist-client-core/4.19.1_hggafkme4tws7hcxgbsryyellm:
+  /@tanstack/query-persist-client-core/4.19.1_5sxf5xmyfihskzdqaqqowrbwte:
     resolution: {integrity: sha512-Tlx9tgeYMDoJ5w8O79TXx85Bk46LDQLvojdjWzQbzKWPIEtvwK6OmG2Z3zxz6qEA3FiVmG0BYjsVMsT6PZOhGg==}
     peerDependencies:
       '@tanstack/query-core': 4.19.1
     dependencies:
-      '@tanstack/query-core': 4.27.0
+      '@tanstack/query-core': 4.29.1
     dev: false
 
-  /@tanstack/query-sync-storage-persister/4.19.1_hggafkme4tws7hcxgbsryyellm:
+  /@tanstack/query-sync-storage-persister/4.19.1_5sxf5xmyfihskzdqaqqowrbwte:
     resolution: {integrity: sha512-gY8rDi6XJ4zPgPF8wEsryu8a87+E9vIByXWryoVO0ucKJzgjVLFNargPSZcMMvRsVw7nhyDCCd/nZZgW+Z3C9g==}
     dependencies:
-      '@tanstack/query-persist-client-core': 4.19.1_hggafkme4tws7hcxgbsryyellm
+      '@tanstack/query-persist-client-core': 4.19.1_5sxf5xmyfihskzdqaqqowrbwte
     transitivePeerDependencies:
       - '@tanstack/query-core'
     dev: false
 
-  /@tanstack/react-query-persist-client/4.19.1_dq73gfy5m2ouc5ssu6wwsa6vna:
+  /@tanstack/react-query-persist-client/4.19.1_od2tu45n456n4irh3lia7o2yv4:
     resolution: {integrity: sha512-uNHCBfK7YiNXTjlO3B/Rym7HrNX6OnrcWIw3iiuGFK+gC566/BB3lcLHvriHwanxbnFvWiua8g9hvddeXVQzeA==}
     peerDependencies:
       '@tanstack/react-query': 4.19.1
     dependencies:
-      '@tanstack/query-persist-client-core': 4.19.1_hggafkme4tws7hcxgbsryyellm
-      '@tanstack/react-query': 4.28.0_biqbaboplfbrettd7655fr4n2y
+      '@tanstack/query-persist-client-core': 4.19.1_5sxf5xmyfihskzdqaqqowrbwte
+      '@tanstack/react-query': 4.29.3_biqbaboplfbrettd7655fr4n2y
     transitivePeerDependencies:
       - '@tanstack/query-core'
     dev: false
 
-  /@tanstack/react-query/4.28.0_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-8cGBV5300RHlvYdS4ea+G1JcZIt5CIuprXYFnsWggkmGoC0b5JaqG0fIX3qwDL9PTNkKvG76NGThIWbpXivMrQ==}
+  /@tanstack/react-query/4.29.3_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-FPQrMu7PbCgBcVzoRJm7WmQnAFv+LUgZM9KBZ7Vk/+yERH2BDLvQRuAgczQd5Tb1s3HbOktECRDaOkUxdyBAjw==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
@@ -3057,7 +3057,7 @@ packages:
       react-native:
         optional: true
     dependencies:
-      '@tanstack/query-core': 4.27.0
+      '@tanstack/query-core': 4.29.1
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       use-sync-external-store: 1.2.0_react@18.2.0
@@ -6708,7 +6708,7 @@ packages:
       react-use-measure: 2.1.1_biqbaboplfbrettd7655fr4n2y
       resize-observer-polyfill: 1.5.1
       styled-components: 5.3.6_biqbaboplfbrettd7655fr4n2y
-      wagmi: 0.9.6_fkqw57kir4xfoqprois7hapgvi
+      wagmi: 0.9.6_obhlcxmk2vws4eapq2hnql4qhm
     transitivePeerDependencies:
       - react-is
     dev: false
@@ -17397,16 +17397,16 @@ packages:
       xml-name-validator: 4.0.0
     dev: true
 
-  /wagmi/0.9.6_fkqw57kir4xfoqprois7hapgvi:
+  /wagmi/0.9.6_obhlcxmk2vws4eapq2hnql4qhm:
     resolution: {integrity: sha512-Y+ikhwyU7+iWHn/GbEkC42c0GBW+ZUzaxTQKyESun2yqrhnxQNhIZSSNnhqw1mws3bjDeUrUeEj3kk0ML6VbgQ==}
     peerDependencies:
       ethers: '>=5.5.1'
       react: '>=17.0.0'
     dependencies:
       '@coinbase/wallet-sdk': 3.6.2_@babel+core@7.19.6
-      '@tanstack/query-sync-storage-persister': 4.19.1_hggafkme4tws7hcxgbsryyellm
-      '@tanstack/react-query': 4.28.0_biqbaboplfbrettd7655fr4n2y
-      '@tanstack/react-query-persist-client': 4.19.1_dq73gfy5m2ouc5ssu6wwsa6vna
+      '@tanstack/query-sync-storage-persister': 4.19.1_5sxf5xmyfihskzdqaqqowrbwte
+      '@tanstack/react-query': 4.29.3_biqbaboplfbrettd7655fr4n2y
+      '@tanstack/react-query-persist-client': 4.19.1_od2tu45n456n4irh3lia7o2yv4
       '@wagmi/core': 0.8.6_vvcalbrf4dpgawk5anpghgauae
       '@walletconnect/ethereum-provider': 1.8.0
       abitype: 0.2.5_typescript@4.8.4
