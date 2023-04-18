@@ -41,18 +41,18 @@ interface StringValue {
 interface ImageValue {
   type: 'image'
   id: string
-  value: string
+  value: string // The value of the image is the url where the image is hosted, usually on IPFS
 }
 
 interface EntityValue {
   type: 'entity'
-  id: string
+  id: string // The id of the EntityValue is the id of the entity the value is referencing
 }
 
 interface DateValue {
   type: 'date'
   id: string
-  value: string
+  value: string // This is represented as an ISO-8601 datetime string
 }
 
 type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue
