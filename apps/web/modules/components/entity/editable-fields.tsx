@@ -249,7 +249,7 @@ const dateFieldProps = cva('w-full placeholder:text-grey-02 focus:outline-none t
   },
 });
 
-const labelStyles = cva('text-footnote', {
+const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
   variants: {
     active: {
       true: 'text-text',
