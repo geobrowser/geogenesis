@@ -8,7 +8,8 @@ import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { DateField, TableImageField, TableStringField } from '../entity/editable-fields';
+import { TableImageField, TableStringField } from '../editable-fields/editable-fields';
+import { DateField } from '../editable-fields/date-field';
 
 interface Props {
   cell: Cell;

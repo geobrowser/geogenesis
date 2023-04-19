@@ -16,11 +16,12 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
-import { DateField, PageImageField, PageStringField } from './editable-fields';
+import { PageImageField, PageStringField } from '../editable-fields/editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
+import { DateField } from '../editable-fields/date-field';
 
 interface Props {
   triples: TripleType[];

@@ -13,7 +13,7 @@ import { LinkableChip } from '../design-system/chip';
 import { Text } from '../design-system/text';
 import { Triple, Value } from '../types';
 import { NavUtils } from '../utils';
-import { ImageZoom } from './entity/editable-fields';
+import { ImageZoom } from './editable-fields/editable-fields';
 import { TableCell } from './table/cell';
 import { CellContent } from './table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from './table/styles';

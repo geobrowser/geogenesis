@@ -5,7 +5,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/types';
 import { useEditEvents } from './edit-events';
 import React from 'react';
-import { PageStringField } from './editable-fields';
+import { PageStringField } from '../editable-fields/editable-fields';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Text } from '~/modules/design-system/text';

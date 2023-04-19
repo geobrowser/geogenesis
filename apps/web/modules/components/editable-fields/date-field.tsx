@@ -1,0 +1,251 @@
+import * as React from 'react';
+import { cva } from 'class-variance-authority';
+import { atomWithValidate, validateAtoms } from 'jotai-form';
+import { useAtom } from 'jotai/react';
+import { AnimatePresence, motion } from 'framer-motion';
+
+interface DateFieldProps {
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  variant?: 'body' | 'tableCell';
+}
+
+const dateFieldProps = cva(
+  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out',
+  {
+    variants: {
+      variant: {
+        body: 'text-body',
+        tableCell: 'text-tableCell',
+      },
+      centered: {
+        true: 'text-center',
+      },
+      error: {
+        true: 'text-red-01',
+      },
+    },
+    defaultVariants: {
+      variant: 'body',
+      centered: false,
+      error: false,
+    },
+  }
+);
+
+const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out', {
+  variants: {
+    active: {
+      true: 'text-text',
+      false: 'text-grey-02',
+    },
+    error: {
+      true: 'text-red-01',
+    },
+  },
+  defaultVariants: {
+    active: false,
+    error: false,
+  },
+});
+
+const dayAtom = atomWithValidate('', {
+  validate: async v => {
+    const regex = /^[0-9]*$/;
+
+    if (v !== '') {
+      if (!regex.test(v)) throw new Error('Day must be a number');
+      if (v.length > 2) throw new Error("Day can't be longer than 2 characters");
+      if (Number(v) > 31) throw new Error('Day must be less than 31');
+      if (Number(v) < 1) throw new Error('Day must be greater than 0');
+    }
+
+    return v;
+  },
+});
+
+const monthAtom = atomWithValidate('', {
+  validate: async v => {
+    const regex = /^[0-9]*$/;
+
+    if (v !== '') {
+      if (!regex.test(v)) throw new Error('Month must be a number');
+      if (v.length > 2) throw new Error("Month can't be longer than 2 characters");
+      if (Number(v) > 12) throw new Error('Month must be less than 12');
+      if (Number(v) < 1) throw new Error('Month must be greater than 0');
+    }
+
+    return v;
+  },
+});
+
+const yearAtom = atomWithValidate('', {
+  validate: async v => {
+    const regex = /^[0-9]*$/;
+
+    if (v !== '') {
+      if (!regex.test(v)) throw new Error('Year must be a number');
+      if (v.length > 4) throw new Error("Year can't be longer than 4 characters");
+    }
+
+    return v;
+  },
+});
+
+const formAtom = validateAtoms(
+  {
+    day: dayAtom,
+    month: monthAtom,
+    year: yearAtom,
+  },
+  values => {
+    if (values.month !== '') {
+      const dayAsNumber = Number(values.day);
+      if (dayAsNumber > 30 && [4, 6, 9, 11].includes(Number(values.month))) {
+        throw new Error('Day must be less than 31 for the entered month');
+      }
+
+      if (dayAsNumber > 29 && Number(values.month) === 2) {
+        throw new Error('Day must be less than 30 for the entered month');
+      }
+    }
+  }
+);
+
+export function DateField(props: DateFieldProps) {
+  const [day, setDay] = useAtom(dayAtom);
+  const [month, setMonth] = useAtom(monthAtom);
+  const [year, setYear] = useAtom(yearAtom);
+  const [formState] = useAtom(formAtom);
+
+  const onDayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    const regex = /^[0-9]*$/;
+
+    if (!regex.test(value)) return;
+    if (value.length > 2) return;
+    setDay(value);
+  };
+
+  const onMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    const regex = /^[0-9]*$/;
+
+    if (!regex.test(value)) return;
+    if (value.length > 2) return;
+    setMonth(value);
+  };
+
+  const onYearChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    const regex = /^[0-9]*$/;
+
+    if (!regex.test(value)) return;
+    if (value.length > 4) return;
+    setYear(value);
+  };
+
+  const isValidForm = formState.isValid;
+  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
+  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !isValidForm;
+  const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
+
+  return (
+    <div>
+      <div className="flex max-w-[164px] gap-3">
+        <div className="flex w-full flex-col" style={{ flex: 2 }}>
+          <input
+            value={month.value}
+            onChange={onMonthChange}
+            placeholder="MM"
+            className={dateFieldProps({ variant: props.variant, error: !isValidMonth || !isValidForm })}
+          />
+          <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
+            Month
+          </span>
+        </div>
+
+        <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
+          /
+        </span>
+
+        <div className="flex flex-col items-center" style={{ flex: 2 }}>
+          <input
+            value={day.value}
+            onChange={onDayChange}
+            placeholder="DD"
+            className={dateFieldProps({ variant: props.variant, centered: true, error: !isValidDay || !isValidForm })}
+          />
+          <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
+        </div>
+
+        <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
+          /
+        </span>
+
+        <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
+          <input
+            value={year.value}
+            onChange={onYearChange}
+            placeholder="YYYY"
+            className={dateFieldProps({ variant: props.variant, centered: true, error: !isValidYear })}
+          />
+          <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
+        </div>
+      </div>
+      <AnimatePresence mode="wait">
+        <div className="overflow-hidden">
+          {!isValidDay && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              Entered day is not valid
+            </motion.p>
+          )}
+          {!isValidMonth && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              Entered month is not valid
+            </motion.p>
+          )}
+          {!isValidYear && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              Entered year is not valid
+            </motion.p>
+          )}
+          {!isValidForm && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              The entered day is not valid for the entered month
+            </motion.p>
+          )}
+        </div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function isLongMonth(month: number) {
+  return [1, 3, 5, 7, 8, 10, 12].includes(month);
+}

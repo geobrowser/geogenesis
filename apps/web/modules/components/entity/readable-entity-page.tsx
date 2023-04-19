@@ -7,13 +7,14 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Triple } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
-import { DateField, ImageZoom } from './editable-fields';
+import { ImageZoom } from '../editable-fields/editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { ReferencedByEntity } from './types';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { useEntityStore } from '~/modules/entity';
+import { DateField } from '../editable-fields/date-field';
 
 interface Props {
   triples: Triple[];

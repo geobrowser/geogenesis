@@ -3,7 +3,7 @@ import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
 import { NavUtils } from '../../utils';
-import { ImageZoom } from '../entity/editable-fields';
+import { ImageZoom } from '../editable-fields/editable-fields';
 import { CellContent } from '../table/cell-content';
 
 interface Props {
