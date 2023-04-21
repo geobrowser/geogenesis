@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
 import { useTableBlock } from './table-block-store';
@@ -13,6 +14,7 @@ import { PageNumberContainer } from '~/modules/components/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/modules/components/table/table-pagination';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { IconButton, SmallButton } from '~/modules/design-system/button';
 
 interface Props {
   spaceId: string;
@@ -20,6 +22,7 @@ interface Props {
 
 export function TableBlock({ spaceId }: Props) {
   const { columns, rows, blockEntity, hasNextPage, hasPreviousPage, setPage, pageNumber } = useTableBlock();
+  const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
   return (
     <div>
@@ -47,15 +50,8 @@ export function TableBlock({ spaceId }: Props) {
           >
             <Icon icon="search" color="grey-02" />
           </span>
-          <span
-            title="Table block filtering coming soon"
-            className="hover:cursor-not-allowed"
-            onClick={() => {
-              //
-            }}
-          >
-            <Icon icon="filterTable" color="grey-02" />
-          </span>
+
+          <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon="filterTable" color="grey-04" />
           <span
             title="Table block filtering coming soon"
             className="hover:cursor-not-allowed"
@@ -68,47 +64,71 @@ export function TableBlock({ spaceId }: Props) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
-        <TableBlockTable space={spaceId} columns={columns} rows={rows} />
-      </div>
+      <LayoutGroup>
+        {isFilterOpen && (
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0 }}
+              exit={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="overflow-hidden border-t border-divider py-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: -15 }}
+                exit={{ opacity: 0, y: -15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, ease: 'easeIn' }}
+              >
+                <EditableFilters />
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
 
-      <Spacer height={12} />
+        <motion.div layout="position">
+          <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
+            <TableBlockTable space={spaceId} columns={columns} rows={rows} />
+          </div>
 
-      <PageNumberContainer>
-        {pageNumber > 1 && (
-          <>
-            <PageNumber number={1} onClick={() => setPage(0)} />
-            {pageNumber > 2 ? (
+          <Spacer height={12} />
+
+          <PageNumberContainer>
+            {pageNumber > 1 && (
               <>
-                <Spacer width={16} />
-                <Text color="grey-03" variant="metadataMedium">
-                  ...
-                </Text>
-                <Spacer width={16} />
+                <PageNumber number={1} onClick={() => setPage(0)} />
+                {pageNumber > 2 ? (
+                  <>
+                    <Spacer width={16} />
+                    <Text color="grey-03" variant="metadataMedium">
+                      ...
+                    </Text>
+                    <Spacer width={16} />
+                  </>
+                ) : (
+                  <Spacer width={4} />
+                )}
               </>
-            ) : (
-              <Spacer width={4} />
             )}
-          </>
-        )}
-        {hasPreviousPage && (
-          <>
-            <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
-            <Spacer width={4} />
-          </>
-        )}
-        <PageNumber isActive number={pageNumber + 1} />
-        {hasNextPage && (
-          <>
-            <Spacer width={4} />
-            <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
-          </>
-        )}
-        <Spacer width={32} />
-        <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-        <Spacer width={12} />
-        <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
-      </PageNumberContainer>
+            {hasPreviousPage && (
+              <>
+                <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
+                <Spacer width={4} />
+              </>
+            )}
+            <PageNumber isActive number={pageNumber + 1} />
+            {hasNextPage && (
+              <>
+                <Spacer width={4} />
+                <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
+              </>
+            )}
+            <Spacer width={32} />
+            <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
+            <Spacer width={12} />
+            <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
+          </PageNumberContainer>
+        </motion.div>
+      </LayoutGroup>
     </div>
   );
 }
@@ -132,5 +152,19 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
     />
   ) : (
     <h4 className="text-smallTitle">{blockEntity?.name}</h4>
+  );
+}
+
+function EditableFilters() {
+  return (
+    <div className="flex items-center gap-2">
+      <SmallButton icon="createSmall" variant="secondary">
+        Filter
+      </SmallButton>
+
+      <SmallButton icon="chevronDownSmall" variant="secondary">
+        Clear
+      </SmallButton>
+    </div>
   );
 }

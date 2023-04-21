@@ -31,6 +31,7 @@ import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 import { Context } from './icons/context';
 import { FilterTable } from './icons/filter-table';
+import { ChevronDownSmall } from './icons/chevron-down-small';
 
 export type IconName =
   | 'blank'
@@ -56,6 +57,7 @@ export type IconName =
   | 'image'
   | 'text'
   | 'rightArrowLongSmall'
+  | 'chevronDownSmall'
   | 'search'
   | 'history'
   | 'editorH1'
@@ -114,4 +116,5 @@ const icons: Record<IconName, React.ElementType> = {
   upload: Upload,
   context: Context,
   filterTable: FilterTable,
+  chevronDownSmall: ChevronDownSmall,
 };
