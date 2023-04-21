@@ -84,7 +84,7 @@ export class ActionsStore implements IActionsStore {
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? [])].filter(
-        (item: ActionType) => !actionIdsToDelete.includes(getId(item))
+        (item: ActionType) => !actionIdsToDelete.includes(Action.getId(item))
       ),
     };
 
@@ -145,7 +145,7 @@ export class ActionsStore implements IActionsStore {
     description: string | undefined = undefined
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const actionsToPublish = spaceActions.filter(action => !(getId(action) in unstagedChanges));
+    const actionsToPublish = spaceActions.filter(action => !(Action.getId(action) in unstagedChanges));
 
     if (actionsToPublish.length < 1) return;
 
@@ -168,7 +168,7 @@ export class ActionsStore implements IActionsStore {
       ...action,
       hasBeenPublished: true,
     }));
-    const unstagedActions = spaceActions.filter(action => getId(action) in unstagedChanges);
+    const unstagedActions = spaceActions.filter(action => Action.getId(action) in unstagedChanges);
 
     this.actions$.set({
       ...this.actions$.get(),
@@ -179,13 +179,3 @@ export class ActionsStore implements IActionsStore {
     await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
-
-const getId = (action: ActionType) => {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return action.id;
-    case 'editTriple':
-      return action.before.id;
-  }
-};

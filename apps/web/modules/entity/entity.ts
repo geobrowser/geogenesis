@@ -170,3 +170,15 @@ export function cover(triples: ITriple[] | undefined): string | null {
 
   return coverUrl;
 }
+
+/**
+ * This function traverses through all the triples associated with an entity and attempts to find the parent entity ID of a block entity.
+ */
+export const getParentEntityId = (triples: ITriple[]) => {
+  return (
+    triples
+      .find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)
+      ?.id.split(':')
+      .slice(-1)[0] ?? null
+  );
+};

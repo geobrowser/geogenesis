@@ -184,10 +184,6 @@ const ReviewChanges = () => {
               />
             </div>
             <div className="-mt-10 flex flex-col divide-y divide-grey-02">
-              <div>
-                <div>WORKSPACE</div>
-                <div>hi!</div>
-              </div>
               {/* {Object.keys(changes).map((key: string) => (
                 <RevisedEntity
                   key={key}
