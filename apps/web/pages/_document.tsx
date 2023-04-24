@@ -30,6 +30,10 @@ class MyDocument extends Document {
             property="og:description"
             content="Browse and organize the world's public knowledge and information in a decentralized way."
           />
+          <meta
+            property="twitter:description"
+            content="Browse and organize the world's public knowledge and information in a decentralized way."
+          />
           <meta property="og:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
 
           {/* Less essential */}
