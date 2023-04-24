@@ -50,7 +50,7 @@ export default function EntityPage(props: Props) {
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
   const opengraphUrl =
-    props.serverAvatarUrl ?? props.serverCoverUrl ?? 'https://www.geobrowser.io/static/geo-social-image.png';
+    props.serverAvatarUrl || props.serverCoverUrl || 'https://www.geobrowser.io/static/geo-social-image.png';
 
   return (
     <>
