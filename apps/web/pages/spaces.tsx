@@ -12,6 +12,7 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   spaces: Space[];
@@ -22,8 +23,8 @@ export default function Spaces({ spaces }: Props) {
     <div>
       <Head>
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
-        <meta property="og:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
-        <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
+        <meta property="og:image" content={DEFAULT_OPENGRAPH_IMAGE} />
+        <meta name="twitter:image" content={DEFAULT_OPENGRAPH_IMAGE} />
       </Head>
       <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>

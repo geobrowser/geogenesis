@@ -13,6 +13,7 @@ import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Space, Triple } from '~/modules/types';
 import { TypesStoreProvider } from '~/modules/type/types-store';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   space: Space;
@@ -33,7 +34,7 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
-  const opengraphUrl = spaceImage || 'https://www.geobrowser.io/static/geo-social-image.png';
+  const opengraphUrl = spaceImage || DEFAULT_OPENGRAPH_IMAGE;
 
   return (
     <div>

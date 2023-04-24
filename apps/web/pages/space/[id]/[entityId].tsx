@@ -21,6 +21,7 @@ import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   triples: Triple[];
@@ -49,8 +50,7 @@ export default function EntityPage(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const opengraphUrl =
-    props.serverAvatarUrl || props.serverCoverUrl || 'https://www.geobrowser.io/static/geo-social-image.png';
+  const opengraphUrl = props.serverAvatarUrl || props.serverCoverUrl || DEFAULT_OPENGRAPH_IMAGE;
 
   return (
     <>
