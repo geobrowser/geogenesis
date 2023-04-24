@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { EntityValue, Entity as IEntity, Triple as ITriple } from '~/modules/types';
+import { EntityValue, Entity as IEntity, Triple as ITriple, FilterField } from '~/modules/types';
 
 export function upsertName({
   blockEntity,
@@ -121,4 +121,10 @@ export function createBlock({
       })
     );
   }
+}
+
+export function createFilter({ columnId, value }: { columnId: string; value: string }) {
+  //
+
+  return '';
 }

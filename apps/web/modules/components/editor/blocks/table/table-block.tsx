@@ -2,7 +2,7 @@ import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock } from './table-block-store';
+import { useTableBlock, useTableBlockStore } from './table-block-store';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -15,6 +15,10 @@ import { NextButton, PageNumber, PreviousButton } from '~/modules/components/tab
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
+import { Entity } from '~/modules/entity';
+import { valueTypes } from '~/modules/value-types';
+import { SYSTEM_IDS } from '~/../../packages/ids';
+import { TripleValueType } from '~/modules/types';
 
 interface Props {
   spaceId: string;
@@ -156,9 +160,34 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 }
 
 function EditableFilters() {
+  const { setFilterState, columns } = useTableBlock();
+
+  const filterableColumns: { id: string; name: string; valueType: TripleValueType }[] = [
+    { id: 'name', name: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT] },
+    ...columns
+      .map(c => ({
+        id: c.id,
+        name: Entity.name(c.triples) ?? '',
+        valueType: valueTypes[Entity.valueTypeId(c.triples) ?? ''],
+      }))
+      .flatMap(c => (c.name !== '' ? [c] : [])),
+  ];
+
+  console.log('filterableColumns', filterableColumns);
+
+  const onCreateFilter = () => {
+    // @TODO: Should the filter creation happen here or in `setFilterstate`?
+    const filter = TableBlockSdk.createFilter({
+      columnId: 'column-1',
+      value: '',
+    });
+
+    setFilterState([]);
+  };
+
   return (
     <div className="flex items-center gap-2">
-      <SmallButton icon="createSmall" variant="secondary">
+      <SmallButton icon="createSmall" variant="secondary" onClick={onCreateFilter}>
         Filter
       </SmallButton>
 

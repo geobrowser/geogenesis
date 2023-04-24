@@ -4,7 +4,7 @@ import { createContext, useContext, useMemo } from 'react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
+import { Column, FilterState, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
@@ -47,7 +47,7 @@ export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
   MergedData: MergedData;
-  pageNumber$: Observable<number> = observable(0);
+  pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
@@ -55,12 +55,15 @@ export class TableBlockStore {
   type$: Observable<ITriple>;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
+  filterState$: Observable<FilterState>;
   abortController: AbortController = new AbortController();
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
     this.ActionsStore = ActionsStore;
     this.type$ = observable(selectedType);
+    this.pageNumber$ = observable(0);
+    this.filterState$ = observable<FilterState>([]);
     this.MergedData = new MergedData({ api, store: ActionsStore });
 
     this.blockEntity$ = makeOptionalComputed(
@@ -227,6 +230,11 @@ export class TableBlockStore {
         this.pageNumber$.set(page);
     }
   };
+
+  setFilterState = (filter: FilterState) => {
+    const newState = filter.length === 0 ? [] : filter;
+    this.filterState$.set(newState);
+  };
 }
 
 const TableBlockStoreContext = createContext<TableBlockStore | undefined>(undefined);
@@ -285,6 +293,8 @@ export function useTableBlock() {
     hasNextPage$,
     hasPreviousPage$,
     setPage,
+    filterState$,
+    setFilterState,
   } = useTableBlockStore();
   const type = useSelector(type$);
   const rows = useSelector(rows$);
@@ -294,6 +304,7 @@ export function useTableBlock() {
   const hasNextPage = useSelector(hasNextPage$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const blockEntity = useSelector(blockEntity$);
+  const filterState = useSelector(filterState$);
 
   return {
     type,
@@ -305,5 +316,7 @@ export function useTableBlock() {
     hasPreviousPage,
     setPage,
     blockEntity,
+    filterState,
+    setFilterState,
   };
 }
