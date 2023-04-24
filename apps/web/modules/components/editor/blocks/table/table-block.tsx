@@ -173,8 +173,6 @@ function EditableFilters() {
       .flatMap(c => (c.name !== '' ? [c] : [])),
   ];
 
-  console.log('filterableColumns', filterableColumns);
-
   const onCreateFilter = () => {
     // @TODO: Should the filter creation happen here or in `setFilterstate`?
     const filter = TableBlockSdk.createFilter({
