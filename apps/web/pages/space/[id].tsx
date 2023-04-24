@@ -33,7 +33,7 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
-  const opengraphUrl = spaceImage ?? 'https://www.geobrowser.io/static/geo-social-image.png';
+  const opengraphUrl = spaceImage || 'https://www.geobrowser.io/static/geo-social-image.png';
 
   return (
     <div>
