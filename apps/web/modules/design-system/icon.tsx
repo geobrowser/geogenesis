@@ -32,6 +32,7 @@ import type { ColorName } from '~/modules/design-system/theme/colors';
 import { Context } from './icons/context';
 import { FilterTable } from './icons/filter-table';
 import { ChevronDownSmall } from './icons/chevron-down-small';
+import { CheckCloseSmall } from './icons/check-close-small';
 
 export type IconName =
   | 'blank'
@@ -67,7 +68,8 @@ export type IconName =
   | 'editorImage'
   | 'editorTable'
   | 'context'
-  | 'filterTable';
+  | 'filterTable'
+  | 'checkCloseSmall';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -117,4 +119,5 @@ const icons: Record<IconName, React.ElementType> = {
   context: Context,
   filterTable: FilterTable,
   chevronDownSmall: ChevronDownSmall,
+  checkCloseSmall: CheckCloseSmall,
 };
