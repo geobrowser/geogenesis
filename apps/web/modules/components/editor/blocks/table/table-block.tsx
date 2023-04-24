@@ -42,7 +42,7 @@ export function TableBlock({ spaceId }: Props) {
         </div>
         <div className="flex items-center gap-5">
           <span
-            title="Table block filtering coming soon"
+            title="Table block searching coming soon"
             className="hover:cursor-not-allowed"
             onClick={() => {
               //
@@ -53,7 +53,7 @@ export function TableBlock({ spaceId }: Props) {
 
           <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon="filterTable" color="grey-04" />
           <span
-            title="Table block filtering coming soon"
+            title="Coming soon"
             className="hover:cursor-not-allowed"
             onClick={() => {
               //
