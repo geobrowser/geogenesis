@@ -63,6 +63,8 @@ type Proposal = {
   description: string;
 };
 
+type EntityId = string;
+
 const ReviewChanges = () => {
   const { spaces } = useSpaces();
   const { allSpacesWithActions } = useActionsStore();
@@ -104,7 +106,7 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
   const { actionsFromSpace, publish } = useActionsStore(activeSpace);
   const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [changes, isLoading] = useChanges(actions, activeSpace);
+  const [data, isLoading] = useChanges(actions, activeSpace);
 
   // Publishing logic
   const { data: signer } = useSigner();
@@ -114,9 +116,15 @@ const ReviewChanges = () => {
     setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
   };
 
-  if (isLoading || typeof changes !== 'object') {
+  if (isLoading || typeof data !== 'object') {
     return null;
   }
+
+  // @TODO render changes with supplemental entity data
+  // render blocks, then attributes
+  const [changes, entities] = data;
+
+  const changedEntities = Object.keys(changes);
 
   return (
     <>
@@ -184,18 +192,15 @@ const ReviewChanges = () => {
               />
             </div>
             <div className="-mt-10 flex flex-col divide-y divide-grey-02">
-              {/* {Object.keys(changes).map((key: string) => (
-                <RevisedEntity
-                  key={key}
-                  spaceId={activeSpace}
-                  entityId={key}
-                  entityName={changes[key].entityName}
-                  entityRevisions={changes[key].entityRevisions}
-                  blockRevisions={changes[key].blockRevisions}
+              {changedEntities.map((entityId: EntityId) => (
+                <ChangedEntity
+                  key={entityId}
+                  entityId={entityId}
+                  change={changes[entityId]}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
-              ))} */}
+              ))}
             </div>
           </div>
         </div>
@@ -203,6 +208,149 @@ const ReviewChanges = () => {
       <StatusBar reviewState={reviewState} />
     </>
   );
+};
+
+type ChangedEntityProps = {
+  entityId: EntityId;
+  change: any;
+  unstagedChanges: Record<string, unknown>;
+  setUnstagedChanges: (value: Record<string, unknown>) => void;
+};
+
+const ChangedEntity = ({ entityId, change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+  const { name, blocks = {}, attributes = {} } = change;
+
+  const blockIds = Object.keys(blocks);
+  const attributeIds = Object.keys(attributes);
+
+  return (
+    <div>
+      <div className="text-mediumTitle">{name}</div>
+      {blockIds.length > 0 && (
+        <div>
+          {blockIds.map(blockId => (
+            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
+          ))}
+        </div>
+      )}
+      {attributeIds.length > 0 && (
+        <div>
+          {attributeIds.map(attributeId => (
+            <ChangedAttribute key={attributeId} attributeId={attributeId} attribute={attributes[attributeId]} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+type ChangedBlockProps = {
+  blockId: string;
+  block: any;
+};
+
+const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
+  const { before, after } = block;
+
+  switch (block.type) {
+    case 'markdownContent': {
+      // @TODO run diff
+
+      return (
+        <div key={blockId} className="flex gap-8">
+          <div className="flex-1  p-4">
+            <div className="text-bodySemibold capitalize">{blockId}</div>
+            <div>{before}</div>
+          </div>
+          <div className="flex-1  p-4">
+            <div className="text-bodySemibold capitalize">{blockId}</div>
+            <div>{after}</div>
+          </div>
+        </div>
+      );
+    }
+    case 'imageBlock': {
+      // @TODO get other entities from parent
+
+      return (
+        <div key={blockId} className="flex gap-8">
+          <div className="flex-1  p-4">
+            <div className="text-bodySemibold capitalize">{blockId}</div>
+            <div>{before && <img src={before} />}</div>
+          </div>
+          <div className="flex-1 p-4">
+            <div className="text-bodySemibold capitalize">{blockId}</div>
+            <div>{after && <img src={after} />}</div>
+          </div>
+        </div>
+      );
+    }
+    default: {
+      return <></>;
+    }
+  }
+};
+
+type ChangedAttributeProps = {
+  attributeId: string;
+  attribute: any;
+};
+
+const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => {
+  const { before, after } = attribute;
+
+  switch (attribute.type) {
+    case 'string': {
+      // @TODO run diffs
+
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            <div>{before}</div>
+          </div>
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            <div>{after}</div>
+          </div>
+        </div>
+      );
+    }
+    case 'entity': {
+      // @TODO get other entities from parent
+      // @TODO support multiple changes
+
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            {before && <Chip status="removed">{before}</Chip>}
+          </div>
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            <div>{after && <Chip status="added">{after}</Chip>}</div>
+          </div>
+        </div>
+      );
+    }
+    case 'image': {
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            <div>{before && <img src={before} />}</div>
+          </div>
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{attributeId}</div>
+            <div>{after && <img src={after} />}</div>
+          </div>
+        </div>
+      );
+    }
+    default: {
+      return <></>;
+    }
+  }
 };
 
 type StatusBarProps = {
@@ -231,157 +379,15 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
   );
 };
 
-// export type Changes = Record<EntityId, ChangeType>;
-
-// type EntityId = string;
-// type ChangeType = {
-//   entityName: EntityName;
-//   entityRevisions?: EntityRevisions;
-//   blockRevisions?: EntityRevisions;
-// };
-
-type EntityName = string;
-type EntityRevisions = Record<AttributeId, EntityRevision>;
-
-type AttributeId = string;
-type EntityRevision = {
-  id: string;
-  attributeName: AttributeName;
-  currentValue?: string;
-  isDiff: boolean;
-  before?: Before;
-  after?: After;
-  differences?: Array<Difference>;
-};
-
-type AttributeName = string;
-type Before = string[];
-type After = string[];
-
 const useChanges = (actions: Array<ActionType>, spaceId: string) => {
   const { network } = Services.useServices();
-  const { data: changes, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: [`${spaceId}-changes`],
     queryFn: async () => Change.fromActions(actions, network),
   });
 
-  return [changes, isLoading];
+  return [data, isLoading];
 };
-
-// export const legacyGetChanges = async (actions: Array<ActionType>, network: INetwork): Promise<any> => {
-//   const changes: any = {};
-//   const parsedActions = Action.squashChanges(actions);
-
-//   parsedActions.forEach((action: ActionType) => {
-//     switch (action.type) {
-//       case 'createTriple': {
-//         const actionValue = Action.getName(action) ?? Action.getValue(action);
-//         if (!actionValue) break;
-//         changes[action.entityId] = {
-//           ...changes[action.entityId],
-//           entityName: action.entityName ?? '',
-//           entityRevisions: {
-//             ...changes[action.entityId]?.entityRevisions,
-//             [action.attributeId]: {
-//               ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
-//               id: action.id,
-//               attributeName: action.attributeName ?? '',
-//               isDiff: false,
-//               after: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []), actionValue],
-//             },
-//           },
-//         };
-//         break;
-//       }
-//       case 'editTriple': {
-//         const beforeActionValue = Action.getName(action.before) ?? Action.getValue(action.before);
-//         const afterActionValue = Action.getName(action.after) ?? Action.getValue(action.after);
-//         if (!beforeActionValue || !afterActionValue) break;
-//         changes[action.before.entityId] = {
-//           ...changes[action.before.entityId],
-//           entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
-//           entityRevisions: {
-//             ...changes[action.before.entityId]?.entityRevisions,
-//             [action.before.attributeId]: {
-//               ...changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId],
-//               id: action.before.id,
-//               attributeName: action.before.attributeName ?? '',
-//               isDiff: true,
-//               currentValue:
-//                 changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
-//                 beforeActionValue,
-//               differences: diffWords(
-//                 changes[action.before.entityId]?.entityRevisions?.[action.before.attributeId]?.currentValue ??
-//                   beforeActionValue,
-//                 afterActionValue
-//               ),
-//             },
-//           },
-//         };
-//         break;
-//       }
-//       case 'deleteTriple': {
-//         const actionValue = Action.getName(action) ?? Action.getValue(action);
-//         if (!actionValue) break;
-//         changes[action.entityId] = {
-//           ...changes[action.entityId],
-//           entityName: action.entityName ?? '',
-//           entityRevisions: {
-//             ...changes[action.entityId]?.entityRevisions,
-//             [action.attributeId]: {
-//               ...changes[action.entityId]?.entityRevisions?.[action.attributeId],
-//               id: action.id,
-//               attributeName: action.attributeName ?? '',
-//               isDiff: false,
-//               before: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []), actionValue],
-//             },
-//           },
-//         };
-//         break;
-//       }
-//     }
-//   });
-//   const blockTypes = ['Text Block', 'Image Block', 'Markdown Content'];
-//   const blockEntities: Array<[string, string]> = [];
-//   for await (const entityId of Object.keys(changes)) {
-//     if (
-//       changes[entityId] &&
-//       changes[entityId]?.entityRevisions !== undefined &&
-//       Object.keys(changes[entityId].entityRevisions ?? {}).length > 0
-//     ) {
-//       for await (const attributeId of Object.keys(changes[entityId].entityRevisions ?? {})) {
-//         if (changes[entityId]?.entityRevisions?.[attributeId].attributeName === 'Parent Entity') {
-//           const parentEntityId = changes[entityId]?.entityRevisions?.[attributeId].id.split(':').slice(-1)[0];
-//           const childEntityId = entityId;
-//           if (parentEntityId) {
-//             blockEntities.push([parentEntityId, childEntityId]);
-//           }
-//         } else if (blockTypes.includes(changes[entityId]?.entityRevisions?.[attributeId]?.attributeName ?? '')) {
-//           const fullEntity = await network.fetchEntity(entityId);
-//           const parentEntityId = fullEntity?.triples
-//             .find(triple => triple.attributeName === 'Parent Entity')
-//             ?.id.split(':')
-//             .slice(-1)[0];
-//           const childEntityId = entityId;
-//           if (parentEntityId) {
-//             blockEntities.push([parentEntityId, childEntityId]);
-//           }
-//         }
-//       }
-//     }
-//   }
-//   blockEntities.forEach(([parentEntityId, childEntityId]) => {
-//     changes[parentEntityId] = {
-//       ...changes[parentEntityId],
-//       blockRevisions: { ...changes[parentEntityId]?.blockRevisions, ...changes[childEntityId]?.entityRevisions },
-//     };
-//   });
-//   blockEntities.forEach(([, childEntityId]) => {
-//     delete changes[childEntityId];
-//   });
-
-//   return changes;
-// };
 
 const message: Record<ReviewState, string> = {
   idle: '',
@@ -393,249 +399,6 @@ const message: Record<ReviewState, string> = {
 };
 
 const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
-
-type RevisedEntityProps = {
-  spaceId: string;
-  entityId: string;
-  entityName: EntityName;
-  entityRevisions?: EntityRevisions;
-  blockRevisions?: EntityRevisions;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
-};
-
-const RevisedEntity = ({
-  spaceId,
-  entityId,
-  entityName,
-  entityRevisions,
-  blockRevisions,
-  unstagedChanges,
-  setUnstagedChanges,
-}: RevisedEntityProps) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [entity, setEntity] = useState<EntityType | null>(null);
-  const [renderedEntityName, setRenderedEntityName] = useState<string>(() => entityName || 'Loading...');
-  const { deleteActions } = useActionsStore(spaceId);
-  const { network } = Services.useServices();
-
-  useEffect(() => {
-    async function fetchRemoteEntity() {
-      const newEntity = await network.fetchEntity(entityId);
-      const newEntityName = renderedEntityName !== 'Loading...' ? renderedEntityName : newEntity?.name ?? 'Not found';
-      setRenderedEntityName(newEntityName);
-      setEntity(newEntity);
-      setIsLoading(false);
-    }
-
-    fetchRemoteEntity();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleDeleteEdits = () => {
-    if (entityRevisions && Object.values(entityRevisions).length > 0) {
-      const allActions = Object.values(entityRevisions).map(item => item.id);
-      deleteActions(spaceId, allActions);
-    }
-  };
-
-  const numberOfRows = getRows(entityRevisions, blockRevisions);
-
-  return (
-    <div className="flex flex-col gap-4 py-10">
-      <div className="-mt-1 text-mediumTitle">{renderedEntityName}</div>
-      <div
-        className="grid w-full grid-flow-col grid-cols-2 items-start gap-8"
-        style={{ gridTemplateRows: `repeat(${numberOfRows}, auto` }}
-      >
-        <div className="text-body">Current version</div>
-        {blockRevisions &&
-          Object.keys(blockRevisions).length > 0 &&
-          Object.keys(blockRevisions).map(blockId => {
-            if (blockId === 'type' || blockId === 'name') return null;
-
-            const { attributeName, differences } = blockRevisions[blockId];
-
-            return (
-              <div key={attributeName} className="relative">
-                <div className="text-body">
-                  {differences
-                    ?.filter(item => !item.added)
-                    ?.map((difference: Difference, index: number) => (
-                      <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
-                        {difference.value}
-                      </span>
-                    ))}
-                </div>
-              </div>
-            );
-          })}
-        {entityRevisions && Object.keys(entityRevisions).length > 0 && (
-          <Panel>
-            {Object.keys(entityRevisions).map(attributeId => {
-              if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-
-              const { attributeName, isDiff, before, differences } = entityRevisions[attributeId];
-
-              return (
-                <Panel.Section key={attributeId}>
-                  <div className="text-bodySemibold">{attributeName}</div>
-                  <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body')}>
-                    {!isDiff ? (
-                      <>
-                        {isLoading ? (
-                          <Skeleton />
-                        ) : (
-                          <>
-                            {entity?.triples
-                              ?.filter(
-                                (item: any) => item.attributeId === attributeId && !before?.includes(item.value.name)
-                              )
-                              ?.map((triple: any) => (
-                                <Chip key={triple.id} status="unchanged">
-                                  {triple.value.name}
-                                </Chip>
-                              ))}
-                          </>
-                        )}
-                        {before?.map(item => (
-                          <Chip key={item} status="removed">
-                            {item}
-                          </Chip>
-                        ))}
-                      </>
-                    ) : (
-                      differences
-                        ?.filter(item => !item.added)
-                        ?.map((difference: Difference, index: number) => (
-                          <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
-                            {difference.value}
-                          </span>
-                        ))
-                    )}
-                  </div>
-                </Panel.Section>
-              );
-            })}
-          </Panel>
-        )}
-        <div className="flex items-center justify-between">
-          <div className="text-body">Your proposed edits</div>
-          <SmallButton onClick={handleDeleteEdits}>Delete edits</SmallButton>
-        </div>
-        {blockRevisions &&
-          Object.keys(blockRevisions).length > 0 &&
-          Object.keys(blockRevisions).map(blockId => {
-            if (blockId === 'type' || blockId === 'name') return null;
-
-            const { id, differences } = blockRevisions[blockId];
-            const unstaged = id in unstagedChanges;
-
-            return (
-              <div key={id} className="relative">
-                <div className={cx('text-body', unstaged && 'opacity-25')}>
-                  {differences
-                    ?.filter(item => !item.removed)
-                    ?.map((difference: Difference, index: number) => (
-                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                        {difference.value}
-                      </span>
-                    ))}
-                </div>
-                <div className="my-4 inline-flex items-center gap-2">
-                  <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
-                  <SquareButton
-                    icon={unstaged ? 'blank' : 'tick'}
-                    onClick={() => {
-                      if (unstaged) {
-                        const newUnstagedChanges = { ...unstagedChanges };
-                        delete newUnstagedChanges[id];
-                        setUnstagedChanges({ ...newUnstagedChanges });
-                      } else {
-                        setUnstagedChanges({ ...unstagedChanges, [id]: null });
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        {entityRevisions && Object.keys(entityRevisions).length > 0 && (
-          <Panel>
-            {Object.keys(entityRevisions).map(attributeId => {
-              if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-
-              const { id, attributeName, isDiff, before, after, differences } = entityRevisions[attributeId];
-              const unstaged = id in unstagedChanges;
-
-              return (
-                <Panel.Section key={attributeId}>
-                  <div className={cx('text-bodySemibold', unstaged && 'opacity-25')}>{attributeName}</div>
-                  <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body', unstaged && 'opacity-25')}>
-                    {!isDiff ? (
-                      <>
-                        {isLoading ? (
-                          <Skeleton />
-                        ) : (
-                          <>
-                            {entity?.triples
-                              ?.filter(
-                                (item: any) =>
-                                  item.attributeId === attributeId &&
-                                  !before?.includes(item.value.name) &&
-                                  !after?.includes(item.value.name)
-                              )
-                              ?.map((triple: any) => (
-                                <Chip key={triple.id} status="unchanged">
-                                  {triple.value.name}
-                                </Chip>
-                              ))}
-                          </>
-                        )}
-                        {before?.map(item => (
-                          <Chip key={item} status="removed">
-                            {item}
-                          </Chip>
-                        ))}
-                        {after?.map(item => (
-                          <Chip key={item} status="added">
-                            {item}
-                          </Chip>
-                        ))}
-                      </>
-                    ) : (
-                      differences
-                        ?.filter(item => !item.removed)
-                        ?.map((difference: Difference, index: number) => (
-                          <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                            {difference.value}
-                          </span>
-                        ))
-                    )}
-                  </div>
-                  <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
-                    <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
-                    <SquareButton
-                      icon={unstaged ? 'blank' : 'tick'}
-                      onClick={() => {
-                        if (unstaged) {
-                          const newUnstagedChanges = { ...unstagedChanges };
-                          delete newUnstagedChanges[id];
-                          setUnstagedChanges({ ...newUnstagedChanges });
-                        } else {
-                          setUnstagedChanges({ ...unstagedChanges, [id]: null });
-                        }
-                      }}
-                    />
-                  </div>
-                </Panel.Section>
-              );
-            })}
-          </Panel>
-        )}
-      </div>
-    </div>
-  );
-};
 
 const Skeleton = () => {
   return (

@@ -99,7 +99,6 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
               ...(changes[parentEntityId]?.blocks ?? {}),
               [entityId]: {
                 ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-
                 type: blockType,
                 before:
                   changes[parentEntityId]?.blocks?.[entityId]?.before ??
@@ -181,7 +180,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
     }
   });
 
-  return changes;
+  return [changes, entities];
 }
 
 const getEntities = async (actions: ActionType[], network: INetwork) => {
