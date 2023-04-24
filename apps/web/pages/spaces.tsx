@@ -22,6 +22,8 @@ export default function Spaces({ spaces }: Props) {
     <div>
       <Head>
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
+        <meta property="og:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
+        <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
       </Head>
       <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>

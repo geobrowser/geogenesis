@@ -33,14 +33,16 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
+  const opengraphUrl = spaceImage ?? 'https://www.geobrowser.io/static/geo-social-image.png';
+
   return (
     <div>
       <Head>
         <title>{spaceName ?? space.id}</title>
         <meta property="og:title" content={spaceName} />
         <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
-        {spaceImage && <meta property="og:image" content={spaceImage} />}
-        {spaceImage && <meta name="twitter:image" content={spaceImage} />}
+        <meta property="og:image" content={opengraphUrl} />
+        <meta name="twitter:image" content={opengraphUrl} />
       </Head>
       <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
