@@ -49,6 +49,7 @@ export default function EntityPage(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const opengraphUrl = props.serverAvatarUrl ?? props.serverCoverUrl;
 
   return (
     <>
@@ -56,8 +57,8 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        {props.serverCoverUrl && <meta property="og:image" content={props.serverAvatarUrl ?? props.serverCoverUrl} />}
-        {props.serverCoverUrl && <meta name="twitter:image" content={props.serverAvatarUrl ?? props.serverCoverUrl} />}
+        {opengraphUrl && <meta property="og:image" content={opengraphUrl} />}
+        {opengraphUrl && <meta name="twitter:image" content={opengraphUrl} />}
         {props.description && <meta property="description" content={props.description} />}
         {props.description && <meta property="og:description" content={props.description} />}
         {props.description && <meta name="twitter:description" content={props.description} />}
