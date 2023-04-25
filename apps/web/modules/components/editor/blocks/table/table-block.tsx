@@ -1,8 +1,9 @@
 import * as React from 'react';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock, useTableBlockStore } from './table-block-store';
+import { useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -17,8 +18,10 @@ import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
 import { Entity } from '~/modules/entity';
 import { valueTypes } from '~/modules/value-types';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { TripleValueType } from '~/modules/types';
+import { Input } from '~/modules/design-system/input';
+import { Select } from '~/modules/design-system/select';
 
 interface Props {
   spaceId: string;
@@ -162,7 +165,7 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 function EditableFilters() {
   const { setFilterState, columns } = useTableBlock();
 
-  const filterableColumns: { id: string; name: string; valueType: TripleValueType }[] = [
+  const filterableColumns: TableBlockFilter[] = [
     { id: 'name', name: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT] },
     ...columns
       .map(c => ({
@@ -185,9 +188,14 @@ function EditableFilters() {
 
   return (
     <div className="flex items-center gap-2">
-      <SmallButton icon="createSmall" variant="secondary" onClick={onCreateFilter}>
-        Filter
-      </SmallButton>
+      <TableBlockFilterPrompt
+        trigger={
+          <SmallButton icon="createSmall" variant="secondary" onClick={onCreateFilter}>
+            Filter
+          </SmallButton>
+        }
+        filters={<TableBlockFilterGroup options={filterableColumns} />}
+      />
 
       <SmallButton icon="chevronDownSmall" variant="secondary">
         Clear
@@ -221,6 +229,75 @@ function TableBlockFilterPill() {
       </div>
       {/* @TODO: Only show in edit mode */}
       {editable && <Icon icon="checkCloseSmall" color="grey-04" />}
+    </div>
+  );
+}
+
+interface TableBlockFilterPromptProps {
+  trigger: React.ReactNode;
+  filters: React.ReactNode;
+}
+
+const TableBlockFilterPromptContent = motion(PopoverPrimitive.Content);
+
+function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProps) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <PopoverPrimitive.Root onOpenChange={setOpen}>
+      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
+      <AnimatePresence mode="wait">
+        {open && (
+          <TableBlockFilterPromptContent
+            forceMount
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{
+              duration: 0.1,
+              ease: 'easeInOut',
+            }}
+            avoidCollisions={true}
+            className="relative z-[1] w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
+            sideOffset={6}
+            alignOffset={-1}
+            align="start"
+          >
+            <span className="text-smallButton">New filter</span>
+            <Spacer height={8} />
+            {filters}
+          </TableBlockFilterPromptContent>
+        )}
+      </AnimatePresence>
+    </PopoverPrimitive.Root>
+  );
+}
+
+type TableBlockFilter = { id: string; name: string; valueType: TripleValueType };
+
+function TableBlockFilterGroup({ options }: { options: TableBlockFilter[] }) {
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <div className="flex flex-1">
+        <Select
+          options={options.map(o => ({ value: o.id, label: o.name }))}
+          value={options[0].id}
+          onChange={field => {
+            // const newFilterClause: FilterClause = { ...filterClause, field: field as FilterField };
+            // onChange(newFilterClause);
+          }}
+        />
+      </div>
+      <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+      <div className="flex flex-1">
+        <Input
+        // value={filterClause.value}
+        // onChange={e => {
+        //   const newFilterClause: FilterClause = { ...filterClause, value: e.currentTarget.value };
+        //   onChange(newFilterClause);
+        // }}
+        />
+      </div>
     </div>
   );
 }
