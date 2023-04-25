@@ -214,10 +214,7 @@ export class TableBlockStore {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType.entityId);
     });
 
-    this.hasNextPage$ = computed(() => {
-      return networkData$.get().hasNextPage;
-    });
-
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
   }
 

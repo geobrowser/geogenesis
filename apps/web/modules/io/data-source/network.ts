@@ -54,6 +54,9 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query?: string;
+  typeIds?: string[];
+  first?: number;
+  skip?: number;
   filter: FilterState;
   abortController?: AbortController;
 };
@@ -310,7 +313,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
+  fetchEntities = async ({ query, filter, first, skip, typeIds, abortController }: FetchEntitiesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
@@ -337,7 +340,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.entitiesQuery(query, entityOfWhere),
+        query: queries.entitiesQuery(query, entityOfWhere, typeIds, first, skip),
       }),
     });
 
@@ -485,31 +488,21 @@ export class Network implements INetwork {
     }
   };
 
-  rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
+  rows = async ({ params, abortController }: FetchRowsOptions) => {
     if (!params.typeId) {
       return { rows: [] };
     }
 
-    /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
-    /* To get our rows, first we get all of the entity IDs of the selected type */
-    const rowEntities = await this.fetchTriples({
+    const entities = await this.fetchEntities({
       query: params.query,
-      space: spaceId,
       abortController,
       first: params.first,
       skip: params.skip,
-      filter: [
-        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-        { field: 'linked-to', value: params.typeId },
-      ],
+      typeIds: [params.typeId],
+
+      // @TODO: Filter should be able to handle AND or OR queries
+      filter: [],
     });
-
-    /* Then we then fetch all triples associated with those row entity IDs */
-    const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
-
-    // This will return null if the entity we're fetching does not exist remotely
-    const maybeEntities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
-    const entities = maybeEntities.flatMap(entity => (entity ? [entity] : []));
 
     return { rows: entities };
   };
@@ -540,20 +533,20 @@ export class Network implements INetwork {
 
     const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
 
-    /* Name is the default column... */
-    const defaultColumns: Column[] = [
-      {
-        id: SYSTEM_IDS.NAME,
-        triples: [],
-      },
-    ];
-
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
       triples: relatedColumnTriples[i].triples,
     }));
 
-    return { columns: [...defaultColumns, ...schemaColumns] };
+    return {
+      columns: [
+        {
+          id: SYSTEM_IDS.NAME,
+          triples: [],
+        },
+        ...schemaColumns,
+      ],
+    };
   };
 
   fetchProposals = async (spaceId: string, abortController?: AbortController) => {
