@@ -4,17 +4,19 @@ import { createContext, useContext, useMemo } from 'react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
+import { Column, FilterClause, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
 
 export const PAGE_SIZE = 10;
 
 export interface TableBlockFilter {
+  type: TripleValueType;
   columnId: string;
   columnName: string;
   value: string;
@@ -86,10 +88,10 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
-          const params = {
+          const params: FetchRowsOptions['params'] = {
             query: '',
             pageNumber: pageNumber,
-            filterState: [],
+            filterState: this.filterState$.get().map(getNetworkFilterFromTableBlockFilter).flat(),
             typeId: selectedType.entityId,
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
@@ -106,6 +108,36 @@ export class TableBlockStore {
             params,
             abortController: this.abortController,
           });
+
+          const filterState = this.filterState$.get();
+
+          if (filterState.length > 0) {
+            const filteredEntities = serverRows.filter(entity => {
+              return entity.triples.find(triple => {
+                return filterState.every(filter => {
+                  if (triple.attributeId === filter.columnId) {
+                    if (filter.type === 'string' && triple.value.type === 'string') {
+                      return triple.value.value.toLowerCase().startsWith(filter.value.toLowerCase());
+                    }
+
+                    if (filter.type === 'entity' && triple.value.type === 'entity') {
+                      return triple.value.name?.toLowerCase().startsWith(filter.value.toLowerCase());
+                    }
+                  }
+
+                  return false;
+                });
+              });
+            });
+
+            console.log('filteredEntities', filteredEntities);
+
+            return {
+              columns: serverColumns,
+              rows: filteredEntities,
+              hasNextPage: filteredEntities.length > PAGE_SIZE,
+            };
+          }
 
           return {
             columns: serverColumns,
@@ -322,4 +354,34 @@ export function useTableBlock() {
     filterState,
     setFilterState,
   };
+}
+
+function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterClause[] {
+  switch (filter.type) {
+    case 'entity':
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    case 'string':
+    case 'image':
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    case 'number':
+      throw new Error(`Unexpected filter for value type: ${filter.type}`);
+  }
 }

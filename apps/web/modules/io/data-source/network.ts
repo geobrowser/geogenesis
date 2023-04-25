@@ -85,7 +85,7 @@ interface FetchColumnsResult {
   columns: Column[];
 }
 
-interface FetchRowsOptions {
+export interface FetchRowsOptions {
   spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
@@ -320,10 +320,10 @@ export class Network implements INetwork {
     >;
 
     const entityOfWhere = [
-      fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
+      fieldFilters['entity-id'] && `id: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
-      fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+      fieldFilters['attribute-id'] && `entityOf_: {attribute: ${JSON.stringify(fieldFilters['attribute-id'])}}`,
       fieldFilters['not-space-id'] && `space_not: ${JSON.stringify(fieldFilters['not-space-id'])}`,
 
       // Until we have OR we can't search for name_contains OR value string contains
@@ -493,6 +493,16 @@ export class Network implements INetwork {
       return { rows: [] };
     }
 
+    /**
+     * 1. Fetch all entities of a specific type
+     * 2. Check each entity to see if it has a triple that matches the filter
+     *    The attribute id should match the filter column id
+     *    The value should match the filter value. We need to set a different graphql
+     *    query depending on the type of the filter value (entity vs string, etc)
+     * 3. Return the entities that match the filter
+     */
+
+    // This gets first X entities that are of a type
     const entities = await this.fetchEntities({
       query: params.query,
       abortController,
@@ -500,7 +510,6 @@ export class Network implements INetwork {
       skip: params.skip,
       typeIds: [params.typeId],
 
-      // @TODO: Filter should be able to handle AND or OR queries
       filter: [],
     });
 

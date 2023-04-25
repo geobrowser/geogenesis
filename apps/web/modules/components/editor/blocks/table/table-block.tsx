@@ -213,6 +213,7 @@ function EditableFilters() {
     setFilterState([
       ...filterState,
       {
+        type: valueType,
         columnId,
         columnName,
         value,
