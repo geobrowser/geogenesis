@@ -22,13 +22,16 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { TripleValueType } from '~/modules/types';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
+import { TextButton } from '~/modules/design-system/text-button';
+import produce from 'immer';
 
 interface Props {
   spaceId: string;
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { columns, rows, blockEntity, hasNextPage, hasPreviousPage, setPage, pageNumber } = useTableBlock();
+  const { columns, rows, blockEntity, hasNextPage, hasPreviousPage, setPage, pageNumber, filterState, setFilterState } =
+    useTableBlock();
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
   return (
@@ -87,7 +90,21 @@ export function TableBlock({ spaceId }: Props) {
               className="flex items-center gap-2"
             >
               <EditableFilters />
-              <TableBlockFilterPill />
+
+              {filterState.map((f, index) => (
+                <TableBlockFilterPill
+                  key={`${f.columnId}-${f.value}`}
+                  filterName={f.columnName}
+                  value={f.value}
+                  onDelete={() => {
+                    const newFilterState = produce(filterState, draft => {
+                      draft.splice(index, 1);
+                    });
+
+                    setFilterState(newFilterState);
+                  }}
+                />
+              ))}
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -163,7 +180,7 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 }
 
 function EditableFilters() {
-  const { setFilterState, columns } = useTableBlock();
+  const { setFilterState, columns, filterState } = useTableBlock();
 
   const filterableColumns: TableBlockFilter[] = [
     { id: 'name', name: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT] },
@@ -176,25 +193,42 @@ function EditableFilters() {
       .flatMap(c => (c.name !== '' ? [c] : [])),
   ];
 
-  const onCreateFilter = () => {
-    // @TODO: Should the filter creation happen here or in `setFilterstate`?
-    const filter = TableBlockSdk.createFilter({
-      columnId: 'column-1',
-      value: '',
+  const onCreateFilter = ({
+    columnId,
+    columnName,
+    value,
+    valueType,
+  }: {
+    columnId: string;
+    columnName: string;
+    value: string;
+    valueType: TripleValueType;
+  }) => {
+    const filterString = TableBlockSdk.createFilterGraphQLString({
+      columnId,
+      value,
+      valueType,
     });
 
-    setFilterState([]);
+    setFilterState([
+      ...filterState,
+      {
+        columnId,
+        columnName,
+        value,
+      },
+    ]);
   };
 
   return (
     <div className="flex items-center gap-2">
       <TableBlockFilterPrompt
         trigger={
-          <SmallButton icon="createSmall" variant="secondary" onClick={onCreateFilter}>
+          <SmallButton icon="createSmall" variant="secondary">
             Filter
           </SmallButton>
         }
-        filters={<TableBlockFilterGroup options={filterableColumns} />}
+        filters={<TableBlockFilterGroup options={filterableColumns} onCreate={onCreateFilter} />}
       />
 
       <SmallButton icon="chevronDownSmall" variant="secondary">
@@ -215,7 +249,15 @@ function PublishedFilterIconFilled() {
   );
 }
 
-function TableBlockFilterPill() {
+function TableBlockFilterPill({
+  filterName,
+  value,
+  onDelete,
+}: {
+  filterName: string;
+  value: string;
+  onDelete: () => void;
+}) {
   const { editable } = useEditable();
 
   return (
@@ -223,12 +265,12 @@ function TableBlockFilterPill() {
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>Platform is</span>
+        <span>{filterName} contains</span>
         <span>·</span>
-        <span>N64</span>
+        <span>{value}</span>
       </div>
       {/* @TODO: Only show in edit mode */}
-      {editable && <Icon icon="checkCloseSmall" color="grey-04" />}
+      {editable && <IconButton icon="checkCloseSmall" color="grey-04" onClick={onDelete} />}
     </div>
   );
 }
@@ -249,7 +291,7 @@ function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProp
       <AnimatePresence mode="wait">
         {open && (
           <TableBlockFilterPromptContent
-            forceMount
+            forceMount={true}
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -263,8 +305,6 @@ function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProp
             alignOffset={-1}
             align="start"
           >
-            <span className="text-smallButton">New filter</span>
-            <Spacer height={8} />
             {filters}
           </TableBlockFilterPromptContent>
         )}
@@ -275,28 +315,45 @@ function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProp
 
 type TableBlockFilter = { id: string; name: string; valueType: TripleValueType };
 
-function TableBlockFilterGroup({ options }: { options: TableBlockFilter[] }) {
+interface TableBlockFilterGroupProps {
+  options: TableBlockFilter[];
+  onCreate: (filter: { columnId: string; columnName: string; value: string; valueType: TripleValueType }) => void;
+}
+
+function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps) {
+  const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
+  const [value, setValue] = React.useState('');
+
+  const onDone = () => {
+    onCreate({
+      columnId: selectedColumn,
+      columnName: options.find(o => o.id === selectedColumn)?.name ?? '',
+      value,
+      valueType: options.find(o => o.id === selectedColumn)?.valueType ?? 'string',
+    });
+  };
+
   return (
-    <div className="flex items-center justify-center gap-3">
-      <div className="flex flex-1">
-        <Select
-          options={options.map(o => ({ value: o.id, label: o.name }))}
-          value={options[0].id}
-          onChange={field => {
-            // const newFilterClause: FilterClause = { ...filterClause, field: field as FilterField };
-            // onChange(newFilterClause);
-          }}
-        />
+    <div>
+      <div className="flex items-center justify-between">
+        <span className="text-smallButton">New filter</span>
+        <TextButton onClick={onDone}>Done</TextButton>
       </div>
-      <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
-      <div className="flex flex-1">
-        <Input
-        // value={filterClause.value}
-        // onChange={e => {
-        //   const newFilterClause: FilterClause = { ...filterClause, value: e.currentTarget.value };
-        //   onChange(newFilterClause);
-        // }}
-        />
+
+      <Spacer height={12} />
+
+      <div className="flex items-center justify-center gap-3">
+        <div className="flex flex-1">
+          <Select
+            options={options.map(o => ({ value: o.id, label: o.name }))}
+            value={selectedColumn}
+            onChange={fieldId => setSelectedColumn(fieldId)}
+          />
+        </div>
+        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+        <div className="flex flex-1">
+          <Input value={value} onChange={e => setValue(e.currentTarget.value)} />
+        </div>
       </div>
     </div>
   );
