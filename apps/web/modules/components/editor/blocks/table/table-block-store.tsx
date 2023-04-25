@@ -12,6 +12,7 @@ import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 
 export const PAGE_SIZE = 10;
 
@@ -98,7 +99,6 @@ export class TableBlockStore {
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -365,7 +365,32 @@ function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterC
           value: filter.columnId,
         },
       ];
-    case 'string':
+    case 'string': {
+      if (filter.columnId === SYSTEM_IDS.NAME) {
+        return [
+          {
+            field: 'entity-name',
+            value: filter.value,
+          },
+          {
+            field: 'attribute-id',
+            value: filter.columnId,
+          },
+        ];
+      }
+
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    }
+
     case 'image':
       return [
         {

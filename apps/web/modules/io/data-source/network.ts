@@ -73,7 +73,6 @@ export type PublishOptions = {
 type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchColumnsOptions {
-  spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
     first: number;
@@ -163,7 +162,8 @@ export class Network implements INetwork {
 
     const where = [
       space && `space: ${JSON.stringify(space)}`,
-      query && `entity_: {name_contains_nocase: ${JSON.stringify(query)}}`,
+      (query || fieldFilters['entity-name']) &&
+        `entity_: {name_contains_nocase: ${JSON.stringify(query || fieldFilters['entity-name'])}}`,
       fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
@@ -514,6 +514,7 @@ export class Network implements INetwork {
     });
 
     if (params.filterState.length > 0) {
+      console.log('params.filterState', params.filterState);
       // 2.
       const maybeTriplesThatMatchFilter = await Promise.all(
         entities.map(entity =>
@@ -544,14 +545,13 @@ export class Network implements INetwork {
     return { rows: entities };
   };
 
-  columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
+  columns = async ({ params, abortController }: FetchColumnsOptions) => {
     if (!params.typeId) {
       return { columns: [] };
     }
 
     const columnsTriples = await this.fetchTriples({
       query: '',
-      space: spaceId,
       abortController,
       first: DEFAULT_PAGE_SIZE,
       skip: 0,
@@ -768,66 +768,6 @@ export class Network implements INetwork {
       console.error(json.errors);
       return null;
     }
-  };
-
-  fetchTableFilter = async ({ abortController }: { abortController?: AbortController }) => {
-    // const response = await fetch(this.subgraphUrl, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   signal: abortController?.signal,
-    //   // @TEMP: Right now we are fetching profiles based on the wallet address which is
-    //   // the name of the entity. There _shouldn't_ be multiple wallets with the same name/address.
-    //   body: JSON.stringify({
-    //     query: queries.profileQuery(address),
-    //   }),
-    // });
-    // if (!response.ok) {
-    //   console.error(`Unable to fetch profile for address: ${address}`);
-    //   console.error(`Failed fetch profile response text: ${await response.text()}`);
-    //   return null;
-    // }
-    // const json: {
-    //   data: {
-    //     geoEntities: NetworkEntity[];
-    //   };
-    //   errors: any[];
-    // } = await response.json();
-    // try {
-    //   // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
-    //   // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.
-    //   const maybeWallets = await Promise.all(json.data.geoEntities.map(e => this.fetchEntity(e.id)));
-    //   const wallets = maybeWallets.flatMap(entity => (entity ? [entity] : []));
-    //   // We take the first wallet for a given address since there should only be one while in closed alpha.
-    //   const wallet = A.head(wallets);
-    //   if (!wallet) {
-    //     return null;
-    //   }
-    //   // We have a backlink from a Wallet entity to a Person entity. We need to fetch the Person entity
-    //   // to access profile attributes like the Avatar.
-    //   const personTriple = wallet?.triples.find(t => t.attributeId === SYSTEM_IDS.PERSON_ATTRIBUTE);
-    //   const personEntityId = personTriple?.value.id ?? null;
-    //   if (!personEntityId) {
-    //     return null;
-    //   }
-    //   const maybePerson = await this.fetchEntity(personEntityId);
-    //   const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
-    //   const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
-    //   return [
-    //     address,
-    //     {
-    //       id: maybePerson?.id ?? '',
-    //       name: maybePerson?.name ?? null,
-    //       avatarUrl: avatarUrl,
-    //     },
-    //   ];
-    // } catch (e) {
-    //   console.error(`Unable to fetch profile for address: ${address}`);
-    //   console.error(e);
-    //   console.error(json.errors);
-    //   return null;
-    // }
   };
 }
 

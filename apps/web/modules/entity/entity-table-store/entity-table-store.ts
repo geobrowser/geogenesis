@@ -127,7 +127,6 @@ export class EntityTableStore implements IEntityTableStore {
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });

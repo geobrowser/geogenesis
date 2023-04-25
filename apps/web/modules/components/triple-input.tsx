@@ -14,7 +14,7 @@ export function TripleInput() {
   const tripleStore = useTriples();
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
-  const showBasicFilter = tripleStore.filterState.length === 1 && tripleStore.filterState[0].field === 'entity-name';
+  const showBasicFilter = tripleStore.filterState.length === 0;
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     tripleStore.setQuery(event.target.value);
