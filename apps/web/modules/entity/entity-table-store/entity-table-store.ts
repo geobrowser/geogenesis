@@ -266,17 +266,6 @@ export class EntityTableStore implements IEntityTableStore {
 
   setQuery = (query: string) => {
     this.query$.set(query);
-
-    // this.setFilterState(
-    //   produce(this.filterState$.get(), draft => {
-    //     const entityNameFilter = draft.find(f => f.field === 'entity-name');
-    //     if (entityNameFilter) {
-    //       entityNameFilter.value = query;
-    //     } else {
-    //       draft.unshift({ field: 'entity-name', value: query });
-    //     }
-    //   })
-    // );
   };
 
   setPageNumber = (pageNumber: number) => {

@@ -1,5 +1,4 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
-import produce from 'immer';
 
 import { ActionsStore } from '../action';
 import { NetworkData } from '~/modules/io';
