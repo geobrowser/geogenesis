@@ -206,31 +206,31 @@ export class TableBlockStore {
         // Make sure we only generate rows for entities that have the selected type
         const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType.entityId));
 
-        const filterState = this.filterState$.get();
+        // const filterState = this.filterState$.get();
 
-        // @TODO: Going to remove this eventually for server side + client side filtering
-        if (filterState.length > 0) {
-          const filteredEntities = entitiesWithSelectedType.filter(entity => {
-            return entity.triples.find(triple => {
-              return filterState.every(filter => {
-                if (triple.attributeId === filter.columnId) {
-                  if (filter.type === 'string' && triple.value.type === 'string') {
-                    return triple.value.value.toLowerCase().startsWith(filter.value.toLowerCase());
-                  }
+        // // @TODO: Going to remove this eventually for server side + client side filtering
+        // if (filterState.length > 0) {
+        //   const filteredEntities = entitiesWithSelectedType.filter(entity => {
+        //     return entity.triples.find(triple => {
+        //       return filterState.every(filter => {
+        //         if (triple.attributeId === filter.columnId) {
+        //           if (filter.type === 'string' && triple.value.type === 'string') {
+        //             return triple.value.value.toLowerCase().startsWith(filter.value.toLowerCase());
+        //           }
 
-                  if (filter.type === 'entity' && triple.value.type === 'entity') {
-                    return triple.value.name?.toLowerCase().startsWith(filter.value.toLowerCase());
-                  }
-                }
+        //           if (filter.type === 'entity' && triple.value.type === 'entity') {
+        //             return triple.value.name?.toLowerCase().startsWith(filter.value.toLowerCase());
+        //           }
+        //         }
 
-                return false;
-              });
-            });
-          });
+        //         return false;
+        //       });
+        //     });
+        //   });
 
-          const { rows } = EntityTable.fromColumnsAndRows(spaceId, filteredEntities, columns);
-          return rows;
-        }
+        //   const { rows } = EntityTable.fromColumnsAndRows(spaceId, filteredEntities, columns);
+        //   return rows;
+        // }
 
         const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
 

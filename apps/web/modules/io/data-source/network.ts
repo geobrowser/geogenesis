@@ -502,16 +502,44 @@ export class Network implements INetwork {
      * 3. Return the entities that match the filter
      */
 
-    // This gets first X entities that are of a type
+    // 1.
     const entities = await this.fetchEntities({
       query: params.query,
       abortController,
-      first: params.first,
+      first: 1000,
       skip: params.skip,
       typeIds: [params.typeId],
 
       filter: [],
     });
+
+    if (params.filterState.length > 0) {
+      // 2.
+      const maybeTriplesThatMatchFilter = await Promise.all(
+        entities.map(entity =>
+          this.fetchTriples({
+            query: '',
+            filter: [...params.filterState, { field: 'entity-id', value: entity.id }],
+            first: 1,
+            skip: 0,
+          })
+        )
+      );
+
+      const triplesThatMatchFilter = maybeTriplesThatMatchFilter.flatMap(t =>
+        t.triples.length !== 0 ? t.triples : []
+      );
+
+      // 3.
+      const entitiesThatMatchFilterIds = triplesThatMatchFilter.map(t => t.entityId);
+      const maybeEntitiesThatMatchFilter = await Promise.all(
+        entitiesThatMatchFilterIds.flatMap(t => this.fetchEntity(t))
+      );
+
+      const entitiesThatMatchFilter = maybeEntitiesThatMatchFilter.flatMap(e => (e ? [e] : []));
+
+      return { rows: entitiesThatMatchFilter };
+    }
 
     return { rows: entities };
   };
@@ -740,6 +768,66 @@ export class Network implements INetwork {
       console.error(json.errors);
       return null;
     }
+  };
+
+  fetchTableFilter = async ({ abortController }: { abortController?: AbortController }) => {
+    // const response = await fetch(this.subgraphUrl, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   signal: abortController?.signal,
+    //   // @TEMP: Right now we are fetching profiles based on the wallet address which is
+    //   // the name of the entity. There _shouldn't_ be multiple wallets with the same name/address.
+    //   body: JSON.stringify({
+    //     query: queries.profileQuery(address),
+    //   }),
+    // });
+    // if (!response.ok) {
+    //   console.error(`Unable to fetch profile for address: ${address}`);
+    //   console.error(`Failed fetch profile response text: ${await response.text()}`);
+    //   return null;
+    // }
+    // const json: {
+    //   data: {
+    //     geoEntities: NetworkEntity[];
+    //   };
+    //   errors: any[];
+    // } = await response.json();
+    // try {
+    //   // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
+    //   // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.
+    //   const maybeWallets = await Promise.all(json.data.geoEntities.map(e => this.fetchEntity(e.id)));
+    //   const wallets = maybeWallets.flatMap(entity => (entity ? [entity] : []));
+    //   // We take the first wallet for a given address since there should only be one while in closed alpha.
+    //   const wallet = A.head(wallets);
+    //   if (!wallet) {
+    //     return null;
+    //   }
+    //   // We have a backlink from a Wallet entity to a Person entity. We need to fetch the Person entity
+    //   // to access profile attributes like the Avatar.
+    //   const personTriple = wallet?.triples.find(t => t.attributeId === SYSTEM_IDS.PERSON_ATTRIBUTE);
+    //   const personEntityId = personTriple?.value.id ?? null;
+    //   if (!personEntityId) {
+    //     return null;
+    //   }
+    //   const maybePerson = await this.fetchEntity(personEntityId);
+    //   const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
+    //   const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
+    //   return [
+    //     address,
+    //     {
+    //       id: maybePerson?.id ?? '',
+    //       name: maybePerson?.name ?? null,
+    //       avatarUrl: avatarUrl,
+    //     },
+    //   ];
+    // } catch (e) {
+    //   console.error(`Unable to fetch profile for address: ${address}`);
+    //   console.error(e);
+    //   console.error(json.errors);
+    //   return null;
+    // }
   };
 }
 
