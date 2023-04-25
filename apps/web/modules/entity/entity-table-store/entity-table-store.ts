@@ -1,6 +1,5 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import produce from 'immer';
 
 import { ActionsStore } from '~/modules/action';
 import { SpaceStore } from '~/modules/spaces/space-store';
