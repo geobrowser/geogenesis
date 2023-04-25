@@ -117,7 +117,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   };
 
   const { columns } = await network.columns({
-    spaceId,
     params,
   });
 

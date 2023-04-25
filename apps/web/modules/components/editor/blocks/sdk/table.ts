@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { EntityValue, Entity as IEntity, Triple as ITriple } from '~/modules/types';
+import { EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
 
 export function upsertName({
   blockEntity,
@@ -123,6 +123,14 @@ export function createBlock({
   }
 }
 
-export function createFilterGraphQLString({ columnId, value, valueType }): string {
+export function createFilterGraphQLString({
+  columnId,
+  value,
+  valueType,
+}: {
+  columnId: string;
+  value: string;
+  valueType: TripleValueType;
+}): string {
   return '';
 }
