@@ -357,6 +357,9 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
         </div>
         <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
         <div className="flex flex-1">
+          {/* TODO: If the valueType is entity, this should be an autocomplete mechanism. For now we'll
+            let users input _any_ entity, but eventually this should autocomplete based on the schema.
+          */}
           <Input value={value} onChange={e => setValue(e.currentTarget.value)} />
         </div>
       </div>

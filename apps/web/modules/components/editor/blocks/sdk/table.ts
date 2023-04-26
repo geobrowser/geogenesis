@@ -125,7 +125,8 @@ export function createBlock({
 
 /**
  * Takes the table filters and converts them to the GraphQL string used to
- * query the table using the filters.
+ * query the table using the filters. We include the typeId from the table
+ * in the graphql string to make sure we're filtering by the correct type.
  *
  * e.g. these filters
  * ```ts
@@ -180,6 +181,7 @@ export function createFilterGraphQLString(
         return `entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_no_case: "${filter.value}"}`;
       }
 
+      // We don't support other value types yet
       return null;
     })
     .flatMap(f => (f ? [f] : []));
@@ -191,6 +193,5 @@ export function createFilterGraphQLString(
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
 
-  // Add the typeIds filter to make sure we're filtering on the correct type from the table
   return `{and: [{typeIds_contains_nocase: ["${typeId}"]}, ${multiFilterQuery}]}`;
 }
