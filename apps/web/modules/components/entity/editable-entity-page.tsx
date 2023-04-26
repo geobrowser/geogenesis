@@ -12,7 +12,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
-import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
@@ -66,38 +65,24 @@ export function EditableEntityPage({ id, name: serverName, spaceId, triples: ser
 
   return (
     <>
-      <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-      <EntityPageContentContainer>
-        <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-        {/*
-        This height differs from the readable page height due to how we're using an expandable textarea for editing
-        the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
-        have to manually adjust the spacing here to remove the layout shift.
-      */}
-        <Spacer height={5.5} />
-        <EntityPageMetadataHeader id={id} spaceId={spaceId} types={types} />
-        <Spacer height={40} />
-        <Editor editable={true} />
-
-        <div className="rounded border border-grey-02 shadow-button">
-          <div className="flex flex-col gap-6 p-5">
-            <EntityAttributes
-              entityId={id}
-              triples={triples}
-              schemaTriples={schemaTriples}
-              name={name}
-              send={send}
-              hideSchema={hideSchema}
-              hiddenSchemaIds={hiddenSchemaIds}
-            />
-          </div>
-          <div className="p-4">
-            <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
-              Add triple
-            </Button>
-          </div>
+      <div className="rounded border border-grey-02 shadow-button">
+        <div className="flex flex-col gap-6 p-5">
+          <EntityAttributes
+            entityId={id}
+            triples={triples}
+            schemaTriples={schemaTriples}
+            name={name}
+            send={send}
+            hideSchema={hideSchema}
+            hiddenSchemaIds={hiddenSchemaIds}
+          />
         </div>
-      </EntityPageContentContainer>
+        <div className="p-4">
+          <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+            Add triple
+          </Button>
+        </div>
+      </div>
       <EntityPresenceProvider entityId={id} spaceId={spaceId}>
         <EntityOthersToast />
       </EntityPresenceProvider>
@@ -373,8 +358,6 @@ function EntityAttributes({
         )}
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
-        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
