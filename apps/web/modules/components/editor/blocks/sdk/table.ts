@@ -157,8 +157,11 @@ export function createFilterGraphQLString(
     columnId: string;
     value: string;
     valueType: TripleValueType;
-  }[]
+  }[],
+  typeId: string
 ): string {
+  if (filters.length === 0) return `typeIds_contains_nocase: ["${typeId}"]`;
+
   const filtersAsStrings = filters
     .map(filter => {
       if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
@@ -168,12 +171,12 @@ export function createFilterGraphQLString(
 
       if (filter.valueType === 'entity') {
         // value is the ID of the relation
-        return `{entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}}`;
+        return `entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}`;
       }
 
       if (filter.valueType === 'string') {
         // value is just the stringValue of the triple
-        return `{entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_no_case: "${filter.value}"}}`;
+        return `entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_no_case: "${filter.value}"}`;
       }
 
       return null;
@@ -181,8 +184,12 @@ export function createFilterGraphQLString(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return filtersAsStrings[0];
+    return `typeIds_contains_nocase: ["${typeId}"], ${filtersAsStrings[0]}`;
   }
 
-  return `{and: [${filtersAsStrings.join(', ')}]}`;
+  // Wrap each filter expression in curly brackets
+  const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
+
+  // Add the typeIds filter to make sure we're filtering on the correct type from the table
+  return `{and: [{typeIds_contains_nocase: ["${typeId}"]}, ${multiFilterQuery}]}`;
 }

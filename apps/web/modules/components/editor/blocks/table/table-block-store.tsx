@@ -273,7 +273,7 @@ export class TableBlockStore {
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
 
-    const filterString = TableBlockSdk.createFilterGraphQLString(newState);
+    const filterString = TableBlockSdk.createFilterGraphQLString(newState, this.type$.get().entityId);
 
     this.filterState$.set(newState);
   };

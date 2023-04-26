@@ -12,56 +12,72 @@ describe('TableBlock SDK', () => {
      *
      * These three combinations can also be used together with an "and" filter
      */
-    const stringFilter = createFilterGraphQLString([
-      {
-        columnId: 'type',
-        value: 'Value 1',
-        valueType: 'string',
-      },
-    ]);
+    const stringFilter = createFilterGraphQLString(
+      [
+        {
+          columnId: 'type',
+          value: 'Value 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
 
-    expect(stringFilter).toEqual(`{entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}`);
+    expect(stringFilter).toEqual(
+      `typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}`
+    );
 
-    const entityFilter = createFilterGraphQLString([
-      {
-        columnId: 'type',
-        value: 'id 1',
-        valueType: 'entity',
-      },
-    ]);
+    const entityFilter = createFilterGraphQLString(
+      [
+        {
+          columnId: 'type',
+          value: 'id 1',
+          valueType: 'entity',
+        },
+      ],
+      'type-id'
+    );
 
-    expect(entityFilter).toEqual(`{entityOf_: {attribute: "type", entityValue: "id 1"}}`);
+    expect(entityFilter).toEqual(
+      `typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}`
+    );
 
-    const nameFilter = createFilterGraphQLString([
-      {
-        columnId: SYSTEM_IDS.NAME,
-        value: 'id 1',
-        valueType: 'string',
-      },
-    ]);
+    const nameFilter = createFilterGraphQLString(
+      [
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: 'id 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
 
-    expect(nameFilter).toEqual(`name_starts_with_nocase: "id 1"`);
+    expect(nameFilter).toEqual(`typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"`);
 
-    const andFilter = createFilterGraphQLString([
-      {
-        columnId: 'type',
-        value: 'Value 1',
-        valueType: 'string',
-      },
-      {
-        columnId: 'type',
-        value: 'id 1',
-        valueType: 'entity',
-      },
-      {
-        columnId: SYSTEM_IDS.NAME,
-        value: 'id 1',
-        valueType: 'string',
-      },
-    ]);
+    const andFilter = createFilterGraphQLString(
+      [
+        {
+          columnId: 'type',
+          value: 'Value 1',
+          valueType: 'string',
+        },
+        {
+          columnId: 'type',
+          value: 'id 1',
+          valueType: 'entity',
+        },
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: 'id 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
 
     expect(andFilter).toEqual(
-      `{and: [{entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, name_starts_with_nocase: "id 1"]}`
+      `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`
     );
   });
 });
