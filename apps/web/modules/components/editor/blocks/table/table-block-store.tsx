@@ -65,7 +65,8 @@ export class TableBlockStore {
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: Observable<TableBlockFilter[]>;
-  abortController: AbortController = new AbortController();
+  isLoading$: Observable<boolean>;
+  abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
@@ -74,6 +75,8 @@ export class TableBlockStore {
     this.pageNumber$ = observable(0);
     this.filterState$ = observable<TableBlockFilter[]>([]);
     this.MergedData = new MergedData({ api, store: ActionsStore });
+    this.isLoading$ = observable(false);
+    this.abortController = new AbortController();
 
     this.blockEntity$ = makeOptionalComputed(
       null,
@@ -97,6 +100,8 @@ export class TableBlockStore {
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
+
+          this.isLoading$.set(true);
 
           const { columns: serverColumns } = await this.api.columns({
             params,
@@ -234,6 +239,8 @@ export class TableBlockStore {
 
         const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
 
+        this.isLoading$.set(false);
+
         return rows;
       })
     );
@@ -326,6 +333,7 @@ export function useTableBlock() {
     setPage,
     filterState$,
     setFilterState,
+    isLoading$,
   } = useTableBlockStore();
   const type = useSelector(type$);
   const rows = useSelector(rows$);
@@ -336,6 +344,7 @@ export function useTableBlock() {
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const blockEntity = useSelector(blockEntity$);
   const filterState = useSelector<TableBlockFilter[]>(filterState$);
+  const isLoading = useSelector(isLoading$);
 
   return {
     type,
@@ -349,6 +358,7 @@ export function useTableBlock() {
     blockEntity,
     filterState,
     setFilterState,
+    isLoading,
   };
 }
 
