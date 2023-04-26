@@ -116,8 +116,6 @@ export class EntityTableStore implements IEntityTableStore {
             this.query$.get()
           );
 
-          console.log('filterString', filterString);
-
           const params: FetchRowsOptions['params'] = {
             filter: filterString,
             typeIds: selectedType?.entityId ? [selectedType.entityId] : [],

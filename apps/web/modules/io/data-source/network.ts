@@ -509,8 +509,6 @@ export class Network implements INetwork {
       filter: params.filter,
     });
 
-    console.log('entities', entities);
-
     return { rows: entities };
   };
 
