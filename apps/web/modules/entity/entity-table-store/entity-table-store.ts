@@ -1,7 +1,5 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import produce from 'immer';
 
 import { ActionsStore } from '~/modules/action';
 import { SpaceStore } from '~/modules/spaces/space-store';
@@ -20,7 +18,7 @@ interface IEntityTableStore {
   columns$: ObservableComputed<Column[]>;
   selectedType$: Observable<SelectedType | null>;
   pageNumber$: Observable<number>;
-  query$: ObservableComputed<string>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
@@ -51,12 +49,7 @@ export const DEFAULT_INITIAL_PARAMS = {
 };
 
 export function initialFilterState(): FilterState {
-  return [
-    {
-      field: 'entity-name',
-      value: '',
-    },
-  ];
+  return [];
 }
 
 /**
@@ -77,7 +70,7 @@ export class EntityTableStore implements IEntityTableStore {
   pageNumber$: Observable<number>;
   selectedType$: Observable<SelectedType | null>;
 
-  query$: ObservableComputed<string>;
+  query$: Observable<string>;
   space$: ObservableComputed<Space | undefined>;
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -112,10 +105,7 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.spaceId = spaceId;
-    this.query$ = computed(() => {
-      const filterState = this.filterState$.get();
-      return filterState.find(f => f.field === 'entity-name')?.value || '';
-    });
+    this.query$ = observable(initialParams.query);
 
     const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
@@ -137,7 +127,6 @@ export class EntityTableStore implements IEntityTableStore {
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -276,16 +265,7 @@ export class EntityTableStore implements IEntityTableStore {
   }
 
   setQuery = (query: string) => {
-    this.setFilterState(
-      produce(this.filterState$.get(), draft => {
-        const entityNameFilter = draft.find(f => f.field === 'entity-name');
-        if (entityNameFilter) {
-          entityNameFilter.value = query;
-        } else {
-          draft.unshift({ field: 'entity-name', value: query });
-        }
-      })
-    );
+    this.query$.set(query);
   };
 
   setPageNumber = (pageNumber: number) => {

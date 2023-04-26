@@ -54,6 +54,9 @@ export type FetchTriplesOptions = {
 
 export type FetchEntitiesOptions = {
   query?: string;
+  typeIds?: string[];
+  first?: number;
+  skip?: number;
   filter: FilterState;
   abortController?: AbortController;
 };
@@ -70,7 +73,6 @@ export type PublishOptions = {
 type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchColumnsOptions {
-  spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
     first: number;
@@ -82,7 +84,7 @@ interface FetchColumnsResult {
   columns: Column[];
 }
 
-interface FetchRowsOptions {
+export interface FetchRowsOptions {
   spaceId: string;
   params: InitialEntityTableStoreParams & {
     skip: number;
@@ -160,7 +162,9 @@ export class Network implements INetwork {
 
     const where = [
       space && `space: ${JSON.stringify(space)}`,
-      query && `entity_: {name_contains_nocase: ${JSON.stringify(query)}}`,
+      // We can pass either `query` or `fieldFilters['entity-name']` to filter by entity name
+      (query || fieldFilters['entity-name']) &&
+        `entity_: {name_contains_nocase: ${JSON.stringify(query || fieldFilters['entity-name'])}}`,
       fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
@@ -310,18 +314,17 @@ export class Network implements INetwork {
     }
   };
 
-  fetchEntities = async ({ query, filter, abortController }: FetchEntitiesOptions) => {
+  fetchEntities = async ({ query, filter, first, skip, typeIds, abortController }: FetchEntitiesOptions) => {
     const fieldFilters = Object.fromEntries(filter.map(clause => [clause.field, clause.value])) as Record<
       FilterField,
       string
     >;
 
     const entityOfWhere = [
-      fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
+      fieldFilters['entity-id'] && `id: ${JSON.stringify(fieldFilters['entity-id'])}`,
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
-      fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
-      fieldFilters['not-space-id'] && `space_not: ${JSON.stringify(fieldFilters['not-space-id'])}`,
+      fieldFilters['attribute-id'] && `entityOf_: {attribute: ${JSON.stringify(fieldFilters['attribute-id'])}}`,
 
       // Until we have OR we can't search for name_contains OR value string contains
       fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
@@ -337,7 +340,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.entitiesQuery(query, entityOfWhere),
+        query: queries.entitiesQuery(query, entityOfWhere, typeIds, first, skip),
       }),
     });
 
@@ -485,43 +488,74 @@ export class Network implements INetwork {
     }
   };
 
-  rows = async ({ spaceId, params, abortController }: FetchRowsOptions) => {
+  rows = async ({ params, abortController }: FetchRowsOptions) => {
     if (!params.typeId) {
       return { rows: [] };
     }
 
-    /* To get our columns, fetch the all attributes from that type (e.g. Person -> Attributes -> Age) */
-    /* To get our rows, first we get all of the entity IDs of the selected type */
-    const rowEntities = await this.fetchTriples({
+    /**
+     * 1. Fetch all entities of a specific type
+     * 2. Check each entity to see if it has a triple that matches the filter
+     *    The attribute id should match the filter column id
+     *    The value should match the filter value. We need to set a different graphql
+     *    query depending on the type of the filter value (entity vs string, etc)
+     * 3. Return the entities that match the filter
+     *
+     * Ideally in the future we have space-specific subgraphs and can filter directly on the
+     * entity by column schema instead of needing to do multiple queries.
+     */
+
+    // 1.
+    const entities = await this.fetchEntities({
       query: params.query,
-      space: spaceId,
       abortController,
-      first: params.first,
+      // fetch many to make sure we're filtering by type enough entities to render the table correctly.
+      // It's okay if we overfetch for now.
+      first: 1000,
       skip: params.skip,
-      filter: [
-        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-        { field: 'linked-to', value: params.typeId },
-      ],
+      typeIds: [params.typeId],
+
+      filter: [],
     });
 
-    /* Then we then fetch all triples associated with those row entity IDs */
-    const rowEntityIds = rowEntities.triples.map(triple => triple.entityId);
+    if (params.filterState.length > 0) {
+      // 2.
+      const maybeTriplesThatMatchFilter = await Promise.all(
+        entities.map(entity =>
+          this.fetchTriples({
+            query: '',
+            filter: [...params.filterState, { field: 'entity-id', value: entity.id }],
+            first: 1,
+            skip: 0,
+          })
+        )
+      );
 
-    // This will return null if the entity we're fetching does not exist remotely
-    const maybeEntities = await Promise.all(rowEntityIds.map(entityId => this.fetchEntity(entityId)));
-    const entities = maybeEntities.flatMap(entity => (entity ? [entity] : []));
+      const triplesThatMatchFilter = maybeTriplesThatMatchFilter.flatMap(t =>
+        t.triples.length !== 0 ? t.triples : []
+      );
+
+      // 3.
+      const entitiesThatMatchFilterIds = triplesThatMatchFilter.map(t => t.entityId);
+      const maybeEntitiesThatMatchFilter = await Promise.all(
+        entitiesThatMatchFilterIds.flatMap(t => this.fetchEntity(t))
+      );
+
+      const entitiesThatMatchFilter = maybeEntitiesThatMatchFilter.flatMap(e => (e ? [e] : []));
+
+      return { rows: entitiesThatMatchFilter };
+    }
 
     return { rows: entities };
   };
 
-  columns = async ({ spaceId, params, abortController }: FetchColumnsOptions) => {
+  columns = async ({ params, abortController }: FetchColumnsOptions) => {
     if (!params.typeId) {
       return { columns: [] };
     }
 
     const columnsTriples = await this.fetchTriples({
       query: '',
-      space: spaceId,
       abortController,
       first: DEFAULT_PAGE_SIZE,
       skip: 0,
@@ -540,20 +574,20 @@ export class Network implements INetwork {
 
     const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
 
-    /* Name is the default column... */
-    const defaultColumns: Column[] = [
-      {
-        id: SYSTEM_IDS.NAME,
-        triples: [],
-      },
-    ];
-
     const schemaColumns: Column[] = columnsTriples.triples.map((triple, i) => ({
       id: triple.value.id,
       triples: relatedColumnTriples[i].triples,
     }));
 
-    return { columns: [...defaultColumns, ...schemaColumns] };
+    return {
+      columns: [
+        {
+          id: SYSTEM_IDS.NAME,
+          triples: [],
+        },
+        ...schemaColumns,
+      ],
+    };
   };
 
   fetchProposals = async (spaceId: string, abortController?: AbortController) => {

@@ -4,15 +4,24 @@ import { createContext, useContext, useMemo } from 'react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
+import { Column, FilterClause, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { SYSTEM_IDS } from '~/../../packages/ids';
 
 export const PAGE_SIZE = 10;
+
+export interface TableBlockFilter {
+  type: TripleValueType;
+  columnId: string;
+  columnName: string;
+  value: string;
+}
 
 interface ITableBlockStoreConfig {
   api: NetworkData.INetwork;
@@ -47,7 +56,7 @@ export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
   MergedData: MergedData;
-  pageNumber$: Observable<number> = observable(0);
+  pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
@@ -55,12 +64,15 @@ export class TableBlockStore {
   type$: Observable<ITriple>;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
+  filterState$: Observable<TableBlockFilter[]>;
   abortController: AbortController = new AbortController();
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
     this.ActionsStore = ActionsStore;
     this.type$ = observable(selectedType);
+    this.pageNumber$ = observable(0);
+    this.filterState$ = observable<TableBlockFilter[]>([]);
     this.MergedData = new MergedData({ api, store: ActionsStore });
 
     this.blockEntity$ = makeOptionalComputed(
@@ -77,17 +89,16 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
-          const params = {
+          const params: FetchRowsOptions['params'] = {
             query: '',
             pageNumber: pageNumber,
-            filterState: [],
+            filterState: this.filterState$.get().map(getNetworkFilterFromTableBlockFilter).flat(),
             typeId: selectedType.entityId,
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -195,6 +206,32 @@ export class TableBlockStore {
         // Make sure we only generate rows for entities that have the selected type
         const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType.entityId));
 
+        // const filterState = this.filterState$.get();
+
+        // // @TODO: Going to remove this eventually for server side + client side filtering
+        // if (filterState.length > 0) {
+        //   const filteredEntities = entitiesWithSelectedType.filter(entity => {
+        //     return entity.triples.find(triple => {
+        //       return filterState.every(filter => {
+        //         if (triple.attributeId === filter.columnId) {
+        //           if (filter.type === 'string' && triple.value.type === 'string') {
+        //             return triple.value.value.toLowerCase().startsWith(filter.value.toLowerCase());
+        //           }
+
+        //           if (filter.type === 'entity' && triple.value.type === 'entity') {
+        //             return triple.value.name?.toLowerCase().startsWith(filter.value.toLowerCase());
+        //           }
+        //         }
+
+        //         return false;
+        //       });
+        //     });
+        //   });
+
+        //   const { rows } = EntityTable.fromColumnsAndRows(spaceId, filteredEntities, columns);
+        //   return rows;
+        // }
+
         const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
 
         return rows;
@@ -205,10 +242,7 @@ export class TableBlockStore {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType.entityId);
     });
 
-    this.hasNextPage$ = computed(() => {
-      return networkData$.get().hasNextPage;
-    });
-
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
   }
 
@@ -226,6 +260,11 @@ export class TableBlockStore {
       default:
         this.pageNumber$.set(page);
     }
+  };
+
+  setFilterState = (filters: TableBlockFilter[]) => {
+    const newState = filters.length === 0 ? [] : filters;
+    this.filterState$.set(newState);
   };
 }
 
@@ -285,6 +324,8 @@ export function useTableBlock() {
     hasNextPage$,
     hasPreviousPage$,
     setPage,
+    filterState$,
+    setFilterState,
   } = useTableBlockStore();
   const type = useSelector(type$);
   const rows = useSelector(rows$);
@@ -294,6 +335,7 @@ export function useTableBlock() {
   const hasNextPage = useSelector(hasNextPage$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const blockEntity = useSelector(blockEntity$);
+  const filterState = useSelector<TableBlockFilter[]>(filterState$);
 
   return {
     type,
@@ -305,5 +347,62 @@ export function useTableBlock() {
     hasPreviousPage,
     setPage,
     blockEntity,
+    filterState,
+    setFilterState,
   };
+}
+
+function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterClause[] {
+  switch (filter.type) {
+    case 'entity':
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    case 'string': {
+      if (filter.columnId === SYSTEM_IDS.NAME) {
+        return [
+          {
+            field: 'entity-name',
+            value: filter.value,
+          },
+          {
+            field: 'attribute-id',
+            value: filter.columnId,
+          },
+        ];
+      }
+
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    }
+
+    case 'image':
+      return [
+        {
+          field: 'value',
+          value: filter.value,
+        },
+        {
+          field: 'attribute-id',
+          value: filter.columnId,
+        },
+      ];
+    case 'number':
+      throw new Error(`Unexpected filter for value type: ${filter.type}`);
+  }
 }

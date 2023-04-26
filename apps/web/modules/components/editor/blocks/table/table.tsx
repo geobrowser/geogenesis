@@ -143,7 +143,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { type, unpublishedColumns } = useTableBlock();
+  const { unpublishedColumns } = useTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
