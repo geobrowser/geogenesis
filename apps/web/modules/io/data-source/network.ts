@@ -162,6 +162,7 @@ export class Network implements INetwork {
 
     const where = [
       space && `space: ${JSON.stringify(space)}`,
+      // We can pass either `query` or `fieldFilters['entity-name']` to filter by entity name
       (query || fieldFilters['entity-name']) &&
         `entity_: {name_contains_nocase: ${JSON.stringify(query || fieldFilters['entity-name'])}}`,
       fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
@@ -324,7 +325,6 @@ export class Network implements INetwork {
       fieldFilters['attribute-name'] &&
         `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
       fieldFilters['attribute-id'] && `entityOf_: {attribute: ${JSON.stringify(fieldFilters['attribute-id'])}}`,
-      fieldFilters['not-space-id'] && `space_not: ${JSON.stringify(fieldFilters['not-space-id'])}`,
 
       // Until we have OR we can't search for name_contains OR value string contains
       fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
@@ -500,12 +500,17 @@ export class Network implements INetwork {
      *    The value should match the filter value. We need to set a different graphql
      *    query depending on the type of the filter value (entity vs string, etc)
      * 3. Return the entities that match the filter
+     *
+     * Ideally in the future we have space-specific subgraphs and can filter directly on the
+     * entity by column schema instead of needing to do multiple queries.
      */
 
     // 1.
     const entities = await this.fetchEntities({
       query: params.query,
       abortController,
+      // fetch many to make sure we're filtering by type enough entities to render the table correctly.
+      // It's okay if we overfetch for now.
       first: 1000,
       skip: params.skip,
       typeIds: [params.typeId],
@@ -514,7 +519,6 @@ export class Network implements INetwork {
     });
 
     if (params.filterState.length > 0) {
-      console.log('params.filterState', params.filterState);
       // 2.
       const maybeTriplesThatMatchFilter = await Promise.all(
         entities.map(entity =>
