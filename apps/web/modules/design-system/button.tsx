@@ -62,7 +62,7 @@ type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 };
 
 export const SquareButton = forwardRef(function SquareButton(
-  { icon, isActive = false, style = {}, disabled = false, children, ...rest }: SquareButtonProps,
+  { icon, isActive = false, className = '', style = {}, disabled = false, children, ...rest }: SquareButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const squareButtonClassNames = cva([
@@ -74,7 +74,7 @@ export const SquareButton = forwardRef(function SquareButton(
   return (
     <button
       ref={ref}
-      className={squareButtonClassNames()}
+      className={squareButtonClassNames({ className })}
       style={{ fontFeatureSettings: '"tnum" 1', ...style }}
       {...rest}
     >

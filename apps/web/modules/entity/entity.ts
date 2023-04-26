@@ -174,7 +174,7 @@ export function cover(triples: ITriple[] | undefined): string | null {
 /**
  * This function traverses through all the triples associated with an entity and attempts to find the parent entity ID of a block entity.
  */
-export const getParentEntityId = (triples: ITriple[]) => {
+export const getParentEntityId = (triples: ITriple[] = []) => {
   return (
     triples
       .find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)

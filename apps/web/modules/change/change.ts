@@ -5,24 +5,25 @@ import { Entity } from '~/modules/entity';
 import type { Action as ActionType, Entity as EntityType, TripleValueType } from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
 
-type EntityId = string;
-type BlockId = string;
-type BlockValueType = 'textBlock' | 'imageBlock' | 'tableBlock' | 'markdownContent';
-type AttributeId = string;
-type Changeset = {
+export type EntityId = string;
+export type BlockId = string;
+export type BlockValueType = 'textBlock' | 'imageBlock' | 'tableBlock' | 'markdownContent';
+export type AttributeId = string;
+export type Changeset = {
   name: string;
   blocks?: Record<BlockId, BlockChange>;
-  attributes?: Record<AttributeId, TripleChange>;
+  attributes?: Record<AttributeId, AttributeChange>;
 };
-type BlockChange = {
+export type BlockChange = {
   type: BlockValueType;
   before: string | null;
   after: string | null;
 };
-type TripleChange = {
+export type AttributeChange = {
   type: TripleValueType;
-  before: string | null;
-  after: string | null;
+  name: string;
+  before: string | null | Array<string | null>;
+  after: string | null | Array<string | null>;
 };
 
 export async function fromActions(actions: ActionType[], network: INetwork) {
@@ -42,7 +43,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
           newBlocks.set(entityId, parentEntityId);
         }
 
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities[entityId].triples);
+        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
         const attributeId = action.attributeId;
 
         if (parentEntityId) {
@@ -52,28 +53,44 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
-            name: entities[parentEntityId]?.name ?? '',
+            name: entities?.[parentEntityId]?.name ?? '',
             blocks: {
               ...(changes[parentEntityId]?.blocks ?? {}),
               [entityId]: {
                 ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                 type: blockType,
                 before: null,
-                after: Action.getName(action) ?? Action.getValue(action, ''),
+                after: Action.getValue(action, ''),
+              },
+            },
+          };
+        } else if (action.value.type === 'entity') {
+          changes[entityId] = {
+            ...changes[entityId],
+            name: entities?.[entityId]?.name ?? '',
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [attributeId]: {
+                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+                type: Action.getValueType(action),
+                name: action.attributeName ?? '',
+                before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? [])],
+                after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
               },
             },
           };
         } else {
           changes[entityId] = {
             ...changes[entityId],
-            name: entities[entityId]?.name ?? '',
+            name: entities?.[entityId]?.name ?? '',
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [attributeId]: {
                 ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
                 type: Action.getValueType(action),
+                name: action.attributeName ?? '',
                 before: null,
-                after: Action.getName(action) ?? Action.getValue(action, ''),
+                after: Action.getValue(action, ''),
               },
             },
           };
@@ -84,7 +101,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
 
       case 'editTriple': {
         const entityId = action.before.entityId;
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities[entityId].triples);
+        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
         const attributeId = action.before.attributeId;
 
         if (parentEntityId) {
@@ -94,34 +111,32 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
-            name: entities[parentEntityId]?.name ?? '',
+            name: entities?.[parentEntityId]?.name ?? '',
             blocks: {
               ...(changes[parentEntityId]?.blocks ?? {}),
               [entityId]: {
                 ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                 type: blockType,
-                before:
-                  changes[parentEntityId]?.blocks?.[entityId]?.before ??
-                  Action.getName(action.before) ??
-                  Action.getValue(action.before, ''),
-                after: Action.getName(action.after) ?? Action.getValue(action.after, ''),
+                before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? Action.getValue(action.before, ''),
+                after: Action.getValue(action.after, ''),
               },
             },
           };
         } else {
           changes[entityId] = {
             ...changes[entityId],
-            name: entities[entityId]?.name ?? '',
+            name: entities?.[entityId]?.name ?? '',
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [attributeId]: {
                 ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
                 type: Action.getValueType(action.after),
+                name: action.before.attributeName ?? '',
                 before:
                   changes[entityId]?.attributes?.[attributeId]?.before ??
                   Action.getName(action.before) ??
                   Action.getValue(action.before, ''),
-                after: Action.getName(action.after) ?? Action.getValue(action.after, ''),
+                after: Action.getValue(action.after, ''),
               },
             },
           };
@@ -132,7 +147,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
 
       case 'deleteTriple': {
         const entityId = action.entityId;
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities[entityId].triples);
+        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
         const attributeId = action.attributeId;
 
         if (parentEntityId) {
@@ -142,7 +157,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
-            name: entities[parentEntityId]?.name ?? '',
+            name: entities?.[parentEntityId]?.name ?? '',
             blocks: {
               ...(changes[parentEntityId]?.blocks ?? {}),
               [entityId]: {
@@ -151,24 +166,40 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 before:
                   typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
                     ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                    : Action.getName(action) ?? Action.getValue(action, ''),
+                    : Action.getValue(action, ''),
                 after: null,
+              },
+            },
+          };
+        } else if (action.value.type === 'entity') {
+          changes[entityId] = {
+            ...changes[entityId],
+            name: entities?.[entityId]?.name ?? '',
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [attributeId]: {
+                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+                type: Action.getValueType(action),
+                name: action.attributeName ?? '',
+                before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? []), Action.getName(action)],
+                after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
               },
             },
           };
         } else {
           changes[entityId] = {
             ...changes[entityId],
-            name: entities[entityId]?.name ?? '',
+            name: entities?.[entityId]?.name ?? '',
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [attributeId]: {
                 ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
                 type: Action.getValueType(action),
+                name: action.attributeName ?? '',
                 before:
                   typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
                     ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
-                    : Action.getName(action) ?? Action.getValue(action, ''),
+                    : Action.getValue(action, ''),
                 after: null,
               },
             },
@@ -212,7 +243,7 @@ const getEntities = async (actions: ActionType[], network: INetwork) => {
   const parentEntitySet = new Set<EntityId>();
 
   Object.keys(entities).forEach(entityId => {
-    const parentEntityId = Entity.getParentEntityId(entities[entityId].triples);
+    const parentEntityId = Entity.getParentEntityId(entities?.[entityId]?.triples);
 
     if (parentEntityId && !entitySet.has(parentEntityId)) {
       parentEntitySet.add(parentEntityId);
