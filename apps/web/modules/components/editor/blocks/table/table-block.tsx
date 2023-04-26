@@ -232,9 +232,9 @@ function EditableFilters() {
         filters={<TableBlockFilterGroup options={filterableColumns} onCreate={onCreateFilter} />}
       />
 
-      <SmallButton icon="chevronDownSmall" variant="secondary">
+      {/* <SmallButton icon="chevronDownSmall" variant="secondary">
         Clear
-      </SmallButton>
+      </SmallButton> */}
     </div>
   );
 }
