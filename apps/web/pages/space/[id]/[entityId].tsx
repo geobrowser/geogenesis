@@ -21,6 +21,7 @@ import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   triples: Triple[];
@@ -49,6 +50,7 @@ export default function EntityPage(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const opengraphUrl = props.serverAvatarUrl || props.serverCoverUrl || DEFAULT_OPENGRAPH_IMAGE;
 
   return (
     <>
@@ -56,10 +58,8 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        {props.serverCoverUrl && <meta property="og:image" content={props.serverCoverUrl} />}
-        {props.serverCoverUrl && (
-          <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
-        )}
+        <meta property="og:image" content={opengraphUrl} />
+        <meta name="twitter:image" content={opengraphUrl} />
         {props.description && <meta property="description" content={props.description} />}
         {props.description && <meta property="og:description" content={props.description} />}
         {props.description && <meta name="twitter:description" content={props.description} />}
