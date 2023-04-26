@@ -8,7 +8,14 @@ import { Input } from '../design-system/input';
 import { Spacer } from '../design-system/spacer';
 import { useTriples } from '../triple/use-triples';
 import { FilterDialog } from './filter/dialog';
-import type { FilterClause } from '../types';
+import type { FilterClause, FilterState } from '../types';
+
+const defaultFilterState: FilterState = [
+  {
+    field: 'entity-name',
+    value: '',
+  },
+];
 
 export function TripleInput() {
   const tripleStore = useTriples();
@@ -25,6 +32,8 @@ export function TripleInput() {
     tripleStore.setFilterState(filteredFilters);
   };
 
+  const filters = tripleStore.filterState.length > 0 ? tripleStore.filterState : defaultFilterState;
+
   return (
     <div className="relative flex overflow-hidden" ref={inputContainerRef}>
       <div className="absolute left-3 top-2.5 z-100">
@@ -40,7 +49,7 @@ export function TripleInput() {
         />
       ) : (
         <div className="flex w-full items-center gap-1 overflow-hidden rounded-l bg-white pl-10 shadow-inner-grey-02">
-          {tripleStore.filterState.map(filter => (
+          {filters.map(filter => (
             <AdvancedFilterPill
               key={filter.field}
               filterClause={filter}
@@ -52,7 +61,7 @@ export function TripleInput() {
       <div className="flex items-center overflow-hidden rounded-r border border-l-0 border-grey-02 bg-white text-grey-04">
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
-          filterState={tripleStore.filterState}
+          filterState={filters}
           setFilterState={tripleStore.setFilterState}
         />
       </div>
