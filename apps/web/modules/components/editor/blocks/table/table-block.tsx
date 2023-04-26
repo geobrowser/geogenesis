@@ -214,16 +214,10 @@ function EditableFilters() {
     value: string;
     valueType: TripleValueType;
   }) => {
-    // const filterString = TableBlockSdk.createFilterGraphQLString({
-    //   columnId,
-    //   value,
-    //   valueType,
-    // });
-
     setFilterState([
       ...filterState,
       {
-        type: valueType,
+        valueType,
         columnId,
         columnName,
         value,

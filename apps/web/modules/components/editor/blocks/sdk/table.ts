@@ -123,14 +123,66 @@ export function createBlock({
   }
 }
 
-export function createFilterGraphQLString({
-  columnId,
-  value,
-  valueType,
-}: {
-  columnId: string;
-  value: string;
-  valueType: TripleValueType;
-}): string {
-  return '';
+/**
+ * Takes the table filters and converts them to the GraphQL string used to
+ * query the table using the filters.
+ *
+ * e.g. these filters
+ * ```ts
+ * const filters = [{
+ *   columnId: 'type',
+ *   value: 'd73a9e43-923e-4102-87da-5d3176ac9df2', // entity ID for 'Blockchain'
+ *   valueType: 'entity',
+ *  },
+ *  {
+ *   columnId: 'type',
+ *   value: '48a331d1-a6d6-49ca-bc23-78f3378eb959', // entity ID for 'Layer 1'
+ *   valueType: 'entity',
+ * }]
+ * ```
+ *
+ * would output to
+ * ```ts
+ * `{
+ *    and: [
+ *      {entityOf_: {attribute: "type", entityValue: "d73a9e43-923e-4102-87da-5d3176ac9df2"}},
+ *      {entityOf_: {attribute: "type", entityValue: "48a331d1-a6d6-49ca-bc23-78f3378eb959"}},
+ *      name: "Bitcoin"
+ *    ]
+ * }`
+ * ```
+ */
+export function createFilterGraphQLString(
+  filters: {
+    columnId: string;
+    value: string;
+    valueType: TripleValueType;
+  }[]
+): string {
+  const filtersAsStrings = filters
+    .map(filter => {
+      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
+        // For the name we can just search for the name based on the indexed GeoEntity name
+        return `name_starts_with_nocase: "${filter.value}"`;
+      }
+
+      if (filter.valueType === 'entity') {
+        // value is the ID of the relation
+        return `{entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}}`;
+      }
+
+      if (filter.valueType === 'string') {
+        // value is just the stringValue of the triple
+        return `{entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_no_case: "${filter.value}"}}`;
+      }
+
+      return null;
+    })
+    .flatMap(f => (f ? [f] : []));
+
+  if (filtersAsStrings.length === 1) {
+    return filtersAsStrings[0];
+  }
+
+  return `{and: [${filtersAsStrings.join(', ')}]}`;
 }

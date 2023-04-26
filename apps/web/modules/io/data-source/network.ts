@@ -520,6 +520,12 @@ export class Network implements INetwork {
 
     if (params.filterState.length > 0) {
       // 2.
+      //
+      // Is there any way we can roll this into the entities fetch above? Why do we need to use triples to avoid nesting?
+      // Just for the entity name?
+      //
+      // We should be able to do entity name as a separate filter on GeoEntities. Then we only need the one query instead of
+      // three
       const maybeTriplesThatMatchFilter = await Promise.all(
         entities.map(entity =>
           this.fetchTriples({

@@ -13,11 +13,12 @@ import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { SYSTEM_IDS } from '~/../../packages/ids';
+import { TableBlockSdk } from '../sdk';
 
 export const PAGE_SIZE = 10;
 
 export interface TableBlockFilter {
-  type: TripleValueType;
+  valueType: TripleValueType;
   columnId: string;
   columnName: string;
   value: string;
@@ -75,7 +76,7 @@ export class TableBlockStore {
     this.pageNumber$ = observable(0);
     this.filterState$ = observable<TableBlockFilter[]>([]);
     this.MergedData = new MergedData({ api, store: ActionsStore });
-    this.isLoading$ = observable(false);
+    this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
     this.blockEntity$ = makeOptionalComputed(
@@ -271,6 +272,9 @@ export class TableBlockStore {
 
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
+
+    const filterString = TableBlockSdk.createFilterGraphQLString(newState);
+
     this.filterState$.set(newState);
   };
 }
@@ -363,7 +367,7 @@ export function useTableBlock() {
 }
 
 function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterClause[] {
-  switch (filter.type) {
+  switch (filter.valueType) {
     case 'entity':
       return [
         {
@@ -413,6 +417,6 @@ function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterC
         },
       ];
     case 'number':
-      throw new Error(`Unexpected filter for value type: ${filter.type}`);
+      throw new Error(`Unexpected filter for value type: ${filter.valueType}`);
   }
 }
