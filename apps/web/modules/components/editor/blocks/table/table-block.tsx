@@ -30,8 +30,18 @@ interface Props {
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { columns, rows, blockEntity, hasNextPage, hasPreviousPage, setPage, pageNumber, filterState, setFilterState } =
-    useTableBlock();
+  const {
+    columns,
+    rows,
+    blockEntity,
+    hasNextPage,
+    hasPreviousPage,
+    setPage,
+    pageNumber,
+    filterState,
+    setFilterState,
+    isLoading,
+  } = useTableBlock();
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
   return (
@@ -112,7 +122,7 @@ export function TableBlock({ spaceId }: Props) {
 
       <motion.div layout="position">
         <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
-          <TableBlockTable space={spaceId} columns={columns} rows={rows} />
+          {isLoading ? <TableBlockPlaceholder /> : <TableBlockTable space={spaceId} columns={columns} rows={rows} />}
         </div>
 
         <Spacer height={12} />
@@ -356,6 +366,74 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
           <Input value={value} onChange={e => setValue(e.currentTarget.value)} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
+
+function TableBlockPlaceholder() {
+  return (
+    <div className="overflow-x-scroll rounded-sm">
+      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+        <thead>
+          <tr>
+            <th
+              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+            >
+              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
+            </th>
+            <th
+              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+            >
+              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
+            </th>
+            <th
+              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+            >
+              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+          </tr>
+          <tr>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+          </tr>
+          <tr>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+              <p className="h-5 rounded-sm bg-divider" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
