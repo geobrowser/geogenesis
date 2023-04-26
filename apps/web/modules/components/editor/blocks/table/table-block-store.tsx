@@ -4,7 +4,7 @@ import { createContext, useContext, useMemo } from 'react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, FilterClause, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
+import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
@@ -12,7 +12,6 @@ import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
-import { SYSTEM_IDS } from '~/../../packages/ids';
 import { TableBlockSdk } from '../sdk';
 
 export const PAGE_SIZE = 10;
@@ -359,59 +358,4 @@ export function useTableBlock() {
     setFilterState,
     isLoading,
   };
-}
-
-function getNetworkFilterFromTableBlockFilter(filter: TableBlockFilter): FilterClause[] {
-  switch (filter.valueType) {
-    case 'entity':
-      return [
-        {
-          field: 'value',
-          value: filter.value,
-        },
-        {
-          field: 'attribute-id',
-          value: filter.columnId,
-        },
-      ];
-    case 'string': {
-      if (filter.columnId === SYSTEM_IDS.NAME) {
-        return [
-          {
-            field: 'entity-name',
-            value: filter.value,
-          },
-          {
-            field: 'attribute-id',
-            value: filter.columnId,
-          },
-        ];
-      }
-
-      return [
-        {
-          field: 'value',
-          value: filter.value,
-        },
-        {
-          field: 'attribute-id',
-          value: filter.columnId,
-        },
-      ];
-    }
-
-    case 'image':
-      return [
-        {
-          field: 'value',
-          value: filter.value,
-        },
-        {
-          field: 'attribute-id',
-          value: filter.columnId,
-        },
-      ];
-    case 'number':
-      throw new Error(`Unexpected filter for value type: ${filter.valueType}`);
-  }
 }

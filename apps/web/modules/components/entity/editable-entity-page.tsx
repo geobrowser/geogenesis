@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';

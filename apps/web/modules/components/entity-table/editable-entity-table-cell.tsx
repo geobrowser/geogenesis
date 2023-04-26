@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { NavUtils } from '~/modules/utils';
 import { Value } from '~/modules/value';
