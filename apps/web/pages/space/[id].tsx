@@ -14,6 +14,8 @@ import { Column, Row, Space, Triple } from '~/modules/types';
 import { TypesStoreProvider } from '~/modules/type/types-store';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
 
 interface Props {
   space: Space;
@@ -110,13 +112,14 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
-  const typeId = initialSelectedType?.entityId;
+  const typeId: string | undefined = initialSelectedType?.entityId;
 
-  const params = {
+  const params: FetchRowsOptions['params'] = {
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeId,
+    typeIds: typeId ? [typeId] : [],
+    filter: TableBlockSdk.createFilterGraphQLString([], typeId ?? ''),
   };
 
   const { columns } = await network.columns({
@@ -124,7 +127,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   });
 
   const { rows: serverRows } = await network.rows({
-    spaceId,
     params,
   });
 

@@ -158,9 +158,12 @@ export function createFilterGraphQLString(
     value: string;
     valueType: TripleValueType;
   }[],
-  typeId: string
+  typeId: string,
+  query?: string
 ): string {
-  if (filters.length === 0) return `typeIds_contains_nocase: ["${typeId}"]`;
+  // @TODO: Have two different configuration objects depending on the caller. i.e., some callers
+  // will use query but others will use the filters.
+  if (filters.length === 0 && !query) return `{typeIds_contains_nocase: ["${typeId}"]}`;
 
   const filtersAsStrings = filters
     .map(filter => {
@@ -183,8 +186,12 @@ export function createFilterGraphQLString(
     })
     .flatMap(f => (f ? [f] : []));
 
+  if (query) {
+    filtersAsStrings.push(`name_starts_with_nocase: "${query}"`);
+  }
+
   if (filtersAsStrings.length === 1) {
-    return `typeIds_contains_nocase: ["${typeId}"], ${filtersAsStrings[0]}`;
+    return `{typeIds_contains_nocase: ["${typeId}"], ${filtersAsStrings[0]}}`;
   }
 
   // Wrap each filter expression in curly brackets

@@ -95,9 +95,8 @@ export class TableBlockStore {
 
           const params: FetchRowsOptions['params'] = {
             query: '',
-            pageNumber: pageNumber,
-            filterState: this.filterState$.get().map(getNetworkFilterFromTableBlockFilter).flat(),
-            typeId: selectedType.entityId,
+            filter: TableBlockSdk.createFilterGraphQLString(this.filterState$.get(), this.type$.get().entityId),
+            typeIds: [selectedType.entityId],
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
@@ -272,9 +271,6 @@ export class TableBlockStore {
 
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
-
-    const filterString = TableBlockSdk.createFilterGraphQLString(newState, this.type$.get().entityId);
-
     this.filterState$.set(newState);
   };
 }
