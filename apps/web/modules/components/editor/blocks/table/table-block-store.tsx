@@ -109,7 +109,6 @@ export class TableBlockStore {
           });
 
           const { rows: serverRows } = await this.api.rows({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
