@@ -9,9 +9,9 @@ describe('TableBlock SDK', () => {
      * 1. String field with a string value
      * 2. Entity field with an entity ID as the value
      * 3. String field targeting the Name column
-     * 4. A query string but no filters
+     * 4. A null type id
      *
-     * These three combinations can also be used together with an "and" filter
+     * These four combinations can also be used together with an "and" filter
      */
     const stringFilter = createFilterGraphQLString(
       [
@@ -25,7 +25,7 @@ describe('TableBlock SDK', () => {
     );
 
     expect(stringFilter).toEqual(
-      `typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}`
+      `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}`
     );
 
     const entityFilter = createFilterGraphQLString(
@@ -40,7 +40,7 @@ describe('TableBlock SDK', () => {
     );
 
     expect(entityFilter).toEqual(
-      `typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}`
+      `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`
     );
 
     const nameFilter = createFilterGraphQLString(
@@ -54,7 +54,7 @@ describe('TableBlock SDK', () => {
       'type-id'
     );
 
-    expect(nameFilter).toEqual(`typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"`);
+    expect(nameFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`);
 
     const andFilter = createFilterGraphQLString(
       [
@@ -81,8 +81,8 @@ describe('TableBlock SDK', () => {
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`
     );
 
-    const queryFilter = createFilterGraphQLString([], 'type-id', 'query');
+    const nullTypeIdFilter = createFilterGraphQLString([], null);
 
-    expect(queryFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "query"}`);
+    expect(nullTypeIdFilter).toEqual('');
   });
 });

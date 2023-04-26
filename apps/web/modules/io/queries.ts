@@ -76,7 +76,7 @@ export const entitiesQuery = (
 // following the pre-existing pattern.
 export const tableEntitiesQuery = (filter: string, first = 100, skip = 0) => {
   return `query {
-    startEntities: geoEntities(where: ${filter}, first: ${first}, skip: ${skip}) {
+    geoEntities(where: ${filter}, first: ${first}, skip: ${skip}) {
       id,
       name
       entityOf {

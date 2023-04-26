@@ -12,6 +12,7 @@ import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { CreateType } from '~/modules/type';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 
@@ -111,9 +112,14 @@ export class EntityTableStore implements IEntityTableStore {
           const pageNumber = this.pageNumber$.get();
 
           const filterString = TableBlockSdk.createFilterGraphQLString(
-            [],
-            selectedType?.entityId ?? '',
-            this.query$.get()
+            [
+              {
+                columnId: SYSTEM_IDS.NAME,
+                value: this.query$.get(),
+                valueType: 'string',
+              },
+            ],
+            selectedType?.entityId ?? null
           );
 
           const params: FetchRowsOptions['params'] = {

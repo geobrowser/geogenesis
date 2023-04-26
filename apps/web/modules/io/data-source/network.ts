@@ -764,15 +764,13 @@ export class Network implements INetwork {
     try {
       const json: {
         data: {
-          startEntities: NetworkEntity[];
+          geoEntities: NetworkEntity[];
         };
       } = await response.json();
 
-      const { startEntities } = json.data;
+      const sortedResults = sortSearchResultsByRelevance(json.data.geoEntities, []);
 
-      const sortedResults = sortSearchResultsByRelevance(startEntities, []);
-
-      const sortedResultsWithTypesAndDescription: EntityType[] = sortedResults.map(result => {
+      return sortedResults.map(result => {
         const triples = fromNetworkTriples(result.entityOf);
         const nameTriple = Entity.nameTriple(triples);
 
@@ -784,20 +782,6 @@ export class Network implements INetwork {
           types: Entity.types(triples, nameTriple?.space),
           triples,
         };
-      });
-
-      // We filter block entities so we don't clutter entity search results with block entities.
-      // Eventually we might want to let the caller handle the filtering instead of doing it
-      // at the network level here.
-      //
-      // We could also do this filter at the top of the algorithm so we don't apply the extra
-      // transformations onto entities that we are going to filter out.
-      return sortedResultsWithTypesAndDescription.filter(result => {
-        return !(
-          result.types.some(t => t.id === SYSTEM_IDS.TEXT_BLOCK) ||
-          result.types.some(t => t.id === SYSTEM_IDS.TABLE_BLOCK) ||
-          result.types.some(t => t.id === SYSTEM_IDS.IMAGE_BLOCK)
-        );
       });
     } catch (e) {
       console.error(`Unable to fetch table entities, typeIds: ${options.typeIds} filter: ${options.filter}`);
