@@ -9,7 +9,7 @@ describe('Space page', () => {
     render(
       <Providers>
         <SpacePage
-          spaceId="1"
+          space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
           initialTypes={[]}
@@ -28,7 +28,7 @@ describe('Space page', () => {
     render(
       <Providers>
         <SpacePage
-          spaceId="1"
+          space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
           initialTypes={[]}
@@ -46,7 +46,7 @@ describe('Space page', () => {
     render(
       <Providers>
         <SpacePage
-          spaceId="1"
+          space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
           initialTypes={[]}

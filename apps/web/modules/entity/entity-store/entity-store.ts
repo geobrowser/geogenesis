@@ -5,8 +5,8 @@ import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
 
 import { ActionsStore } from '~/modules/action';
-import { tiptapExtensions } from '~/modules/components/entity/editor/editor';
-import { htmlToPlainText } from '~/modules/components/entity/editor/editor-utils';
+import { tiptapExtensions } from '~/modules/components/editor/editor';
+import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
 import { NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';
@@ -598,10 +598,12 @@ export class EntityStore implements IEntityStore {
     const maybeRemoteBlocks = await Promise.all(removedBlockIds.map(async blockId => this.api.fetchEntity(blockId)));
     const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
-    // To delete an entity we delete all of its triples
-    remoteBlocks.forEach(block => {
-      block.triples.forEach(t => this.remove(t));
-    });
+    batch(() =>
+      // To delete an entity we delete all of its triples
+      remoteBlocks.forEach(block => {
+        block.triples.forEach(t => this.remove(t));
+      })
+    );
 
     // Delete any local triples associated with the deleted block entities
     const localTriplesForDeletedBlocks = pipe(
@@ -610,7 +612,7 @@ export class EntityStore implements IEntityStore {
       triples => triples.filter(t => removedBlockIds.includes(t.entityId))
     );
 
-    localTriplesForDeletedBlocks.forEach(t => this.remove(t));
+    batch(() => localTriplesForDeletedBlocks.forEach(t => this.remove(t)));
 
     // We delete the existingBlockTriple if the page content is completely empty
     if (newBlockIds.length === 0) {
@@ -636,7 +638,11 @@ export class EntityStore implements IEntityStore {
     const populatedContent = content.filter(node => {
       const isNonParagraph = node.type !== 'paragraph';
       const isParagraphWithContent =
-        node.type === 'paragraph' && node.content && node.content.length > 0 && node.content[0].text;
+        node.type === 'paragraph' &&
+        node.content &&
+        node.content.length > 0 &&
+        node.content[0].text &&
+        !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
 
       return isNonParagraph || isParagraphWithContent;
     });

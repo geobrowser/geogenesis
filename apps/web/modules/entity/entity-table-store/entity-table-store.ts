@@ -1,10 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import produce from 'immer';
 
 import { ActionsStore } from '~/modules/action';
-import { ID } from '~/modules/id';
 import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
@@ -12,16 +9,16 @@ import { NetworkData } from '~/modules/io';
 import { Column, FilterState, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
+import { CreateType } from '~/modules/type';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 
 interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
-  types$: ObservableComputed<SelectedType[]>;
   selectedType$: Observable<SelectedType | null>;
   pageNumber$: Observable<number>;
-  query$: ObservableComputed<string>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
@@ -29,7 +26,6 @@ interface IEntityTableStore {
   SpaceStore: SpaceStore;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
-  columnValueType: (columnId: string) => string;
 }
 
 interface IEntityTableStoreConfig {
@@ -39,7 +35,6 @@ interface IEntityTableStoreConfig {
   pageSize?: number;
   initialRows: Row[];
   initialSelectedType: TripleType | null;
-  initialTypes: TripleType[];
   initialColumns: Column[];
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
@@ -54,14 +49,18 @@ export const DEFAULT_INITIAL_PARAMS = {
 };
 
 export function initialFilterState(): FilterState {
-  return [
-    {
-      field: 'entity-name',
-      value: '',
-    },
-  ];
+  return [];
 }
 
+/**
+ * The EntityTableStore handles state and logic for the EntityTable component that
+ * gets rendered on the /spaces/[id] route. For now it duplicated a lot of functionality
+ * that we have in the TableBlockStore as well. Eventually the EntityTable will be
+ * de-emphasized in the product and we will be able to migrate a lot of the implementation
+ * from the TableBlockStore to here.
+ *
+ * For now we are fine with the duplication.
+ */
 export class EntityTableStore implements IEntityTableStore {
   private api: NetworkData.INetwork;
   rows$: ObservableComputed<Row[]>;
@@ -70,15 +69,10 @@ export class EntityTableStore implements IEntityTableStore {
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<SelectedType | null>;
-  // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-  // uses the entityId and entityName, so we filter out the rest of the data when adding
-  // a foreign type. This makes it so we don't have to query the network or check local
-  // actions for the entity whose entityId === t.value.id
-  types$: ObservableComputed<SelectedType[]>;
-  query$: ObservableComputed<string>;
+
+  query$: Observable<string>;
   space$: ObservableComputed<Space | undefined>;
   filterState$: Observable<FilterState>;
-  localForeignTypes$: ObservableComputed<{ id: string; entityId: string; entityName: string }[]>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   spaceId: string;
@@ -92,7 +86,6 @@ export class EntityTableStore implements IEntityTableStore {
     initialRows,
     initialSelectedType,
     initialColumns,
-    initialTypes,
     ActionsStore,
     SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
@@ -106,99 +99,16 @@ export class EntityTableStore implements IEntityTableStore {
     this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
-    this.localForeignTypes$ = observable<{ id: string; entityId: string; entityName: string }[]>([]);
-
-    this.localForeignTypes$ = makeOptionalComputed(
-      [],
-      computed(() => {
-        const space = this.space$.get();
-
-        if (!space) {
-          return [];
-        }
-
-        const spaceActions = this.ActionsStore.actions$.get()[spaceId] ?? [];
-        const triplesFromSpaceActions = Triple.fromActions(spaceActions, []);
-
-        const spaceConfigId = space.spaceConfigEntityId;
-
-        if (!spaceConfigId) {
-          const localSpaceConfigId = triplesFromSpaceActions.find(
-            t => t.value.type === 'entity' && t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
-          )?.entityId;
-
-          const localForeignTriples = pipe(
-            this.ActionsStore.actions$.get(),
-            actions => Triple.fromActions(actions[spaceId], []),
-            A.filter(t => t.entityId === localSpaceConfigId),
-            A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-            // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-            // uses the entityId and entityName, so we filter out the rest of the data. This
-            // makes it so we don't have to query the network or check local actions for the
-            // entity whose entityId === t.value.id
-            A.map(t => ({
-              id: t.id,
-              entityId: t.value.type === 'entity' ? t.value.id : '',
-              entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
-            }))
-          );
-
-          return localForeignTriples;
-        }
-
-        const localForeignTypes = pipe(
-          this.ActionsStore.actions$.get(),
-          actions => Triple.fromActions(actions[spaceId], []),
-          A.filter(t => t.entityId === spaceConfigId),
-          A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-          // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-          // uses the entityId and entityName, so we filter out the rest of the data. This
-          // makes it so we don't have to query the network or check local actions for the
-          // entity whose entityId === t.value.id
-          A.map(t => ({
-            id: t.id,
-            entityId: t.value.type === 'entity' ? t.value.id : '',
-            entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
-          }))
-        );
-
-        return localForeignTypes;
-      })
-    );
-
-    this.types$ = computed(() => {
-      const globalActions = ActionsStore.actions$.get()[spaceId] || [];
-      const actions = globalActions.filter(a => {
-        const isCreate =
-          a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-        const isDelete =
-          a.type === 'deleteTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-        const isRemove =
-          a.type === 'editTriple' &&
-          a.before.attributeId === SYSTEM_IDS.TYPES &&
-          a.before.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-
-        return isCreate || isDelete || isRemove;
-      });
-
-      const localForeignTypes = this.localForeignTypes$.get();
-
-      const triplesFromActions = Triple.fromActions(actions, initialTypes);
-      return [...Triple.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
-    });
 
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
 
     this.spaceId = spaceId;
-    this.query$ = computed(() => {
-      const filterState = this.filterState$.get();
-      return filterState.find(f => f.field === 'entity-name')?.value || '';
-    });
+    this.query$ = observable(initialParams.query);
 
     const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [], triples: [] },
+      { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
           this.abortController.abort();
@@ -217,7 +127,6 @@ export class EntityTableStore implements IEntityTableStore {
           };
 
           const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -233,6 +142,7 @@ export class EntityTableStore implements IEntityTableStore {
           return {
             columns: serverColumns,
             rows: serverRows.slice(0, pageSize),
+            hasNextPage: serverRows.length > pageSize,
           };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
@@ -241,12 +151,13 @@ export class EntityTableStore implements IEntityTableStore {
           }
 
           // TODO: Real error handling
-          return { columns: [], rows: [], triples: [], hasNextPage: false };
+          return { columns: [], rows: [], hasNextPage: false };
         }
       })
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(
@@ -351,43 +262,10 @@ export class EntityTableStore implements IEntityTableStore {
         return rows;
       })
     );
-
-    this.hasNextPage$ = computed(() => (this.rows$.get()?.length ?? 0) > pageSize);
   }
 
-  columnValueType = (columnId: string): string => {
-    const column = this.columns$.get().find(c => c.id === columnId);
-
-    if (!column) {
-      // Typescript defensive programming
-      return SYSTEM_IDS.TEXT;
-    }
-
-    return Entity.valueTypeId(column.triples) ?? SYSTEM_IDS.TEXT;
-  };
-
-  columnName = (columnId: string): string => {
-    const column = this.columns$.get().find(c => c.id === columnId);
-
-    if (!column) {
-      // Typescript defensive programming
-      return '';
-    }
-
-    return Entity.name(column.triples) || '';
-  };
-
   setQuery = (query: string) => {
-    this.setFilterState(
-      produce(this.filterState$.get(), draft => {
-        const entityNameFilter = draft.find(f => f.field === 'entity-name');
-        if (entityNameFilter) {
-          entityNameFilter.value = query;
-        } else {
-          draft.unshift({ field: 'entity-name', value: query });
-        }
-      })
-    );
+    this.query$.set(query);
   };
 
   setPageNumber = (pageNumber: number) => {
@@ -416,69 +294,15 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   createForeignType = (foreignType: TripleType) => {
-    const spaceConfigEntityId = this.space$.spaceConfigEntityId.get() || ID.createEntityId();
-
-    if (!this.space$.get()?.spaceConfigEntityId) {
-      const spaceConfigNameTriple = Triple.withId({
-        space: this.spaceId,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
-      });
-
-      const spaceConfigTypeTriple = Triple.withId({
-        space: this.spaceId,
-        entityId: spaceConfigEntityId,
-        entityName: 'Space Configuration',
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
-      });
-
-      this.ActionsStore.create(spaceConfigNameTriple);
-      this.ActionsStore.create(spaceConfigTypeTriple);
-    }
-
-    const spaceConfigForeignTypeTriple = Triple.withId({
-      space: this.spaceId,
-      entityId: spaceConfigEntityId,
-      entityName: 'Space Configuration',
-      attributeId: SYSTEM_IDS.FOREIGN_TYPES,
-      attributeName: 'Foreign Types',
-      value: { id: foreignType.entityId, type: 'entity', name: foreignType.entityName },
-    });
-
-    this.ActionsStore.create(spaceConfigForeignTypeTriple);
+    CreateType.createForeignType(
+      foreignType,
+      this.spaceId,
+      this.space$.spaceConfigEntityId.get(),
+      this.ActionsStore.create
+    );
   };
 
   createType = (entityName: string) => {
-    /* It's a bit awkward to use the EntityStoreProvider for this work since it's a fresh entityId each time... */
-    const entityId = ID.createEntityId();
-    const nameTriple = Triple.withId({
-      space: this.spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.NAME,
-      attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: entityName },
-    });
-    const typeTriple = Triple.withId({
-      space: this.spaceId,
-      entityId,
-      entityName,
-      attributeId: SYSTEM_IDS.TYPES,
-      attributeName: 'Types',
-      value: {
-        id: SYSTEM_IDS.SCHEMA_TYPE,
-        type: 'entity',
-        name: 'Type',
-      },
-    });
-    this.ActionsStore.create(nameTriple);
-    this.ActionsStore.create(typeTriple);
-
-    return typeTriple;
+    return CreateType.createType(entityName, this.spaceId, this.ActionsStore.create);
   };
 }

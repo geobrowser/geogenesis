@@ -93,7 +93,7 @@ export class Merged implements IMergeDataSource {
     if (!globalActions.some(a => a.entityId === id)) return maybeNetworkEntity;
 
     // Need to find the local version of this entity if it exists and merge it with the network entity
-    // if it exists.
+    // if it exists. If the network entity doesn't exist, we search the local store for the entity.
     const entity = pipe(
       this.store.actions$.get(),
       actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),

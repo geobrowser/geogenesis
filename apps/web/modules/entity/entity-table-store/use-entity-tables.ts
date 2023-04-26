@@ -19,17 +19,13 @@ export const useEntityTable = () => {
     hydrated$,
     selectedType$,
     columns$,
-    types$,
     unpublishedColumns$,
-    columnValueType,
     setFilterState,
-    columnName,
     createForeignType,
     createType,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
-  const types = useSelector(types$);
   const hydrated = useSelector(hydrated$);
   const selectedType = useSelector(selectedType$);
   const pageNumber = useSelector(pageNumber$);
@@ -43,7 +39,6 @@ export const useEntityTable = () => {
     rows,
     columns,
     unpublishedColumns,
-    types,
     query,
     hydrated,
     selectedType,
@@ -53,8 +48,6 @@ export const useEntityTable = () => {
     setPreviousPage,
     setSelectedType,
     pageNumber,
-    columnValueType,
-    columnName,
     hasPreviousPage,
     hasNextPage,
     filterState,

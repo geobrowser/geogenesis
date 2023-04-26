@@ -2,9 +2,10 @@ import * as React from 'react';
 import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 
-import { EntityTableStoreProvider, useEntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/types';
-import { EntityTableContainer } from '../../entity-table/entity-table-container';
+import { TableBlockStoreProvider } from './blocks/table/table-block-store';
+import { TableBlock } from './blocks/table/table-block';
+import { useTypesStore } from '~/modules/type/types-store';
 
 export const TableNode = Node.create({
   name: 'tableNode',
@@ -46,41 +47,35 @@ export const TableNode = Node.create({
   },
 });
 
-export const TableNodeComponent = function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, typeId } = node.attrs;
-
-  const { types } = useEntityTable();
+function TableNodeComponent({ node }: NodeViewRendererProps) {
+  const { spaceId, typeId, id } = node.attrs;
+  const { types } = useTypesStore();
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId) as Triple;
   }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* Setting "types.length" rather than types as a dependency to prevent excessive rerendering */
 
   return (
-    <NodeViewWrapper className="react-component-with-content">
+    <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} />
+        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} entityId={id} />
       </div>
     </NodeViewWrapper>
   );
-};
+}
 
-export const TableNodeChildren = React.memo(function TableNodeComponent({
+function TableNodeChildren({
   spaceId,
   selectedType,
+  entityId,
 }: {
   spaceId: string;
   selectedType: Triple;
+  entityId: string;
 }) {
   return (
-    <EntityTableStoreProvider
-      spaceId={spaceId}
-      initialSelectedType={selectedType}
-      initialRows={[]}
-      initialColumns={[]}
-      initialTypes={[]}
-    >
-      <EntityTableContainer showHeader={false} spaceId={spaceId} spaceName={''} />
-    </EntityTableStoreProvider>
+    <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+      <TableBlock spaceId={spaceId} />
+    </TableBlockStoreProvider>
   );
-});
+}

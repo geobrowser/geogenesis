@@ -12,16 +12,22 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { useEditable } from '~/modules/stores/use-editable';
-import { Triple } from '~/modules/types';
+import { Space, Triple } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
-import { EntityPageTableBlockStoreProvider } from '~/modules/components/entity/entity-page-table-block-store-provider';
+import { TypesStoreProvider } from '~/modules/type/types-store';
+import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   triples: Triple[];
   id: string;
   name: string;
+  description: string | null;
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
   serverAvatarUrl: string | null;
@@ -30,6 +36,9 @@ interface Props {
   // For the page editor
   blockTriples: Triple[];
   blockIdsTriple: Triple | null;
+
+  spaceTypes: Triple[];
+  space: Space | null;
 }
 
 export default function EntityPage(props: Props) {
@@ -39,29 +48,40 @@ export default function EntityPage(props: Props) {
   const renderEditablePage = isEditor && editable;
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
+  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const opengraphUrl = props.serverAvatarUrl || props.serverCoverUrl || DEFAULT_OPENGRAPH_IMAGE;
+
   return (
     <>
       <Head>
         <title>{props.name ?? props.id}</title>
+        <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
+        <meta property="og:image" content={opengraphUrl} />
+        <meta name="twitter:image" content={opengraphUrl} />
+        {props.description && <meta property="description" content={props.description} />}
+        {props.description && <meta property="og:description" content={props.description} />}
+        {props.description && <meta name="twitter:description" content={props.description} />}
       </Head>
-      <EntityStoreProvider
-        id={props.id}
-        spaceId={props.spaceId}
-        initialTriples={props.triples}
-        initialSchemaTriples={[]}
-        initialBlockIdsTriple={props.blockIdsTriple}
-        initialBlockTriples={props.blockTriples}
-      >
-        <EntityPageTableBlockStoreProvider
+
+      <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
+        <EntityStoreProvider
+          id={props.id}
           spaceId={props.spaceId}
-          initialColumns={[]}
-          initialRows={[]}
-          initialSelectedType={null}
+          initialTriples={props.triples}
+          initialSchemaTriples={[]}
+          initialBlockIdsTriple={props.blockIdsTriple}
+          initialBlockTriples={props.blockTriples}
         >
-          <Page {...props} schemaTriples={[]} />
-        </EntityPageTableBlockStoreProvider>
-      </EntityStoreProvider>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+
+          <EntityPageContentContainer>
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <Page {...props} />
+          </EntityPageContentContainer>
+        </EntityStoreProvider>
+      </TypesStoreProvider>
     </>
   );
 }
@@ -74,18 +94,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
 
-  const [entity, related] = await Promise.all([
+  const spaces = await network.fetchSpaces();
+  const space = spaces.find(s => s.id === spaceId) ?? null;
+
+  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
     network.fetchEntity(entityId),
 
     network.fetchEntities({
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    fetchSpaceTypeTriples(network, spaceId),
+    space ? fetchForeignTypeTriples(network, space) : [],
   ]);
+
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
-
-  const spaces = await network.fetchSpaces();
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
@@ -105,27 +130,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     };
   });
 
-  /* Storing the array of block ids as a string value since we currently do not support arrays */
-  // @TODO: the Block triple for the entity should already be fetched in the entity query above
-  const blockIdTriples = await network.fetchTriples({
-    space: spaceId,
-    query: '',
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'entity-id', value: entityId },
-      {
-        field: 'attribute-id',
-        value: SYSTEM_IDS.BLOCKS,
-      },
-    ],
-  });
-
-  const blockIdsTriple = blockIdTriples.triples[0] || null;
-
+  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
 
-  // @TODO: Try and use fetchEntity instead
+  // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
+  // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
+  // the entire entity for each block so the query isn't dependenent on the space and we have the types
+  // associated with each block entity (TableBlock, TextBlock, etc.)
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
@@ -145,6 +156,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       triples: entity?.triples ?? [],
       id: entityId,
       name: entity?.name ?? entityId,
+      description: Entity.description(entity?.triples ?? []),
       spaceId,
       referencedByEntities,
       key: entityId,
@@ -154,6 +166,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       // For entity page editor
       blockIdsTriple,
       blockTriples,
+
+      space,
+      spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     },
   };
 };

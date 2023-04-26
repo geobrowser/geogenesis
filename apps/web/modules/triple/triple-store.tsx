@@ -1,5 +1,4 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
-import produce from 'immer';
 
 import { ActionsStore } from '../action';
 import { NetworkData } from '~/modules/io';
@@ -11,7 +10,7 @@ interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;
   pageNumber$: Observable<number>;
   hydrated$: Observable<boolean>;
-  query$: ObservableComputed<string>;
+  query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   setQuery(query: string): void;
@@ -41,19 +40,14 @@ export const DEFAULT_INITIAL_PARAMS = {
 };
 
 export function initialFilterState(): FilterState {
-  return [
-    {
-      field: 'entity-name',
-      value: '',
-    },
-  ];
+  return [];
 }
 
 export class TripleStore implements ITripleStore {
   private api: NetworkData.INetwork;
   triples$: ObservableComputed<TripleType[]> = observable([]);
   pageNumber$: Observable<number>;
-  query$: ObservableComputed<string>;
+  query$: Observable<string>;
   filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hydrated$: Observable<boolean> = observable(false);
@@ -78,10 +72,7 @@ export class TripleStore implements ITripleStore {
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
     );
     this.space = space;
-    this.query$ = computed(() => {
-      const filterState = this.filterState$.get();
-      return filterState.find(f => f.field === 'entity-name')?.value || '';
-    });
+    this.query$ = observable(initialParams.query);
 
     const networkData$ = makeOptionalComputed(
       { triples: [], hasNextPage: false },
@@ -128,16 +119,7 @@ export class TripleStore implements ITripleStore {
   }
 
   setQuery = (query: string) => {
-    this.setFilterState(
-      produce(this.filterState$.get(), draft => {
-        const entityNameFilter = draft.find(f => f.field === 'entity-name');
-        if (entityNameFilter) {
-          entityNameFilter.value = query;
-        } else {
-          draft.unshift({ field: 'entity-name', value: query });
-        }
-      })
-    );
+    this.query$.set(query);
   };
 
   setPageNumber = (pageNumber: number) => {

@@ -30,7 +30,7 @@ export const tiptapExtensions = [
   IdExtension,
 ];
 
-export const Editor = ({ editable = true }: Props) => {
+export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const entityStore = useEntityStore();
 
   const editor = useEditor(
@@ -74,4 +74,4 @@ export const Editor = ({ editable = true }: Props) => {
       <Spacer height={60} />
     </div>
   );
-};
+});

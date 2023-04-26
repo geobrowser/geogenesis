@@ -11,9 +11,12 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Space, Triple } from '~/modules/types';
+import { TypesStoreProvider } from '~/modules/type/types-store';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
-  spaceId: string;
+  space: Space;
   spaceName?: string;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
@@ -23,7 +26,7 @@ interface Props {
 }
 
 export default function EntitiesPage({
-  spaceId,
+  space,
   spaceName,
   spaceImage,
   initialColumns,
@@ -31,29 +34,35 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
+  const opengraphUrl = spaceImage || DEFAULT_OPENGRAPH_IMAGE;
+
   return (
     <div>
       <Head>
-        <title>{spaceName ?? spaceId}</title>
-        <meta property="og:url" content={`https://geobrowser.io/${spaceId}}`} />
+        <title>{spaceName ?? space.id}</title>
+        <meta property="og:title" content={spaceName} />
+        <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
+        <meta property="og:image" content={opengraphUrl} />
+        <meta name="twitter:image" content={opengraphUrl} />
       </Head>
-      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
+      <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
-      <SpaceNavbar spaceId={spaceId} />
-      <EntityTableStoreProvider
-        spaceId={spaceId}
-        initialRows={initialRows}
-        initialSelectedType={initialSelectedType}
-        initialColumns={initialColumns}
-        initialTypes={initialTypes}
-      >
-        <EntityTableContainer
-          spaceId={spaceId}
-          spaceName={spaceName}
-          initialColumns={initialColumns}
+      <SpaceNavbar spaceId={space.id} />
+      <TypesStoreProvider initialTypes={initialTypes} space={space}>
+        <EntityTableStoreProvider
+          spaceId={space.id}
           initialRows={initialRows}
-        />
-      </EntityTableStoreProvider>
+          initialSelectedType={initialSelectedType}
+          initialColumns={initialColumns}
+        >
+          <EntityTableContainer
+            spaceId={space.id}
+            spaceName={spaceName}
+            initialColumns={initialColumns}
+            initialRows={initialRows}
+          />
+        </EntityTableStoreProvider>
+      </TypesStoreProvider>
     </div>
   );
 }
@@ -111,7 +120,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   };
 
   const { columns } = await network.columns({
-    spaceId,
     params,
   });
 
@@ -124,7 +132,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   return {
     props: {
-      spaceId,
+      space,
       spaceName,
       spaceImage,
       initialSelectedType,
@@ -134,60 +142,4 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       initialTypes,
     },
   };
-};
-
-export const fetchForeignTypeTriples = async (network: NetworkData.INetwork, space: Space) => {
-  if (!space.spaceConfigEntityId) {
-    return [];
-  }
-
-  const foreignTypesFromSpaceConfig = await network.fetchTriples({
-    query: '',
-    space: space.id,
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'entity-id', value: space.spaceConfigEntityId },
-      { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
-    ],
-  });
-
-  const foreignTypesIds = foreignTypesFromSpaceConfig.triples.map(triple => triple.value.id);
-
-  const foreignTypes = await Promise.all(
-    foreignTypesIds.map(entityId =>
-      network.fetchTriples({
-        query: '',
-        skip: 0,
-        first: DEFAULT_PAGE_SIZE,
-        filter: [
-          { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-          { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
-        ],
-      })
-    )
-  );
-
-  return foreignTypes.flatMap(foreignType => foreignType.triples);
-};
-
-export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, spaceId: string) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-
-  const { triples } = await network.fetchTriples({
-    query: '',
-    space: spaceId,
-    skip: 0,
-    first: DEFAULT_PAGE_SIZE,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      {
-        field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
-      },
-    ],
-  });
-
-  return triples;
 };

@@ -12,42 +12,28 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
+import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
-import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
 import { PageImageField, PageStringField } from './editable-fields';
-import { Editor } from './editor/editor';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { EntityPageCover } from './entity-page-cover';
 
 interface Props {
   triples: TripleType[];
-  schemaTriples: TripleType[];
   id: string;
   name: string;
   spaceId: string;
-  serverAvatarUrl: string | null;
-  serverCoverUrl: string | null;
 }
 
-export function EditableEntityPage({
-  id,
-  name: serverName,
-  spaceId,
-  schemaTriples: serverSchemaTriples,
-  triples: serverTriples,
-  serverAvatarUrl,
-  serverCoverUrl,
-}: Props) {
+export function EditableEntityPage({ id, name: serverName, spaceId, triples: serverTriples }: Props) {
   const {
     triples: localTriples,
-    schemaTriples: localSchemaTriples,
+    schemaTriples,
     update,
     create,
     remove,
@@ -60,14 +46,8 @@ export function EditableEntityPage({
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
-  const schemaTriples = localSchemaTriples.length === 0 ? serverSchemaTriples : localSchemaTriples;
-
-  const nameTriple = Entity.nameTriple(triples);
 
   const name = Entity.name(triples) ?? serverName;
-  const types = Entity.types(triples, spaceId).flatMap(t => (t ? [t] : []));
-  const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
-  const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
 
   const send = useEditEvents({
     context: {
@@ -81,16 +61,6 @@ export function EditableEntityPage({
       remove,
     },
   });
-
-  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    send({
-      type: 'EDIT_ENTITY_NAME',
-      payload: {
-        name: e.target.value,
-        triple: nameTriple,
-      },
-    });
-  };
 
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 

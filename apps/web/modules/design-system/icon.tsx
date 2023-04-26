@@ -29,6 +29,10 @@ import { EditorText } from './icons/editor-text';
 import { Image } from './icons/image';
 import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
+import { Context } from './icons/context';
+import { FilterTable } from './icons/filter-table';
+import { ChevronDownSmall } from './icons/chevron-down-small';
+import { CheckCloseSmall } from './icons/check-close-small';
 
 export type IconName =
   | 'blank'
@@ -54,6 +58,7 @@ export type IconName =
   | 'image'
   | 'text'
   | 'rightArrowLongSmall'
+  | 'chevronDownSmall'
   | 'search'
   | 'history'
   | 'editorH1'
@@ -61,7 +66,10 @@ export type IconName =
   | 'editorH3'
   | 'editorText'
   | 'editorImage'
-  | 'editorTable';
+  | 'editorTable'
+  | 'context'
+  | 'filterTable'
+  | 'checkCloseSmall';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -108,4 +116,8 @@ const icons: Record<IconName, React.ElementType> = {
   string: Text,
   image: Image,
   upload: Upload,
+  context: Context,
+  filterTable: FilterTable,
+  chevronDownSmall: ChevronDownSmall,
+  checkCloseSmall: CheckCloseSmall,
 };

@@ -2,13 +2,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 import { Entity } from '../../entity';
 
-import { Triple } from '../../types';
+import { Space, Triple } from '../../types';
 import { FetchTriplesOptions, INetwork } from '../data-source/network';
 
-export const makeStubTriple = (name: string): Triple => {
+export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
     id: name,
-    entityId: name,
+    entityId: entityId ?? name,
     entityName: name,
     attributeId: 'name',
     attributeName: 'Name',
@@ -66,6 +66,19 @@ export const makeStubRelationAttribute = (name: string): Triple => {
       id: SYSTEM_IDS.RELATION,
     },
     space: 's',
+  };
+};
+
+export const makeStubSpace = (spaceId: string): Space => {
+  return {
+    id: spaceId,
+    isRootSpace: false,
+    editors: [],
+    editorControllers: [],
+    admins: [],
+    attributes: {},
+    entityId: spaceId,
+    spaceConfigEntityId: null,
   };
 };
 
