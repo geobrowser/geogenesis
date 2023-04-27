@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/modules/io';
-import { getChanges } from '~/modules/components/review';
+import { Change } from '~/modules/change';
 import type { Action } from '~/modules/types';
-import type { Changes } from '~/modules/components/review';
+import type { Changeset } from '~/modules/change/change';
 
 const STRING_ACTIONS: Array<Action> = [
   {
@@ -28,48 +28,37 @@ const STRING_ACTIONS: Array<Action> = [
   },
 ];
 
-const STRING_CHANGES: Changes = {
+const STRING_CHANGES: Record<string, Changeset> = {
   Devin: {
-    entityName: 'Devin',
-    entityRevisions: {
+    name: '',
+    attributes: {
       name: {
-        id: 'Devin',
-        attributeName: 'Name',
-        isDiff: false,
-        after: ['Devin'],
+        type: 'string',
+        name: 'Name',
+        before: null,
+        after: 'Devin',
       },
     },
   },
   Alice: {
-    entityName: 'Alice',
-    entityRevisions: {
+    name: '',
+    attributes: {
       name: {
-        id: 'Alice',
-        attributeName: 'Name',
-        isDiff: true,
-        currentValue: 'Alice',
-        differences: [
-          {
-            count: 1,
-            value: 'Alice',
-          },
-          {
-            count: 2,
-            added: true,
-            value: '-2',
-          },
-        ],
+        type: 'string',
+        name: 'Name',
+        before: 'Alice',
+        after: 'Alice-2',
       },
     },
   },
   Bob: {
-    entityName: 'Bob',
-    entityRevisions: {
+    name: '',
+    attributes: {
       name: {
-        id: 'Bob',
-        attributeName: 'Name',
-        isDiff: false,
-        before: ['Bob'],
+        type: 'string',
+        name: 'Name',
+        before: 'Bob',
+        after: null,
       },
     },
   },
@@ -86,41 +75,43 @@ const ENTITY_ACTIONS: Array<Action> = [
   },
 ];
 
-const ENTITY_CHANGES: Changes = {
+const ENTITY_CHANGES: Record<string, Changeset> = {
   Devin: {
-    entityName: 'Devin',
-    entityRevisions: {
+    name: '',
+    attributes: {
       attribute: {
-        id: 'Devin',
-        attributeName: 'Types',
-        isDiff: false,
+        type: 'entity',
+        name: 'Types',
+        before: [],
         after: ['Text'],
       },
     },
   },
   Bob: {
-    entityName: 'Bob',
-    entityRevisions: {
+    name: '',
+    attributes: {
       attribute: {
-        id: 'Bob',
-        attributeName: 'Types',
-        isDiff: false,
+        type: 'entity',
+        name: 'Types',
         before: ['Text'],
+        after: [],
       },
     },
   },
 };
 
 describe('Actions to changes transformer (string values)', () => {
-  it('Generates changes from actions', () => {
-    const changes = getChanges(STRING_ACTIONS);
+  it('Generates changes from actions', async () => {
+    const network = new MockNetworkData.MockNetwork();
+    const [changes] = await Change.fromActions(STRING_ACTIONS, network);
     expect(changes).toEqual(STRING_CHANGES);
   });
 });
 
 describe('Actions to changes transformer (entity values)', () => {
-  it('Generates changes from actions', () => {
-    const changes = getChanges(ENTITY_ACTIONS);
+  it('Generates changes from actions', async () => {
+    const network = new MockNetworkData.MockNetwork();
+    const [changes] = await Change.fromActions(ENTITY_ACTIONS, network);
     expect(changes).toEqual(ENTITY_CHANGES);
   });
 });

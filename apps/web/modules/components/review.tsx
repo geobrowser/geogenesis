@@ -1,15 +1,19 @@
 import * as React from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import cx from 'classnames';
 import { cva } from 'class-variance-authority';
 import { useSigner } from 'wagmi';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
+import pluralize from 'pluralize';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import { useQuery } from '@tanstack/react-query';
+import { RemoveScroll } from 'react-remove-scroll';
 
-import { Action as ActionNamespace } from '../action';
+import { Action } from '../action';
+import { Change } from '../change';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
@@ -18,8 +22,8 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
-import type { Action, Entity, ReviewState, Space } from '../types';
-import type { SpaceId } from '../action/actions-store';
+import type { Action as ActionType, Triple as TripleType, Entity as EntityType, ReviewState, Space } from '../types';
+import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -52,12 +56,15 @@ export const Review = () => {
   );
 };
 
+type SpaceId = string;
 type Proposals = Record<SpaceId, Proposal>;
 
 type Proposal = {
   name: string;
   description: string;
 };
+
+type EntityId = string;
 
 const ReviewChanges = () => {
   const { spaces } = useSpaces();
@@ -77,7 +84,7 @@ const ReviewChanges = () => {
   const options = allSpacesWithActions.map(spaceId => ({
     value: spaceId,
     label: (
-      <span className="inline-flex items-center gap-2 text-button text-text ">
+      <span className="inline-flex items-center gap-2 text-button text-text">
         <span className="relative h-4 w-4 overflow-hidden rounded-sm">
           <img
             src={getSpaceImage(spaces, spaceId)}
@@ -94,20 +101,33 @@ const ReviewChanges = () => {
 
   // Proposal state
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
-  const [proposals, setProposals] = useLocalStorage<Proposals>('proposals', {});
+  const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
-  const { actionsFromSpace, publish } = useActionsStore(activeSpace);
-  const changes = useChanges(ActionNamespace.unpublishedChanges(actionsFromSpace));
+  const { actionsFromSpace, publish, clear } = useActionsStore(activeSpace);
+  const actions = Action.unpublishedChanges(actionsFromSpace);
+  const [data, isLoading] = useChanges(actions, activeSpace);
 
   // Publishing logic
   const { data: signer } = useSigner();
+
   const handlePublish = async () => {
     if (!activeSpace || !signer) return;
+    const clearProposalName = () => {
+      setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
+    };
     await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
-    setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
+    clearProposalName();
   };
+
+  if (isLoading || typeof data !== 'object') {
+    return null;
+  }
+
+  const [changes, entities] = data;
+
+  const changedEntityIds = Object.keys(changes);
 
   return (
     <>
@@ -156,9 +176,23 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
+      <RemoveScroll className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <div className="flex flex-col gap-16">
+          <div className="relative flex flex-col gap-16">
+            <div className="absolute top-0 right-0 flex items-center gap-8">
+              <div className="inline-flex items-center gap-2">
+                <span>
+                  <span className="font-medium">
+                    {actionsFromSpace.length} {pluralize('edit', actionsFromSpace.length)}
+                  </span>{' '}
+                  selected to publish
+                </span>
+                <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+              </div>
+              <div>
+                <SmallButton onClick={() => clear(activeSpace)}>Delete all</SmallButton>
+              </div>
+            </div>
             <div className="flex flex-col">
               <div className="text-body">Proposal name</div>
               <input
@@ -174,14 +208,12 @@ const ReviewChanges = () => {
                 className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
               />
             </div>
-            <div className="-mt-10 flex flex-col divide-y divide-grey-02">
-              {Object.keys(changes).map((key: string) => (
-                <RevisedEntity
-                  key={key}
-                  spaceId={activeSpace}
-                  entityId={key}
-                  entityName={changes[key].entityName}
-                  entityRevisions={changes[key].entityRevisions}
+            <div className="flex flex-col gap-16 divide-y divide-grey-02">
+              {changedEntityIds.map((entityId: EntityId) => (
+                <ChangedEntity
+                  key={entityId}
+                  change={changes[entityId] as Changeset}
+                  entity={entities[entityId] as EntityType}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
@@ -189,10 +221,331 @@ const ReviewChanges = () => {
             </div>
           </div>
         </div>
-      </div>
+      </RemoveScroll>
       <StatusBar reviewState={reviewState} />
     </>
   );
+};
+
+type ChangedEntityProps = {
+  change: Changeset;
+  entity: EntityType;
+  unstagedChanges: Record<string, unknown>;
+  setUnstagedChanges: (value: Record<string, unknown>) => void;
+};
+
+const ChangedEntity = ({ change, entity, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+  const { name, blocks = {}, attributes = {} } = change;
+
+  const blockIds = Object.keys(blocks);
+  const attributeIds = Object.keys(attributes);
+
+  let renderedName = name;
+
+  if (!renderedName) {
+    attributeIds.forEach(attributeId => {
+      const attribute = attributes[attributeId];
+
+      if (attribute.name === 'Name' && typeof attribute.after === 'string') {
+        renderedName = attribute.after;
+      }
+    });
+  }
+
+  return (
+    <div className="relative -top-12 pt-12">
+      <div className="text-mediumTitle">{renderedName}</div>
+      <div className="flex gap-8">
+        <div className="flex-1 text-body">Current version</div>
+        <div className="relative flex-1 text-body">
+          Your proposed edits
+          <div className="absolute top-0 right-0">
+            <SmallButton title="Coming soon" className="cursor-not-allowed">
+              Delete all
+            </SmallButton>
+          </div>
+        </div>
+      </div>
+      {blockIds.length > 0 && (
+        <div className="mt-4">
+          {blockIds.map((blockId: BlockId) => (
+            <ChangedBlock
+              key={blockId}
+              blockId={blockId}
+              block={blocks[blockId]}
+              entity={entity}
+              unstagedChanges={unstagedChanges}
+              setUnstagedChanges={setUnstagedChanges}
+            />
+          ))}
+        </div>
+      )}
+      {attributeIds.length > 0 && (
+        <div className="mt-4">
+          {attributeIds.map((attributeId: AttributeId) => (
+            <ChangedAttribute
+              key={attributeId}
+              attributeId={attributeId}
+              attribute={attributes[attributeId]}
+              entity={entity}
+              unstagedChanges={unstagedChanges}
+              setUnstagedChanges={setUnstagedChanges}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+type ChangedBlockProps = {
+  blockId: BlockId;
+  block: BlockChange;
+  entity: EntityType;
+  unstagedChanges: Record<string, unknown>;
+  setUnstagedChanges: (value: Record<string, unknown>) => void;
+};
+
+const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChanges }: ChangedBlockProps) => {
+  const { before, after } = block;
+
+  // Don't show dead changes
+  if (!before && !after) return null;
+
+  switch (block.type) {
+    case 'markdownContent': {
+      const { markdownType: beforeMarkdownType, markdownContent: beforeMarkdownContent } = parseMarkdown(before ?? '');
+      const { markdownType: afterMarkdownType, markdownContent: afterMarkdownContent } = parseMarkdown(after ?? '');
+
+      const differences = diffWords(beforeMarkdownContent, afterMarkdownContent);
+
+      const BeforeComponent = beforeMarkdownType;
+      const AfterComponent = afterMarkdownType;
+
+      return (
+        <div key={blockId} className="flex gap-8">
+          <div className="ProseMirror flex-1 py-4">
+            <BeforeComponent>
+              {differences
+                .filter(item => !item.added)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </BeforeComponent>
+          </div>
+          <div className="ProseMirror flex-1 py-4">
+            <AfterComponent>
+              {differences
+                .filter(item => !item.removed)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </AfterComponent>
+          </div>
+        </div>
+      );
+    }
+    case 'imageBlock': {
+      return (
+        <div key={blockId} className="flex gap-8">
+          <div className="flex-1 py-4">
+            <div>
+              {before && (
+                <span className="inline-block rounded bg-errorTertiary p-1">
+                  <img src={before} className="rounded" />
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 py-4">
+            <div>
+              {after && (
+                <span className="inline-block rounded bg-successTertiary p-1">
+                  <img src={after} className="rounded" />
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    default: {
+      // required for <ChangedBlock /> to be valid JSX
+      return <React.Fragment />;
+    }
+  }
+};
+
+type ChangedAttributeProps = {
+  attributeId: AttributeId;
+  attribute: AttributeChange;
+  entity: EntityType;
+  unstagedChanges: Record<string, unknown>;
+  setUnstagedChanges: (value: Record<string, unknown>) => void;
+};
+
+const ChangedAttribute = ({
+  attributeId,
+  attribute,
+  entity,
+  unstagedChanges,
+  setUnstagedChanges,
+}: ChangedAttributeProps) => {
+  // Don't show page blocks
+  if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
+  const { name, before, after } = attribute;
+
+  // Don't show dead changes
+  if (!before && !after) return null;
+
+  switch (attribute.type) {
+    case 'string': {
+      const checkedBefore = typeof before === 'string' ? before : '';
+      const checkedAfter = typeof after === 'string' ? after : '';
+      const differences = diffWords(checkedBefore, checkedAfter);
+
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {differences
+                .filter(item => !item.added)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                icon="trash"
+                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
+                title="Coming soon"
+              />
+              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+            </div>
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {differences
+                .filter(item => !item.removed)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'entity': {
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="flex flex-wrap gap-2">
+              {entity?.triples
+                .filter((triple: any) => triple.attributeId === attributeId && !before?.includes(triple.value.name))
+                .map((triple: any) => (
+                  <Chip key={triple.id} status="unchanged">
+                    {triple.value.name}
+                  </Chip>
+                ))}
+              {Array.isArray(before) && (
+                <>
+                  {before.map(item => (
+                    <Chip key={item} status="removed">
+                      {before}
+                    </Chip>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                icon="trash"
+                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
+                title="Coming soon"
+              />
+              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+            </div>
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="flex flex-wrap gap-2">
+              {entity?.triples
+                .filter(
+                  (triple: any) =>
+                    triple.attributeId === attributeId &&
+                    !before?.includes(triple.value.name) &&
+                    !after?.includes(triple.value.name)
+                )
+                .map((triple: any) => (
+                  <Chip key={triple.id} status="unchanged">
+                    {triple.value.name}
+                  </Chip>
+                ))}
+              {Array.isArray(after) && (
+                <>
+                  {after.map(item => (
+                    <Chip key={item} status="added">
+                      {item}
+                    </Chip>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'image': {
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div>
+              {typeof before !== 'object' && (
+                <span className="inline-block rounded bg-errorTertiary p-1">
+                  <img src={before} className="rounded" />
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                icon="trash"
+                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
+                title="Coming soon"
+              />
+              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+            </div>
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div>
+              {typeof after !== 'object' && (
+                <span className="inline-block rounded bg-successTertiary p-1">
+                  <img src={after} className="rounded" />
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    default: {
+      // required for <ChangedAttribute /> to be valid JSX
+      return <React.Fragment />;
+    }
+  }
 };
 
 type StatusBarProps = {
@@ -221,117 +574,14 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
   );
 };
 
-export type Changes = Record<EntityId, Change>;
-
-type EntityId = string;
-type Change = { entityName: EntityName; entityRevisions: EntityRevisions };
-
-type EntityName = string;
-type EntityRevisions = Record<AttributeId, EntityRevision>;
-
-type AttributeId = string;
-type EntityRevision = {
-  id: string;
-  attributeName: AttributeName;
-  currentValue?: string;
-  isDiff: boolean;
-  before?: Before;
-  after?: After;
-  differences?: Array<Difference>;
-};
-
-type AttributeName = string;
-type Before = string[];
-type After = string[];
-
-const useChanges = (actions: Array<Action>) => {
-  return useMemo(() => getChanges(actions), [actions]);
-};
-
-export const getChanges = (actions: Array<Action>): Changes => {
-  const changes: Changes = {};
-
-  const squashedActions = ActionNamespace.prepareActionsForPublishing(actions);
-
-  squashedActions.forEach((action: Action) => {
-    switch (action.type) {
-      case 'createTriple': {
-        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
-        if (!actionValue) break;
-
-        changes[action.entityId] = {
-          ...changes[action.entityId],
-          entityName: action.entityName ?? '',
-          entityRevisions: {
-            ...changes[action.entityId]?.entityRevisions,
-            [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions[action.attributeId],
-              id: action.id,
-              attributeName: action.attributeName ?? '',
-              isDiff: false,
-              after: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.after ?? []), actionValue],
-            },
-          },
-        };
-
-        break;
-      }
-
-      case 'editTriple': {
-        const beforeActionValue = ActionNamespace.getName(action.before) ?? ActionNamespace.getValue(action.before);
-        const afterActionValue = ActionNamespace.getName(action.after) ?? ActionNamespace.getValue(action.after);
-        if (!beforeActionValue || !afterActionValue) break;
-
-        changes[action.before.entityId] = {
-          ...changes[action.before.entityId],
-          entityName: (changes[action.before.entityId]?.entityName || action.before.entityName) ?? '',
-          entityRevisions: {
-            ...changes[action.before.entityId]?.entityRevisions,
-            [action.before.attributeId]: {
-              ...changes[action.before.entityId]?.entityRevisions[action.before.attributeId],
-              id: action.before.id,
-              attributeName: action.before.attributeName ?? '',
-              isDiff: true,
-              currentValue:
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
-                beforeActionValue,
-              differences: diffWords(
-                changes[action.before.entityId]?.entityRevisions[action.before.attributeId]?.currentValue ??
-                  beforeActionValue,
-                afterActionValue
-              ),
-            },
-          },
-        };
-
-        break;
-      }
-
-      case 'deleteTriple': {
-        const actionValue = ActionNamespace.getName(action) ?? ActionNamespace.getValue(action);
-        if (!actionValue) break;
-
-        changes[action.entityId] = {
-          ...changes[action.entityId],
-          entityName: action.entityName ?? '',
-          entityRevisions: {
-            ...changes[action.entityId]?.entityRevisions,
-            [action.attributeId]: {
-              ...changes[action.entityId]?.entityRevisions[action.attributeId],
-              id: action.id,
-              attributeName: action.attributeName ?? '',
-              isDiff: false,
-              before: [...(changes[action.entityId]?.entityRevisions?.[action.attributeId]?.before ?? []), actionValue],
-            },
-          },
-        };
-
-        break;
-      }
-    }
+const useChanges = (actions: Array<ActionType>, spaceId: string) => {
+  const { network } = Services.useServices();
+  const { data, isLoading } = useQuery({
+    queryKey: [`${spaceId}-changes`],
+    queryFn: async () => Change.fromActions(actions, network),
   });
 
-  return changes;
+  return [data, isLoading];
 };
 
 const message: Record<ReviewState, string> = {
@@ -345,207 +595,6 @@ const message: Record<ReviewState, string> = {
 
 const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
 
-type RevisedEntityProps = {
-  spaceId: string;
-  entityId: string;
-  entityName: EntityName;
-  entityRevisions: EntityRevisions;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
-};
-
-const RevisedEntity = ({
-  spaceId,
-  entityId,
-  entityName,
-  entityRevisions,
-  unstagedChanges,
-  setUnstagedChanges,
-}: RevisedEntityProps) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [entity, setEntity] = useState<Entity | null>(null);
-  const [renderedEntityName, setRenderedEntityName] = useState<string>(() => entityName || 'Loading...');
-  const { deleteActions } = useActionsStore(spaceId);
-  const { network } = Services.useServices();
-
-  useEffect(() => {
-    async function fetchRemoteEntity() {
-      const newEntity = await network.fetchEntity(entityId);
-      const newEntityName = renderedEntityName !== 'Loading...' ? renderedEntityName : newEntity?.name ?? 'Not found';
-      setRenderedEntityName(newEntityName);
-      setEntity(newEntity);
-      setIsLoading(false);
-    }
-
-    fetchRemoteEntity();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleDeleteEdits = () => {
-    const allActions = Object.values(entityRevisions).map(item => item.id);
-    deleteActions(spaceId, allActions);
-  };
-
-  return (
-    <div className="flex flex-col gap-4 py-10">
-      <div className="-mt-1 text-mediumTitle">{renderedEntityName}</div>
-      <div className="grid grid-cols-2 items-start gap-8">
-        <div className="flex flex-col gap-2">
-          <div className="text-body">Current version</div>
-          <Panel>
-            {Object.keys(entityRevisions).map(attributeId => {
-              const { attributeName, isDiff, before, differences } = entityRevisions[attributeId];
-
-              return (
-                <Panel.Section key={attributeId}>
-                  <div className="text-bodySemibold">{attributeName}</div>
-                  <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body')}>
-                    {!isDiff ? (
-                      <>
-                        {isLoading ? (
-                          <Skeleton />
-                        ) : (
-                          <>
-                            {entity?.triples
-                              ?.filter(
-                                (item: any) => item.attributeId === attributeId && !before?.includes(item.value.name)
-                              )
-                              ?.map((triple: any) => (
-                                <Chip key={triple.id} status="unchanged">
-                                  {triple.value.name}
-                                </Chip>
-                              ))}
-                          </>
-                        )}
-                        {before?.map(item => (
-                          <Chip key={item} status="removed">
-                            {item}
-                          </Chip>
-                        ))}
-                      </>
-                    ) : (
-                      differences
-                        ?.filter(item => !item.added)
-                        ?.map((difference: Difference, index: number) => (
-                          <span key={index} className={cx(difference.removed && 'bg-grey-02 line-through')}>
-                            {difference.value}
-                          </span>
-                        ))
-                    )}
-                  </div>
-                </Panel.Section>
-              );
-            })}
-          </Panel>
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="text-body">Your proposed edits</div>
-            <SmallButton onClick={handleDeleteEdits}>Delete edits</SmallButton>
-          </div>
-          <Panel>
-            {Object.keys(entityRevisions).map(attributeId => {
-              const { id, attributeName, isDiff, before, after, differences } = entityRevisions[attributeId];
-              const unstaged = id in unstagedChanges;
-
-              return (
-                <Panel.Section key={attributeId}>
-                  <div className={cx('text-bodySemibold', unstaged && 'opacity-25')}>{attributeName}</div>
-                  <div className={cx(!isDiff ? 'flex flex-wrap gap-1.5' : 'text-body', unstaged && 'opacity-25')}>
-                    {!isDiff ? (
-                      <>
-                        {isLoading ? (
-                          <Skeleton />
-                        ) : (
-                          <>
-                            {entity?.triples
-                              ?.filter(
-                                (item: any) =>
-                                  item.attributeId === attributeId &&
-                                  !before?.includes(item.value.name) &&
-                                  !after?.includes(item.value.name)
-                              )
-                              ?.map((triple: any) => (
-                                <Chip key={triple.id} status="unchanged">
-                                  {triple.value.name}
-                                </Chip>
-                              ))}
-                          </>
-                        )}
-                        {before?.map(item => (
-                          <Chip key={item} status="removed">
-                            {item}
-                          </Chip>
-                        ))}
-                        {after?.map(item => (
-                          <Chip key={item} status="added">
-                            {item}
-                          </Chip>
-                        ))}
-                      </>
-                    ) : (
-                      differences
-                        ?.filter(item => !item.removed)
-                        ?.map((difference: Difference, index: number) => (
-                          <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                            {difference.value}
-                          </span>
-                        ))
-                    )}
-                  </div>
-                  <div className="absolute right-0 top-0 m-4 inline-flex items-center gap-2">
-                    <SquareButton icon="trash" onClick={() => deleteActions(spaceId, [id])} />
-                    <SquareButton
-                      icon={unstaged ? 'blank' : 'tick'}
-                      onClick={() => {
-                        if (unstaged) {
-                          const newUnstagedChanges = { ...unstagedChanges };
-                          delete newUnstagedChanges[id];
-                          setUnstagedChanges({ ...newUnstagedChanges });
-                        } else {
-                          setUnstagedChanges({ ...unstagedChanges, [id]: null });
-                        }
-                      }}
-                    />
-                  </div>
-                </Panel.Section>
-              );
-            })}
-          </Panel>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Skeleton = () => {
-  return (
-    <div className="inline-flex min-h-[1.5rem] items-center rounded-sm bg-white px-2 py-1 text-grey-04 shadow-inner shadow-text">
-      Loading...
-    </div>
-  );
-};
-
-type PanelProps = {
-  children: React.ReactNode;
-};
-
-const Panel = ({ children }: PanelProps) => {
-  return (
-    <div className="divide-y divide-grey-02/75 overflow-hidden rounded border border-grey-02/75 bg-white shadow-light">
-      {children}
-    </div>
-  );
-};
-Panel.Section = Section;
-
-type SectionProps = {
-  children: React.ReactNode;
-};
-
-function Section({ children }: SectionProps) {
-  return <div className="relative p-4">{children}</div>;
-}
-
 type ChipProps = {
   status?: 'added' | 'removed' | 'unchanged';
   children: React.ReactNode;
@@ -558,7 +607,7 @@ const Chip = ({ status = 'unchanged', children }: ChipProps) => {
       variants: {
         status: {
           added: 'bg-successTertiary',
-          removed: 'bg-grey-02 line-through',
+          removed: 'bg-errorTertiary line-through',
           unchanged: 'bg-white',
         },
       },
@@ -567,6 +616,34 @@ const Chip = ({ status = 'unchanged', children }: ChipProps) => {
 
   return <span className={chip({ status })}>{children}</span>;
 };
+
+type MarkdownType = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+
+const markdownComponent: Record<number, MarkdownType> = {
+  0: 'p',
+  1: 'h1',
+  2: 'h2',
+  3: 'h3',
+  4: 'h4',
+  5: 'h5',
+  6: 'h6',
+};
+
+function parseMarkdown(markdownString: string) {
+  let markdownType: MarkdownType = 'p';
+  let markdownContent = markdownString;
+  let markdownLevel = 0;
+
+  while (markdownContent.startsWith('#')) {
+    markdownContent = markdownContent.substring(1);
+    markdownLevel++;
+  }
+
+  markdownType = markdownComponent[markdownLevel];
+  markdownContent = markdownContent.trim();
+
+  return { markdownType, markdownContent };
+}
 
 function getSpaceImage(spaces: Space[], spaceId: string): string {
   return (

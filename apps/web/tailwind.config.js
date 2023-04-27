@@ -22,6 +22,7 @@ module.exports = {
       orange: '#FFA134',
       green: '#2ACE9D',
       successTertiary: '#D4F5EB',
+      errorTertiary: '#FFE1DC',
       'red-01': '#FF523A',
       'red-02': '#FFEEEB',
     },

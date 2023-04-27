@@ -37,7 +37,6 @@ function getActionFromChangeStatus(action: Action) {
     case 'createTriple':
     case 'deleteTriple':
       return [action];
-
     case 'editTriple':
       return [action.before, action.after];
   }
