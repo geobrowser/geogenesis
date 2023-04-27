@@ -179,7 +179,7 @@ export function createGraphQLStringFromFilters(
 
       if (filter.valueType === 'string') {
         // value is just the stringValue of the triple
-        return `entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_no_case: "${filter.value}"}`;
+        return `entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_nocase: "${filter.value}"}`;
       }
 
       // We don't support other value types yet
@@ -209,7 +209,7 @@ export function createGraphQLStringFromFilters(
  *       typeIds_contains_nocase: ["type-id"]
  *     },
  *     {
- *       entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}
+ *       entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}
  *     },
  *     {
  *       entityOf_: {attribute: "type", entityValue: "id 1"}
