@@ -1,5 +1,5 @@
 import * as React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
@@ -294,7 +294,7 @@ interface TableBlockFilterPromptProps {
   }) => void;
 }
 
-const TableBlockFilterPromptContent = motion(PopoverPrimitive.Content);
+const TableBlockFilterPromptContent = motion(Content);
 
 function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
   const [open, setOpen] = React.useState(false);
@@ -309,6 +309,7 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
   >('');
 
   const onOpenChange = (open: boolean) => {
+    console.log('onOpenChange');
     setSelectedColumn(SYSTEM_IDS.NAME);
     setValue('');
     setOpen(open);
@@ -329,73 +330,70 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
   };
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
-      <AnimatePresence mode="wait">
-        {open && (
-          <TableBlockFilterPromptContent
-            forceMount={true}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            onInteractOutside={() => {
-              //
-            }}
-            onPointerDownOutside={() => {
-              //
-            }}
-            transition={{
-              duration: 0.1,
-              ease: 'easeInOut',
-            }}
-            avoidCollisions={true}
-            className="relative z-[1] w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
-            sideOffset={6}
-            alignOffset={-1}
-            align="start"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-smallButton">New filter</span>
-              <TextButton onClick={onDone}>Done</TextButton>
-            </div>
+    <Root open={open} onOpenChange={onOpenChange}>
+      <Trigger>{trigger}</Trigger>
+      <Portal>
+        <AnimatePresence>
+          {open && (
+            <TableBlockFilterPromptContent
+              forceMount={true}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                duration: 0.1,
+                ease: 'easeInOut',
+              }}
+              avoidCollisions={true}
+              className="z-10 w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
+              sideOffset={8}
+              align="start"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-smallButton">New filter</span>
+                  <TextButton onClick={onDone}>Done</TextButton>
+                </div>
 
-            <Spacer height={12} />
+                <Spacer height={12} />
 
-            <div className="flex items-center justify-center gap-3">
-              <div className="flex flex-1">
-                <Select
-                  options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                  value={selectedColumn}
-                  onChange={fieldId => {
-                    setSelectedColumn(fieldId);
-                    setValue('');
-                  }}
-                />
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex flex-1">
+                    <Select
+                      options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+                      value={selectedColumn}
+                      onChange={fieldId => {
+                        setSelectedColumn(fieldId);
+                        setValue('');
+                      }}
+                    />
+                  </div>
+                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+                  <div className="relative flex flex-1">
+                    {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
+                      <TableBlockEntityFilterInput
+                        selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
+                        onSelect={r =>
+                          setValue({
+                            entityId: r.id,
+                            entityName: r.name,
+                          })
+                        }
+                      />
+                    ) : (
+                      <Input
+                        value={typeof value === 'string' ? value : ''}
+                        onChange={e => setValue(e.currentTarget.value)}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
-              <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
-              <div className="relative flex flex-1">
-                {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
-                  <TableBlockEntityFilterInput
-                    selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
-                    onSelect={r =>
-                      setValue({
-                        entityId: r.id,
-                        entityName: r.name,
-                      })
-                    }
-                  />
-                ) : (
-                  <Input
-                    value={typeof value === 'string' ? value : ''}
-                    onChange={e => setValue(e.currentTarget.value)}
-                  />
-                )}
-              </div>
-            </div>
-          </TableBlockFilterPromptContent>
-        )}
-      </AnimatePresence>
-    </PopoverPrimitive.Root>
+            </TableBlockFilterPromptContent>
+          )}
+        </AnimatePresence>
+      </Portal>
+    </Root>
   );
 }
 
