@@ -105,6 +105,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
   ]);
 
+  // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
@@ -112,14 +113,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
-  const typeId: string | undefined = initialSelectedType?.entityId;
+  // initialTypes[0] can be empty if there's no types in the space
+  const typeId: string | null = initialSelectedType?.entityId ?? null;
 
   const params: FetchRowsOptions['params'] = {
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createFilterGraphQLString([], typeId ?? null),
+    filter: TableBlockSdk.createFilterGraphQLString([], typeId),
   };
 
   const { columns } = await network.columns({

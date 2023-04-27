@@ -309,14 +309,12 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
   >('');
 
   const onOpenChange = (open: boolean) => {
-    console.log('onOpenChange');
     setSelectedColumn(SYSTEM_IDS.NAME);
     setValue('');
     setOpen(open);
   };
 
   const onDone = () => {
-    console.log('onDone');
     onCreate({
       columnId: selectedColumn,
       columnName: options.find(o => o.columnId === selectedColumn)?.columnName ?? '',
