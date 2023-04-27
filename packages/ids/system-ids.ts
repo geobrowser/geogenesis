@@ -67,6 +67,8 @@ Block Entity -> TYPES -> TABLE_BLOCK
 Block Entity -> ROW_TYPE -> Some_Type_ID */
 export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
 
+export const FILTER = 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103'
+
 /**
  * Addresses for important contracts on Polygon mainnet.
  *
