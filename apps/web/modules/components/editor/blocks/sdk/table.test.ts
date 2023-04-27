@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFilterGraphQLString } from './table';
+import { createGraphQLStringFromFilters } from './table';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 describe('TableBlock SDK', () => {
@@ -13,7 +13,7 @@ describe('TableBlock SDK', () => {
      *
      * These four combinations can also be used together with an "and" filter
      */
-    const stringFilter = createFilterGraphQLString(
+    const stringFilter = createGraphQLStringFromFilters(
       [
         {
           columnId: 'type',
@@ -29,7 +29,7 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}`
     );
 
-    const entityFilter = createFilterGraphQLString(
+    const entityFilter = createGraphQLStringFromFilters(
       [
         {
           columnId: 'type',
@@ -45,7 +45,7 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`
     );
 
-    const nameFilter = createFilterGraphQLString(
+    const nameFilter = createGraphQLStringFromFilters(
       [
         {
           columnId: SYSTEM_IDS.NAME,
@@ -59,7 +59,7 @@ describe('TableBlock SDK', () => {
 
     expect(nameFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`);
 
-    const andFilter = createFilterGraphQLString(
+    const andFilter = createGraphQLStringFromFilters(
       [
         {
           columnId: 'type',
@@ -87,7 +87,7 @@ describe('TableBlock SDK', () => {
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`
     );
 
-    const nullTypeIdFilter = createFilterGraphQLString([], null);
+    const nullTypeIdFilter = createGraphQLStringFromFilters([], null);
 
     expect(nullTypeIdFilter).toEqual('');
   });

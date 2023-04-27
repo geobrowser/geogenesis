@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
 
 export function upsertName({
   blockEntity,
@@ -153,7 +153,7 @@ export function createBlock({
  * }`
  * ```
  */
-export function createFilterGraphQLString(
+export function createGraphQLStringFromFilters(
   filters: {
     columnId: string;
     columnName: string;
@@ -195,4 +195,129 @@ export function createFilterGraphQLString(
   const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
 
   return `{and: [{typeIds_contains_nocase: ["${typeId}"]}, ${multiFilterQuery}]}`;
+}
+
+/**
+ * Takes the graphQL string representing the TableBlock filters and maps them to the
+ * application/UI representation of the filters.
+ *
+ * Turns this:
+ * ```ts
+ * {
+ *    and: [
+ *     {
+ *       typeIds_contains_nocase: ["type-id"]
+ *     },
+ *     {
+ *       entityOf_: {attribute: "type", stringValue_starts_with_no_case: "Value 1"}
+ *     },
+ *     {
+ *       entityOf_: {attribute: "type", entityValue: "id 1"}
+ *     },
+ *     {
+ *       name_starts_with_nocase: "id 1"
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * into this:
+ *```ts
+ * [
+ *  {
+ *     columnId: 'type',
+ *     columnName: 'Type',
+ *     valueType: 'string',
+ *     value: 'Value 1'
+ *   },
+ *   {
+ *     columnId: 'type',
+ *     columnName: 'Type',
+ *     valueType: 'entity',
+ *     value: 'id 1'
+ *   },
+ *   {
+ *     columnId: 'name',
+ *     columnName: 'Name',
+ *     valueType: 'string',
+ *     value: 'id 1'
+ *   }
+ * ]
+ * ```
+ */
+export function createFiltersFromGraphQLString(
+  graphQLString: string,
+  columns: Column[]
+): {
+  columnId: string;
+  columnName: string;
+  valueType: TripleValueType;
+  value: string;
+}[] {
+  const filterNames = columns.reduce<Map<string, string | null>>((acc, column) => {
+    // Need to special case name since it is not included in type schemas, but we want
+    // to default include it in all tables.
+    if (column.id === SYSTEM_IDS.NAME) {
+      acc.set(column.id, 'Name');
+      return acc;
+    }
+
+    acc.set(column.id, Entity.name(column.triples));
+    return acc;
+  }, new Map<string, string>());
+
+  const filters: {
+    columnId: string;
+    columnName: string;
+    valueType: TripleValueType;
+    value: string;
+  }[] = [];
+
+  // Parse a name query from the filter
+  const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
+  const nameMatch = graphQLString.match(nameRegex);
+  const nameValue = nameMatch ? nameMatch[1] : null;
+
+  if (nameValue) {
+    filters.push({ columnId: SYSTEM_IDS.NAME, columnName: 'Name', valueType: 'string', value: nameValue });
+  }
+
+  // Parse all entity relationship queries from the filter
+  const entityValueRegex = /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*entityValue\s*:\s*"([^"]*)"\s*}/g;
+
+  for (const match of graphQLString.matchAll(entityValueRegex)) {
+    const attribute = match[1];
+    const entityValue = match[2];
+
+    if (attribute && entityValue) {
+      filters.push({
+        columnId: attribute,
+        columnName: filterNames.get(attribute) || '',
+        valueType: 'entity',
+        value: entityValue,
+      });
+    }
+  }
+
+  // Parse all string queries from the filter
+  const stringValueRegex =
+    /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*stringValue_starts_with_nocase\s*:\s*"([^"]*)"\s*}/g;
+
+  for (const match of graphQLString.matchAll(stringValueRegex)) {
+    const attribute = match[1];
+    const stringValue = match[2];
+
+    if (attribute && stringValue) {
+      filters.push({
+        columnId: attribute,
+        columnName: filterNames.get(attribute) || '',
+        valueType: 'string',
+        value: stringValue,
+      });
+    }
+  }
+
+  console.log('filters', filters);
+
+  return filters;
 }

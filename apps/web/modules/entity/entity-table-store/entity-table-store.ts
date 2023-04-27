@@ -111,7 +111,7 @@ export class EntityTableStore implements IEntityTableStore {
           const selectedType = this.selectedType$.get();
           const pageNumber = this.pageNumber$.get();
 
-          const filterString = TableBlockSdk.createFilterGraphQLString(
+          const filterString = TableBlockSdk.createGraphQLStringFromFilters(
             [
               {
                 columnId: SYSTEM_IDS.NAME,

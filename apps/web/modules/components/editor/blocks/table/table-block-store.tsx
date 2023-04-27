@@ -7,7 +7,7 @@ import { Services } from '~/modules/services';
 import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable, observe } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
@@ -93,11 +93,14 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
-          const filterValue = this.filterState$.get();
+          const filterString = TableBlockSdk.createGraphQLStringFromFilters(
+            this.filterState$.get(),
+            this.type$.get().entityId
+          );
 
           const params: FetchRowsOptions['params'] = {
             query: '',
-            filter: TableBlockSdk.createFilterGraphQLString(filterValue, this.type$.get().entityId),
+            filter: filterString,
             typeIds: [selectedType.entityId],
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
@@ -252,6 +255,16 @@ export class TableBlockStore {
 
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+
+    // @TODO: Remove
+    observe(() => {
+      const filterString = TableBlockSdk.createGraphQLStringFromFilters(
+        this.filterState$.get(),
+        this.type$.get().entityId
+      );
+
+      TableBlockSdk.createFiltersFromGraphQLString(filterString, this.columns$.get());
+    });
   }
 
   setPage = (page: number | 'next' | 'previous') => {

@@ -121,7 +121,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createFilterGraphQLString([], typeId),
+    filter: TableBlockSdk.createGraphQLStringFromFilters([], typeId),
   };
 
   const { columns } = await network.columns({
