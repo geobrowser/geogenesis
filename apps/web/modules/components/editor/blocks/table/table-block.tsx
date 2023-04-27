@@ -236,12 +236,13 @@ function EditableFilters() {
   return (
     <div className="flex items-center gap-2">
       <TableBlockFilterPrompt
+        options={filterableColumns}
+        onCreate={onCreateFilter}
         trigger={
           <SmallButton icon="createSmall" variant="secondary">
             Filter
           </SmallButton>
         }
-        filters={<TableBlockFilterGroup options={filterableColumns} onCreate={onCreateFilter} />}
       />
 
       {/* <SmallButton icon="chevronDownSmall" variant="secondary">
@@ -283,43 +284,6 @@ function TableBlockFilterPill({ filter, onDelete }: { filter: TableBlockFilter; 
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
-  filters: React.ReactNode;
-}
-
-const TableBlockFilterPromptContent = motion(PopoverPrimitive.Content);
-
-function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProps) {
-  const [open, setOpen] = React.useState(false);
-
-  return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
-      <AnimatePresence mode="wait">
-        {open && (
-          <TableBlockFilterPromptContent
-            forceMount={true}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{
-              duration: 0.1,
-              ease: 'easeInOut',
-            }}
-            avoidCollisions={true}
-            className="relative z-[1] w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
-            sideOffset={6}
-            alignOffset={-1}
-            align="start"
-          >
-            {filters}
-          </TableBlockFilterPromptContent>
-        )}
-      </AnimatePresence>
-    </PopoverPrimitive.Root>
-  );
-}
-
-interface TableBlockFilterGroupProps {
   options: TableBlockFilter[];
   onCreate: (filter: {
     columnId: string;
@@ -330,7 +294,11 @@ interface TableBlockFilterGroupProps {
   }) => void;
 }
 
-function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps) {
+const TableBlockFilterPromptContent = motion(PopoverPrimitive.Content);
+
+function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
+  const [open, setOpen] = React.useState(false);
+
   const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
   const [value, setValue] = React.useState<
     | string
@@ -340,9 +308,14 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
       }
   >('');
 
-  const valuet = typeof value === 'string' ? value : value.entityName;
+  const onOpenChange = (open: boolean) => {
+    setSelectedColumn(SYSTEM_IDS.NAME);
+    setValue('');
+    setOpen(open);
+  };
 
   const onDone = () => {
+    console.log('onDone');
     onCreate({
       columnId: selectedColumn,
       columnName: options.find(o => o.columnId === selectedColumn)?.columnName ?? '',
@@ -350,62 +323,99 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
       valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
       valueName: typeof value === 'string' ? null : value.entityName,
     });
+    setOpen(false);
+    setSelectedColumn(SYSTEM_IDS.NAME);
+    setValue('');
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <span className="text-smallButton">New filter</span>
-        <TextButton onClick={onDone}>Done</TextButton>
-      </div>
+    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
+      <AnimatePresence mode="wait">
+        {open && (
+          <TableBlockFilterPromptContent
+            forceMount={true}
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            onInteractOutside={() => {
+              //
+            }}
+            onPointerDownOutside={() => {
+              //
+            }}
+            transition={{
+              duration: 0.1,
+              ease: 'easeInOut',
+            }}
+            avoidCollisions={true}
+            className="relative z-[1] w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
+            sideOffset={6}
+            alignOffset={-1}
+            align="start"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-smallButton">New filter</span>
+              <TextButton onClick={onDone}>Done</TextButton>
+            </div>
 
-      <Spacer height={12} />
+            <Spacer height={12} />
 
-      <div className="flex items-center justify-center gap-3">
-        <div className="flex flex-1">
-          <Select
-            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-            value={selectedColumn}
-            onChange={fieldId => setSelectedColumn(fieldId)}
-          />
-        </div>
-        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
-        <div className="relative flex flex-1">
-          {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
-            <TableBlockEntityFilterInput
-              onSelect={r =>
-                setValue({
-                  entityId: r.id,
-                  entityName: r.name,
-                })
-              }
-            />
-          ) : (
-            <Input value={valuet ?? ''} onChange={e => setValue(e.currentTarget.value)} />
-          )}
-        </div>
-      </div>
-    </div>
+            <div className="flex items-center justify-center gap-3">
+              <div className="flex flex-1">
+                <Select
+                  options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+                  value={selectedColumn}
+                  onChange={fieldId => {
+                    setSelectedColumn(fieldId);
+                    setValue('');
+                  }}
+                />
+              </div>
+              <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+              <div className="relative flex flex-1">
+                {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
+                  <TableBlockEntityFilterInput
+                    selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
+                    onSelect={r =>
+                      setValue({
+                        entityId: r.id,
+                        entityName: r.name,
+                      })
+                    }
+                  />
+                ) : (
+                  <Input
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={e => setValue(e.currentTarget.value)}
+                  />
+                )}
+              </div>
+            </div>
+          </TableBlockFilterPromptContent>
+        )}
+      </AnimatePresence>
+    </PopoverPrimitive.Root>
   );
 }
 
 interface TableBlockEntityFilterInputProps {
   onSelect: (result: IEntity) => void;
+  selectedValue: string;
 }
 
-function TableBlockEntityFilterInput({ onSelect }: TableBlockEntityFilterInputProps) {
+function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEntityFilterInputProps) {
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
-  const containerRef = React.useRef<HTMLDivElement>(null);
 
   return (
     <div className="relative w-full">
-      <Input value={autocomplete.query} onChange={e => autocomplete.onQueryChange(e.target.value)} />
+      <Input
+        value={autocomplete.query === '' ? selectedValue : autocomplete.query}
+        onChange={e => autocomplete.onQueryChange(e.target.value)}
+      />
       {autocomplete.query && (
-        <div
-          ref={containerRef}
-          className="absolute top-[36px] z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
-        >
+        <div className="absolute top-[36px] z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
           <ResizableContainer duration={0.125}>
             <ResultsList>
               {autocomplete.results.map((result, i) => (
@@ -417,7 +427,10 @@ function TableBlockEntityFilterInput({ onSelect }: TableBlockEntityFilterInputPr
                 >
                   <ResultContent
                     key={result.id}
-                    onClick={() => onSelect(result)}
+                    onClick={() => {
+                      autocomplete.onQueryChange('');
+                      onSelect(result);
+                    }}
                     spaces={spaces}
                     alreadySelected={false}
                     result={result}
