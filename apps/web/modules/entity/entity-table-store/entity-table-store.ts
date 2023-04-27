@@ -115,6 +115,7 @@ export class EntityTableStore implements IEntityTableStore {
             [
               {
                 columnId: SYSTEM_IDS.NAME,
+                columnName: 'Name',
                 value: this.query$.get(),
                 valueType: 'string',
               },

@@ -17,6 +17,7 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: 'type',
+          columnName: 'Types',
           value: 'Value 1',
           valueType: 'string',
         },
@@ -32,6 +33,7 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: 'type',
+          columnName: 'Types',
           value: 'id 1',
           valueType: 'entity',
         },
@@ -47,6 +49,7 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: SYSTEM_IDS.NAME,
+          columnName: 'Name',
           value: 'id 1',
           valueType: 'string',
         },
@@ -60,16 +63,19 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: 'type',
+          columnName: 'Types',
           value: 'Value 1',
           valueType: 'string',
         },
         {
           columnId: 'type',
+          columnName: 'Types',
           value: 'id 1',
           valueType: 'entity',
         },
         {
           columnId: SYSTEM_IDS.NAME,
+          columnName: 'Name',
           value: 'id 1',
           valueType: 'string',
         },

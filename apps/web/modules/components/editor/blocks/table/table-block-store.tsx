@@ -17,10 +17,11 @@ import { TableBlockSdk } from '../sdk';
 export const PAGE_SIZE = 10;
 
 export interface TableBlockFilter {
-  valueType: TripleValueType;
   columnId: string;
   columnName: string;
+  valueType: TripleValueType;
   value: string;
+  valueName: string | null;
 }
 
 interface ITableBlockStoreConfig {
@@ -92,9 +93,11 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
+          const filterValue = this.filterState$.get();
+
           const params: FetchRowsOptions['params'] = {
             query: '',
-            filter: TableBlockSdk.createFilterGraphQLString(this.filterState$.get(), this.type$.get().entityId),
+            filter: TableBlockSdk.createFilterGraphQLString(filterValue, this.type$.get().entityId),
             typeIds: [selectedType.entityId],
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,

@@ -156,8 +156,9 @@ export function createBlock({
 export function createFilterGraphQLString(
   filters: {
     columnId: string;
-    value: string;
+    columnName: string;
     valueType: TripleValueType;
+    value: string;
   }[],
   typeId: string | null
 ): string {

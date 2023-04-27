@@ -3,7 +3,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock } from './table-block-store';
+import { TableBlockFilter, useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -108,8 +108,7 @@ export function TableBlock({ spaceId }: Props) {
               {filterState.map((f, index) => (
                 <TableBlockFilterPill
                   key={`${f.columnId}-${f.value}`}
-                  filterName={f.columnName}
-                  value={f.value}
+                  filter={f}
                   onDelete={() => {
                     const newFilterState = produce(filterState, draft => {
                       draft.splice(index, 1);
@@ -197,14 +196,16 @@ function EditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
   const filterableColumns: TableBlockFilter[] = [
-    { id: 'name', name: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT] },
+    { columnId: 'name', columnName: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT], value: '', valueName: null },
     ...columns
       .map(c => ({
-        id: c.id,
-        name: Entity.name(c.triples) ?? '',
+        columnId: c.id,
+        columnName: Entity.name(c.triples) ?? '',
         valueType: valueTypes[Entity.valueTypeId(c.triples) ?? ''],
+        value: '',
+        valueName: null,
       }))
-      .flatMap(c => (c.name !== '' ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' ? [c] : [])),
   ];
 
   const onCreateFilter = ({
@@ -212,11 +213,13 @@ function EditableFilters() {
     columnName,
     value,
     valueType,
+    valueName,
   }: {
     columnId: string;
     columnName: string;
     value: string;
     valueType: TripleValueType;
+    valueName: string | null;
   }) => {
     setFilterState([
       ...filterState,
@@ -225,6 +228,7 @@ function EditableFilters() {
         columnId,
         columnName,
         value,
+        valueName,
       },
     ]);
   };
@@ -258,27 +262,20 @@ function PublishedFilterIconFilled() {
   );
 }
 
-function TableBlockFilterPill({
-  filterName,
-  value,
-  onDelete,
-}: {
-  filterName: string;
-  value: string;
-  onDelete: () => void;
-}) {
+function TableBlockFilterPill({ filter, onDelete }: { filter: TableBlockFilter; onDelete: () => void }) {
   const { editable } = useEditable();
+
+  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filterName} contains</span>
+        <span>{filter.columnName} contains</span>
         <span>·</span>
         <span>{value}</span>
       </div>
-      {/* @TODO: Only show in edit mode */}
       {editable && <IconButton icon="checkCloseSmall" color="grey-04" onClick={onDelete} />}
     </div>
   );
@@ -295,7 +292,7 @@ function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProp
   const [open, setOpen] = React.useState(false);
 
   return (
-    <PopoverPrimitive.Root onOpenChange={setOpen}>
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open && (
@@ -322,11 +319,15 @@ function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProp
   );
 }
 
-type TableBlockFilter = { id: string; name: string; valueType: TripleValueType };
-
 interface TableBlockFilterGroupProps {
   options: TableBlockFilter[];
-  onCreate: (filter: { columnId: string; columnName: string; value: string; valueType: TripleValueType }) => void;
+  onCreate: (filter: {
+    columnId: string;
+    columnName: string;
+    value: string;
+    valueType: TripleValueType;
+    valueName: string | null;
+  }) => void;
 }
 
 function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps) {
@@ -344,9 +345,10 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
   const onDone = () => {
     onCreate({
       columnId: selectedColumn,
-      columnName: options.find(o => o.id === selectedColumn)?.name ?? '',
+      columnName: options.find(o => o.columnId === selectedColumn)?.columnName ?? '',
       value: typeof value === 'string' ? value : value.entityId,
-      valueType: options.find(o => o.id === selectedColumn)?.valueType ?? 'string',
+      valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
+      valueName: typeof value === 'string' ? null : value.entityName,
     });
   };
 
@@ -362,17 +364,14 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
       <div className="flex items-center justify-center gap-3">
         <div className="flex flex-1">
           <Select
-            options={options.map(o => ({ value: o.id, label: o.name }))}
+            options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
             value={selectedColumn}
             onChange={fieldId => setSelectedColumn(fieldId)}
           />
         </div>
         <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
         <div className="relative flex flex-1">
-          {/* TODO: If the valueType is entity, this should be an autocomplete mechanism. For now we'll
-            let users input _any_ entity, but eventually this should autocomplete based on the schema.
-          */}
-          {options.find(o => o.id === selectedColumn)?.valueType === 'entity' ? (
+          {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
             <TableBlockEntityFilterInput
               onSelect={r =>
                 setValue({

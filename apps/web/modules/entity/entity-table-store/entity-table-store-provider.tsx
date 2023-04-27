@@ -7,7 +7,7 @@ import { useActionsStoreContext } from '~/modules/action';
 import { useSpaceStore } from '~/modules/spaces/space-store';
 import { Params } from '../../params';
 import { Services } from '../../services';
-import { Column, FilterState, Row, Triple } from '../../types';
+import { Column, Row, Triple } from '../../types';
 import { EntityTableStore } from './entity-table-store';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
