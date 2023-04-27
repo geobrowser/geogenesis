@@ -16,14 +16,18 @@ import { NextButton, PageNumber, PreviousButton } from '~/modules/components/tab
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
-import { Entity } from '~/modules/entity';
 import { valueTypes } from '~/modules/value-types';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { TripleValueType } from '~/modules/types';
+import { Entity as IEntity, TripleValueType } from '~/modules/types';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
 import { TextButton } from '~/modules/design-system/text-button';
 import produce from 'immer';
+import { ResultContent, ResultsList } from '~/modules/components/entity/autocomplete/results-list';
+import { useAutocomplete } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
+import { Entity } from '~/modules/entity';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 
 interface Props {
   spaceId: string;
@@ -327,13 +331,21 @@ interface TableBlockFilterGroupProps {
 
 function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps) {
   const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
-  const [value, setValue] = React.useState('');
+  const [value, setValue] = React.useState<
+    | string
+    | {
+        entityId: string;
+        entityName: string | null;
+      }
+  >('');
+
+  const valuet = typeof value === 'string' ? value : value.entityName;
 
   const onDone = () => {
     onCreate({
       columnId: selectedColumn,
       columnName: options.find(o => o.id === selectedColumn)?.name ?? '',
-      value,
+      value: typeof value === 'string' ? value : value.entityId,
       valueType: options.find(o => o.id === selectedColumn)?.valueType ?? 'string',
     });
   };
@@ -356,13 +368,67 @@ function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps
           />
         </div>
         <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
-        <div className="flex flex-1">
+        <div className="relative flex flex-1">
           {/* TODO: If the valueType is entity, this should be an autocomplete mechanism. For now we'll
             let users input _any_ entity, but eventually this should autocomplete based on the schema.
           */}
-          <Input value={value} onChange={e => setValue(e.currentTarget.value)} />
+          {options.find(o => o.id === selectedColumn)?.valueType === 'entity' ? (
+            <TableBlockEntityFilterInput
+              onSelect={r =>
+                setValue({
+                  entityId: r.id,
+                  entityName: r.name,
+                })
+              }
+            />
+          ) : (
+            <Input value={valuet ?? ''} onChange={e => setValue(e.currentTarget.value)} />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface TableBlockEntityFilterInputProps {
+  onSelect: (result: IEntity) => void;
+}
+
+function TableBlockEntityFilterInput({ onSelect }: TableBlockEntityFilterInputProps) {
+  const autocomplete = useAutocomplete();
+  const { spaces } = useSpaces();
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="relative w-full">
+      <Input value={autocomplete.query} onChange={e => autocomplete.onQueryChange(e.target.value)} />
+      {autocomplete.query && (
+        <div
+          ref={containerRef}
+          className="absolute top-[36px] z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+        >
+          <ResizableContainer duration={0.125}>
+            <ResultsList>
+              {autocomplete.results.map((result, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={result.id}
+                >
+                  <ResultContent
+                    key={result.id}
+                    onClick={() => onSelect(result)}
+                    spaces={spaces}
+                    alreadySelected={false}
+                    result={result}
+                  />
+                </motion.div>
+              ))}
+            </ResultsList>
+          </ResizableContainer>
+        </div>
+      )}
     </div>
   );
 }

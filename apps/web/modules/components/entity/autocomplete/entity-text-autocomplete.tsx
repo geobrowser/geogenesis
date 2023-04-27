@@ -21,11 +21,14 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) 
   const { spaces } = useSpaces();
 
   useEffect(() => {
-    document.addEventListener('click', e => {
+    const handleQueryChange = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         onQueryChange('');
       }
-    });
+    };
+
+    document.addEventListener('click', handleQueryChange);
+    return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
 
   // TODO: Implement keyboard navigation
@@ -54,7 +57,6 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) 
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.02 * i }}
                   key={result.id}
-                  onSelect={() => onDone(result)}
                 >
                   <ResultContent
                     key={result.id}
