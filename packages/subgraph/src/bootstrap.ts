@@ -11,6 +11,7 @@ import {
   BLOCKS,
   COVER_ATTRIBUTE,
   DESCRIPTION,
+  FILTER,
   FOREIGN_TYPES,
   IMAGE,
   IMAGE_ATTRIBUTE,
@@ -97,6 +98,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: ROW_TYPE, _1: new StringValue(ROW_TYPE, 'Row Type') },
   { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
   { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
+  { _0: FILTER, _1: new StringValue(COVER_ATTRIBUTE, 'Filter') },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -113,6 +115,7 @@ const attributes: Tuple<string, string>[] = [
   { _0: ROW_TYPE, _1: RELATION },
   { _0: BLOCKS, _1: RELATION },
   { _0: PARENT_ENTITY, _1: RELATION },
+  { _0: FILTER, _1: TEXT },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
