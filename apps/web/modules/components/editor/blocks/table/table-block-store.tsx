@@ -7,18 +7,19 @@ import { Services } from '~/modules/services';
 import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
-import { Observable, ObservableComputed, computed, observable, observe } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { A, pipe } from '@mobily/ts-belt';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { ID } from '~/modules/id';
 
 export const PAGE_SIZE = 10;
 
 export interface TableBlockFilter {
   columnId: string;
-  columnName: string;
   valueType: TripleValueType;
   value: string;
   valueName: string | null;
@@ -57,6 +58,7 @@ export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
   MergedData: MergedData;
+  entityId: string;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
@@ -65,16 +67,16 @@ export class TableBlockStore {
   type$: Observable<ITriple>;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
-  filterState$: Observable<TableBlockFilter[]>;
+  filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
   abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
+    this.entityId = entityId;
     this.ActionsStore = ActionsStore;
     this.type$ = observable(selectedType);
     this.pageNumber$ = observable(0);
-    this.filterState$ = observable<TableBlockFilter[]>([]);
     this.MergedData = new MergedData({ api, store: ActionsStore });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
@@ -82,6 +84,26 @@ export class TableBlockStore {
     this.blockEntity$ = makeOptionalComputed(
       null,
       computed(() => this.MergedData.fetchEntity(entityId))
+    );
+
+    this.filterState$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        // 1. Get either the server Filter triple or the local Filter triple
+        // 2. Map the value of the Filter triple to TableBlockFilter[]
+        const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const localFilterTriple = pipe(
+          this.ActionsStore.allActions$.get(),
+          actions => Triple.fromActions(actions, []),
+          A.find(t => t.entityId === entityId && t.attributeId === SYSTEM_IDS.FILTER)
+        );
+
+        // Default to the locally changed version of a filter if it exists
+        const filter = localFilterTriple ?? serverFilterTriple;
+        const filterValue = filter?.value.type === 'string' ? filter?.value.value : '';
+
+        return await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
+      })
     );
 
     const networkData$ = makeOptionalComputed(
@@ -255,16 +277,6 @@ export class TableBlockStore {
 
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-
-    // @TODO: Remove
-    observe(() => {
-      const filterString = TableBlockSdk.createGraphQLStringFromFilters(
-        this.filterState$.get(),
-        this.type$.get().entityId
-      );
-
-      TableBlockSdk.createFiltersFromGraphQLString(filterString, this.columns$.get());
-    });
   }
 
   setPage = (page: number | 'next' | 'previous') => {
@@ -285,7 +297,46 @@ export class TableBlockStore {
 
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
-    this.filterState$.set(newState);
+    const filterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+    // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
+    const newFiltersString =
+      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type$.get().entityId);
+
+    if (!filterTriple) {
+      return this.ActionsStore.create(
+        Triple.withId({
+          attributeId: SYSTEM_IDS.FILTER,
+          attributeName: 'Filter',
+          entityId: this.entityId,
+          space: this.blockEntity$.get()?.nameTripleSpace ?? '',
+          entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+          value: {
+            type: 'string',
+            value: newFiltersString,
+            id: ID.createValueId(),
+          },
+        })
+      );
+    }
+
+    // If the triple exists and we remove the last filter, we can just delete the triple.
+    if (newState.length === 0) {
+      return this.ActionsStore.remove(filterTriple);
+    }
+
+    return this.ActionsStore.update(
+      Triple.ensureStableId({
+        ...filterTriple,
+        entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+        value: {
+          ...filterTriple.value,
+          type: 'string',
+          value: newFiltersString,
+        },
+      }),
+      filterTriple
+    );
   };
 }
 

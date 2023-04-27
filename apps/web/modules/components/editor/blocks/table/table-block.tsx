@@ -48,6 +48,20 @@ export function TableBlock({ spaceId }: Props) {
   } = useTableBlock();
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
+  const filtersWithColumnName = filterState.map(f => {
+    if (f.columnId === SYSTEM_IDS.NAME) {
+      return {
+        ...f,
+        columnName: 'Name',
+      };
+    }
+
+    return {
+      ...f,
+      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+    };
+  });
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between py-1">
@@ -105,7 +119,7 @@ export function TableBlock({ spaceId }: Props) {
             >
               <EditableFilters />
 
-              {filterState.map((f, index) => (
+              {filtersWithColumnName.map((f, index) => (
                 <TableBlockFilterPill
                   key={`${f.columnId}-${f.value}`}
                   filter={f}
@@ -195,7 +209,7 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 function EditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
-  const filterableColumns: TableBlockFilter[] = [
+  const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
     { columnId: 'name', columnName: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT], value: '', valueName: null },
     ...columns
       .map(c => ({
@@ -210,13 +224,11 @@ function EditableFilters() {
 
   const onCreateFilter = ({
     columnId,
-    columnName,
     value,
     valueType,
     valueName,
   }: {
     columnId: string;
-    columnName: string;
     value: string;
     valueType: TripleValueType;
     valueName: string | null;
@@ -226,7 +238,6 @@ function EditableFilters() {
       {
         valueType,
         columnId,
-        columnName,
         value,
         valueName,
       },
@@ -263,7 +274,13 @@ function PublishedFilterIconFilled() {
   );
 }
 
-function TableBlockFilterPill({ filter, onDelete }: { filter: TableBlockFilter; onDelete: () => void }) {
+function TableBlockFilterPill({
+  filter,
+  onDelete,
+}: {
+  filter: TableBlockFilter & { columnName: string };
+  onDelete: () => void;
+}) {
   const { editable } = useEditable();
 
   const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
@@ -284,14 +301,8 @@ function TableBlockFilterPill({ filter, onDelete }: { filter: TableBlockFilter; 
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
-  options: TableBlockFilter[];
-  onCreate: (filter: {
-    columnId: string;
-    columnName: string;
-    value: string;
-    valueType: TripleValueType;
-    valueName: string | null;
-  }) => void;
+  options: (TableBlockFilter & { columnName: string })[];
+  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
 }
 
 const TableBlockFilterPromptContent = motion(Content);
@@ -317,7 +328,6 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
   const onDone = () => {
     onCreate({
       columnId: selectedColumn,
-      columnName: options.find(o => o.columnId === selectedColumn)?.columnName ?? '',
       value: typeof value === 'string' ? value : value.entityId,
       valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
       valueName: typeof value === 'string' ? null : value.entityName,

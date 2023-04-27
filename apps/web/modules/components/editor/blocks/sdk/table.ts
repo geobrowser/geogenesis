@@ -156,7 +156,6 @@ export function createBlock({
 export function createGraphQLStringFromFilters(
   filters: {
     columnId: string;
-    columnName: string;
     valueType: TripleValueType;
     value: string;
   }[],
@@ -245,32 +244,22 @@ export function createGraphQLStringFromFilters(
  * ]
  * ```
  */
-export function createFiltersFromGraphQLString(
+export async function createFiltersFromGraphQLString(
   graphQLString: string,
-  columns: Column[]
-): {
-  columnId: string;
-  columnName: string;
-  valueType: TripleValueType;
-  value: string;
-}[] {
-  const filterNames = columns.reduce<Map<string, string | null>>((acc, column) => {
-    // Need to special case name since it is not included in type schemas, but we want
-    // to default include it in all tables.
-    if (column.id === SYSTEM_IDS.NAME) {
-      acc.set(column.id, 'Name');
-      return acc;
-    }
-
-    acc.set(column.id, Entity.name(column.triples));
-    return acc;
-  }, new Map<string, string>());
-
-  const filters: {
+  fetchEntity: (entityId: string) => Promise<IEntity | null>
+): Promise<
+  {
     columnId: string;
-    columnName: string;
     valueType: TripleValueType;
     value: string;
+    valueName: string | null;
+  }[]
+> {
+  const filters: {
+    columnId: string;
+    valueType: TripleValueType;
+    value: string;
+    valueName: string | null;
   }[] = [];
 
   // Parse a name query from the filter
@@ -279,7 +268,12 @@ export function createFiltersFromGraphQLString(
   const nameValue = nameMatch ? nameMatch[1] : null;
 
   if (nameValue) {
-    filters.push({ columnId: SYSTEM_IDS.NAME, columnName: 'Name', valueType: 'string', value: nameValue });
+    filters.push({
+      columnId: SYSTEM_IDS.NAME,
+      valueType: 'string',
+      value: nameValue,
+      valueName: null,
+    });
   }
 
   // Parse all entity relationship queries from the filter
@@ -290,12 +284,16 @@ export function createFiltersFromGraphQLString(
     const entityValue = match[2];
 
     if (attribute && entityValue) {
-      filters.push({
-        columnId: attribute,
-        columnName: filterNames.get(attribute) || '',
-        valueType: 'entity',
-        value: entityValue,
-      });
+      const maybeEntity = await fetchEntity(entityValue);
+
+      if (maybeEntity) {
+        filters.push({
+          columnId: attribute,
+          valueType: 'entity',
+          value: entityValue,
+          valueName: maybeEntity.name,
+        });
+      }
     }
   }
 
@@ -310,14 +308,12 @@ export function createFiltersFromGraphQLString(
     if (attribute && stringValue) {
       filters.push({
         columnId: attribute,
-        columnName: filterNames.get(attribute) || '',
         valueType: 'string',
         value: stringValue,
+        valueName: null,
       });
     }
   }
-
-  console.log('filters', filters);
 
   return filters;
 }
