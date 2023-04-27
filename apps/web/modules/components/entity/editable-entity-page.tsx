@@ -358,6 +358,7 @@ function EntityAttributes({
         )}
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
