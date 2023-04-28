@@ -1,5 +1,6 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { pipe } from '@mobily/ts-belt';
-import { Action, Action as ActionType, CreateTripleAction, DeleteTripleAction } from '~/modules/types';
+import { Action, Action as ActionType } from '~/modules/types';
 
 export function forEntityId(actions: ActionType[], entityId: string) {
   return actions.filter(a => {
@@ -129,25 +130,69 @@ export function prepareActionsForPublishing(actions: Action[]) {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
 
-export const getValue = (action: Action): string | null => {
+export const getValue = (action: Action, fallback: unknown = false) => {
   const checkedAction = action.type === 'editTriple' ? action.after : action;
+  let value: string | null;
 
   switch (checkedAction.value.type) {
     case 'number':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
     case 'string':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
     case 'entity':
-      return checkedAction.value.id;
+      value = checkedAction.value.id;
+      break;
     case 'image':
-      return checkedAction.value.value;
+      value = checkedAction.value.value;
+      break;
+  }
+
+  return fallback !== false ? value ?? fallback : value;
+};
+
+export const getValueType = (action: Action) => {
+  const checkedAction = action.type === 'editTriple' ? action.after : action;
+
+  return checkedAction.value.type;
+};
+
+export const getName = (action: Action) => {
+  const checkedAction = action.type === 'editTriple' ? action.after : action;
+
+  switch (checkedAction.value.type) {
+    case 'entity':
+      return checkedAction.value.name;
+    default:
+      return null;
   }
 };
 
-export const getName = (action: CreateTripleAction | DeleteTripleAction): string | null => {
-  switch (action.value.type) {
-    case 'entity':
-      return action.value.name;
+export const getId = (action: Action) => {
+  switch (action.type) {
+    case 'createTriple':
+    case 'deleteTriple':
+      return action.id;
+    case 'editTriple':
+      return action.before.id;
+  }
+};
+
+export const getBlockType = (action: Action) => {
+  const checkedAction = action.type === 'editTriple' ? action.after : action;
+
+  switch (checkedAction.attributeId) {
+    case SYSTEM_IDS.TEXT_BLOCK:
+      return 'textBlock';
+    case SYSTEM_IDS.IMAGE:
+    case SYSTEM_IDS.IMAGE_ATTRIBUTE:
+    case SYSTEM_IDS.IMAGE_BLOCK:
+      return 'imageBlock';
+    case SYSTEM_IDS.TABLE_BLOCK:
+      return 'tableBlock';
+    case SYSTEM_IDS.MARKDOWN_CONTENT:
+      return 'markdownContent';
     default:
       return null;
   }

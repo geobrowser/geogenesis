@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { LinkableChip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -93,14 +94,18 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
 
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
-          <Text as="p" variant="bodySemibold">
-            {triples[0].attributeName || attributeId}
-          </Text>
-          <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
-        </div>
-      ))}
+      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
+        return (
+          <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
+            <Text as="p" variant="bodySemibold">
+              {triples[0].attributeName || attributeId}
+            </Text>
+            <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
+          </div>
+        );
+      })}
     </>
   );
 }

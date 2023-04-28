@@ -1,6 +1,6 @@
 import * as React from 'react';
-
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { useActionsStore } from '~/modules/action';
 import { Button, SquareButton } from '~/modules/design-system/button';
 import { DeletableChipButton } from '~/modules/design-system/chip';
@@ -358,6 +358,7 @@ function EntityAttributes({
         )}
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
