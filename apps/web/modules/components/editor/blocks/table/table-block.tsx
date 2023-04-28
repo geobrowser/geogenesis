@@ -89,7 +89,11 @@ export function TableBlock({ spaceId }: Props) {
             <Icon icon="search" color="grey-02" />
           </span>
 
-          <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon="filterTable" color="grey-04" />
+          <IconButton
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            icon={filterState.length > 0 ? 'filterTableWithFilters' : 'filterTable'}
+            color="grey-04"
+          />
           <span
             title="Coming soon"
             className="hover:cursor-not-allowed"
