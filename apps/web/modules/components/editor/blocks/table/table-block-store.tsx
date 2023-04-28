@@ -83,7 +83,14 @@ export class TableBlockStore {
 
     this.blockEntity$ = makeOptionalComputed(
       null,
-      computed(() => this.MergedData.fetchEntity(entityId))
+      computed(() => {
+        // HACK: This is a hack to rerun this computed when actions change.
+        // In the future we should pass in the actions as a dependency to
+        // the MergedData method calls to trigger any re-runs of computeds.
+        this.ActionsStore.allActions$.get();
+
+        return this.MergedData.fetchEntity(entityId);
+      })
     );
 
     this.filterState$ = makeOptionalComputed(
@@ -102,7 +109,7 @@ export class TableBlockStore {
         const filter = localFilterTriple ?? serverFilterTriple;
         const filterValue = filter?.value.type === 'string' ? filter?.value.value : '';
 
-        return await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
+        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
       })
     );
 
@@ -318,11 +325,6 @@ export class TableBlockStore {
           },
         })
       );
-    }
-
-    // If the triple exists and we remove the last filter, we can just delete the triple.
-    if (newState.length === 0) {
-      return this.ActionsStore.remove(filterTriple);
     }
 
     return this.ActionsStore.update(

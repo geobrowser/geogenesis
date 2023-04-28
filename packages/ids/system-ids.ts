@@ -13,6 +13,9 @@ export const TYPES = 'type'
 /* Example Usage: Person -> ATTRIBUTES -> Age */
 export const ATTRIBUTES = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 
+// A Type is a categorization of an Entity. For example, a Person Type has specific
+// schema associated with it. An Entity can be a Person Type. An Entity can have
+// multiple Types. For example, an Entity can be a Person and a Philosopher.
 /* Example Usage: Person -> TYPES -> SCHEMA_TYPE */
 export const SCHEMA_TYPE = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 

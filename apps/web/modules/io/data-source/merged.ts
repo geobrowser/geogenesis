@@ -85,10 +85,7 @@ export class Merged implements IMergeDataSource {
   fetchEntity = async (id: Parameters<INetwork['fetchEntity']>[0]) => {
     const maybeNetworkEntity = await this.api.fetchEntity(id);
 
-    const globalActions = Triple.fromActions(
-      Object.values(this.store.actions$.get()).flatMap(a => a),
-      []
-    );
+    const globalActions = Triple.fromActions(this.store.allActions$.get(), []);
 
     if (!globalActions.some(a => a.entityId === id)) return maybeNetworkEntity;
 

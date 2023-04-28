@@ -98,7 +98,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: ROW_TYPE, _1: new StringValue(ROW_TYPE, 'Row Type') },
   { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
   { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
-  { _0: FILTER, _1: new StringValue(COVER_ATTRIBUTE, 'Filter') },
+  { _0: FILTER, _1: new StringValue(FILTER, 'Filter') },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
