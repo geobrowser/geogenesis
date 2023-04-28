@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
 import { ROOT_SPACE_IMAGE } from '~/modules/constants';
-import { Entity, InitialEntityTableStoreParams } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import {
   Account,
@@ -72,7 +72,7 @@ export type PublishOptions = {
 type FetchTriplesResult = { triples: TripleType[] };
 
 interface FetchColumnsOptions {
-  params: InitialEntityTableStoreParams & {
+  params: FetchTableEntitiesOptions & {
     skip: number;
     first: number;
   };
@@ -83,9 +83,17 @@ interface FetchColumnsResult {
   columns: Column[];
 }
 
+export interface FetchTableEntitiesOptions {
+  query?: string;
+  typeIds?: string[];
+  first?: number;
+  skip?: number;
+  filter: string;
+  abortController?: AbortController;
+}
+
 export interface FetchRowsOptions {
-  spaceId: string;
-  params: InitialEntityTableStoreParams & {
+  params: FetchTableEntitiesOptions & {
     skip: number;
     first: number;
   };
@@ -488,68 +496,23 @@ export class Network implements INetwork {
   };
 
   rows = async ({ params, abortController }: FetchRowsOptions) => {
-    if (!params.typeId) {
+    if (params.typeIds?.length === 0) {
       return { rows: [] };
     }
 
-    /**
-     * 1. Fetch all entities of a specific type
-     * 2. Check each entity to see if it has a triple that matches the filter
-     *    The attribute id should match the filter column id
-     *    The value should match the filter value. We need to set a different graphql
-     *    query depending on the type of the filter value (entity vs string, etc)
-     * 3. Return the entities that match the filter
-     *
-     * Ideally in the future we have space-specific subgraphs and can filter directly on the
-     * entity by column schema instead of needing to do multiple queries.
-     */
-
-    // 1.
-    const entities = await this.fetchEntities({
-      query: params.query,
+    const entities = await this.fetchTableEntities({
       abortController,
-      // fetch many to make sure we're filtering by type enough entities to render the table correctly.
-      // It's okay if we overfetch for now.
-      first: 1000,
+      first: params.first,
       skip: params.skip,
-      typeIds: [params.typeId],
-
-      filter: [],
+      typeIds: params.typeIds,
+      filter: params.filter,
     });
-
-    if (params.filterState.length > 0) {
-      // 2.
-      const maybeTriplesThatMatchFilter = await Promise.all(
-        entities.map(entity =>
-          this.fetchTriples({
-            query: '',
-            filter: [...params.filterState, { field: 'entity-id', value: entity.id }],
-            first: 1,
-            skip: 0,
-          })
-        )
-      );
-
-      const triplesThatMatchFilter = maybeTriplesThatMatchFilter.flatMap(t =>
-        t.triples.length !== 0 ? t.triples : []
-      );
-
-      // 3.
-      const entitiesThatMatchFilterIds = triplesThatMatchFilter.map(t => t.entityId);
-      const maybeEntitiesThatMatchFilter = await Promise.all(
-        entitiesThatMatchFilterIds.flatMap(t => this.fetchEntity(t))
-      );
-
-      const entitiesThatMatchFilter = maybeEntitiesThatMatchFilter.flatMap(e => (e ? [e] : []));
-
-      return { rows: entitiesThatMatchFilter };
-    }
 
     return { rows: entities };
   };
 
   columns = async ({ params, abortController }: FetchColumnsOptions) => {
-    if (!params.typeId) {
+    if (params.typeIds?.length === 0) {
       return { columns: [] };
     }
 
@@ -559,7 +522,7 @@ export class Network implements INetwork {
       first: DEFAULT_PAGE_SIZE,
       skip: 0,
       filter: [
-        { field: 'entity-id', value: params.typeId },
+        { field: 'entity-id', value: params.typeIds?.[0] ?? '' },
         { field: 'attribute-id', value: SYSTEM_IDS.ATTRIBUTES },
       ],
     });
@@ -770,6 +733,59 @@ export class Network implements INetwork {
       console.error(e);
       console.error(json.errors);
       return null;
+    }
+  };
+
+  // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
+  // the set of custom Table filters set on the table. These filters have small differences from the other
+  // types of filters we have in the app, so we are using a separate method to fetch them for now.
+  //
+  // Ideally we let the caller define the logic for fetching and handling the result, but for now we are
+  // following the pre-existing pattern.
+  fetchTableEntities = async (options: FetchTableEntitiesOptions) => {
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: options.abortController?.signal,
+      body: JSON.stringify({
+        query: queries.tableEntitiesQuery(options.filter, options.first, options.skip),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch table entities, typeIds: ${options.typeIds} filter: ${options.filter}`);
+      console.error(`Failed fetch table entities response text: ${await response.text()}`);
+      return [];
+    }
+
+    try {
+      const json: {
+        data: {
+          geoEntities: NetworkEntity[];
+        };
+      } = await response.json();
+
+      const sortedResults = sortSearchResultsByRelevance(json.data.geoEntities, []);
+
+      return sortedResults.map(result => {
+        const triples = fromNetworkTriples(result.entityOf);
+        const nameTriple = Entity.nameTriple(triples);
+
+        return {
+          id: result.id,
+          name: result.name,
+          description: Entity.description(triples),
+          nameTripleSpace: nameTriple?.space,
+          types: Entity.types(triples, nameTriple?.space),
+          triples,
+        };
+      });
+    } catch (e) {
+      console.error(`Unable to fetch table entities, typeIds: ${options.typeIds} filter: ${options.filter}`);
+      console.error(e);
+      return [];
     }
   };
 }

@@ -1,9 +1,9 @@
 import * as React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock } from './table-block-store';
+import { TableBlockFilter, useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -16,14 +16,18 @@ import { NextButton, PageNumber, PreviousButton } from '~/modules/components/tab
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
-import { Entity } from '~/modules/entity';
 import { valueTypes } from '~/modules/value-types';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { TripleValueType } from '~/modules/types';
+import { Entity as IEntity, TripleValueType } from '~/modules/types';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
 import { TextButton } from '~/modules/design-system/text-button';
 import produce from 'immer';
+import { ResultContent, ResultsList } from '~/modules/components/entity/autocomplete/results-list';
+import { useAutocomplete } from '~/modules/search';
+import { useSpaces } from '~/modules/spaces/use-spaces';
+import { Entity } from '~/modules/entity';
+import { ResizableContainer } from '~/modules/design-system/resizable-container';
 
 interface Props {
   spaceId: string;
@@ -43,6 +47,20 @@ export function TableBlock({ spaceId }: Props) {
     isLoading,
   } = useTableBlock();
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+
+  const filtersWithColumnName = filterState.map(f => {
+    if (f.columnId === SYSTEM_IDS.NAME) {
+      return {
+        ...f,
+        columnName: 'Name',
+      };
+    }
+
+    return {
+      ...f,
+      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+    };
+  });
 
   return (
     <div>
@@ -101,11 +119,10 @@ export function TableBlock({ spaceId }: Props) {
             >
               <EditableFilters />
 
-              {filterState.map((f, index) => (
+              {filtersWithColumnName.map((f, index) => (
                 <TableBlockFilterPill
                   key={`${f.columnId}-${f.value}`}
-                  filterName={f.columnName}
-                  value={f.value}
+                  filter={f}
                   onDelete={() => {
                     const newFilterState = produce(filterState, draft => {
                       draft.splice(index, 1);
@@ -192,41 +209,37 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
 function EditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
-  const filterableColumns: TableBlockFilter[] = [
-    { id: 'name', name: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT] },
+  const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
+    { columnId: 'name', columnName: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT], value: '', valueName: null },
     ...columns
       .map(c => ({
-        id: c.id,
-        name: Entity.name(c.triples) ?? '',
+        columnId: c.id,
+        columnName: Entity.name(c.triples) ?? '',
         valueType: valueTypes[Entity.valueTypeId(c.triples) ?? ''],
+        value: '',
+        valueName: null,
       }))
-      .flatMap(c => (c.name !== '' ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' ? [c] : [])),
   ];
 
   const onCreateFilter = ({
     columnId,
-    columnName,
     value,
     valueType,
+    valueName,
   }: {
     columnId: string;
-    columnName: string;
     value: string;
     valueType: TripleValueType;
+    valueName: string | null;
   }) => {
-    // const filterString = TableBlockSdk.createFilterGraphQLString({
-    //   columnId,
-    //   value,
-    //   valueType,
-    // });
-
     setFilterState([
       ...filterState,
       {
-        type: valueType,
+        valueType,
         columnId,
-        columnName,
         value,
+        valueName,
       },
     ]);
   };
@@ -234,12 +247,13 @@ function EditableFilters() {
   return (
     <div className="flex items-center gap-2">
       <TableBlockFilterPrompt
+        options={filterableColumns}
+        onCreate={onCreateFilter}
         trigger={
           <SmallButton icon="createSmall" variant="secondary">
             Filter
           </SmallButton>
         }
-        filters={<TableBlockFilterGroup options={filterableColumns} onCreate={onCreateFilter} />}
       />
 
       {/* <SmallButton icon="chevronDownSmall" variant="secondary">
@@ -261,26 +275,25 @@ function PublishedFilterIconFilled() {
 }
 
 function TableBlockFilterPill({
-  filterName,
-  value,
+  filter,
   onDelete,
 }: {
-  filterName: string;
-  value: string;
+  filter: TableBlockFilter & { columnName: string };
   onDelete: () => void;
 }) {
   const { editable } = useEditable();
+
+  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filterName} contains</span>
+        <span>{filter.columnName} contains</span>
         <span>·</span>
         <span>{value}</span>
       </div>
-      {/* @TODO: Only show in edit mode */}
       {editable && <IconButton icon="checkCloseSmall" color="grey-04" onClick={onDelete} />}
     </div>
   );
@@ -288,84 +301,152 @@ function TableBlockFilterPill({
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
-  filters: React.ReactNode;
+  options: (TableBlockFilter & { columnName: string })[];
+  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
 }
 
-const TableBlockFilterPromptContent = motion(PopoverPrimitive.Content);
+const TableBlockFilterPromptContent = motion(Content);
 
-function TableBlockFilterPrompt({ trigger, filters }: TableBlockFilterPromptProps) {
+function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
   const [open, setOpen] = React.useState(false);
 
-  return (
-    <PopoverPrimitive.Root onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
-      <AnimatePresence mode="wait">
-        {open && (
-          <TableBlockFilterPromptContent
-            forceMount={true}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{
-              duration: 0.1,
-              ease: 'easeInOut',
-            }}
-            avoidCollisions={true}
-            className="relative z-[1] w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
-            sideOffset={6}
-            alignOffset={-1}
-            align="start"
-          >
-            {filters}
-          </TableBlockFilterPromptContent>
-        )}
-      </AnimatePresence>
-    </PopoverPrimitive.Root>
-  );
-}
-
-type TableBlockFilter = { id: string; name: string; valueType: TripleValueType };
-
-interface TableBlockFilterGroupProps {
-  options: TableBlockFilter[];
-  onCreate: (filter: { columnId: string; columnName: string; value: string; valueType: TripleValueType }) => void;
-}
-
-function TableBlockFilterGroup({ options, onCreate }: TableBlockFilterGroupProps) {
   const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
-  const [value, setValue] = React.useState('');
+  const [value, setValue] = React.useState<
+    | string
+    | {
+        entityId: string;
+        entityName: string | null;
+      }
+  >('');
+
+  const onOpenChange = (open: boolean) => {
+    setSelectedColumn(SYSTEM_IDS.NAME);
+    setValue('');
+    setOpen(open);
+  };
 
   const onDone = () => {
     onCreate({
       columnId: selectedColumn,
-      columnName: options.find(o => o.id === selectedColumn)?.name ?? '',
-      value,
-      valueType: options.find(o => o.id === selectedColumn)?.valueType ?? 'string',
+      value: typeof value === 'string' ? value : value.entityId,
+      valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
+      valueName: typeof value === 'string' ? null : value.entityName,
     });
+    setOpen(false);
+    setSelectedColumn(SYSTEM_IDS.NAME);
+    setValue('');
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <span className="text-smallButton">New filter</span>
-        <TextButton onClick={onDone}>Done</TextButton>
-      </div>
+    <Root open={open} onOpenChange={onOpenChange}>
+      <Trigger>{trigger}</Trigger>
+      <Portal>
+        <AnimatePresence>
+          {open && (
+            <TableBlockFilterPromptContent
+              forceMount={true}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                duration: 0.1,
+                ease: 'easeInOut',
+              }}
+              avoidCollisions={true}
+              className="z-10 w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
+              sideOffset={8}
+              align="start"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-smallButton">New filter</span>
+                  <TextButton onClick={onDone}>Done</TextButton>
+                </div>
 
-      <Spacer height={12} />
+                <Spacer height={12} />
 
-      <div className="flex items-center justify-center gap-3">
-        <div className="flex flex-1">
-          <Select
-            options={options.map(o => ({ value: o.id, label: o.name }))}
-            value={selectedColumn}
-            onChange={fieldId => setSelectedColumn(fieldId)}
-          />
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex flex-1">
+                    <Select
+                      options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
+                      value={selectedColumn}
+                      onChange={fieldId => {
+                        setSelectedColumn(fieldId);
+                        setValue('');
+                      }}
+                    />
+                  </div>
+                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+                  <div className="relative flex flex-1">
+                    {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
+                      <TableBlockEntityFilterInput
+                        selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
+                        onSelect={r =>
+                          setValue({
+                            entityId: r.id,
+                            entityName: r.name,
+                          })
+                        }
+                      />
+                    ) : (
+                      <Input
+                        value={typeof value === 'string' ? value : ''}
+                        onChange={e => setValue(e.currentTarget.value)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </TableBlockFilterPromptContent>
+          )}
+        </AnimatePresence>
+      </Portal>
+    </Root>
+  );
+}
+
+interface TableBlockEntityFilterInputProps {
+  onSelect: (result: IEntity) => void;
+  selectedValue: string;
+}
+
+function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEntityFilterInputProps) {
+  const autocomplete = useAutocomplete();
+  const { spaces } = useSpaces();
+
+  return (
+    <div className="relative w-full">
+      <Input
+        value={autocomplete.query === '' ? selectedValue : autocomplete.query}
+        onChange={e => autocomplete.onQueryChange(e.target.value)}
+      />
+      {autocomplete.query && (
+        <div className="absolute top-[36px] z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+          <ResizableContainer duration={0.125}>
+            <ResultsList>
+              {autocomplete.results.map((result, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={result.id}
+                >
+                  <ResultContent
+                    key={result.id}
+                    onClick={() => {
+                      autocomplete.onQueryChange('');
+                      onSelect(result);
+                    }}
+                    spaces={spaces}
+                    alreadySelected={false}
+                    result={result}
+                  />
+                </motion.div>
+              ))}
+            </ResultsList>
+          </ResizableContainer>
         </div>
-        <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
-        <div className="flex flex-1">
-          <Input value={value} onChange={e => setValue(e.currentTarget.value)} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

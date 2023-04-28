@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useRouter } from 'next/router';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Context } from '~/modules/design-system/icons/context';
 import { Menu } from '~/modules/design-system/menu';

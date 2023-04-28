@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';

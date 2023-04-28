@@ -14,6 +14,8 @@ import { Column, Row, Space, Triple } from '~/modules/types';
 import { TypesStoreProvider } from '~/modules/type/types-store';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
 
 interface Props {
   space: Space;
@@ -103,6 +105,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     }),
   ]);
 
+  // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
   const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
@@ -110,13 +113,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
 
-  const typeId = initialSelectedType?.entityId;
+  // initialTypes[0] can be empty if there's no types in the space
+  const typeId: string | null = initialSelectedType?.entityId ?? null;
 
-  const params = {
+  const params: FetchRowsOptions['params'] = {
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeId,
+    typeIds: typeId ? [typeId] : [],
+    filter: TableBlockSdk.createGraphQLStringFromFilters([], typeId),
   };
 
   const { columns } = await network.columns({
@@ -124,7 +129,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   });
 
   const { rows: serverRows } = await network.rows({
-    spaceId,
     params,
   });
 

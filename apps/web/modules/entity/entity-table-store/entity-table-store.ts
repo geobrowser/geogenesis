@@ -6,10 +6,13 @@ import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { NetworkData } from '~/modules/io';
-import { Column, FilterState, Row, Space, Triple as TripleType } from '../../types';
+import { Column, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { CreateType } from '~/modules/type';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 
@@ -48,10 +51,6 @@ export const DEFAULT_INITIAL_PARAMS = {
   typeId: '',
 };
 
-export function initialFilterState(): FilterState {
-  return [];
-}
-
 /**
  * The EntityTableStore handles state and logic for the EntityTable component that
  * gets rendered on the /spaces/[id] route. For now it duplicated a lot of functionality
@@ -72,7 +71,6 @@ export class EntityTableStore implements IEntityTableStore {
 
   query$: Observable<string>;
   space$: ObservableComputed<Space | undefined>;
-  filterState$: Observable<FilterState>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   spaceId: string;
@@ -100,10 +98,6 @@ export class EntityTableStore implements IEntityTableStore {
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.columns$ = observable(initialColumns);
 
-    this.filterState$ = observable<FilterState>(
-      initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
-    );
-
     this.spaceId = spaceId;
     this.query$ = observable(initialParams.query);
 
@@ -117,11 +111,20 @@ export class EntityTableStore implements IEntityTableStore {
           const selectedType = this.selectedType$.get();
           const pageNumber = this.pageNumber$.get();
 
-          const params = {
-            query: this.query$.get(),
-            pageNumber: pageNumber,
-            filterState: this.filterState$.get(),
-            typeId: selectedType?.entityId || null,
+          const filterString = TableBlockSdk.createGraphQLStringFromFilters(
+            [
+              {
+                columnId: SYSTEM_IDS.NAME,
+                value: this.query$.get(),
+                valueType: 'string',
+              },
+            ],
+            selectedType?.entityId ?? null
+          );
+
+          const params: FetchRowsOptions['params'] = {
+            filter: filterString,
+            typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: pageSize + 1,
             skip: pageNumber * pageSize,
           };
@@ -132,7 +135,6 @@ export class EntityTableStore implements IEntityTableStore {
           });
 
           const { rows: serverRows } = await this.api.rows({
-            spaceId: spaceId,
             params,
             abortController: this.abortController,
           });
@@ -285,12 +287,6 @@ export class EntityTableStore implements IEntityTableStore {
     const previousPageNumber = this.pageNumber$.get() - 1;
     if (previousPageNumber < 0) return;
     this.pageNumber$.set(previousPageNumber);
-  };
-
-  setFilterState = (filter: FilterState) => {
-    const newState = filter.length === 0 ? initialFilterState() : filter;
-    this.setPageNumber(0);
-    this.filterState$.set(newState);
   };
 
   createForeignType = (foreignType: TripleType) => {

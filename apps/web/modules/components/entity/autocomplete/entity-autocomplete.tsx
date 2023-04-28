@@ -77,7 +77,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.02 * i }}
                     key={result.id}
-                    onSelect={() => onDone(result)}
                   >
                     <ResultContent
                       key={result.id}
