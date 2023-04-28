@@ -10,7 +10,7 @@ import pluralize from 'pluralize';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
-import { RemoveScroll } from 'react-remove-scroll';
+// import { RemoveScroll } from 'react-remove-scroll';
 
 import { Action } from '../action';
 import { Change } from '../change';
@@ -176,7 +176,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <RemoveScroll className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
+      <div className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="relative flex flex-col gap-16">
             <div className="absolute top-0 right-0 flex items-center gap-8">
@@ -221,7 +221,7 @@ const ReviewChanges = () => {
             </div>
           </div>
         </div>
-      </RemoveScroll>
+      </div>
       <StatusBar reviewState={reviewState} />
     </>
   );
