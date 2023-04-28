@@ -89,11 +89,35 @@ export function TableBlock({ spaceId }: Props) {
             <Icon icon="search" color="grey-02" />
           </span>
 
-          <IconButton
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            icon={filterState.length > 0 ? 'filterTableWithFilters' : 'filterTable'}
-            color="grey-04"
-          />
+          <AnimatePresence initial={false} mode="wait">
+            {filterState.length > 0 ? (
+              <motion.div
+                className="flex items-center"
+                key="filter-table-with-filters"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.15, bounce: 0.2 }}
+              >
+                <IconButton
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  icon="filterTableWithFilters"
+                  color="grey-04"
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                className="flex items-center"
+                key="filter-table-without-filters"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.15, bounce: 0.2 }}
+              >
+                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon="filterTable" color="grey-04" />
+              </motion.div>
+            )}
+          </AnimatePresence>
           <span
             title="Coming soon"
             className="hover:cursor-not-allowed"
