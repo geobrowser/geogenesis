@@ -1,4 +1,5 @@
 import * as React from 'react';
+import Link from 'next/link';
 import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import BoringAvatar from 'boring-avatars';
@@ -28,6 +29,9 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/entity';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
+import { Menu } from '~/modules/design-system/menu';
+import { Context } from '~/modules/design-system/icons/context';
+import { Close } from '~/modules/design-system/icons/close';
 
 interface Props {
   spaceId: string;
@@ -46,7 +50,15 @@ export function TableBlock({ spaceId }: Props) {
     setFilterState,
     isLoading,
   } = useTableBlock();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+
+  const hiddenColumns =
+    blockEntity?.triples
+      .filter(triple => triple.attributeId === SYSTEM_IDS.HIDDEN_COLUMNS)
+      .flatMap(item => item.value.id) ?? [];
+
+  const renderedColumns = columns.filter(item => !hiddenColumns.includes(item.id));
 
   const filtersWithColumnName = filterState.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {
@@ -118,15 +130,21 @@ export function TableBlock({ spaceId }: Props) {
               </motion.div>
             )}
           </AnimatePresence>
-          <span
-            title="Coming soon"
-            className="hover:cursor-not-allowed"
-            onClick={() => {
-              //
-            }}
+          <Menu
+            open={isMenuOpen}
+            onOpenChange={setIsMenuOpen}
+            align="end"
+            trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
+            className="max-w-[5.8rem] whitespace-nowrap"
           >
-            <Icon icon="context" color="grey-02" />
-          </span>
+            <Link href={`/space/${spaceId}/${blockEntity?.id}`}>
+              <a className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg">
+                <Text variant="button" className="hover:!text-text">
+                  View data
+                </Text>
+              </a>
+            </Link>
+          </Menu>
         </div>
       </div>
 
@@ -167,7 +185,11 @@ export function TableBlock({ spaceId }: Props) {
 
       <motion.div layout="position">
         <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
-          {isLoading ? <TableBlockPlaceholder /> : <TableBlockTable space={spaceId} columns={columns} rows={rows} />}
+          {isLoading ? (
+            <TableBlockPlaceholder />
+          ) : (
+            <TableBlockTable space={spaceId} columns={renderedColumns} rows={rows} />
+          )}
         </div>
 
         <Spacer height={12} />
