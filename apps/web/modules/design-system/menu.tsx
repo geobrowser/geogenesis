@@ -10,6 +10,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   align?: 'start' | 'center' | 'end';
+  side?: 'bottom' | 'left' | 'right' | 'top';
   className?: string;
 }
 
@@ -28,7 +29,15 @@ const contentStyles = cva(
   }
 );
 
-export function Menu({ children, trigger, open, onOpenChange, align = 'end', className = '' }: Props) {
+export function Menu({
+  children,
+  trigger,
+  open,
+  onOpenChange,
+  align = 'end',
+  side = undefined,
+  className = '',
+}: Props) {
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open}>
@@ -45,6 +54,7 @@ export function Menu({ children, trigger, open, onOpenChange, align = 'end', cla
               ease: 'easeInOut',
             }}
             align={align}
+            side={side}
             sideOffset={8}
             className={contentStyles({ align, className })}
           >
