@@ -48,6 +48,8 @@ export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
 /* Example Usage: Block Entity -> TYPES -> TABLE_BLOCK */
 export const TABLE_BLOCK = '88d59252-17ae-4d9a-a367-24710129eb47'
 
+export const HIDDEN_COLUMNS = '1ed5b976-f8a4-451b-a2cc-531f85b59cab'
+
 /* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320'
 
