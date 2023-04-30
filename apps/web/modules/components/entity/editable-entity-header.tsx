@@ -9,7 +9,7 @@ import { PageStringField } from './editable-fields';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Text } from '~/modules/design-system/text';
-import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
+import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { Editor } from '../editor/editor';
 
 export function EditableHeading({
@@ -81,12 +81,16 @@ export function EditableHeading({
             </Text>
           </Truncate>
           {space && (
-            <span className="mt-1 inline-block rounded bg-black px-2 py-0.5 text-sm font-medium text-white">Space</span>
+            <span className="mt-1 inline-block rounded bg-text px-2 py-0.5 text-sm font-medium text-white">Space</span>
           )}
           <Spacer height={12} />
         </div>
       )}
-      <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} space={space} />
+      {!space ? (
+        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
+      ) : (
+        <SpacePageMetadataHeader spaceId={spaceId} />
+      )}
       <Spacer height={40} />
       <Editor editable={isEditing} />
     </div>
