@@ -10,6 +10,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   align?: 'start' | 'center' | 'end';
+  className?: string;
 }
 
 const MotionContent = motion(PopoverContent);
@@ -27,7 +28,7 @@ const contentStyles = cva(
   }
 );
 
-export function Menu({ children, trigger, open, onOpenChange, align = 'end' }: Props) {
+export function Menu({ children, trigger, open, onOpenChange, align = 'end', className = '' }: Props) {
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open}>
@@ -45,7 +46,7 @@ export function Menu({ children, trigger, open, onOpenChange, align = 'end' }: P
             }}
             align={align}
             sideOffset={8}
-            className={contentStyles({ align })}
+            className={contentStyles({ align, className })}
           >
             {children}
           </MotionContent>
