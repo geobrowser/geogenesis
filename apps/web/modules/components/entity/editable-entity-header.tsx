@@ -9,7 +9,7 @@ import { PageStringField } from './editable-fields';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Text } from '~/modules/design-system/text';
-import { EntityPageMetadataHeader } from '../entity-page/entity-page-metadata-header';
+import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { Editor } from '../editor/editor';
 
 export function EditableHeading({
@@ -17,11 +17,13 @@ export function EditableHeading({
   entityId,
   name: serverName,
   triples: serverTriples,
+  space = false,
 }: {
   spaceId: string;
   entityId: string;
   name: string;
   triples: Triple[];
+  space?: boolean;
 }) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { editable } = useEditable();
@@ -61,10 +63,10 @@ export function EditableHeading({
 
   return (
     <div>
-      {isEditing ? (
+      {!space && isEditing ? (
         <div>
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
-          {/* 
+          {/*
             This height differs from the readable page height due to how we're using an expandable textarea for editing
             the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
             have to manually adjust the spacing here to remove the layout shift.
@@ -78,11 +80,17 @@ export function EditableHeading({
               {name}
             </Text>
           </Truncate>
+          {space && (
+            <span className="mt-1 inline-block rounded bg-text px-2 py-0.5 text-sm font-medium text-white">Space</span>
+          )}
           <Spacer height={12} />
         </div>
       )}
-
-      <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
+      {!space ? (
+        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
+      ) : (
+        <SpacePageMetadataHeader spaceId={spaceId} />
+      )}
       <Spacer height={40} />
       <Editor editable={isEditing} />
     </div>

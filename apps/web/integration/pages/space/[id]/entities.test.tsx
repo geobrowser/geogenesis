@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { MockNetworkData } from '~/modules/io';
-import SpacePage from '~/pages/space/[id]';
+import SpacePage from '~/pages/space/[id]/entities';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
