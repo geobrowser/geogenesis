@@ -1,16 +1,20 @@
+import * as React from 'react';
+import Link from 'next/link';
+
 import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Entity, useEntityStore } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/types';
 import { useEditEvents } from './edit-events';
-import React from 'react';
 import { PageStringField } from './editable-fields';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Text } from '~/modules/design-system/text';
 import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '../entity-page/entity-page-metadata-header';
 import { Editor } from '../editor/editor';
+import { Button } from '~/modules/design-system/button';
+import { NavUtils } from '~/modules/utils';
 
 export function EditableHeading({
   spaceId,
@@ -62,7 +66,7 @@ export function EditableHeading({
   };
 
   return (
-    <div>
+    <div className="relative">
       {!space && isEditing ? (
         <div>
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
@@ -93,6 +97,15 @@ export function EditableHeading({
       )}
       <Spacer height={40} />
       <Editor editable={isEditing} />
+      {space && isEditing && (
+        <div className="absolute top-0 right-0">
+          <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
+            <a>
+              <Button icon="create">New entity</Button>
+            </a>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
