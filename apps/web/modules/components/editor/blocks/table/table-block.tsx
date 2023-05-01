@@ -240,9 +240,6 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
   const { isEditor } = useAccessControl(spaceId);
   const { blockEntity } = useTableBlock();
 
-  // @TODO remove console.info
-  console.info('blockEntity:', blockEntity);
-
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     TableBlockSdk.upsertName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
   };
@@ -251,7 +248,6 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
     <input
       onBlur={onNameChange}
       defaultValue={blockEntity?.name ?? undefined}
-      value={blockEntity?.name ?? ''}
       placeholder="Enter a name for this table..."
       className="w-full appearance-none text-smallTitle text-text outline-none placeholder:text-grey-03"
     />

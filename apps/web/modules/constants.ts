@@ -7,6 +7,6 @@ export const PLACEHOLDER_IMAGES = {
 };
 
 export const ROOT_SPACE_IMAGE =
-  'https://cdn.discordapp.com/attachments/882371689244143687/1070102478802133052/root.png';
+  'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmU3TRxyXGKbgCFPFVddJmRnxHQ6ojnppumU3zpPUjJ4WK';
 
 export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-social-image.png';

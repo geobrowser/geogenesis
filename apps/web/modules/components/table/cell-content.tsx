@@ -14,12 +14,14 @@ interface Props {
 export function CellContent({ isExpanded, value, isEntity, href }: Props) {
   const content = href ? (
     <Link href={href} passHref>
-      <a className="inline-block text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">
+      <a className="inline-block break-words text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">
         {value}
       </a>
     </Link>
   ) : (
-    <Text variant="tableCell">{value}</Text>
+    <Text variant="tableCell" className="break-words">
+      {value}
+    </Text>
   );
 
   return (
