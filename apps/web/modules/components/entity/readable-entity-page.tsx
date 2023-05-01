@@ -15,7 +15,7 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { useEntityStore } from '~/modules/entity';
-import { Button } from '~/modules/design-system/button';
+import { SmallButton } from '~/modules/design-system/button';
 
 interface Props {
   triples: Triple[];
@@ -136,9 +136,9 @@ function ReferencedByEntities({ referencedByEntities }: ReferencedByEntitiesProp
         ))}
         {!isExpanded ? (
           <div>
-            <Button variant="tertiary" icon="chevronDownSmall" onClick={() => setIsExpanded(true)}>
+            <SmallButton variant="secondary" icon="chevronDownSmall" onClick={() => setIsExpanded(true)}>
               Show more
-            </Button>
+            </SmallButton>
           </div>
         ) : (
           <>
