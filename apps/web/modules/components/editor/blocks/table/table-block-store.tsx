@@ -84,10 +84,14 @@ export class TableBlockStore {
     this.blockEntity$ = makeOptionalComputed(
       null,
       computed(() => {
+        // @TODO restore an alternate hack or implement the updated MergedData methods
+
         // HACK: This is a hack to rerun this computed when actions change.
         // In the future we should pass in the actions as a dependency to
         // the MergedData method calls to trigger any re-runs of computeds.
-        this.ActionsStore.allActions$.get();
+
+        // ↓ hack temporarily disabled due to UX issues
+        // this.ActionsStore.allActions$.get();
 
         return this.MergedData.fetchEntity(entityId);
       })
