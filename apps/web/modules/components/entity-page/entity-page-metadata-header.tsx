@@ -39,7 +39,6 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
           </li>
         ))}
       </ul>
-
       <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
         {versions?.map(v => (
           <HistoryItem
@@ -74,7 +73,9 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
 
   return (
     <div className="flex items-center justify-between text-text">
-      <div className="flex"></div>
+      <div className="flex">
+        <span className="mt-1 inline-block rounded bg-text px-[7px] py-px text-sm font-medium text-white">Space</span>
+      </div>
       <div className="inline-flex items-center gap-4">
         <HistoryPanel isLoading={isLoadingProposals} isEmpty={proposals?.length === 0}>
           {proposals?.map(p => (
