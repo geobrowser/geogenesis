@@ -15,6 +15,7 @@ import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-sma
 import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { useEntityStore } from '~/modules/entity';
+import { Button } from '~/modules/design-system/button';
 
 interface Props {
   triples: Triple[];
@@ -46,14 +47,7 @@ export function ReadableEntityPage({ triples, id, name, referencedByEntities }: 
             <Text color="grey-04">There are no entities referencing {name}.</Text>
           </>
         ) : (
-          <>
-            <Spacer height={20} />
-            <div className="flex flex-col gap-6">
-              {referencedByEntities.map(referencedByEntity => (
-                <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-              ))}
-            </div>
-          </>
+          <ReferencedByEntities referencedByEntities={referencedByEntities} />
         )}
       </div>
     </>
@@ -106,6 +100,54 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
           </div>
         );
       })}
+    </>
+  );
+}
+
+type ReferencedByEntitiesProps = {
+  referencedByEntities: Array<ReferencedByEntity>;
+};
+
+function ReferencedByEntities({ referencedByEntities }: ReferencedByEntitiesProps) {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const count = referencedByEntities.length;
+
+  if (count <= 3)
+    return (
+      <>
+        <Spacer height={20} />
+        <div className="flex flex-col gap-6">
+          {referencedByEntities.map(referencedByEntity => (
+            <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+          ))}
+        </div>
+      </>
+    );
+
+  const firstReferencedByEntities = referencedByEntities.slice(0, 3);
+  const lastReferencedByEntities = referencedByEntities.slice(3);
+
+  return (
+    <>
+      <Spacer height={20} />
+      <div className="flex flex-col gap-6">
+        {firstReferencedByEntities.map(referencedByEntity => (
+          <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+        ))}
+        {!isExpanded ? (
+          <div>
+            <Button variant="tertiary" icon="chevronDownSmall" onClick={() => setIsExpanded(true)}>
+              Show more
+            </Button>
+          </div>
+        ) : (
+          <>
+            {lastReferencedByEntities.map(referencedByEntity => (
+              <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+            ))}
+          </>
+        )}
+      </div>
     </>
   );
 }
