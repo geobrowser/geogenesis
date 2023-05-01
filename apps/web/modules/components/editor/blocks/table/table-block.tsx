@@ -1,7 +1,9 @@
 import * as React from 'react';
 import Link from 'next/link';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
+import produce from 'immer';
 import BoringAvatar from 'boring-avatars';
 
 import { TableBlockFilter, useTableBlock } from './table-block-store';
@@ -18,12 +20,10 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
 import { valueTypes } from '~/modules/value-types';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity as IEntity, TripleValueType } from '~/modules/types';
 import { Input } from '~/modules/design-system/input';
 import { Select } from '~/modules/design-system/select';
 import { TextButton } from '~/modules/design-system/text-button';
-import produce from 'immer';
 import { ResultContent, ResultsList } from '~/modules/components/entity/autocomplete/results-list';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
@@ -240,6 +240,9 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
   const { isEditor } = useAccessControl(spaceId);
   const { blockEntity } = useTableBlock();
 
+  // @TODO remove console.info
+  console.info('blockEntity:', blockEntity);
+
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     TableBlockSdk.upsertName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
   };
@@ -248,6 +251,7 @@ function EditableTitle({ spaceId }: { spaceId: string }) {
     <input
       onBlur={onNameChange}
       defaultValue={blockEntity?.name ?? undefined}
+      value={blockEntity?.name ?? ''}
       placeholder="Enter a name for this table..."
       className="w-full appearance-none text-smallTitle text-text outline-none placeholder:text-grey-03"
     />
