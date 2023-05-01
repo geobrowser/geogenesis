@@ -84,9 +84,6 @@ export function EditableHeading({
               {name}
             </Text>
           </Truncate>
-          {space && (
-            <span className="mt-1 inline-block rounded bg-text px-2 py-0.5 text-sm font-medium text-white">Space</span>
-          )}
           <Spacer height={12} />
         </div>
       )}
