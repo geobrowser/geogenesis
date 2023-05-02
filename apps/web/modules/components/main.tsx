@@ -16,7 +16,7 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isReviewOpen}
-      className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]"
+      className="mx-auto max-w-[1200px] pt-8 pb-16  xl:px-[2ch]"
     >
       {children}
     </motion.main>
