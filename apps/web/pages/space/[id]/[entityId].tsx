@@ -169,34 +169,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     )
   ).flatMap(block => block.triples);
 
-  if (redirect) {
-    return {
-      redirect: {
-        destination: redirect,
-        permanent: false,
-      },
-      props: {
-        triples: entity?.triples ?? [],
-        id: entityId,
-        name: entity?.name ?? entityId,
-        description: Entity.description(entity?.triples ?? []),
-        spaceId,
-        referencedByEntities,
-        key: entityId,
-        serverAvatarUrl,
-        serverCoverUrl,
-
-        // For entity page editor
-        blockIdsTriple,
-        blockTriples,
-
-        space,
-        spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
-        redirect,
-      },
-    };
-  }
-
   return {
     props: {
       triples: entity?.triples ?? [],
