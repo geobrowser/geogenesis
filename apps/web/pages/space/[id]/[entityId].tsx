@@ -109,6 +109,16 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 
+  // Redirect from space configuration page to space page
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION)) {
+    return {
+      redirect: {
+        destination: `/space/${entity.nameTripleSpace}`,
+        permanent: false,
+      },
+    };
+  }
+
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
 
