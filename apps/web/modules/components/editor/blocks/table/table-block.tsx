@@ -503,6 +503,8 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEnti
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 
+const PLACEHOLDER_ROWS = new Array(10).fill(0);
+
 function TableBlockPlaceholder() {
   return (
     <div className="overflow-x-scroll rounded-sm">
@@ -530,39 +532,19 @@ function TableBlockPlaceholder() {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-            <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-              <p className="h-5 rounded-sm bg-divider" />
-            </td>
-          </tr>
+          {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
+            <tr key={index}>
+              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+                <p className="h-5 rounded-sm bg-divider" />
+              </td>
+              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+                <p className="h-5 rounded-sm bg-divider" />
+              </td>
+              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
+                <p className="h-5 rounded-sm bg-divider" />
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
