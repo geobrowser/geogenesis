@@ -408,13 +408,12 @@ export class EntityStore implements IEntityStore {
   Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
-    if (node.type === 'tableNode') return;
-
     const blockEntityId = node.attrs?.id;
     const entityName = this.nodeName(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
     const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== entityName;
+    const isTableNode = node.type === 'tableNode';
 
     if (!existingBlockTriple) {
       this.create(
@@ -427,7 +426,7 @@ export class EntityStore implements IEntityStore {
           value: { id: ID.createValueId(), type: 'string', value: entityName },
         })
       );
-    } else if (isUpdated) {
+    } else if (!isTableNode && isUpdated) {
       this.update(
         Triple.ensureStableId({
           ...existingBlockTriple,
