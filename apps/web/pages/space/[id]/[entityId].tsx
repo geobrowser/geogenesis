@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -39,9 +40,16 @@ interface Props {
 
   spaceTypes: Triple[];
   space: Space | null;
+  redirect: string | null;
 }
 
 export default function EntityPage(props: Props) {
+  const router = useRouter();
+
+  if (props.redirect) {
+    router.push(props.redirect);
+  }
+
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
 
@@ -51,6 +59,10 @@ export default function EntityPage(props: Props) {
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
   const opengraphUrl = props.serverAvatarUrl || props.serverCoverUrl || DEFAULT_OPENGRAPH_IMAGE;
+
+  if (props.redirect) {
+    return null;
+  }
 
   return (
     <>
@@ -90,6 +102,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
+  let redirect: string | null = null;
 
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
@@ -111,12 +124,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
-    return {
-      redirect: {
-        destination: `/space/${entity?.nameTripleSpace}`,
-        permanent: false,
-      },
-    };
+    redirect = `/space/${entity?.nameTripleSpace}`;
   }
 
   const serverAvatarUrl = Entity.avatar(entity?.triples);
@@ -179,6 +187,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
       space,
       spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
+      redirect,
     },
   };
 };

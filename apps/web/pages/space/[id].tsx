@@ -109,6 +109,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
         destination: `/space/${spaceId}/entities`,
         permanent: false,
       },
+      props: {},
     };
   }
 
