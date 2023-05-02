@@ -88,8 +88,6 @@ export class TableBlockStore {
         // In the future we should pass in the actions as a dependency to
         // the MergedData method calls to trigger any re-runs of computeds.
         this.ActionsStore.allActions$.get();
-        // DOUBLEHACK: This staves off some race condition set off by the first hack.
-        sleep(100);
         return this.MergedData.fetchEntity(entityId);
       })
     );
@@ -428,11 +426,4 @@ export function useTableBlock() {
     setFilterState,
     isLoading,
   };
-}
-
-function sleep(milliseconds: number) {
-  const end = new Date().getTime() + milliseconds;
-  while (new Date().getTime() < end) {
-    // sleeping
-  }
 }
