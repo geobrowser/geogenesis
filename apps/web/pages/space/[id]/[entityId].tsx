@@ -110,10 +110,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   ]);
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION)) {
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
     return {
       redirect: {
-        destination: `/space/${entity.nameTripleSpace}`,
+        destination: `/space/${entity?.nameTripleSpace}`,
         permanent: false,
       },
     };
