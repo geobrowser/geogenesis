@@ -246,6 +246,8 @@ export class Network implements INetwork {
   };
 
   fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
+    if (!id) return null;
+
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
