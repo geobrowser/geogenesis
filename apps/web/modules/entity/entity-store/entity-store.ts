@@ -408,6 +408,8 @@ export class EntityStore implements IEntityStore {
   Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
+    if (node.type === 'tableNode') return;
+
     const blockEntityId = node.attrs?.id;
     const entityName = this.nodeName(node);
 
