@@ -102,7 +102,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.query.id as string;
   const entityId = context.query.entityId as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
-  let redirect: string | null = null;
 
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);
@@ -123,6 +122,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   ]);
 
   // Redirect from space configuration page to space page
+  let redirect: string | null = null;
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
     redirect = `/space/${entity?.nameTripleSpace}`;
   }
@@ -168,6 +168,34 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       })
     )
   ).flatMap(block => block.triples);
+
+  if (redirect) {
+    return {
+      redirect: {
+        destination: redirect,
+        permanent: false,
+      },
+      props: {
+        triples: entity?.triples ?? [],
+        id: entityId,
+        name: entity?.name ?? entityId,
+        description: Entity.description(entity?.triples ?? []),
+        spaceId,
+        referencedByEntities,
+        key: entityId,
+        serverAvatarUrl,
+        serverCoverUrl,
+
+        // For entity page editor
+        blockIdsTriple,
+        blockTriples,
+
+        space,
+        spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
+        redirect,
+      },
+    };
+  }
 
   return {
     props: {
