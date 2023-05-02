@@ -136,7 +136,7 @@ function ReferencedByEntities({ referencedByEntities }: ReferencedByEntitiesProp
         ))}
         {!isExpanded ? (
           <div>
-            <Button variant="tertiary" icon="chevronDownSmall" onClick={() => setIsExpanded(true)}>
+            <Button variant="tertiary" onClick={() => setIsExpanded(true)}>
               Show more
             </Button>
           </div>

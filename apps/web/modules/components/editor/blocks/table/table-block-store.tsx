@@ -1,19 +1,19 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A, pipe } from '@mobily/ts-belt';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Services } from '~/modules/services';
 import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
-import { useSelector } from '@legendapp/state/react';
 import { MergedData, NetworkData } from '~/modules/io';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
-import { A, pipe } from '@mobily/ts-belt';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ID } from '~/modules/id';
 
 export const PAGE_SIZE = 10;
@@ -84,15 +84,12 @@ export class TableBlockStore {
     this.blockEntity$ = makeOptionalComputed(
       null,
       computed(() => {
-        // @TODO restore an alternate hack or implement the updated MergedData methods
-
         // HACK: This is a hack to rerun this computed when actions change.
         // In the future we should pass in the actions as a dependency to
         // the MergedData method calls to trigger any re-runs of computeds.
-
-        // ↓ hack temporarily disabled due to UX issues
-        // this.ActionsStore.allActions$.get();
-
+        this.ActionsStore.allActions$.get();
+        // DOUBLEHACK: This staves off some race condition set off by the first hack.
+        sleep(100);
         return this.MergedData.fetchEntity(entityId);
       })
     );
@@ -431,4 +428,11 @@ export function useTableBlock() {
     setFilterState,
     isLoading,
   };
+}
+
+function sleep(milliseconds: number) {
+  const end = new Date().getTime() + milliseconds;
+  while (new Date().getTime() < end) {
+    // sleeping
+  }
 }
