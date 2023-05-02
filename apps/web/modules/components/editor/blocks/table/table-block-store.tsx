@@ -129,7 +129,7 @@ export class TableBlockStore {
           const params: FetchRowsOptions['params'] = {
             query: '',
             filter: filterString,
-            typeIds: [selectedType.entityId],
+            typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
@@ -165,7 +165,7 @@ export class TableBlockStore {
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], columns, selectedType.entityId);
+      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], columns, selectedType?.entityId);
     });
 
     // @TODO: Use fetchEntity in the fetches here. Could also probably use MergedData
@@ -191,7 +191,7 @@ export class TableBlockStore {
           this.ActionsStore.actions$.get()[spaceId],
           actions => Triple.fromActions(actions, []),
           triples => Entity.entitiesFromTriples(triples),
-          A.filter(e => e.types.some(t => t.id === selectedType.entityId)),
+          A.filter(e => e.types.some(t => t.id === selectedType?.entityId)),
           A.map(t => t.id)
         );
 
@@ -215,7 +215,7 @@ export class TableBlockStore {
         const entitiesCreatedOrChangedLocally = pipe(
           this.ActionsStore.actions$.get(),
           actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
-          A.filter(e => e.types.some(t => t.id === selectedType.entityId))
+          A.filter(e => e.types.some(t => t.id === selectedType?.entityId))
         );
 
         const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
@@ -241,7 +241,7 @@ export class TableBlockStore {
         ]);
 
         // Make sure we only generate rows for entities that have the selected type
-        const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType.entityId));
+        const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType?.entityId));
 
         // const filterState = this.filterState$.get();
 
@@ -278,7 +278,7 @@ export class TableBlockStore {
     );
 
     this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType.entityId);
+      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType?.entityId);
     });
 
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
