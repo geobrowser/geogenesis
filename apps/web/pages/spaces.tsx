@@ -28,6 +28,16 @@ export default function Spaces({ spaces }: Props) {
   return (
     <div>
       <Head>
+        <title>Geo Genesis</title>
+        <meta property="og:title" content="Geo Genesis" />
+        <meta
+          name="description"
+          content="Browse and organize the world's public knowledge and information in a decentralized way."
+        />
+        <meta
+          property="og:description"
+          content="Browse and organize the world's public knowledge and information in a decentralized way."
+        />
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
         <meta property="og:image" content={DEFAULT_OPENGRAPH_IMAGE} />
         <meta name="twitter:image" content={DEFAULT_OPENGRAPH_IMAGE} />

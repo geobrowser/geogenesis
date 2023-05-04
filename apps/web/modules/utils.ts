@@ -1,5 +1,7 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 
+import { DEFAULT_OPENGRAPH_IMAGE } from './constants';
+
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
     const data = observable.get() as T;
@@ -77,3 +79,16 @@ export class GeoDate {
     return new Date(value * 1000);
   }
 }
+
+export const getOpenGraphImageUrl = (value: string) => {
+  if (value.startsWith('https://api.thegraph.com/ipfs')) {
+    const hash = value.split('=')[1];
+    return `https://geobrowser.io/api/og?hash=${hash}`;
+  } else if (value.startsWith('http')) {
+    return value;
+  } else if (value) {
+    return `https://geobrowser.io/api/og?hash=${value}`;
+  } else {
+    return DEFAULT_OPENGRAPH_IMAGE;
+  }
+};

@@ -13,9 +13,9 @@ import { StorageClient } from '~/modules/services/storage';
 import { Column, Row, Space, Triple } from '~/modules/types';
 import { TypesStoreProvider } from '~/modules/type/types-store';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
+import { getOpenGraphImageUrl } from '~/modules/utils';
 
 interface Props {
   space: Space;
@@ -36,7 +36,8 @@ export default function EntitiesPage({
   initialRows,
   initialTypes,
 }: Props) {
-  const opengraphUrl = spaceImage || DEFAULT_OPENGRAPH_IMAGE;
+  const imageUrl = spaceImage || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
 
   return (
     <div>
@@ -44,8 +45,8 @@ export default function EntitiesPage({
         <title>{spaceName ?? space.id}</title>
         <meta property="og:title" content={spaceName} />
         <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
-        <meta property="og:image" content={opengraphUrl} />
-        <meta name="twitter:image" content={opengraphUrl} />
+        <meta property="og:image" content={openGraphImageUrl} />
+        <meta name="twitter:image" content={openGraphImageUrl} />
       </Head>
       <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
       <Spacer height={34} />
