@@ -11,10 +11,12 @@ import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
 // import { RemoveScroll } from 'react-remove-scroll';
+import BoringAvatar from 'boring-avatars';
 
 import { Action } from '../action';
 import { Change } from '../change';
 import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
+import { colors } from '~/modules/design-system/theme/colors';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
 import { useReview } from '~/modules/review';
@@ -22,8 +24,10 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
+import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
 import type { Action as ActionType, Triple as TripleType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
+import { ZERO_WIDTH_SPACE } from '../constants';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -176,7 +180,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-none rounded-t-[32px] bg-bg shadow-big">
+      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="relative flex flex-col gap-16">
             <div className="absolute top-0 right-0 flex items-center gap-8">
@@ -369,6 +373,77 @@ const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChan
                 </span>
               )}
             </div>
+          </div>
+        </div>
+      );
+    }
+    case 'tableBlock': {
+      const isNewTable = before === null || before?.startsWith('Table Block ') === true;
+      const differences = diffWords(before ?? '', after ?? '');
+
+      return (
+        <div key={blockId} className="flex gap-8">
+          <div className="flex-1 py-4">
+            {!isNewTable && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="overflow-hidden rounded">
+                    <BoringAvatar
+                      size={16}
+                      square={true}
+                      variant="bauhaus"
+                      name={before ?? 'Untitled'}
+                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+                    />
+                  </span>
+                  <div className="text-smallTitle">
+                    {differences
+                      .filter(item => !item.added)
+                      .map((difference: Difference, index: number) => (
+                        <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                          {difference.value}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                <TableBlockPlaceholder
+                  columns={2}
+                  rows={2}
+                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                />
+              </>
+            )}
+          </div>
+          <div className="flex-1 py-4">
+            {after && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="overflow-hidden rounded">
+                    <BoringAvatar
+                      size={16}
+                      square={true}
+                      variant="bauhaus"
+                      name={after ?? 'Untitled'}
+                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+                    />
+                  </span>
+                  <div className="text-smallTitle">
+                    {differences
+                      .filter(item => !item.removed)
+                      .map((difference: Difference, index: number) => (
+                        <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                          {difference.value}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                <TableBlockPlaceholder
+                  columns={2}
+                  rows={2}
+                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                />
+              </>
+            )}
           </div>
         </div>
       );
