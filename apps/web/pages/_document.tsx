@@ -20,17 +20,6 @@ class MyDocument extends Document {
           <meta charSet="utf-8" />
           <meta property="og:type" content="website" />
 
-          {/* Essential for socials */}
-          <meta property="og:title" content="Geo Genesis" />
-          <meta
-            name="description"
-            content="Browse and organize the world's public knowledge and information in a decentralized way."
-          />
-          <meta
-            property="og:description"
-            content="Browse and organize the world's public knowledge and information in a decentralized way."
-          />
-
           {/* Less essential */}
           <meta name="twitter:card" content="summary_large_image" />
           <meta property="og:site_name" content="geobrowser.io" />

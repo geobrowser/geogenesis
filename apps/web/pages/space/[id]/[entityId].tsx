@@ -22,7 +22,7 @@ import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { getOpenGraphImageUrl } from '~/modules/utils';
 
 interface Props {
   triples: Triple[];
@@ -58,7 +58,10 @@ export default function EntityPage(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const opengraphUrl = props.serverAvatarUrl || props.serverCoverUrl || DEFAULT_OPENGRAPH_IMAGE;
+  const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description =
+    props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
 
   if (props.redirect) {
     return null;
@@ -70,11 +73,11 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        <meta property="og:image" content={opengraphUrl} />
-        <meta name="twitter:image" content={opengraphUrl} />
-        {props.description && <meta property="description" content={props.description} />}
-        {props.description && <meta property="og:description" content={props.description} />}
-        {props.description && <meta name="twitter:description" content={props.description} />}
+        <meta property="og:image" content={openGraphImageUrl} />
+        <meta name="twitter:image" content={openGraphImageUrl} />
+        <meta property="description" content={description} />
+        <meta property="og:description" content={description} />
+        <meta name="twitter:description" content={description} />
       </Head>
 
       <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
