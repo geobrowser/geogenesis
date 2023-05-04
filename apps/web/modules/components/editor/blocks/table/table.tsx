@@ -191,13 +191,12 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
               <EmptyTableText>No results found</EmptyTableText>
             </tr>
           )}
-          {table.getRowModel().rows.map(row => {
+          {table.getRowModel().rows.map((row, index: number) => {
             const cells = row.getVisibleCells();
-
-            const entityId = cells[0].getValue<Cell>()?.entityId;
+            const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
 
             return (
-              <tr key={entityId} className="hover:bg-bg">
+              <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
