@@ -1,20 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ImageResponse } from '@vercel/og';
 import type { NextRequest } from 'next/server';
+
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 export const config = {
   runtime: 'experimental-edge',
 };
-
-const defaultImage = fetch(new URL('./static/geo-social-image-v2.png', import.meta.url)).then(res => res.arrayBuffer());
 
 export default async function handler(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const hash = searchParams.get('hash');
 
   if (!hash) {
-    const defaultImageData = await defaultImage;
-
     return new ImageResponse(
       (
         <div
@@ -26,7 +23,7 @@ export default async function handler(request: NextRequest) {
           }}
         >
           <img
-            src={defaultImageData as any}
+            src={DEFAULT_OPENGRAPH_IMAGE}
             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
             alt=""
           />
@@ -39,6 +36,8 @@ export default async function handler(request: NextRequest) {
     );
   }
 
+  const image = `https://api.thegraph.com/ipfs/api/v0/cat?arg=${hash}`;
+
   return new ImageResponse(
     (
       <div
@@ -50,7 +49,7 @@ export default async function handler(request: NextRequest) {
         }}
       >
         <img
-          src={`https://api.thegraph.com/ipfs/api/v0/cat?arg=${hash}`}
+          src={image}
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
           alt=""
         />
