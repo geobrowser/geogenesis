@@ -1,4 +1,5 @@
 import * as React from 'react';
+import cx from 'classnames';
 import Link from 'next/link';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
@@ -503,46 +504,40 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEnti
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 
-const PLACEHOLDER_ROWS = new Array(10).fill(0);
+type TableBlockPlaceholderProps = {
+  className?: string;
+  columns?: number;
+  rows?: number;
+};
 
-function TableBlockPlaceholder() {
+export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
+  const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
+  const PLACEHOLDER_ROWS = new Array(rows).fill(0);
+
   return (
-    <div className="overflow-x-scroll rounded-sm">
+    <div className={cx('overflow-x-scroll rounded-sm', className)}>
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           <tr>
-            <th
-              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-            >
-              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
-            </th>
-            <th
-              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-            >
-              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
-            </th>
-            <th
-              className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-              style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-            >
-              <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
-            </th>
+            {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+              <th
+                key={index}
+                className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+                style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+              >
+                <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
             <tr key={index}>
-              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-                <p className="h-5 rounded-sm bg-divider" />
-              </td>
-              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-                <p className="h-5 rounded-sm bg-divider" />
-              </td>
-              <td className="border border-grey-02 bg-transparent p-[10px] align-top">
-                <p className="h-5 rounded-sm bg-divider" />
-              </td>
+              {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+                <td key={index} className="border border-grey-02 bg-transparent p-[10px] align-top">
+                  <p className="h-5 rounded-sm bg-divider" />
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

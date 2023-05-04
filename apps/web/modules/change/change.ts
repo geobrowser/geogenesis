@@ -49,7 +49,26 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
         if (parentEntityId) {
           const blockType = Action.getBlockType(action);
 
-          if (blockType === null) break;
+          if (blockType === null) {
+            // @NOTE we're assuming this means we're creating a table block
+            if (action.attributeId === 'name') {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableBlock',
+                    before: null,
+                    after: Action.getValue(action, ''),
+                  },
+                },
+              };
+            }
+
+            break;
+          }
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
@@ -107,7 +126,26 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
         if (parentEntityId) {
           const blockType = Action.getBlockType(action.before);
 
-          if (blockType === null) break;
+          if (blockType === null) {
+            // @NOTE we're assuming this means we're editing the name of a table block
+            if (action.before.attributeId === 'name') {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableBlock',
+                    before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? Action.getValue(action.before, ''),
+                    after: Action.getValue(action.after, ''),
+                  },
+                },
+              };
+            }
+
+            break;
+          }
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
@@ -153,7 +191,26 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
         if (parentEntityId) {
           const blockType = Action.getBlockType(action);
 
-          if (blockType === null) break;
+          if (blockType === null) {
+            // @NOTE we're assuming this means we're deleting a table block
+            if (action.attributeId === 'name') {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableBlock',
+                    before: Action.getValue(action, ''),
+                    after: null,
+                  },
+                },
+              };
+            }
+
+            break;
+          }
 
           changes[parentEntityId] = {
             ...changes[parentEntityId],
