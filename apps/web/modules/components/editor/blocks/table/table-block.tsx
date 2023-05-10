@@ -33,6 +33,7 @@ import { ResizableContainer } from '~/modules/design-system/resizable-container'
 import { Menu } from '~/modules/design-system/menu';
 import { Context } from '~/modules/design-system/icons/context';
 import { Close } from '~/modules/design-system/icons/close';
+import { NavUtils } from '~/modules/utils';
 
 interface Props {
   spaceId: string;
@@ -50,9 +51,13 @@ export function TableBlock({ spaceId }: Props) {
     filterState,
     setFilterState,
     isLoading,
+    type,
   } = useTableBlock();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+  const { editable } = useEditable();
+  const { isEditor } = useAccessControl(spaceId);
+  const isEditing = editable && isEditor;
 
   const hiddenColumns =
     blockEntity?.triples
@@ -74,6 +79,8 @@ export function TableBlock({ spaceId }: Props) {
       columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
+
+  const typeId = type.entityId;
 
   return (
     <div>
@@ -146,6 +153,18 @@ export function TableBlock({ spaceId }: Props) {
               </a>
             </Link>
           </Menu>
+          <span>
+            {isEditing && (
+              <>
+                <Spacer width={12} />
+                <Link href={NavUtils.toCreateEntity(spaceId, typeId)} passHref>
+                  <a>
+                    <SmallButton className="whitespace-nowrap">New entity</SmallButton>
+                  </a>
+                </Link>
+              </>
+            )}
+          </span>
         </div>
       </div>
 

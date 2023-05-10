@@ -30,7 +30,13 @@ export function titleCase(string: string): string {
 export const NavUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
-  toCreateEntity: (spaceId: string) => `/space/${spaceId}/create-entity`,
+  toCreateEntity: (spaceId: string, typeId?: string) => {
+    if (typeId) {
+      return `/space/${spaceId}/create-entity?typeId=${typeId}`;
+    }
+
+    return `/space/${spaceId}/create-entity`;
+  },
 };
 
 export function getFilesFromFileList(fileList: FileList): File[] {

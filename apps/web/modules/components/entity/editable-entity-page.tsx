@@ -21,15 +21,17 @@ import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
+import { Services } from '~/modules/services';
 
 interface Props {
   triples: TripleType[];
   id: string;
   name: string;
   spaceId: string;
+  typeId?: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, spaceId, triples: serverTriples }: Props) {
+export function EditableEntityPage({ id, name: serverName, spaceId, triples: serverTriples, typeId }: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -41,6 +43,7 @@ export function EditableEntityPage({ id, name: serverName, spaceId, triples: ser
   } = useEntityStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
+  const { network } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -62,6 +65,33 @@ export function EditableEntityPage({ id, name: serverName, spaceId, triples: ser
   });
 
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
+
+  const [hasSetType, setHasSetType] = React.useState(false);
+
+  React.useEffect(() => {
+    if (hasSetType) return;
+
+    const setTypeTriple = async () => {
+      const typeEntity = await network.fetchEntity(typeId ?? '');
+      if (typeEntity) {
+        send({
+          type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+          payload: {
+            attributeId: 'type',
+            attributeName: 'Type',
+            entityId: typeEntity.id,
+            entityName: typeEntity.name || '',
+          },
+        });
+      }
+    };
+
+    if (typeId) {
+      setTypeTriple();
+    }
+
+    setHasSetType(true);
+  }, [hasSetType, network, send, typeId]);
 
   return (
     <>
