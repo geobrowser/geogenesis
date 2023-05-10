@@ -29,9 +29,19 @@ interface Props {
   name: string;
   spaceId: string;
   typeId?: string;
+  filterId?: string;
+  filterValue?: string;
 }
 
-export function EditableEntityPage({ id, name: serverName, spaceId, triples: serverTriples, typeId }: Props) {
+export function EditableEntityPage({
+  id,
+  name: serverName,
+  spaceId,
+  triples: serverTriples,
+  typeId,
+  filterId,
+  filterValue,
+}: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -67,12 +77,14 @@ export function EditableEntityPage({ id, name: serverName, spaceId, triples: ser
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   const [hasSetType, setHasSetType] = React.useState(false);
+  const [hasSetFilter, setHasSetFilter] = React.useState(false);
 
   React.useEffect(() => {
     if (hasSetType) return;
 
     const setTypeTriple = async () => {
       const typeEntity = await network.fetchEntity(typeId ?? '');
+
       if (typeEntity) {
         send({
           type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
@@ -92,6 +104,34 @@ export function EditableEntityPage({ id, name: serverName, spaceId, triples: ser
 
     setHasSetType(true);
   }, [hasSetType, network, send, typeId]);
+
+  React.useEffect(() => {
+    if (!hasSetType) return;
+    if (hasSetFilter) return;
+
+    const setFilterTriple = async () => {
+      const idEntity = await network.fetchEntity(filterId ?? '');
+      const valueEntity = await network.fetchEntity(filterValue ?? '');
+
+      if (filterId && filterValue && idEntity && valueEntity) {
+        send({
+          type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+          payload: {
+            attributeId: idEntity.id,
+            attributeName: idEntity.name ?? '',
+            entityId: valueEntity.id,
+            entityName: valueEntity.name || '',
+          },
+        });
+      }
+    };
+
+    if (filterId && filterValue) {
+      setFilterTriple();
+    }
+
+    setHasSetFilter(true);
+  }, [hasSetType, hasSetFilter, network, send, filterId, filterValue]);
 
   return (
     <>
