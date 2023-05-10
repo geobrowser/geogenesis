@@ -81,6 +81,8 @@ export function TableBlock({ spaceId }: Props) {
   });
 
   const typeId = type.entityId;
+  const filterId = filterState?.[0]?.columnId ?? null;
+  const filterValue = filterState?.[0]?.value ?? null;
 
   return (
     <div>
@@ -157,7 +159,7 @@ export function TableBlock({ spaceId }: Props) {
             {isEditing && (
               <>
                 <Spacer width={12} />
-                <Link href={NavUtils.toCreateEntity(spaceId, typeId)} passHref>
+                <Link href={NavUtils.toCreateEntity(spaceId, typeId, filterId, filterValue)} passHref>
                   <a>
                     <SmallButton className="whitespace-nowrap">New entity</SmallButton>
                   </a>

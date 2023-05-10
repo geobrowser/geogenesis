@@ -30,7 +30,11 @@ export function titleCase(string: string): string {
 export const NavUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
-  toCreateEntity: (spaceId: string, typeId?: string) => {
+  toCreateEntity: (spaceId: string, typeId?: string, filterId?: string, filterValue?: string) => {
+    if (typeId && filterId && filterValue) {
+      return `/space/${spaceId}/create-entity?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
+    }
+
     if (typeId) {
       return `/space/${spaceId}/create-entity?typeId=${typeId}`;
     }
