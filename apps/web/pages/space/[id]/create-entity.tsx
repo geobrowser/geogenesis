@@ -1,4 +1,5 @@
 import type { GetServerSideProps } from 'next';
+import Head from 'next/head';
 import { useMemo } from 'react';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 
@@ -14,32 +15,40 @@ import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces
 import { TypesStoreProvider } from '~/modules/type/types-store';
 import { Space, Triple } from '~/modules/types';
 
-interface Props {
+type Props = {
   spaceId: string;
+  typeId: string | undefined;
   space: Space | null;
   spaceTypes: Triple[];
-}
+};
 
-export default function CreateEntity({ spaceId, spaceTypes, space }: Props) {
+export default function CreateEntity({ spaceId, typeId, spaceTypes, space }: Props) {
   const newId = useMemo(() => ID.createEntityId(), []);
 
   return (
-    <TypesStoreProvider initialTypes={spaceTypes} space={space}>
-      <EntityStoreProvider
-        id={newId}
-        spaceId={spaceId}
-        initialTriples={[]}
-        initialSchemaTriples={[]}
-        initialBlockTriples={[]}
-        initialBlockIdsTriple={null}
-      >
-        <CreateEntityContent newId={newId} spaceId={spaceId} />
-      </EntityStoreProvider>
-    </TypesStoreProvider>
+    <>
+      <Head>
+        <title>Geo - {space?.attributes.name} - Create entity</title>
+      </Head>
+      <TypesStoreProvider initialTypes={spaceTypes} space={space}>
+        <EntityStoreProvider
+          id={newId}
+          spaceId={spaceId}
+          initialTriples={[]}
+          initialSchemaTriples={[]}
+          initialBlockTriples={[]}
+          initialBlockIdsTriple={null}
+        >
+          <CreateEntityContent newId={newId} spaceId={spaceId} typeId={typeId} />
+        </EntityStoreProvider>
+      </TypesStoreProvider>
+    </>
   );
 }
 
-export function CreateEntityContent({ spaceId, newId }: { spaceId: string; newId: string }) {
+type CreateEntityContentProps = { spaceId: string; newId: string; typeId?: string };
+
+export function CreateEntityContent({ spaceId, newId, typeId }: CreateEntityContentProps) {
   const { triples } = useEntityStore();
   const avatarUrl = Entity.avatar(triples) ?? null;
   const coverUrl = Entity.cover(triples) ?? null;
@@ -49,7 +58,7 @@ export function CreateEntityContent({ spaceId, newId }: { spaceId: string; newId
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
       <EntityPageContentContainer>
         <EditableHeading spaceId={spaceId} entityId={newId} name="" triples={triples} />
-        <EditableEntityPage id={newId} name="" spaceId={spaceId} triples={triples} />
+        <EditableEntityPage id={newId} name="" spaceId={spaceId} typeId={typeId} triples={triples} />
       </EntityPageContentContainer>
     </>
   );
@@ -57,6 +66,8 @@ export function CreateEntityContent({ spaceId, newId }: { spaceId: string; newId
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.query.id as string;
+  const typeId = context.query.typeId as string | undefined;
+
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
   const storage = new StorageClient(config.ipfs);
@@ -73,6 +84,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   return {
     props: {
       spaceId,
+      typeId,
       space,
       spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     },
