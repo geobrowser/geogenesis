@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import cx from 'classnames';
 import { cva } from 'class-variance-authority';
 import { useSigner } from 'wagmi';
@@ -10,7 +10,6 @@ import pluralize from 'pluralize';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
-// import { RemoveScroll } from 'react-remove-scroll';
 import BoringAvatar from 'boring-avatars';
 
 import { Action } from '../action';
@@ -25,16 +24,15 @@ import { useActionsStore } from '../action';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
 import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
-import type { Action as ActionType, Triple as TripleType, Entity as EntityType, ReviewState, Space } from '../types';
+import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
-import { ZERO_WIDTH_SPACE } from '../constants';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
 
-  const onClose = () => {
+  const onClose = useCallback(() => {
     setIsReviewOpen(false);
-  };
+  }, [setIsReviewOpen]);
 
   return (
     <Dialog.Root open={isReviewOpen} onOpenChange={onClose} modal={true}>
@@ -116,17 +114,17 @@ const ReviewChanges = () => {
   // Publishing logic
   const { data: signer } = useSigner();
 
-  const handlePublish = async () => {
+  const handlePublish = useCallback(async () => {
     if (!activeSpace || !signer) return;
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
     await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
     clearProposalName();
-  };
+  }, [activeSpace, proposalName, proposals, publish, signer, unstagedChanges]);
 
   if (isLoading || typeof data !== 'object') {
-    return null;
+    return <>Loading...</>;
   }
 
   const [changes, entities] = data;
@@ -216,6 +214,7 @@ const ReviewChanges = () => {
               {changedEntityIds.map((entityId: EntityId) => (
                 <ChangedEntity
                   key={entityId}
+                  spaceId={activeSpace}
                   change={changes[entityId] as Changeset}
                   entity={entities[entityId] as EntityType}
                   unstagedChanges={unstagedChanges}
@@ -232,14 +231,25 @@ const ReviewChanges = () => {
 };
 
 type ChangedEntityProps = {
+  spaceId: SpaceId;
   change: Changeset;
   entity: EntityType;
   unstagedChanges: Record<string, unknown>;
   setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
-const ChangedEntity = ({ change, entity, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
-  const { name, blocks = {}, attributes = {} } = change;
+const ChangedEntity = ({ spaceId, change, entity, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+  const { name, blocks = {}, attributes = {}, actions = [] } = change;
+
+  const [deleted, setDeleted] = useState(false);
+  const { deleteActions } = useActionsStore(spaceId);
+
+  const handleDeleteActions = useCallback(() => {
+    deleteActions(spaceId, actions);
+    setDeleted(true);
+  }, [spaceId, actions, deleteActions]);
+
+  if (deleted) return null;
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -264,9 +274,7 @@ const ChangedEntity = ({ change, entity, unstagedChanges, setUnstagedChanges }: 
         <div className="relative flex-1 text-body">
           Your proposed edits
           <div className="absolute top-0 right-0">
-            <SmallButton title="Coming soon" className="cursor-not-allowed">
-              Delete all
-            </SmallButton>
+            <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
           </div>
         </div>
       </div>
