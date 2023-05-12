@@ -145,7 +145,7 @@ export class ActionsStore implements IActionsStore {
     description: string | undefined = undefined
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const actionsToPublish = spaceActions.filter(action => !(Action.getId(action) in unstagedChanges));
+    const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
 
     if (actionsToPublish.length < 1) return;
 
@@ -168,14 +168,40 @@ export class ActionsStore implements IActionsStore {
       ...action,
       hasBeenPublished: true,
     }));
-    const unstagedActions = spaceActions.filter(action => Action.getId(action) in unstagedChanges);
 
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: [...publishedActions, ...unstagedActions],
+      [spaceId]: [...publishedActions, ...actionsToPersist],
     });
 
     onChangePublishState('publish-complete');
     await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
+
+const splitActions = (actions: ActionType[], unstagedChanges: any) => {
+  const actionsToPublish: ActionType[] = [];
+  const actionsToPersist: ActionType[] = [];
+
+  actions.forEach(action => {
+    switch (action.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.entityId] ?? {}, action.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+      case 'editTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.before.entityId] ?? {}, action.before.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+    }
+  });
+
+  return [actionsToPublish, actionsToPersist];
+};

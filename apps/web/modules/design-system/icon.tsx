@@ -34,6 +34,7 @@ import { FilterTable } from './icons/filter-table';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
+import { Dash } from './icons/dash';
 
 export type IconName =
   | 'blank'
@@ -71,7 +72,8 @@ export type IconName =
   | 'context'
   | 'filterTable'
   | 'filterTableWithFilters'
-  | 'checkCloseSmall';
+  | 'checkCloseSmall'
+  | 'dash';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -123,4 +125,5 @@ const icons: Record<IconName, React.ElementType> = {
   filterTableWithFilters: FilterTableWithFilters,
   chevronDownSmall: ChevronDownSmall,
   checkCloseSmall: CheckCloseSmall,
+  dash: Dash,
 };
