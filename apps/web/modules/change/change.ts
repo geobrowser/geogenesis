@@ -5,6 +5,7 @@ import { Entity } from '~/modules/entity';
 import type { Action as ActionType, Entity as EntityType, TripleValueType } from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
 
+export type ActionId = string;
 export type EntityId = string;
 export type BlockId = string;
 export type BlockValueType = 'textBlock' | 'imageBlock' | 'tableBlock' | 'markdownContent';
@@ -13,6 +14,7 @@ export type Changeset = {
   name: string;
   blocks?: Record<BlockId, BlockChange>;
   attributes?: Record<AttributeId, AttributeChange>;
+  actions?: Array<ActionId>;
 };
 export type BlockChange = {
   type: BlockValueType;
@@ -64,6 +66,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                     after: Action.getValue(action, ''),
                   },
                 },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
               };
             }
 
@@ -82,6 +85,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: Action.getValue(action, ''),
               },
             },
+            actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
           };
         } else if (action.value.type === 'entity') {
           changes[entityId] = {
@@ -97,6 +101,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
               },
             },
+            actions: [...(changes[entityId]?.actions ?? []), action.id],
           };
         } else {
           changes[entityId] = {
@@ -112,6 +117,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: Action.getValue(action, ''),
               },
             },
+            actions: [...(changes[entityId]?.actions ?? []), action.id],
           };
         }
 
@@ -141,6 +147,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                     after: Action.getValue(action.after, ''),
                   },
                 },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
               };
             }
 
@@ -159,6 +166,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: Action.getValue(action.after, ''),
               },
             },
+            actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
           };
         } else {
           changes[entityId] = {
@@ -177,6 +185,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: Action.getValue(action.after, ''),
               },
             },
+            actions: [...(changes[entityId]?.actions ?? []), action.before.id],
           };
         }
 
@@ -206,6 +215,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                     after: null,
                   },
                 },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
               };
             }
 
@@ -227,6 +237,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: null,
               },
             },
+            actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
           };
         } else if (action.value.type === 'entity') {
           changes[entityId] = {
@@ -242,6 +253,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
               },
             },
+            actions: [...(changes[entityId]?.actions ?? []), action.id],
           };
         } else {
           changes[entityId] = {
@@ -260,6 +272,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 after: null,
               },
             },
+            actions: [...(changes[entityId]?.actions ?? []), action.id],
           };
         }
 
