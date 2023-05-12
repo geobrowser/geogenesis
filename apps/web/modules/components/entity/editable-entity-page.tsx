@@ -28,9 +28,9 @@ interface Props {
   id: string;
   name: string;
   spaceId: string;
-  typeId?: string;
-  filterId?: string;
-  filterValue?: string;
+  typeId?: string | null;
+  filterId?: string | null;
+  filterValue?: string | null;
 }
 
 export function EditableEntityPage({

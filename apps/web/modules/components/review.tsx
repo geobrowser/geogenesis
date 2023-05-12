@@ -21,7 +21,6 @@ import { Spinner } from '~/modules/design-system/spinner';
 import { useReview } from '~/modules/review';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
-import { useLocalStorage } from '../hooks/use-local-storage';
 import { Services } from '../services';
 import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
@@ -106,7 +105,7 @@ const ReviewChanges = () => {
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
-  const [unstagedChanges, setUnstagedChanges] = useLocalStorage<Record<string, unknown>>('unstagedChanges', {});
+  const [unstagedChanges, setUnstagedChanges] = useState<Record<string, unknown>>({});
   const { actionsFromSpace, publish, clear } = useActionsStore(activeSpace);
   const actions = Action.unpublishedChanges(actionsFromSpace);
   const [data, isLoading] = useChanges(actions, activeSpace);
@@ -124,10 +123,15 @@ const ReviewChanges = () => {
   }, [activeSpace, proposalName, proposals, publish, signer, unstagedChanges]);
 
   if (isLoading || typeof data !== 'object') {
-    return <>Loading...</>;
+    return null;
   }
 
   const [changes, entities] = data;
+  const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
+  const totalEdits = getTotalEdits(
+    changes as Record<string, Change.Changeset>,
+    unstagedChanges as Record<string, Record<string, boolean>>
+  );
 
   const changedEntityIds = Object.keys(changes);
 
@@ -185,11 +189,14 @@ const ReviewChanges = () => {
               <div className="inline-flex items-center gap-2">
                 <span>
                   <span className="font-medium">
-                    {actionsFromSpace.length} {pluralize('edit', actionsFromSpace.length)}
+                    {totalEdits} {pluralize('edit', totalEdits)}
                   </span>{' '}
                   selected to publish
                 </span>
-                <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+                <SquareButton
+                  icon={totalEdits === 0 ? 'blank' : totalEdits === totalChanges ? 'tick' : 'dash'}
+                  onClick={() => setUnstagedChanges({})}
+                />
               </div>
               <div>
                 <SmallButton onClick={() => clear(activeSpace)}>Delete all</SmallButton>
@@ -216,6 +223,7 @@ const ReviewChanges = () => {
                   key={entityId}
                   spaceId={activeSpace}
                   change={changes[entityId] as Changeset}
+                  entityId={entityId}
                   entity={entities[entityId] as EntityType}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
@@ -229,27 +237,74 @@ const ReviewChanges = () => {
     </>
   );
 };
+const getTotalChanges = (changes: Record<string, Change.Changeset>) => {
+  let totalChanges = 0;
+
+  for (const key in changes) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    for (const _ in changes[key]?.attributes) {
+      totalChanges++;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    for (const _ in changes[key]?.blocks) {
+      totalChanges++;
+    }
+  }
+
+  return totalChanges;
+};
+
+const getTotalEdits = (
+  changes: Record<string, Change.Changeset>,
+  unstagedChanges: Record<string, Record<string, boolean>>
+) => {
+  let totalEdits = 0;
+
+  for (const key in changes) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    for (const _ in changes[key]?.attributes) {
+      totalEdits++;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    for (const _ in changes[key]?.blocks) {
+      totalEdits++;
+    }
+  }
+
+  for (const key in unstagedChanges) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    for (const _ in unstagedChanges[key]) {
+      totalEdits--;
+    }
+  }
+
+  return totalEdits;
+};
 
 type ChangedEntityProps = {
   spaceId: SpaceId;
   change: Changeset;
+  entityId: EntityId;
   entity: EntityType;
   unstagedChanges: Record<string, unknown>;
   setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
-const ChangedEntity = ({ spaceId, change, entity, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+const ChangedEntity = ({
+  spaceId,
+  change,
+  entityId,
+  entity,
+  unstagedChanges,
+  setUnstagedChanges,
+}: ChangedEntityProps) => {
   const { name, blocks = {}, attributes = {}, actions = [] } = change;
 
-  const [deleted, setDeleted] = useState(false);
   const { deleteActions } = useActionsStore(spaceId);
 
   const handleDeleteActions = useCallback(() => {
     deleteActions(spaceId, actions);
-    setDeleted(true);
   }, [spaceId, actions, deleteActions]);
-
-  if (deleted) return null;
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -299,6 +354,7 @@ const ChangedEntity = ({ spaceId, change, entity, unstagedChanges, setUnstagedCh
               key={attributeId}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
+              entityId={entityId}
               entity={entity}
               unstagedChanges={unstagedChanges}
               setUnstagedChanges={setUnstagedChanges}
@@ -466,6 +522,7 @@ const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChan
 type ChangedAttributeProps = {
   attributeId: AttributeId;
   attribute: AttributeChange;
+  entityId: EntityId;
   entity: EntityType;
   unstagedChanges: Record<string, unknown>;
   setUnstagedChanges: (value: Record<string, unknown>) => void;
@@ -474,6 +531,7 @@ type ChangedAttributeProps = {
 const ChangedAttribute = ({
   attributeId,
   attribute,
+  entityId,
   entity,
   unstagedChanges,
   setUnstagedChanges,
@@ -482,6 +540,26 @@ const ChangedAttribute = ({
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
   const { name, before, after } = attribute;
+
+  const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
+
+  const handleStaging = () => {
+    if (!unstaged) {
+      setUnstagedChanges({
+        ...unstagedChanges,
+        [entityId]: {
+          ...(unstagedChanges[entityId] ?? {}),
+          [attributeId]: true,
+        },
+      });
+    } else {
+      const newUnstagedChanges: any = { ...unstagedChanges };
+      if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
+        delete newUnstagedChanges?.[entityId]?.[attributeId];
+      }
+      setUnstagedChanges(newUnstagedChanges);
+    }
+  };
 
   // Don't show dead changes
   if (!before && !after) return null;
@@ -513,7 +591,7 @@ const ChangedAttribute = ({
                 className="cursor-not-allowed opacity-0 group-hover:opacity-100"
                 title="Coming soon"
               />
-              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
@@ -560,7 +638,7 @@ const ChangedAttribute = ({
                 className="cursor-not-allowed opacity-0 group-hover:opacity-100"
                 title="Coming soon"
               />
-              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
@@ -610,7 +688,7 @@ const ChangedAttribute = ({
                 className="cursor-not-allowed opacity-0 group-hover:opacity-100"
                 title="Coming soon"
               />
-              <SquareButton icon="tick" className="cursor-not-allowed" title="Coming soon" />
+              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
@@ -657,10 +735,10 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
   );
 };
 
-const useChanges = (actions: Array<ActionType>, spaceId: string) => {
+const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { network } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: [`${spaceId}-changes`],
+    queryKey: [`${spaceId}-changes-${actions.length}`],
     queryFn: async () => Change.fromActions(actions, network),
   });
 

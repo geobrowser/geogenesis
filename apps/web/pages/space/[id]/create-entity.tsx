@@ -17,9 +17,9 @@ import { Space, Triple } from '~/modules/types';
 
 type Props = {
   spaceId: string;
-  typeId: string | undefined;
-  filterId: string | undefined;
-  filterValue: string | undefined;
+  typeId: string | null;
+  filterId: string | null;
+  filterValue: string | null;
   space: Space | null;
   spaceTypes: Triple[];
 };
@@ -57,9 +57,9 @@ export default function CreateEntity({ spaceId, typeId, filterId, filterValue, s
 type CreateEntityContentProps = {
   spaceId: string;
   newId: string;
-  typeId?: string;
-  filterId?: string;
-  filterValue?: string;
+  typeId?: string | null;
+  filterId?: string | null;
+  filterValue?: string | null;
 };
 
 export function CreateEntityContent({ spaceId, newId, typeId, filterId, filterValue }: CreateEntityContentProps) {
@@ -108,9 +108,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   return {
     props: {
       spaceId,
-      typeId,
-      filterId,
-      filterValue,
+      typeId: typeId ?? null,
+      filterId: filterId ?? null,
+      filterValue: filterValue ?? null,
       space,
       spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     },
