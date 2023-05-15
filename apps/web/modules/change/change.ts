@@ -26,6 +26,7 @@ export type AttributeChange = {
   name: string;
   before: string | null | Array<string | null>;
   after: string | null | Array<string | null>;
+  actions: Array<ActionId>;
 };
 
 export async function fromActions(actions: ActionType[], network: INetwork) {
@@ -99,6 +100,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 name: action.attributeName ?? '',
                 before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? [])],
                 after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
+                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
               },
             },
             actions: [...(changes[entityId]?.actions ?? []), action.id],
@@ -115,6 +117,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 name: action.attributeName ?? '',
                 before: null,
                 after: Action.getValue(action, ''),
+                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
               },
             },
             actions: [...(changes[entityId]?.actions ?? []), action.id],
@@ -183,6 +186,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                   Action.getName(action.before) ??
                   Action.getValue(action.before, ''),
                 after: Action.getValue(action.after, ''),
+                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.before.id],
               },
             },
             actions: [...(changes[entityId]?.actions ?? []), action.before.id],
@@ -251,6 +255,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 name: action.attributeName ?? '',
                 before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? []), Action.getName(action)],
                 after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
+                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
               },
             },
             actions: [...(changes[entityId]?.actions ?? []), action.id],
@@ -270,6 +275,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                     ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
                     : Action.getValue(action, ''),
                 after: null,
+                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
               },
             },
             actions: [...(changes[entityId]?.actions ?? []), action.id],
