@@ -352,6 +352,7 @@ const ChangedEntity = ({
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
               key={attributeId}
+              spaceId={spaceId}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
               entityId={entityId}
@@ -520,6 +521,7 @@ const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChan
 };
 
 type ChangedAttributeProps = {
+  spaceId: SpaceId;
   attributeId: AttributeId;
   attribute: AttributeChange;
   entityId: EntityId;
@@ -529,6 +531,7 @@ type ChangedAttributeProps = {
 };
 
 const ChangedAttribute = ({
+  spaceId,
   attributeId,
   attribute,
   entityId,
@@ -536,6 +539,14 @@ const ChangedAttribute = ({
   unstagedChanges,
   setUnstagedChanges,
 }: ChangedAttributeProps) => {
+  const { actions = [] } = attribute;
+
+  const { deleteActions } = useActionsStore(spaceId);
+
+  const handleDeleteActions = useCallback(() => {
+    deleteActions(spaceId, actions);
+  }, [spaceId, actions, deleteActions]);
+
   // Don't show page blocks
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
@@ -586,11 +597,7 @@ const ChangedAttribute = ({
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
             <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                icon="trash"
-                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
-                title="Coming soon"
-              />
+              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -633,11 +640,7 @@ const ChangedAttribute = ({
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
             <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                icon="trash"
-                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
-                title="Coming soon"
-              />
+              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -683,11 +686,7 @@ const ChangedAttribute = ({
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
             <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                icon="trash"
-                className="cursor-not-allowed opacity-0 group-hover:opacity-100"
-                title="Coming soon"
-              />
+              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
