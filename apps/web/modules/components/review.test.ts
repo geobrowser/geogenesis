@@ -37,8 +37,10 @@ const STRING_CHANGES: Record<string, Changeset> = {
         name: 'Name',
         before: null,
         after: 'Devin',
+        actions: ['Devin'],
       },
     },
+    actions: ['Devin'],
   },
   Alice: {
     name: '',
@@ -48,8 +50,10 @@ const STRING_CHANGES: Record<string, Changeset> = {
         name: 'Name',
         before: 'Alice',
         after: 'Alice-2',
+        actions: ['Alice'],
       },
     },
+    actions: ['Alice'],
   },
   Bob: {
     name: '',
@@ -59,8 +63,10 @@ const STRING_CHANGES: Record<string, Changeset> = {
         name: 'Name',
         before: 'Bob',
         after: null,
+        actions: ['Bob'],
       },
     },
+    actions: ['Bob'],
   },
 };
 
@@ -84,8 +90,10 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
         name: 'Types',
         before: [],
         after: ['Text'],
+        actions: ['Devin'],
       },
     },
+    actions: ['Devin'],
   },
   Bob: {
     name: '',
@@ -95,8 +103,10 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
         name: 'Types',
         before: ['Text'],
         after: [],
+        actions: ['Bob'],
       },
     },
+    actions: ['Bob'],
   },
 };
 
