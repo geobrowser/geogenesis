@@ -59,12 +59,14 @@ export function TableBlock({ spaceId }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = editable && isEditor;
 
-  const hiddenColumns =
-    blockEntity?.triples
-      .filter(triple => triple.attributeId === SYSTEM_IDS.HIDDEN_COLUMNS)
-      .flatMap(item => item.value.id) ?? [];
+  const shownColumns = [
+    ...(blockEntity?.triples
+      .filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS)
+      .flatMap(item => item.value.id) ?? []),
+    'name',
+  ];
 
-  const renderedColumns = columns.filter(item => !hiddenColumns.includes(item.id));
+  const renderedColumns = columns.filter(item => shownColumns.includes(item.id));
 
   const filtersWithColumnName = filterState.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

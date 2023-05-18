@@ -3,6 +3,7 @@ import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
+import Gapcursor from '@tiptap/extension-gapcursor';
 
 import { SquareButton } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -19,6 +20,7 @@ interface Props {
 export const tiptapExtensions = [
   StarterKit,
   ConfiguredCommandExtension,
+  Gapcursor,
   TableNode,
   Image,
   Placeholder.configure({
