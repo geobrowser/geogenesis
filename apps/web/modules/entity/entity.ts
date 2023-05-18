@@ -54,10 +54,16 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
       // There are some system level Entities that have Triples from multiple Spaces. We only
       // want to show the Triples/Types from the current Space if there are multiple Types
       // with the same name assigned to this Entity.
-      if (triples.length > 1) {
+      if (triples.length > 1 && currentSpace) {
         return triples
           .filter(triple => triple.space === currentSpace)
           .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
+      }
+
+      if (triples.length > 1) {
+        return triples.flatMap(triple =>
+          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
+        );
       }
 
       return [];
