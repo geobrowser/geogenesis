@@ -3,6 +3,7 @@ import { batch, computed, Observable, observable, ObservableComputed, observe } 
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
+import pluralize from 'pluralize';
 
 import { ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/editor/editor';
@@ -366,11 +367,10 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for getting the human-readable, plain-text name of a node */
   nodeName = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
 
     if (isTableNode) {
-      return `Table Block ${blockEntityId}`;
+      return `${pluralize(node.attrs?.typeName, 2, false)}`;
     }
 
     const nodeHTML = this.textNodeHTML(node);
