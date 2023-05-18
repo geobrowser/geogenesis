@@ -76,11 +76,20 @@ export function TableBlock({ spaceId }: Props) {
       };
     }
 
+    if (f.columnId === SYSTEM_IDS.SPACE) {
+      return {
+        ...f,
+        columnName: 'Space',
+      };
+    }
+
     return {
       ...f,
       columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
+
+  console.log('filtersWithColumnName', filtersWithColumnName);
 
   const typeId = type.entityId;
   const filterId = filterState?.[0]?.columnId ?? null;
@@ -284,7 +293,20 @@ function EditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
   const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
-    { columnId: 'name', columnName: 'Name', valueType: valueTypes[SYSTEM_IDS.TEXT], value: '', valueName: null },
+    {
+      columnId: SYSTEM_IDS.NAME,
+      columnName: 'Name',
+      valueType: valueTypes[SYSTEM_IDS.TEXT],
+      value: '',
+      valueName: null,
+    },
+    {
+      columnId: SYSTEM_IDS.SPACE,
+      columnName: 'Space',
+      valueType: valueTypes[SYSTEM_IDS.RELATION],
+      value: '',
+      valueName: null,
+    },
     ...columns
       .map(c => ({
         columnId: c.id,
@@ -329,10 +351,6 @@ function EditableFilters() {
           </SmallButton>
         }
       />
-
-      {/* <SmallButton icon="chevronDownSmall" variant="secondary">
-        Clear
-      </SmallButton> */}
     </div>
   );
 }
@@ -364,7 +382,7 @@ function TableBlockFilterPill({
       {/* @TODO: Use avatar if the filter is not published */}
       <PublishedFilterIconFilled />
       <div className="flex items-center gap-1">
-        <span>{filter.columnName} contains</span>
+        <span>{filter.columnName} is</span>
         <span>·</span>
         <span>{value}</span>
       </div>
@@ -400,6 +418,8 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
   };
 
   const onDone = () => {
+    console.log('onDone', { selectedColumn, value });
+
     onCreate({
       columnId: selectedColumn,
       value: typeof value === 'string' ? value : value.entityId,
@@ -450,9 +470,24 @@ function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilter
                       }}
                     />
                   </div>
-                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Contains</span>
+                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
                   <div className="relative flex flex-1">
-                    {options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
+                    {selectedColumn === SYSTEM_IDS.SPACE ? (
+                      <TableBlockEntityFilterInput
+                        selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
+                        onSelect={r => {
+                          const selectedSpace = r.triples.find(t => t.attributeId === SYSTEM_IDS.SPACE);
+                          if (!selectedSpace) return;
+
+                          const spaceId = selectedSpace?.value.type === 'string' ? selectedSpace.value.value : '';
+
+                          setValue({
+                            entityId: spaceId,
+                            entityName: r.name,
+                          });
+                        }}
+                      />
+                    ) : options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
                       <TableBlockEntityFilterInput
                         selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
                         onSelect={r =>

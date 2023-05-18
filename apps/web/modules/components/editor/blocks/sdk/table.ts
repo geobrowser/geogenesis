@@ -171,6 +171,11 @@ export function createGraphQLStringFromFilters(
         return `name_starts_with_nocase: "${filter.value}"`;
       }
 
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'entity') {
+        console.log('space stuff', filter);
+        return `entityOf_: {space: "${filter.value}"}`;
+      }
+
       if (filter.valueType === 'entity') {
         // value is the ID of the relation
         return `entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}`;
@@ -272,6 +277,19 @@ export async function createFiltersFromGraphQLString(
       columnId: SYSTEM_IDS.NAME,
       valueType: 'string',
       value: nameValue,
+      valueName: null,
+    });
+  }
+
+  const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
+  const spaceMatch = graphQLString.match(spaceRegex);
+  const spaceValue = spaceMatch ? spaceMatch[1] : null;
+
+  if (spaceValue) {
+    filters.push({
+      columnId: SYSTEM_IDS.SPACE,
+      valueType: 'string',
+      value: spaceValue,
       valueName: null,
     });
   }
