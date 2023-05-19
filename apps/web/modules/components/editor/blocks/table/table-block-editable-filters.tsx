@@ -35,7 +35,8 @@ export function TableBlockEditableFilters() {
         value: '',
         valueName: null,
       }))
-      .flatMap(c => (c.columnName !== '' ? [c] : [])),
+      // Filter out any columns with names and any columns that are not entity or string value types
+      .flatMap(c => (c.columnName !== '' && (c.valueType === 'entity' || c.valueType === 'string') ? [c] : [])),
   ];
 
   const onCreateFilter = ({
