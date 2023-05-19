@@ -132,7 +132,12 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
               sideOffset={8}
               align="start"
             >
-              <div>
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  onDone();
+                }}
+              >
                 <div className="flex items-center justify-between ">
                   <span className="text-smallButton">New filter</span>
                   <AnimatePresence>
@@ -181,7 +186,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                     )}
                   </div>
                 </div>
-              </div>
+              </form>
             </TableBlockFilterPromptContent>
           )}
         </AnimatePresence>

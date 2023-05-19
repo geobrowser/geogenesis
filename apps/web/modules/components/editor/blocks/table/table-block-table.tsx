@@ -187,18 +187,9 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
         </thead>
         <tbody>
           {table.getRowModel().rows.length === 0 && (
-            // We add placeholder cells to the table when there are no rows
-            // to make sure the empty text correctly aligns in the center of
-            // the table
             <tr>
-              <td className="border border-r-0 border-grey-02">
-                <p> </p>
-              </td>
               <td className="border border-x-0 border-grey-02">
                 <EmptyTableText>No results found</EmptyTableText>
-              </td>
-              <td className="border border-l-0 border-grey-02">
-                <p> </p>
               </td>
             </tr>
           )}
