@@ -65,59 +65,129 @@ function getFilterValueName(interfaceFilterValue: InterfaceFilterValue) {
   }
 }
 
+type PromptState = {
+  selectedColumn: string;
+  value: InterfaceFilterValue;
+  open: boolean;
+};
+
+type PromptAction =
+  | {
+      type: 'open';
+    }
+  | { type: 'close' }
+  | { type: 'onOpenChange'; payload: { open: boolean } }
+  | { type: 'selectColumn'; payload: { columnId: string } }
+  | {
+      type: 'selectEntityValue' | 'selectSpaceValue';
+      payload: { id: string; name: string | null };
+    }
+  | {
+      type: 'selectStringValue';
+      payload: { value: string };
+    }
+  | {
+      type: 'done';
+    };
+
+const reducer = (state: PromptState, action: PromptAction): PromptState => {
+  switch (action.type) {
+    case 'open':
+      return {
+        ...state,
+        open: true,
+      };
+    case 'close':
+      return {
+        ...state,
+        open: false,
+      };
+    case 'onOpenChange':
+      return {
+        open: action.payload.open,
+        selectedColumn: SYSTEM_IDS.NAME,
+        value: {
+          type: 'string',
+          value: '',
+        },
+      };
+    case 'selectColumn':
+      // @TODO: The value should be based on the selected column value type
+      return {
+        ...state,
+        selectedColumn: action.payload.columnId,
+      };
+    case 'selectEntityValue':
+      return {
+        ...state,
+        value: {
+          type: 'entity',
+          entityId: action.payload.id,
+          entityName: action.payload.name,
+        },
+      };
+    case 'selectSpaceValue':
+      return {
+        ...state,
+        value: {
+          type: 'space',
+          spaceId: action.payload.id,
+          spaceName: action.payload.name,
+        },
+      };
+    case 'selectStringValue':
+      return {
+        ...state,
+        value: {
+          type: 'string',
+          value: action.payload.value,
+        },
+      };
+    case 'done':
+      return {
+        open: false,
+        selectedColumn: SYSTEM_IDS.NAME,
+        value: {
+          type: 'string',
+          value: '',
+        },
+      };
+  }
+};
+
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const [open, setOpen] = React.useState(false);
+  const [state, dispatch] = React.useReducer(reducer, {
+    selectedColumn: SYSTEM_IDS.NAME,
+    value: { type: 'string', value: '' },
+    open: false,
+  });
 
-  const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
-  const [value, setValue] = React.useState<InterfaceFilterValue>({ type: 'string', value: '' });
-
-  const onOpenChange = (open: boolean) => {
-    setSelectedColumn(SYSTEM_IDS.NAME);
-    setValue({ type: 'string', value: '' });
-    setOpen(open);
-  };
+  const onOpenChange = (open: boolean) => dispatch({ type: 'onOpenChange', payload: { open } });
 
   const onDone = () => {
     onCreate({
-      columnId: selectedColumn,
-      value: getFilterValue(value),
-      valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
-      valueName: getFilterValueName(value),
+      columnId: state.selectedColumn,
+      value: getFilterValue(state.value),
+      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'string',
+      valueName: getFilterValueName(state.value),
     });
-    setOpen(false);
-    setSelectedColumn(SYSTEM_IDS.NAME);
-    setValue({ type: 'string', value: '' });
+    dispatch({ type: 'done' });
   };
 
-  const onSelectColumnToFilter = (columnId: string) => {
-    setSelectedColumn(columnId);
+  const onSelectColumnToFilter = (columnId: string) => dispatch({ type: 'selectColumn', payload: { columnId } });
 
-    // @TODO: The value should be based on the selected column value type
-    setValue({ type: 'string', value: '' });
-  };
+  const onSelectEntityValue = (entity: { id: string; name: string | null }) =>
+    dispatch({ type: 'selectEntityValue', payload: { id: entity.id, name: entity.name } });
 
-  const onSelectEntityValue = (entity: { id: string; name: string | null }) => {
-    setValue({
-      type: 'entity',
-      entityId: entity.id,
-      entityName: entity.name,
-    });
-  };
-
-  const onSelectSpaceValue = (space: { id: string; name: string | null }) => {
-    setValue({
-      type: 'space',
-      spaceId: space.id,
-      spaceName: space.name,
-    });
-  };
+  const onSelectSpaceValue = (space: { id: string; name: string | null }) =>
+    dispatch({ type: 'selectSpaceValue', payload: { id: space.id, name: space.name } });
 
   return (
-    <Root open={open} onOpenChange={onOpenChange}>
+    <Root open={state.open} onOpenChange={onOpenChange}>
       <Trigger>{trigger}</Trigger>
       <Portal>
         <AnimatePresence>
-          {open && (
+          {state.open && (
             <TableBlockFilterPromptContent
               forceMount={true}
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -141,7 +211,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                 <div className="flex items-center justify-between ">
                   <span className="text-smallButton">New filter</span>
                   <AnimatePresence>
-                    {getFilterValue(value) !== '' && (
+                    {getFilterValue(state.value) !== '' && (
                       <motion.span
                         initial={{ scale: 0.95, opacity: 0 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -162,26 +232,28 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   <div className="flex flex-1">
                     <Select
                       options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      value={selectedColumn}
+                      value={state.selectedColumn}
                       onChange={onSelectColumnToFilter}
                     />
                   </div>
                   <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
                   <div className="relative flex flex-1">
-                    {selectedColumn === SYSTEM_IDS.SPACE ? (
+                    {state.selectedColumn === SYSTEM_IDS.SPACE ? (
                       <TableBlockSpaceFilterInput
-                        selectedValue={getFilterValueName(value) ?? ''}
+                        selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}
                       />
-                    ) : options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
+                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'entity' ? (
                       <TableBlockEntityFilterInput
-                        selectedValue={getFilterValueName(value) ?? ''}
+                        selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />
                     ) : (
                       <Input
-                        value={getFilterValue(value)}
-                        onChange={e => setValue({ type: 'string', value: e.currentTarget.value })}
+                        value={getFilterValue(state.value)}
+                        onChange={e =>
+                          dispatch({ type: 'selectStringValue', payload: { value: e.currentTarget.value } })
+                        }
                       />
                     )}
                   </div>
