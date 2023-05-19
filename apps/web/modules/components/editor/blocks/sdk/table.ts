@@ -128,6 +128,8 @@ export function createBlock({
  * query the table using the filters. We include the typeId from the table
  * in the graphql string to make sure we're filtering by the correct type.
  *
+ * We treat Name and Space as special filters.
+ *
  * e.g. these filters
  * ```ts
  * const filters = [{
@@ -166,6 +168,9 @@ export function createGraphQLStringFromFilters(
 
   const filtersAsStrings = filters
     .map(filter => {
+      // We treat Name and Space as special filters even though they are not always
+      // columns on the type schema for a table. We allow users to be able to filter
+      // by name and space.
       if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name_starts_with_nocase: "${filter.value}"`;

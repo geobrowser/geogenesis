@@ -28,6 +28,12 @@ interface TableBlockFilterPromptProps {
 
 const TableBlockFilterPromptContent = motion(Content);
 
+/**
+ * We allow users to filter by Name, Space, or any Text or Relation column. We need to support
+ * different autocomplete experiences for the filter inputs for each of these cases. Each data
+ * model for these cases is also different, and we represent the different cases in the filter UI
+ * with the InterfaceFilterValue type below.
+ */
 type InterfaceFilterValue =
   | { type: 'string'; value: string }
   | {

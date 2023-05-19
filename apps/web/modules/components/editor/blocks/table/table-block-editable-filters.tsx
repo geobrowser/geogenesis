@@ -9,6 +9,9 @@ import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 export function TableBlockEditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
+  // We treat Name and Space as special filters even though they are not always
+  // columns on the type schema for a table. We allow users to be able to filter
+  // by name and space.
   const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
     {
       columnId: SYSTEM_IDS.NAME,
