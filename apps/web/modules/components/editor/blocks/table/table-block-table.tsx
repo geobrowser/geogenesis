@@ -188,7 +188,9 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <EmptyTableText>No results found</EmptyTableText>
+              <td className="border border-x-0 border-grey-02">
+                <EmptyTableText>No results found</EmptyTableText>
+              </td>
             </tr>
           )}
           {table.getRowModel().rows.map((row, index: number) => {

@@ -82,6 +82,19 @@ describe('TableBlock SDK', () => {
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`
     );
 
+    const spaceFilter = createGraphQLStringFromFilters(
+      [
+        {
+          columnId: SYSTEM_IDS.SPACE,
+          valueType: 'string',
+          value: 'id 1',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(spaceFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "id 1"}}`);
+
     const nullTypeIdFilter = createGraphQLStringFromFilters([], null);
 
     expect(nullTypeIdFilter).toEqual('');
@@ -185,6 +198,28 @@ describe('TableBlock SDK', () => {
       {
         columnId: 'type',
         value: 'Value 1',
+        valueType: 'string',
+        valueName: null,
+      },
+    ]);
+
+    const spaceFilter = await createFiltersFromGraphQLString(
+      `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "id 1"}}`,
+      async () => {
+        return {
+          id: 'id 1',
+          triples: [MockNetworkData.makeStubTriple('Types')],
+          name: 'Entity Name',
+          description: '',
+          types: [],
+        };
+      }
+    );
+
+    expect(spaceFilter).toEqual([
+      {
+        columnId: SYSTEM_IDS.SPACE,
+        value: 'id 1',
         valueType: 'string',
         valueName: null,
       },

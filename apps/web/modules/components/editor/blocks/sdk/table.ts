@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Column, EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
+import { EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
 
 export function upsertName({
   blockEntity,
@@ -128,6 +128,8 @@ export function createBlock({
  * query the table using the filters. We include the typeId from the table
  * in the graphql string to make sure we're filtering by the correct type.
  *
+ * We treat Name and Space as special filters.
+ *
  * e.g. these filters
  * ```ts
  * const filters = [{
@@ -166,9 +168,16 @@ export function createGraphQLStringFromFilters(
 
   const filtersAsStrings = filters
     .map(filter => {
+      // We treat Name and Space as special filters even though they are not always
+      // columns on the type schema for a table. We allow users to be able to filter
+      // by name and space.
       if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name_starts_with_nocase: "${filter.value}"`;
+      }
+
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
+        return `entityOf_: {space: "${filter.value}"}`;
       }
 
       if (filter.valueType === 'entity') {
@@ -272,6 +281,19 @@ export async function createFiltersFromGraphQLString(
       columnId: SYSTEM_IDS.NAME,
       valueType: 'string',
       value: nameValue,
+      valueName: null,
+    });
+  }
+
+  const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
+  const spaceMatch = graphQLString.match(spaceRegex);
+  const spaceValue = spaceMatch ? spaceMatch[1] : null;
+
+  if (spaceValue) {
+    filters.push({
+      columnId: SYSTEM_IDS.SPACE,
+      valueType: 'string',
+      value: spaceValue,
       valueName: null,
     });
   }
