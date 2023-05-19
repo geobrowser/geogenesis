@@ -146,7 +146,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                   [entityId]: {
                     ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                     type: 'tableBlock',
-                    before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? Action.getValue(action.before, ''),
+                    before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? null,
                     after: Action.getValue(action.after, ''),
                   },
                 },

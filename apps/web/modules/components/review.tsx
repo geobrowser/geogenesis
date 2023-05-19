@@ -443,7 +443,7 @@ const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChan
       );
     }
     case 'tableBlock': {
-      const isNewTable = before === null || before?.startsWith('Table Block ') === true;
+      const isNewTable = before === null;
       const differences = diffWords(before ?? '', after ?? '');
 
       return (

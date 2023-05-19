@@ -75,7 +75,7 @@ export function EditableHeading({
             the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
             have to manually adjust the spacing here to remove the layout shift.
           */}
-          <Spacer height={5.5} />
+          <Spacer height={2} />
         </div>
       ) : (
         <div>
