@@ -2,7 +2,7 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
-import { Observable, ObservableComputed, computed, observable, observe } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
@@ -174,10 +174,6 @@ export class TableBlockStore {
       computed(async () => {
         const columns = this.columns$.get();
         const { rows: serverRows } = networkData$.get();
-
-        if (serverRows.length === 0) {
-          return [];
-        }
 
         /**
          * There are several edge-cases we need to handle in order to correctly merge local changes

@@ -171,8 +171,7 @@ export function createGraphQLStringFromFilters(
         return `name_starts_with_nocase: "${filter.value}"`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'entity') {
-        console.log('space stuff', filter);
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
         return `entityOf_: {space: "${filter.value}"}`;
       }
 

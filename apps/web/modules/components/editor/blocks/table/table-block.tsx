@@ -24,6 +24,7 @@ import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
+import { useSpaces } from '~/modules/spaces/use-spaces';
 
 interface Props {
   spaceId: string;
@@ -47,6 +48,7 @@ export function TableBlock({ spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing();
+  const { spaces } = useSpaces();
 
   const shownColumns = [
     ...(blockEntity?.triples
@@ -69,6 +71,7 @@ export function TableBlock({ spaceId }: Props) {
       return {
         ...f,
         columnName: 'Space',
+        value: spaces.find(s => s.id === f.value)?.attributes[SYSTEM_IDS.NAME] ?? f.value,
       };
     }
 

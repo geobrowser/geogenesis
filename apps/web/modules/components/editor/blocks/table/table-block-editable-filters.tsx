@@ -20,7 +20,7 @@ export function TableBlockEditableFilters() {
     {
       columnId: SYSTEM_IDS.SPACE,
       columnName: 'Space',
-      valueType: valueTypes[SYSTEM_IDS.RELATION],
+      valueType: valueTypes[SYSTEM_IDS.TEXT],
       value: '',
       valueName: null,
     },
@@ -58,16 +58,14 @@ export function TableBlockEditableFilters() {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <TableBlockFilterPrompt
-        options={filterableColumns}
-        onCreate={onCreateFilter}
-        trigger={
-          <SmallButton icon="createSmall" variant="secondary">
-            Filter
-          </SmallButton>
-        }
-      />
-    </div>
+    <TableBlockFilterPrompt
+      options={filterableColumns}
+      onCreate={onCreateFilter}
+      trigger={
+        <SmallButton icon="createSmall" variant="secondary">
+          Filter
+        </SmallButton>
+      }
+    />
   );
 }
