@@ -59,6 +59,15 @@ export function TableBlock({ spaceId }: Props) {
 
   const renderedColumns = columns.filter(item => shownColumns.includes(item.id));
 
+  /**
+   * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
+   * special handling when creating the graphql string.
+   * 1. Name
+   * 2. Space
+   * 3. Any entity or string column
+   *
+   * Name and Space are treated specially throughout this code path.
+   */
   const filtersWithColumnName = filterState.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {
       return {

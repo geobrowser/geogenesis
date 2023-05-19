@@ -27,17 +27,6 @@ interface TableBlockFilterPromptProps {
 
 const TableBlockFilterPromptContent = motion(Content);
 
-/**
- * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
- * special handling when creating the graphql string.
- * 1. Name
- * 2. Space
- * 3. Any entity or string column
- *
- * Name and Space are treated specially. The complexity comes in when setting the filter for the Space, since the
- * id of the Space entity and address of the Space contract aren't the same.
- */
-
 type InterfaceFilterValue =
   | { type: 'string'; value: string }
   | {
@@ -137,9 +126,22 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
               align="start"
             >
               <div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between ">
                   <span className="text-smallButton">New filter</span>
-                  <TextButton onClick={onDone}>Done</TextButton>
+                  <AnimatePresence>
+                    {getFilterValue(value) !== '' && (
+                      <motion.span
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.1 }}
+                      >
+                        <TextButton color="ctaPrimary" onClick={onDone}>
+                          Done
+                        </TextButton>
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <Spacer height={12} />
