@@ -18,6 +18,7 @@ import { ResultItem } from '~/modules/components/entity/autocomplete/results-lis
 import { Breadcrumb } from '~/modules/design-system/breadcrumb';
 import { ChevronDownSmall } from '~/modules/design-system/icons/chevron-down-small';
 import { Tag } from '~/modules/design-system/tag';
+import { useDebouncedValue } from '~/modules/hooks/use-debounced-value';
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
@@ -236,9 +237,12 @@ interface TableBlockSpaceFilterInputProps {
 
 function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpaceFilterInputProps) {
   const [query, onQueryChange] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(query.toLowerCase()));
+  const results = spaces.filter(s =>
+    s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(debouncedQuery.toLowerCase())
+  );
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
