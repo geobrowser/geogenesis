@@ -169,7 +169,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       />
                     ) : (
                       <Input
-                        value={typeof value === 'string' ? value : ''}
+                        value={getFilterValue(value)}
                         onChange={e => setValue({ type: 'string', value: e.currentTarget.value })}
                       />
                     )}
