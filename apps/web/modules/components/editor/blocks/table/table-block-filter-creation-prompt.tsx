@@ -69,28 +69,6 @@ function getFilterValueName(interfaceFilterValue: InterfaceFilterValue) {
   }
 }
 
-// function getFilterDefaultValueForType(type: InterfaceFilterValue['type']) {
-//   switch (type) {
-//     case 'string':
-//       return {
-//         type: 'string',
-//         value: '',
-//       };
-//     case 'entity':
-//       return {
-//         type: 'entity',
-//         entityId: '',
-//         entityName: null,
-//       };
-//     case 'space':
-//       return {
-//         type: 'space',
-//         spaceId: '',
-//         spaceName: null,
-//       };
-//   }
-// }
-
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -258,7 +236,7 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const [query, onQueryChange] = React.useState('');
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s => s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(query.toLowerCase()));
+  const results = spaces.filter(s => s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(query.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
