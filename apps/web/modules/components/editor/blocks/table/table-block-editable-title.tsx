@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/modules/action';
 import { useTableBlock } from './table-block-store';
-import { useUserCanEdit } from '~/modules/hooks/use-user-can-edit';
+import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 import { TableBlockSdk } from '../sdk';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { update, create } = useActionsStore();
-  const userCanEdit = useUserCanEdit(spaceId);
+  const userCanEdit = useUserIsEditing(spaceId);
   const { blockEntity } = useTableBlock();
 
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

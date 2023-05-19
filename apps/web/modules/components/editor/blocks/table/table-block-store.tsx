@@ -2,7 +2,7 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable, observe } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
@@ -122,6 +122,8 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
+          this.isLoading$.set(true);
+
           const filterString = TableBlockSdk.createGraphQLStringFromFilters(
             this.filterState$.get(),
             this.type$.get().entityId
@@ -134,8 +136,6 @@ export class TableBlockStore {
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
-
-          this.isLoading$.set(true);
 
           const { columns: serverColumns } = await this.api.columns({
             params,
@@ -169,12 +169,15 @@ export class TableBlockStore {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], columns, selectedType?.entityId);
     });
 
-    // @TODO: Use fetchEntity in the fetches here. Could also probably use MergedData
     this.rows$ = makeOptionalComputed(
       [],
       computed(async () => {
         const columns = this.columns$.get();
         const { rows: serverRows } = networkData$.get();
+
+        if (serverRows.length === 0) {
+          return [];
+        }
 
         /**
          * There are several edge-cases we need to handle in order to correctly merge local changes

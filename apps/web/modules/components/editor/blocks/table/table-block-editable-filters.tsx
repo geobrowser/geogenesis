@@ -4,6 +4,7 @@ import { valueTypes } from '~/modules/value-types';
 import { TripleValueType } from '~/modules/types';
 import { SmallButton } from '~/modules/design-system/button';
 import { Entity } from '~/modules/entity';
+import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
 export function TableBlockEditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();

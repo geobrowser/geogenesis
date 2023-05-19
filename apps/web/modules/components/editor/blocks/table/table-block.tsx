@@ -8,8 +8,6 @@ import BoringAvatar from 'boring-avatars';
 
 import { useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table-block-table';
-import { useEditable } from '~/modules/stores/use-editable';
-import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Icon } from '~/modules/design-system/icon';
 import { colors } from '~/modules/design-system/theme/colors';
 import { PageNumberContainer } from '~/modules/components/table/styles';
@@ -25,6 +23,7 @@ import { NavUtils } from '~/modules/utils';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockFilterPill } from './table-block-filter-pill';
+import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 
 interface Props {
   spaceId: string;
@@ -44,11 +43,10 @@ export function TableBlock({ spaceId }: Props) {
     isLoading,
     type,
   } = useTableBlock();
+
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(spaceId);
-  const isEditing = editable && isEditor;
+  const isEditing = useUserIsEditing();
 
   const shownColumns = [
     ...(blockEntity?.triples
