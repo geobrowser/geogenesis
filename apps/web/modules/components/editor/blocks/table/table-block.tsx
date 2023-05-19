@@ -2,38 +2,29 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Trigger, Root, Content, Portal } from '@radix-ui/react-popover';
 import { motion, AnimatePresence } from 'framer-motion';
 import produce from 'immer';
 import BoringAvatar from 'boring-avatars';
 
-import { TableBlockFilter, useTableBlock } from './table-block-store';
-import { TableBlockTable } from './table';
+import { useTableBlock } from './table-block-store';
+import { TableBlockTable } from './table-block-table';
 import { useEditable } from '~/modules/stores/use-editable';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Icon } from '~/modules/design-system/icon';
 import { colors } from '~/modules/design-system/theme/colors';
-import { useActionsStore } from '~/modules/action';
-import { TableBlockSdk } from '../sdk';
 import { PageNumberContainer } from '~/modules/components/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/modules/components/table/table-pagination';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { IconButton, SmallButton } from '~/modules/design-system/button';
-import { valueTypes } from '~/modules/value-types';
-import { Entity as IEntity, TripleValueType } from '~/modules/types';
-import { Input } from '~/modules/design-system/input';
-import { Select } from '~/modules/design-system/select';
-import { TextButton } from '~/modules/design-system/text-button';
-import { ResultContent, ResultsList } from '~/modules/components/entity/autocomplete/results-list';
-import { useAutocomplete } from '~/modules/search';
-import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/entity';
-import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { Menu } from '~/modules/design-system/menu';
 import { Context } from '~/modules/design-system/icons/context';
 import { Close } from '~/modules/design-system/icons/close';
 import { NavUtils } from '~/modules/utils';
+import { TableBlockEditableTitle } from './table-block-editable-title';
+import { TableBlockEditableFilters } from './table-block-editable-filters';
+import { TableBlockFilterPill } from './table-block-filter-pill';
 
 interface Props {
   spaceId: string;
@@ -89,8 +80,6 @@ export function TableBlock({ spaceId }: Props) {
     };
   });
 
-  console.log('filtersWithColumnName', filtersWithColumnName);
-
   const typeId = type.entityId;
   const filterId = filterState?.[0]?.columnId ?? null;
   const filterValue = filterState?.[0]?.value ?? null;
@@ -109,7 +98,7 @@ export function TableBlock({ spaceId }: Props) {
             />
           </span>
 
-          <EditableTitle spaceId={spaceId} />
+          <TableBlockEditableTitle spaceId={spaceId} />
         </div>
         <div className="flex items-center gap-5">
           <span
@@ -196,7 +185,7 @@ export function TableBlock({ spaceId }: Props) {
               transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
               className="flex items-center gap-2"
             >
-              <EditableFilters />
+              <TableBlockEditableFilters />
 
               {filtersWithColumnName.map((f, index) => (
                 <TableBlockFilterPill
@@ -263,299 +252,6 @@ export function TableBlock({ spaceId }: Props) {
           <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
         </PageNumberContainer>
       </div>
-    </div>
-  );
-}
-
-function EditableTitle({ spaceId }: { spaceId: string }) {
-  const { update, create } = useActionsStore();
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(spaceId);
-  const { blockEntity } = useTableBlock();
-
-  const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    TableBlockSdk.upsertName({ name: e.currentTarget.value, blockEntity, api: { update, create } });
-  };
-
-  return editable && isEditor ? (
-    <input
-      onBlur={onNameChange}
-      defaultValue={blockEntity?.name ?? undefined}
-      placeholder="Enter a name for this table..."
-      className="w-full appearance-none text-smallTitle text-text outline-none placeholder:text-grey-03"
-    />
-  ) : (
-    <h4 className="text-smallTitle">{blockEntity?.name}</h4>
-  );
-}
-
-function EditableFilters() {
-  const { setFilterState, columns, filterState } = useTableBlock();
-
-  const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
-    {
-      columnId: SYSTEM_IDS.NAME,
-      columnName: 'Name',
-      valueType: valueTypes[SYSTEM_IDS.TEXT],
-      value: '',
-      valueName: null,
-    },
-    {
-      columnId: SYSTEM_IDS.SPACE,
-      columnName: 'Space',
-      valueType: valueTypes[SYSTEM_IDS.RELATION],
-      value: '',
-      valueName: null,
-    },
-    ...columns
-      .map(c => ({
-        columnId: c.id,
-        columnName: Entity.name(c.triples) ?? '',
-        valueType: valueTypes[Entity.valueTypeId(c.triples) ?? ''],
-        value: '',
-        valueName: null,
-      }))
-      .flatMap(c => (c.columnName !== '' ? [c] : [])),
-  ];
-
-  const onCreateFilter = ({
-    columnId,
-    value,
-    valueType,
-    valueName,
-  }: {
-    columnId: string;
-    value: string;
-    valueType: TripleValueType;
-    valueName: string | null;
-  }) => {
-    setFilterState([
-      ...filterState,
-      {
-        valueType,
-        columnId,
-        value,
-        valueName,
-      },
-    ]);
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <TableBlockFilterPrompt
-        options={filterableColumns}
-        onCreate={onCreateFilter}
-        trigger={
-          <SmallButton icon="createSmall" variant="secondary">
-            Filter
-          </SmallButton>
-        }
-      />
-    </div>
-  );
-}
-
-function PublishedFilterIconFilled() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9.12976 0L2.87024 0C1.6588 0 0.947091 1.36185 1.63876 2.35643L4.45525 6.40634C4.48438 6.44823 4.5 6.49804 4.5 6.54907L4.5 10.5C4.5 11.3284 5.17157 12 6 12C6.82843 12 7.5 11.3284 7.5 10.5L7.5 6.54907C7.5 6.49804 7.51562 6.44823 7.54475 6.40634L10.3612 2.35642C11.0529 1.36185 10.3412 0 9.12976 0Z"
-        fill={colors.light['text']}
-      />
-    </svg>
-  );
-}
-
-function TableBlockFilterPill({
-  filter,
-  onDelete,
-}: {
-  filter: TableBlockFilter & { columnName: string };
-  onDelete: () => void;
-}) {
-  const { editable } = useEditable();
-
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
-
-  return (
-    <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
-      {/* @TODO: Use avatar if the filter is not published */}
-      <PublishedFilterIconFilled />
-      <div className="flex items-center gap-1">
-        <span>{filter.columnName} is</span>
-        <span>·</span>
-        <span>{value}</span>
-      </div>
-      {editable && <IconButton icon="checkCloseSmall" color="grey-04" onClick={onDelete} />}
-    </div>
-  );
-}
-
-interface TableBlockFilterPromptProps {
-  trigger: React.ReactNode;
-  options: (TableBlockFilter & { columnName: string })[];
-  onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
-}
-
-const TableBlockFilterPromptContent = motion(Content);
-
-function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const [open, setOpen] = React.useState(false);
-
-  const [selectedColumn, setSelectedColumn] = React.useState<string>(SYSTEM_IDS.NAME);
-  const [value, setValue] = React.useState<
-    | string
-    | {
-        entityId: string;
-        entityName: string | null;
-      }
-  >('');
-
-  const onOpenChange = (open: boolean) => {
-    setSelectedColumn(SYSTEM_IDS.NAME);
-    setValue('');
-    setOpen(open);
-  };
-
-  const onDone = () => {
-    console.log('onDone', { selectedColumn, value });
-
-    onCreate({
-      columnId: selectedColumn,
-      value: typeof value === 'string' ? value : value.entityId,
-      valueType: options.find(o => o.columnId === selectedColumn)?.valueType ?? 'string',
-      valueName: typeof value === 'string' ? null : value.entityName,
-    });
-    setOpen(false);
-    setSelectedColumn(SYSTEM_IDS.NAME);
-    setValue('');
-  };
-
-  return (
-    <Root open={open} onOpenChange={onOpenChange}>
-      <Trigger>{trigger}</Trigger>
-      <Portal>
-        <AnimatePresence>
-          {open && (
-            <TableBlockFilterPromptContent
-              forceMount={true}
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                duration: 0.1,
-                ease: 'easeInOut',
-              }}
-              avoidCollisions={true}
-              className="z-10 w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
-              sideOffset={8}
-              align="start"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-smallButton">New filter</span>
-                  <TextButton onClick={onDone}>Done</TextButton>
-                </div>
-
-                <Spacer height={12} />
-
-                <div className="flex items-center justify-center gap-3">
-                  <div className="flex flex-1">
-                    <Select
-                      options={options.map(o => ({ value: o.columnId, label: o.columnName }))}
-                      value={selectedColumn}
-                      onChange={fieldId => {
-                        setSelectedColumn(fieldId);
-                        setValue('');
-                      }}
-                    />
-                  </div>
-                  <span className="rounded bg-divider px-3 py-[8.5px] text-button">Is</span>
-                  <div className="relative flex flex-1">
-                    {selectedColumn === SYSTEM_IDS.SPACE ? (
-                      <TableBlockEntityFilterInput
-                        selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
-                        onSelect={r => {
-                          const selectedSpace = r.triples.find(t => t.attributeId === SYSTEM_IDS.SPACE);
-                          if (!selectedSpace) return;
-
-                          const spaceId = selectedSpace?.value.type === 'string' ? selectedSpace.value.value : '';
-
-                          setValue({
-                            entityId: spaceId,
-                            entityName: r.name,
-                          });
-                        }}
-                      />
-                    ) : options.find(o => o.columnId === selectedColumn)?.valueType === 'entity' ? (
-                      <TableBlockEntityFilterInput
-                        selectedValue={typeof value === 'string' ? '' : value.entityName ?? ''}
-                        onSelect={r =>
-                          setValue({
-                            entityId: r.id,
-                            entityName: r.name,
-                          })
-                        }
-                      />
-                    ) : (
-                      <Input
-                        value={typeof value === 'string' ? value : ''}
-                        onChange={e => setValue(e.currentTarget.value)}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </TableBlockFilterPromptContent>
-          )}
-        </AnimatePresence>
-      </Portal>
-    </Root>
-  );
-}
-
-interface TableBlockEntityFilterInputProps {
-  onSelect: (result: IEntity) => void;
-  selectedValue: string;
-}
-
-function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEntityFilterInputProps) {
-  const autocomplete = useAutocomplete();
-  const { spaces } = useSpaces();
-
-  return (
-    <div className="relative w-full">
-      <Input
-        value={autocomplete.query === '' ? selectedValue : autocomplete.query}
-        onChange={e => autocomplete.onQueryChange(e.target.value)}
-      />
-      {autocomplete.query && (
-        <div className="absolute top-[36px] z-[1] flex max-h-[340px] w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
-          <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {autocomplete.results.map((result, i) => (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.02 * i }}
-                  key={result.id}
-                >
-                  <ResultContent
-                    key={result.id}
-                    onClick={() => {
-                      autocomplete.onQueryChange('');
-                      onSelect(result);
-                    }}
-                    spaces={spaces}
-                    alreadySelected={false}
-                    result={result}
-                  />
-                </motion.div>
-              ))}
-            </ResultsList>
-          </ResizableContainer>
-        </div>
-      )}
     </div>
   );
 }

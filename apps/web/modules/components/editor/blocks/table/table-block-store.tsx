@@ -15,6 +15,7 @@ import { Triple } from '~/modules/triple';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
 import { ID } from '~/modules/id';
+import { Value } from '~/modules/value';
 
 export const PAGE_SIZE = 10;
 
@@ -106,7 +107,7 @@ export class TableBlockStore {
 
         // Default to the locally changed version of a filter if it exists
         const filter = localFilterTriple ?? serverFilterTriple;
-        const filterValue = filter?.value.type === 'string' ? filter?.value.value : '';
+        const filterValue = Value.stringValue(filter) ?? '';
 
         return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
       })
@@ -242,32 +243,6 @@ export class TableBlockStore {
 
         // Make sure we only generate rows for entities that have the selected type
         const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType?.entityId));
-
-        // const filterState = this.filterState$.get();
-
-        // // @TODO: Going to remove this eventually for server side + client side filtering
-        // if (filterState.length > 0) {
-        //   const filteredEntities = entitiesWithSelectedType.filter(entity => {
-        //     return entity.triples.find(triple => {
-        //       return filterState.every(filter => {
-        //         if (triple.attributeId === filter.columnId) {
-        //           if (filter.type === 'string' && triple.value.type === 'string') {
-        //             return triple.value.value.toLowerCase().startsWith(filter.value.toLowerCase());
-        //           }
-
-        //           if (filter.type === 'entity' && triple.value.type === 'entity') {
-        //             return triple.value.name?.toLowerCase().startsWith(filter.value.toLowerCase());
-        //           }
-        //         }
-
-        //         return false;
-        //       });
-        //     });
-        //   });
-
-        //   const { rows } = EntityTable.fromColumnsAndRows(spaceId, filteredEntities, columns);
-        //   return rows;
-        // }
 
         const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
 
