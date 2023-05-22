@@ -64,7 +64,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   );
 }
 
-type ImageVariant = 'avatar' | 'banner' | 'default';
+type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default';
 
 interface ImageZoomProps {
   imageSrc: string;
@@ -82,6 +82,9 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
   banner: {
     height: 44,
     width: 240,
+  },
+  'table-cell': {
+    width: 60,
   },
 };
 

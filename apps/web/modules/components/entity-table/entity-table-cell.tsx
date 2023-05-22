@@ -41,7 +41,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
             );
           }
           if (value.type === 'image') {
-            return <ImageZoom key={value.id} imageSrc={value.value} variant="avatar" />;
+            return <ImageZoom key={value.id} imageSrc={value.value} variant="table-cell" />;
           } else {
             return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
           }

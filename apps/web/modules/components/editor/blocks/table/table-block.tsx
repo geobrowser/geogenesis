@@ -5,6 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { motion, AnimatePresence } from 'framer-motion';
 import produce from 'immer';
 import BoringAvatar from 'boring-avatars';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import { useTableBlock } from './table-block-store';
 import { TableBlockTable } from './table-block-table';
@@ -25,7 +26,6 @@ import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { ErrorBoundary } from 'react-error-boundary';
 
 interface Props {
   spaceId: string;
