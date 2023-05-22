@@ -65,7 +65,7 @@ export class TableBlockStore {
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
-  type$: Observable<ITriple>;
+  type: ITriple;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
@@ -76,7 +76,7 @@ export class TableBlockStore {
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
-    this.type$ = observable(selectedType);
+    this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore });
     this.isLoading$ = observable(true);
@@ -126,7 +126,7 @@ export class TableBlockStore {
 
           const filterString = TableBlockSdk.createGraphQLStringFromFilters(
             this.filterState$.get(),
-            this.type$.get().entityId
+            this.type.entityId
           );
 
           const params: FetchRowsOptions['params'] = {
@@ -281,7 +281,7 @@ export class TableBlockStore {
 
     // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
     const newFiltersString =
-      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type$.get().entityId);
+      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type.entityId);
 
     if (!filterTriple) {
       return this.ActionsStore.create(
@@ -365,7 +365,7 @@ export function useTableBlock() {
     rows$,
     pageNumber$,
     columns$,
-    type$,
+    type,
     unpublishedColumns$,
     blockEntity$,
     hasNextPage$,
@@ -375,7 +375,6 @@ export function useTableBlock() {
     setFilterState,
     isLoading$,
   } = useTableBlockStore();
-  const type = useSelector(type$);
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);

@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import { Triple } from '~/modules/types';
 import { TableBlockStoreProvider } from './blocks/table/table-block-store';
-import { TableBlock } from './blocks/table/table-block';
+import { TableBlock, TableBlockError } from './blocks/table/table-block';
 import { useTypesStore } from '~/modules/type/types-store';
 
 export const TableNode = Node.create({
@@ -51,9 +52,18 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId, id } = node.attrs;
   const { types } = useTypesStore();
 
+  console.log('types', { types, typeId, id });
+
   const selectedType = useMemo(() => {
+    // HACK: the type for a table block should only be one of the types from the spaces or
+    // a foreign type configured for the space. We are storing these types in the TypesStore
+    // so we should be safe casting to a Triple here.
     return types.find(type => type.entityId === typeId) as Triple;
   }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (selectedType === undefined) {
+    console.error(`Undefined type in blockId: ${id}`);
+  }
 
   return (
     <NodeViewWrapper>
@@ -74,8 +84,16 @@ function TableNodeChildren({
   entityId: string;
 }) {
   return (
-    <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
-      <TableBlock spaceId={spaceId} />
-    </TableBlockStoreProvider>
+    <ErrorBoundary
+      fallback={
+        <>
+          <TableBlockError spaceId={spaceId} blockId={entityId} />
+        </>
+      }
+    >
+      <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+        <TableBlock spaceId={spaceId} />
+      </TableBlockStoreProvider>
+    </ErrorBoundary>
   );
 }
