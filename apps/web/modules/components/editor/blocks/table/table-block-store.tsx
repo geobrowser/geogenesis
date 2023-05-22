@@ -8,7 +8,7 @@ import { useSelector } from '@legendapp/state/react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
+import { Column, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -65,7 +65,7 @@ export class TableBlockStore {
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
-  type: ITriple;
+  type: SelectedEntityType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
