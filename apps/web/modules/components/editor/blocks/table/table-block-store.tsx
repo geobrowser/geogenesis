@@ -6,9 +6,9 @@ import { Observable, ObservableComputed, computed, observable } from '@legendapp
 import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
-import { Entity, EntityTable } from '~/modules/entity';
+import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
+import { Column, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -40,7 +40,7 @@ interface ITableBlockStoreConfig {
 
   // This is the type of Entity we are rendering in the rows in the TableBlock
   // e.g., a Person or a Project
-  selectedType: ITriple;
+  selectedType: SelectedEntityType;
 
   // @TODO: Columns and rows shouldn't be dependent on Space?
   spaceId: string;
@@ -65,7 +65,7 @@ export class TableBlockStore {
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
-  type$: Observable<ITriple>;
+  type: SelectedEntityType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
@@ -76,7 +76,7 @@ export class TableBlockStore {
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
-    this.type$ = observable(selectedType);
+    this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore });
     this.isLoading$ = observable(true);
@@ -126,7 +126,7 @@ export class TableBlockStore {
 
           const filterString = TableBlockSdk.createGraphQLStringFromFilters(
             this.filterState$.get(),
-            this.type$.get().entityId
+            this.type.entityId
           );
 
           const params: FetchRowsOptions['params'] = {
@@ -281,7 +281,7 @@ export class TableBlockStore {
 
     // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
     const newFiltersString =
-      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type$.get().entityId);
+      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type.entityId);
 
     if (!filterTriple) {
       return this.ActionsStore.create(
@@ -322,7 +322,7 @@ interface Props {
   children: React.ReactNode;
 
   // @TODO: This should be type Entity
-  selectedType: ITriple;
+  selectedType?: SelectedEntityType;
   entityId: string;
 }
 
@@ -336,6 +336,13 @@ interface Props {
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
+
+  if (!selectedType) {
+    // A table block might reference a type that has been deleted which will not be found
+    // in the types store.
+    console.error(`Undefined type in blockId: ${entityId}`);
+    throw new Error('Missing selectedType in TableBlockStoreProvider');
+  }
 
   const store = useMemo(() => {
     return new TableBlockStore({
@@ -365,7 +372,7 @@ export function useTableBlock() {
     rows$,
     pageNumber$,
     columns$,
-    type$,
+    type,
     unpublishedColumns$,
     blockEntity$,
     hasNextPage$,
@@ -375,7 +382,6 @@ export function useTableBlock() {
     setFilterState,
     isLoading$,
   } = useTableBlockStore();
-  const type = useSelector(type$);
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);

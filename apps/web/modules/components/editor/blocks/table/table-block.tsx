@@ -157,7 +157,7 @@ export function TableBlock({ spaceId }: Props) {
             trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
             className="max-w-[5.8rem] whitespace-nowrap"
           >
-            <Link href={`/space/${spaceId}/${blockEntity?.id}`}>
+            <Link href={NavUtils.toEntity(spaceId, blockEntity?.id ?? '')}>
               <a className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg">
                 <Text variant="button" className="hover:!text-text">
                   View data
@@ -306,6 +306,39 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId: string }) {
+  return (
+    <div className="overflow-hidden rounded border border-red-02 p-0 shadow-button shadow-red-02">
+      <div className="overflow-x-scroll rounded-sm">
+        <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+          <thead>
+            <tr>
+              <th className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left">
+                <p className="h-5 w-full rounded-sm align-middle"></p>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="flex flex-col items-center border-t border-red-02 bg-transparent p-5 align-top">
+                <p className="flex text-lg text-red-01">
+                  Something went wrong. Make sure this table is configured correctly.
+                </p>
+                <Spacer height={12} />
+                <Link href={NavUtils.toEntity(spaceId, blockId ?? '')}>
+                  <a className="flex cursor-pointer items-center rounded-sm text-button text-grey-03 transition-colors duration-75 hover:text-text">
+                    View table block data
+                  </a>
+                </Link>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

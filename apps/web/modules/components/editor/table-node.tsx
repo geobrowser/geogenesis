@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { useMemo } from 'react';
 import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { ErrorBoundary } from 'react-error-boundary';
 
-import { Triple } from '~/modules/types';
 import { TableBlockStoreProvider } from './blocks/table/table-block-store';
-import { TableBlock } from './blocks/table/table-block';
+import { TableBlock, TableBlockError } from './blocks/table/table-block';
 import { useTypesStore } from '~/modules/type/types-store';
+import { SelectedEntityType } from '~/modules/entity';
 
 export const TableNode = Node.create({
   name: 'tableNode',
@@ -52,7 +53,7 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { types } = useTypesStore();
 
   const selectedType = useMemo(() => {
-    return types.find(type => type.entityId === typeId) as Triple;
+    return types.find(type => type.entityId === typeId);
   }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -70,12 +71,20 @@ function TableNodeChildren({
   entityId,
 }: {
   spaceId: string;
-  selectedType: Triple;
+  selectedType?: SelectedEntityType;
   entityId: string;
 }) {
   return (
-    <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
-      <TableBlock spaceId={spaceId} />
-    </TableBlockStoreProvider>
+    <ErrorBoundary
+      fallback={
+        <>
+          <TableBlockError spaceId={spaceId} blockId={entityId} />
+        </>
+      }
+    >
+      <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+        <TableBlock spaceId={spaceId} />
+      </TableBlockStoreProvider>
+    </ErrorBoundary>
   );
 }
