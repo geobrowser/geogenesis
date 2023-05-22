@@ -7,6 +7,7 @@ import { Triple } from '~/modules/types';
 import { TableBlockStoreProvider } from './blocks/table/table-block-store';
 import { TableBlock, TableBlockError } from './blocks/table/table-block';
 import { useTypesStore } from '~/modules/type/types-store';
+import { SelectedEntityType } from '~/modules/entity';
 
 export const TableNode = Node.create({
   name: 'tableNode',
@@ -53,15 +54,8 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { types } = useTypesStore();
 
   const selectedType = useMemo(() => {
-    // HACK: the type for a table block should only be one of the types from the spaces or
-    // a foreign type configured for the space. We are storing these types in the TypesStore
-    // so we should be safe casting to a Triple here.
-    return types.find(type => type.entityId === typeId) as Triple;
+    return types.find(type => type.entityId === typeId);
   }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (selectedType === undefined) {
-    console.error(`Undefined type in blockId: ${id}`);
-  }
 
   return (
     <NodeViewWrapper>
@@ -78,7 +72,7 @@ function TableNodeChildren({
   entityId,
 }: {
   spaceId: string;
-  selectedType: Triple;
+  selectedType?: SelectedEntityType;
   entityId: string;
 }) {
   return (

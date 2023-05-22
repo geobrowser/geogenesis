@@ -6,7 +6,7 @@ import { Observable, ObservableComputed, computed, observable } from '@legendapp
 import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
-import { Entity, EntityTable } from '~/modules/entity';
+import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
 import { Column, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
@@ -40,7 +40,7 @@ interface ITableBlockStoreConfig {
 
   // This is the type of Entity we are rendering in the rows in the TableBlock
   // e.g., a Person or a Project
-  selectedType: ITriple;
+  selectedType: SelectedEntityType;
 
   // @TODO: Columns and rows shouldn't be dependent on Space?
   spaceId: string;
@@ -322,7 +322,7 @@ interface Props {
   children: React.ReactNode;
 
   // @TODO: This should be type Entity
-  selectedType: ITriple;
+  selectedType?: SelectedEntityType;
   entityId: string;
 }
 
@@ -336,6 +336,13 @@ interface Props {
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
+
+  if (!selectedType) {
+    // A table block might reference a type that has been deleted which will not be found
+    // in the types store.
+    console.error(`Undefined type in blockId: ${entityId}`);
+    throw new Error('Missing selectedType in TableBlockStoreProvider');
+  }
 
   const store = useMemo(() => {
     return new TableBlockStore({
