@@ -325,12 +325,12 @@ export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId
           <tbody>
             <tr>
               <td className="flex flex-col items-center border-t border-red-02 bg-transparent p-5 align-top">
-                <p className="flex text-lg text-red-01">
+                <p className="flex text-lg text-text">
                   Something went wrong. Make sure this table is configured correctly.
                 </p>
                 <Spacer height={12} />
                 <Link href={NavUtils.toEntity(spaceId, blockId ?? '')}>
-                  <a className="flex cursor-pointer items-center rounded-sm text-button text-grey-03 transition-colors duration-75 hover:text-text">
+                  <a className="flex cursor-pointer items-center rounded-sm text-button text-grey-04 transition-colors duration-75 hover:text-text">
                     View table block data
                   </a>
                 </Link>
