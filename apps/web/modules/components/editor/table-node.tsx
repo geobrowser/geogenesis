@@ -52,8 +52,6 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId, id } = node.attrs;
   const { types } = useTypesStore();
 
-  console.log('types', { types, typeId, id });
-
   const selectedType = useMemo(() => {
     // HACK: the type for a table block should only be one of the types from the spaces or
     // a foreign type configured for the space. We are storing these types in the TypesStore

@@ -331,10 +331,8 @@ export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId
                 </p>
                 <Spacer height={12} />
                 <Link href={NavUtils.toEntity(spaceId, blockId ?? '')}>
-                  <a className="flex cursor-pointer items-center rounded-sm">
-                    <Text variant="button" color="grey-04">
-                      View data
-                    </Text>
+                  <a className="flex cursor-pointer items-center rounded-sm text-button text-grey-03 transition-colors duration-75 hover:text-text">
+                    View table block data
                   </a>
                 </Link>
               </td>
