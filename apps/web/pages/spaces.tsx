@@ -18,10 +18,13 @@ interface Props {
   spaces: Space[];
 }
 
-const HIDDEN_SPACES: Array<string> = [
-  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661',
-  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD',
-  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6',
+// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
+// Temporarily we just filter some Spaces when we fetch Spaces.
+export const HIDDEN_SPACES: Array<string> = [
+  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
+  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
+  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
+  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
 ];
 
 export default function Spaces({ spaces }: Props) {
@@ -47,6 +50,8 @@ export default function Spaces({ spaces }: Props) {
         <Spacer height={40} />
         <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
           {spaces.map(space => {
+            // @HACK: Right now we hide some spaces from the front page. There's no way to remove
+            // Spaces from the Subgraph store yet.
             if (HIDDEN_SPACES.includes(space.id)) return null;
 
             const name = space.attributes.name;
