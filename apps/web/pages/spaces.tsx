@@ -18,12 +18,6 @@ interface Props {
   spaces: Space[];
 }
 
-const HIDDEN_SPACES: Array<string> = [
-  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661',
-  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD',
-  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6',
-];
-
 export default function Spaces({ spaces }: Props) {
   return (
     <div>
@@ -47,8 +41,6 @@ export default function Spaces({ spaces }: Props) {
         <Spacer height={40} />
         <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
           {spaces.map(space => {
-            if (HIDDEN_SPACES.includes(space.id)) return null;
-
             const name = space.attributes.name;
             const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 

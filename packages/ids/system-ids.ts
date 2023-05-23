@@ -74,10 +74,6 @@ export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
 
 export const FILTER = 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103'
 
-// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
-// Temporarily we just filter The Graph space when we fetch Spaces.
-export const THE_GRAPH_SPACE = '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886'
-
 /**
  * Addresses for important contracts on Polygon mainnet.
  *

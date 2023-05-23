@@ -4,7 +4,7 @@ import { EntryAddedEventObject, Space as SpaceContract, Space__factory } from '@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
-import { ROOT_SPACE_IMAGE } from '~/modules/constants';
+import { HIDDEN_SPACES, ROOT_SPACE_IMAGE } from '~/modules/constants';
 import { Entity } from '~/modules/entity';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import {
@@ -467,9 +467,9 @@ export class Network implements INetwork {
         };
       } = await spacesResponse.json();
 
-      const spacesWithoutTheGraph = json.data.spaces.filter(space => space.id !== SYSTEM_IDS.THE_GRAPH_SPACE);
+      const spacesWithoutHiddenSpaces = json.data.spaces.filter(space => !HIDDEN_SPACES.includes(space.id));
 
-      const spaces = spacesWithoutTheGraph.map((space): Space => {
+      const spaces = spacesWithoutHiddenSpaces.map((space): Space => {
         const attributes = Object.fromEntries(
           space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
         );
