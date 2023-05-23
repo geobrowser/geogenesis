@@ -467,7 +467,9 @@ export class Network implements INetwork {
         };
       } = await spacesResponse.json();
 
-      const spaces = json.data.spaces.map((space): Space => {
+      const spacesWithoutTheGraph = json.data.spaces.filter(space => space.id !== SYSTEM_IDS.THE_GRAPH_SPACE);
+
+      const spaces = spacesWithoutTheGraph.map((space): Space => {
         const attributes = Object.fromEntries(
           space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
         );
