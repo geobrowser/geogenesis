@@ -2,7 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Triple } from '~/modules/triple';
 import { Action, Column, Entity, Row } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE } from '..';
 
 export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
@@ -27,7 +26,6 @@ export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
 
   return {
     rows: aggregatedRows,
-    hasNextPage: entities.length > DEFAULT_PAGE_SIZE,
   };
 }
 

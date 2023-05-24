@@ -2,7 +2,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { ActionsStore } from '~/modules/action';
 import { Entity, EntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
-import { Column, OmitStrict, Version } from '~/modules/types';
+import { Column, OmitStrict, Row, Version } from '~/modules/types';
 import { INetwork } from './network';
 
 interface MergeDataSourceOptions {
@@ -10,12 +10,12 @@ interface MergeDataSourceOptions {
   store: ActionsStore;
 }
 
-interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile'> {
+interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile' | 'rows'> {
   rows: (
     options: Parameters<INetwork['rows']>[0],
     columns: Column[],
     selectedTypeEntityId?: string
-  ) => Promise<ReturnType<INetwork['rows']>>;
+  ) => Promise<{ rows: Row[] }>;
 }
 
 export class Merged implements IMergeDataSource {
