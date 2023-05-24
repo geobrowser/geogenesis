@@ -215,7 +215,7 @@ export function TableBlock({ spaceId }: Props) {
         </AnimatePresence>
       )}
 
-      <motion.div layout="position">
+      <motion.div layout="position" transition={{ duration: 0.15 }}>
         <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
           {isLoading ? (
             <TableBlockPlaceholder />
