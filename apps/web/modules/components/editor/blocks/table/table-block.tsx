@@ -45,8 +45,6 @@ export function TableBlock({ spaceId }: Props) {
     type,
   } = useTableBlock();
 
-  console.log('isLoading in TableBlock', isLoading);
-
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
