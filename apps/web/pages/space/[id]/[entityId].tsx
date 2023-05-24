@@ -45,8 +45,12 @@ interface Props {
 
 export default function EntityPage(props: Props) {
   const router = useRouter();
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
-  if (props.redirect) {
+  if (isMounted && props.redirect) {
     router.push(props.redirect);
   }
 
