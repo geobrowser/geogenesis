@@ -22,6 +22,7 @@ import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 import { Services } from '~/modules/services';
+import { AttributeConfigurationMenu } from './attribute-configuration-menu';
 
 interface Props {
   triples: ITriple[];
@@ -462,47 +463,50 @@ function EntityAttributes({
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
-                  <TripleTypeDropdown
-                    value={ITriple as IconName}
-                    options={[
-                      {
-                        label: (
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <TextIcon />
-                            <Spacer width={8} />
-                            Text
-                          </div>
-                        ),
-                        value: 'string',
-                        onClick: () => onChangeITriple('string', triples),
-                        disabled: !isEntityGroup,
-                      },
-                      {
-                        label: (
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Relation />
-                            <Spacer width={8} />
-                            Relation
-                          </div>
-                        ),
-                        value: 'entity',
-                        onClick: () => onChangeITriple('entity', triples),
-                        disabled: Boolean(isEntityGroup),
-                      },
-                      {
-                        label: (
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Image />
-                            <Spacer width={8} />
-                            Image
-                          </div>
-                        ),
-                        value: 'image',
-                        onClick: () => onChangeITriple('image', triples),
-                        disabled: Boolean(isEntityGroup),
-                      },
-                    ]}
-                  />
+                  <>
+                    <AttributeConfigurationMenu />
+                    <TripleTypeDropdown
+                      value={ITriple as IconName}
+                      options={[
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <TextIcon />
+                              <Spacer width={8} />
+                              Text
+                            </div>
+                          ),
+                          value: 'string',
+                          onClick: () => onChangeITriple('string', triples),
+                          disabled: !isEntityGroup,
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Relation />
+                              <Spacer width={8} />
+                              Relation
+                            </div>
+                          ),
+                          value: 'entity',
+                          onClick: () => onChangeITriple('entity', triples),
+                          disabled: Boolean(isEntityGroup),
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Image />
+                              <Spacer width={8} />
+                              Image
+                            </div>
+                          ),
+                          value: 'image',
+                          onClick: () => onChangeITriple('image', triples),
+                          disabled: Boolean(isEntityGroup),
+                        },
+                      ]}
+                    />
+                  </>
                 )}
                 <SquareButton
                   icon="trash"

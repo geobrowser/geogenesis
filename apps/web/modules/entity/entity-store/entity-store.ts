@@ -251,6 +251,7 @@ export class EntityStore implements IEntityStore {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
     });
 
+    // @TODO: We need to do the same thing for tables
     const attributeRelationTypes = computed(async () => {
       const triples = this.triples$.get();
       const schemaTriples = this.schemaTriples$.get();
