@@ -1,8 +1,8 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 import { ActionsStore } from '~/modules/action';
-import { Entity } from '~/modules/entity';
+import { Entity, EntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
-import { OmitStrict, Version } from '~/modules/types';
+import { Column, OmitStrict, Version } from '~/modules/types';
 import { INetwork } from './network';
 
 interface MergeDataSourceOptions {
@@ -10,7 +10,13 @@ interface MergeDataSourceOptions {
   store: ActionsStore;
 }
 
-interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile'> {}
+interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile'> {
+  rows: (
+    options: Parameters<INetwork['rows']>[0],
+    columns: Column[],
+    selectedTypeEntityId?: string
+  ) => Promise<ReturnType<INetwork['rows']>>;
+}
 
 export class Merged implements IMergeDataSource {
   private api: INetwork;
@@ -104,8 +110,94 @@ export class Merged implements IMergeDataSource {
     return entity;
   };
 
-  columns = async (options: Parameters<INetwork['columns']>[0]) => this.api.columns(options);
-  rows = async (options: Parameters<INetwork['rows']>[0]) => this.api.rows(options);
+  columns = async (options: Parameters<INetwork['columns']>[0]) => {
+    const { columns: serverColumns } = await this.api.columns(options);
+
+    const columns = EntityTable.columnsFromActions(
+      this.store.allActions$.get(),
+      serverColumns,
+      options.params.typeIds?.[0]
+    );
+
+    return { columns };
+  };
+
+  rows = async (options: Parameters<INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
+    const { rows: serverRows } = await this.api.rows(options);
+
+    /**
+     * Aggregate data for the rows from local and server entities.
+     *
+     * There are several edge-cases we need to handle in order to correctly merge local changes
+     * with server data in the entity table:
+     * 1. An entity is created locally and is given the selected type
+     * 2. An entity is edited locally and is given the selected type
+     * 3. A type is created locally and an entity is given the new type
+     *
+     * Since the table aggregation code expects triples, we may end up in a situation where
+     * the type for an entity has changed, but the name hasn't. In this case there is no local
+     * version of the name triple, so we need to fetch it along with any other triples the table
+     * needs to render the columnSchema.
+     */
+
+    const changedEntitiesIdsFromAnotherType = pipe(
+      this.store.allActions$.get(),
+      actions => Triple.fromActions(actions, []),
+      triples => Entity.entitiesFromTriples(triples),
+      A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
+      A.map(t => t.id)
+    );
+
+    // Fetch any entities that exist already remotely that have been changed locally
+    // and have the selected type to make sure we have all of the triples necessary
+    // to represent the entity in the table.
+    //
+    // e.g., We add Type A to Entity A. When we render the Type A table, we need
+    // _all_ of the triples for Entity A, not just the ones that have changed locally.
+    //
+    // This will return null if the entity we're fetching does not exist remotely.
+    // i.e., the entity was created locally and has not been published to the server.
+    const maybeServerEntitiesChangedLocally = await Promise.all(
+      changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
+    );
+
+    const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
+
+    const serverEntityTriples = serverRows.flatMap(t => t.triples);
+
+    const entitiesCreatedOrChangedLocally = pipe(
+      this.store.actions$.get(),
+      actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
+      A.filter(e => e.types.some(t => t.id === selectedTypeEntityId))
+    );
+
+    const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
+    const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
+
+    // Filter out any server rows that have been changed locally
+    const filteredServerRows = serverEntityTriples.filter(
+      sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
+    );
+
+    const entities = Entity.entitiesFromTriples([
+      // These are entities that were created locally and have the selected type
+      ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
+
+      // These are entities that have a new type locally and may exist on the server.
+      // We need to fetch all triples associated with this entity in order to correctly
+      // populate the table.
+      ...serverEntitiesChangedLocally.flatMap(e => e.triples),
+
+      // These are entities that have been fetched from the server and have the selected type.
+      // They are deduped from the local changes above.
+      ...filteredServerRows,
+    ]);
+
+    // Make sure we only generate rows for entities that have the selected type
+    const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
+
+    return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
+  };
 
   // Right now we can't create local spaces, so we just return the network spaces.
   fetchSpaces = async () => this.api.fetchSpaces();
