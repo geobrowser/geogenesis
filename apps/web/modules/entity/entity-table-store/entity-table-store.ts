@@ -259,7 +259,7 @@ export class EntityTableStore implements IEntityTableStore {
           e.types.some(t => t.id === this.selectedType$.get()?.entityId)
         );
 
-        const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
+        const { rows } = EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
 
         return rows;
       })

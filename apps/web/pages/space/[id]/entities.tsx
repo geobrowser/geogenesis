@@ -133,7 +133,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     params,
   });
 
-  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
+  const { rows } = EntityTable.fromColumnsAndRows(serverRows, columns);
 
   return {
     props: {
