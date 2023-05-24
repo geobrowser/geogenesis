@@ -11,7 +11,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Entity as EntityType, Triple as TripleType, TripleValueType } from '~/modules/types';
+import { Entity as EntityType, Triple as ITriple, TripleValueType } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
@@ -24,7 +24,7 @@ import { TripleTypeDropdown } from './triple-type-dropdown';
 import { Services } from '~/modules/services';
 
 interface Props {
-  triples: TripleType[];
+  triples: ITriple[];
   id: string;
   name: string;
   spaceId: string;
@@ -170,8 +170,8 @@ function EntityAttributes({
   hiddenSchemaIds,
 }: {
   entityId: string;
-  triples: TripleType[];
-  schemaTriples: TripleType[];
+  triples: ITriple[];
+  schemaTriples: ITriple[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
   hideSchema: (id: string) => void;
@@ -204,7 +204,7 @@ function EntityAttributes({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
 
-  const onChangeTripleType = (type: TripleValueType, triples: TripleType[]) => {
+  const onChangeITriple = (type: TripleValueType, triples: ITriple[]) => {
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
@@ -214,7 +214,7 @@ function EntityAttributes({
     });
   };
 
-  const removeOrResetEntityTriple = (triple: TripleType) => {
+  const removeOrResetEntityTriple = (triple: ITriple) => {
     hideSchema(triple.attributeId);
     send({
       type: 'REMOVE_PAGE_ENTITY',
@@ -253,7 +253,7 @@ function EntityAttributes({
     });
   };
 
-  const createEntityTripleFromPlaceholder = (triple: TripleType, linkedEntity: EntityType) => {
+  const createEntityTripleFromPlaceholder = (triple: ITriple, linkedEntity: EntityType) => {
     send({
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {
@@ -265,7 +265,7 @@ function EntityAttributes({
     });
   };
 
-  const createStringTripleFromPlaceholder = (triple: TripleType, value: string) => {
+  const createStringTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
       payload: {
@@ -276,7 +276,7 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: TripleType, name: string) => {
+  const updateValue = (triple: ITriple, name: string) => {
     send({
       type: 'UPDATE_VALUE',
       payload: {
@@ -286,7 +286,7 @@ function EntityAttributes({
     });
   };
 
-  const uploadImage = (triple: TripleType, imageSrc: string) => {
+  const uploadImage = (triple: ITriple, imageSrc: string) => {
     send({
       type: 'UPLOAD_IMAGE',
       payload: {
@@ -296,7 +296,7 @@ function EntityAttributes({
     });
   };
 
-  const removeImage = (triple: TripleType) => {
+  const removeImage = (triple: ITriple) => {
     send({
       type: 'REMOVE_IMAGE',
       payload: {
@@ -326,7 +326,7 @@ function EntityAttributes({
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: TripleType, isEmptyEntity: boolean) => {
+  const tripleToEditableField = (attributeId: string, triple: ITriple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'string':
         return (
@@ -431,7 +431,7 @@ function EntityAttributes({
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
-        const tripleType: TripleValueType = triples[0].value.type || 'string';
+        const ITriple: TripleValueType = triples[0].value.type || 'string';
 
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
@@ -463,7 +463,7 @@ function EntityAttributes({
               <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
                   <TripleTypeDropdown
-                    value={tripleType as IconName}
+                    value={ITriple as IconName}
                     options={[
                       {
                         label: (
@@ -474,7 +474,7 @@ function EntityAttributes({
                           </div>
                         ),
                         value: 'string',
-                        onClick: () => onChangeTripleType('string', triples),
+                        onClick: () => onChangeITriple('string', triples),
                         disabled: !isEntityGroup,
                       },
                       {
@@ -486,7 +486,7 @@ function EntityAttributes({
                           </div>
                         ),
                         value: 'entity',
-                        onClick: () => onChangeTripleType('entity', triples),
+                        onClick: () => onChangeITriple('entity', triples),
                         disabled: Boolean(isEntityGroup),
                       },
                       {
@@ -498,7 +498,7 @@ function EntityAttributes({
                           </div>
                         ),
                         value: 'image',
-                        onClick: () => onChangeTripleType('image', triples),
+                        onClick: () => onChangeITriple('image', triples),
                         disabled: Boolean(isEntityGroup),
                       },
                     ]}

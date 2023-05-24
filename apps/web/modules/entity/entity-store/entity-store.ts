@@ -9,21 +9,21 @@ import { ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/editor/editor';
 import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
-import { NetworkData } from '~/modules/io';
+import { MergedData, NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';
-import { EntityValue, Triple as TripleType } from '~/modules/types';
+import { EntityValue, Triple as ITriple } from '~/modules/types';
 import { Value } from '~/modules/value';
 import { Entity } from '..';
 
 const markdownConverter = new showdown.Converter();
 
 interface IEntityStore {
-  create(triple: TripleType): void;
-  update(triple: TripleType, oldTriple: TripleType): void;
-  remove(triple: TripleType): void;
+  create(triple: ITriple): void;
+  update(triple: ITriple, oldTriple: ITriple): void;
+  remove(triple: ITriple): void;
 }
 
-export const createInitialDefaultTriples = (spaceId: string, entityId: string): TripleType[] => {
+export const createInitialDefaultTriples = (spaceId: string, entityId: string): ITriple[] => {
   const nameTriple = Triple.withId({
     space: spaceId,
     entityId,
@@ -75,10 +75,10 @@ interface IEntityStoreConfig {
   api: NetworkData.INetwork;
   spaceId: string;
   id: string;
-  initialTriples: TripleType[];
-  initialSchemaTriples: TripleType[];
-  initialBlockIdsTriple: TripleType | null;
-  initialBlockTriples: TripleType[];
+  initialTriples: ITriple[];
+  initialSchemaTriples: ITriple[];
+  initialBlockIdsTriple: ITriple | null;
+  initialBlockTriples: ITriple[];
   ActionsStore: ActionsStore;
 }
 
@@ -86,17 +86,17 @@ export class EntityStore implements IEntityStore {
   private api: NetworkData.INetwork;
   id: string;
   spaceId: string;
-  triples$: ObservableComputed<TripleType[]>;
+  triples$: ObservableComputed<ITriple[]>;
   blockIds$: ObservableComputed<string[]>;
-  blockIdsTriple$: ObservableComputed<TripleType | null>;
-  blockTriples$: ObservableComputed<TripleType[]>;
+  blockIdsTriple$: ObservableComputed<ITriple | null>;
+  blockTriples$: ObservableComputed<ITriple[]>;
   editorJson$: ObservableComputed<JSONContent>;
-  typeTriples$: ObservableComputed<TripleType[]>;
-  schemaTriples$: Observable<TripleType[]> = observable<TripleType[]>([]);
+  typeTriples$: ObservableComputed<ITriple[]>;
+  schemaTriples$: Observable<ITriple[]> = observable<ITriple[]>([]);
   hiddenSchemaIds$: Observable<string[]> = observable<string[]>([]);
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
-  name: ObservableComputed<string>;
+  name$: ObservableComputed<string>;
 
   constructor({
     api,
@@ -147,7 +147,7 @@ export class EntityStore implements IEntityStore {
       );
     });
 
-    this.name = computed(() => {
+    this.name$ = computed(() => {
       return Entity.name(this.triples$.get()) || '';
     });
 
@@ -251,12 +251,43 @@ export class EntityStore implements IEntityStore {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
     });
 
+    const attributeRelationTypes = computed(async () => {
+      const triples = this.triples$.get();
+      const schemaTriples = this.schemaTriples$.get();
+
+      const attributesWithRelationValues = [...triples, ...schemaTriples]
+        .filter(t => t.value.type === 'entity')
+        .map(t => ({ attributeId: t.attributeId, attributeName: t.attributeName }));
+
+      // @TODO: Fetch the relation types from the server/local state
+      const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+      const relationAttributeTypes = await Promise.all(
+        attributesWithRelationValues.map(a =>
+          mergedStore.fetchTriples({
+            query: '',
+            first: DEFAULT_PAGE_SIZE,
+            skip: 0,
+            filter: [
+              {
+                field: 'entity-id',
+                value: a.attributeId,
+              },
+              {
+                field: 'attribute-id',
+                value: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+              },
+            ],
+          })
+        )
+      );
+    });
+
     /*
     Computed values in @legendapp/state will rerun for every change recursively up the tree.
     This is problematic when the computed value is expensive to compute or involves a network request.
     To avoid this, we can use the observe function to only run the computation when the direct dependencies change.
     */
-    observe<TripleType[]>(e => {
+    observe<ITriple[]>(e => {
       const typeTriples = this.typeTriples$.get();
       const previous = e.previous || [];
 
@@ -269,7 +300,7 @@ export class EntityStore implements IEntityStore {
     });
   }
 
-  setSchemaTriples = async (typeTriples: TripleType[]) => {
+  setSchemaTriples = async (typeTriples: ITriple[]) => {
     this.abortController.abort();
     this.abortController = new AbortController();
 
@@ -351,9 +382,9 @@ export class EntityStore implements IEntityStore {
     }
   };
 
-  create = (triple: TripleType) => this.ActionsStore.create(triple);
-  remove = (triple: TripleType) => this.ActionsStore.remove(triple);
-  update = (triple: TripleType, oldTriple: TripleType) => this.ActionsStore.update(triple, oldTriple);
+  create = (triple: ITriple) => this.ActionsStore.create(triple);
+  remove = (triple: ITriple) => this.ActionsStore.remove(triple);
+  update = (triple: ITriple, oldTriple: ITriple) => this.ActionsStore.update(triple, oldTriple);
 
   getBlockTriple = ({ entityId, attributeId }: { entityId: string; attributeId: string }) => {
     const blockTriples = this.blockTriples$.get();
@@ -501,7 +532,7 @@ export class EntityStore implements IEntityStore {
           entityName: this.nodeName(node),
           attributeId: SYSTEM_IDS.PARENT_ENTITY,
           attributeName: 'Parent Entity',
-          value: { id: this.id, type: 'entity', name: this.name.get() },
+          value: { id: this.id, type: 'entity', name: this.name$.get() },
         })
       );
     }
@@ -569,7 +600,7 @@ export class EntityStore implements IEntityStore {
       const triple = Triple.withId({
         space: this.spaceId,
         entityId: this.id,
-        entityName: this.name.get(),
+        entityName: this.name$.get(),
         attributeId: SYSTEM_IDS.BLOCKS,
         attributeName: 'Blocks',
         value: {
