@@ -2,9 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Triple } from '~/modules/triple';
 import { Action, Column, Entity, Row } from '~/modules/types';
-import { DEFAULT_PAGE_SIZE } from '..';
 
-export function fromColumnsAndRows(spaceId: string, entities: Entity[], columns: Column[]) {
+export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
   const aggregatedRows = entities.map(({ triples, id }) => {
     return columns.reduce((acc, column) => {
@@ -27,7 +26,6 @@ export function fromColumnsAndRows(spaceId: string, entities: Entity[], columns:
 
   return {
     rows: aggregatedRows,
-    hasNextPage: entities.length > DEFAULT_PAGE_SIZE,
   };
 }
 
