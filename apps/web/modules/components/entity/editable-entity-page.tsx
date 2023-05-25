@@ -90,7 +90,7 @@ export function EditableEntityPage({
           type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
           payload: {
             attributeId: 'type',
-            attributeName: 'Type',
+            attributeName: 'Types',
             entityId: typeEntity.id,
             entityName: typeEntity.name || '',
           },
