@@ -28,6 +28,7 @@ import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
+import { INetwork } from '../io/data-source/network';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useReview();
@@ -862,33 +863,9 @@ type TableFiltersProps = {
 };
 
 const TableFilters = ({ rawFilter }: TableFiltersProps) => {
-  const [filters, setFilters] = React.useState<Array<TableBlockFilter & { columnName: string }>>([]);
-  const { network } = Services.useServices();
+  const [filters, isLoading] = useFilters(rawFilter);
 
-  useEffect(() => {
-    const getFilters = async (rawFilter: string) => {
-      const filters = await createFiltersFromGraphQLString(rawFilter, network.fetchEntity);
-      const { columns } = await network.columns({ params: { skip: 0, first: 0, filter: '' } });
-      const filtersWithColumnName = filters.map(f => {
-        if (f.columnId === SYSTEM_IDS.NAME) {
-          return {
-            ...f,
-            columnName: 'Name',
-          };
-        }
-        return {
-          ...f,
-          columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
-        };
-      });
-
-      setFilters(filtersWithColumnName);
-    };
-
-    getFilters(rawFilter);
-  }, [rawFilter, network]);
-
-  if (filters.length === 0) return null;
+  if (isLoading || !Array.isArray(filters) || filters.length === 0) return null;
 
   return (
     <>
@@ -928,4 +905,33 @@ const TableFilter = ({ filter }: TableFilterProps) => {
       </div>
     </div>
   );
+};
+
+const useFilters = (rawFilter: string): [Array<TableBlockFilter & { columnName: string }> | undefined, boolean] => {
+  const { network } = Services.useServices();
+  const { data, isLoading } = useQuery({
+    queryKey: [`${rawFilter}`],
+    queryFn: async () => getFilters(rawFilter, network),
+  });
+
+  return [data, isLoading];
+};
+
+const getFilters = async (rawFilter: string, network: INetwork) => {
+  const filters = await createFiltersFromGraphQLString(rawFilter, network.fetchEntity);
+  const { columns } = await network.columns({ params: { skip: 0, first: 0, filter: '' } });
+  const filtersWithColumnName = filters.map(f => {
+    if (f.columnId === SYSTEM_IDS.NAME) {
+      return {
+        ...f,
+        columnName: 'Name',
+      };
+    }
+    return {
+      ...f,
+      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+    };
+  });
+
+  return filtersWithColumnName;
 };
