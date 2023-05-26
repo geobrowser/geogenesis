@@ -50,8 +50,13 @@ export function ResultContent({ onClick, result, alreadySelected, spaces, withDe
   const showBreadcrumbs = spaceName || result.types.length > 0;
   const showBreadcrumbChevron = spaceName && result.types.length > 0;
 
+  const onSelect = () => {
+    if (alreadySelected) return;
+    onClick();
+  };
+
   return (
-    <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
+    <ResultItem onClick={onSelect} existsOnEntity={Boolean(alreadySelected)}>
       <div className="flex w-full items-center justify-between leading-[1rem]">
         <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
           {result.name ?? result.id}

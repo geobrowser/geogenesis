@@ -61,9 +61,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                 >
                   <ResultContent
                     key={result.id}
-                    onClick={() => {
-                      if (!itemIdsSet.has(result.id)) onDone(result);
-                    }}
+                    onClick={() => onDone(result)}
                     spaces={spaces}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}

@@ -81,9 +81,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
                   >
                     <ResultContent
                       key={result.id}
-                      onClick={() => {
-                        if (!entityItemIdsSet.has(result.id)) onDone(result);
-                      }}
+                      onClick={() => onDone(result)}
                       alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
                       spaces={spaces}

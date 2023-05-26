@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { SquareButton } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
 import { Command } from 'cmdk';
@@ -8,6 +7,8 @@ import { Menu } from '~/modules/design-system/menu';
 import { useAutocomplete } from '~/modules/search';
 import { ResultContent } from './autocomplete/results-list';
 import { useSpaces } from '~/modules/spaces/use-spaces';
+import { DeletableChipButton } from '~/modules/design-system/chip';
+import { NavUtils } from '~/modules/utils';
 
 export function AttributeConfigurationMenu() {
   const [open, setOpen] = React.useState(false);
@@ -23,23 +24,50 @@ export function AttributeConfigurationMenu() {
 }
 
 function AttributeSearch() {
+  const [selectedTypes, setSelectedTypes] = React.useState<
+    { typeId: string; typeName: string | null; spaceId: string }[]
+  >([]);
+
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
 
+  const alreadySelectedTypes = selectedTypes.map(st => st.typeId);
+
   return (
     <Command label="Type search">
-      <div className="px-2 pb-2">
+      <div className="mb-2 px-2">
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 px-2">
+        {selectedTypes.map(st => (
+          <DeletableChipButton
+            href={NavUtils.toEntity(st.spaceId, st.typeId)}
+            onClick={() => {
+              //
+            }}
+            key={st.typeId}
+          >
+            {st.typeName ?? st.typeId}
+          </DeletableChipButton>
+        ))}
       </div>
       <Command.List>
         {autocomplete.results.map(result => (
           <Command.Item key={result.id}>
             <ResultContent
+              alreadySelected={alreadySelectedTypes.includes(result.id)}
               withDescription={false}
               result={result}
               spaces={spaces}
               onClick={() => {
-                //
+                setSelectedTypes(prev => [
+                  ...prev,
+                  {
+                    typeId: result.id,
+                    typeName: result.name,
+                    spaceId: result.nameTripleSpace ?? '',
+                  },
+                ]);
               }}
             />
           </Command.Item>
