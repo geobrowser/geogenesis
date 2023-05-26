@@ -14,6 +14,7 @@ import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as ITriple } from '~/modules/types';
 import { Value } from '~/modules/value';
 import { Entity } from '..';
+import { makeOptionalComputed } from '~/modules/utils';
 
 const markdownConverter = new showdown.Converter();
 
@@ -97,6 +98,7 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
   name$: ObservableComputed<string>;
+  attributeRelationTypes$: ObservableComputed<Record<string, { typeId: string }>>;
 
   constructor({
     api,
@@ -252,36 +254,43 @@ export class EntityStore implements IEntityStore {
     });
 
     // @TODO: We need to do the same thing for tables
-    const attributeRelationTypes = computed(async () => {
-      const triples = this.triples$.get();
-      const schemaTriples = this.schemaTriples$.get();
+    this.attributeRelationTypes$ = makeOptionalComputed(
+      {},
+      computed(async () => {
+        const triples = this.triples$.get();
+        const schemaTriples = this.schemaTriples$.get();
 
-      const attributesWithRelationValues = [...triples, ...schemaTriples]
-        .filter(t => t.value.type === 'entity')
-        .map(t => ({ attributeId: t.attributeId, attributeName: t.attributeName }));
+        // 1. Fetch all attributes that are entity values
+        // 2. Filter attributes that have the relation type attribute
+        // 3. Return the type id and name of the relation type
 
-      // @TODO: Fetch the relation types from the server/local state
-      const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
-      const relationAttributeTypes = await Promise.all(
-        attributesWithRelationValues.map(a =>
-          mergedStore.fetchTriples({
-            query: '',
-            first: DEFAULT_PAGE_SIZE,
-            skip: 0,
-            filter: [
-              {
-                field: 'entity-id',
-                value: a.attributeId,
-              },
-              {
-                field: 'attribute-id',
-                value: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-              },
-            ],
-          })
-        )
-      );
-    });
+        // Filter out any duplicate attributes across triples + schemaTriples.
+        // Also ensure they are entity values.
+        const attributesWithRelationValues = [
+          ...new Set([...triples, ...schemaTriples].filter(t => t.value.type === 'entity').map(t => t.attributeId)),
+        ];
+
+        // Make sure we merge any unpublished entities
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const maybeRelationAttributeTypes = await Promise.all(
+          attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
+        );
+
+        const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
+
+        const relationTypes = relationTypeEntities.filter(
+          t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        );
+
+        return relationTypes.reduce<Record<string, { typeId: string }>>((acc, relationType) => {
+          acc[relationType.entityId] = {
+            typeId: relationType.value.id,
+          };
+
+          return acc;
+        }, {});
+      })
+    );
 
     /*
     Computed values in @legendapp/state will rerun for every change recursively up the tree.

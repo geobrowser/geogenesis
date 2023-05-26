@@ -17,12 +17,14 @@ export function useEntityPageStore() {
     id,
     updateEditorBlocks,
     editorJson$,
+    attributeRelationTypes$,
   } = useEntityStoreContext();
   const triples = useSelector(triples$);
   const schemaTriples = useSelector<Triple[]>(schemaTriples$);
   const hiddenSchemaIds = useSelector<string[]>(hiddenSchemaIds$);
   const blockIds = useSelector<string[]>(blockIds$);
   const editorJson = useSelector(editorJson$);
+  const attributeRelationTypes = useSelector<Record<string, { typeId: string }>>(attributeRelationTypes$);
 
   return {
     triples,
@@ -37,5 +39,6 @@ export function useEntityPageStore() {
     editorJson,
     blockIds,
     id,
+    attributeRelationTypes,
   };
 }

@@ -51,6 +51,7 @@ export function EditableEntityPage({
     remove,
     hideSchema,
     hiddenSchemaIds,
+    attributeRelationTypes,
   } = useEntityStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
@@ -146,6 +147,7 @@ export function EditableEntityPage({
             send={send}
             hideSchema={hideSchema}
             hiddenSchemaIds={hiddenSchemaIds}
+            allowedTypes={attributeRelationTypes}
           />
         </div>
         <div className="p-4">
@@ -169,6 +171,7 @@ function EntityAttributes({
   send,
   hideSchema,
   hiddenSchemaIds,
+  allowedTypes,
 }: {
   entityId: string;
   triples: ITriple[];
@@ -177,6 +180,7 @@ function EntityAttributes({
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
+  allowedTypes: Record<string, { typeId: string }>;
 }) {
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
@@ -362,11 +366,14 @@ function EntityAttributes({
         return null;
       case 'entity':
         if (isEmptyEntity) {
+          const relationType = allowedTypes[attributeId] ? [allowedTypes[attributeId].typeId] : undefined;
+
           return (
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
                 key={`entity-${attributeId}-${triple.value.id}`}
                 placeholder="Add value..."
+                allowedTypes={relationType}
                 onDone={result =>
                   triple.placeholder
                     ? createEntityTripleFromPlaceholder(triple, result)
@@ -437,6 +444,7 @@ function EntityAttributes({
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
+        const relationType = allowedTypes[attributeId] ? [allowedTypes[attributeId].typeId] : undefined;
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -445,6 +453,7 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
+                allowedTypes={relationType}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -459,6 +468,7 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(triple => triple.value.id)}
+                  allowedTypes={relationType}
                 />
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">

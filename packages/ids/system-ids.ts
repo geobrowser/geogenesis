@@ -29,7 +29,9 @@ export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
 // This sets the type of values which can be set as part of a relation value.
 // e.g. An attribute called People can only accept values of type Person
-export const RELATION_VALUE_RELATIONSHIP_TYPE = '@TODO'
+// @TODO: Change this to the real UUID from mainnet.
+export const RELATION_VALUE_RELATIONSHIP_TYPE =
+  '7c259260-8fec-4450-87df-0d9c4a815813'
 
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
