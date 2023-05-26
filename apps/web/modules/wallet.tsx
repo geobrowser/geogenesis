@@ -9,6 +9,7 @@ import { Link } from './design-system/icons/link';
 import { Unlink } from './design-system/icons/unlink';
 import { Spacer } from './design-system/spacer';
 import { Text } from './design-system/text';
+import { ClientOnly } from './components/client-only';
 
 const LOCAL_CHAIN: Chain = {
   id: Number(Config.options.development.chainId),
@@ -75,22 +76,24 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
 
   return (
-    <ConnectKitButton.Custom>
-      {({ show, isConnected }) => {
-        return (
-          // We're using an anonymous function for disconnect to appease the TS gods.
-          <button
-            onClick={isConnected ? () => disconnect() : show}
-            className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0 text-ctaPrimary"
-          >
-            {isConnected ? <Unlink /> : <Link />}
-            <Spacer width={8} />
-            <Text color="ctaPrimary" variant="button">
-              {isConnected ? 'Disconnect wallet' : 'Connect wallet'}
-            </Text>
-          </button>
-        );
-      }}
-    </ConnectKitButton.Custom>
+    <ClientOnly>
+      <ConnectKitButton.Custom>
+        {({ show, isConnected }) => {
+          return (
+            // We're using an anonymous function for disconnect to appease the TS gods.
+            <button
+              onClick={isConnected ? () => disconnect() : show}
+              className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0 text-ctaPrimary"
+            >
+              {isConnected ? <Unlink /> : <Link />}
+              <Spacer width={8} />
+              <Text color="ctaPrimary" variant="button">
+                {isConnected ? 'Disconnect wallet' : 'Connect wallet'}
+              </Text>
+            </button>
+          );
+        }}
+      </ConnectKitButton.Custom>
+    </ClientOnly>
   );
 }
