@@ -95,7 +95,8 @@ export function createProposedVersion(
   entityId: string,
   createdBy: Address,
   proposalId: string,
-  proposalName: string | null
+  proposalName: string | null,
+  createdAtBlock: BigInt
 ): ProposedVersion {
   let version = ProposedVersion.load(versionId)
   if (version == null) {
@@ -105,6 +106,7 @@ export function createProposedVersion(
     version.entity = entityId
     version.createdAt = createdAt
     version.name = proposalName
+    version.createdAtBlock = createdAtBlock
     version.save()
   }
   let proposal = Proposal.load(proposalId)
@@ -130,7 +132,8 @@ export function createVersion(
   createdAt: BigInt,
   entityId: string,
   createdBy: Address,
-  proposalName: string | null
+  proposalName: string | null,
+  createdAtBlock: BigInt
 ): Version {
   let version = Version.load(versionId)
   let proposed = ProposedVersion.load(proposedVersion)
@@ -160,6 +163,7 @@ export function createVersion(
     }
     version.createdAt = createdAt
     version.name = proposalName
+    version.createdAtBlock = createdAtBlock
     version.save()
   }
   return version
