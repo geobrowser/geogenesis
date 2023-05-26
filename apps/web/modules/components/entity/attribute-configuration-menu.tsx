@@ -9,6 +9,7 @@ import { ResultContent } from './autocomplete/results-list';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { DeletableChipButton } from '~/modules/design-system/chip';
 import { NavUtils } from '~/modules/utils';
+import { Entity } from '~/modules/types';
 
 export function AttributeConfigurationMenu() {
   const [open, setOpen] = React.useState(false);
@@ -32,6 +33,18 @@ function AttributeSearch() {
   const { spaces } = useSpaces();
 
   const alreadySelectedTypes = selectedTypes.map(st => st.typeId);
+
+  const onSelect = (result: Entity) => {
+    autocomplete.onQueryChange('');
+    setSelectedTypes(prev => [
+      ...prev,
+      {
+        typeId: result.id,
+        typeName: result.name,
+        spaceId: result.nameTripleSpace ?? '',
+      },
+    ]);
+  };
 
   return (
     <Command label="Type search">
@@ -59,16 +72,7 @@ function AttributeSearch() {
               withDescription={false}
               result={result}
               spaces={spaces}
-              onClick={() => {
-                setSelectedTypes(prev => [
-                  ...prev,
-                  {
-                    typeId: result.id,
-                    typeName: result.name,
-                    spaceId: result.nameTripleSpace ?? '',
-                  },
-                ]);
-              }}
+              onClick={() => onSelect(result)}
             />
           </Command.Item>
         ))}
