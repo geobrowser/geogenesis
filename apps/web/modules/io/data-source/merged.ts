@@ -62,6 +62,11 @@ export class Merged implements IMergeDataSource {
           return false;
         }
 
+        // If the entity does not have the selected types don't return it.
+        if (options.typeIds && options.typeIds.length > 0) {
+          if (!e.types.some(t => options.typeIds?.includes(t.id))) return false;
+        }
+
         const lowerName = e.name.toLowerCase();
         const lowerQuery = options.query ? options.query.toLowerCase() : '';
         return lowerName.startsWith(lowerQuery) || lowerName.includes(lowerQuery);
