@@ -75,7 +75,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns } = useTableBlock();
+    const { columns, columnRelationTypes } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -115,6 +115,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
+          columnRelationTypeId={columnRelationTypes[cellData.columnId]?.typeId}
         />
       );
     } else if (cellData && !isPlaceholderCell) {

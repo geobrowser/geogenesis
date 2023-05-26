@@ -70,6 +70,7 @@ export class TableBlockStore {
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
+  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string }>>;
   abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
@@ -189,6 +190,37 @@ export class TableBlockStore {
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType?.entityId);
     });
+
+    this.columnRelationTypes$ = makeOptionalComputed(
+      {},
+      computed(async () => {
+        const columns = this.columns$.get();
+
+        // 1. Fetch all attributes that are entity values
+        // 2. Filter attributes that have the relation type attribute
+        // 3. Return the type id and name of the relation type
+
+        // Make sure we merge any unpublished entities
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const maybeRelationAttributeTypes = await Promise.all(
+          columns.map(t => t.id).map(attributeId => mergedStore.fetchEntity(attributeId))
+        );
+
+        const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
+
+        const relationTypes = relationTypeEntities.filter(
+          t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        );
+
+        return relationTypes.reduce<Record<string, { typeId: string }>>((acc, relationType) => {
+          acc[relationType.entityId] = {
+            typeId: relationType.value.id,
+          };
+
+          return acc;
+        }, {});
+      })
+    );
 
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
@@ -316,6 +348,7 @@ export function useTableBlock() {
     filterState$,
     setFilterState,
     isLoading$,
+    columnRelationTypes$,
   } = useTableBlockStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -326,6 +359,7 @@ export function useTableBlock() {
   const blockEntity = useSelector(blockEntity$);
   const filterState = useSelector<TableBlockFilter[]>(filterState$);
   const isLoading = useSelector(isLoading$);
+  const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
     type,
@@ -340,5 +374,6 @@ export function useTableBlock() {
     filterState,
     setFilterState,
     isLoading,
+    columnRelationTypes,
   };
 }
