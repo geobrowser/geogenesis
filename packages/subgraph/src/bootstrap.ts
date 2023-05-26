@@ -151,7 +151,8 @@ export function bootstrapRootSpaceCoreTypes(
     createdBy,
     createdAtTimestamp,
     space,
-    `Creating initial types for ${space}`
+    `Creating initial types for ${space}`,
+    createdAtBlock
   )
 
   const entityToActionIds = new Map<string, string[]>()
@@ -288,7 +289,8 @@ export function bootstrapRootSpaceCoreTypes(
         entityId,
         createdBy,
         proposalId,
-        `Creating initial types for ${space}`
+        `Creating initial types for ${space}`,
+        createdAtBlock
       )
 
       createVersion(
@@ -297,7 +299,8 @@ export function bootstrapRootSpaceCoreTypes(
         createdAtTimestamp,
         entityId,
         createdBy,
-        `Creating initial types for ${space}`
+        `Creating initial types for ${space}`,
+        createdAtBlock
       )
     }
   }
