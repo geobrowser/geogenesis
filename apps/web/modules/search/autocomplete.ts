@@ -38,8 +38,6 @@ class EntityAutocomplete {
 
           if (query.length === 0) return [];
 
-          console.log('query inside autocomplete', query);
-
           this.loading$.set(true);
           const entities = await this.mergedDataSource.fetchEntities({
             query,
@@ -47,8 +45,6 @@ class EntityAutocomplete {
             filter,
             typeIds: allowedTypes,
           });
-
-          console.log('enttiies', entities);
 
           this.loading$.set(false);
           return entities;
@@ -91,8 +87,6 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);
   const loading = useSelector(autocomplete.loading$);
-
-  console.log('query inside hook', query);
 
   return {
     isEmpty: A.isEmpty(results) && S.isNotEmpty(query) && !loading,
