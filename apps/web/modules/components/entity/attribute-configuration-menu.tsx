@@ -1,8 +1,9 @@
 import * as React from 'react';
+import { Command } from 'cmdk';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { SquareButton } from '~/modules/design-system/button';
 import { Input } from '~/modules/design-system/input';
-import { Command } from 'cmdk';
-
 import { Menu } from '~/modules/design-system/menu';
 import { useAutocomplete } from '~/modules/search';
 import { ResultContent } from './autocomplete/results-list';
@@ -10,21 +11,30 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { DeletableChipButton } from '~/modules/design-system/chip';
 import { NavUtils } from '~/modules/utils';
 import { Entity } from '~/modules/types';
+import { useActionsStore } from '~/modules/action';
+import { Triple } from '~/modules/triple';
 
-export function AttributeConfigurationMenu() {
+interface Props {
+  // This is the entityId of the attribute being configured with a relation type.
+  attributeId: string;
+  attributeName: string | null;
+}
+
+export function AttributeConfigurationMenu({ attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} />
       </div>
     </Menu>
   );
 }
 
-function AttributeSearch() {
+function AttributeSearch({ attributeId, attributeName }: Props) {
+  const { create, remove } = useActionsStore();
   const [selectedTypes, setSelectedTypes] = React.useState<
     { typeId: string; typeName: string | null; spaceId: string }[]
   >([]);
@@ -44,6 +54,38 @@ function AttributeSearch() {
         spaceId: result.nameTripleSpace ?? '',
       },
     ]);
+
+    create(
+      Triple.withId({
+        entityId: attributeId,
+        attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+        attributeName: 'Relation Value Types',
+        entityName: attributeName,
+        space: result.nameTripleSpace ?? '',
+        value: {
+          type: 'entity',
+          id: result.id,
+          name: result.name,
+        },
+      })
+    );
+  };
+
+  const onRemove = ({ typeId, spaceId, typeName }: { typeId: string; spaceId: string; typeName: string | null }) => {
+    remove(
+      Triple.withId({
+        entityId: attributeId,
+        attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+        attributeName: 'Relation Value Types',
+        entityName: attributeName,
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: typeId,
+          name: typeName,
+        },
+      })
+    );
   };
 
   return (
@@ -55,9 +97,7 @@ function AttributeSearch() {
         {selectedTypes.map(st => (
           <DeletableChipButton
             href={NavUtils.toEntity(st.spaceId, st.typeId)}
-            onClick={() => {
-              //
-            }}
+            onClick={() => onRemove(st)}
             key={st.typeId}
           >
             {st.typeName ?? st.typeId}
