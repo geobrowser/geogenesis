@@ -3,17 +3,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 import { EntityType } from '~/modules/types';
-import { HistoryItem, HistoryLoading, HistoryPanel } from '../history';
+import { HistoryItem, HistoryPanel } from '../history';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 import { Action } from '~/modules/action';
 import { useQuery } from '@tanstack/react-query';
 import { Services } from '~/modules/services';
-import { HistoryEmpty } from '../history/history-empty';
 import { Menu } from '~/modules/design-system/menu';
 import { Context } from '~/modules/design-system/icons/context';
 import { Close } from '~/modules/design-system/icons/close';
 import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
+import { EntityPageContextMenu } from './entity-page-context-menu';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -39,17 +39,20 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
           </li>
         ))}
       </ul>
-      <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
-        {versions?.map(v => (
-          <HistoryItem
-            key={v.id}
-            changeCount={Action.getChangeCount(v.actions)}
-            createdAt={v.createdAt}
-            createdBy={v.createdBy}
-            name={v.name}
-          />
-        ))}
-      </HistoryPanel>
+      <div className="flex items-center gap-3">
+        <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
+          {versions?.map(v => (
+            <HistoryItem
+              key={v.id}
+              changeCount={Action.getChangeCount(v.actions)}
+              createdAt={v.createdAt}
+              createdBy={v.createdBy}
+              name={v.name}
+            />
+          ))}
+        </HistoryPanel>
+        <EntityPageContextMenu entityId={id} spaceId={spaceId} />
+      </div>
     </div>
   );
 }
