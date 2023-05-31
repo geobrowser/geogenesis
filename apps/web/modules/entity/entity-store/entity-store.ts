@@ -293,6 +293,8 @@ export class EntityStore implements IEntityStore {
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
+        console.log('relationTypes', relationTypes);
+
         return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
           (acc, relationType) => {
             if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
