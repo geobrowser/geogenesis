@@ -7,11 +7,10 @@ import { Truncate } from '../../design-system/truncate';
 interface Props {
   value: string;
   isExpanded?: boolean;
-  isEntity?: boolean;
   href?: string;
 }
 
-export function CellContent({ isExpanded, value, isEntity, href }: Props) {
+export function CellContent({ isExpanded, value, href }: Props) {
   const content = href ? (
     <Link href={href} passHref>
       <a className="block break-all text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">
@@ -25,7 +24,7 @@ export function CellContent({ isExpanded, value, isEntity, href }: Props) {
   );
 
   return (
-    <Truncate maxLines={isEntity ? 1 : 3} shouldTruncate={!isExpanded}>
+    <Truncate maxLines={3} shouldTruncate={!isExpanded}>
       {content}
     </Truncate>
   );

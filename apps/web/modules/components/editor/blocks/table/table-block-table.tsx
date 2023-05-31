@@ -174,11 +174,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <th
-                  key={header.id}
-                  className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
-                  style={{ minWidth: header.column.getSize() }}
-                >
+                <th key={header.id} className="min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left">
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
               ))}
