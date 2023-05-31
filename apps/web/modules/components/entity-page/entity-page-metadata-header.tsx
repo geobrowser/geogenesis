@@ -13,8 +13,7 @@ import { Context } from '~/modules/design-system/icons/context';
 import { Close } from '~/modules/design-system/icons/close';
 import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
-import { EntityPageContextMenu, EntityPageContextMenuItem } from './entity-page-context-menu';
-import { EntityPageDeleteEntityModal } from './entity-page-delete-entity-modal';
+import { EntityPageContextMenu } from './entity-page-context-menu';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -30,14 +29,6 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
   });
 
   const isLoadingVersions = !versions || isLoading;
-
-  const onCopyId = async () => {
-    try {
-      await navigator.clipboard.writeText(id);
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-    }
-  };
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -60,16 +51,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
             />
           ))}
         </HistoryPanel>
-        <EntityPageContextMenu>
-          <EntityPageContextMenuItem onClick={onCopyId}>Copy ID</EntityPageContextMenuItem>
-          <EntityPageContextMenuItem
-            onClick={() => {
-              //
-            }}
-          >
-            <EntityPageDeleteEntityModal trigger={<button className="text-red-01">Delete entity</button>} />
-          </EntityPageContextMenuItem>
-        </EntityPageContextMenu>
+        <EntityPageContextMenu entityId={id} spaceId={spaceId} />
       </div>
     </div>
   );

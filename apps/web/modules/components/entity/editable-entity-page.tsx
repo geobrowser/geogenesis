@@ -26,22 +26,13 @@ import { Services } from '~/modules/services';
 interface Props {
   triples: TripleType[];
   id: string;
-  name: string;
   spaceId: string;
   typeId?: string | null;
   filterId?: string | null;
   filterValue?: string | null;
 }
 
-export function EditableEntityPage({
-  id,
-  name: serverName,
-  spaceId,
-  triples: serverTriples,
-  typeId,
-  filterId,
-  filterValue,
-}: Props) {
+export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, filterId, filterValue }: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -58,8 +49,7 @@ export function EditableEntityPage({
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
-
-  const name = Entity.name(triples) ?? serverName;
+  const name = Entity.name(triples) ?? '';
 
   const send = useEditEvents({
     context: {
