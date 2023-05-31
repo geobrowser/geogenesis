@@ -108,7 +108,7 @@ const names: Tuple<string, StringValue>[] = [
     _0: RELATION_VALUE_RELATIONSHIP_TYPE,
     _1: new StringValue(
       RELATION_VALUE_RELATIONSHIP_TYPE,
-      'Relation Value Type'
+      'Relation Value Types'
     ),
   },
 ]
