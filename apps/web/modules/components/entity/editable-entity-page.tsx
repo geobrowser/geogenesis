@@ -27,22 +27,13 @@ import { AttributeConfigurationMenu } from './attribute-configuration-menu';
 interface Props {
   triples: ITriple[];
   id: string;
-  name: string;
   spaceId: string;
   typeId?: string | null;
   filterId?: string | null;
   filterValue?: string | null;
 }
 
-export function EditableEntityPage({
-  id,
-  name: serverName,
-  spaceId,
-  triples: serverTriples,
-  typeId,
-  filterId,
-  filterValue,
-}: Props) {
+export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, filterId, filterValue }: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -61,7 +52,8 @@ export function EditableEntityPage({
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
-  const name = Entity.name(triples) ?? serverName;
+  // Always default to the local state for the name
+  const name = Entity.name(triples) ?? '';
 
   const send = useEditEvents({
     context: {
@@ -92,7 +84,7 @@ export function EditableEntityPage({
           type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
           payload: {
             attributeId: 'type',
-            attributeName: 'Type',
+            attributeName: 'Types',
             entityId: typeEntity.id,
             entityName: typeEntity.name || '',
           },

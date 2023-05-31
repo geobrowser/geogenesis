@@ -5,7 +5,7 @@ import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
 import pluralize from 'pluralize';
 
-import { ActionsStore } from '~/modules/action';
+import { Action, ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/editor/editor';
 import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
@@ -121,6 +121,16 @@ export class EntityStore implements IEntityStore {
       const localBlockIdsForEntity = Triple.fromActions(ActionsStore.actions$.get()[spaceId], [])
         .filter(t => t.entityId === id)
         .find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
+
+      // If there previously was a published blockIdsTriple, but it was deleted locally, we want to
+      // favor the local version of the blockIdsTriple.
+      const isLocalBlockTripleDeleted = Action.squashChanges(ActionsStore.allActions$.get()).find(
+        a => a.type === 'deleteTriple' && a.entityId === id && a.attributeId === SYSTEM_IDS.BLOCKS
+      );
+
+      if (isLocalBlockTripleDeleted) {
+        return null;
+      }
 
       // Favor the local version of the blockIdsTriple if it exists
       return localBlockIdsForEntity ?? initialBlockIdsTriple;

@@ -26,12 +26,15 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           spaceId="1"
-          versions={[]}
           triples={[]}
-          schemaTriples={[]}
           referencedByEntities={[]}
           blockTriples={[]}
           blockIdsTriple={null}
+          description={null}
+          serverAvatarUrl={null}
+          serverCoverUrl={null}
+          space={null}
+          spaceTypes={[]}
         />
       </Providers>
     );
@@ -46,12 +49,15 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           spaceId="1"
-          versions={[]}
           triples={[genericAttribute]}
-          schemaTriples={[]}
           referencedByEntities={[]}
           blockTriples={[]}
           blockIdsTriple={null}
+          description={null}
+          serverAvatarUrl={null}
+          serverCoverUrl={null}
+          space={null}
+          spaceTypes={[]}
         />
       </Providers>
     );
@@ -66,12 +72,15 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           spaceId="1"
-          versions={[]}
           triples={[{ ...genericAttribute, attributeName: null }]}
-          schemaTriples={[]}
           referencedByEntities={[]}
           blockTriples={[]}
           blockIdsTriple={null}
+          description={null}
+          serverAvatarUrl={null}
+          serverCoverUrl={null}
+          space={null}
+          spaceTypes={[]}
         />
       </Providers>
     );
@@ -86,12 +95,15 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           spaceId="1"
-          versions={[]}
           triples={[]}
-          schemaTriples={[]}
           referencedByEntities={[]}
           blockTriples={[]}
           blockIdsTriple={null}
+          description={null}
+          serverAvatarUrl={null}
+          serverCoverUrl={null}
+          space={null}
+          spaceTypes={[]}
         />
       </Providers>
     );
@@ -106,9 +118,7 @@ describe('Entity page', () => {
           id="1"
           name="Banana"
           spaceId="1"
-          versions={[]}
           triples={[]}
-          schemaTriples={[]}
           referencedByEntities={[
             {
               id: '1',
@@ -132,6 +142,11 @@ describe('Entity page', () => {
           ]}
           blockTriples={[]}
           blockIdsTriple={null}
+          description={null}
+          serverAvatarUrl={null}
+          serverCoverUrl={null}
+          space={null}
+          spaceTypes={[]}
         />
       </Providers>
     );
