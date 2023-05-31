@@ -441,8 +441,6 @@ function EntityAttributes({
         const relationTypesIds =
           allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId].map(rt => rt.typeId) : undefined;
 
-        console.log('relationTypesIds', relationTypesIds);
-
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
