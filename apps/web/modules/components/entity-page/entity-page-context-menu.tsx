@@ -50,7 +50,8 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       side="bottom"
     >
       <EntityPageContextMenuItem isMenuOpen={isMenuOpen} isModalOpen={isModalOpen}>
-        <button className="h-full w-full px-2 py-2" onClick={onCopyId}>
+        <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyId}>
+          <Icon icon="copy" />
           Copy ID
         </button>
       </EntityPageContextMenuItem>
@@ -60,7 +61,12 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
             open={isModalOpen}
             onOpenChange={onModalOpenChange}
             onDelete={onDelete}
-            trigger={<button className="h-full w-full px-2 py-2 text-red-01">Delete entity</button>}
+            trigger={
+              <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01">
+                <Icon icon="trash" />
+                Delete entity
+              </button>
+            }
           />
         </EntityPageContextMenuItem>
       )}
