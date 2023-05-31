@@ -247,7 +247,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       />
                     ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'entity' ? (
                       <TableBlockEntityFilterInput
-                        typeIdToFilter={columnRelationTypes[state.selectedColumn]?.typeId}
+                        typeIdToFilter={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />
@@ -273,12 +273,12 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 interface TableBlockEntityFilterInputProps {
   onSelect: (result: Entity) => void;
   selectedValue: string;
-  typeIdToFilter?: string;
+  typeIdToFilter?: string[];
 }
 
 function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }: TableBlockEntityFilterInputProps) {
   console.log('typeIdToFilter', typeIdToFilter);
-  const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: [typeIdToFilter] } : undefined);
+  const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: typeIdToFilter } : undefined);
   const { spaces } = useSpaces();
 
   console.log('autocomplete', autocomplete);

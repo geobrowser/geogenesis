@@ -172,7 +172,7 @@ function EntityAttributes({
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
-  allowedTypes: Record<string, { typeId: string; typeName: string | null }>;
+  allowedTypes: Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>;
 }) {
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
@@ -358,15 +358,15 @@ function EntityAttributes({
         return null;
       case 'entity':
         if (isEmptyEntity) {
-          // @TODO: Make it work with multiple allowedTypes
-          const relationType = allowedTypes[attributeId] ? [allowedTypes[attributeId].typeId] : undefined;
+          const relationTypes =
+            allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId].map(rt => rt.typeId) : undefined;
 
           return (
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
                 key={`entity-${attributeId}-${triple.value.id}`}
                 placeholder="Add value..."
-                allowedTypes={relationType}
+                allowedTypes={relationTypes}
                 onDone={result =>
                   triple.placeholder
                     ? createEntityTripleFromPlaceholder(triple, result)
@@ -437,7 +437,9 @@ function EntityAttributes({
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
-        const relationType = allowedTypes[attributeId] ? [allowedTypes[attributeId].typeId] : undefined;
+        const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
+        const relationTypesIds =
+          allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId].map(rt => rt.typeId) : undefined;
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -446,7 +448,7 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
-                allowedTypes={relationType}
+                allowedTypes={relationTypesIds}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -461,14 +463,18 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
                   entityValueIds={entityValueTriples.map(triple => triple.value.id)}
-                  allowedTypes={relationType}
+                  allowedTypes={relationTypesIds}
                 />
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">
                 {!isPlaceholder && (
                   <>
                     {isEntityGroup ? (
-                      <AttributeConfigurationMenu attributeId={attributeId} attributeName={attributeName} />
+                      <AttributeConfigurationMenu
+                        attributeId={attributeId}
+                        attributeName={attributeName}
+                        configuredTypes={relationTypes}
+                      />
                     ) : null}
                     <TripleTypeDropdown
                       value={ITriple as IconName}

@@ -19,7 +19,7 @@ interface Props {
   remove: (triple: Triple) => void;
   valueType: string;
   columnName: string;
-  columnRelationTypeId?: string;
+  columnRelationTypeIds?: string[];
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -31,7 +31,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   remove,
   columnName,
   valueType,
-  columnRelationTypeId,
+  columnRelationTypeIds,
 }: Props) {
   const send = useEditEvents({
     context: {
@@ -61,8 +61,11 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isEmptyRelation = isRelationValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
 
-  // @TODO: Make it work with multiple columnRelationTypeIds
-  const typesToFilter = columnRelationTypeId ? [columnRelationTypeId] : undefined;
+  const typesToFilter = columnRelationTypeIds
+    ? columnRelationTypeIds.length > 0
+      ? columnRelationTypeIds
+      : undefined
+    : undefined;
 
   const removeEntityTriple = (triple: Triple) => {
     send({

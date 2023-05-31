@@ -70,7 +70,9 @@ export class TableBlockStore {
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
-  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string; typeName: string | null }>>;
+  columnRelationTypes$: ObservableComputed<
+    Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>
+  >;
   abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
@@ -212,14 +214,17 @@ export class TableBlockStore {
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
-        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null }>>(
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
           (acc, relationType) => {
-            acc[relationType.entityId] = {
+            if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
+
+            acc[relationType.entityId].push({
               typeId: relationType.value.id,
 
               // We can safely cast here because we filter for entity type values above.
               typeName: (relationType.value as EntityValue).name,
-            };
+              spaceId: relationType.space,
+            });
 
             return acc;
           },

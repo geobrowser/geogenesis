@@ -115,7 +115,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
-          columnRelationTypeId={columnRelationTypes[cellData.columnId]?.typeId}
+          columnRelationTypeIds={columnRelationTypes[cellData.columnId]?.map(t => t.typeId)}
         />
       );
     } else if (cellData && !isPlaceholderCell) {

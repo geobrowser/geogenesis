@@ -18,44 +18,32 @@ interface Props {
   // This is the entityId of the attribute being configured with a relation type.
   attributeId: string;
   attributeName: string | null;
+  configuredTypes: { typeId: string; typeName: string | null; spaceId: string }[];
 }
 
-export function AttributeConfigurationMenu({ attributeId, attributeName }: Props) {
+export function AttributeConfigurationMenu({ attributeId, attributeName, configuredTypes }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch attributeId={attributeId} attributeName={attributeName} />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} configuredTypes={configuredTypes} />
       </div>
     </Menu>
   );
 }
 
-function AttributeSearch({ attributeId, attributeName }: Props) {
+function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props) {
   const { create, remove } = useActionsStore();
-  const [selectedTypes, setSelectedTypes] = React.useState<
-    { typeId: string; typeName: string | null; spaceId: string }[]
-  >([]);
-
-  // @TODO: Prefill existing relation types for this attributeId
 
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
 
-  const alreadySelectedTypes = selectedTypes.map(st => st.typeId);
+  const alreadySelectedTypes = configuredTypes.map(st => st.typeId);
 
   const onSelect = (result: Entity) => {
     autocomplete.onQueryChange('');
-    setSelectedTypes(prev => [
-      ...prev,
-      {
-        typeId: result.id,
-        typeName: result.name,
-        spaceId: result.nameTripleSpace ?? '',
-      },
-    ]);
 
     create(
       Triple.withId({
@@ -96,7 +84,7 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-2 px-2">
-        {selectedTypes.map(st => (
+        {configuredTypes.map(st => (
           <DeletableChipButton
             href={NavUtils.toEntity(st.spaceId, st.typeId)}
             onClick={() => onRemove(st)}
@@ -107,7 +95,7 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
         ))}
       </div>
       <Command.List>
-        {autocomplete.results.map(result => (
+        {autocomplete.results.slice(0, 10).map(result => (
           <Command.Item key={result.id}>
             <ResultContent
               alreadySelected={alreadySelectedTypes.includes(result.id)}

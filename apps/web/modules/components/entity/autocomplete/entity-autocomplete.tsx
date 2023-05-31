@@ -40,6 +40,7 @@ interface Props {
 }
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes }: Props) {
+  console.log('allowedTypes', allowedTypes);
   const autocomplete = useAutocomplete({ allowedTypes });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
