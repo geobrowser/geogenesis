@@ -41,7 +41,6 @@ export function EditableHeading({
   // Default to the server name if there is no local name only when in browse mode.
   // Otherwise leave it empty when in edit mode.
   const name = isEditing ? Entity.name(triples) ?? '' : serverName;
-  console.log('name', name);
   const types = Entity.types(triples) ?? [];
 
   const send = useEditEvents({
