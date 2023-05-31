@@ -60,6 +60,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
+
+  // @TODO: Make it work with multiple columnRelationTypeIds
   const typesToFilter = columnRelationTypeId ? [columnRelationTypeId] : undefined;
 
   const removeEntityTriple = (triple: Triple) => {

@@ -8,7 +8,7 @@ import { useSelector } from '@legendapp/state/react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -70,7 +70,7 @@ export class TableBlockStore {
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
-  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string }>>;
+  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string; typeName: string | null }>>;
   abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
@@ -212,13 +212,19 @@ export class TableBlockStore {
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
-        return relationTypes.reduce<Record<string, { typeId: string }>>((acc, relationType) => {
-          acc[relationType.entityId] = {
-            typeId: relationType.value.id,
-          };
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null }>>(
+          (acc, relationType) => {
+            acc[relationType.entityId] = {
+              typeId: relationType.value.id,
 
-          return acc;
-        }, {});
+              // We can safely cast here because we filter for entity type values above.
+              typeName: (relationType.value as EntityValue).name,
+            };
+
+            return acc;
+          },
+          {}
+        );
       })
     );
 

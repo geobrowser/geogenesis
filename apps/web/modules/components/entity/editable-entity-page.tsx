@@ -172,7 +172,7 @@ function EntityAttributes({
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
-  allowedTypes: Record<string, { typeId: string }>;
+  allowedTypes: Record<string, { typeId: string; typeName: string | null }>;
 }) {
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
@@ -358,6 +358,7 @@ function EntityAttributes({
         return null;
       case 'entity':
         if (isEmptyEntity) {
+          // @TODO: Make it work with multiple allowedTypes
           const relationType = allowedTypes[attributeId] ? [allowedTypes[attributeId].typeId] : undefined;
 
           return (

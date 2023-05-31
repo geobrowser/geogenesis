@@ -6,7 +6,7 @@ import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
 import { MergedData, NetworkData } from '~/modules/io';
-import { Column, Row, Space, Triple as TripleType } from '../../types';
+import { Column, EntityValue, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { CreateType } from '~/modules/type';
@@ -68,7 +68,7 @@ export class EntityTableStore implements IEntityTableStore {
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
   selectedType$: Observable<SelectedType | null>;
-  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string }>>;
+  columnRelationTypes$: ObservableComputed<Record<string, { typeId: string; typeName: string | null }>>;
 
   query$: Observable<string>;
   space$: ObservableComputed<Space | undefined>;
@@ -287,13 +287,19 @@ export class EntityTableStore implements IEntityTableStore {
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
-        return relationTypes.reduce<Record<string, { typeId: string }>>((acc, relationType) => {
-          acc[relationType.entityId] = {
-            typeId: relationType.value.id,
-          };
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null }>>(
+          (acc, relationType) => {
+            acc[relationType.entityId] = {
+              typeId: relationType.value.id,
 
-          return acc;
-        }, {});
+              // We can safely cast here because we filter for entity type values above.
+              typeName: (relationType.value as EntityValue).name,
+            };
+
+            return acc;
+          },
+          {}
+        );
       })
     );
   }

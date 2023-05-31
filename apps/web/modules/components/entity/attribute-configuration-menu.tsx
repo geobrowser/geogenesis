@@ -39,6 +39,8 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
     { typeId: string; typeName: string | null; spaceId: string }[]
   >([]);
 
+  // @TODO: Prefill existing relation types for this attributeId
+
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
 

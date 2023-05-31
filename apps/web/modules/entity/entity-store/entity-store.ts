@@ -98,7 +98,7 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
   name$: ObservableComputed<string>;
-  attributeRelationTypes$: ObservableComputed<Record<string, { typeId: string }>>;
+  attributeRelationTypes$: ObservableComputed<Record<string, { typeId: string; typeName: string | null }>>;
 
   constructor({
     api,
@@ -291,13 +291,19 @@ export class EntityStore implements IEntityStore {
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
-        return relationTypes.reduce<Record<string, { typeId: string }>>((acc, relationType) => {
-          acc[relationType.entityId] = {
-            typeId: relationType.value.id,
-          };
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null }>>(
+          (acc, relationType) => {
+            acc[relationType.entityId] = {
+              typeId: relationType.value.id,
 
-          return acc;
-        }, {});
+              // We can safely cast here because we filter for entity type values above.
+              typeName: (relationType.value as EntityValue).name,
+            };
+
+            return acc;
+          },
+          {}
+        );
       })
     );
 

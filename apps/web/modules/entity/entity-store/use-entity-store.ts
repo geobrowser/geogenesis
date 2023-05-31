@@ -24,7 +24,7 @@ export function useEntityPageStore() {
   const hiddenSchemaIds = useSelector<string[]>(hiddenSchemaIds$);
   const blockIds = useSelector<string[]>(blockIds$);
   const editorJson = useSelector(editorJson$);
-  const attributeRelationTypes = useSelector<Record<string, { typeId: string }>>(attributeRelationTypes$);
+  const attributeRelationTypes = useSelector(attributeRelationTypes$);
 
   return {
     triples,
