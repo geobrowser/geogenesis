@@ -49,6 +49,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
+
+  // Always default to the local state for the name
   const name = Entity.name(triples) ?? '';
 
   const send = useEditEvents({
