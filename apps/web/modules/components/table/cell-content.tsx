@@ -7,7 +7,6 @@ import { Truncate } from '../../design-system/truncate';
 interface Props {
   value: string;
   isExpanded?: boolean;
-  isEntity?: boolean;
   href?: string;
 }
 

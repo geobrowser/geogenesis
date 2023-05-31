@@ -20,15 +20,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
     const entityId = cell.entityId;
     const value = Entity.name(cell.triples) ?? entityId;
 
-    return (
-      <CellContent
-        key={value}
-        isEntity
-        href={NavUtils.toEntity(space, entityId)}
-        isExpanded={isExpanded}
-        value={value}
-      />
-    );
+    return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   } else
     return (
       <div className="flex flex-wrap gap-2">
