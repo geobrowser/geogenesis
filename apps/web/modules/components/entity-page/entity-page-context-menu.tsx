@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Icon } from '~/modules/design-system/icon';
 import { Menu } from '~/modules/design-system/menu';
-import { EntityPageDeleteEntityModal } from './entity-page-delete-entity-modal';
 import { useEntityStore } from '~/modules/entity';
 import { batch } from '@legendapp/state';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
@@ -13,7 +12,6 @@ interface Props {
 
 export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   const [isMenuOpen, onMenuOpenChange] = React.useState(false);
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { triples, schemaTriples, remove } = useEntityStore();
 
@@ -32,12 +30,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       schemaTriples.forEach(t => remove(t));
     });
 
-    setIsModalOpen(false);
     onMenuOpenChange(false);
-  };
-
-  const onModalOpenChange = (isOpen: boolean) => {
-    setIsModalOpen(isOpen);
   };
 
   return (
@@ -56,17 +49,10 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       </EntityPageContextMenuItem>
       {isEditing && (
         <EntityPageContextMenuItem>
-          <EntityPageDeleteEntityModal
-            open={isModalOpen}
-            onOpenChange={onModalOpenChange}
-            onDelete={onDelete}
-            trigger={
-              <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01">
-                <Icon icon="trash" />
-                Delete entity
-              </button>
-            }
-          />
+          <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
+            <Icon icon="trash" />
+            Delete entity
+          </button>
         </EntityPageContextMenuItem>
       )}
     </Menu>
