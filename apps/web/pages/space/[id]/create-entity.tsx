@@ -74,7 +74,6 @@ export function CreateEntityContent({ spaceId, newId, typeId, filterId, filterVa
         <EditableHeading spaceId={spaceId} entityId={newId} name="" triples={triples} />
         <EditableEntityPage
           id={newId}
-          name=""
           spaceId={spaceId}
           typeId={typeId}
           filterId={filterId}

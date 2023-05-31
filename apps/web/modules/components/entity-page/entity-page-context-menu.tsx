@@ -37,7 +37,6 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   };
 
   const onModalOpenChange = (isOpen: boolean) => {
-    // if (isOpen) onMenuOpenChange(false);
     setIsModalOpen(isOpen);
   };
 
@@ -49,14 +48,14 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       trigger={<Icon icon="context" color="grey-04" />}
       side="bottom"
     >
-      <EntityPageContextMenuItem isMenuOpen={isMenuOpen} isModalOpen={isModalOpen}>
+      <EntityPageContextMenuItem>
         <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyId}>
           <Icon icon="copy" />
           Copy ID
         </button>
       </EntityPageContextMenuItem>
       {isEditing && (
-        <EntityPageContextMenuItem isMenuOpen={isMenuOpen} isModalOpen={isModalOpen}>
+        <EntityPageContextMenuItem>
           <EntityPageDeleteEntityModal
             open={isModalOpen}
             onOpenChange={onModalOpenChange}
@@ -76,11 +75,9 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
 interface EntityPageContextMenuItemProps {
   children: React.ReactNode;
-  isMenuOpen: boolean;
-  isModalOpen: boolean;
 }
 
-function EntityPageContextMenuItem({ children, isMenuOpen, isModalOpen }: EntityPageContextMenuItemProps) {
+function EntityPageContextMenuItem({ children }: EntityPageContextMenuItemProps) {
   return (
     <div className={`w-full divide-y divide-divider bg-white text-button text-grey-04 hover:bg-bg hover:text-text`}>
       {children}
