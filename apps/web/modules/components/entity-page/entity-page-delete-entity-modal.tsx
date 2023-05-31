@@ -46,7 +46,7 @@ export function EntityPageDeleteEntityModal({ trigger, open, onOpenChange, onDel
                 <Spacer height={16} />
                 <p>
                   This will delete all triples in this entity. Deleting this entity may have unexpected side-effects as
-                  any entities referencing this entity will be broken.
+                  any other entities referencing this entity will be broken.
                 </p>
                 <Spacer height={32} />
                 <div className="flex items-center justify-between">
