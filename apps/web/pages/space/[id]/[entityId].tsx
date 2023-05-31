@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -39,9 +40,20 @@ interface Props {
 
   spaceTypes: Triple[];
   space: Space | null;
+  redirect: string | null;
 }
 
 export default function EntityPage(props: Props) {
+  const router = useRouter();
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (props.redirect && isMounted) {
+    router.push(props.redirect);
+  }
+
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
 
@@ -54,6 +66,10 @@ export default function EntityPage(props: Props) {
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
   const description =
     props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
+
+  if (props.redirect) {
+    return null;
+  }
 
   return (
     <>
@@ -111,6 +127,12 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     fetchSpaceTypeTriples(network, spaceId),
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
+
+  // Redirect from space configuration page to space page
+  let redirect: string | null = null;
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
+    redirect = `/space/${entity?.nameTripleSpace}`;
+  }
 
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
@@ -172,6 +194,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
 
       space,
       spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
+      redirect,
     },
   };
 };
