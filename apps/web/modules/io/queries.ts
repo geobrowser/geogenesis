@@ -13,6 +13,9 @@ export const entitiesQuery = (
     contain: `{name_contains_nocase: ${JSON.stringify(query)}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}`,
   };
 
+  // If there are multiple TypeIds we need to build an OR query for each one. Each query in the OR
+  // filter will contain the `query` and `entityOfWhere` params. We need to do this because there is
+  // no where filter like "typeIds_contains_any_nocase."
   if (typeIds && typeIds.length > 1) {
     const whereStartsWithMultipleTypeIds = [];
     const whereContainsMultipleTypeIds = [];
