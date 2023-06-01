@@ -94,11 +94,10 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
   if (!actions) return triples;
 
   const newTriples: Triple[] = [...triples].reverse();
-  const newActions = actions;
 
   // If our actions have modified one of the network triples, we don't want to add that
   // network triple to the triples array
-  newActions.forEach(action => {
+  actions.forEach(action => {
     switch (action.type) {
       case 'createTriple': {
         // We may add a triple that has the same attributeId as other triples. We want to insert

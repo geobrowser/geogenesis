@@ -210,7 +210,10 @@ export class TableBlockStore {
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
-        const relationTypes = relationTypeEntities.filter(
+        // Merge all local and server triples
+        const mergedTriples = Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities);
+
+        const relationTypes = mergedTriples.filter(
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 

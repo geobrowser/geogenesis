@@ -120,22 +120,16 @@ export class EntityStore implements IEntityStore {
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
     this.blockIdsTriple$ = computed(() => {
-      const localBlockIdsForEntity = Triple.fromActions(ActionsStore.actions$.get()[spaceId], [])
-        .filter(t => t.entityId === id)
-        .find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
-
-      // If there previously was a published blockIdsTriple, but it was deleted locally, we want to
-      // favor the local version of the blockIdsTriple.
-      const isLocalBlockTripleDeleted = Action.squashChanges(ActionsStore.allActions$.get()).find(
-        a => a.type === 'deleteTriple' && a.entityId === id && a.attributeId === SYSTEM_IDS.BLOCKS
+      const localBlockIdsForEntity = pipe(
+        ActionsStore.allActions$.get(),
+        actions => Action.squashChanges(actions),
+        actions => Triple.fromActions(actions, initialBlockIdsTriple ? [initialBlockIdsTriple] : []),
+        A.filter(t => t.entityId === id),
+        A.find(t => t.attributeId === SYSTEM_IDS.BLOCKS)
       );
 
-      if (isLocalBlockTripleDeleted) {
-        return null;
-      }
-
       // Favor the local version of the blockIdsTriple if it exists
-      return localBlockIdsForEntity ?? initialBlockIdsTriple;
+      return localBlockIdsForEntity ?? null;
     });
 
     this.blockIds$ = computed(() => {
@@ -289,7 +283,10 @@ export class EntityStore implements IEntityStore {
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
-        const relationTypes = relationTypeEntities.filter(
+        // Merge all local and server triples
+        const mergedTriples = Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities);
+
+        const relationTypes = mergedTriples.filter(
           t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
