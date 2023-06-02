@@ -395,7 +395,8 @@ export class Network implements INetwork {
         return !(
           result.types.some(t => t.id === SYSTEM_IDS.TEXT_BLOCK) ||
           result.types.some(t => t.id === SYSTEM_IDS.TABLE_BLOCK) ||
-          result.types.some(t => t.id === SYSTEM_IDS.IMAGE_BLOCK)
+          result.types.some(t => t.id === SYSTEM_IDS.IMAGE_BLOCK) ||
+          result.types.some(t => t.id === SYSTEM_IDS.SPACE_CONFIGURATION)
         );
       });
     } catch (e) {
