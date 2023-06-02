@@ -93,12 +93,14 @@ export class GeoDate {
 export const getOpenGraphImageUrl = (value: string) => {
   if (value.startsWith('https://api.thegraph.com/ipfs')) {
     const hash = value.split('=')[1];
-    return `https://geobrowser.io/api/og?hash=${hash}`;
+    return `/preview/${hash}.png`;
   } else if (value.startsWith('http')) {
     return value;
   } else if (value) {
-    return `https://geobrowser.io/api/og?hash=${value}`;
+    return `/preview/${value}.png`;
   } else {
     return DEFAULT_OPENGRAPH_IMAGE;
   }
 };
+
+// https://geobrowser.io/api/og?hash=

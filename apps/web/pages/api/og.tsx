@@ -9,7 +9,11 @@ export const config = {
 
 export default async function handler(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const hash = searchParams.get('hash');
+  let hash = searchParams.get('hash') ?? '';
+
+  if (hash.includes('.png')) {
+    hash = hash.split('.')[0];
+  }
 
   if (!hash) {
     return new ImageResponse(

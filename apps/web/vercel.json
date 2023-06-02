@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/preview/:path*",
+      "destination": "https://geobrowser.io/api/og?hash=:path*"
+    }
+  ]
+}
