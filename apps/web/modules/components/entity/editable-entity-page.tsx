@@ -201,7 +201,7 @@ function EntityAttributes({
   const descriptionTriple = Entity.descriptionTriple(triples);
   const description = Entity.description(triples);
 
-  const onChangeITriple = (type: TripleValueType, triples: ITriple[]) => {
+  const onChangeTriple = (type: TripleValueType, triples: ITriple[]) => {
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
@@ -488,7 +488,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'string',
-                          onClick: () => onChangeITriple('string', triples),
+                          onClick: () => onChangeTriple('string', triples),
                           disabled: !isEntityGroup,
                         },
                         {
@@ -500,7 +500,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'entity',
-                          onClick: () => onChangeITriple('entity', triples),
+                          onClick: () => onChangeTriple('entity', triples),
                           disabled: Boolean(isEntityGroup),
                         },
                         {
@@ -512,7 +512,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'image',
-                          onClick: () => onChangeITriple('image', triples),
+                          onClick: () => onChangeTriple('image', triples),
                           disabled: Boolean(isEntityGroup),
                         },
                       ]}
