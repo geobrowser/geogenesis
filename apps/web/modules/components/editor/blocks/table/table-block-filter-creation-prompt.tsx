@@ -277,11 +277,8 @@ interface TableBlockEntityFilterInputProps {
 }
 
 function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }: TableBlockEntityFilterInputProps) {
-  console.log('typeIdToFilter', typeIdToFilter);
   const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: typeIdToFilter } : undefined);
   const { spaces } = useSpaces();
-
-  console.log('autocomplete', autocomplete);
 
   return (
     <div className="relative w-full">
