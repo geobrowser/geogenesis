@@ -70,6 +70,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
+  // @TODO(baiirun): fix this
   const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
   const memoizedFilter = useMemo(() => filter, [filter]);
 

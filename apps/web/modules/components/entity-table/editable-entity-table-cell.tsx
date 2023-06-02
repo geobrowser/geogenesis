@@ -61,6 +61,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isEmptyRelation = isRelationValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
 
+  // @TODO(baiirun): move encoding an empty string array to undefined to queries.ts
+  // Pass the ids only if they are defined and not empty.
   const typesToFilter = columnRelationTypeIds
     ? columnRelationTypeIds.length > 0
       ? columnRelationTypeIds
