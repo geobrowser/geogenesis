@@ -42,7 +42,6 @@ interface ITableBlockStoreConfig {
   // e.g., a Person or a Project
   selectedType: SelectedEntityType;
 
-  // @TODO: Columns and rows shouldn't be dependent on Space?
   spaceId: string;
 }
 
