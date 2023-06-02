@@ -14,6 +14,7 @@ interface EntityAutocompleteOptions {
   spaceId?: string;
   ActionsStore: ActionsStore;
   filter?: FilterState;
+  allowedTypes?: string[];
 }
 
 class EntityAutocomplete {
@@ -23,7 +24,7 @@ class EntityAutocomplete {
   abortController: AbortController = new AbortController();
   mergedDataSource: MergedData;
 
-  constructor({ api, ActionsStore, filter = [] }: EntityAutocompleteOptions) {
+  constructor({ api, ActionsStore, allowedTypes, filter = [] }: EntityAutocompleteOptions) {
     this.mergedDataSource = new MergedData({ api, store: ActionsStore });
 
     this.results$ = makeOptionalComputed(
@@ -42,7 +43,9 @@ class EntityAutocomplete {
             query,
             abortController: this.abortController,
             filter,
+            typeIds: allowedTypes,
           });
+
           this.loading$.set(false);
           return entities;
         } catch (e) {
@@ -60,17 +63,27 @@ class EntityAutocomplete {
 
 interface AutocompleteOptions {
   filter?: FilterState;
+  allowedTypes?: string[];
 }
 
-export function useAutocomplete({ filter = [] }: AutocompleteOptions = {}) {
+export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
+  // @TODO(baiirun): fix this
+  const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
+  const memoizedFilter = useMemo(() => filter, [filter]);
+
   const autocomplete = useMemo(() => {
-    return new EntityAutocomplete({ api: network, ActionsStore, filter });
+    return new EntityAutocomplete({
+      api: network,
+      ActionsStore,
+      filter: memoizedFilter,
+      allowedTypes: memoizedAllowedTypes,
+    });
     // Typically we wouldn't want to stringify a dependency array value, but since
     // we know that the FilterState object is small we know it won't create a performance issue.
-  }, [network, ActionsStore, JSON.stringify(filter)]);
+  }, [network, ActionsStore, memoizedAllowedTypes, memoizedFilter]);
 
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);

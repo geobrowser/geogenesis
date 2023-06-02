@@ -30,6 +30,7 @@ import {
   TEXT_BLOCK,
   TYPES,
   VALUE_TYPE,
+  RELATION_VALUE_RELATIONSHIP_TYPE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -63,6 +64,7 @@ const entities: string[] = [
   MARKDOWN_CONTENT,
   ROW_TYPE,
   PARENT_ENTITY,
+  RELATION_VALUE_RELATIONSHIP_TYPE,
 ]
 
 class Tuple<T, U> {
@@ -102,6 +104,13 @@ const names: Tuple<string, StringValue>[] = [
   { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
   { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
   { _0: FILTER, _1: new StringValue(FILTER, 'Filter') },
+  {
+    _0: RELATION_VALUE_RELATIONSHIP_TYPE,
+    _1: new StringValue(
+      RELATION_VALUE_RELATIONSHIP_TYPE,
+      'Relation Value Types'
+    ),
+  },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -119,6 +128,7 @@ const attributes: Tuple<string, string>[] = [
   { _0: BLOCKS, _1: RELATION },
   { _0: PARENT_ENTITY, _1: RELATION },
   { _0: FILTER, _1: TEXT },
+  { _0: RELATION_VALUE_RELATIONSHIP_TYPE, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */

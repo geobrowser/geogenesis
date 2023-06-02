@@ -8,10 +8,41 @@ export const entitiesQuery = (
   const typeIdsString =
     typeIds && typeIds.length > 0 ? `typeIds_contains_nocase: [${typeIds?.map(t => `"${t}"`).join(', ')}]` : '';
 
+  const constructedWhere = {
+    start: `{name_starts_with_nocase: ${JSON.stringify(query)}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}`,
+    contain: `{name_contains_nocase: ${JSON.stringify(query)}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}`,
+  };
+
+  // If there are multiple TypeIds we need to build an OR query for each one. Each query in the OR
+  // filter will contain the `query` and `entityOfWhere` params. We need to do this because there is
+  // no where filter like "typeIds_contains_any_nocase."
+  if (typeIds && typeIds.length > 1) {
+    const whereStartsWithMultipleTypeIds = [];
+    const whereContainsMultipleTypeIds = [];
+
+    for (const id of typeIds) {
+      whereStartsWithMultipleTypeIds.push(
+        `typeIds_contains_nocase: ["${id}"], name_starts_with_nocase: ${JSON.stringify(
+          query
+        )}, entityOf_: {${entityOfWhere}}`
+      );
+
+      whereContainsMultipleTypeIds.push(
+        `typeIds_contains_nocase: ["${id}"], name_contains_nocase: ${JSON.stringify(
+          query
+        )}, entityOf_: {${entityOfWhere}}`
+      );
+    }
+
+    const multiFilterStartsWithQuery = whereStartsWithMultipleTypeIds.map(f => `{${f}}`).join(', ');
+    const multiFilterContainsQuery = whereContainsMultipleTypeIds.map(f => `{${f}}`).join(', ');
+
+    constructedWhere.start = `{or: [${multiFilterStartsWithQuery}]}`;
+    constructedWhere.contain = `{or: [${multiFilterContainsQuery}]}`;
+  }
+
   return `query {
-    startEntities: geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(
-      query
-    )}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}, first: ${first}, skip: ${skip}) {
+    startEntities: geoEntities(where: ${constructedWhere.start}, first: ${first}, skip: ${skip}) {
       id,
       name
       entityOf {
@@ -37,9 +68,7 @@ export const entitiesQuery = (
         }
       }
     }
-    containEntities: geoEntities(where: {name_contains_nocase: ${JSON.stringify(
-      query
-    )}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}, first: ${first}, skip: ${skip}) {
+    containEntities: geoEntities(where: ${constructedWhere.contain}, first: ${first}, skip: ${skip}) {
       id,
       name,
       entityOf {

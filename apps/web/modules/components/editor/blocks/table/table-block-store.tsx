@@ -8,7 +8,7 @@ import { useSelector } from '@legendapp/state/react';
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -42,7 +42,6 @@ interface ITableBlockStoreConfig {
   // e.g., a Person or a Project
   selectedType: SelectedEntityType;
 
-  // @TODO: Columns and rows shouldn't be dependent on Space?
   spaceId: string;
 }
 
@@ -70,6 +69,9 @@ export class TableBlockStore {
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
+  columnRelationTypes$: ObservableComputed<
+    Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>
+  >;
   abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
@@ -189,6 +191,52 @@ export class TableBlockStore {
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType?.entityId);
     });
+
+    this.columnRelationTypes$ = makeOptionalComputed(
+      {},
+      computed(async () => {
+        const columns = this.columns$.get();
+
+        // 1. Fetch all attributes that are entity values
+        // 2. Filter attributes that have the relation type attribute
+        // 3. Return the type id and name of the relation type
+
+        // Make sure we merge any unpublished entities
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const maybeRelationAttributeTypes = await Promise.all(
+          columns.map(t => t.id).map(attributeId => mergedStore.fetchEntity(attributeId))
+        );
+
+        const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
+
+        // Merge all local and server triples
+        const mergedTriples = A.uniqBy(
+          Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
+          t => t.id
+        );
+
+        const relationTypes = mergedTriples.filter(
+          t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        );
+
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
+          (acc, relationType) => {
+            if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
+
+            acc[relationType.entityId].push({
+              typeId: relationType.value.id,
+
+              // We can safely cast here because we filter for entity type values above.
+              typeName: (relationType.value as EntityValue).name,
+              spaceId: relationType.space,
+            });
+
+            return acc;
+          },
+          {}
+        );
+      })
+    );
 
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
@@ -316,6 +364,7 @@ export function useTableBlock() {
     filterState$,
     setFilterState,
     isLoading$,
+    columnRelationTypes$,
   } = useTableBlockStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -326,6 +375,7 @@ export function useTableBlock() {
   const blockEntity = useSelector(blockEntity$);
   const filterState = useSelector<TableBlockFilter[]>(filterState$);
   const isLoading = useSelector(isLoading$);
+  const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
     type,
@@ -340,5 +390,6 @@ export function useTableBlock() {
     filterState,
     setFilterState,
     isLoading,
+    columnRelationTypes,
   };
 }

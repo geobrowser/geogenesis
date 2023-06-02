@@ -19,6 +19,7 @@ interface Props {
   remove: (triple: Triple) => void;
   valueType: string;
   columnName: string;
+  columnRelationTypeIds?: string[];
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -30,6 +31,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   remove,
   columnName,
   valueType,
+  columnRelationTypeIds,
 }: Props) {
   const send = useEditEvents({
     context: {
@@ -58,6 +60,14 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
+
+  // @TODO(baiirun): move encoding an empty string array to undefined to queries.ts
+  // Pass the ids only if they are defined and not empty.
+  const typesToFilter = columnRelationTypeIds
+    ? columnRelationTypeIds.length > 0
+      ? columnRelationTypeIds
+      : undefined
+    : undefined;
 
   const removeEntityTriple = (triple: Triple) => {
     send({
@@ -159,6 +169,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
             entityValueIds={entityValueTriples.map(t => t.value.id)}
+            allowedTypes={typesToFilter}
           />
         </>
       )}
@@ -168,6 +179,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+          allowedTypes={typesToFilter}
         />
       )}
 

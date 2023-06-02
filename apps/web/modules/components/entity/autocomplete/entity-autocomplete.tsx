@@ -36,10 +36,11 @@ const MotionContent = motion(StyledContent);
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
+  allowedTypes?: string[];
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
-  const autocomplete = useAutocomplete();
+export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes }: Props) {
+  const autocomplete = useAutocomplete({ allowedTypes });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
@@ -80,9 +81,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds }: Props) {
                   >
                     <ResultContent
                       key={result.id}
-                      onClick={() => {
-                        if (!entityItemIdsSet.has(result.id)) onDone(result);
-                      }}
+                      onClick={() => onDone(result)}
                       alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
                       spaces={spaces}

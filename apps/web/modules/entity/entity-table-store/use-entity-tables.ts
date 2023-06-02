@@ -20,6 +20,7 @@ export const useEntityTable = () => {
     unpublishedColumns$,
     createForeignType,
     createType,
+    columnRelationTypes$,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -30,6 +31,7 @@ export const useEntityTable = () => {
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const hasNextPage = useSelector(hasNextPage$);
   const query = useSelector(query$);
+  const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
     rows,
@@ -48,5 +50,6 @@ export const useEntityTable = () => {
     hasNextPage,
     createType,
     createForeignType,
+    columnRelationTypes,
   };
 };

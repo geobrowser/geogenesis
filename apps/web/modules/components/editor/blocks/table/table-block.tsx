@@ -215,7 +215,7 @@ export function TableBlock({ spaceId }: Props) {
         </AnimatePresence>
       )}
 
-      <div>
+      <motion.div layout="position" transition={{ duration: 0.15 }}>
         <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
           {isLoading ? (
             <TableBlockPlaceholder />
@@ -261,7 +261,7 @@ export function TableBlock({ spaceId }: Props) {
           <Spacer width={12} />
           <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
         </PageNumberContainer>
-      </div>
+      </motion.div>
     </div>
   );
 }

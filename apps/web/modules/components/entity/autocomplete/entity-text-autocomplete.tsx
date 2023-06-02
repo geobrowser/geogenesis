@@ -12,10 +12,11 @@ interface Props {
   placeholder?: string;
   onDone: (result: Entity) => void;
   itemIds: string[];
+  allowedTypes?: string[];
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) {
-  const { query, results, onQueryChange } = useAutocomplete();
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes }: Props) {
+  const { query, results, onQueryChange } = useAutocomplete({ allowedTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
@@ -60,9 +61,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone }: Props) 
                 >
                   <ResultContent
                     key={result.id}
-                    onClick={() => {
-                      if (!itemIdsSet.has(result.id)) onDone(result);
-                    }}
+                    onClick={() => onDone(result)}
                     spaces={spaces}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}

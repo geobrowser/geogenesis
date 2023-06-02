@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Content, Root, Trigger, Portal } from '@radix-ui/react-popover';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { TableBlockFilter } from './table-block-store';
+import { TableBlockFilter, useTableBlock } from './table-block-store';
 import { TripleValueType, Entity, Space } from '~/modules/types';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -156,6 +156,8 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
 };
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
+  const { columnRelationTypes } = useTableBlock();
+
   const [state, dispatch] = React.useReducer(reducer, {
     selectedColumn: SYSTEM_IDS.NAME,
     value: { type: 'string', value: '' },
@@ -245,6 +247,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       />
                     ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'entity' ? (
                       <TableBlockEntityFilterInput
+                        typeIdToFilter={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />
@@ -270,10 +273,11 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 interface TableBlockEntityFilterInputProps {
   onSelect: (result: Entity) => void;
   selectedValue: string;
+  typeIdToFilter?: string[];
 }
 
-function TableBlockEntityFilterInput({ onSelect, selectedValue }: TableBlockEntityFilterInputProps) {
-  const autocomplete = useAutocomplete();
+function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }: TableBlockEntityFilterInputProps) {
+  const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: typeIdToFilter } : undefined);
   const { spaces } = useSpaces();
 
   return (
