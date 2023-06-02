@@ -95,7 +95,7 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
         ))}
       </div>
       <Command.List>
-        {autocomplete.results.slice(0, 10).map(result => (
+        {autocomplete.results.slice(0, 5).map(result => (
           <Command.Item key={result.id}>
             <ResultContent
               alreadySelected={alreadySelectedTypes.includes(result.id)}
