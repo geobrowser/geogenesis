@@ -12,6 +12,7 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
+import { Divider } from '~/modules/design-system/divider';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -65,36 +66,44 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
             }}
             sideOffset={8}
           >
-            <div className="relative m-0.5 p-2">
+            <div className="relative p-2">
               <div className="absolute top-[1.125rem] left-5 z-100">
                 <Search />
               </div>
               <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </div>
             <ResizableContainer duration={0.125}>
-              <ResultsList>
-                {autocomplete.results.map((result, i) => (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={result.id}
-                  >
-                    <ResultContent
+              {!autocomplete.isEmpty && (
+                <ResultsList>
+                  {autocomplete.results.map((result, i) => (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.02 * i }}
                       key={result.id}
-                      onClick={() => onDone(result)}
-                      alreadySelected={entityItemIdsSet.has(result.id)}
-                      result={result}
-                      spaces={spaces}
-                    />
-                  </motion.div>
-                ))}
-              </ResultsList>
+                    >
+                      <ResultContent
+                        key={result.id}
+                        onClick={() => onDone(result)}
+                        alreadySelected={entityItemIdsSet.has(result.id)}
+                        result={result}
+                        spaces={spaces}
+                      />
+                    </motion.div>
+                  ))}
+                </ResultsList>
+              )}
               {autocomplete.isEmpty && (
-                <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                  <p>0 entities found</p>
-                  <TextButton>Create new entity</TextButton>
-                </div>
+                <>
+                  <div className="pb-2">
+                    <Divider type="horizontal" />
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+                    <p>0 entities found</p>
+                    <TextButton>Create new entity</TextButton>
+                  </div>
+                </>
               )}
             </ResizableContainer>
           </MotionContent>

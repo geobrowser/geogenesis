@@ -8,6 +8,7 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
+import { Divider } from '~/modules/design-system/divider';
 
 interface Props {
   placeholder?: string;
@@ -48,35 +49,41 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
           ref={containerRef}
           className="absolute top-[36px] z-[1] flex max-h-[340px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
         >
-          {!isEmpty && (
-            <p className="p-2.5">
-              <Text variant="smallButton">Add a relation</Text>
-            </p>
-          )}
+          <p className="p-2">
+            <Text variant="smallButton">Add a relation</Text>
+          </p>
           <ResizableContainer duration={0.125}>
-            <ResultsList>
-              {results.map((result, i) => (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.02 * i }}
-                  key={result.id}
-                >
-                  <ResultContent
+            {!isEmpty && (
+              <ResultsList>
+                {results.map((result, i) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
                     key={result.id}
-                    onClick={() => onDone(result)}
-                    spaces={spaces}
-                    alreadySelected={itemIdsSet.has(result.id)}
-                    result={result}
-                  />
-                </motion.div>
-              ))}
-            </ResultsList>
+                  >
+                    <ResultContent
+                      key={result.id}
+                      onClick={() => onDone(result)}
+                      spaces={spaces}
+                      alreadySelected={itemIdsSet.has(result.id)}
+                      result={result}
+                    />
+                  </motion.div>
+                ))}
+              </ResultsList>
+            )}
             {isEmpty && (
-              <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                <p>0 entities found</p>
-                <TextButton>Create new entity</TextButton>
-              </div>
+              <>
+                <div className="pb-2">
+                  <Divider type="horizontal" />
+                </div>
+
+                <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+                  <p>0 entities found</p>
+                  <TextButton>Create new entity</TextButton>
+                </div>
+              </>
             )}
           </ResizableContainer>
         </div>
