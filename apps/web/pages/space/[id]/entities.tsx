@@ -47,7 +47,6 @@ export default function EntitiesPage({
         <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
         <meta property="og:image" content={openGraphImageUrl} />
         <meta name="twitter:image" content={openGraphImageUrl} />
-        <link rel="prefetch" href={openGraphImageUrl} />
         <link rel="preload" as="image" href={openGraphImageUrl} />
       </Head>
       <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
