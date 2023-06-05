@@ -9,19 +9,18 @@ export function useLocalStorage<T>(key: string, initialValue: T, callback?: (val
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
     } catch (error) {
-      console.log(error);
+      console.error(`Cannot read key: ${key} from local storage during initialization`, error);
       return initialValue;
     }
   });
+
   const setValue = (value: T | ((val: T) => T)) => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      }
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
     } catch (error) {
-      console.log(error);
+      console.error(`Cannot set key: ${key} in local storage`, error);
     }
   };
 
@@ -36,8 +35,8 @@ export function useLocalStorage<T>(key: string, initialValue: T, callback?: (val
         const item = window.localStorage.getItem(key);
         const value = item ? JSON.parse(item) : initialValue;
         callback?.(value);
-      } catch (e) {
-        console.error(`Cannot read key: ${key} from local storage`, e);
+      } catch (error) {
+        console.error(`Cannot read key: ${key} from local storage`, error);
         return initialValue;
       }
     };
