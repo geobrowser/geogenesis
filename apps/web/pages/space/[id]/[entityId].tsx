@@ -206,6 +206,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     return {
       props: {
         triples: [],
+        name: entityId,
+        description: '',
         id: entityId,
         blockIdsTriple: null,
         blockTriples: [],
