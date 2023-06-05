@@ -13,8 +13,7 @@ import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
-import { Icon } from '~/modules/design-system/icon';
-import { Spinner } from '~/modules/design-system/spinner';
+import { Dots } from '~/modules/design-system/dots';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -69,19 +68,21 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
             sideOffset={8}
           >
             <div className="relative p-2">
-              <div className="absolute top-[1.125rem] left-5 z-100">
-                <AnimatePresence initial={false} mode="wait">
-                  {autocomplete.isLoading ? (
+              <AnimatePresence initial={false} mode="wait">
+                {autocomplete.isLoading ? (
+                  <div className="absolute top-[50%] left-5 z-100">
                     <motion.span
-                      key="spinner"
+                      key="dots"
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.1 }}
                     >
-                      <Spinner />
+                      <Dots />
                     </motion.span>
-                  ) : (
+                  </div>
+                ) : (
+                  <div className="absolute top-[1.125rem] left-5 z-100">
                     <motion.span
                       key="search"
                       initial={{ opacity: 0, scale: 0.95 }}
@@ -91,9 +92,9 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
                     >
                       <Search />
                     </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
+                  </div>
+                )}
+              </AnimatePresence>
               <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </div>
             <ResizableContainer duration={0.125}>

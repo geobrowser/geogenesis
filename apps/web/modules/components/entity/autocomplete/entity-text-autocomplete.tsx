@@ -1,14 +1,14 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
-import { Text } from '~/modules/design-system/text';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
+import { Dots } from '~/modules/design-system/dots';
 
 interface Props {
   placeholder?: string;
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes }: Props) {
-  const { query, results, onQueryChange, isEmpty } = useAutocomplete({ allowedTypes });
+  const { query, results, onQueryChange, isEmpty, isLoading } = useAutocomplete({ allowedTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
@@ -49,9 +49,6 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
           ref={containerRef}
           className="absolute top-[36px] z-[1] flex max-h-[340px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
         >
-          <p className="p-2">
-            <Text variant="smallButton">Add a relation</Text>
-          </p>
           <ResizableContainer duration={0.125}>
             {!isEmpty && (
               <ResultsList>
@@ -73,18 +70,31 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                 ))}
               </ResultsList>
             )}
-            {isEmpty && (
-              <>
-                <div className="pb-2">
-                  <Divider type="horizontal" />
-                </div>
 
-                <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                  <p>0 entities found</p>
-                  <TextButton>Create new entity</TextButton>
-                </div>
-              </>
+            {!isLoading && (
+              <div className="pb-2">
+                <Divider type="horizontal" />
+              </div>
             )}
+
+            <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+              <AnimatePresence mode="wait">
+                {isLoading ? (
+                  <motion.span
+                    key="dots"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    <Dots />
+                  </motion.span>
+                ) : (
+                  <p>0 entities found</p>
+                )}
+              </AnimatePresence>
+              <TextButton>Create new entity</TextButton>
+            </div>
           </ResizableContainer>
         </div>
       )}
