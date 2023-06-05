@@ -13,6 +13,8 @@ import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
+import { Icon } from '~/modules/design-system/icon';
+import { Spinner } from '~/modules/design-system/spinner';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -68,7 +70,29 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
           >
             <div className="relative p-2">
               <div className="absolute top-[1.125rem] left-5 z-100">
-                <Search />
+                <AnimatePresence initial={false} mode="wait">
+                  {autocomplete.isLoading ? (
+                    <motion.span
+                      key="spinner"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <Spinner />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="search"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <Search />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </div>
               <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </div>
