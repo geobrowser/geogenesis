@@ -8,7 +8,7 @@ import type { INetwork } from '~/modules/io/data-source/network';
 export type ActionId = string;
 export type EntityId = string;
 export type BlockId = string;
-export type BlockValueType = 'textBlock' | 'imageBlock' | 'tableBlock' | 'markdownContent';
+export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
 export type AttributeId = string;
 export type Changeset = {
   name: string;
@@ -63,6 +63,22 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                   [entityId]: {
                     ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                     type: 'tableBlock',
+                    before: null,
+                    after: Action.getValue(action, ''),
+                  },
+                },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+              };
+              // @NOTE we're assumign this means we're creating a table filter
+            } else {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableFilter',
                     before: null,
                     after: Action.getValue(action, ''),
                   },
@@ -146,7 +162,29 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                   [entityId]: {
                     ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                     type: 'tableBlock',
-                    before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? null,
+                    before:
+                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+                        : null,
+                    after: Action.getValue(action.after, ''),
+                  },
+                },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
+              };
+              // @NOTE we're assumign this means we're editing a table filter
+            } else {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableFilter',
+                    before:
+                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+                        : Action.getValue(action.before, ''),
                     after: Action.getValue(action.after, ''),
                   },
                 },
@@ -165,7 +203,10 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
               [entityId]: {
                 ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                 type: blockType,
-                before: changes[parentEntityId]?.blocks?.[entityId]?.before ?? Action.getValue(action.before, ''),
+                before:
+                  typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
+                    ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+                    : Action.getValue(action.before, ''),
                 after: Action.getValue(action.after, ''),
               },
             },
@@ -182,9 +223,9 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 type: Action.getValueType(action.after),
                 name: action.before.attributeName ?? '',
                 before:
-                  changes[entityId]?.attributes?.[attributeId]?.before ??
-                  Action.getName(action.before) ??
-                  Action.getValue(action.before, ''),
+                  typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
+                    ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
+                    : Action.getName(action.before) ?? Action.getValue(action.before, ''),
                 after: Action.getValue(action.after, ''),
                 actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.before.id],
               },
@@ -215,7 +256,29 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                   [entityId]: {
                     ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
                     type: 'tableBlock',
-                    before: Action.getValue(action, ''),
+                    before:
+                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
+                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+                        : Action.getValue(action, ''),
+                    after: null,
+                  },
+                },
+                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+              };
+              // @NOTE we're assumign this means we're deleting a table filter
+            } else {
+              changes[parentEntityId] = {
+                ...changes[parentEntityId],
+                name: entities?.[parentEntityId]?.name ?? '',
+                blocks: {
+                  ...(changes[parentEntityId]?.blocks ?? {}),
+                  [entityId]: {
+                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+                    type: 'tableFilter',
+                    before:
+                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+                        : Action.getValue(action, ''),
                     after: null,
                   },
                 },
