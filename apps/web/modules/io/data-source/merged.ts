@@ -94,25 +94,30 @@ export class Merged implements IMergeDataSource {
    *
    */
   fetchEntity = async (id: Parameters<INetwork['fetchEntity']>[0]) => {
-    const maybeNetworkEntity = await this.api.fetchEntity(id);
+    try {
+      const maybeNetworkEntity = await this.api.fetchEntity(id);
 
-    const globalActions = Triple.fromActions(this.store.allActions$.get(), []);
+      const globalActions = Triple.fromActions(this.store.allActions$.get(), []);
 
-    if (!globalActions.some(a => a.entityId === id)) return maybeNetworkEntity;
+      if (!globalActions.some(a => a.entityId === id)) return maybeNetworkEntity;
 
-    // Need to find the local version of this entity if it exists and merge it with the network entity
-    // if it exists. If the network entity doesn't exist, we search the local store for the entity.
-    const entity = pipe(
-      this.store.actions$.get(),
-      actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),
-      A.find(e => e.id === id)
-    );
+      // Need to find the local version of this entity if it exists and merge it with the network entity
+      // if it exists. If the network entity doesn't exist, we search the local store for the entity.
+      const entity = pipe(
+        this.store.actions$.get(),
+        actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),
+        A.find(e => e.id === id)
+      );
 
-    if (!entity) {
+      if (!entity) {
+        return null;
+      }
+
+      return entity;
+    } catch (e) {
+      console.error('Could not merge local entity with network entity', e);
       return null;
     }
-
-    return entity;
   };
 
   columns = async (options: Parameters<INetwork['columns']>[0]) => {

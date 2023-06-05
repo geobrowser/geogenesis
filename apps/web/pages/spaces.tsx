@@ -79,12 +79,23 @@ export default function Spaces({ spaces }: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
-  const spaces = await network.fetchSpaces();
 
-  return {
-    props: {
-      spaces,
-    },
-  };
+  try {
+    const network = new NetworkData.Network(storage, config.subgraph);
+    const spaces = await network.fetchSpaces();
+
+    return {
+      props: {
+        spaces,
+      },
+    };
+  } catch (e) {
+    console.error('Could not fetch spaces', e);
+
+    return {
+      props: {
+        spaces: [],
+      },
+    };
+  }
 };

@@ -202,9 +202,8 @@ export class TableBlockStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
         const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(t => t.id).map(attributeId => mergedStore.fetchEntity(attributeId))
+          columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))
         );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
