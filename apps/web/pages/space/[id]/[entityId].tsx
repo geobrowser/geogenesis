@@ -79,6 +79,7 @@ export default function EntityPage(props: Props) {
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
         <meta property="og:image" content={openGraphImageUrl} />
         <meta name="twitter:image" content={openGraphImageUrl} />
+        <link rel="preload" as="image" href={openGraphImageUrl} />
         <meta property="description" content={description} />
         <meta property="og:description" content={description} />
         <meta name="twitter:description" content={description} />
