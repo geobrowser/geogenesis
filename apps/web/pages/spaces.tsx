@@ -44,6 +44,7 @@ export default function Spaces({ spaces }: Props) {
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
         <meta property="og:image" content={DEFAULT_OPENGRAPH_IMAGE} />
         <meta name="twitter:image" content={DEFAULT_OPENGRAPH_IMAGE} />
+        <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </Head>
       <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>
