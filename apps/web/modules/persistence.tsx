@@ -5,10 +5,12 @@ import { Action, useActionsStore } from './action';
 import { useLocalStorage } from './hooks/use-local-storage';
 import type { SpaceActions } from './action/actions-store';
 
+const ACTIONS_STORE_KEY = 'storedActions';
+
 export const Persistence = () => {
   const [isInitialRender, setIsInitialRender] = useState<boolean>(true);
   const { actions, restore } = useActionsStore();
-  const [storedActions, setStoredActions] = useLocalStorage('storedActions', {});
+  const [storedActions, setStoredActions] = useLocalStorage(ACTIONS_STORE_KEY, {}, restore);
 
   // Restore actions on first render, save actions each render thereafter
   useEffect(() => {
