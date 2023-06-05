@@ -7,6 +7,7 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
+import { TextButton } from '~/modules/design-system/text-button';
 
 interface Props {
   placeholder?: string;
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes }: Props) {
-  const { query, results, onQueryChange } = useAutocomplete({ allowedTypes });
+  const { query, results, onQueryChange, isEmpty } = useAutocomplete({ allowedTypes });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
@@ -47,9 +48,11 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
           ref={containerRef}
           className="absolute top-[36px] z-[1] flex max-h-[340px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
         >
-          <p className="p-2.5">
-            <Text variant="smallButton">Add a relation</Text>
-          </p>
+          {!isEmpty && (
+            <p className="p-2.5">
+              <Text variant="smallButton">Add a relation</Text>
+            </p>
+          )}
           <ResizableContainer duration={0.125}>
             <ResultsList>
               {results.map((result, i) => (
@@ -69,6 +72,12 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                 </motion.div>
               ))}
             </ResultsList>
+            {isEmpty && (
+              <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+                <p>0 entities found</p>
+                <TextButton>Create new entity</TextButton>
+              </div>
+            )}
           </ResizableContainer>
         </div>
       )}

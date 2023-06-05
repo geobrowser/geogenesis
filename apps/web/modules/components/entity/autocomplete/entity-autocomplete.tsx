@@ -11,6 +11,7 @@ import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
+import { TextButton } from '~/modules/design-system/text-button';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -89,6 +90,12 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
                   </motion.div>
                 ))}
               </ResultsList>
+              {autocomplete.isEmpty && (
+                <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+                  <p>0 entities found</p>
+                  <TextButton>Create new entity</TextButton>
+                </div>
+              )}
             </ResizableContainer>
           </MotionContent>
         ) : null}
