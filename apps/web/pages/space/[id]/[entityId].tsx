@@ -200,8 +200,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
       },
     };
   } catch (e) {
-    console.error(`Could not fetch entity ${entityId} on entity page`);
-    console.error(e);
+    console.error(`Could not fetch entity ${entityId} on entity page`, e);
 
     return {
       props: {

@@ -280,7 +280,7 @@ export class EntityTableStore implements IEntityTableStore {
         // Make sure we merge any unpublished entities
         const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
         const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(t => t.id).map(attributeId => mergedStore.fetchEntity(attributeId))
+          columns.map(column => mergedStore.fetchEntity(column.id))
         );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
