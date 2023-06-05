@@ -32,6 +32,18 @@ export const Persistence = () => {
     // no need to save stored actions a second time when `storedActions` are updated
   }, [isInitialRender, actions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync actions across tabs
+  useEffect(() => {
+    const readLocalStore = () => {
+      const item = window.localStorage.getItem('storedActions');
+      const value = item ? JSON.parse(item) : storedActions;
+      restore(value);
+    };
+
+    window.addEventListener('storage', readLocalStore);
+    return () => window.removeEventListener('storage', readLocalStore);
+  }, [storedActions, restore]);
+
   useEffect(() => {
     setIsInitialRender(false);
   }, []);
