@@ -47,31 +47,29 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
       {query && (
         <div
           ref={containerRef}
-          className="absolute top-[36px] z-[1] flex max-h-[340px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className="absolute top-[36px] z-[1] flex max-h-[400px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
         >
           <ResizableContainer duration={0.125}>
-            {!isEmpty && (
-              <ResultsList>
-                {results.map((result, i) => (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
+            <ResultsList>
+              {results.map((result, i) => (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.02 * i }}
+                  key={result.id}
+                >
+                  <ResultContent
                     key={result.id}
-                  >
-                    <ResultContent
-                      key={result.id}
-                      onClick={() => onDone(result)}
-                      spaces={spaces}
-                      alreadySelected={itemIdsSet.has(result.id)}
-                      result={result}
-                    />
-                  </motion.div>
-                ))}
-              </ResultsList>
-            )}
+                    onClick={() => onDone(result)}
+                    spaces={spaces}
+                    alreadySelected={itemIdsSet.has(result.id)}
+                    result={result}
+                  />
+                </motion.div>
+              ))}
+            </ResultsList>
 
-            {!isLoading && (
+            {!isEmpty && !isLoading && (
               <div className="pb-2">
                 <Divider type="horizontal" />
               </div>
@@ -90,7 +88,15 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                     <Dots />
                   </motion.span>
                 ) : (
-                  <p>0 entities found</p>
+                  <motion.p
+                    key="entities found"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    {results.length} entities found
+                  </motion.p>
                 )}
               </AnimatePresence>
               <TextButton>Create new entity</TextButton>

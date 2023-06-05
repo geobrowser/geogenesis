@@ -118,17 +118,18 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
                   ))}
                 </ResultsList>
               )}
-              {autocomplete.isEmpty && (
-                <>
-                  <div className="pb-2">
-                    <Divider type="horizontal" />
-                  </div>
 
-                  <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                    <p>0 entities found</p>
-                    <TextButton>Create new entity</TextButton>
-                  </div>
-                </>
+              {!autocomplete.isLoading && autocomplete.query && (
+                <div className="pb-2">
+                  <Divider type="horizontal" />
+                </div>
+              )}
+
+              {!autocomplete.isLoading && autocomplete.query && (
+                <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+                  <p>{autocomplete.results.length} entities found</p>
+                  <TextButton>Create new entity</TextButton>
+                </div>
               )}
             </ResizableContainer>
           </MotionContent>

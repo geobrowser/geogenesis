@@ -16,10 +16,10 @@ const loadingContainerVariants = {
 
 const loadingCircleVariants = {
   start: {
-    y: '-50%',
+    y: '-100%',
   },
   end: {
-    y: '50%',
+    y: '25%',
   },
 };
 
