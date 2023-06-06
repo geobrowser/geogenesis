@@ -20,10 +20,8 @@ import { useActionsStore } from '~/modules/action';
 import { Triple } from '~/modules/triple';
 import { ID } from '~/modules/id';
 import { batch } from '@legendapp/state';
-import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useToast } from '~/modules/hooks/use-toast';
 import { EntityCreatedToast } from './entity-created-toast';
-import { UserAgent } from '~/modules/utils';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -55,17 +53,31 @@ interface Props {
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
-  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
+  const { create, allActions } = useActionsStore();
+  const autocomplete = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
   const entityItemIdsSet = new Set(entityValueIds);
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  const onCreateNewEntity = React.useCallback(() => {
+  React.useEffect(() => {
+    const handleQueryChange = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        autocomplete.onQueryChange('');
+      }
+    };
+
+    document.addEventListener('click', handleQueryChange);
+    return () => document.removeEventListener('click', handleQueryChange);
+  }, [autocomplete]);
+
+  console.log('actions', allActions);
+
+  const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
@@ -74,13 +86,13 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
         Triple.withId({
           entityId: newEntityId,
           attributeId: SYSTEM_IDS.NAME,
-          entityName: query,
+          entityName: autocomplete.query,
           attributeName: 'Name',
           space: spaceId,
           value: {
             type: 'string',
             id: ID.createValueId(),
-            value: query,
+            value: autocomplete.query,
           },
         })
       );
@@ -91,7 +103,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
             Triple.withId({
               entityId: newEntityId,
               attributeId: SYSTEM_IDS.TYPES,
-              entityName: query,
+              entityName: autocomplete.query,
               attributeName: 'Types',
               space: spaceId,
               value: {
@@ -106,19 +118,24 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     });
 
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
-  }, [query, allowedTypes, spaceId, create, setToast]);
+  };
 
-  const memoizedShortcuts = React.useMemo(
-    () => [
-      {
-        key: 'Enter', // Cmd + Enter
-        callback: () => onCreateNewEntity(),
-      },
-    ],
-    [onCreateNewEntity]
-  );
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === 'Enter' && autocomplete.query) {
+        onCreateNewEntity();
+      }
 
-  useKeyboardShortcuts(memoizedShortcuts);
+      // if (e.ctrlKey && e.key === 'Enter' && autocomplete.query) {
+      //   onCreateNewEntity();
+      // }
+    };
+
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  });
+
+  // @TODO: implement keyboard navigation
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -139,7 +156,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
           >
             <div className="relative p-2">
               <AnimatePresence initial={false} mode="wait">
-                {isLoading ? (
+                {autocomplete.isLoading ? (
                   <div className="absolute top-[50%] left-5 z-100">
                     <motion.span
                       key="dots"
@@ -165,12 +182,12 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                   </div>
                 )}
               </AnimatePresence>
-              <Input withExternalSearchIcon onChange={e => onQueryChange(e.currentTarget.value)} />
+              <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
             </div>
             <ResizableContainer duration={0.125}>
-              {!isEmpty && (
+              {!autocomplete.isEmpty && (
                 <ResultsList>
-                  {results.map((result, i) => (
+                  {autocomplete.results.map((result, i) => (
                     <motion.div
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -189,23 +206,23 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                 </ResultsList>
               )}
 
-              {!isLoading && query && (
+              {!autocomplete.isLoading && autocomplete.query && (
                 <div className="pb-2">
                   <Divider type="horizontal" />
                 </div>
               )}
 
-              {!isLoading && query && (
+              {!autocomplete.isLoading && autocomplete.query && (
                 <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
                   <p>
-                    {results.length} {pluralize('entity', results.length)} found
+                    {autocomplete.results.length} {pluralize('entity', autocomplete.results.length)} found
                   </p>
                   <div className="flex items-baseline gap-3">
-                    {!UserAgent.isMobile() && (
+                    {/* {!UserAgent.isMobile() && (
                       <p className="rounded-sm text-smallButton tabular-nums text-text">
                         {UserAgent.isMac() ? '⌘ + Enter' : 'Ctrl + Enter'}
                       </p>
-                    )}
+                    )} */}
                     <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
                   </div>
                 </div>

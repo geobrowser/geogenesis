@@ -11,7 +11,6 @@ import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
 import { Dots } from '~/modules/design-system/dots';
-import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { ID } from '~/modules/id';
 import { batch } from '@legendapp/state';
 import { Triple } from '~/modules/triple';
@@ -31,8 +30,8 @@ interface Props {
 export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId }: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
-  const { query, results, onQueryChange, isEmpty, isLoading } = useAutocomplete({
-    allowedTypes: allowedTypes?.map(t => t.typeId),
+  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
+    allowedTypes: allowedTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
@@ -49,7 +48,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
 
-  const onCreateNewEntity = React.useCallback(() => {
+  const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
@@ -90,21 +89,9 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
     });
 
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
-  }, [query, allowedTypes, spaceId, create, setToast]);
+  };
 
-  const memoizedShortcuts = React.useMemo(
-    () => [
-      {
-        key: 'Enter', // Cmd + Enter
-        callback: () => onCreateNewEntity(),
-      },
-    ],
-    [onCreateNewEntity]
-  );
-
-  useKeyboardShortcuts(memoizedShortcuts);
-
-  // TODO: Implement keyboard navigation
+  // @TODO: implement keyboard navigation
 
   return (
     <div className="relative w-full">
@@ -171,7 +158,14 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                   </motion.p>
                 )}
               </AnimatePresence>
-              <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
+              <div className="flex items-baseline gap-3">
+                {/* {!UserAgent.isMobile() && (
+                  <p className="rounded-sm text-smallButton tabular-nums text-text">
+                    {UserAgent.isMac() ? '⌘ + Enter' : 'Ctrl + Enter'}
+                  </p>
+                )} */}
+                <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
+              </div>
             </div>
           </ResizableContainer>
         </div>
