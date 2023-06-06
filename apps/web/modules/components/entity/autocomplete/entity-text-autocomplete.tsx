@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
+import pluralize from 'pluralize';
 
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { useAutocomplete } from '~/modules/search';
@@ -95,7 +96,9 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.1 }}
                   >
-                    {results.length} entities found
+                    <p>
+                      {results.length} {pluralize('entity', results.length)} found
+                    </p>
                   </motion.p>
                 )}
               </AnimatePresence>

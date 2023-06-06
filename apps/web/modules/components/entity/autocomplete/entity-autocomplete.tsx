@@ -2,6 +2,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useState } from 'react';
+import pluralize from 'pluralize';
 
 import { SquareButton } from '~/modules/design-system/button';
 import { Search } from '~/modules/design-system/icons/search';
@@ -127,7 +128,9 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
 
               {!autocomplete.isLoading && autocomplete.query && (
                 <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                  <p>{autocomplete.results.length} entities found</p>
+                  <p>
+                    {autocomplete.results.length} {pluralize('entity', autocomplete.results.length)} found
+                  </p>
                   <TextButton>Create new entity</TextButton>
                 </div>
               )}
