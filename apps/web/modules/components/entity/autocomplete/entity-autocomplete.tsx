@@ -23,6 +23,7 @@ import { batch } from '@legendapp/state';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { useToast } from '~/modules/hooks/use-toast';
 import { EntityCreatedToast } from './entity-created-toast';
+import { UserAgent } from '~/modules/utils';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -200,7 +201,11 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                     {results.length} {pluralize('entity', results.length)} found
                   </p>
                   <div className="flex items-baseline gap-3">
-                    <p className="rounded-sm text-smallButton tabular-nums text-text">⌘ + Enter</p>
+                    {!UserAgent.isMobile() && (
+                      <p className="rounded-sm text-smallButton tabular-nums text-text">
+                        {UserAgent.isMac() ? '⌘ + Enter' : 'Ctrl + Enter'}
+                      </p>
+                    )}
                     <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
                   </div>
                 </div>

@@ -89,7 +89,7 @@ export class GeoDate {
     return new Date(value * 1000);
   }
 }
-
+// https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {
   if (value.startsWith('https://api.thegraph.com/ipfs')) {
     const hash = value.split('=')[1];
@@ -103,4 +103,40 @@ export const getOpenGraphImageUrl = (value: string) => {
   }
 };
 
-// https://geobrowser.io/api/og?hash=
+declare interface Navigator extends NavigatorUA {}
+
+// https://wicg.github.io/ua-client-hints/#navigatorua
+declare interface NavigatorUA {
+  readonly userAgentData?: NavigatorUAData;
+}
+
+// https://wicg.github.io/ua-client-hints/#navigatoruadata
+interface NavigatorUAData {
+  readonly brands?: { readonly brand: string; readonly version: string }[];
+  readonly mobile?: boolean;
+  readonly platform?: string;
+}
+
+// This is an experimental feature. It also doesn't work on Firefox.
+
+export class UserAgent {
+  static isMac() {
+    if (typeof window !== 'undefined') {
+      if ((window.navigator as Navigator).userAgentData) {
+        return (window.navigator as Navigator).userAgentData?.platform === 'macOS';
+      }
+    }
+
+    return false;
+  }
+
+  static isMobile() {
+    if (typeof window !== 'undefined') {
+      if ((window.navigator as Navigator).userAgentData) {
+        return (window.navigator as Navigator).userAgentData?.mobile;
+      }
+    }
+
+    return false;
+  }
+}
