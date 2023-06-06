@@ -177,6 +177,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
       {isEmptyRelation && (
         <EntityTextAutocomplete
+          spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}

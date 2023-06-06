@@ -366,6 +366,7 @@ function EntityAttributes({
           return (
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
+                spaceId={spaceId}
                 key={`entity-${attributeId}-${triple.value.id}`}
                 placeholder="Add value..."
                 allowedTypes={relationTypes}
@@ -445,6 +446,7 @@ function EntityAttributes({
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
               <EntityTextAutocomplete
+                spaceId={spaceId}
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}

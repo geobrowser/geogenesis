@@ -21,6 +21,8 @@ import { Triple } from '~/modules/triple';
 import { ID } from '~/modules/id';
 import { batch } from '@legendapp/state';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { useToast } from '~/modules/hooks/use-toast';
+import { EntityCreatedToast } from './entity-created-toast';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -51,22 +53,18 @@ interface Props {
 }
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId }: Props) {
+  const [, setToast] = useToast();
   const { create } = useActionsStore();
-  const autocomplete = useAutocomplete({ allowedTypes: allowedTypes?.map(type => type.typeId) });
+  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
+    allowedTypes: allowedTypes?.map(type => type.typeId),
+  });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  useKeyboardShortcuts([
-    {
-      key: 'Enter', // Cmd + Enter
-      callback: () => onCreateNewEntity(),
-    },
-  ]);
-
-  const onCreateNewEntity = () => {
+  const onCreateNewEntity = React.useCallback(() => {
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
@@ -75,13 +73,13 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
         Triple.withId({
           entityId: newEntityId,
           attributeId: SYSTEM_IDS.NAME,
-          entityName: autocomplete.query,
+          entityName: query,
           attributeName: 'Name',
           space: spaceId,
           value: {
             type: 'string',
             id: ID.createValueId(),
-            value: autocomplete.query,
+            value: query,
           },
         })
       );
@@ -92,7 +90,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
             Triple.withId({
               entityId: newEntityId,
               attributeId: SYSTEM_IDS.TYPES,
-              entityName: autocomplete.query,
+              entityName: query,
               attributeName: 'Types',
               space: spaceId,
               value: {
@@ -105,7 +103,21 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
         });
       }
     });
-  };
+
+    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+  }, [query, allowedTypes, spaceId, create, setToast]);
+
+  const memoizedShortcuts = React.useMemo(
+    () => [
+      {
+        key: 'Enter', // Cmd + Enter
+        callback: () => onCreateNewEntity(),
+      },
+    ],
+    [onCreateNewEntity]
+  );
+
+  useKeyboardShortcuts(memoizedShortcuts);
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -126,7 +138,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
           >
             <div className="relative p-2">
               <AnimatePresence initial={false} mode="wait">
-                {autocomplete.isLoading ? (
+                {isLoading ? (
                   <div className="absolute top-[50%] left-5 z-100">
                     <motion.span
                       key="dots"
@@ -152,12 +164,12 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                   </div>
                 )}
               </AnimatePresence>
-              <Input withExternalSearchIcon onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
+              <Input withExternalSearchIcon onChange={e => onQueryChange(e.currentTarget.value)} />
             </div>
             <ResizableContainer duration={0.125}>
-              {!autocomplete.isEmpty && (
+              {!isEmpty && (
                 <ResultsList>
-                  {autocomplete.results.map((result, i) => (
+                  {results.map((result, i) => (
                     <motion.div
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -176,18 +188,21 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                 </ResultsList>
               )}
 
-              {!autocomplete.isLoading && autocomplete.query && (
+              {!isLoading && query && (
                 <div className="pb-2">
                   <Divider type="horizontal" />
                 </div>
               )}
 
-              {!autocomplete.isLoading && autocomplete.query && (
+              {!isLoading && query && (
                 <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
                   <p>
-                    {autocomplete.results.length} {pluralize('entity', autocomplete.results.length)} found
+                    {results.length} {pluralize('entity', results.length)} found
                   </p>
-                  <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
+                  <div className="flex items-baseline gap-3">
+                    <p className="rounded-sm text-smallButton tabular-nums text-text">⌘ + Enter</p>
+                    <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
+                  </div>
                 </div>
               )}
             </ResizableContainer>

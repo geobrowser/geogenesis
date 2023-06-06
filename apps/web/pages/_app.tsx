@@ -24,6 +24,7 @@ import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
+import { Toast } from '~/modules/hooks/use-toast';
 
 function Root(props: AppProps) {
   return (
@@ -90,6 +91,7 @@ function App({ Component, pageProps }: AppProps) {
       </Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
+        <Toast />
         <FlowBar />
         <Review />
         <Persistence />

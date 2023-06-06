@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 import pluralize from 'pluralize';
@@ -10,15 +11,26 @@ import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
 import { Dots } from '~/modules/design-system/dots';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { ID } from '~/modules/id';
+import { batch } from '@legendapp/state';
+import { Triple } from '~/modules/triple';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { EntityCreatedToast } from './entity-created-toast';
+import { useActionsStore } from '~/modules/action';
+import { useToast } from '~/modules/hooks/use-toast';
 
 interface Props {
   placeholder?: string;
   onDone: (result: Entity) => void;
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
+  spaceId: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes }: Props) {
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId }: Props) {
+  const [, setToast] = useToast();
+  const { create } = useActionsStore();
   const { query, results, onQueryChange, isEmpty, isLoading } = useAutocomplete({
     allowedTypes: allowedTypes?.map(t => t.typeId),
   });
@@ -36,6 +48,61 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
     document.addEventListener('click', handleQueryChange);
     return () => document.removeEventListener('click', handleQueryChange);
   }, [onQueryChange]);
+
+  const onCreateNewEntity = React.useCallback(() => {
+    const newEntityId = ID.createEntityId();
+
+    // Create new entity with name and types
+    batch(() => {
+      create(
+        Triple.withId({
+          entityId: newEntityId,
+          attributeId: SYSTEM_IDS.NAME,
+          entityName: query,
+          attributeName: 'Name',
+          space: spaceId,
+          value: {
+            type: 'string',
+            id: ID.createValueId(),
+            value: query,
+          },
+        })
+      );
+
+      if (allowedTypes) {
+        allowedTypes.forEach(type => {
+          create(
+            Triple.withId({
+              entityId: newEntityId,
+              attributeId: SYSTEM_IDS.TYPES,
+              entityName: query,
+              attributeName: 'Types',
+              space: spaceId,
+              value: {
+                type: 'entity',
+                id: type.typeId,
+                name: type.typeName,
+              },
+            })
+          );
+        });
+      }
+    });
+
+    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
+  }, [query, allowedTypes, spaceId, create, setToast]);
+
+  const memoizedShortcuts = React.useMemo(
+    () => [
+      {
+        key: 'Enter', // Cmd + Enter
+        callback: () => onCreateNewEntity(),
+      },
+    ],
+    [onCreateNewEntity]
+  );
+
+  useKeyboardShortcuts(memoizedShortcuts);
 
   // TODO: Implement keyboard navigation
 
@@ -104,7 +171,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                   </motion.p>
                 )}
               </AnimatePresence>
-              <TextButton>Create new entity</TextButton>
+              <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
             </div>
           </ResizableContainer>
         </div>
