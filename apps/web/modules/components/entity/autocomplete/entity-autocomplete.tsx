@@ -118,21 +118,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
-  React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'Enter' && autocomplete.query) {
-        onCreateNewEntity();
-      }
-
-      // if (e.ctrlKey && e.key === 'Enter' && autocomplete.query) {
-      //   onCreateNewEntity();
-      // }
-    };
-
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  });
-
   // @TODO: implement keyboard navigation
 
   return (
