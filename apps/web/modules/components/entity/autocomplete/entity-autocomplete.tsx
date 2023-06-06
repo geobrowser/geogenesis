@@ -44,8 +44,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
-  // Space entity id: 1d5d0c2a-db23-466c-a0b0-9abe879df457
-
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
