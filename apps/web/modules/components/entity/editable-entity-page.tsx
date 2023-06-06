@@ -462,7 +462,9 @@ function EntityAttributes({
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
                   onDone={entity => addEntityValue(attributeId, entity)}
-                  entityValueIds={entityValueTriples.map(triple => triple.value.id)}
+                  entityValueIds={entityValueTriples
+                    .filter(triple => triple.attributeId === attributeId)
+                    .map(triple => triple.value.id)}
                   allowedTypes={relationTypesIds}
                 />
               )}

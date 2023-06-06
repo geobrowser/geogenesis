@@ -168,7 +168,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
-            entityValueIds={entityValueTriples.map(t => t.value.id)}
+            entityValueIds={entityValueTriples
+              .filter(triple => triple.attributeId === attributeId)
+              .map(triple => triple.value.id)}
             allowedTypes={typesToFilter}
           />
         </>
