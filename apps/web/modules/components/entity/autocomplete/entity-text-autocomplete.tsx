@@ -15,11 +15,13 @@ interface Props {
   placeholder?: string;
   onDone: (result: Entity) => void;
   itemIds: string[];
-  allowedTypes?: string[];
+  allowedTypes?: { typeId: string; typeName: string | null }[];
 }
 
 export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes }: Props) {
-  const { query, results, onQueryChange, isEmpty, isLoading } = useAutocomplete({ allowedTypes });
+  const { query, results, onQueryChange, isEmpty, isLoading } = useAutocomplete({
+    allowedTypes: allowedTypes?.map(t => t.typeId),
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();

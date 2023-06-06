@@ -1,5 +1,6 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as React from 'react';
 import { useState } from 'react';
 import pluralize from 'pluralize';
@@ -15,6 +16,11 @@ import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
 import { Dots } from '~/modules/design-system/dots';
+import { useActionsStore } from '~/modules/action';
+import { Triple } from '~/modules/triple';
+import { ID } from '~/modules/id';
+import { batch } from '@legendapp/state';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 
 interface ContentProps {
   children: React.ReactNode;
@@ -40,16 +46,66 @@ const MotionContent = motion(StyledContent);
 interface Props {
   entityValueIds: string[];
   onDone: (result: Entity) => void;
-  allowedTypes?: string[];
+  allowedTypes?: { typeId: string; typeName: string | null }[];
+  spaceId: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes }: Props) {
-  const autocomplete = useAutocomplete({ allowedTypes });
+export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId }: Props) {
+  const { create } = useActionsStore();
+  const autocomplete = useAutocomplete({ allowedTypes: allowedTypes?.map(type => type.typeId) });
   const entityItemIdsSet = new Set(entityValueIds);
   const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+
+  useKeyboardShortcuts([
+    {
+      key: 'Enter', // Cmd + Enter
+      callback: () => onCreateNewEntity(),
+    },
+  ]);
+
+  const onCreateNewEntity = () => {
+    const newEntityId = ID.createEntityId();
+
+    // Create new entity with name and types
+    batch(() => {
+      create(
+        Triple.withId({
+          entityId: newEntityId,
+          attributeId: SYSTEM_IDS.NAME,
+          entityName: autocomplete.query,
+          attributeName: 'Name',
+          space: spaceId,
+          value: {
+            type: 'string',
+            id: ID.createValueId(),
+            value: autocomplete.query,
+          },
+        })
+      );
+
+      if (allowedTypes) {
+        allowedTypes.forEach(type => {
+          create(
+            Triple.withId({
+              entityId: newEntityId,
+              attributeId: SYSTEM_IDS.TYPES,
+              entityName: autocomplete.query,
+              attributeName: 'Types',
+              space: spaceId,
+              value: {
+                type: 'entity',
+                id: type.typeId,
+                name: type.typeName,
+              },
+            })
+          );
+        });
+      }
+    });
+  };
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -131,7 +187,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes 
                   <p>
                     {autocomplete.results.length} {pluralize('entity', autocomplete.results.length)} found
                   </p>
-                  <TextButton>Create new entity</TextButton>
+                  <TextButton onClick={onCreateNewEntity}>Create new entity</TextButton>
                 </div>
               )}
             </ResizableContainer>
