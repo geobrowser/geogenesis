@@ -13,7 +13,7 @@ import { Providers } from '~/modules/providers';
 import { Dialog } from '~/modules/search';
 import { Main } from '~/modules/components/main';
 import { useEditable } from '~/modules/stores/use-editable';
-import { NavUtils, isMac } from '~/modules/utils';
+import { NavUtils } from '~/modules/utils';
 import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
