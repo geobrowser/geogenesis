@@ -33,7 +33,7 @@ export const Button = forwardRef(function Button(
             'text-white bg-ctaPrimary hover:bg-ctaHover border-transparent focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
             '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-grey-02 hover:border-text focus:border-text focus:shadow-inner-text shadow-button',
-          tertiary: 'text-white bg-text border-text',
+          tertiary: 'text-white bg-text border-white shadow-none',
           done: 'text-text bg-green border-green',
           disabled: 'text-grey-03 bg-divider hover:bg-divider border-transparent',
         },
@@ -66,7 +66,7 @@ export const SquareButton = forwardRef(function SquareButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const squareButtonClassNames = cva([
-    'box-border relative flex justify-center items-center w-6 h-6 p-1 border rounded focus:outline-none transition ease-in-out duration-200 text-text bg-white hover:bg-bg hover:border-text focus:border-text !text-grey-04 hover:!text-text focus:shadow-inner-text',
+    'box-border relative flex justify-center items-center w-6 h-6 p-1 border rounded-sm focus:outline-none transition ease-in-out duration-200 text-text bg-white hover:bg-bg hover:border-text focus:border-text !text-grey-04 hover:!text-text focus:shadow-inner-text',
     !isActive ? 'border-grey-02' : 'border-text !text-text !bg-bg',
     !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
   ]);

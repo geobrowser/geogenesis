@@ -1,7 +1,7 @@
 import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { Input } from '~/modules/design-system/input';
 import { useAutocomplete } from '~/modules/search';
@@ -9,6 +9,8 @@ import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from '../components/entity/autocomplete/results-list';
 import { ResizableContainer } from '../design-system/resizable-container';
+import { Dots } from '../design-system/dots';
+import { Search } from '../design-system/icons/search';
 
 interface Props {
   onDone: (result: Entity) => void;
@@ -26,9 +28,36 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
         <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded border border-grey-02 bg-white shadow-dropdown">
-          <div className={cx('p-2', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
+          <div className={cx('relative p-2', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
+            <AnimatePresence mode="wait">
+              {autocomplete.isLoading ? (
+                <div className="absolute top-[50%] left-5 z-100">
+                  <motion.span
+                    key="dots"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    <Dots />
+                  </motion.span>
+                </div>
+              ) : (
+                <div className="absolute top-[1.125rem] left-5 z-100">
+                  <motion.span
+                    key="search"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    <Search />
+                  </motion.span>
+                </div>
+              )}
+            </AnimatePresence>
             <Input
-              withSearchIcon
+              withExternalSearchIcon
               onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
               value={autocomplete.query}
             />

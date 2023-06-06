@@ -36,6 +36,7 @@ import { CheckCloseSmall } from './icons/check-close-small';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { Dash } from './icons/dash';
 import { Cog } from './icons/cog';
+import { NewTab } from './icons/new-tab';
 
 export type IconName =
   | 'blank'
@@ -75,7 +76,8 @@ export type IconName =
   | 'filterTableWithFilters'
   | 'checkCloseSmall'
   | 'dash'
-  | 'cog';
+  | 'cog'
+  | 'newTab';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -129,4 +131,5 @@ const icons: Record<IconName, React.ElementType> = {
   checkCloseSmall: CheckCloseSmall,
   dash: Dash,
   cog: Cog,
+  newTab: NewTab,
 };

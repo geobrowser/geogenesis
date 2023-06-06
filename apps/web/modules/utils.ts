@@ -89,7 +89,7 @@ export class GeoDate {
     return new Date(value * 1000);
   }
 }
-
+// https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {
   if (value.startsWith('https://api.thegraph.com/ipfs')) {
     const hash = value.split('=')[1];
@@ -102,5 +102,3 @@ export const getOpenGraphImageUrl = (value: string) => {
     return DEFAULT_OPENGRAPH_IMAGE;
   }
 };
-
-// https://geobrowser.io/api/og?hash=

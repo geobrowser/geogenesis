@@ -18,6 +18,7 @@ import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
+import { Toast } from '~/modules/hooks/use-toast';
 import { useReview } from '~/modules/review';
 
 import 'react-medium-image-zoom/dist/styles.css';
@@ -90,6 +91,7 @@ function App({ Component, pageProps }: AppProps) {
       </Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
+        <Toast />
         <FlowBar />
         <Review />
         <Persistence />
