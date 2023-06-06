@@ -465,8 +465,10 @@ function EntityAttributes({
                 <EntityAutocompleteDialog
                   spaceId={spaceId}
                   onDone={entity => addEntityValue(attributeId, entity)}
-                  entityValueIds={entityValueTriples.map(triple => triple.value.id)}
                   allowedTypes={relationTypes}
+                  entityValueIds={entityValueTriples
+                    .filter(triple => triple.attributeId === attributeId)
+                    .map(triple => triple.value.id)}
                 />
               )}
               <div className="absolute top-6 right-0 flex items-center gap-2">
