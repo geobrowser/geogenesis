@@ -53,7 +53,7 @@ interface Props {
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId }: Props) {
   const [, setToast] = useToast();
-  const { create, allActions } = useActionsStore();
+  const { create } = useActionsStore();
   const autocomplete = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
@@ -74,8 +74,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     document.addEventListener('click', handleQueryChange);
     return () => document.removeEventListener('click', handleQueryChange);
   }, [autocomplete]);
-
-  console.log('actions', allActions);
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
