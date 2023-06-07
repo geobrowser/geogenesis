@@ -15,6 +15,7 @@ import { EntityValue, Triple as ITriple } from '~/modules/types';
 import { Value } from '~/modules/value';
 import { Entity } from '..';
 import { makeOptionalComputed } from '~/modules/utils';
+import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
 
 const markdownConverter = new showdown.Converter();
 
@@ -569,7 +570,7 @@ export class EntityStore implements IEntityStore {
   };
 
   /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
-  createBlockRowTypeTriple = (node: JSONContent) => {
+  createTableBlockMetadata = (node: JSONContent) => {
     const blockEntityId = node.attrs?.id;
     const isTableNode = node.type === 'tableNode';
     const rowTypeEntityId = node.attrs?.typeId;
@@ -579,9 +580,9 @@ export class EntityStore implements IEntityStore {
       return null;
     }
 
-    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.ROW_TYPE });
+    const existingRowTypeTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.ROW_TYPE });
 
-    if (!existingBlockTriple) {
+    if (!existingRowTypeTriple) {
       this.create(
         Triple.withId({
           space: this.spaceId,
@@ -592,6 +593,38 @@ export class EntityStore implements IEntityStore {
           value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
         })
       );
+
+      // Make sure that we only add it for new tables by also checking that the row type triple doesn't exist.
+      // Typically the row type triple only gets added when the table is created. Otherwise this will create
+      // a new filter for every table block that doesn't have one every time the content of the editor is changed.
+      // Generally the filter triple _also_ won't exist if the row type doesn't, but we check to be safe.
+      const existingFilterTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.FILTER });
+
+      if (!existingFilterTriple) {
+        this.create(
+          Triple.withId({
+            space: this.spaceId,
+            entityId: blockEntityId,
+            entityName: this.nodeName(node),
+            attributeId: SYSTEM_IDS.FILTER,
+            attributeName: 'Filter',
+            value: {
+              id: ID.createValueId(),
+              type: 'string',
+              value: TableBlockSdk.createGraphQLStringFromFilters(
+                [
+                  {
+                    columnId: SYSTEM_IDS.SPACE,
+                    valueType: 'string',
+                    value: this.spaceId,
+                  },
+                ],
+                rowTypeEntityId
+              ),
+            },
+          })
+        );
+      }
     }
   };
 
@@ -716,7 +749,7 @@ export class EntityStore implements IEntityStore {
 
       populatedContent.forEach(node => {
         this.createParentEntityTriple(node);
-        this.createBlockRowTypeTriple(node);
+        this.createTableBlockMetadata(node);
         this.createBlockTypeTriple(node);
         this.upsertBlockNameTriple(node);
         this.upsertBlockMarkdownTriple(node);
