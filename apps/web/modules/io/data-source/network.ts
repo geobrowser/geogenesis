@@ -769,9 +769,7 @@ export class Network implements INetwork {
         };
       } = await response.json();
 
-      const sortedResults = sortSearchResultsByRelevance(json.data.geoEntities, []);
-
-      return sortedResults.map(result => {
+      return json.data.geoEntities.map(result => {
         const triples = fromNetworkTriples(result.entityOf);
         const nameTriple = Entity.nameTriple(triples);
 
