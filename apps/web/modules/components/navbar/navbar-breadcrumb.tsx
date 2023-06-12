@@ -22,9 +22,11 @@ export function NavbarBreadcrumb({ children, href, img }: NavbarBreadcrumbProps)
             <Spacer width={8} />
           </>
         )}
-        <Text variant="button" className="hover:!text-text">
-          {children}
-        </Text>
+        <div className="truncate sm:max-w-[20ch]">
+          <Text variant="button" className="hover:!text-text">
+            {children}
+          </Text>
+        </div>
       </a>
     </Link>
   );
