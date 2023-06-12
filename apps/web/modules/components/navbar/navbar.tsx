@@ -85,13 +85,15 @@ export function Navbar({ onSearchClick }: Props) {
         )}
       </div>
 
-      <div className="flex items-center sm:hidden">
+      <div className="flex items-center">
         <button className="flex items-center gap-2 text-grey-04 hover:text-text" onClick={onSearchClick}>
           <Icon icon="search" />
           <p className="text-input">Search</p>
         </button>
-        <Spacer width={16} />
-        <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
+        <div className="flex items-center sm:hidden">
+          <Spacer width={16} />
+          <NavbarActions spaceId={components?.[2]?.split('?')[0] ?? ''} />
+        </div>
       </div>
     </nav>
   );
