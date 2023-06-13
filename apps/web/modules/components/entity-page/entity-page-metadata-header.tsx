@@ -14,6 +14,7 @@ import { Close } from '~/modules/design-system/icons/close';
 import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
 import { EntityPageContextMenu } from './entity-page-context-menu';
+import { useDiff } from '~/modules/diff';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -28,6 +29,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     queryFn: async () => network.fetchProposedVersions(id, spaceId),
   });
 
+  const { setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
+
   const isLoadingVersions = !versions || isLoading;
 
   return (
@@ -41,9 +44,14 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
       </ul>
       <div className="flex items-center gap-3">
         <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
-          {versions?.map(v => (
+          {versions?.map((v, index) => (
             <HistoryItem
               key={v.id}
+              onClick={() => {
+                setPreviousVersion(versions[index + 1]?.id ?? '');
+                setSelectedVersion(v.id);
+                setIsCompareOpen(true);
+              }}
               changeCount={Action.getChangeCount(v.actions)}
               createdAt={v.createdAt}
               createdBy={v.createdBy}
@@ -84,6 +92,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           {proposals?.map(p => (
             <HistoryItem
               key={p.id}
+              id={p.id}
               changeCount={Action.getChangeCount(
                 p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
               )}

@@ -2,7 +2,15 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Action } from '~/modules/action';
 import { Entity } from '~/modules/entity';
-import type { Action as ActionType, Entity as EntityType, TripleValueType } from '~/modules/types';
+import { Triple } from '~/modules/triple';
+import { Value } from '~/modules/value';
+
+import type {
+  Action as ActionType,
+  Entity as EntityType,
+  Triple as TripleType,
+  TripleValueType,
+} from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
 
 export type ActionId = string;
@@ -30,7 +38,7 @@ export type AttributeChange = {
 };
 
 export async function fromActions(actions: ActionType[], network: INetwork) {
-  const entities: Record<EntityId, EntityType> = await getEntities(actions, network);
+  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, network);
 
   const changes: Record<EntityId, Changeset> = {};
 
@@ -69,7 +77,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 },
                 actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
               };
-              // @NOTE we're assumign this means we're creating a table filter
+              // @NOTE we're assuming this means we're creating a table filter
             } else {
               changes[parentEntityId] = {
                 ...changes[parentEntityId],
@@ -171,7 +179,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 },
                 actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
               };
-              // @NOTE we're assumign this means we're editing a table filter
+              // @NOTE we're assuming this means we're editing a table filter
             } else {
               changes[parentEntityId] = {
                 ...changes[parentEntityId],
@@ -265,7 +273,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
                 },
                 actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
               };
-              // @NOTE we're assumign this means we're deleting a table filter
+              // @NOTE we're assuming this means we're deleting a table filter
             } else {
               changes[parentEntityId] = {
                 ...changes[parentEntityId],
@@ -353,7 +361,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
   return [changes, entities];
 }
 
-const getEntities = async (actions: ActionType[], network: INetwork) => {
+const getEntitiesFromActions = async (actions: ActionType[], network: INetwork) => {
   const entities: Record<EntityId, EntityType> = {};
 
   const entitySet = new Set<EntityId>();
@@ -402,3 +410,232 @@ const getEntities = async (actions: ActionType[], network: INetwork) => {
 
   return entities;
 };
+
+export async function fromVersion(versionId: string, previousVersionId: string, network: INetwork) {
+  const changes: Record<EntityId, Changeset> = {};
+
+  const [selectedVersion, previousVersion] = await Promise.all([
+    network.fetchProposedVersion(versionId),
+    network.fetchProposedVersion(previousVersionId),
+  ]);
+
+  const versions = {
+    selected: selectedVersion,
+    previous: previousVersion,
+  };
+
+  const entityId = selectedVersion.entity.id;
+
+  const selectedBlock = parseInt(selectedVersion.createdAtBlock, 10);
+  const previousBlock = selectedBlock - 1;
+
+  const [selectedEntity, previousEntity] = await Promise.all([
+    network.fetchEntity(entityId, null, selectedBlock),
+    network.fetchEntity(entityId, null, previousBlock),
+  ]);
+
+  const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
+    ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+    : [];
+
+  const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
+    ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+    : [];
+
+  const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
+    await Promise.all([
+      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, selectedBlock))),
+      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+      Promise.all(previousEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+    ]);
+
+  if (selectedEntity) {
+    changes[entityId] = {
+      name: selectedEntity.name ?? '',
+    };
+
+    selectedEntity.triples.map(triple => {
+      switch (triple.value.type) {
+        case 'entity': {
+          changes[entityId] = {
+            ...changes[entityId],
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [triple.attributeId]: {
+                ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                type: triple.value.type ?? '',
+                name: triple.attributeName ?? '',
+                before: [],
+                after: [...(changes[entityId]?.attributes?.[triple.attributeId]?.after ?? []), triple.value.name],
+                actions: [],
+              },
+            },
+          };
+          break;
+        }
+
+        default: {
+          changes[entityId] = {
+            ...changes[entityId],
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [triple.attributeId]: {
+                ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                type: triple.value.type ?? '',
+                name: triple.attributeName ?? '',
+                before: null,
+                after: Triple.getValue(triple) ?? '',
+                actions: [],
+              },
+            },
+          };
+          break;
+        }
+      }
+    });
+  }
+
+  if (previousEntity) {
+    previousEntity.triples.map(triple => {
+      switch (triple.value.type) {
+        case 'entity': {
+          changes[entityId] = {
+            ...changes[entityId],
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [triple.attributeId]: {
+                ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                type: triple.value.type ?? '',
+                name: triple.attributeName ?? '',
+                before: [...(changes[entityId]?.attributes?.[triple.attributeId]?.before ?? []), triple.value.name],
+                after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
+                actions: [],
+              },
+            },
+          };
+          break;
+        }
+        default: {
+          changes[entityId] = {
+            ...changes[entityId],
+            attributes: {
+              ...(changes[entityId]?.attributes ?? {}),
+              [triple.attributeId]: {
+                ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                type: triple.value.type ?? '',
+                name: triple.attributeName ?? '',
+                before: Triple.getValue(triple) ?? '',
+                after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
+                actions: [],
+              },
+            },
+          };
+          break;
+        }
+      }
+    });
+  }
+
+  if (maybeRemoteSelectedEntityBlocks) {
+    maybeRemoteSelectedEntityBlocks.forEach(selectedEntityBlock => {
+      if (selectedEntityBlock === null) return;
+
+      changes[entityId] = {
+        ...changes[entityId],
+        blocks: {
+          ...(changes[entityId]?.blocks ?? {}),
+          [selectedEntityBlock.id]: {
+            type: getBlockTypeFromTriples(selectedEntityBlock.triples),
+            before: null,
+            after: getBlockValueFromTriples(selectedEntityBlock.triples),
+          },
+        },
+      };
+    });
+  }
+
+  if (maybeRemotePreviousEntityBlocks) {
+    maybeRemotePreviousEntityBlocks.forEach(previousEntityBlock => {
+      if (previousEntityBlock === null) return;
+
+      changes[entityId] = {
+        ...changes[entityId],
+        blocks: {
+          ...(changes[entityId]?.blocks ?? {}),
+          [previousEntityBlock.id]: {
+            ...(changes[entityId]?.blocks?.[previousEntityBlock.id] ?? {}),
+            before: getBlockValueFromTriples(previousEntityBlock.triples),
+          } as BlockChange,
+        },
+      };
+    });
+  }
+
+  if (maybeAdditionalRemotePreviousEntityBlocks) {
+    maybeAdditionalRemotePreviousEntityBlocks.forEach(previousEntityBlock => {
+      if (previousEntityBlock === null) return;
+
+      changes[entityId] = {
+        ...changes[entityId],
+        blocks: {
+          ...(changes[entityId]?.blocks ?? {}),
+          [previousEntityBlock.id]: {
+            ...(changes[entityId]?.blocks?.[previousEntityBlock.id] ?? {}),
+            type: getBlockTypeFromTriples(previousEntityBlock.triples),
+            before: getBlockValueFromTriples(previousEntityBlock.triples),
+            after: changes[entityId]?.blocks?.[previousEntityBlock.id]?.after ?? null,
+          },
+        },
+      };
+    });
+  }
+
+  return [changes, versions];
+}
+
+const getBlockTypeFromTriples = (triples: TripleType[]): BlockValueType => {
+  const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
+
+  // @TODO replace with better fallback
+  if (!tripleWithContent) return 'markdownContent';
+
+  switch (tripleWithContent.attributeId) {
+    case SYSTEM_IDS.ROW_TYPE:
+    case SYSTEM_IDS.TABLE_BLOCK:
+      return 'tableBlock';
+    case SYSTEM_IDS.IMAGE_BLOCK:
+      return 'imageBlock';
+    case SYSTEM_IDS.MARKDOWN_CONTENT:
+      return 'markdownContent';
+    case SYSTEM_IDS.FILTER:
+      return 'tableFilter';
+    default:
+      // @TODO replace with better fallback
+      return 'markdownContent';
+  }
+};
+
+const getBlockValueFromTriples = (triples: TripleType[]) => {
+  const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
+
+  // @TODO replace with better fallback
+  if (!tripleWithContent) {
+    return '';
+  }
+
+  if (tripleWithContent.attributeId === SYSTEM_IDS.ROW_TYPE) {
+    return tripleWithContent.entityName;
+  }
+
+  return Triple.getValue(tripleWithContent);
+};
+
+const CONTENT_ATTRIBUTE_IDS = [
+  SYSTEM_IDS.ROW_TYPE,
+  SYSTEM_IDS.TABLE_BLOCK,
+  SYSTEM_IDS.IMAGE_BLOCK,
+  SYSTEM_IDS.MARKDOWN_CONTENT,
+  SYSTEM_IDS.FILTER,
+];

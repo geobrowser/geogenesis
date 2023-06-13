@@ -8,13 +8,14 @@ interface Props {
   // We want to group together all changes to the same property into a single
   // change count. i.e., a proposed change may have multiple action taken on
   // the same triple, we want to make sure that only renders as a single change.
+  onClick: () => void;
   changeCount: number;
   createdAt: number;
   createdBy: Profile;
   name: string | null;
 }
 
-export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) {
+export function HistoryItem({ onClick = () => null, changeCount, createdAt, createdBy, name }: Props) {
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023
@@ -39,7 +40,10 @@ export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) 
   const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
 
   return (
-    <div className="bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text">
+    <button
+      onClick={onClick}
+      className="relative z-10 block w-full bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text"
+    >
       <div className="flex items-center justify-between">
         <Text as="h1" variant="metadataMedium" className="mb-2">
           {truncatedVersionName}
@@ -62,6 +66,6 @@ export function HistoryItem({ changeCount, createdAt, createdBy, name }: Props) 
           </p>
         </div>
       </div>
-    </div>
+    </button>
   );
 }

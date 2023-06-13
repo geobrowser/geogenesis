@@ -1,21 +1,22 @@
 import * as React from 'react';
 import { motion } from 'framer-motion';
 
-import { useReview } from '~/modules/review';
+import { useDiff } from '~/modules/diff';
 
 type MainProps = {
   children: React.ReactNode;
 };
 
 export const Main = ({ children }: MainProps) => {
-  const { isReviewOpen } = useReview();
+  const { isReviewOpen, isCompareOpen } = useDiff();
+  const isHidden = isReviewOpen || isCompareOpen;
 
   return (
     <motion.main
       variants={variants}
       animate="animate"
       transition={transition}
-      custom={isReviewOpen}
+      custom={isHidden}
       className="mx-auto max-w-[1200px] pt-8 pb-16  xl:px-[2ch]"
     >
       {children}

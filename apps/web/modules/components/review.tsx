@@ -4,7 +4,6 @@ import cx from 'classnames';
 import { cva } from 'class-variance-authority';
 import { useSigner } from 'wagmi';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import pluralize from 'pluralize';
 import { diffWords } from 'diff';
@@ -18,46 +17,26 @@ import { Button, SmallButton, SquareButton } from '~/modules/design-system/butto
 import { colors } from '~/modules/design-system/theme/colors';
 import { Dropdown } from '~/modules/design-system/dropdown';
 import { Spinner } from '~/modules/design-system/spinner';
-import { useReview } from '~/modules/review';
+import { useDiff } from '~/modules/diff';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { useActionsStore } from '../action';
 import { Services } from '../services';
 import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
 import { Entity } from '../entity';
 import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
+import { INetwork } from '../io/data-source/network';
+import { SlideUp } from './slide-up/slide-up';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
-import { INetwork } from '../io/data-source/network';
 
 export const Review = () => {
-  const { isReviewOpen, setIsReviewOpen } = useReview();
-
-  const onClose = useCallback(() => {
-    setIsReviewOpen(false);
-  }, [setIsReviewOpen]);
+  const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   return (
-    <Dialog.Root open={isReviewOpen} onOpenChange={onClose} modal={true}>
-      <Dialog.Portal forceMount>
-        <AnimatePresence>
-          {isReviewOpen && (
-            <Dialog.Content forceMount>
-              <motion.div
-                variants={reviewVariants}
-                initial="hidden"
-                animate="visible"
-                exit="hidden"
-                transition={transition}
-                className={cx('fixed inset-0 z-100 h-full w-full bg-grey-02', !isReviewOpen && 'pointer-events-none')}
-              >
-                <ReviewChanges />
-              </motion.div>
-            </Dialog.Content>
-          )}
-        </AnimatePresence>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
+      <ReviewChanges />
+    </SlideUp>
   );
 };
 
@@ -74,7 +53,7 @@ type EntityId = string;
 const ReviewChanges = () => {
   const { spaces } = useSpaces();
   const { allSpacesWithActions } = useActionsStore();
-  const { setIsReviewOpen, activeSpace, setActiveSpace } = useReview();
+  const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   // Set a new default active space when active spaces change
   useEffect(() => {
@@ -241,6 +220,7 @@ const ReviewChanges = () => {
     </>
   );
 };
+
 const getTotalChanges = (changes: Record<string, Change.Changeset>) => {
   let totalChanges = 0;
 
@@ -837,19 +817,6 @@ function getSpaceImage(spaces: Space[], spaceId: string): string {
     'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
   );
 }
-
-const reviewVariants = {
-  hidden: { y: '100%' },
-  visible: {
-    y: '0%',
-    transition: {
-      type: 'spring',
-      duration: 0.5,
-      bounce: 0,
-      delay: 0.5,
-    },
-  },
-};
 
 const statusVariants = {
   hidden: { opacity: 0, y: '4px' },
