@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 import { Entity } from '../../entity';
 
-import { Space, Triple } from '../../types';
+import { OmitStrict, Space, Triple } from '../../types';
 import { FetchTriplesOptions, INetwork } from '../data-source/network';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
@@ -82,7 +82,7 @@ export const makeStubSpace = (spaceId: string): Space => {
   };
 };
 
-export class MockNetwork implements INetwork {
+export class MockNetwork implements OmitStrict<INetwork, 'fetchProposedVersion'> {
   pageNumber$ = observable(0);
   query$ = observable('');
   spaces$ = observable([]);
