@@ -92,7 +92,6 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           {proposals?.map(p => (
             <HistoryItem
               key={p.id}
-              id={p.id}
               changeCount={Action.getChangeCount(
                 p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
               )}

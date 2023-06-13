@@ -8,7 +8,7 @@ interface Props {
   // We want to group together all changes to the same property into a single
   // change count. i.e., a proposed change may have multiple action taken on
   // the same triple, we want to make sure that only renders as a single change.
-  onClick: () => void;
+  onClick?: () => void;
   changeCount: number;
   createdAt: number;
   createdBy: Profile;

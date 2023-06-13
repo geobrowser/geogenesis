@@ -45,7 +45,6 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
         {proposals?.map(p => (
           <HistoryItem
             key={p.id}
-            id={p.id}
             changeCount={Action.getChangeCount(
               p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
             )}
