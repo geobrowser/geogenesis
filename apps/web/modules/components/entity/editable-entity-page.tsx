@@ -140,6 +140,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
             hideSchema={hideSchema}
             hiddenSchemaIds={hiddenSchemaIds}
             allowedTypes={attributeRelationTypes}
+            spaceId={spaceId}
           />
         </div>
         <div className="p-4">
@@ -164,6 +165,7 @@ function EntityAttributes({
   hideSchema,
   hiddenSchemaIds,
   allowedTypes,
+  spaceId,
 }: {
   entityId: string;
   triples: ITriple[];
@@ -173,6 +175,7 @@ function EntityAttributes({
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
   allowedTypes: Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>;
+  spaceId: string;
 }) {
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
@@ -358,12 +361,12 @@ function EntityAttributes({
         return null;
       case 'entity':
         if (isEmptyEntity) {
-          const relationTypes =
-            allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId].map(rt => rt.typeId) : undefined;
+          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
 
           return (
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
+                spaceId={spaceId}
                 key={`entity-${attributeId}-${triple.value.id}`}
                 placeholder="Add value..."
                 allowedTypes={relationTypes}
@@ -438,17 +441,16 @@ function EntityAttributes({
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
-        const relationTypesIds =
-          allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId].map(rt => rt.typeId) : undefined;
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
               <EntityTextAutocomplete
+                spaceId={spaceId}
                 placeholder="Add attribute..."
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
-                allowedTypes={relationTypesIds}
+                allowedTypes={relationTypes}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
@@ -461,23 +463,24 @@ function EntityAttributes({
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
+                  spaceId={spaceId}
                   onDone={entity => addEntityValue(attributeId, entity)}
+                  allowedTypes={relationTypes}
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
                     .map(triple => triple.value.id)}
-                  allowedTypes={relationTypesIds}
                 />
               )}
-              <div className="absolute top-6 right-0 flex items-center gap-2">
+              <div className="absolute top-6 right-0 flex items-center gap-1">
+                {isEntityGroup ? (
+                  <AttributeConfigurationMenu
+                    attributeId={attributeId}
+                    attributeName={attributeName}
+                    configuredTypes={relationTypes}
+                  />
+                ) : null}
                 {!isPlaceholder && (
                   <>
-                    {isEntityGroup ? (
-                      <AttributeConfigurationMenu
-                        attributeId={attributeId}
-                        attributeName={attributeName}
-                        configuredTypes={relationTypes}
-                      />
-                    ) : null}
                     <TripleTypeDropdown
                       value={ITriple as IconName}
                       options={[

@@ -19,6 +19,7 @@ import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
 import { useDiff } from '~/modules/diff';
+import { Toast } from '~/modules/hooks/use-toast';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
@@ -91,6 +92,7 @@ function App({ Component, pageProps }: AppProps) {
       </Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
+        <Toast />
         <FlowBar />
         <Review />
         <Compare />

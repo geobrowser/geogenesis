@@ -7,8 +7,10 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { useDiff } from '~/modules/diff';
 import { Action, useActionsStore } from '../action';
 import { A, D, pipe } from '@mobily/ts-belt';
+import { useToast } from '../hooks/use-toast';
 
 export const FlowBar = () => {
+  const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
   const { allActions, allSpacesWithActions } = useActionsStore();
@@ -28,32 +30,35 @@ export const FlowBar = () => {
 
   const spacesCount = allSpacesWithActions.length;
 
-  if (actionsCount === 0 || !editable) return null;
+  // Don't show the flow bar if there are no actions, if the user is not in edit mode, or if there is a toast
+  const hideFlowbar = actionsCount === 0 || !editable || toast;
 
   return (
     <AnimatePresence>
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
-        <motion.div
-          variants={flowVariants}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
-          transition={transition}
-          custom={!isReviewOpen}
-          className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
-        >
-          <div className="inline-flex items-center font-medium">
-            <span>{pluralize('edit', actionsCount, true)}</span>
-            <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
-            <span>
-              {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
-            </span>
-          </div>
-          <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-            Review {pluralize('edit', actionsCount, false)}
-          </Button>
-        </motion.div>
-      </div>
+      {!hideFlowbar && (
+        <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
+          <motion.div
+            variants={flowVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={transition}
+            custom={!isReviewOpen}
+            className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
+          >
+            <div className="inline-flex items-center font-medium">
+              <span>{pluralize('edit', actionsCount, true)}</span>
+              <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
+              <span>
+                {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
+              </span>
+            </div>
+            <Button onClick={() => setIsReviewOpen(true)} variant="primary">
+              Review {pluralize('edit', actionsCount, false)}
+            </Button>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

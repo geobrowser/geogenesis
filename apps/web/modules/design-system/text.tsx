@@ -62,7 +62,7 @@ const textStyles = cva('', {
       'red-02': 'text-red-02',
     },
     ellipsize: {
-      true: 'whitespace-pre text-overflow-ellipsis overflow-hidden',
+      true: 'whitespace-pre text-ellipsis overflow-hidden',
     },
   },
   defaultVariants: {
