@@ -1,6 +1,12 @@
 name: Unit Tests
 
-on: push
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
@@ -18,5 +24,7 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
 
       - run: pnpm test

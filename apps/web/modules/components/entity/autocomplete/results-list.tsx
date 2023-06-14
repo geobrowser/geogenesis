@@ -38,9 +38,10 @@ interface Props {
   result: Entity;
   alreadySelected?: boolean;
   spaces: Space[];
+  withDescription?: boolean;
 }
 
-export function ResultContent({ onClick, result, alreadySelected, spaces }: Props) {
+export function ResultContent({ onClick, result, alreadySelected, spaces, withDescription = true }: Props) {
   const space = spaces.find(space => space.id === result.nameTripleSpace);
 
   const spaceImg = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
@@ -49,10 +50,15 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
   const showBreadcrumbs = spaceName || result.types.length > 0;
   const showBreadcrumbChevron = spaceName && result.types.length > 0;
 
+  const onSelect = () => {
+    if (alreadySelected) return;
+    onClick();
+  };
+
   return (
-    <ResultItem onClick={onClick} existsOnEntity={Boolean(alreadySelected)}>
+    <ResultItem onClick={onSelect} existsOnEntity={Boolean(alreadySelected)}>
       <div className="flex w-full items-center justify-between leading-[1rem]">
-        <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
+        <Text variant="metadataMedium" ellipsize className="leading-[1.125rem]">
           {result.name ?? result.id}
         </Text>
         {alreadySelected && <CheckCircleSmall color="grey-04" />}
@@ -77,7 +83,7 @@ export function ResultContent({ onClick, result, alreadySelected, spaces }: Prop
           </div>
         </>
       )}
-      {result.description && (
+      {withDescription && result.description && (
         <>
           <Spacer height={4} />
           <Truncate maxLines={3} shouldTruncate variant="footnote">

@@ -13,6 +13,9 @@ export const TYPES = 'type'
 /* Example Usage: Person -> ATTRIBUTES -> Age */
 export const ATTRIBUTES = '01412f83-8189-4ab1-8365-65c7fd358cc1'
 
+// A Type is a categorization of an Entity. For example, a Person Type has specific
+// schema associated with it. An Entity can be a Person Type. An Entity can have
+// multiple Types. For example, an Entity can be a Person and a Philosopher.
 /* Example Usage: Person -> TYPES -> SCHEMA_TYPE */
 export const SCHEMA_TYPE = 'd7ab4092-0ab5-441e-88c3-5c27952de773'
 
@@ -23,6 +26,11 @@ export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
 
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
+
+// This sets the type of values which can be set as part of a relation value.
+// e.g. An attribute called People can only accept values of type Person
+export const RELATION_VALUE_RELATIONSHIP_TYPE =
+  'cfa6a2f5-151f-43bf-a684-f7f0228f63ff'
 
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
@@ -45,6 +53,8 @@ export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
 /* Example Usage: Block Entity -> TYPES -> TABLE_BLOCK */
 export const TABLE_BLOCK = '88d59252-17ae-4d9a-a367-24710129eb47'
 
+export const SHOWN_COLUMNS = '388ad59b-1cc7-413c-a0bb-34a4de48c758'
+
 /* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320'
 
@@ -66,6 +76,8 @@ export const MARKDOWN_CONTENT = 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4'
 Block Entity -> TYPES -> TABLE_BLOCK
 Block Entity -> ROW_TYPE -> Some_Type_ID */
 export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
+
+export const FILTER = 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103'
 
 /**
  * Addresses for important contracts on Polygon mainnet.
@@ -122,3 +134,6 @@ export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
     },
   ]
 */
+
+// Legacy attributes
+export const HIDDEN_COLUMNS = '1ed5b976-f8a4-451b-a2cc-531f85b59cab'

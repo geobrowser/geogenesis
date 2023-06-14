@@ -1,6 +1,5 @@
 import { useSelector } from '@legendapp/state/react';
 
-import { FilterState } from '../../types';
 import { useEntityTableStore } from './entity-table-store-provider';
 
 export const useEntityTable = () => {
@@ -15,14 +14,13 @@ export const useEntityTable = () => {
     pageNumber$,
     hasPreviousPage$,
     hasNextPage$,
-    filterState$,
     hydrated$,
     selectedType$,
     columns$,
     unpublishedColumns$,
-    setFilterState,
     createForeignType,
     createType,
+    columnRelationTypes$,
   } = useEntityTableStore();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
@@ -33,7 +31,7 @@ export const useEntityTable = () => {
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const hasNextPage = useSelector(hasNextPage$);
   const query = useSelector(query$);
-  const filterState = useSelector<FilterState>(filterState$);
+  const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
     rows,
@@ -50,9 +48,8 @@ export const useEntityTable = () => {
     pageNumber,
     hasPreviousPage,
     hasNextPage,
-    filterState,
-    setFilterState,
     createType,
     createForeignType,
+    columnRelationTypes,
   };
 };

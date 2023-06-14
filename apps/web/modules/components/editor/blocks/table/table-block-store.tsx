@@ -1,18 +1,30 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A, pipe } from '@mobily/ts-belt';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreContext } from '~/modules/action';
-import { Entity, EntityTable } from '~/modules/entity';
+import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/modules/types';
-import { useSelector } from '@legendapp/state/react';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { MergedData, NetworkData } from '~/modules/io';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
-import { A, pipe } from '@mobily/ts-belt';
+import { FetchRowsOptions } from '~/modules/io/data-source/network';
+import { TableBlockSdk } from '../sdk';
+import { ID } from '~/modules/id';
+import { Value } from '~/modules/value';
 
 export const PAGE_SIZE = 10;
+
+export interface TableBlockFilter {
+  columnId: string;
+  valueType: TripleValueType;
+  value: string;
+  valueName: string | null;
+}
 
 interface ITableBlockStoreConfig {
   api: NetworkData.INetwork;
@@ -28,9 +40,8 @@ interface ITableBlockStoreConfig {
 
   // This is the type of Entity we are rendering in the rows in the TableBlock
   // e.g., a Person or a Project
-  selectedType: ITriple;
+  selectedType: SelectedEntityType;
 
-  // @TODO: Columns and rows shouldn't be dependent on Space?
   spaceId: string;
 }
 
@@ -47,25 +58,61 @@ export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
   MergedData: MergedData;
-  pageNumber$: Observable<number> = observable(0);
+  entityId: string;
+  pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   columns$: ObservableComputed<Column[]>;
   rows$: ObservableComputed<Row[]>;
-  type$: Observable<ITriple>;
+  type: SelectedEntityType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
-  abortController: AbortController = new AbortController();
+  filterState$: ObservableComputed<TableBlockFilter[]>;
+  isLoading$: Observable<boolean>;
+  columnRelationTypes$: ObservableComputed<
+    Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>
+  >;
+  abortController: AbortController;
 
   constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
+    this.entityId = entityId;
     this.ActionsStore = ActionsStore;
-    this.type$ = observable(selectedType);
+    this.type = selectedType;
+    this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore });
+    this.isLoading$ = observable(true);
+    this.abortController = new AbortController();
 
     this.blockEntity$ = makeOptionalComputed(
       null,
-      computed(() => this.MergedData.fetchEntity(entityId))
+      computed(() => {
+        // HACK: This is a hack to rerun this computed when actions change.
+        // In the future we should pass in the actions as a dependency to
+        // the MergedData method calls to trigger any re-runs of computeds.
+        this.ActionsStore.allActions$.get();
+        return this.MergedData.fetchEntity(entityId);
+      })
+    );
+
+    this.filterState$ = makeOptionalComputed(
+      [],
+      computed(async () => {
+        // 1. Get either the server Filter triple or the local Filter triple
+        // 2. Map the value of the Filter triple to TableBlockFilter[]
+        const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const localFilterTriple = pipe(
+          this.ActionsStore.allActions$.get(),
+          actions => Triple.fromActions(actions, []),
+          A.find(t => t.entityId === entityId && t.attributeId === SYSTEM_IDS.FILTER)
+        );
+
+        // Default to the locally changed version of a filter if it exists
+        const filter = localFilterTriple ?? serverFilterTriple;
+        const filterValue = Value.stringValue(filter) ?? '';
+
+        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
+      })
     );
 
     const networkData$ = makeOptionalComputed(
@@ -77,31 +124,47 @@ export class TableBlockStore {
 
           const pageNumber = this.pageNumber$.get();
 
-          const params = {
+          this.isLoading$.set(true);
+
+          const filterString = TableBlockSdk.createGraphQLStringFromFilters(
+            this.filterState$.get(),
+            this.type.entityId
+          );
+
+          const params: FetchRowsOptions['params'] = {
             query: '',
-            pageNumber: pageNumber,
-            filterState: [],
-            typeId: selectedType.entityId,
+            filter: filterString,
+            typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: PAGE_SIZE + 1,
             skip: pageNumber * PAGE_SIZE,
           };
 
-          const { columns: serverColumns } = await this.api.columns({
-            spaceId: spaceId,
+          /**
+           * Aggregate columns from local and server columns.
+           */
+          const { columns } = await this.MergedData.columns({
             params,
             abortController: this.abortController,
           });
 
-          const { rows: serverRows } = await this.api.rows({
-            spaceId: spaceId,
-            params,
-            abortController: this.abortController,
-          });
+          /**
+           * Aggregate data for the rows from local and server entities.
+           */
+          const { rows } = await this.MergedData.rows(
+            {
+              params,
+              abortController: this.abortController,
+            },
+            columns,
+            selectedType?.entityId
+          );
+
+          this.isLoading$.set(false);
 
           return {
-            columns: serverColumns,
-            rows: serverRows.slice(0, PAGE_SIZE),
-            hasNextPage: serverRows.length > PAGE_SIZE,
+            columns,
+            rows: rows.slice(0, PAGE_SIZE),
+            hasNextPage: rows.length > PAGE_SIZE,
           };
         } catch (e) {
           if (e instanceof Error && e.name === 'AbortError') {
@@ -115,100 +178,66 @@ export class TableBlockStore {
       })
     );
 
-    this.columns$ = computed(() => {
-      const { columns } = networkData$.get();
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], columns, selectedType.entityId);
+    this.rows$ = computed(() => {
+      const { rows } = networkData$.get();
+      return rows;
     });
 
-    // @TODO: Use fetchEntity in the fetches here. Could also probably use MergedData
-    this.rows$ = makeOptionalComputed(
-      [],
+    this.columns$ = computed(() => {
+      const { columns } = networkData$.get();
+      return columns;
+    });
+
+    this.unpublishedColumns$ = computed(() => {
+      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType?.entityId);
+    });
+
+    this.columnRelationTypes$ = makeOptionalComputed(
+      {},
       computed(async () => {
         const columns = this.columns$.get();
-        const { rows: serverRows } = networkData$.get();
 
-        /**
-         * There are several edge-cases we need to handle in order to correctly merge local changes
-         * with server data in the entity table:
-         * 1. An entity is created locally and is given the selected type
-         * 2. An entity is edited locally and is given the selected type
-         * 3. A type is created locally and an entity is given the new type
-         *
-         * Since the table aggregation code expects triples, we may end up in a situation where
-         * the type for an entity has changed, but the name hasn't. In this case there is no local
-         * version of the name triple, so we need to fetch it along with any other triples the table
-         * needs to render the columnSchema.
-         */
-        const changedEntitiesIdsFromAnotherType = pipe(
-          this.ActionsStore.actions$.get()[spaceId],
-          actions => Triple.fromActions(actions, []),
-          triples => Entity.entitiesFromTriples(triples),
-          A.filter(e => e.types.some(t => t.id === selectedType.entityId)),
-          A.map(t => t.id)
+        // 1. Fetch all attributes that are entity values
+        // 2. Filter attributes that have the relation type attribute
+        // 3. Return the type id and name of the relation type
+
+        // Make sure we merge any unpublished entities
+        const maybeRelationAttributeTypes = await Promise.all(
+          columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))
         );
 
-        // Fetch any entities that exist already remotely that have been changed locally
-        // and have the selected type to make sure we have all of the triples necessary
-        // to represent the entity in the table.
-        //
-        // e.g., We add Type A to Entity A. When we render the Type A table, we need
-        // _all_ of the triples for Entity A, not just the ones that have changed locally.
-        //
-        // This will return null if the entity we're fetching does not exist remotely.
-        // i.e., the entity was created locally and has not been published to the server.
-        const maybeServerEntitiesChangedLocally = await Promise.all(
-          changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
+        const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
+
+        // Merge all local and server triples
+        const mergedTriples = A.uniqBy(
+          Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
+          t => t.id
         );
 
-        const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
-
-        const serverEntityTriples = serverRows.flatMap(t => t.triples);
-
-        const entitiesCreatedOrChangedLocally = pipe(
-          this.ActionsStore.actions$.get(),
-          actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
-          A.filter(e => e.types.some(t => t.id === selectedType.entityId))
+        const relationTypes = mergedTriples.filter(
+          t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
         );
 
-        const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
-        const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
+        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
+          (acc, relationType) => {
+            if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
-        // Filter out any server rows that have been changed locally
-        const filteredServerRows = serverEntityTriples.filter(
-          sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
+            acc[relationType.entityId].push({
+              typeId: relationType.value.id,
+
+              // We can safely cast here because we filter for entity type values above.
+              typeName: (relationType.value as EntityValue).name,
+              spaceId: relationType.space,
+            });
+
+            return acc;
+          },
+          {}
         );
-
-        const entities = Entity.entitiesFromTriples([
-          // These are entities that were created locally and have the selected type
-          ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
-
-          // These are entities that have a new type locally and may exist on the server.
-          // We need to fetch all triples associated with this entity in order to correctly
-          // populate the table.
-          ...serverEntitiesChangedLocally.flatMap(e => e.triples),
-
-          // These are entities that have been fetched from the server and have the selected type.
-          // They are deduped from the local changes above.
-          ...filteredServerRows,
-        ]);
-
-        // Make sure we only generate rows for entities that have the selected type
-        const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedType.entityId));
-
-        const { rows } = EntityTable.fromColumnsAndRows(spaceId, entitiesWithSelectedType, columns);
-
-        return rows;
       })
     );
 
-    this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType.entityId);
-    });
-
-    this.hasNextPage$ = computed(() => {
-      return networkData$.get().hasNextPage;
-    });
-
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
   }
 
@@ -227,6 +256,45 @@ export class TableBlockStore {
         this.pageNumber$.set(page);
     }
   };
+
+  setFilterState = (filters: TableBlockFilter[]) => {
+    const newState = filters.length === 0 ? [] : filters;
+    const filterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+    // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
+    const newFiltersString =
+      newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type.entityId);
+
+    if (!filterTriple) {
+      return this.ActionsStore.create(
+        Triple.withId({
+          attributeId: SYSTEM_IDS.FILTER,
+          attributeName: 'Filter',
+          entityId: this.entityId,
+          space: this.blockEntity$.get()?.nameTripleSpace ?? '',
+          entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+          value: {
+            type: 'string',
+            value: newFiltersString,
+            id: ID.createValueId(),
+          },
+        })
+      );
+    }
+
+    return this.ActionsStore.update(
+      Triple.ensureStableId({
+        ...filterTriple,
+        entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+        value: {
+          ...filterTriple.value,
+          type: 'string',
+          value: newFiltersString,
+        },
+      }),
+      filterTriple
+    );
+  };
 }
 
 const TableBlockStoreContext = createContext<TableBlockStore | undefined>(undefined);
@@ -236,7 +304,7 @@ interface Props {
   children: React.ReactNode;
 
   // @TODO: This should be type Entity
-  selectedType: ITriple;
+  selectedType?: SelectedEntityType;
   entityId: string;
 }
 
@@ -250,6 +318,13 @@ interface Props {
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
+
+  if (!selectedType) {
+    // A table block might reference a type that has been deleted which will not be found
+    // in the types store.
+    console.error(`Undefined type in blockId: ${entityId}`);
+    throw new Error('Missing selectedType in TableBlockStoreProvider');
+  }
 
   const store = useMemo(() => {
     return new TableBlockStore({
@@ -279,14 +354,17 @@ export function useTableBlock() {
     rows$,
     pageNumber$,
     columns$,
-    type$,
+    type,
     unpublishedColumns$,
     blockEntity$,
     hasNextPage$,
     hasPreviousPage$,
     setPage,
+    filterState$,
+    setFilterState,
+    isLoading$,
+    columnRelationTypes$,
   } = useTableBlockStore();
-  const type = useSelector(type$);
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
@@ -294,6 +372,9 @@ export function useTableBlock() {
   const hasNextPage = useSelector(hasNextPage$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
   const blockEntity = useSelector(blockEntity$);
+  const filterState = useSelector<TableBlockFilter[]>(filterState$);
+  const isLoading = useSelector(isLoading$);
+  const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
     type,
@@ -305,5 +386,9 @@ export function useTableBlock() {
     hasPreviousPage,
     setPage,
     blockEntity,
+    filterState,
+    setFilterState,
+    isLoading,
+    columnRelationTypes,
   };
 }

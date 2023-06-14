@@ -12,22 +12,53 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { Space } from '~/modules/types';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 interface Props {
   spaces: Space[];
 }
 
+// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
+// Temporarily we just filter some Spaces when we fetch Spaces.
+export const HIDDEN_SPACES: Array<string> = [
+  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
+  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
+  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
+  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
+  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in San Francisco
+  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in San Francisco
+  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street outreach in San Francisco
+  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
+];
+
 export default function Spaces({ spaces }: Props) {
   return (
     <div>
       <Head>
+        <title>Geo Genesis</title>
+        <meta property="og:title" content="Geo Genesis" />
+        <meta
+          name="description"
+          content="Browse and organize the world's public knowledge and information in a decentralized way."
+        />
+        <meta
+          property="og:description"
+          content="Browse and organize the world's public knowledge and information in a decentralized way."
+        />
         <meta property="og:url" content={`https://geobrowser.io/spaces`} />
+        <meta property="og:image" content={DEFAULT_OPENGRAPH_IMAGE} />
+        <meta name="twitter:image" content={DEFAULT_OPENGRAPH_IMAGE} />
+        <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </Head>
       <div className="flex flex-col">
         <Text variant="mainPage">All spaces</Text>
         <Spacer height={40} />
         <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
           {spaces.map(space => {
+            // @HACK: Right now we hide some spaces from the front page. There's no way to remove
+            // Spaces from the Subgraph store yet.
+            if (HIDDEN_SPACES.includes(space.id)) return null;
+
             const name = space.attributes.name;
             const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
@@ -53,12 +84,23 @@ export default function Spaces({ spaces }: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
-  const spaces = await network.fetchSpaces();
 
-  return {
-    props: {
-      spaces,
-    },
-  };
+  try {
+    const network = new NetworkData.Network(storage, config.subgraph);
+    const spaces = await network.fetchSpaces();
+
+    return {
+      props: {
+        spaces,
+      },
+    };
+  } catch (e) {
+    console.error('Could not fetch spaces', e);
+
+    return {
+      props: {
+        spaces: [],
+      },
+    };
+  }
 };

@@ -1,143 +1,194 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import * as React from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { EntityTableContainer } from '~/modules/components/entity-table/entity-table-container';
-import { SpaceHeader } from '~/modules/components/space/space-header';
-import { SpaceNavbar } from '~/modules/components/space/space-navbar';
-import { Spacer } from '~/modules/design-system/spacer';
-import { DEFAULT_PAGE_SIZE, EntityTable, EntityTableStoreProvider } from '~/modules/entity';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
+import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
+import { ReferencedByEntity } from '~/modules/components/entity/types';
+import { Entity, EntityStoreProvider } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
-import { Column, Row, Space, Triple } from '~/modules/types';
+import { useEditable } from '~/modules/stores/use-editable';
+import { Space, Triple } from '~/modules/types';
+import { NavUtils } from '~/modules/utils';
+import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
+import { Value } from '~/modules/value';
 import { TypesStoreProvider } from '~/modules/type/types-store';
+import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
+import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
+import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { getOpenGraphImageUrl } from '~/modules/utils';
 
 interface Props {
-  space: Space;
-  spaceName?: string;
-  spaceImage: string | null;
-  initialSelectedType: Triple | null;
-  initialTypes: Triple[];
-  initialColumns: Column[];
-  initialRows: Row[];
+  triples: Triple[];
+  id: string;
+  name: string;
+  description: string | null;
+  spaceId: string;
+  referencedByEntities: ReferencedByEntity[];
+  serverAvatarUrl: string | null;
+  serverCoverUrl: string | null;
+
+  // For the page editor
+  blockTriples: Triple[];
+  blockIdsTriple: Triple | null;
+
+  space: Space | null;
+  spaceTypes: Triple[];
 }
 
-export default function EntitiesPage({
-  space,
-  spaceName,
-  spaceImage,
-  initialColumns,
-  initialSelectedType,
-  initialRows,
-  initialTypes,
-}: Props) {
+export default function SpacePage(props: Props) {
+  const { isEditor } = useAccessControl(props.spaceId);
+  const { editable } = useEditable();
+
+  const renderEditablePage = isEditor && editable;
+  const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
+
+  const avatarUrl = props.serverAvatarUrl;
+  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description =
+    props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
+
   return (
-    <div>
+    <>
       <Head>
-        <title>{spaceName ?? space.id}</title>
-        <meta property="og:title" content={spaceName} />
-        <meta property="og:url" content={`https://geobrowser.io/${space.id}}`} />
-        {spaceImage && <meta property="og:image" content={spaceImage} />}
-        {spaceImage && <meta name="twitter:image" content={spaceImage} />}
+        <title>{props.name ?? props.id}</title>
+        <meta property="og:title" content={props.name} />
+        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
+        <meta property="og:image" content={openGraphImageUrl} />
+        <meta name="twitter:image" content={openGraphImageUrl} />
+        <link rel="preload" as="image" href={openGraphImageUrl} />
+        <meta property="description" content={description} />
+        <meta property="og:description" content={description} />
+        <meta name="twitter:description" content={description} />
       </Head>
-      <SpaceHeader spaceId={space.id} spaceImage={spaceImage} spaceName={spaceName} />
-      <Spacer height={34} />
-      <SpaceNavbar spaceId={space.id} />
-      <TypesStoreProvider initialTypes={initialTypes} space={space}>
-        <EntityTableStoreProvider
-          spaceId={space.id}
-          initialRows={initialRows}
-          initialSelectedType={initialSelectedType}
-          initialColumns={initialColumns}
+
+      <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
+        <EntityStoreProvider
+          id={props.id}
+          spaceId={props.spaceId}
+          initialTriples={props.triples}
+          initialSchemaTriples={[]}
+          initialBlockIdsTriple={props.blockIdsTriple}
+          initialBlockTriples={props.blockTriples}
         >
-          <EntityTableContainer
-            spaceId={space.id}
-            spaceName={spaceName}
-            initialColumns={initialColumns}
-            initialRows={initialRows}
-          />
-        </EntityTableStoreProvider>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} space={true} />
+
+          <EntityPageContentContainer>
+            <EditableHeading
+              spaceId={props.spaceId}
+              entityId={props.id}
+              name={props.name}
+              triples={props.triples}
+              space={true}
+            />
+            <Page {...props} />
+          </EntityPageContentContainer>
+        </EntityStoreProvider>
       </TypesStoreProvider>
-    </div>
+    </>
   );
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const spaceId = context.params?.id as string;
-  const initialParams = Params.parseEntityTableQueryParameters(context.resolvedUrl);
+  const spaceId = context.query.id as string;
   const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
+
   const storage = new StorageClient(config.ipfs);
-
   const network = new NetworkData.Network(storage, config.subgraph);
+
   const spaces = await network.fetchSpaces();
-  const space = spaces.find(s => s.id === spaceId);
+  const space = spaces.find(s => s.id === spaceId) ?? null;
+  const entityId = space?.spaceConfigEntityId;
 
-  if (!space)
+  if (!entityId) {
     return {
-      notFound: true,
+      redirect: {
+        destination: `/space/${spaceId}/entities`,
+        permanent: false,
+      },
+      props: {},
     };
+  }
 
-  const spaceImage = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
-  const spaceName = spaceNames[spaceId];
+  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
+    network.fetchEntity(entityId),
 
-  const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(network, spaceId),
-    fetchForeignTypeTriples(network, space),
-    network.fetchTriples({
+    network.fetchEntities({
       query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
-      filter: [
-        { field: 'entity-id', value: space.entityId ?? '' },
-        {
-          field: 'attribute-id',
-          value: SYSTEM_IDS.DEFAULT_TYPE,
-        },
-      ],
+      filter: [{ field: 'linked-to', value: entityId }],
     }),
+
+    fetchSpaceTypeTriples(network, spaceId),
+    space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 
-  const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
+  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+  const serverAvatarUrl = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+  const serverCoverUrl = Entity.cover(entity?.triples);
 
-  const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
+  const referencedByEntities: ReferencedByEntity[] = related.map(e => {
+    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    const space = spaces.find(s => s.id === spaceId);
 
-  const initialSelectedType =
-    initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
+    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
 
-  const typeId = initialSelectedType?.entityId;
-
-  const params = {
-    ...initialParams,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeId,
-  };
-
-  const { columns } = await network.columns({
-    spaceId,
-    params,
+    return {
+      id: e.id,
+      name: e.name,
+      types: e.types,
+      space: {
+        id: spaceId,
+        name: spaceName,
+        image: spaceImage,
+      },
+    };
   });
 
-  const { rows: serverRows } = await network.rows({
-    spaceId,
-    params,
-  });
+  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
 
-  const { rows } = EntityTable.fromColumnsAndRows(spaceId, serverRows, columns);
+  // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
+  // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
+  // the entire entity for each block so the query isn't dependenent on the space and we have the types
+  // associated with each block entity (TableBlock, TextBlock, etc.)
+  const blockTriples = (
+    await Promise.all(
+      blockIds.map(blockId => {
+        return network.fetchTriples({
+          space: spaceId,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: blockId }],
+        });
+      })
+    )
+  ).flatMap(block => block.triples);
 
   return {
     props: {
+      triples: entity?.triples ?? [],
+      id: entityId,
+      name: entity?.name ?? spaceName ?? '',
+      description: Entity.description(entity?.triples ?? []),
+      spaceId,
+      referencedByEntities,
+      serverAvatarUrl,
+      serverCoverUrl,
+
+      // For entity page editor
+      blockIdsTriple,
+      blockTriples,
+
       space,
-      spaceName,
-      spaceImage,
-      initialSelectedType,
-      initialForeignTypes,
-      initialColumns: columns,
-      initialRows: rows,
-      initialTypes,
+      spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     },
   };
 };

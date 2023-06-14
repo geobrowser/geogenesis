@@ -4,7 +4,7 @@ import cx from 'classnames';
 type EmptyTableTextProps = React.ComponentPropsWithoutRef<'td'>;
 
 export const EmptyTableText = ({ className = '', ...rest }: EmptyTableTextProps) => (
-  <td className={cx('p-2.5 text-lg', className)} {...rest} />
+  <td className={cx('flex items-center justify-center p-2.5 text-lg', className)} {...rest} />
 );
 
 type PageContainerProps = React.ComponentPropsWithoutRef<'div'>;

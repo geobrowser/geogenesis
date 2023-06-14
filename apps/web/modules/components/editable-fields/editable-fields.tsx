@@ -1,27 +1,25 @@
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
 import { cva } from 'class-variance-authority';
+import Textarea from 'react-textarea-autosize';
 import Zoom from 'react-medium-image-zoom';
 
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
 
-const textareaStyles = cva(
-  'w-full h-full resize-none bg-transparent overflow-hidden m-0 p-0 placeholder:text-grey-02 focus:outline-none',
-  {
-    variants: {
-      variant: {
-        mainPage: 'text-mainPage',
-        body: 'text-body',
-        tableCell: 'text-tableCell',
-        smallTitle: 'text-smallTitle',
-      },
+const textareaStyles = cva('w-full resize-none bg-transparent m-0 p-0 placeholder:text-grey-02 focus:outline-none', {
+  variants: {
+    variant: {
+      mainPage: 'text-mainPage',
+      body: 'text-body',
+      tableCell: 'text-tableCell',
+      smallTitle: 'text-smallTitle',
     },
-    defaultVariants: {
-      variant: 'body',
-    },
-  }
-);
+  },
+  defaultVariants: {
+    variant: 'body',
+  },
+});
 
 interface TableStringFieldProps {
   onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -31,7 +29,6 @@ interface TableStringFieldProps {
 
 export function TableStringField({ ...props }: TableStringFieldProps) {
   const [localValue, setLocalValue] = React.useState(props.value || '');
-  const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     // Update local value if value prop changes from outside the component
@@ -39,10 +36,8 @@ export function TableStringField({ ...props }: TableStringFieldProps) {
   }, [props.value]);
 
   return (
-    <textarea
+    <Textarea
       {...props}
-      ref={ref}
-      rows={1}
       onBlur={props.onBlur}
       onChange={e => setLocalValue(e.currentTarget.value)}
       value={localValue}
@@ -59,26 +54,9 @@ interface PageStringFieldProps {
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  // Manually keep the height of the textarea in sync with its content.
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-
-      if (props.variant === 'body') {
-        // This aligns the bottom of the text area with the sum of line heights * number of lines
-        // for body text.
-        ref.current.style.height = `${ref.current.scrollHeight - 4}px`;
-      }
-    }
-  });
-
   return (
-    <textarea
+    <Textarea
       {...props}
-      ref={ref}
-      rows={1}
       onChange={props.onChange}
       value={props.value}
       className={textareaStyles({ variant: props.variant })}
@@ -86,7 +64,7 @@ export function PageStringField({ ...props }: PageStringFieldProps) {
   );
 }
 
-type ImageVariant = 'avatar' | 'banner' | 'default';
+type ImageVariant = 'avatar' | 'banner' | 'table-cell' | 'default';
 
 interface ImageZoomProps {
   imageSrc: string;
@@ -104,6 +82,9 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
   banner: {
     height: 44,
     width: 240,
+  },
+  'table-cell': {
+    width: 60,
   },
 };
 

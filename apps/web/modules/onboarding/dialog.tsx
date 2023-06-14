@@ -17,7 +17,6 @@ import { useOnboarding } from './use-onboarding';
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
 
 export const OnboardingDialog = observer(() => {
-  const { isOnboardingVisible } = useOnboarding();
   const { address } = useAccount();
 
   const [name, setName] = useState('');

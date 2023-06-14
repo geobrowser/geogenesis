@@ -82,6 +82,7 @@ type Proposal @entity {
   status: ProposalStatus! # status of the proposal
   createdAt: BigInt! # block timestamp
   proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal
+  createdAtBlock: BigInt!
 }
 
 type ActionCount @entity {
@@ -97,6 +98,7 @@ type ProposedVersion @entity {
   entity: GeoEntity! # entity we are describing
   createdAt: BigInt! # block timestamp
   actions: [Action!]! # All actions to be taken if this version is finalized
+  createdAtBlock: BigInt!
 }
 
 type Version @entity {
@@ -107,6 +109,7 @@ type Version @entity {
   createdAt: BigInt! # block timestamp
   proposedVersion: ProposedVersion! # the proposed version that was finalized to make this entity
   actions: [Action!]! # All actions taken from genesis to this version
+  createdAtBlock: BigInt!
 }
 
 #An action to take as part of a version

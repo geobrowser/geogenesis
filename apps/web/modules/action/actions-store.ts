@@ -84,7 +84,7 @@ export class ActionsStore implements IActionsStore {
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? [])].filter(
-        (item: ActionType) => !actionIdsToDelete.includes(getId(item))
+        (item: ActionType) => !actionIdsToDelete.includes(Action.getId(item))
       ),
     };
 
@@ -145,7 +145,7 @@ export class ActionsStore implements IActionsStore {
     description: string | undefined = undefined
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const actionsToPublish = spaceActions.filter(action => !(getId(action) in unstagedChanges));
+    const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
 
     if (actionsToPublish.length < 1) return;
 
@@ -168,11 +168,10 @@ export class ActionsStore implements IActionsStore {
       ...action,
       hasBeenPublished: true,
     }));
-    const unstagedActions = spaceActions.filter(action => getId(action) in unstagedChanges);
 
     this.actions$.set({
       ...this.actions$.get(),
-      [spaceId]: [...publishedActions, ...unstagedActions],
+      [spaceId]: [...publishedActions, ...actionsToPersist],
     });
 
     onChangePublishState('publish-complete');
@@ -180,12 +179,29 @@ export class ActionsStore implements IActionsStore {
   };
 }
 
-const getId = (action: ActionType) => {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return action.id;
-    case 'editTriple':
-      return action.before.id;
-  }
+const splitActions = (actions: ActionType[], unstagedChanges: any) => {
+  const actionsToPublish: ActionType[] = [];
+  const actionsToPersist: ActionType[] = [];
+
+  actions.forEach(action => {
+    switch (action.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.entityId] ?? {}, action.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+      case 'editTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.before.entityId] ?? {}, action.before.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+    }
+  });
+
+  return [actionsToPublish, actionsToPersist];
 };

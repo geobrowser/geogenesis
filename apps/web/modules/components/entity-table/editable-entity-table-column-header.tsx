@@ -1,6 +1,6 @@
 import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useActionsStore } from '~/modules/action';
 import { IconName } from '~/modules/design-system/icon';
 import { Image } from '~/modules/design-system/icons/image';

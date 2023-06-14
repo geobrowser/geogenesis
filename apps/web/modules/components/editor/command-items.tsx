@@ -34,6 +34,8 @@ export const tableCommandItem: CommandSuggestionItem = {
         },
       })
       .createParagraphNear()
+      .blur()
+      .focus()
       .run();
   },
 };

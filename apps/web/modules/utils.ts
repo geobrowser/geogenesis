@@ -1,5 +1,7 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 
+import { DEFAULT_OPENGRAPH_IMAGE } from './constants';
+
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
     const data = observable.get() as T;
@@ -28,7 +30,17 @@ export function titleCase(string: string): string {
 export const NavUtils = {
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
-  toCreateEntity: (spaceId: string) => `/space/${spaceId}/create-entity`,
+  toCreateEntity: (spaceId: string, typeId?: string | null, filterId?: string | null, filterValue?: string | null) => {
+    if (typeId && filterId && filterValue) {
+      return `/space/${spaceId}/create-entity?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
+    }
+
+    if (typeId) {
+      return `/space/${spaceId}/create-entity?typeId=${typeId}`;
+    }
+
+    return `/space/${spaceId}/create-entity`;
+  },
 };
 
 export function getFilesFromFileList(fileList: FileList): File[] {
@@ -77,3 +89,16 @@ export class GeoDate {
     return new Date(value * 1000);
   }
 }
+// https://geobrowser.io/api/og?hash=
+export const getOpenGraphImageUrl = (value: string) => {
+  if (value.startsWith('https://api.thegraph.com/ipfs')) {
+    const hash = value.split('=')[1];
+    return `https://www.geobrowser.io/preview/${hash}.png`;
+  } else if (value.startsWith('http')) {
+    return value;
+  } else if (value) {
+    return `https://www.geobrowser.io/preview/${value}.png`;
+  } else {
+    return DEFAULT_OPENGRAPH_IMAGE;
+  }
+};

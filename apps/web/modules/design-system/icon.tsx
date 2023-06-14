@@ -31,6 +31,12 @@ import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
 import { Context } from './icons/context';
 import { FilterTable } from './icons/filter-table';
+import { ChevronDownSmall } from './icons/chevron-down-small';
+import { CheckCloseSmall } from './icons/check-close-small';
+import { FilterTableWithFilters } from './icons/filter-table-with-filters';
+import { Dash } from './icons/dash';
+import { Cog } from './icons/cog';
+import { NewTab } from './icons/new-tab';
 
 export type IconName =
   | 'blank'
@@ -56,6 +62,7 @@ export type IconName =
   | 'image'
   | 'text'
   | 'rightArrowLongSmall'
+  | 'chevronDownSmall'
   | 'search'
   | 'history'
   | 'editorH1'
@@ -66,7 +73,12 @@ export type IconName =
   | 'editorTable'
   | 'context'
   | 'filterTable'
-  | 'date';
+  | 'date'
+  | 'filterTableWithFilters'
+  | 'checkCloseSmall'
+  | 'dash'
+  | 'cog'
+  | 'newTab';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -116,4 +128,10 @@ const icons: Record<IconName, React.ElementType> = {
   context: Context,
   filterTable: FilterTable,
   date: FilterTable,
+  filterTableWithFilters: FilterTableWithFilters,
+  chevronDownSmall: ChevronDownSmall,
+  checkCloseSmall: CheckCloseSmall,
+  dash: Dash,
+  cog: Cog,
+  newTab: NewTab,
 };

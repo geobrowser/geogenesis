@@ -56,7 +56,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         return (
           <CellContent
-            isEntity
             href={NavUtils.toEntity(space, entityId)}
             isExpanded={table.options?.meta?.expandedCells[cellId]}
             value={value}

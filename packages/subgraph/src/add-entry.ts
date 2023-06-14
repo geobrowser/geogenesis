@@ -115,7 +115,8 @@ export function getOrCreateProposal(
   createdBy: Address,
   createdAt: BigInt,
   space: string,
-  proposalName: string | null
+  proposalName: string | null,
+  createdAtBlock: BigInt
 ): Proposal {
   let proposal = Proposal.load(id)
   if (!proposal) {
@@ -126,6 +127,7 @@ export function getOrCreateProposal(
     proposal.proposedVersions = []
     proposal.space = space
     proposal.name = proposalName
+    proposal.createdAtBlock = createdAtBlock
     proposal.save()
   }
   return proposal as Proposal
@@ -168,7 +170,8 @@ function handleRoot(
     createdBy,
     createdAtTimestamp,
     space,
-    proposalName
+    proposalName,
+    createdAtBlock
   )
 
   // entityId -> actions
@@ -214,7 +217,8 @@ function handleRoot(
       entityId,
       createdBy,
       proposalId,
-      proposalName
+      proposalName,
+      createdAtBlock
     )
 
     createVersion(
@@ -223,7 +227,8 @@ function handleRoot(
       createdAtTimestamp,
       entityId,
       createdBy,
-      proposalName
+      proposalName,
+      createdAtBlock
     )
   }
 }

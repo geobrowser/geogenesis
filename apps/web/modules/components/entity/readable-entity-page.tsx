@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { LinkableChip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -15,6 +16,7 @@ import { Tag } from '~/modules/design-system/tag';
 import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-diagonal';
 import { useEntityStore } from '~/modules/entity';
 import { DateField } from '../editable-fields/date-field';
+import { SmallButton } from '~/modules/design-system/button';
 
 interface Props {
   triples: Triple[];
@@ -46,14 +48,7 @@ export function ReadableEntityPage({ triples, id, name, referencedByEntities }: 
             <Text color="grey-04">There are no entities referencing {name}.</Text>
           </>
         ) : (
-          <>
-            <Spacer height={20} />
-            <div className="flex flex-col gap-6">
-              {referencedByEntities.map(referencedByEntity => (
-                <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-              ))}
-            </div>
-          </>
+          <ReferencedByEntities referencedByEntities={referencedByEntities} />
         )}
       </div>
     </>
@@ -96,14 +91,66 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
 
   return (
     <>
-      {Object.entries(groupedTriples).map(([attributeId, triples], index) => (
-        <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
-          <Text as="p" variant="bodySemibold">
-            {triples[0].attributeName || attributeId}
-          </Text>
-          <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
+      {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
+        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
+        return (
+          <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
+            <Text as="p" variant="bodySemibold">
+              {triples[0].attributeName || attributeId}
+            </Text>
+            <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+type ReferencedByEntitiesProps = {
+  referencedByEntities: Array<ReferencedByEntity>;
+};
+
+function ReferencedByEntities({ referencedByEntities }: ReferencedByEntitiesProps) {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const count = referencedByEntities.length;
+
+  if (count <= 3)
+    return (
+      <>
+        <Spacer height={20} />
+        <div className="flex flex-col gap-6">
+          {referencedByEntities.map(referencedByEntity => (
+            <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+          ))}
         </div>
-      ))}
+      </>
+    );
+
+  const firstReferencedByEntities = referencedByEntities.slice(0, 3);
+  const lastReferencedByEntities = referencedByEntities.slice(3);
+
+  return (
+    <>
+      <Spacer height={20} />
+      <div className="flex flex-col gap-6">
+        {firstReferencedByEntities.map(referencedByEntity => (
+          <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+        ))}
+        {!isExpanded ? (
+          <div>
+            <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
+              Show more
+            </SmallButton>
+          </div>
+        ) : (
+          <>
+            {lastReferencedByEntities.map(referencedByEntity => (
+              <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
+            ))}
+          </>
+        )}
+      </div>
     </>
   );
 }
@@ -127,9 +174,11 @@ function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: Re
         <Spacer height={8} />
         <div className="flex items-center">
           <div className="flex items-center gap-1">
-            <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image ?? ''} />
-            </span>
+            {referencedByEntity.space.image && (
+              <span className="relative h-3 w-3 overflow-hidden rounded-xs">
+                <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} />
+              </span>
+            )}
             <Text as="p" variant="footnoteMedium">
               {referencedByEntity.space.name}
             </Text>

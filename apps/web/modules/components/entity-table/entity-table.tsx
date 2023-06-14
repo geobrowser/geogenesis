@@ -75,7 +75,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // We know that cell is rendered as a React component by react-table
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns } = useEntityTable();
+    const { columns, columnRelationTypes } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -115,6 +115,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
+          columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
     } else if (cellData && !isPlaceholderCell) {
@@ -192,13 +193,12 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
               <EmptyTableText>No results found</EmptyTableText>
             </tr>
           )}
-          {table.getRowModel().rows.map(row => {
+          {table.getRowModel().rows.map((row, index: number) => {
             const cells = row.getVisibleCells();
-
-            const entityId = cells[0].getValue<Cell>()?.entityId;
+            const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
 
             return (
-              <tr key={entityId} className="hover:bg-bg">
+              <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];

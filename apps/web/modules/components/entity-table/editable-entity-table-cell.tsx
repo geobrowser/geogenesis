@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { NavUtils } from '~/modules/utils';
 import { Value } from '~/modules/value';
@@ -20,6 +20,7 @@ interface Props {
   remove: (triple: Triple) => void;
   valueType: string;
   columnName: string;
+  columnRelationTypes?: { typeId: string; typeName: string | null }[];
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
@@ -31,6 +32,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   remove,
   columnName,
   valueType,
+  columnRelationTypes,
 }: Props) {
   const send = useEditEvents({
     context: {
@@ -60,6 +62,14 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
   const isPopulatedRelation = isRelationValueType && !isEmptyCell;
+
+  // @TODO(baiirun): move encoding an empty string array to undefined to queries.ts
+  // Pass the ids only if they are defined and not empty.
+  const typesToFilter = columnRelationTypes
+    ? columnRelationTypes.length > 0
+      ? columnRelationTypes
+      : undefined
+    : undefined;
 
   const removeEntityTriple = (triple: Triple) => {
     send({
@@ -160,16 +170,22 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
-            entityValueIds={entityValueTriples.map(t => t.value.id)}
+            entityValueIds={entityValueTriples
+              .filter(triple => triple.attributeId === attributeId)
+              .map(triple => triple.value.id)}
+            allowedTypes={typesToFilter}
+            spaceId={space}
           />
         </>
       )}
 
       {isEmptyRelation && (
         <EntityTextAutocomplete
+          spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+          allowedTypes={typesToFilter}
         />
       )}
 

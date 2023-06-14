@@ -75,7 +75,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns } = useTableBlock();
+    const { columns, columnRelationTypes } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
@@ -115,6 +115,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
+          columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
     } else if (cellData && !isPlaceholderCell) {
@@ -143,7 +144,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { type, unpublishedColumns } = useTableBlock();
+  const { unpublishedColumns } = useTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
@@ -174,11 +175,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <th
-                  key={header.id}
-                  className="lg:min-w-none min-w-[300px] border border-b-0 border-grey-02 p-[10px] text-left"
-                  style={{ minWidth: header.column.getSize() }}
-                >
+                <th key={header.id} className="min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left">
                   {flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
               ))}
@@ -188,16 +185,17 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <EmptyTableText>No results found</EmptyTableText>
+              <td className="border border-x-0 border-grey-02">
+                <EmptyTableText>No results found</EmptyTableText>
+              </td>
             </tr>
           )}
-          {table.getRowModel().rows.map(row => {
+          {table.getRowModel().rows.map((row, index: number) => {
             const cells = row.getVisibleCells();
-
-            const entityId = cells[0].getValue<Cell>()?.entityId;
+            const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
 
             return (
-              <tr key={entityId} className="hover:bg-bg">
+              <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];

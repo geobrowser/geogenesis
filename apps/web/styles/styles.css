@@ -79,3 +79,16 @@ textarea::placeholder {
   /* This is the background color of the overlay for the react-medium-image-zoom package*/
   background-color: rgba(0, 0, 0, 0.6) !important;
 }
+
+/* Provide space for the gap cursor */
+.ProseMirror {
+  @apply pb-8;
+}
+
+.ProseMirror > * + * {
+  @apply mt-3;
+}
+
+.ProseMirror img {
+  @apply h-auto max-w-full;
+}

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
@@ -21,6 +22,7 @@ import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { getOpenGraphImageUrl } from '~/modules/utils';
 
 interface Props {
   triples: Triple[];
@@ -38,9 +40,20 @@ interface Props {
 
   spaceTypes: Triple[];
   space: Space | null;
+  redirect: string | null;
 }
 
 export default function EntityPage(props: Props) {
+  const router = useRouter();
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (props.redirect && isMounted) {
+    router.push(props.redirect);
+  }
+
   const { isEditor } = useAccessControl(props.spaceId);
   const { editable } = useEditable();
 
@@ -49,6 +62,14 @@ export default function EntityPage(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description =
+    props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
+
+  if (props.redirect) {
+    return null;
+  }
 
   return (
     <>
@@ -56,13 +77,12 @@ export default function EntityPage(props: Props) {
         <title>{props.name ?? props.id}</title>
         <meta property="og:title" content={props.name} />
         <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        {props.serverCoverUrl && <meta property="og:image" content={props.serverCoverUrl} />}
-        {props.serverCoverUrl && (
-          <meta name="twitter:image" content="https://www.geobrowser.io/static/geo-social-image.png" />
-        )}
-        {props.description && <meta property="description" content={props.description} />}
-        {props.description && <meta property="og:description" content={props.description} />}
-        {props.description && <meta name="twitter:description" content={props.description} />}
+        <meta property="og:image" content={openGraphImageUrl} />
+        <meta name="twitter:image" content={openGraphImageUrl} />
+        <link rel="preload" as="image" href={openGraphImageUrl} />
+        <meta property="description" content={description} />
+        <meta property="og:description" content={description} />
+        <meta name="twitter:description" content={description} />
       </Head>
 
       <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
@@ -89,86 +109,117 @@ export default function EntityPage(props: Props) {
 export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const spaceId = context.query.id as string;
   const entityId = context.query.entityId as string;
-  const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
-  const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  try {
+    const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
 
-  const spaces = await network.fetchSpaces();
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+    const storage = new StorageClient(config.ipfs);
+    const network = new NetworkData.Network(storage, config.subgraph);
 
-  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
-    network.fetchEntity(entityId),
+    const spaces = await network.fetchSpaces();
+    const space = spaces.find(s => s.id === spaceId) ?? null;
 
-    network.fetchEntities({
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
+    const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
+      network.fetchEntity(entityId),
 
-    fetchSpaceTypeTriples(network, spaceId),
-    space ? fetchForeignTypeTriples(network, space) : [],
-  ]);
+      network.fetchEntities({
+        query: '',
+        filter: [{ field: 'linked-to', value: entityId }],
+      }),
 
-  const serverAvatarUrl = Entity.avatar(entity?.triples);
-  const serverCoverUrl = Entity.cover(entity?.triples);
+      fetchSpaceTypeTriples(network, spaceId),
+      space ? fetchForeignTypeTriples(network, space) : [],
+    ]);
 
-  const referencedByEntities: ReferencedByEntity[] = related.map(e => {
-    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
-    const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+    // Redirect from space configuration page to space page
+    let redirect: string | null = null;
+    if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
+      redirect = `/space/${entity?.nameTripleSpace}`;
+    }
+
+    const serverAvatarUrl = Entity.avatar(entity?.triples);
+    const serverCoverUrl = Entity.cover(entity?.triples);
+
+    const referencedByEntities: ReferencedByEntity[] = related.map(e => {
+      const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+      const space = spaces.find(s => s.id === spaceId);
+      const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+      const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+
+      return {
+        id: e.id,
+        name: e.name,
+        types: e.types,
+        space: {
+          id: spaceId,
+          name: spaceName,
+          image: spaceImage,
+        },
+      };
+    });
+
+    const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
+    const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+
+    // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
+    // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
+    // the entire entity for each block so the query isn't dependenent on the space and we have the types
+    // associated with each block entity (TableBlock, TextBlock, etc.)
+    const blockTriples = (
+      await Promise.all(
+        blockIds.map(blockId => {
+          return network.fetchTriples({
+            space: spaceId,
+            query: '',
+            skip: 0,
+            first: DEFAULT_PAGE_SIZE,
+            filter: [{ field: 'entity-id', value: blockId }],
+          });
+        })
+      )
+    ).flatMap(block => block.triples);
 
     return {
-      id: e.id,
-      name: e.name,
-      types: e.types,
-      space: {
-        id: spaceId,
-        name: spaceName,
-        image: spaceImage,
+      props: {
+        triples: entity?.triples ?? [],
+        id: entityId,
+        name: entity?.name ?? entityId,
+        description: Entity.description(entity?.triples ?? []),
+        spaceId,
+        referencedByEntities,
+        key: entityId,
+        serverAvatarUrl,
+        serverCoverUrl,
+
+        // For entity page editor
+        blockIdsTriple,
+        blockTriples,
+
+        space,
+        spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
+        redirect,
       },
     };
-  });
+  } catch (e) {
+    console.error(`Could not fetch entity ${entityId} on entity page`, e);
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
-
-  // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
-  // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
-  // the entire entity for each block so the query isn't dependenent on the space and we have the types
-  // associated with each block entity (TableBlock, TextBlock, etc.)
-  const blockTriples = (
-    await Promise.all(
-      blockIds.map(blockId => {
-        return network.fetchTriples({
-          space: spaceId,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
-      })
-    )
-  ).flatMap(block => block.triples);
-
-  return {
-    props: {
-      triples: entity?.triples ?? [],
-      id: entityId,
-      name: entity?.name ?? entityId,
-      description: Entity.description(entity?.triples ?? []),
-      spaceId,
-      referencedByEntities,
-      key: entityId,
-      serverAvatarUrl,
-      serverCoverUrl,
-
-      // For entity page editor
-      blockIdsTriple,
-      blockTriples,
-
-      space,
-      spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
-    },
-  };
+    return {
+      props: {
+        triples: [],
+        name: entityId,
+        description: '',
+        id: entityId,
+        blockIdsTriple: null,
+        blockTriples: [],
+        spaceId,
+        referencedByEntities: [],
+        key: entityId,
+        serverAvatarUrl: null,
+        serverCoverUrl: null,
+        space: null,
+        spaceTypes: [],
+        redirect: null,
+      },
+    };
+  }
 };

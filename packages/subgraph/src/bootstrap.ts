@@ -11,6 +11,7 @@ import {
   BLOCKS,
   COVER_ATTRIBUTE,
   DESCRIPTION,
+  FILTER,
   FOREIGN_TYPES,
   IMAGE,
   IMAGE_ATTRIBUTE,
@@ -24,10 +25,12 @@ import {
   SPACE,
   SPACE_CONFIGURATION,
   TABLE_BLOCK,
+  SHOWN_COLUMNS,
   TEXT,
   TEXT_BLOCK,
   TYPES,
   VALUE_TYPE,
+  RELATION_VALUE_RELATIONSHIP_TYPE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -54,12 +57,14 @@ const entities: string[] = [
   SPACE_CONFIGURATION,
   FOREIGN_TYPES,
   TABLE_BLOCK,
+  SHOWN_COLUMNS,
   TEXT_BLOCK,
   IMAGE_BLOCK,
   BLOCKS,
   MARKDOWN_CONTENT,
   ROW_TYPE,
   PARENT_ENTITY,
+  RELATION_VALUE_RELATIONSHIP_TYPE,
 ]
 
 class Tuple<T, U> {
@@ -86,6 +91,7 @@ const names: Tuple<string, StringValue>[] = [
   },
   { _0: FOREIGN_TYPES, _1: new StringValue(FOREIGN_TYPES, 'Foreign Types') },
   { _0: TABLE_BLOCK, _1: new StringValue(TABLE_BLOCK, 'Table Block') },
+  { _0: SHOWN_COLUMNS, _1: new StringValue(SHOWN_COLUMNS, 'Shown Columns') },
   { _0: TEXT_BLOCK, _1: new StringValue(TEXT_BLOCK, 'Text Block') },
   { _0: IMAGE_BLOCK, _1: new StringValue(IMAGE_BLOCK, 'Image Block') },
   { _0: BLOCKS, _1: new StringValue(BLOCKS, 'Blocks') },
@@ -97,6 +103,14 @@ const names: Tuple<string, StringValue>[] = [
   { _0: ROW_TYPE, _1: new StringValue(ROW_TYPE, 'Row Type') },
   { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
   { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
+  { _0: FILTER, _1: new StringValue(FILTER, 'Filter') },
+  {
+    _0: RELATION_VALUE_RELATIONSHIP_TYPE,
+    _1: new StringValue(
+      RELATION_VALUE_RELATIONSHIP_TYPE,
+      'Relation Value Types'
+    ),
+  },
 ]
 
 /* Multi-dimensional array of [EntityId, ValueType] */
@@ -113,6 +127,8 @@ const attributes: Tuple<string, string>[] = [
   { _0: ROW_TYPE, _1: RELATION },
   { _0: BLOCKS, _1: RELATION },
   { _0: PARENT_ENTITY, _1: RELATION },
+  { _0: FILTER, _1: TEXT },
+  { _0: RELATION_VALUE_RELATIONSHIP_TYPE, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
@@ -145,7 +161,8 @@ export function bootstrapRootSpaceCoreTypes(
     createdBy,
     createdAtTimestamp,
     space,
-    `Creating initial types for ${space}`
+    `Creating initial types for ${space}`,
+    createdAtBlock
   )
 
   const entityToActionIds = new Map<string, string[]>()
@@ -282,7 +299,8 @@ export function bootstrapRootSpaceCoreTypes(
         entityId,
         createdBy,
         proposalId,
-        `Creating initial types for ${space}`
+        `Creating initial types for ${space}`,
+        createdAtBlock
       )
 
       createVersion(
@@ -291,7 +309,8 @@ export function bootstrapRootSpaceCoreTypes(
         createdAtTimestamp,
         entityId,
         createdBy,
-        `Creating initial types for ${space}`
+        `Creating initial types for ${space}`,
+        createdAtBlock
       )
     }
   }

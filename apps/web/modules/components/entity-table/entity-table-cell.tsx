@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '~/../../packages/ids';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/modules/entity';
 import { LinkableChip } from '../../design-system/chip';
 import { Cell, Triple } from '../../types';
@@ -20,15 +20,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
     const entityId = cell.entityId;
     const value = Entity.name(cell.triples) ?? entityId;
 
-    return (
-      <CellContent
-        key={value}
-        isEntity
-        href={NavUtils.toEntity(space, entityId)}
-        isExpanded={isExpanded}
-        value={value}
-      />
-    );
+    return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   } else
     return (
       <div className="flex flex-wrap gap-2">
@@ -41,7 +33,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
             );
           }
           if (value.type === 'image') {
-            return <ImageZoom key={value.id} imageSrc={value.value} variant="avatar" />;
+            return <ImageZoom key={value.id} imageSrc={value.value} variant="table-cell" />;
           } else {
             return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
           }

@@ -27,7 +27,7 @@ export function HistoryPanel({ children, isLoading, isEmpty }: Props) {
   };
 
   return (
-    <Menu open={open} onOpenChange={onOpenChange} trigger={<Icon icon="history" color="grey-04" />}>
+    <Menu open={open} onOpenChange={onOpenChange} trigger={<Icon icon="history" color="grey-04" />} side="bottom">
       {getHistoryContent()}
     </Menu>
   );
