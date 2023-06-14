@@ -84,8 +84,6 @@ importers:
       ethers: ^5.7.2
       framer-motion: ^10.3.2
       immer: ^9.0.16
-      jotai: ^2.0.4
-      jotai-form: ^0.1.0
       js-confetti: ^0.11.0
       jsdom: ^20.0.0
       next: ^12.1.6
@@ -147,8 +145,6 @@ importers:
       ethers: 5.7.2
       framer-motion: 10.3.2_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
-      jotai: 2.0.4_react@18.2.0
-      jotai-form: 0.1.0_jotai@2.0.4
       js-confetti: 0.11.0
       next: 12.3.1_qtpcxnaaarbm4ws7ughq6oxfve
       papaparse: 5.3.2
@@ -11526,26 +11522,6 @@ packages:
       graceful-fs: 4.2.10
       picomatch: 2.3.1
     dev: true
-
-  /jotai-form/0.1.0_jotai@2.0.4:
-    resolution: {integrity: sha512-LMWm34rj1woGoeZg4gpOVzh3/cIJexTNHPQDwOPXwZt07Cq8iboiAPBy+s3rdG4UZe76M+msjtACSQbw0aQo7Q==}
-    peerDependencies:
-      jotai: '>=1.11.0'
-    dependencies:
-      jotai: 2.0.4_react@18.2.0
-    dev: false
-
-  /jotai/2.0.4_react@18.2.0:
-    resolution: {integrity: sha512-XkR1Jtm4a2iKV/7fdB3rNHjJz8FkkDMVczqiAok7lt8W4F69l/ZQkPGWSEV+hJOJXRn27k6XYKOoKEQIwBuAMA==}
-    engines: {node: '>=12.20.0'}
-    peerDependencies:
-      react: '>=17.0.0'
-    peerDependenciesMeta:
-      react:
-        optional: true
-    dependencies:
-      react: 18.2.0
-    dev: false
 
   /js-confetti/0.11.0:
     resolution: {integrity: sha512-Hc7I3VI4r4H0nq5q/oQK+JJwGoYRYVHK72fGk8E9Ay1dbh+aiZ9yl0yFp1K4oYeq7YFDQAndYChwqLPA3QWQuA==}

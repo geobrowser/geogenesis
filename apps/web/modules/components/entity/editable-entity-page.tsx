@@ -361,7 +361,7 @@ function EntityAttributes({
       case 'number':
         return null;
       case 'date':
-        return <DateField onChange={e => console.log(e.currentTarget.value)} placeholder="Add value..." />;
+        return <DateField value={[]} onChange={e => console.log(e.currentTarget.value)} placeholder="Add value..." />;
       case 'entity':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
@@ -521,6 +521,18 @@ function EntityAttributes({
                           ),
                           value: 'image',
                           onClick: () => onChangeTriple('image', triples),
+                          disabled: Boolean(isEntityGroup),
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Image />
+                              <Spacer width={8} />
+                              Date
+                            </div>
+                          ),
+                          value: 'date',
+                          onClick: () => onChangeTriple('date', triples),
                           disabled: Boolean(isEntityGroup),
                         },
                       ]}

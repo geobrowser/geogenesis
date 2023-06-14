@@ -1,7 +1,5 @@
 import * as React from 'react';
 import { cva } from 'class-variance-authority';
-import { atomWithValidate, validateAtoms } from 'jotai-form';
-import { useAtom } from 'jotai/react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface DateFieldProps {
@@ -51,8 +49,66 @@ const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out
   },
 });
 
-const dayAtom = atomWithValidate('', {
-  validate: async v => {
+function useFormWithValidation<T extends { day: string; month: string; year: string }>(
+  values: T,
+  validate: (values: T) => boolean
+) {
+  const [isValidating, setIsValidating] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    try {
+      setIsValidating(true);
+      validate(values);
+      setError(null);
+      setIsValidating(false);
+    } catch (e: unknown) {
+      setError((e as Error).message);
+      setIsValidating(false);
+    }
+  }, [values, validate]);
+
+  return [
+    {
+      isValid: error === null,
+      isValidating,
+      error,
+    },
+  ];
+}
+
+function useFieldWithValidation(initialValue: string, validate: (value: string) => boolean) {
+  const [value, setValue] = React.useState(initialValue);
+  const [isValidating, setIsValidating] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const memoizedValidate = React.useCallback(validate, [validate]);
+
+  React.useEffect(() => {
+    try {
+      setIsValidating(true);
+      memoizedValidate(value);
+      setError(null);
+      setIsValidating(false);
+    } catch (e: unknown) {
+      setError((e as Error).message);
+      setIsValidating(false);
+    }
+  }, [value, memoizedValidate]);
+
+  return [
+    {
+      value,
+      error,
+      isValidating,
+      isValid: error === null,
+    },
+    (v: string) => setValue(v),
+  ] as const;
+}
+
+export function DateField(props: DateFieldProps) {
+  const [day, setDay] = useFieldWithValidation('', (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -62,12 +118,10 @@ const dayAtom = atomWithValidate('', {
       if (Number(v) < 1) throw new Error('Day must be greater than 0');
     }
 
-    return v;
-  },
-});
+    return true;
+  });
 
-const monthAtom = atomWithValidate('', {
-  validate: async v => {
+  const [month, setMonth] = useFieldWithValidation('', (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -77,30 +131,21 @@ const monthAtom = atomWithValidate('', {
       if (Number(v) < 1) throw new Error('Month must be greater than 0');
     }
 
-    return v;
-  },
-});
+    return true;
+  });
 
-const yearAtom = atomWithValidate('', {
-  validate: async v => {
+  const [year, setYear] = useFieldWithValidation('', (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
       if (!regex.test(v)) throw new Error('Year must be a number');
-      if (v.length > 4) throw new Error("Year can't be longer than 4 characters");
+      if (v.length < 4) throw new Error('Year must be 4 characters');
     }
 
-    return v;
-  },
-});
+    return true;
+  });
 
-const formAtom = validateAtoms(
-  {
-    day: dayAtom,
-    month: monthAtom,
-    year: yearAtom,
-  },
-  values => {
+  const [formState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, values => {
     if (values.month !== '') {
       const dayAsNumber = Number(values.day);
       if (dayAsNumber > 30 && [4, 6, 9, 11].includes(Number(values.month))) {
@@ -111,14 +156,9 @@ const formAtom = validateAtoms(
         throw new Error('Day must be less than 30 for the entered month');
       }
     }
-  }
-);
 
-export function DateField(props: DateFieldProps) {
-  const [day, setDay] = useAtom(dayAtom);
-  const [month, setMonth] = useAtom(monthAtom);
-  const [year, setYear] = useAtom(yearAtom);
-  const [formState] = useAtom(formAtom);
+    return true;
+  });
 
   const onDayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
