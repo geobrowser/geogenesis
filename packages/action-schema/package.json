@@ -5,14 +5,14 @@
   "license": "MIT",
   "main": "./dist/src/index",
   "scripts": {
-    "generate": "pnpm run codegen:schema && pnpm run codegen:wasm",
-    "generate:schema": "npx ts-json-schema-generator --path 'src/action.ts' --type Root --out build/schema.json --additional-properties false --expose all --unstable",
+    "codegen": "pnpm run codegen:schema",
+    "codegen:schema": "npx ts-json-schema-generator --path 'src/action.ts' --type Root --out build/schema.json --additional-properties false --expose all --unstable",
     "generate:wasm": "node ../assemblyscript-json-schema/dist/src/bin.js --schema build/schema.json --output assembly/generated",
     "test": "pnpm run test:ts && pnpm run test:wasm",
     "test:wasm": "yarn build:wasm && ts-node test/index.ts",
     "test:ts": "vitest run",
     "clean": "rimraf build dist assembly/generated",
-    "build": "pnpm run build:ts && pnpm run build:wasm",
+    "build": "pnpm run build:wasm && pnpm run build:ts",
     "build:wasm": "asc assembly/index.ts -o build/test.wasm -t build/test.wat --debug --runtime stub --exportRuntime --bindings raw --disableWarning 235",
     "build:ts": "npx tsc"
   },
