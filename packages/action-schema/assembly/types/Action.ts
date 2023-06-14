@@ -12,30 +12,24 @@ export class Action {
   }
 
   asCreateEntityAction(): CreateEntityAction | null {
-    return this.type == 'createEntity'
-      ? (this as unknown as CreateEntityAction)
-      : null
+    return this.type == 'createEntity' ? (this as CreateEntityAction) : null
   }
 
   asCreateTripleAction(): CreateTripleAction | null {
-    return this.type == 'createTriple'
-      ? (this as unknown as CreateTripleAction)
-      : null
+    return this.type == 'createTriple' ? (this as CreateTripleAction) : null
   }
 
   asDeleteTripleAction(): DeleteTripleAction | null {
-    return this.type == 'deleteTriple'
-      ? (this as unknown as DeleteTripleAction)
-      : null
+    return this.type == 'deleteTriple' ? (this as DeleteTripleAction) : null
   }
 
   toJSON(): JSON.Value {
     if (this.type == 'createEntity')
-      return (this as unknown as CreateEntityAction).toJSON()
+      return (this as CreateEntityAction).toJSON()
     if (this.type == 'createTriple')
-      return (this as unknown as CreateTripleAction).toJSON()
+      return (this as CreateTripleAction).toJSON()
     if (this.type == 'deleteTriple')
-      return (this as unknown as DeleteTripleAction).toJSON()
+      return (this as DeleteTripleAction).toJSON()
     throw `undefined variant of: Action.${this.type}`
   }
 

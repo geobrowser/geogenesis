@@ -14,31 +14,31 @@ export class Value {
   }
 
   asNumberValue(): NumberValue | null {
-    return this.type == 'number' ? (this as unknown as NumberValue) : null
+    return this.type == 'number' ? (this as NumberValue) : null
   }
 
   asStringValue(): StringValue | null {
-    return this.type == 'string' ? (this as unknown as StringValue) : null
+    return this.type == 'string' ? (this as StringValue) : null
   }
 
   asEntityValue(): EntityValue | null {
-    return this.type == 'entity' ? (this as unknown as EntityValue) : null
+    return this.type == 'entity' ? (this as EntityValue) : null
   }
 
   asImageValue(): ImageValue | null {
-    return this.type == 'image' ? (this as unknown as ImageValue) : null
+    return this.type == 'image' ? (this as ImageValue) : null
   }
 
   asDateValue(): DateValue | null {
-    return this.type == 'date' ? (this as unknown as DateValue) : null
+    return this.type == 'date' ? (this as DateValue) : null
   }
 
   toJSON(): JSON.Value {
-    if (this.type == 'number') return (this as unknown as NumberValue).toJSON()
-    if (this.type == 'string') return (this as unknown as StringValue).toJSON()
-    if (this.type == 'entity') return (this as unknown as EntityValue).toJSON()
-    if (this.type == 'image') return (this as unknown as ImageValue).toJSON()
-    if (this.type == 'date') return (this as unknown as DateValue).toJSON()
+    if (this.type == 'number') return (this as NumberValue).toJSON()
+    if (this.type == 'string') return (this as StringValue).toJSON()
+    if (this.type == 'entity') return (this as EntityValue).toJSON()
+    if (this.type == 'image') return (this as ImageValue).toJSON()
+    if (this.type == 'date') return (this as DateValue).toJSON()
     throw `undefined variant of: Value.${this.type}`
   }
 
