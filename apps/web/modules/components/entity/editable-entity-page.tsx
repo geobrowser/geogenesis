@@ -498,7 +498,7 @@ function EntityAttributes({
                           ),
                           value: 'string',
                           onClick: () => onChangeTriple('string', triples),
-                          disabled: !isEntityGroup,
+                          disabled: false,
                         },
                         {
                           label: (
@@ -510,7 +510,7 @@ function EntityAttributes({
                           ),
                           value: 'entity',
                           onClick: () => onChangeTriple('entity', triples),
-                          disabled: Boolean(isEntityGroup),
+                          disabled: false,
                         },
                         {
                           label: (
@@ -522,7 +522,7 @@ function EntityAttributes({
                           ),
                           value: 'image',
                           onClick: () => onChangeTriple('image', triples),
-                          disabled: Boolean(isEntityGroup),
+                          disabled: false,
                         },
                         {
                           label: (
@@ -534,7 +534,7 @@ function EntityAttributes({
                           ),
                           value: 'date',
                           onClick: () => onChangeTriple('date', triples),
-                          disabled: Boolean(isEntityGroup),
+                          disabled: false,
                         },
                       ]}
                     />

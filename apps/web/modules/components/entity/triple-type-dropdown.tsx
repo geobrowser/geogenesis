@@ -38,13 +38,13 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
             sideOffset={2}
             className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded border border-grey-02 bg-white"
           >
-            <DropdownPrimitive.Group className="overflow-hidden rounded">
+            <DropdownPrimitive.Group className="divide-y divide-grey-02 overflow-hidden rounded">
               {options.map((option, index) => (
                 <DropdownPrimitive.Item
                   key={`triple-type-dropdown-${index}`}
                   onClick={option.disabled ? undefined : option.onClick}
                   className={cx(
-                    'flex select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    'flex w-full select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
                     value === option.value && '!bg-bg !text-text'
                   )}
                 >
