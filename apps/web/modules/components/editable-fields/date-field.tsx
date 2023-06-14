@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface DateFieldProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
-  onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur?: (date: [string] | [string, string]) => void;
   variant?: 'body' | 'tableCell';
   value: string[];
 }
@@ -148,12 +148,21 @@ export function DateField(props: DateFieldProps) {
   const [formState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, values => {
     if (values.month !== '') {
       const dayAsNumber = Number(values.day);
+      const yearAsNumber = Number(values.year);
       if (dayAsNumber > 30 && [4, 6, 9, 11].includes(Number(values.month))) {
         throw new Error('Day must be less than 31 for the entered month');
       }
 
-      if (dayAsNumber > 29 && Number(values.month) === 2) {
-        throw new Error('Day must be less than 30 for the entered month');
+      // Check leap year in order to validate February has 29 days
+      if ((yearAsNumber % 4 === 0 && yearAsNumber % 100 === 0) || yearAsNumber % 400 === 0) {
+        if (dayAsNumber > 29 && Number(values.month) === 2) {
+          throw new Error('Day must be less than 30 for the entered month');
+        }
+      }
+
+      // Otherwise we validate that February has 28 days
+      if (dayAsNumber > 28 && Number(values.month) === 2) {
+        throw new Error('Day must be less than 29 for the entered month');
       }
     }
 
@@ -187,6 +196,19 @@ export function DateField(props: DateFieldProps) {
     setYear(value);
   };
 
+  const onBlur = () => {
+    // We may have an invalid date if the user is still typing
+    try {
+      const isoDate = new Date(`${year.value}-${month.value}-${day.value}`);
+      console.log(isoDate.toISOString());
+
+      // Only create the triple if the form is valid
+      if (isValidForm) props.onBlur?.([isoDate.toISOString()]);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
   const isValidForm = formState.isValid;
   const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
   const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !isValidForm;
@@ -199,6 +221,7 @@ export function DateField(props: DateFieldProps) {
           <input
             value={month.value}
             onChange={onMonthChange}
+            onBlur={onBlur}
             placeholder="MM"
             className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
           />
@@ -215,6 +238,7 @@ export function DateField(props: DateFieldProps) {
           <input
             value={day.value}
             onChange={onDayChange}
+            onBlur={onBlur}
             placeholder="DD"
             className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidDay || !isValidForm })}
           />
@@ -229,6 +253,7 @@ export function DateField(props: DateFieldProps) {
           <input
             value={year.value}
             onChange={onYearChange}
+            onBlur={onBlur}
             placeholder="YYYY"
             className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
           />
