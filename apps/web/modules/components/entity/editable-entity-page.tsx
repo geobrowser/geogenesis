@@ -24,6 +24,7 @@ import { TripleTypeDropdown } from './triple-type-dropdown';
 import { DateField } from '../editable-fields/date-field';
 import { Services } from '~/modules/services';
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
+import { Date } from '~/modules/design-system/icons/date';
 
 interface Props {
   triples: ITriple[];
@@ -438,7 +439,7 @@ function EntityAttributes({
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
-        const ITriple: TripleValueType = triples[0].value.type || 'string';
+        const tripleType: TripleValueType = triples[0].value.type || 'string';
 
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
@@ -485,7 +486,7 @@ function EntityAttributes({
                 {!isPlaceholder && (
                   <>
                     <TripleTypeDropdown
-                      value={ITriple as IconName}
+                      value={tripleType as IconName}
                       options={[
                         {
                           label: (
@@ -526,7 +527,7 @@ function EntityAttributes({
                         {
                           label: (
                             <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Image />
+                              <Date />
                               <Spacer width={8} />
                               Date
                             </div>

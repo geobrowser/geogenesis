@@ -37,6 +37,7 @@ import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { Dash } from './icons/dash';
 import { Cog } from './icons/cog';
 import { NewTab } from './icons/new-tab';
+import { Date } from './icons/date';
 
 export type IconName =
   | 'blank'
@@ -127,7 +128,7 @@ const icons: Record<IconName, React.ElementType> = {
   upload: Upload,
   context: Context,
   filterTable: FilterTable,
-  date: FilterTable,
+  date: Date,
   filterTableWithFilters: FilterTableWithFilters,
   chevronDownSmall: ChevronDownSmall,
   checkCloseSmall: CheckCloseSmall,
