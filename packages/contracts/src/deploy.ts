@@ -3,7 +3,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { Contract } from 'ethers'
 import { ethers, upgrades } from 'hardhat'
 
-import { Space, FakeSpaceV2, PermissionlessSpace } from '../build/types'
+import { Space, PermissionlessSpace } from '../build/types'
 
 type DeployOptions = {
   debug?: true
