@@ -201,6 +201,7 @@ export function DateField(props: DateFieldProps) {
     // We may have an invalid date if the user is still typing
     try {
       const isoDate = new Date(`${year.value}-${month.value}-${day.value}`);
+      isoDate.setUTCHours(0, 0, 0, 0);
       console.log(isoDate.toISOString());
 
       // Only create the triple if the form is valid
