@@ -8,6 +8,7 @@ interface DateFieldProps {
   onBlur?: (date: [string] | [string, string]) => void;
   variant?: 'body' | 'tableCell';
   value: string[];
+  isEditing?: boolean;
 }
 
 const dateFieldStyles = cva(
@@ -158,11 +159,11 @@ export function DateField(props: DateFieldProps) {
         if (dayAsNumber > 29 && Number(values.month) === 2) {
           throw new Error('Day must be less than 30 for the entered month');
         }
-      }
-
-      // Otherwise we validate that February has 28 days
-      if (dayAsNumber > 28 && Number(values.month) === 2) {
-        throw new Error('Day must be less than 29 for the entered month');
+      } else {
+        // Otherwise we validate that February has 28 days
+        if (dayAsNumber > 28 && Number(values.month) === 2) {
+          throw new Error('Day must be less than 29 for the entered month');
+        }
       }
     }
 
@@ -218,13 +219,19 @@ export function DateField(props: DateFieldProps) {
     <div>
       <div className="flex max-w-[164px] gap-3">
         <div className="flex w-full flex-col" style={{ flex: 2 }}>
-          <input
-            value={month.value}
-            onChange={onMonthChange}
-            onBlur={onBlur}
-            placeholder="MM"
-            className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
-          />
+          {props.isEditing ? (
+            <input
+              value={month.value}
+              onChange={onMonthChange}
+              onBlur={onBlur}
+              placeholder="MM"
+              className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
+            />
+          ) : (
+            <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
+              {props.value}
+            </p>
+          )}
           <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
             Month
           </span>
@@ -235,13 +242,29 @@ export function DateField(props: DateFieldProps) {
         </span>
 
         <div className="flex flex-col items-center" style={{ flex: 2 }}>
-          <input
-            value={day.value}
-            onChange={onDayChange}
-            onBlur={onBlur}
-            placeholder="DD"
-            className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidDay || !isValidForm })}
-          />
+          {props.isEditing ? (
+            <input
+              value={day.value}
+              onChange={onDayChange}
+              onBlur={onBlur}
+              placeholder="DD"
+              className={dateFieldStyles({
+                variant: props.variant,
+                centered: true,
+                error: !isValidDay || !isValidForm,
+              })}
+            />
+          ) : (
+            <p
+              className={dateFieldStyles({
+                variant: props.variant,
+                centered: true,
+                error: !isValidDay || !isValidForm,
+              })}
+            >
+              {props.value}
+            </p>
+          )}
           <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
         </div>
 
@@ -250,13 +273,19 @@ export function DateField(props: DateFieldProps) {
         </span>
 
         <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
-          <input
-            value={year.value}
-            onChange={onYearChange}
-            onBlur={onBlur}
-            placeholder="YYYY"
-            className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
-          />
+          {props.isEditing ? (
+            <input
+              value={year.value}
+              onChange={onYearChange}
+              onBlur={onBlur}
+              placeholder="YYYY"
+              className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
+            />
+          ) : (
+            <p className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}>
+              {props.value}
+            </p>
+          )}
           <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
         </div>
       </div>
