@@ -5,12 +5,13 @@ import { Text } from '../../design-system/text';
 import { Truncate } from '../../design-system/truncate';
 
 interface Props {
-  value: string | string[];
+  value: string;
   isExpanded?: boolean;
   href?: string;
 }
 
 export function CellContent({ isExpanded, value, href }: Props) {
+  // @TODO: Handle date values
   const content = href ? (
     <Link href={href} passHref>
       <a className="block break-words text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">

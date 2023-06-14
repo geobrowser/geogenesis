@@ -9,9 +9,10 @@ interface DateFieldProps {
   placeholder?: string;
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell';
+  value: string[];
 }
 
-const dateFieldProps = cva(
+const dateFieldStyles = cva(
   'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out',
   {
     variants: {
@@ -159,7 +160,7 @@ export function DateField(props: DateFieldProps) {
             value={month.value}
             onChange={onMonthChange}
             placeholder="MM"
-            className={dateFieldProps({ variant: props.variant, error: !isValidMonth || !isValidForm })}
+            className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
           />
           <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
             Month
@@ -175,7 +176,7 @@ export function DateField(props: DateFieldProps) {
             value={day.value}
             onChange={onDayChange}
             placeholder="DD"
-            className={dateFieldProps({ variant: props.variant, centered: true, error: !isValidDay || !isValidForm })}
+            className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidDay || !isValidForm })}
           />
           <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
         </div>
@@ -189,7 +190,7 @@ export function DateField(props: DateFieldProps) {
             value={year.value}
             onChange={onYearChange}
             placeholder="YYYY"
-            className={dateFieldProps({ variant: props.variant, centered: true, error: !isValidYear })}
+            className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
           />
           <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
         </div>
@@ -244,8 +245,4 @@ export function DateField(props: DateFieldProps) {
       </AnimatePresence>
     </div>
   );
-}
-
-function isLongMonth(month: number) {
-  return [1, 3, 5, 7, 8, 10, 12].includes(month);
 }

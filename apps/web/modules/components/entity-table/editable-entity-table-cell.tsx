@@ -214,7 +214,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isDateValueType && <DateField />}
+      {isDateValueType && <DateField value={[]} />}
     </div>
   );
 });
