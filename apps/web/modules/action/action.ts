@@ -132,7 +132,7 @@ export function prepareActionsForPublishing(actions: Action[]) {
 
 export const getValue = (action: Action, fallback: unknown = false) => {
   const checkedAction = action.type === 'editTriple' ? action.after : action;
-  let value: string | null = null;
+  let value: string | null;
 
   switch (checkedAction.value.type) {
     case 'number':
