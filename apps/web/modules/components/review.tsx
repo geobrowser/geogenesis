@@ -114,8 +114,6 @@ const ReviewChanges = () => {
   const actions = Action.unpublishedChanges(actionsFromSpace);
   const [data, isLoading] = useChanges(actions, activeSpace);
 
-  console.log('actions', ActionNamespace.prepareActionsForPublishing(actionsFromSpace));
-
   // Publishing logic
   const { data: signer } = useSigner();
 

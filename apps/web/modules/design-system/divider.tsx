@@ -9,9 +9,9 @@ export const Divider = ({ className = '', ...rest }: Props) => {
   return (
     <div
       className={cx(
-        rest.type === 'horizontal' && 'w-full',
-        rest.type === 'vertical' && 'h-full',
-        'border-2 border-divider',
+        rest.type === 'horizontal' && 'justify-stretch',
+        rest.type === 'vertical' && 'items-stretch',
+        'border-[0.5px] border-grey-02',
         className
       )}
       {...rest}
