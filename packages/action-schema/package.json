@@ -6,8 +6,6 @@
   "main": "./dist/src/index",
   "scripts": {
     "codegen": "pnpm run codegen:schema && pnpm run codegen:wasm",
-    "codegen:schema": "npx ts-json-schema-generator --path 'src/action.ts' --type Root --out build/schema.json --additional-properties false --expose all --unstable",
-    "codegen:wasm": "node ../assemblyscript-json-schema/dist/src/bin.js --schema build/schema.json --output assembly/generated",
     "test": "pnpm run test:ts && pnpm run test:wasm",
     "test:wasm": "yarn build:wasm && ts-node test/index.ts",
     "test:ts": "vitest run",
