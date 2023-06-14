@@ -52,7 +52,7 @@ interface EntityValue {
 interface DateValue {
   type: 'date'
   id: string
-  value: string // This is represented as an ISO-8601 datetime string
+  value: string[] // This is represented as an [ISO-8601 datetime, time] tuple
 }
 
 type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue

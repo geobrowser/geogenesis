@@ -13,6 +13,9 @@ function createValueId(value: Value): string {
   const entityValue = value.asEntityValue()
   if (entityValue) return entityValue.id
 
+  const dateValue = value.asDateValue()
+  if (dateValue) return dateValue.id
+
   throw new Error('Bad serialization')
 }
 

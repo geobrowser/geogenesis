@@ -9,7 +9,7 @@ type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkDateValue = { valueType: 'DATE'; numberValue: number };
+type NetworkDateValue = { valueType: 'DATE'; arrayValue: string[] };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue | NetworkDateValue;
 
@@ -69,7 +69,7 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
         name: networkTriple.entityValue.name,
       };
     case 'DATE':
-      return { type: 'date', id: networkTriple.valueId, value: networkTriple.numberValue.toString() };
+      return { type: 'date', id: networkTriple.valueId, value: networkTriple.arrayValue.map(toString) };
   }
 }
 
@@ -88,7 +88,7 @@ export function extractActionValue(networkAction: NetworkAction): Value {
         name: networkAction.entityValue?.name ?? null,
       };
     case 'DATE':
-      return { type: 'date', id: networkAction.valueId, value: networkAction.numberValue.toString() };
+      return { type: 'date', id: networkAction.valueId, value: networkAction.arrayValue.map(toString) };
   }
 }
 
@@ -114,7 +114,7 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction
     case 'IMAGE':
       return !networkTriple.stringValue;
     case 'DATE':
-      return !networkTriple.numberValue;
+      return !networkTriple.arrayValue;
   }
 }
 

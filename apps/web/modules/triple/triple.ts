@@ -55,7 +55,7 @@ export function emptyValue(type: TripleValueType): Value {
     date: {
       id: ID.createValueId(),
       type: 'date',
-      value: '',
+      value: [],
     },
   };
 
@@ -187,7 +187,7 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]) {
   });
 }
 
-export const getValue = (triple: Triple): string | null => {
+export const getValue = (triple: Triple): string | string[] | null => {
   switch (triple.value.type) {
     case 'number':
       return triple.value.value;

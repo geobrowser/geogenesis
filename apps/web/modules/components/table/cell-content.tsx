@@ -5,7 +5,7 @@ import { Text } from '../../design-system/text';
 import { Truncate } from '../../design-system/truncate';
 
 interface Props {
-  value: string;
+  value: string | string[];
   isExpanded?: boolean;
   href?: string;
 }

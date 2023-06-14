@@ -7,7 +7,6 @@ import {
   createProposedVersion,
   createVersion,
   getOrCreateAccount,
-  getOrCreateAction,
   getOrCreateActionCount,
   handleAction,
 } from './actions'
