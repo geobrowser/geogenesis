@@ -130,9 +130,9 @@ export function prepareActionsForPublishing(actions: Action[]) {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
 
-export const getValue = (action: Action, fallback: unknown = false) => {
+export const getValue = (action: Action, fallback: unknown = false): string => {
   const checkedAction = action.type === 'editTriple' ? action.after : action;
-  let value: string | null;
+  let value: string | null = '';
 
   switch (checkedAction.value.type) {
     case 'number':
@@ -147,8 +147,6 @@ export const getValue = (action: Action, fallback: unknown = false) => {
     case 'image':
       value = checkedAction.value.value;
       break;
-    // @TODO: date
-    // @TODO: ordered array
   }
 
   return fallback !== false ? value ?? fallback : value;
