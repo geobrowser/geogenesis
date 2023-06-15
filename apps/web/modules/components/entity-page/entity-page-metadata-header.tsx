@@ -1,12 +1,14 @@
 import * as React from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useInView } from 'framer-motion';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/modules/types';
-import { HistoryItem, HistoryPanel } from '../history';
+import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 import { Action } from '~/modules/action';
-import { useQuery } from '@tanstack/react-query';
 import { Services } from '~/modules/services';
 import { Menu } from '~/modules/design-system/menu';
 import { Context } from '~/modules/design-system/icons/context';
@@ -14,6 +16,8 @@ import { Close } from '~/modules/design-system/icons/close';
 import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
 import { EntityPageContextMenu } from './entity-page-context-menu';
+import { Dots } from '~/modules/design-system/dots';
+import { Button } from '~/modules/design-system/button';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -40,7 +44,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
         ))}
       </ul>
       <div className="flex items-center gap-3">
-        <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
+        <HistoryPanel>
           {versions?.map(v => (
             <HistoryItem
               key={v.id}
@@ -67,12 +71,25 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
 
   const { network } = Services.useServices();
 
-  const { data: proposals, isLoading } = useQuery({
+  const {
+    data: proposals,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async () => network.fetchProposals(spaceId),
+    queryFn: async ({ pageParam = 0 }) => network.fetchProposals(spaceId, undefined, pageParam),
+    getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
-  const isLoadingProposals = !proposals || isLoading;
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: false, amount: 0.1 });
+
+  useEffect(() => {
+    if (isInView) {
+      fetchNextPage();
+    }
+  }, [isInView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -80,18 +97,32 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
         <span className="mt-1 inline-block rounded bg-text px-[7px] py-px text-sm font-medium text-white">Space</span>
       </div>
       <div className="inline-flex items-center gap-4">
-        <HistoryPanel isLoading={isLoadingProposals} isEmpty={proposals?.length === 0}>
-          {proposals?.map(p => (
-            <HistoryItem
-              key={p.id}
-              changeCount={Action.getChangeCount(
-                p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-              )}
-              createdAt={p.createdAt}
-              createdBy={p.createdBy}
-              name={p.name}
-            />
+        <HistoryPanel>
+          {proposals?.pages?.length === 0 && <HistoryEmpty />}
+          {proposals?.pages.map(group => (
+            <>
+              {group.map(p => (
+                <HistoryItem
+                  key={p.id}
+                  changeCount={Action.getChangeCount(
+                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
+                  )}
+                  createdAt={p.createdAt}
+                  createdBy={p.createdBy}
+                  name={p.name}
+                />
+              ))}
+            </>
           ))}
+          <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
+            {isFetching || isFetchingNextPage ? (
+              <Dots />
+            ) : (
+              <Button variant="secondary" onClick={() => fetchNextPage()}>
+                Load more
+              </Button>
+            )}
+          </div>
         </HistoryPanel>
         <Menu
           open={open}

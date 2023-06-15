@@ -134,8 +134,10 @@ export const tableEntitiesQuery = (filter: string, first = 100, skip = 0) => {
   }`;
 };
 
-export const proposalsQuery = (spaceId: string) => `query {
-  proposals(first: 10, where: {space: ${JSON.stringify(spaceId)}}, orderBy: createdAt, orderDirection: desc) {
+export const proposalsQuery = (spaceId: string, skip = 0) => `query {
+  proposals(first: 10, where: {space: ${JSON.stringify(
+    spaceId
+  )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
     id
     name
     description
