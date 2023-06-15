@@ -27,12 +27,32 @@ interface EntityPageMetadataHeaderProps {
 
 export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetadataHeaderProps) {
   const { network } = Services.useServices();
-  const { data: versions, isLoading } = useQuery({
+  const {
+    data: versions,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: async () => network.fetchProposedVersions(id, spaceId),
+    queryFn: async ({ pageParam = 0 }) => network.fetchProposedVersions(id, spaceId, undefined, pageParam),
+    getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
-  const isLoadingVersions = !versions || isLoading;
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: false, amount: 0.1 });
+
+  useEffect(() => {
+    if (isInView) {
+      fetchNextPage();
+    }
+  }, [isInView]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isLastPage =
+    versions?.pages &&
+    versions.pages.length > 1 &&
+    versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
+
+  const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -45,15 +65,31 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
       </ul>
       <div className="flex items-center gap-3">
         <HistoryPanel>
-          {versions?.map(v => (
-            <HistoryItem
-              key={v.id}
-              changeCount={Action.getChangeCount(v.actions)}
-              createdAt={v.createdAt}
-              createdBy={v.createdBy}
-              name={v.name}
-            />
+          {versions?.pages?.length === 0 && <HistoryEmpty />}
+          {renderedVersions?.map(group => (
+            <>
+              {group.map(v => (
+                <HistoryItem
+                  key={v.id}
+                  changeCount={Action.getChangeCount(v.actions)}
+                  createdAt={v.createdAt}
+                  createdBy={v.createdBy}
+                  name={v.name}
+                />
+              ))}
+            </>
           ))}
+          {!isLastPage && (
+            <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
+              {isFetching || isFetchingNextPage ? (
+                <Dots />
+              ) : (
+                <Button variant="secondary" onClick={() => fetchNextPage()}>
+                  Load more
+                </Button>
+              )}
+            </div>
+          )}
         </HistoryPanel>
         <EntityPageContextMenu entityId={id} spaceId={spaceId} />
       </div>
@@ -91,6 +127,13 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     }
   }, [isInView]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isLastPage =
+    proposals?.pages &&
+    proposals.pages.length > 1 &&
+    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+
+  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+
   return (
     <div className="flex items-center justify-between text-text">
       <div className="flex">
@@ -99,7 +142,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
       <div className="inline-flex items-center gap-4">
         <HistoryPanel>
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
-          {proposals?.pages.map(group => (
+          {renderedProposals?.map(group => (
             <>
               {group.map(p => (
                 <HistoryItem
@@ -114,15 +157,17 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
               ))}
             </>
           ))}
-          <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
-            {isFetching || isFetchingNextPage ? (
-              <Dots />
-            ) : (
-              <Button variant="secondary" onClick={() => fetchNextPage()}>
-                Load more
-              </Button>
-            )}
-          </div>
+          {!isLastPage && (
+            <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
+              {isFetching || isFetchingNextPage ? (
+                <Dots />
+              ) : (
+                <Button variant="secondary" onClick={() => fetchNextPage()}>
+                  Load more
+                </Button>
+              )}
+            </div>
+          )}
         </HistoryPanel>
         <Menu
           open={open}

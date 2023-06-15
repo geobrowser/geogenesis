@@ -110,7 +110,12 @@ export interface INetwork {
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
-  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
+  fetchProposedVersions: (
+    entityId: string,
+    spaceId: string,
+    abortController?: AbortController,
+    page?: number
+  ) => Promise<Version[]>;
   fetchProposals: (spaceId: string, abortController?: AbortController, page?: number) => Promise<Proposal[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
@@ -615,10 +620,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
-    // @TODO remove console.info for entityId
-    console.info('entityId:', entityId);
-
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController, page = 0) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -626,7 +628,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.proposedVersionsQuery(entityId),
+        query: queries.proposedVersionsQuery(entityId, 10 * page),
       }),
     });
 

@@ -177,8 +177,10 @@ export const proposalsQuery = (spaceId: string, skip = 0) => `query {
   }
 }`;
 
-export const proposedVersionsQuery = (entityId: string) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, orderBy: createdAt, orderDirection: desc, first: 10) {
+export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
+  proposedVersions(where: {entity: ${JSON.stringify(
+    entityId
+  )}}, orderBy: createdAt, orderDirection: desc, first: 10, skip: ${skip}) {
     id
     name
     createdAt
