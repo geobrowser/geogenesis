@@ -45,7 +45,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     if (isInView) {
       fetchNextPage();
     }
-  }, [isInView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isInView, fetchNextPage]);
 
   const isLastPage =
     versions?.pages &&
@@ -125,7 +125,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     if (isInView) {
       fetchNextPage();
     }
-  }, [isInView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isInView, fetchNextPage]);
 
   const isLastPage =
     proposals?.pages &&
