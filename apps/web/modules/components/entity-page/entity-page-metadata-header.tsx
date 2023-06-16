@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useInView } from 'framer-motion';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/modules/types';
 import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
@@ -17,7 +17,7 @@ import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { Dots } from '~/modules/design-system/dots';
-import { Button } from '~/modules/design-system/button';
+import { SmallButton } from '~/modules/design-system/button';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -80,13 +80,13 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
             </>
           ))}
           {!isLastPage && (
-            <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
+            <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
               ) : (
-                <Button variant="secondary" onClick={() => fetchNextPage()}>
-                  Load more
-                </Button>
+                <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                  Show more
+                </SmallButton>
               )}
             </div>
           )}
@@ -158,13 +158,13 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
             </>
           ))}
           {!isLastPage && (
-            <div ref={ref} className="flex h-16 w-full flex-shrink-0 items-center justify-center bg-white">
+            <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
               ) : (
-                <Button variant="secondary" onClick={() => fetchNextPage()}>
-                  Load more
-                </Button>
+                <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                  Show more
+                </SmallButton>
               )}
             </div>
           )}
