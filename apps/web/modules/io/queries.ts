@@ -234,3 +234,39 @@ export const profileQuery = (address: string) => `query {
     }
   }
 }`;
+
+export const proposedVersionQuery = (id: string) => `query {
+  proposedVersion(id: ${JSON.stringify(id)}) {
+    id
+    name
+    createdAt
+    createdAtBlock
+    createdBy {
+      id
+    }
+    actions {
+      actionType
+      id
+      attribute {
+        id
+        name
+      }
+      entity {
+        id
+        name
+      }
+      entityValue {
+        id
+        name
+      }
+      numberValue
+      stringValue
+      valueType
+      valueId
+    }
+    entity {
+      id
+      name
+    }
+  }
+}`;

@@ -78,7 +78,7 @@ export const useDiff = () => {
   const value = useContext(DiffContext);
 
   if (!value) {
-    throw new Error(`Missing ReviewProvider`);
+    throw new Error(`Missing DiffProvider`);
   }
 
   return value;

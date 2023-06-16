@@ -15,7 +15,7 @@ interface Props {
   name: string | null;
 }
 
-export function HistoryItem({ onClick = () => null, changeCount, createdAt, createdBy, name }: Props) {
+export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }: Props) {
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023

@@ -56,21 +56,7 @@ const CompareChanges = () => {
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          {isLoading || typeof data !== 'object' ? (
-            <div className="text-metadataMedium">Loading...</div>
-          ) : (
-            <Versions
-              data={
-                data as [
-                  Record<string, Change.Changeset>,
-                  {
-                    selected: any;
-                    previous: any;
-                  }
-                ]
-              }
-            />
-          )}
+          {isLoading || !data ? <div className="text-metadataMedium">Loading...</div> : <Versions data={data} />}
         </div>
       </div>
     </>

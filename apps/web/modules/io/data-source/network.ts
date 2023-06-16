@@ -260,41 +260,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: `query {
-          proposedVersion(id: ${JSON.stringify(id)}) {
-            id
-            name
-            createdAt
-            createdAtBlock
-            createdBy {
-              id
-            }
-            actions {
-              actionType
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-            }
-            entity {
-              id
-              name
-            }
-          }
-        }`,
+        query: queries.proposedVersionQuery(id),
       }),
     });
 
@@ -333,7 +299,7 @@ export class Network implements INetwork {
     if (!id) return null;
 
     if (typeof blockNumber === 'number' && blockNumber < 36472399) {
-      console.error(`36472399 is the earliest block number`);
+      console.error(`36472399 is the earliest block number in GEO`);
       return null;
     }
 
