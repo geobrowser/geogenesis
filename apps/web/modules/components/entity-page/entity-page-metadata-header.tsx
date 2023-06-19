@@ -1,8 +1,6 @@
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useInView } from 'framer-motion';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/modules/types';
@@ -37,15 +35,6 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     queryFn: async ({ pageParam = 0 }) => network.fetchProposedVersions(id, spaceId, undefined, pageParam),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
-
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: false, amount: 0.1 });
-
-  useEffect(() => {
-    if (isInView) {
-      fetchNextPage();
-    }
-  }, [isInView, fetchNextPage]);
 
   const isOnePage = versions?.pages && versions.pages[0].length < 10;
 
@@ -84,7 +73,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
             </>
           ))}
           {showMore && (
-            <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+            <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
               ) : (
@@ -122,15 +111,6 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: false, amount: 0.1 });
-
-  useEffect(() => {
-    if (isInView) {
-      fetchNextPage();
-    }
-  }, [isInView, fetchNextPage]);
-
   const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
 
   const isLastPage =
@@ -166,7 +146,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
             </>
           ))}
           {showMore && (
-            <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+            <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
               ) : (
