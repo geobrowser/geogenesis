@@ -237,7 +237,7 @@ export function DateField(props: DateFieldProps) {
             />
           ) : (
             <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
-              {props.value}
+              {month.value}
             </p>
           )}
           <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
@@ -270,7 +270,7 @@ export function DateField(props: DateFieldProps) {
                 error: !isValidDay || !isValidForm,
               })}
             >
-              {props.value}
+              {day.value}
             </p>
           )}
           <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
@@ -291,7 +291,7 @@ export function DateField(props: DateFieldProps) {
             />
           ) : (
             <p className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}>
-              {props.value}
+              {year.value}
             </p>
           )}
           <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>

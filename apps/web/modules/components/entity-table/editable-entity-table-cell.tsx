@@ -103,6 +103,17 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
+  const createDateTripleWithValue = (value: string) => {
+    send({
+      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId,
+        attributeName: columnName,
+        value,
+      },
+    });
+  };
+
   const uploadImage = (triple: Triple, imageSrc: string) => {
     send({
       type: 'UPLOAD_IMAGE',
@@ -135,7 +146,17 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPDATE_VALUE',
+      type: 'UPDATE_STRING_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
+  const updateDateTripleValue = (triple: Triple, value: string) => {
+    send({
+      type: 'UPDATE_DATE_VALUE',
       payload: {
         triple,
         value,
@@ -197,7 +218,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               ? createStringTripleWithValue(e.target.value)
               : updateStringTripleValue(firstTriple, e.target.value)
           }
-          value={Value.stringValue(firstTriple) || ''}
+          value={Value.stringValue(firstTriple) ?? ''}
         />
       )}
 
@@ -214,7 +235,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isDateValueType && <DateField isEditing={true} value={new Date().toISOString()} />}
+      {isDateValueType && (
+        <DateField
+          isEditing={true}
+          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
+          value={Value.stringValue(firstTriple) ?? ''}
+        />
+      )}
     </div>
   );
 });

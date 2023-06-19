@@ -74,7 +74,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
           />
         );
       case 'date':
-        return <DateField isEditing={false} value={new Date().toISOString()} />;
+        return <DateField isEditing={false} value={triple.value.value} />;
       case 'entity': {
         return (
           <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
