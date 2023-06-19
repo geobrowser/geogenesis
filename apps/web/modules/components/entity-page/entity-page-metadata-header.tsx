@@ -47,12 +47,16 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     }
   }, [isInView, fetchNextPage]);
 
+  const isOnePage = versions?.pages && versions.pages[0].length < 10;
+
   const isLastPage =
     versions?.pages &&
     versions.pages.length > 1 &&
     versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
 
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
+
+  const showMore = !isOnePage && !isLastPage;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -79,7 +83,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
               ))}
             </>
           ))}
-          {!isLastPage && (
+          {showMore && (
             <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
@@ -127,12 +131,16 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     }
   }, [isInView, fetchNextPage]);
 
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+
   const isLastPage =
     proposals?.pages &&
     proposals.pages.length > 1 &&
     proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
 
   const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+
+  const showMore = !isOnePage && !isLastPage;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -157,7 +165,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
               ))}
             </>
           ))}
-          {!isLastPage && (
+          {showMore && (
             <div ref={ref} className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
               {isFetching || isFetchingNextPage ? (
                 <Dots />
