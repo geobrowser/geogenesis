@@ -296,9 +296,30 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: ITriple, name: string) => {
+  const createDateTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
-      type: 'UPDATE_VALUE',
+      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
+        value,
+      },
+    });
+  };
+
+  const updateStringValue = (triple: ITriple, name: string) => {
+    send({
+      type: 'UPDATE_STRING_VALUE',
+      payload: {
+        triple,
+        value: name,
+      },
+    });
+  };
+
+  const updateDateValue = (triple: ITriple, name: string) => {
+    send({
+      type: 'UPDATE_DATE_VALUE',
       payload: {
         triple,
         value: name,
@@ -359,7 +380,7 @@ function EntityAttributes({
             onChange={e => {
               triple.placeholder
                 ? createStringTripleFromPlaceholder(triple, e.target.value)
-                : updateValue(triple, e.target.value);
+                : updateStringValue(triple, e.target.value);
             }}
           />
         );
@@ -380,7 +401,15 @@ function EntityAttributes({
       case 'number':
         return null;
       case 'date':
-        return <DateField isEditing={true} value={''} onBlur={v => console.log(v)} placeholder="Add value..." />;
+        return (
+          // @TODO: Handle placeholders
+          <DateField
+            isEditing={true}
+            value={triple.value.value}
+            onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
+            placeholder="Add value..."
+          />
+        );
       case 'entity':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
