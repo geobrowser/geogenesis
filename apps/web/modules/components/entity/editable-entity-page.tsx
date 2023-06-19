@@ -11,7 +11,7 @@ import { Text as TextIcon } from '~/modules/design-system/icons/text';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Entity, useEntityStore } from '~/modules/entity';
-import { Entity as EntityType, Triple as ITriple, TripleValueType } from '~/modules/types';
+import { Triple as ITriple, TripleValueType } from '~/modules/types';
 import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
@@ -227,7 +227,13 @@ function EntityAttributes({
     });
   };
 
-  const linkAttribute = (oldAttributeId: string, attribute: EntityType) => {
+  const linkAttribute = (
+    oldAttributeId: string,
+    attribute: {
+      id: string;
+      name: string | null;
+    }
+  ) => {
     send({
       type: 'LINK_ATTRIBUTE',
       payload: {
@@ -240,7 +246,13 @@ function EntityAttributes({
     });
   };
 
-  const addEntityValue = (attributeId: string, linkedEntity: EntityType) => {
+  const addEntityValue = (
+    attributeId: string,
+    linkedEntity: {
+      id: string;
+      name: string | null;
+    }
+  ) => {
     // If it's an empty triple value
     send({
       type: 'ADD_PAGE_ENTITY_VALUE',
@@ -255,7 +267,13 @@ function EntityAttributes({
     });
   };
 
-  const createEntityTripleFromPlaceholder = (triple: ITriple, linkedEntity: EntityType) => {
+  const createEntityTripleFromPlaceholder = (
+    triple: ITriple,
+    linkedEntity: {
+      id: string;
+      name: string | null;
+    }
+  ) => {
     send({
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
       payload: {

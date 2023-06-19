@@ -11,7 +11,6 @@ import { Input } from '~/modules/design-system/input';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
@@ -46,7 +45,7 @@ const MotionContent = motion(StyledContent);
 
 interface Props {
   entityValueIds: string[];
-  onDone: (result: Entity) => void;
+  onDone: (result: { id: string; name: string | null }) => void;
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
 }
@@ -115,6 +114,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
       }
     });
 
+    onDone({ id: newEntityId, name: autocomplete.query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 

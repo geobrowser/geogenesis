@@ -6,7 +6,6 @@ import pluralize from 'pluralize';
 import { ResizableContainer } from '~/modules/design-system/resizable-container';
 import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/modules/spaces/use-spaces';
-import { Entity } from '~/modules/types';
 import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/modules/design-system/text-button';
 import { Divider } from '~/modules/design-system/divider';
@@ -21,7 +20,7 @@ import { useToast } from '~/modules/hooks/use-toast';
 
 interface Props {
   placeholder?: string;
-  onDone: (result: Entity) => void;
+  onDone: (result: { id: string; name: string | null }) => void;
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
@@ -88,6 +87,7 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
       }
     });
 
+    onDone({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 

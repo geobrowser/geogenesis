@@ -824,25 +824,29 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
 }
 
 async function addEntries(spaceContract: SpaceContract, uris: string[], onStartPublish: () => void) {
-  const gasResponse = await fetch('https://gasstation-mainnet.matic.network/v2');
+  const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
   const gasSuggestion: {
     safeLow: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
     standard: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
     fast: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
-    estimatedBaseFee: number;
+    fastest: {
+      maxPriorityFee: string;
+      maxFee: string;
+    };
+    estimatedBaseFee: string;
   } = await gasResponse.json();
 
-  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee.toFixed().toString(), 'gwei');
-  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee.toFixed().toString(), 'gwei');
+  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee, 'gwei');
+  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee, 'gwei');
 
   const mintTx = await spaceContract.addEntries(uris, {
     maxFeePerGas: maxFeeAsGWei,
