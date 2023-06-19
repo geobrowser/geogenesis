@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
+import { GeoDate } from '~/modules/utils';
 
 interface DateFieldProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
-  onBlur?: (date: [string] | [string, string]) => void;
+  onBlur?: (date: string) => void;
   variant?: 'body' | 'tableCell';
-  value: string[];
+  value: string;
   isEditing?: boolean;
 }
 
@@ -109,7 +110,13 @@ function useFieldWithValidation(initialValue: string, validate: (value: string) 
 }
 
 export function DateField(props: DateFieldProps) {
-  const [day, setDay] = useFieldWithValidation('', (v: string) => {
+  const date = new Date(props.value);
+  const isDate = GeoDate.isValidDate(date);
+  const initialDay = isDate ? date.getDate().toString() : '';
+  const initialMonth = isDate ? (date.getMonth() + 1).toString() : '';
+  const initialYear = isDate ? date.getFullYear().toString() : '';
+
+  const [day, setDay] = useFieldWithValidation(initialDay, (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -122,7 +129,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  const [month, setMonth] = useFieldWithValidation('', (v: string) => {
+  const [month, setMonth] = useFieldWithValidation(initialMonth, (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -135,7 +142,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  const [year, setYear] = useFieldWithValidation('', (v: string) => {
+  const [year, setYear] = useFieldWithValidation(initialYear, (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -205,7 +212,7 @@ export function DateField(props: DateFieldProps) {
       console.log(isoDate.toISOString());
 
       // Only create the triple if the form is valid
-      if (isValidForm) props.onBlur?.([isoDate.toISOString()]);
+      if (isValidForm) props.onBlur?.(isoDate.toISOString());
     } catch (e) {
       console.log(e);
     }

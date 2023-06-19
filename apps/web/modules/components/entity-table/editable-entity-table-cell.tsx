@@ -214,7 +214,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isDateValueType && <DateField isEditing={true} value={[new Date().toISOString()]} />}
+      {isDateValueType && <DateField isEditing={true} value={new Date().toISOString()} />}
     </div>
   );
 });

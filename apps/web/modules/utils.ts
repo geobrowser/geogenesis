@@ -88,6 +88,10 @@ export class GeoDate {
   static fromGeoTime(value: number) {
     return new Date(value * 1000);
   }
+
+  static isValidDate(date: Date): date is Date {
+    return date instanceof Date && !isNaN(date.getMilliseconds());
+  }
 }
 // https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {

@@ -35,7 +35,7 @@ export type ImageValue = {
 export type DateValue = {
   type: 'date';
   id: string;
-  value: string[];
+  value: string;
 };
 
 export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue;

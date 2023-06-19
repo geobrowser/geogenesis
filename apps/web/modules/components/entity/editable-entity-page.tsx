@@ -362,7 +362,7 @@ function EntityAttributes({
       case 'number':
         return null;
       case 'date':
-        return <DateField isEditing={true} value={[]} onBlur={v => console.log(v)} placeholder="Add value..." />;
+        return <DateField isEditing={true} value={''} onBlur={v => console.log(v)} placeholder="Add value..." />;
       case 'entity':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;

@@ -4,9 +4,9 @@ import { Value } from './Value'
 
 export class DateValue extends Value {
   id: string
-  value: string[]
+  value: string
 
-  constructor(id: string, value: string[]) {
+  constructor(id: string, value: string) {
     super('date')
     this.id = id
     this.value = value
@@ -18,12 +18,7 @@ export class DateValue extends Value {
     __obj.set('type', type)
     const id = new JSON.Str(this.id)
     __obj.set('id', id)
-    const value = new JSON.Arr()
-
-    for (let i = 0; i < this.value.length; i++) {
-      value.push(new JSON.Str(this.value[i]))
-    }
-
+    const value = new JSON.Str(this.value)
     __obj.set('value', value)
 
     return __obj
@@ -49,7 +44,7 @@ export class DateValue extends Value {
       return null
     }
     const id = __id.valueOf()
-    let __value = __obj.getArr('value')
+    let __value = __obj.getString('value')
 
     if (__value == null) {
       log.debug('DateValue.fromJSON(): __value is null', [])
@@ -57,12 +52,6 @@ export class DateValue extends Value {
     }
     const value = __value.valueOf()
 
-    const val: string[] = []
-
-    for (let i = 0; i < value.length; i++) {
-      val.push(value[i].toString())
-    }
-
-    return new DateValue(id, val)
+    return new DateValue(id, value)
   }
 }

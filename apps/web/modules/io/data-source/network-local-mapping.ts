@@ -9,7 +9,7 @@ type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkDateValue = { valueType: 'DATE'; arrayValue: string[] };
+type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
 
 type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue | NetworkDateValue;
 
@@ -69,7 +69,7 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
         name: networkTriple.entityValue.name,
       };
     case 'DATE':
-      return { type: 'date', id: networkTriple.valueId, value: networkTriple.arrayValue.map(toString) };
+      return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
   }
 }
 
@@ -88,7 +88,7 @@ export function extractActionValue(networkAction: NetworkAction): Value {
         name: networkAction.entityValue?.name ?? null,
       };
     case 'DATE':
-      return { type: 'date', id: networkAction.valueId, value: networkAction.arrayValue.map(toString) };
+      return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
   }
 }
 
@@ -114,7 +114,7 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction
     case 'IMAGE':
       return !networkTriple.stringValue;
     case 'DATE':
-      return !networkTriple.arrayValue;
+      return !networkTriple.stringValue;
   }
 }
 
@@ -150,7 +150,8 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
     .map(networkAction => {
       // There's an edge-case bug where the value can be null even though it should be an object.
       // Right now we're not doing any triple validation, but once we do we will no longer be indexing
-      // empty triples.
+      // empty triples. This is likely a result of very old data that does not map to the expected
+      // type for value types.
       if (networkTripleHasEmptyValue(networkAction) || networkTripleHasEmptyAttribute(networkAction)) {
         return null;
       }

@@ -55,7 +55,7 @@ export function emptyValue(type: TripleValueType): Value {
     date: {
       id: ID.createValueId(),
       type: 'date',
-      value: [],
+      value: '',
     },
   };
 

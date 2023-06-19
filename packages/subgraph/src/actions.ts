@@ -218,13 +218,11 @@ export function handleCreateTripleAction(
   if (dateValue) {
     log.debug('Creating date value', [])
     if (attribute.id == TYPES) {
-      for (let i = 0; i < dateValue.value.length; i++) {
-        addEntityTypeId(entity, dateValue.value[i])
-      }
+      addEntityTypeId(entity, dateValue.value)
     }
     triple.valueType = 'DATE'
     triple.valueId = dateValue.id
-    triple.arrayValue = dateValue.value
+    triple.stringValue = dateValue.value
     log.debug('Finished creating date value', [])
   }
 
@@ -336,12 +334,10 @@ function handleDeleteTripleAction(
       removeEntityTypeId(entity, entityValue.id)
     }
 
-    const dateValue = fact.value.asDateValue()
-    if (dateValue && entity) {
-      for (let i = 0; i < dateValue.value.length; i++) {
-        removeEntityTypeId(entity, dateValue.value[i])
-      }
-    }
+    // const dateValue = fact.value.asDateValue()
+    // if (dateValue && entity) {
+    //   removeEntityTypeId(entity, dateValue.value)
+    // }
   }
 
   if (fact.attributeId == 'name') {
@@ -376,7 +372,8 @@ export function getOrCreateAction(
   numberValue: string | null = null,
   stringValue: string | null = null,
   entityValue: string | null = null,
-  dateValue: string[] | null = null
+  imageValue: string | null = null,
+  dateValue: string | null = null
 ): ActionEntity {
   let action = ActionEntity.load(id)
   if (action == null) {
@@ -389,7 +386,8 @@ export function getOrCreateAction(
     if (numberValue) action.numberValue = BigDecimal.fromString(numberValue)
     if (stringValue) action.stringValue = stringValue
     if (entityValue) action.entityValue = entityValue
-    if (dateValue) action.arrayValue = dateValue
+    if (imageValue) action.stringValue = imageValue
+    if (dateValue) action.stringValue = dateValue
 
     action.save()
   }
@@ -419,18 +417,18 @@ export function handleAction(
     let value = createTripleAction.value
     let valueId: string = ''
 
+    let imageValue = value.asDateValue()
+    let imgValue: string | null = null
+    if (imageValue != null) {
+      valueId = imageValue.id
+      imgValue = imageValue.value
+    }
+
     let dateValue = value.asDateValue()
-    let dValue: string[] | null = null
+    let dValue: string | null = null
     if (dateValue != null) {
       valueId = dateValue.id
-
-      if (dateValue.value.length > 0) {
-        dValue = []
-
-        for (let i = 0; i < dateValue.value.length; i++) {
-          dValue.push(dateValue.value[i])
-        }
-      }
+      dValue = dateValue.value
     }
 
     let entityValue = value.asEntityValue()
@@ -461,6 +459,7 @@ export function handleAction(
       numValue,
       strValue,
       entValue,
+      imgValue,
       dValue
     )
     return action.id
@@ -480,18 +479,18 @@ export function handleAction(
     let value = deleteTripleAction.value
     let valueId: string = ''
 
+    let imageValue = value.asDateValue()
+    let imgValue: string | null = null
+    if (imageValue != null) {
+      valueId = imageValue.id
+      imgValue = imageValue.value
+    }
+
     let dateValue = value.asDateValue()
-    let dValue: string[] | null = null
+    let dValue: string | null = null
     if (dateValue != null) {
       valueId = dateValue.id
-
-      if (dateValue.value.length > 0) {
-        dValue = []
-
-        for (let i = 0; i < dateValue.value.length; i++) {
-          dValue.push(dateValue.value[i])
-        }
-      }
+      dValue = dateValue.value
     }
 
     let entityValue = value.asEntityValue()
@@ -522,6 +521,7 @@ export function handleAction(
       numValue,
       strValue,
       entValue,
+      imgValue,
       dValue
     )
     return action.id
