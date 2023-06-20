@@ -110,11 +110,7 @@ function useFieldWithValidation(initialValue: string, validate: (value: string) 
 }
 
 export function DateField(props: DateFieldProps) {
-  const date = new Date(props.value);
-  const isDate = GeoDate.isValidDate(date);
-  const initialDay = isDate ? date.getDate().toString() : '';
-  const initialMonth = isDate ? (date.getMonth() + 1).toString() : '';
-  const initialYear = isDate ? date.getFullYear().toString() : '';
+  const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(props.value);
 
   const [day, setDay] = useFieldWithValidation(initialDay, (v: string) => {
     const regex = /^[0-9]*$/;
@@ -207,12 +203,11 @@ export function DateField(props: DateFieldProps) {
   const onBlur = () => {
     // We may have an invalid date if the user is still typing
     try {
-      const isoDate = new Date(`${year.value}-${month.value}-${day.value}`);
-      isoDate.setUTCHours(0, 0, 0, 0);
-      console.log(isoDate.toISOString());
+      const isoString = GeoDate.toISOStringUTC({ day: day.value, month: month.value, year: year.value });
+      console.log('onBlur', isoString);
 
       // Only create the triple if the form is valid
-      if (isValidForm) props.onBlur?.(isoDate.toISOString());
+      if (isValidForm) props.onBlur?.(isoString);
     } catch (e) {
       console.log(e);
     }
