@@ -285,8 +285,9 @@ const listener =
         return triples.forEach(triple => {
           const isString = type === 'string';
           const isImage = type === 'image';
+          const isDate = type === 'date';
 
-          const retainTripleValueId = isString || isImage;
+          const retainTripleValueId = isString || isImage || isDate;
 
           const newValue = retainTripleValueId ? { ...value, id: triple.value.id } : value;
 

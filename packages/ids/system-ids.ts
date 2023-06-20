@@ -27,13 +27,16 @@ export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
+/* Example Usage: Address -> VALUE_TYPE -> TEXT */
+export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
+
+// Date of Birth -> VALUE_TYPE -> DATE
+export const DATE = '167664f6-68f8-40e1-976b-20bd16ed8d47'
+
 // This sets the type of values which can be set as part of a relation value.
 // e.g. An attribute called People can only accept values of type Person
 export const RELATION_VALUE_RELATIONSHIP_TYPE =
   'cfa6a2f5-151f-43bf-a684-f7f0228f63ff'
-
-/* Example Usage: Address -> VALUE_TYPE -> TEXT */
-export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'

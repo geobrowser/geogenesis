@@ -57,7 +57,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
-  const isDateValueType = valueType === 'date';
+  const isDateValueType = valueType === SYSTEM_IDS.DATE;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
@@ -239,7 +239,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         <DateField
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
-          value={Value.stringValue(firstTriple) ?? ''}
+          value={Value.dateValue(firstTriple) ?? ''}
         />
       )}
     </div>
