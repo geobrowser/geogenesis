@@ -158,7 +158,7 @@ export function DateField(props: DateFieldProps) {
       }
 
       // Check leap year in order to validate February has 29 days
-      if ((yearAsNumber % 4 === 0 && yearAsNumber % 100 === 0) || yearAsNumber % 400 === 0) {
+      if (yearAsNumber % 4 === 0) {
         if (dayAsNumber > 29 && Number(values.month) === 2) {
           throw new Error('Day must be less than 30 for the entered month');
         }
