@@ -10,6 +10,7 @@ import { Navbar } from '~/modules/components/navbar/navbar';
 import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';
 import { Providers } from '~/modules/providers';
+import { Scroll } from '~/modules/components/scroll';
 import { Dialog } from '~/modules/search';
 import { Main } from '~/modules/components/main';
 import { useEditable } from '~/modules/stores/use-editable';
@@ -73,7 +74,7 @@ function App({ Component, pageProps }: AppProps) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <>
+    <Scroll>
       <Navbar onSearchClick={() => setOpen(true)} />
       <OnboardingDialog />
       <Dialog
@@ -97,7 +98,7 @@ function App({ Component, pageProps }: AppProps) {
         <Persistence />
       </ClientOnly>
       <Analytics />
-    </>
+    </Scroll>
   );
 }
 
