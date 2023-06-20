@@ -4,12 +4,12 @@ import { GeoDate } from './utils';
 describe('GeoDate', () => {
   it('converts day, month, year, hour, minute to ISO string at UTC time', () => {
     expect(GeoDate.toISOStringUTC({ day: '16', month: '12', year: '1990', hour: '12', minute: '30' })).toBe(
-      '1990-12-17T02:30:00.000Z'
+      '1990-12-16T12:30:00.000Z'
     );
 
     // Correctly parses time into two digits
     expect(GeoDate.toISOStringUTC({ day: '16', month: '12', year: '1990', hour: '3', minute: '5' })).toBe(
-      '1990-12-16T17:05:00.000Z'
+      '1990-12-16T03:05:00.000Z'
     );
   });
 

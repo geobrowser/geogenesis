@@ -130,7 +130,13 @@ function useFieldWithValidation(initialValue: string, validate: (value: string) 
 }
 
 export function DateField(props: DateFieldProps) {
-  const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(props.value);
+  const {
+    day: initialDay,
+    month: initialMonth,
+    year: initialYear,
+    hour: initialHour,
+    minute: initialMinute,
+  } = GeoDate.fromISOStringUTC(props.value);
 
   const [day, setDay] = useFieldWithValidation(initialDay, (v: string) => {
     const regex = /^[0-9]*$/;
@@ -169,7 +175,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  const [hour, setHour] = useFieldWithValidation('00', (v: string) => {
+  const [hour, setHour] = useFieldWithValidation(initialHour, (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -181,7 +187,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  const [minute, setMinute] = useFieldWithValidation('00', (v: string) => {
+  const [minute, setMinute] = useFieldWithValidation(initialMinute, (v: string) => {
     const regex = /^[0-9]*$/;
 
     if (v !== '') {
@@ -273,7 +279,6 @@ export function DateField(props: DateFieldProps) {
         minute: minute.value,
         hour: hour.value,
       });
-      console.log('onBlur', isoString);
 
       // Only create the triple if the form is valid
       if (isValidForm) props.onBlur?.(isoString);

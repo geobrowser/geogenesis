@@ -94,7 +94,6 @@ export class GeoDate {
   }
 
   // Geo DateField expects ISO strings to be set in UTC time.
-  // @TODO: encode time
   static toISOStringUTC({
     day,
     month,
@@ -108,19 +107,11 @@ export class GeoDate {
     hour: string;
     minute: string;
   }): string {
-    const isoDate = new Date(`${month}-${day}-${year} ${hour}:${minute}`);
-    const isoUtcDate = new Date(
-      isoDate.getUTCFullYear(),
-      isoDate.getUTCMonth(),
-      isoDate.getUTCDate(),
-      isoDate.getUTCHours(),
-      isoDate.getUTCMinutes()
-    );
-    return isoUtcDate.toISOString();
+    const isoDate = new Date(`${month}-${day}-${year} ${hour}:${minute} UTC`);
+    return isoDate.toISOString();
   }
 
-  // Geo DateField parses ISO strings in UTC time into day, month, year.
-  // @TODO: parse time
+  // Geo DateField parses ISO strings in UTC time into day, month, year, hour, minute.
   static fromISOStringUTC(dateString: string): {
     day: string;
     month: string;
