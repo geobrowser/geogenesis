@@ -5,7 +5,6 @@ import { GeoDate } from '~/modules/utils';
 import { Minus } from '~/modules/design-system/icons/minus';
 import { Spacer } from '~/modules/design-system/spacer';
 import { SmallButton } from '~/modules/design-system/button';
-import { on } from 'events';
 
 interface DateFieldProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -267,7 +266,13 @@ export function DateField(props: DateFieldProps) {
   const onBlur = () => {
     // We may have an invalid date if the user is still typing
     try {
-      const isoString = GeoDate.toISOStringUTC({ day: day.value, month: month.value, year: year.value });
+      const isoString = GeoDate.toISOStringUTC({
+        day: day.value,
+        month: month.value,
+        year: year.value,
+        minute: minute.value,
+        hour: hour.value,
+      });
       console.log('onBlur', isoString);
 
       // Only create the triple if the form is valid

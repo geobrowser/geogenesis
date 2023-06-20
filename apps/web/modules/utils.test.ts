@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { GeoDate } from './utils';
 
 describe('GeoDate', () => {
-  it('converts day, month, year to ISO string at UTC time', () => {
-    expect(GeoDate.toISOStringUTC({ day: '16', month: '12', year: '1990' })).toBe('1990-12-16T00:00:00.000Z');
+  it('converts day, month, year, hour, minute to ISO string at UTC time', () => {
+    expect(GeoDate.toISOStringUTC({ day: '16', month: '12', year: '1990', hour: '12', minute: '30' })).toBe(
+      '1990-12-17T02:30:00.000Z'
+    );
+
+    // Correctly parses time into two digits
+    expect(GeoDate.toISOStringUTC({ day: '16', month: '12', year: '1990', hour: '3', minute: '5' })).toBe(
+      '1990-12-16T17:05:00.000Z'
+    );
   });
 
   it('converts ISO string at UTC time to day, month, year', () => {
@@ -11,6 +18,16 @@ describe('GeoDate', () => {
       day: '16',
       month: '12',
       year: '1990',
+      hour: '0',
+      minute: '0',
+    });
+
+    expect(GeoDate.fromISOStringUTC('1990-12-16T12:30:00.000Z')).toEqual({
+      day: '16',
+      month: '12',
+      year: '1990',
+      hour: '12',
+      minute: '30',
     });
   });
 
