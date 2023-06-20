@@ -99,28 +99,38 @@ function useFormWithValidation<T extends { day: string; month: string; year: str
   ];
 }
 
-function useFieldWithValidation(initialValue: string, validate: (value: string) => boolean) {
+function useFieldWithValidation(
+  initialValue: string,
+  { validate, transform }: { validate: (value: string) => boolean; transform?: (value: string) => string }
+) {
   const [value, setValue] = React.useState(initialValue);
   const [isValidating, setIsValidating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const memoizedValidate = React.useCallback(validate, [validate]);
+  const memoizedTransformedValue = React.useMemo(() => {
+    if (transform) {
+      return transform(value);
+    }
+
+    return value;
+  }, [transform, value]);
 
   React.useEffect(() => {
     try {
       setIsValidating(true);
-      memoizedValidate(value);
+      memoizedValidate(memoizedTransformedValue);
       setError(null);
       setIsValidating(false);
     } catch (e: unknown) {
       setError((e as Error).message);
       setIsValidating(false);
     }
-  }, [value, memoizedValidate]);
+  }, [memoizedTransformedValue, memoizedValidate]);
 
   return [
     {
-      value,
+      value: memoizedTransformedValue,
       error,
       isValidating,
       isValid: error === null,
@@ -138,65 +148,90 @@ export function DateField(props: DateFieldProps) {
     minute: initialMinute,
   } = GeoDate.fromISOStringUTC(props.value);
 
-  const [day, setDay] = useFieldWithValidation(initialDay, (v: string) => {
-    const regex = /^[0-9]*$/;
+  const [day, setDay] = useFieldWithValidation(initialDay, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-    if (v !== '') {
-      if (!regex.test(v)) throw new Error('Day must be a number');
-      if (v.length > 2) throw new Error("Day can't be longer than 2 characters");
-      if (Number(v) > 31) throw new Error('Day must be less than 31');
-      if (Number(v) < 1) throw new Error('Day must be greater than 0');
-    }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Day must be a number');
+        if (v.length > 2) throw new Error("Day can't be longer than 2 characters");
+        if (Number(v) > 31) throw new Error('Day must be less than 31');
+        if (Number(v) < 1) throw new Error('Day must be greater than 0');
+      }
 
-    return true;
+      return true;
+    },
   });
 
-  const [month, setMonth] = useFieldWithValidation(initialMonth, (v: string) => {
-    const regex = /^[0-9]*$/;
+  const [month, setMonth] = useFieldWithValidation(initialMonth, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-    if (v !== '') {
-      if (!regex.test(v)) throw new Error('Month must be a number');
-      if (v.length > 2) throw new Error("Month can't be longer than 2 characters");
-      if (Number(v) > 12) throw new Error('Month must be 12 or less');
-      if (Number(v) < 1) throw new Error('Month must be greater than 0');
-    }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Month must be a number');
+        if (v.length > 2) throw new Error("Month can't be longer than 2 characters");
+        if (Number(v) > 12) throw new Error('Month must be 12 or less');
+        if (Number(v) < 1) throw new Error('Month must be greater than 0');
+      }
 
-    return true;
+      return true;
+    },
   });
 
-  const [year, setYear] = useFieldWithValidation(initialYear, (v: string) => {
-    const regex = /^[0-9]*$/;
+  const [year, setYear] = useFieldWithValidation(initialYear, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-    if (v !== '') {
-      if (!regex.test(v)) throw new Error('Year must be a number');
-      if (v.length < 4) throw new Error('Year must be 4 characters');
-    }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Year must be a number');
+        if (v.length < 4) throw new Error('Year must be 4 characters');
+      }
 
-    return true;
+      return true;
+    },
   });
 
-  const [hour, setHour] = useFieldWithValidation(initialHour, (v: string) => {
-    const regex = /^[0-9]*$/;
+  const [hour, setHour] = useFieldWithValidation(initialHour, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-    if (v !== '') {
-      if (!regex.test(v)) throw new Error('Hour must be a number');
-      if (Number(v) > 12) throw new Error('Hour must be 12 or less');
-      if (Number(v) < 1) throw new Error('Hour must be greater than 0');
-    }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Hour must be a number');
+        if (Number(v) > 12) throw new Error('Hour must be 12 or less');
+        if (Number(v) < 1) throw new Error('Hour must be greater than 0');
+      }
 
-    return true;
+      return true;
+    },
+    transform: (v: string) => {
+      if (v === '') return v;
+
+      const hourAsNumber = Number(v);
+
+      if (hourAsNumber > 12) {
+        return (hourAsNumber - 12).toString();
+      }
+
+      if (hourAsNumber < 1) {
+        return '';
+      }
+
+      return v;
+    },
   });
 
-  const [minute, setMinute] = useFieldWithValidation(initialMinute, (v: string) => {
-    const regex = /^[0-9]*$/;
+  const [minute, setMinute] = useFieldWithValidation(initialMinute, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-    if (v !== '') {
-      if (!regex.test(v)) throw new Error('Minute must be a number');
-      if (Number(v) > 12) throw new Error('Minute must be 60 or less');
-      if (Number(v) < 1) throw new Error('Minute must be greater than 0');
-    }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Minute must be a number');
+        if (Number(v) > 12) throw new Error('Minute must be 60 or less');
+        if (Number(v) < 1) throw new Error('Minute must be greater than 0');
+      }
 
-    return true;
+      return true;
+    },
   });
 
   const [formState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, values => {
@@ -223,6 +258,16 @@ export function DateField(props: DateFieldProps) {
 
     return true;
   });
+
+  console.log('number initialHour', Number(initialHour));
+  const [meridiem, setMeridiem] = React.useState<'am' | 'pm'>(Number(initialHour) < 12 ? 'am' : 'pm');
+  console.log('meridiem', meridiem);
+
+  const onToggleMeridiem = () => {
+    const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
+    onBlur(meridiem);
+    setMeridiem(newMeridiem);
+  };
 
   const onDayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
@@ -269,16 +314,19 @@ export function DateField(props: DateFieldProps) {
     setHour(value);
   };
 
-  const onBlur = () => {
-    // We may have an invalid date if the user is still typing
+  const onBlur = (meridiam: 'am' | 'pm') => {
     try {
+      const newMeridiem = meridiam === 'am' ? 'pm' : 'am';
+      // GeoDate.toISOStringUTC will throw an error if the date is invalid
       const isoString = GeoDate.toISOStringUTC({
         day: day.value,
         month: month.value,
         year: year.value,
         minute: minute.value,
-        hour: hour.value,
+        hour: newMeridiem === 'am' ? hour.value : (Number(hour.value) + 12).toString(),
       });
+
+      console.log('isoString', isoString);
 
       // Only create the triple if the form is valid
       if (isValidForm) props.onBlur?.(isoString);
@@ -301,7 +349,7 @@ export function DateField(props: DateFieldProps) {
               <input
                 value={month.value}
                 onChange={onMonthChange}
-                onBlur={onBlur}
+                onBlur={() => onBlur(meridiem)}
                 placeholder="MM"
                 className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
               />
@@ -324,7 +372,7 @@ export function DateField(props: DateFieldProps) {
               <input
                 value={day.value}
                 onChange={onDayChange}
-                onBlur={onBlur}
+                onBlur={() => onBlur(meridiem)}
                 placeholder="DD"
                 className={dateFieldStyles({
                   variant: props.variant,
@@ -355,7 +403,7 @@ export function DateField(props: DateFieldProps) {
               <input
                 value={year.value}
                 onChange={onYearChange}
-                onBlur={onBlur}
+                onBlur={() => onBlur(meridiem)}
                 placeholder="YYYY"
                 className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
               />
@@ -370,36 +418,41 @@ export function DateField(props: DateFieldProps) {
         <div className="flex w-[151px] items-center">
           <Minus color="grey-03" />
           <Spacer width={18} />
-          {/* Wrapper span to avoid setting the width to full */}
-          <span>
-            {props.isEditing ? (
-              <div className="flex items-center justify-start gap-1">
-                <input
-                  value={hour.value}
-                  onChange={onHourChange}
-                  onBlur={onBlur}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidYear })}
-                />
-                <span>:</span>
-                <input
-                  value={minute.value}
-                  onChange={onMinuteChange}
-                  onBlur={onBlur}
-                  placeholder="00"
-                  className={timeStyles({ variant: props.variant, error: !isValidYear })}
-                />
-              </div>
-            ) : (
-              <div className="flex items-center justify-start gap-1">
-                <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
-                <span>:</span>
-                <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
-              </div>
-            )}
-          </span>
+          {props.isEditing ? (
+            <div className="flex items-center justify-start gap-1">
+              <input
+                value={hour.value}
+                onChange={onHourChange}
+                onBlur={() => onBlur(meridiem)}
+                placeholder="00"
+                className={timeStyles({ variant: props.variant, error: !isValidYear })}
+              />
+              <span>:</span>
+              <input
+                value={minute.value}
+                onChange={onMinuteChange}
+                onBlur={() => onBlur(meridiem)}
+                placeholder="00"
+                className={timeStyles({ variant: props.variant, error: !isValidYear })}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-start gap-1">
+              <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
+              <span>:</span>
+              <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
+            </div>
+          )}
           <Spacer width={12} />
-          <SmallButton variant="secondary">AM</SmallButton>
+          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+            <SmallButton
+              onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
+              variant="secondary"
+              className="uppercase"
+            >
+              {meridiem}
+            </SmallButton>
+          </motion.div>
         </div>
       </div>
 

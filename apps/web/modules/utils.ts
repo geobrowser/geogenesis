@@ -119,6 +119,7 @@ export class GeoDate {
     hour: string;
     minute: string;
   } {
+    console.log('dateString', dateString);
     const date = new Date(dateString);
     const isDate = GeoDate.isValidDate(date);
     const day = isDate ? date.getUTCDate().toString() : '';
@@ -126,6 +127,8 @@ export class GeoDate {
     const year = isDate ? date.getUTCFullYear().toString() : '';
     const hour = isDate ? date.getUTCHours().toString() : '';
     const minute = isDate ? date.getUTCMinutes().toString() : '';
+
+    console.log('hour', hour);
 
     return { day, month, year, hour, minute };
   }
