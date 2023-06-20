@@ -90,16 +90,6 @@ async function main() {
           id: randomUUID(),
         },
       },
-      {
-        type: 'createTriple',
-        entityId: space2Id,
-        attributeId: 'name',
-        value: {
-          type: 'date',
-          value: new Date().toISOString(),
-          id: randomUUID(),
-        },
-      },
     ],
     // name: 'Legacy space deployment',
   }

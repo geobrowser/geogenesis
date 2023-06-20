@@ -333,11 +333,6 @@ function handleDeleteTripleAction(
     if (entityValue && entity) {
       removeEntityTypeId(entity, entityValue.id)
     }
-
-    // const dateValue = fact.value.asDateValue()
-    // if (dateValue && entity) {
-    //   removeEntityTypeId(entity, dateValue.value)
-    // }
   }
 
   if (fact.attributeId == 'name') {
