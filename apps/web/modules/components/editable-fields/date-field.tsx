@@ -381,7 +381,11 @@ export function DateField(props: DateFieldProps) {
                 />
               </div>
             ) : (
-              <p className={dateFieldStyles({ variant: props.variant })}>44:44</p>
+              <div className="flex items-center justify-start gap-1">
+                <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
+                <span>:</span>
+                <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
+              </div>
             )}
           </span>
           <Spacer width={12} />
