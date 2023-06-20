@@ -39,10 +39,7 @@ type SpaceId = string;
 type EntityId = string;
 
 const CompareChanges = () => {
-  const { setIsCompareOpen, selectedVersion, previousVersion } = useDiff();
-
-  // Proposal state
-  const [data, isLoading] = useChanges(selectedVersion, previousVersion);
+  const { setIsCompareOpen } = useDiff();
 
   return (
     <>
@@ -56,26 +53,22 @@ const CompareChanges = () => {
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          {isLoading || !data ? <div className="text-metadataMedium">Loading...</div> : <Versions data={data} />}
+          <Versions />
         </div>
       </div>
     </>
   );
 };
 
-type VersionsProps = {
-  data: [
-    Record<string, Change.Changeset>,
-    {
-      selected: any;
-      previous: any;
-    }
-  ];
-};
+const Versions = () => {
+  const { selectedVersion, previousVersion } = useDiff();
+  const [data, isLoading] = useChanges(selectedVersion, previousVersion);
 
-const Versions = ({ data }: VersionsProps) => {
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
-  const [changes, versions] = data;
+  if (isLoading || typeof data === 'boolean' || typeof data === 'undefined') {
+    return <div className="text-metadataMedium">Loading...</div>;
+  }
+
+  const { changes, versions } = data;
 
   const changedEntityIds = Object.keys(changes);
 
@@ -182,7 +175,7 @@ const Versions = ({ data }: VersionsProps) => {
       </div>
       <div className="flex flex-col gap-16 divide-y divide-grey-02">
         {changedEntityIds.map((entityId: EntityId) => (
-          <ChangedEntity key={entityId} change={changes[entityId] as Changeset} entityId={entityId} />
+          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
         ))}
       </div>
     </div>

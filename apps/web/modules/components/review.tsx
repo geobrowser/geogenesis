@@ -109,7 +109,7 @@ const ReviewChanges = () => {
     return null;
   }
 
-  const [changes, entities] = data;
+  const { changes, entities } = data;
   const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
   const totalEdits = getTotalEdits(
     changes as Record<string, Change.Changeset>,

@@ -358,7 +358,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
     }
   });
 
-  return [changes, entities];
+  return { changes, entities };
 }
 
 const getEntitiesFromActions = async (actions: ActionType[], network: INetwork) => {
@@ -592,7 +592,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
     });
   }
 
-  return [changes, versions];
+  return { changes, versions };
 }
 
 const getBlockTypeFromTriples = (triples: TripleType[]): BlockValueType => {
