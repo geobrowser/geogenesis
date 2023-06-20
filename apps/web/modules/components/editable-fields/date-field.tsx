@@ -259,9 +259,7 @@ export function DateField(props: DateFieldProps) {
     return true;
   });
 
-  console.log('number initialHour', Number(initialHour));
   const [meridiem, setMeridiem] = React.useState<'am' | 'pm'>(Number(initialHour) < 12 ? 'am' : 'pm');
-  console.log('meridiem', meridiem);
 
   const onToggleMeridiem = () => {
     const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
@@ -325,8 +323,6 @@ export function DateField(props: DateFieldProps) {
         minute: minute.value,
         hour: newMeridiem === 'am' ? hour.value : (Number(hour.value) + 12).toString(),
       });
-
-      console.log('isoString', isoString);
 
       // Only create the triple if the form is valid
       if (isValidForm) props.onBlur?.(isoString);
