@@ -153,12 +153,13 @@ export function DateField(props: DateFieldProps) {
     if (values.month !== '') {
       const dayAsNumber = Number(values.day);
       const yearAsNumber = Number(values.year);
-      if (dayAsNumber > 30 && [4, 6, 9, 11].includes(Number(values.month))) {
+
+      if (dayAsNumber > 30 && GeoDate.isMonth30Days(Number(values.month))) {
         throw new Error('Day must be less than 31 for the entered month');
       }
 
       // Check leap year in order to validate February has 29 days
-      if (yearAsNumber % 4 === 0) {
+      if (GeoDate.isLeapYear(yearAsNumber)) {
         if (dayAsNumber > 29 && Number(values.month) === 2) {
           throw new Error('Day must be less than 30 for the entered month');
         }

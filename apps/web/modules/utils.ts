@@ -111,6 +111,14 @@ export class GeoDate {
 
     return { day, month, year };
   }
+
+  static isLeapYear(year: number): boolean {
+    return year % 4 === 0;
+  }
+
+  static isMonth30Days(month: number): boolean {
+    return [4, 6, 9, 11].includes(month);
+  }
 }
 // https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {
