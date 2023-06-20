@@ -41,7 +41,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
         </Text>
       </div>
 
-      <HistoryPanel isLoading={isLoadingProposals} isEmpty={proposals?.length === 0}>
+      <HistoryPanel>
         {proposals?.map(p => (
           <HistoryItem
             key={p.id}

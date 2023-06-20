@@ -110,8 +110,13 @@ export interface INetwork {
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
-  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
-  fetchProposals: (spaceId: string, abortController?: AbortController) => Promise<Proposal[]>;
+  fetchProposedVersions: (
+    entityId: string,
+    spaceId: string,
+    abortController?: AbortController,
+    page?: number
+  ) => Promise<Version[]>;
+  fetchProposals: (spaceId: string, abortController?: AbortController, page?: number) => Promise<Proposal[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -554,7 +559,7 @@ export class Network implements INetwork {
     };
   };
 
-  fetchProposals = async (spaceId: string, abortController?: AbortController) => {
+  fetchProposals = async (spaceId: string, abortController?: AbortController, page = 0) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -562,7 +567,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.proposalsQuery(spaceId),
+        query: queries.proposalsQuery(spaceId, 10 * page),
       }),
     });
 
@@ -615,7 +620,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController, page = 0) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -623,7 +628,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.proposedVersionsQuery(entityId),
+        query: queries.proposedVersionsQuery(entityId, 10 * page),
       }),
     });
 
