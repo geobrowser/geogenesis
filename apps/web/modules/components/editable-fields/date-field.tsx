@@ -2,6 +2,10 @@ import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GeoDate } from '~/modules/utils';
+import { Minus } from '~/modules/design-system/icons/minus';
+import { Spacer } from '~/modules/design-system/spacer';
+import { SmallButton } from '~/modules/design-system/button';
+import { on } from 'events';
 
 interface DateFieldProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -47,6 +51,23 @@ const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out
   },
   defaultVariants: {
     active: false,
+    error: false,
+  },
+});
+
+const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tabular-nums', {
+  variants: {
+    variant: {
+      body: 'text-body',
+      tableCell: 'text-tableCell',
+    },
+
+    error: {
+      true: 'text-red-01',
+    },
+  },
+  defaultVariants: {
+    variant: 'body',
     error: false,
   },
 });
@@ -131,7 +152,7 @@ export function DateField(props: DateFieldProps) {
     if (v !== '') {
       if (!regex.test(v)) throw new Error('Month must be a number');
       if (v.length > 2) throw new Error("Month can't be longer than 2 characters");
-      if (Number(v) > 12) throw new Error('Month must be less than 12');
+      if (Number(v) > 12) throw new Error('Month must be 12 or less');
       if (Number(v) < 1) throw new Error('Month must be greater than 0');
     }
 
@@ -144,6 +165,30 @@ export function DateField(props: DateFieldProps) {
     if (v !== '') {
       if (!regex.test(v)) throw new Error('Year must be a number');
       if (v.length < 4) throw new Error('Year must be 4 characters');
+    }
+
+    return true;
+  });
+
+  const [hour, setHour] = useFieldWithValidation('00', (v: string) => {
+    const regex = /^[0-9]*$/;
+
+    if (v !== '') {
+      if (!regex.test(v)) throw new Error('Hour must be a number');
+      if (Number(v) > 12) throw new Error('Hour must be 12 or less');
+      if (Number(v) < 1) throw new Error('Hour must be greater than 0');
+    }
+
+    return true;
+  });
+
+  const [minute, setMinute] = useFieldWithValidation('00', (v: string) => {
+    const regex = /^[0-9]*$/;
+
+    if (v !== '') {
+      if (!regex.test(v)) throw new Error('Minute must be a number');
+      if (Number(v) > 12) throw new Error('Minute must be 60 or less');
+      if (Number(v) < 1) throw new Error('Minute must be greater than 0');
     }
 
     return true;
@@ -201,6 +246,24 @@ export function DateField(props: DateFieldProps) {
     setYear(value);
   };
 
+  const onMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    const regex = /^[0-9]*$/;
+
+    if (!regex.test(value)) return;
+    if (value.length > 2) return;
+    setMinute(value);
+  };
+
+  const onHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    const regex = /^[0-9]*$/;
+
+    if (!regex.test(value)) return;
+    if (value.length > 2) return;
+    setHour(value);
+  };
+
   const onBlur = () => {
     // We may have an invalid date if the user is still typing
     try {
@@ -221,78 +284,111 @@ export function DateField(props: DateFieldProps) {
 
   return (
     <div>
-      <div className="flex max-w-[164px] gap-3">
-        <div className="flex w-full flex-col" style={{ flex: 2 }}>
-          {props.isEditing ? (
-            <input
-              value={month.value}
-              onChange={onMonthChange}
-              onBlur={onBlur}
-              placeholder="MM"
-              className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
-            />
-          ) : (
-            <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
-              {month.value}
-            </p>
-          )}
-          <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
-            Month
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex max-w-[157px] gap-3">
+          <div className="flex w-full flex-col" style={{ flex: 2 }}>
+            {props.isEditing ? (
+              <input
+                value={month.value}
+                onChange={onMonthChange}
+                onBlur={onBlur}
+                placeholder="MM"
+                className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
+              />
+            ) : (
+              <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
+                {month.value}
+              </p>
+            )}
+            <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
+              Month
+            </span>
+          </div>
+
+          <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
+            /
           </span>
+
+          <div className="flex flex-col items-center" style={{ flex: 2 }}>
+            {props.isEditing ? (
+              <input
+                value={day.value}
+                onChange={onDayChange}
+                onBlur={onBlur}
+                placeholder="DD"
+                className={dateFieldStyles({
+                  variant: props.variant,
+                  centered: true,
+                  error: !isValidDay || !isValidForm,
+                })}
+              />
+            ) : (
+              <p
+                className={dateFieldStyles({
+                  variant: props.variant,
+                  centered: true,
+                  error: !isValidDay || !isValidForm,
+                })}
+              >
+                {day.value}
+              </p>
+            )}
+            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
+          </div>
+
+          <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
+            /
+          </span>
+
+          <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
+            {props.isEditing ? (
+              <input
+                value={year.value}
+                onChange={onYearChange}
+                onBlur={onBlur}
+                placeholder="YYYY"
+                className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
+              />
+            ) : (
+              <p className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}>
+                {year.value}
+              </p>
+            )}
+            <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
+          </div>
         </div>
-
-        <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
-          /
-        </span>
-
-        <div className="flex flex-col items-center" style={{ flex: 2 }}>
-          {props.isEditing ? (
-            <input
-              value={day.value}
-              onChange={onDayChange}
-              onBlur={onBlur}
-              placeholder="DD"
-              className={dateFieldStyles({
-                variant: props.variant,
-                centered: true,
-                error: !isValidDay || !isValidForm,
-              })}
-            />
-          ) : (
-            <p
-              className={dateFieldStyles({
-                variant: props.variant,
-                centered: true,
-                error: !isValidDay || !isValidForm,
-              })}
-            >
-              {day.value}
-            </p>
-          )}
-          <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
-        </div>
-
-        <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
-          /
-        </span>
-
-        <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
-          {props.isEditing ? (
-            <input
-              value={year.value}
-              onChange={onYearChange}
-              onBlur={onBlur}
-              placeholder="YYYY"
-              className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
-            />
-          ) : (
-            <p className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}>
-              {year.value}
-            </p>
-          )}
-          <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
+        <div className="flex w-[151px] items-center">
+          <Minus color="grey-03" />
+          <Spacer width={18} />
+          {/* Wrapper span to avoid setting the width to full */}
+          <span>
+            {props.isEditing ? (
+              <div className="flex items-center justify-start gap-1">
+                <input
+                  value={hour.value}
+                  onChange={onHourChange}
+                  onBlur={onBlur}
+                  placeholder="00"
+                  className={timeStyles({ variant: props.variant, error: !isValidYear })}
+                />
+                <span>:</span>
+                <input
+                  value={minute.value}
+                  onChange={onMinuteChange}
+                  onBlur={onBlur}
+                  placeholder="00"
+                  className={timeStyles({ variant: props.variant, error: !isValidYear })}
+                />
+              </div>
+            ) : (
+              <p className={dateFieldStyles({ variant: props.variant })}>44:44</p>
+            )}
+          </span>
+          <Spacer width={12} />
+          <SmallButton variant="secondary">AM</SmallButton>
         </div>
       </div>
+
       <AnimatePresence mode="wait">
         <div className="overflow-hidden">
           {!isValidDay && (

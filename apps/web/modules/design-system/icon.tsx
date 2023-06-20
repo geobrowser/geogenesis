@@ -38,6 +38,7 @@ import { Dash } from './icons/dash';
 import { Cog } from './icons/cog';
 import { NewTab } from './icons/new-tab';
 import { Date } from './icons/date';
+import { Minus } from './icons/minus';
 
 export type IconName =
   | 'blank'
@@ -79,7 +80,8 @@ export type IconName =
   | 'checkCloseSmall'
   | 'dash'
   | 'cog'
-  | 'newTab';
+  | 'newTab'
+  | 'minus';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -135,4 +137,5 @@ const icons: Record<IconName, React.ElementType> = {
   dash: Dash,
   cog: Cog,
   newTab: NewTab,
+  minus: Minus,
 };
