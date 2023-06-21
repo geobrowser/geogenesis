@@ -279,10 +279,13 @@ export function DateField(props: DateFieldProps) {
         newHour = '00';
       }
 
+      const isValidDay = day.value !== '' || (!day.isValidating && day.isValid);
+      const isValidMonth = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
+      const isValidYear = year.value !== '' || (!year.isValidating && year.isValid);
+      const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
       const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
-      const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
-      const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
-      const isValid = isValidMinute && isValidMonth && isValidYear && dateFormState.isValid && timeFormState.isValid;
+      const isValid =
+        isValidDay && isValidMonth && isValidYear && dateFormState.isValid && isValidHour && isValidMinute;
 
       if (isValid) {
         // GeoDate.toISOStringUTC will throw an error if the date is invalid
@@ -302,9 +305,9 @@ export function DateField(props: DateFieldProps) {
     }
   };
 
-  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
   const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
   const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
+  const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
   const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
   const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
 
