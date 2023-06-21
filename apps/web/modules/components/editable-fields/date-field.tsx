@@ -386,7 +386,7 @@ export function DateField(props: DateFieldProps) {
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
-        <div className="flex max-w-[157px] gap-3">
+        <div className="flex max-w-[164px] gap-3">
           <div className="flex w-full flex-col" style={{ flex: 2 }}>
             {props.isEditing ? (
               <input
