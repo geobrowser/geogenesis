@@ -54,7 +54,6 @@ const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tab
       body: 'text-body',
       tableCell: 'text-tableCell',
     },
-
     error: {
       true: 'text-red-01',
     },
@@ -65,10 +64,7 @@ const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tab
   },
 });
 
-function useFormWithValidation<T extends { day: string; month: string; year: string }>(
-  values: T,
-  validate: (values: T) => boolean
-) {
+function useFormWithValidation<T>(values: T, validate: (values: T) => boolean) {
   const [isValidating, setIsValidating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -197,53 +193,25 @@ export function DateField(props: DateFieldProps) {
 
       return true;
     },
-    transform: (v: string) => {
-      if (v === '') return v;
-
-      const hourAsNumber = Number(v);
-
-      if (hourAsNumber > 12) {
-        return (hourAsNumber - 12).toString().padStart(2, '0');
-      }
-
-      if (hourAsNumber < 1) {
-        return '';
-      }
-
-      return v;
-    },
   });
 
   const [minute, setMinute] = useFieldWithValidation(initialMinute.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
+      console.log('validate', v);
+
       if (v !== '') {
         if (!regex.test(v)) throw new Error('Minute must be a number');
-        if (Number(v) > 12) throw new Error('Minute must be 60 or less');
-        if (Number(v) < 1) throw new Error('Minute must be greater than 0');
+        if (Number(v) > 59) throw new Error('Minute must be 59 or less');
+        if (Number(v) < 0) throw new Error('Minute must be 0 or greater');
       }
 
       return true;
     },
-    transform: (v: string) => {
-      if (v === '') return v;
-
-      const minuteAsNumber = Number(v);
-
-      if (minuteAsNumber > 60) {
-        return '00';
-      }
-
-      if (minuteAsNumber < 1) {
-        return '';
-      }
-
-      return v;
-    },
   });
 
-  const [formState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, values => {
+  const [dateFormState] = useFormWithValidation({ day: day.value, month: month.value, year: year.value }, values => {
     if (values.month !== '') {
       const dayAsNumber = Number(values.day);
       const yearAsNumber = Number(values.year);
@@ -262,6 +230,22 @@ export function DateField(props: DateFieldProps) {
         if (dayAsNumber > 28 && Number(values.month) === 2) {
           throw new Error('Day must be less than 29 for the entered month');
         }
+      }
+    }
+
+    return true;
+  });
+
+  const [timeFormState] = useFormWithValidation({ hour: hour.value, minute: minute.value }, values => {
+    if (values.hour !== '') {
+      if (values.minute === '') {
+        throw new Error("Must enter a minute if you've entered an hour");
+      }
+    }
+
+    if (values.minute !== '') {
+      if (values.hour === '') {
+        throw new Error("Must enter an hour if you've entered a minute");
       }
     }
 
@@ -333,12 +317,12 @@ export function DateField(props: DateFieldProps) {
       let newMonth = month.value;
       let newYear = year.value;
 
-      if (Number(minute.value) < 10) {
+      if (Number(minute.value) < 10 && minute.value !== '') {
         newMinute = minute.value.padStart(2, '0');
         setMinute(newMinute);
       }
 
-      if (Number(hour.value) < 10) {
+      if (Number(hour.value) < 10 && hour.value !== '') {
         newHour = hour.value.padStart(2, '0');
         setHour(newHour);
       }
@@ -358,29 +342,32 @@ export function DateField(props: DateFieldProps) {
         setYear(newYear);
       }
 
-      // GeoDate.toISOStringUTC will throw an error if the date is invalid
-      const isoString = GeoDate.toISOStringUTC({
-        day: newDay,
-        month: newMonth,
-        year: newYear,
-        minute: newMinute,
-        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
-      });
+      if (dateFormState && timeFormState) {
+        // GeoDate.toISOStringUTC will throw an error if the date is invalid
+        const isoString = GeoDate.toISOStringUTC({
+          day: newDay,
+          month: newMonth,
+          year: newYear,
+          minute: newMinute,
+          hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+        });
 
-      if (Number(hour.value) < 10) {
-        setHour(hour.value.padStart(2, '0'));
+        console.log(isoString);
+
+        // Only create the triple if the form is valid
+        props.onBlur?.(isoString);
       }
-
-      // Only create the triple if the form is valid
-      if (isValidForm) props.onBlur?.(isoString);
     } catch (e) {
       console.log(e);
     }
   };
 
-  const isValidForm = formState.isValid;
+  const isValidDateForm = dateFormState.isValid;
+  const isValidTimeForm = timeFormState.isValid;
   const isValidDay = day.value === '' || (!day.isValidating && day.isValid);
-  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !isValidForm;
+  const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
+  const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
+  const isValidMonth = month.value === '' || (!month.isValidating && month.isValid) || !isValidDateForm;
   const isValidYear = year.value === '' || (!year.isValidating && year.isValid);
 
   return (
@@ -397,15 +384,15 @@ export function DateField(props: DateFieldProps) {
                 placeholder="MM"
                 className={dateFieldStyles({
                   variant: props.variant,
-                  error: !isValidMonth || !isValidForm,
+                  error: !isValidMonth || !isValidDateForm,
                 })}
               />
             ) : (
-              <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
+              <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidDateForm })}>
                 {month.value}
               </p>
             )}
-            <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidForm })}>
+            <span className={labelStyles({ active: month.value !== '', error: !isValidMonth || !isValidDateForm })}>
               Month
             </span>
           </div>
@@ -424,20 +411,22 @@ export function DateField(props: DateFieldProps) {
                 placeholder="DD"
                 className={dateFieldStyles({
                   variant: props.variant,
-                  error: !isValidDay || !isValidForm,
+                  error: !isValidDay || !isValidDateForm,
                 })}
               />
             ) : (
               <p
                 className={dateFieldStyles({
                   variant: props.variant,
-                  error: !isValidDay || !isValidForm,
+                  error: !isValidDay || !isValidDateForm,
                 })}
               >
                 {day.value}
               </p>
             )}
-            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidForm })}>Day</span>
+            <span className={labelStyles({ active: day.value !== '', error: !isValidDay || !isValidDateForm })}>
+              Day
+            </span>
           </div>
 
           <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
@@ -452,12 +441,16 @@ export function DateField(props: DateFieldProps) {
                 onChange={onYearChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="YYYY"
-                className={dateFieldStyles({ variant: props.variant, error: !isValidYear })}
+                className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}
               />
             ) : (
-              <p className={dateFieldStyles({ variant: props.variant, error: !isValidYear })}>{year.value}</p>
+              <p className={dateFieldStyles({ variant: props.variant, error: !isValidYear || !dateFormState.isValid })}>
+                {year.value}
+              </p>
             )}
-            <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
+            <span className={labelStyles({ active: year.value !== '', error: !isValidYear || !dateFormState.isValid })}>
+              Year
+            </span>
           </div>
         </div>
         <div className="flex items-center">
@@ -471,7 +464,7 @@ export function DateField(props: DateFieldProps) {
                 onChange={onHourChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="00"
-                className={timeStyles({ variant: props.variant, error: !isValidYear })}
+                className={timeStyles({ variant: props.variant, error: !isValidHour || !isValidTimeForm })}
               />
               <span>:</span>
               <input
@@ -480,7 +473,7 @@ export function DateField(props: DateFieldProps) {
                 onChange={onMinuteChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="00"
-                className={timeStyles({ variant: props.variant, error: !isValidYear })}
+                className={timeStyles({ variant: props.variant, error: !isValidMinute || !isValidTimeForm })}
               />
             </div>
           ) : (
@@ -511,6 +504,28 @@ export function DateField(props: DateFieldProps) {
 
       <AnimatePresence mode="wait">
         <div className="overflow-hidden">
+          {!isValidHour && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              Entered hour is not valid. Please use a 12 hour format.
+            </motion.p>
+          )}
+          {!isValidMinute && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              Entered minute is not valid.
+            </motion.p>
+          )}
           {!isValidDay && (
             <motion.p
               className="mt-2 text-smallButton text-red-01"
@@ -544,7 +559,7 @@ export function DateField(props: DateFieldProps) {
               Entered year is not valid
             </motion.p>
           )}
-          {!isValidForm && (
+          {!isValidDateForm && (
             <motion.p
               className="mt-2 text-smallButton text-red-01"
               initial={{ opacity: 0, y: -5 }}
@@ -552,7 +567,18 @@ export function DateField(props: DateFieldProps) {
               exit={{ opacity: 0, y: -5 }}
               transition={{ duration: 0.15, bounce: 0.2 }}
             >
-              The entered day is not valid for the entered month
+              {dateFormState.error}
+            </motion.p>
+          )}
+          {!isValidTimeForm && (
+            <motion.p
+              className="mt-2 text-smallButton text-red-01"
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15, bounce: 0.2 }}
+            >
+              {timeFormState.error}
             </motion.p>
           )}
         </div>
