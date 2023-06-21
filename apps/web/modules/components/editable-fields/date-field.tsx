@@ -191,7 +191,7 @@ export function DateField(props: DateFieldProps) {
 
   const onToggleMeridiem = () => {
     const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
-    onBlur(meridiem);
+    onBlur(newMeridiem);
     setMeridiem(newMeridiem);
   };
 
@@ -244,8 +244,6 @@ export function DateField(props: DateFieldProps) {
 
   const onBlur = (meridiem: 'am' | 'pm') => {
     try {
-      const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
-
       let newMinute = minute.value;
       let newHour = hour.value;
       let newDay = day.value;
@@ -277,6 +275,10 @@ export function DateField(props: DateFieldProps) {
         setYear(newYear);
       }
 
+      if (Number(hour.value) === 12) {
+        newHour = '00';
+      }
+
       if (dateFormState && timeFormState) {
         // GeoDate.toISOStringUTC will throw an error if the date is invalid
         const isoString = GeoDate.toISOStringUTC({
@@ -284,10 +286,8 @@ export function DateField(props: DateFieldProps) {
           month: newMonth,
           year: newYear,
           minute: newMinute,
-          hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+          hour: meridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
         });
-
-        console.log(isoString);
 
         // Only create the triple if the form is valid
         props.onBlur?.(isoString);
@@ -395,7 +395,7 @@ export function DateField(props: DateFieldProps) {
             <div className="flex items-center justify-start gap-1">
               <input
                 data-testid="date-field-hour"
-                value={hour.value}
+                value={hour.value === '00' ? '12' : hour.value}
                 onChange={onHourChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="00"
@@ -413,7 +413,7 @@ export function DateField(props: DateFieldProps) {
             </div>
           ) : (
             <div className="flex items-center justify-start gap-1">
-              <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
+              <p className={timeStyles({ variant: props.variant })}>{hour.value === '00' ? '12' : hour.value}</p>
               <span>:</span>
               <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
               <p className="text-body uppercase">{meridiem}</p>

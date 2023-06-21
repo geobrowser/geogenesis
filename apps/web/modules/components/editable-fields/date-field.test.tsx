@@ -72,27 +72,27 @@ describe('DateField', () => {
   it('should render hour when hour changes', () => {
     render(<DateField isEditing={true} value="" />);
 
-    const monthInput = screen.getByTestId('date-field-hour') as HTMLInputElement;
-    fireEvent.change(monthInput, { target: { value: '12' } });
-    expect(monthInput.value).toBe('12');
+    const hourInput = screen.getByTestId('date-field-hour') as HTMLInputElement;
+    fireEvent.change(hourInput, { target: { value: '12' } });
+    expect(hourInput.value).toBe('12');
 
     // Hours greater than 12 are mapped to their 12 hour clock equivalent
     // e.g. 13 -> 1 or 17 -> 5
-    fireEvent.change(monthInput, { target: { value: '13' } });
-    expect(monthInput.value).toBe('01');
+    fireEvent.change(hourInput, { target: { value: '13' } });
+    expect(hourInput.value).toBe('13');
+    expect(screen.getByText('Entered hour is not valid. Please use a 12 hour format.')).toBeInTheDocument();
   });
 
   it('should render minute when minute changes', () => {
     render(<DateField isEditing={true} value="" />);
 
-    const monthInput = screen.getByTestId('date-field-minute') as HTMLInputElement;
-    fireEvent.change(monthInput, { target: { value: '30' } });
-    expect(monthInput.value).toBe('30');
+    const minuteInput = screen.getByTestId('date-field-minute') as HTMLInputElement;
+    fireEvent.change(minuteInput, { target: { value: '30' } });
+    expect(minuteInput.value).toBe('30');
 
-    // Hours greater than 12 are mapped to their 12 hour clock equivalent
-    // e.g. 13 -> 1 or 17 -> 5
-    fireEvent.change(monthInput, { target: { value: '61' } });
-    expect(monthInput.value).toBe('00');
+    fireEvent.change(minuteInput, { target: { value: '61' } });
+    expect(minuteInput.value).toBe('61');
+    expect(screen.getByText('Entered minute is not valid.')).toBeInTheDocument();
   });
 
   it('should toggle am/pm', () => {
