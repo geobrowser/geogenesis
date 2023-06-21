@@ -80,10 +80,10 @@ export function DateField(props: DateFieldProps) {
       const regex = /^[0-9]*$/;
 
       if (v !== '') {
-        if (!regex.test(v)) throw new Error('Day must be a number');
-        if (v.length > 2) throw new Error("Day can't be longer than 2 characters");
-        if (Number(v) > 31) throw new Error('Day must be less than 31');
-        if (Number(v) < 1) throw new Error('Day must be greater than 0');
+        if (!regex.test(v)) throw new Error('Day must be a number.');
+        if (v.length > 2) throw new Error("Day can't be longer than 2 characters.");
+        if (Number(v) > 31) throw new Error('Day must be less than 31.');
+        if (Number(v) < 1) throw new Error('Day must be greater than 0.');
       }
 
       return true;
@@ -95,10 +95,10 @@ export function DateField(props: DateFieldProps) {
       const regex = /^[0-9]*$/;
 
       if (v !== '') {
-        if (!regex.test(v)) throw new Error('Month must be a number');
-        if (v.length > 2) throw new Error("Month can't be longer than 2 characters");
-        if (Number(v) > 12) throw new Error('Month must be 12 or less');
-        if (Number(v) < 1) throw new Error('Month must be greater than 0');
+        if (!regex.test(v)) throw new Error('Month must be a number.');
+        if (v.length > 2) throw new Error("Month can't be longer than 2 characters.");
+        if (Number(v) > 12) throw new Error('Month must be 12 or less.');
+        if (Number(v) < 1) throw new Error('Month must be greater than 0.');
       }
 
       return true;
@@ -110,8 +110,8 @@ export function DateField(props: DateFieldProps) {
       const regex = /^[0-9]*$/;
 
       if (v !== '') {
-        if (!regex.test(v)) throw new Error('Year must be a number');
-        if (v.length < 4) throw new Error('Year must be 4 characters');
+        if (!regex.test(v)) throw new Error('Year must be a number.');
+        if (v.length < 4) throw new Error('Year must be 4 characters.');
       }
 
       return true;
@@ -123,9 +123,9 @@ export function DateField(props: DateFieldProps) {
       const regex = /^[0-9]*$/;
 
       if (v !== '') {
-        if (!regex.test(v)) throw new Error('Hour must be a number');
-        if (Number(v) > 12) throw new Error('Hour must be 12 or less');
-        if (Number(v) < 1) throw new Error('Hour must be greater than 0');
+        if (!regex.test(v)) throw new Error('Hour must be a number.');
+        if (Number(v) > 12) throw new Error('Hour must be 12 or less.');
+        if (Number(v) < 1) throw new Error('Hour must be greater than 0.');
       }
 
       return true;
@@ -137,9 +137,9 @@ export function DateField(props: DateFieldProps) {
       const regex = /^[0-9]*$/;
 
       if (v !== '') {
-        if (!regex.test(v)) throw new Error('Minute must be a number');
-        if (Number(v) > 59) throw new Error('Minute must be 59 or less');
-        if (Number(v) < 0) throw new Error('Minute must be 0 or greater');
+        if (!regex.test(v)) throw new Error('Minute must be a number.');
+        if (Number(v) > 59) throw new Error('Minute must be 59 or less.');
+        if (Number(v) < 0) throw new Error('Minute must be 0 or greater.');
       }
 
       return true;
@@ -152,18 +152,18 @@ export function DateField(props: DateFieldProps) {
       const yearAsNumber = Number(values.year);
 
       if (dayAsNumber > 30 && GeoDate.isMonth30Days(Number(values.month))) {
-        throw new Error('Day must be less than 31 for the entered month');
+        throw new Error('Day must be less than 31 for the entered month.');
       }
 
       // Check leap year in order to validate February has 29 days
       if (GeoDate.isLeapYear(yearAsNumber)) {
         if (dayAsNumber > 29 && Number(values.month) === 2) {
-          throw new Error('Day must be less than 30 for the entered month');
+          throw new Error('Day must be less than 30 for the entered month.');
         }
       } else {
         // Otherwise we validate that February has 28 days
         if (dayAsNumber > 28 && Number(values.month) === 2) {
-          throw new Error('Day must be less than 29 for the entered month');
+          throw new Error('Day must be less than 29 for the entered month.');
         }
       }
     }
@@ -174,13 +174,13 @@ export function DateField(props: DateFieldProps) {
   const [timeFormState] = useFormWithValidation({ hour: hour.value, minute: minute.value }, values => {
     if (values.hour !== '') {
       if (values.minute === '') {
-        throw new Error("Must enter a minute if you've entered an hour");
+        throw new Error("Must enter a minute if you've entered an hour.");
       }
     }
 
     if (values.minute !== '') {
       if (values.hour === '') {
-        throw new Error("Must enter an hour if you've entered a minute");
+        throw new Error("Must enter an hour if you've entered a minute.");
       }
     }
 
