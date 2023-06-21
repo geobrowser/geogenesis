@@ -5,6 +5,8 @@ import { GeoDate } from '~/modules/utils';
 import { Minus } from '~/modules/design-system/icons/minus';
 import { Spacer } from '~/modules/design-system/spacer';
 import { SmallButton } from '~/modules/design-system/button';
+import { useFieldWithValidation } from '~/modules/hooks/use-field-with-validation';
+import { useFormWithValidation } from '~/modules/hooks/use-form-with-validation';
 
 interface DateFieldProps {
   onBlur?: (date: string) => void;
@@ -63,71 +65,6 @@ const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tab
     error: false,
   },
 });
-
-function useFormWithValidation<T>(values: T, validate: (values: T) => boolean) {
-  const [isValidating, setIsValidating] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    try {
-      setIsValidating(true);
-      validate(values);
-      setError(null);
-      setIsValidating(false);
-    } catch (e: unknown) {
-      setError((e as Error).message);
-      setIsValidating(false);
-    }
-  }, [values, validate]);
-
-  return [
-    {
-      isValid: error === null,
-      isValidating,
-      error,
-    },
-  ];
-}
-
-function useFieldWithValidation(
-  initialValue: string,
-  { validate, transform }: { validate: (value: string) => boolean; transform?: (value: string) => string }
-) {
-  const [value, setValue] = React.useState(initialValue);
-  const [isValidating, setIsValidating] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const memoizedValidate = React.useCallback(validate, [validate]);
-  const memoizedTransformedValue = React.useMemo(() => {
-    if (transform) {
-      return transform(value);
-    }
-
-    return value;
-  }, [transform, value]);
-
-  React.useEffect(() => {
-    try {
-      setIsValidating(true);
-      memoizedValidate(memoizedTransformedValue);
-      setError(null);
-      setIsValidating(false);
-    } catch (e: unknown) {
-      setError((e as Error).message);
-      setIsValidating(false);
-    }
-  }, [memoizedTransformedValue, memoizedValidate]);
-
-  return [
-    {
-      value: memoizedTransformedValue,
-      error,
-      isValidating,
-      isValid: error === null,
-    },
-    (v: string) => setValue(v),
-  ] as const;
-}
 
 export function DateField(props: DateFieldProps) {
   const {
@@ -198,8 +135,6 @@ export function DateField(props: DateFieldProps) {
   const [minute, setMinute] = useFieldWithValidation(initialMinute.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
-
-      console.log('validate', v);
 
       if (v !== '') {
         if (!regex.test(v)) throw new Error('Minute must be a number');
