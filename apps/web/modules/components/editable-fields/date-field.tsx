@@ -7,8 +7,6 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { SmallButton } from '~/modules/design-system/button';
 
 interface DateFieldProps {
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
   onBlur?: (date: string) => void;
   variant?: 'body' | 'tableCell';
   value: string;
@@ -16,15 +14,12 @@ interface DateFieldProps {
 }
 
 const dateFieldStyles = cva(
-  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out',
+  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out text-center',
   {
     variants: {
       variant: {
         body: 'text-body',
         tableCell: 'text-tableCell',
-      },
-      centered: {
-        true: 'text-center',
       },
       error: {
         true: 'text-red-01',
@@ -32,7 +27,6 @@ const dateFieldStyles = cva(
     },
     defaultVariants: {
       variant: 'body',
-      centered: false,
       error: false,
     },
   }
@@ -209,7 +203,7 @@ export function DateField(props: DateFieldProps) {
       const hourAsNumber = Number(v);
 
       if (hourAsNumber > 12) {
-        return (hourAsNumber - 12).toString();
+        return (hourAsNumber - 12).toString().padStart(2, '0');
       }
 
       if (hourAsNumber < 1) {
@@ -231,6 +225,21 @@ export function DateField(props: DateFieldProps) {
       }
 
       return true;
+    },
+    transform: (v: string) => {
+      if (v === '') return v;
+
+      const minuteAsNumber = Number(v);
+
+      if (minuteAsNumber > 60) {
+        return '00';
+      }
+
+      if (minuteAsNumber < 1) {
+        return '';
+      }
+
+      return v;
     },
   });
 
@@ -300,6 +309,7 @@ export function DateField(props: DateFieldProps) {
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
+
     setMinute(value);
   };
 
@@ -309,20 +319,57 @@ export function DateField(props: DateFieldProps) {
 
     if (!regex.test(value)) return;
     if (value.length > 2) return;
+
     setHour(value);
   };
 
-  const onBlur = (meridiam: 'am' | 'pm') => {
+  const onBlur = (meridiem: 'am' | 'pm') => {
     try {
-      const newMeridiem = meridiam === 'am' ? 'pm' : 'am';
+      const newMeridiem = meridiem === 'am' ? 'pm' : 'am';
+
+      let newMinute = minute.value;
+      let newHour = hour.value;
+      let newDay = day.value;
+      let newMonth = month.value;
+      let newYear = year.value;
+
+      if (Number(minute.value) < 10) {
+        newMinute = minute.value.padStart(2, '0');
+        setMinute(newMinute);
+      }
+
+      if (Number(hour.value) < 10) {
+        newHour = hour.value.padStart(2, '0');
+        setHour(newHour);
+      }
+
+      if (Number(day.value) < 10) {
+        newDay = day.value.padStart(2, '0');
+        setDay(newDay);
+      }
+
+      if (Number(month.value) < 10) {
+        newMonth = month.value.padStart(2, '0');
+        setMonth(newMonth);
+      }
+
+      if (Number(year.value) < 1000 || Number(year.value) < 100 || Number(year.value) < 10) {
+        newYear = year.value.padStart(4, '0');
+        setYear(newYear);
+      }
+
       // GeoDate.toISOStringUTC will throw an error if the date is invalid
       const isoString = GeoDate.toISOStringUTC({
-        day: day.value,
-        month: month.value,
-        year: year.value,
-        minute: minute.value,
-        hour: newMeridiem === 'am' ? hour.value : (Number(hour.value) + 12).toString(),
+        day: newDay,
+        month: newMonth,
+        year: newYear,
+        minute: newMinute,
+        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
       });
+
+      if (Number(hour.value) < 10) {
+        setHour(hour.value.padStart(2, '0'));
+      }
 
       // Only create the triple if the form is valid
       if (isValidForm) props.onBlur?.(isoString);
@@ -343,11 +390,15 @@ export function DateField(props: DateFieldProps) {
           <div className="flex w-full flex-col" style={{ flex: 2 }}>
             {props.isEditing ? (
               <input
+                data-testid="date-field-month"
                 value={month.value}
                 onChange={onMonthChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="MM"
-                className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}
+                className={dateFieldStyles({
+                  variant: props.variant,
+                  error: !isValidMonth || !isValidForm,
+                })}
               />
             ) : (
               <p className={dateFieldStyles({ variant: props.variant, error: !isValidMonth || !isValidForm })}>
@@ -366,13 +417,13 @@ export function DateField(props: DateFieldProps) {
           <div className="flex flex-col items-center" style={{ flex: 2 }}>
             {props.isEditing ? (
               <input
+                data-testid="date-field-day"
                 value={day.value}
                 onChange={onDayChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="DD"
                 className={dateFieldStyles({
                   variant: props.variant,
-                  centered: true,
                   error: !isValidDay || !isValidForm,
                 })}
               />
@@ -380,7 +431,6 @@ export function DateField(props: DateFieldProps) {
               <p
                 className={dateFieldStyles({
                   variant: props.variant,
-                  centered: true,
                   error: !isValidDay || !isValidForm,
                 })}
               >
@@ -397,26 +447,26 @@ export function DateField(props: DateFieldProps) {
           <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
             {props.isEditing ? (
               <input
+                data-testid="date-field-year"
                 value={year.value}
                 onChange={onYearChange}
                 onBlur={() => onBlur(meridiem)}
                 placeholder="YYYY"
-                className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}
+                className={dateFieldStyles({ variant: props.variant, error: !isValidYear })}
               />
             ) : (
-              <p className={dateFieldStyles({ variant: props.variant, centered: true, error: !isValidYear })}>
-                {year.value}
-              </p>
+              <p className={dateFieldStyles({ variant: props.variant, error: !isValidYear })}>{year.value}</p>
             )}
             <span className={labelStyles({ active: year.value !== '', error: !isValidYear })}>Year</span>
           </div>
         </div>
-        <div className="flex w-[151px] items-center">
+        <div className="flex items-center">
           <Minus color="grey-03" />
           <Spacer width={18} />
           {props.isEditing ? (
             <div className="flex items-center justify-start gap-1">
               <input
+                data-testid="date-field-hour"
                 value={hour.value}
                 onChange={onHourChange}
                 onBlur={() => onBlur(meridiem)}
@@ -425,6 +475,7 @@ export function DateField(props: DateFieldProps) {
               />
               <span>:</span>
               <input
+                data-testid="date-field-minute"
                 value={minute.value}
                 onChange={onMinuteChange}
                 onBlur={() => onBlur(meridiem)}
@@ -437,18 +488,24 @@ export function DateField(props: DateFieldProps) {
               <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
               <span>:</span>
               <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
+              <p className="text-body uppercase">{meridiem}</p>
             </div>
           )}
-          <Spacer width={12} />
-          <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
-            <SmallButton
-              onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
-              variant="secondary"
-              className="uppercase"
-            >
-              {meridiem}
-            </SmallButton>
-          </motion.div>
+
+          {props.isEditing && (
+            <>
+              <Spacer width={12} />
+              <motion.div whileTap={{ scale: 0.95 }} className="focus:outline-none">
+                <SmallButton
+                  onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
+                  variant="secondary"
+                  className="uppercase"
+                >
+                  {meridiem}
+                </SmallButton>
+              </motion.div>
+            </>
+          )}
         </div>
       </div>
 
