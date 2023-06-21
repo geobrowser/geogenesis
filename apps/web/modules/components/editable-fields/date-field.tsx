@@ -142,7 +142,7 @@ export function DateField(props: DateFieldProps) {
     minute: initialMinute,
   } = GeoDate.fromISOStringUTC(props.value);
 
-  const [day, setDay] = useFieldWithValidation(initialDay, {
+  const [day, setDay] = useFieldWithValidation(initialDay.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -157,7 +157,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [month, setMonth] = useFieldWithValidation(initialMonth, {
+  const [month, setMonth] = useFieldWithValidation(initialMonth.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -172,7 +172,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [year, setYear] = useFieldWithValidation(initialYear, {
+  const [year, setYear] = useFieldWithValidation(initialYear.padStart(4, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -185,7 +185,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [hour, setHour] = useFieldWithValidation(initialHour, {
+  const [hour, setHour] = useFieldWithValidation(initialHour.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -214,7 +214,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [minute, setMinute] = useFieldWithValidation(initialMinute, {
+  const [minute, setMinute] = useFieldWithValidation(initialMinute.padStart(2, '0'), {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
