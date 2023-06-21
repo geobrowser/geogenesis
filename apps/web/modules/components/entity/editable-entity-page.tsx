@@ -402,12 +402,10 @@ function EntityAttributes({
         return null;
       case 'date':
         return (
-          // @TODO: Handle placeholders
           <DateField
             isEditing={true}
             value={triple.value.value}
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
-            placeholder="Add value..."
           />
         );
       case 'entity':
