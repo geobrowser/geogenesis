@@ -16,7 +16,7 @@ interface DateFieldProps {
 }
 
 const dateFieldStyles = cva(
-  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out text-center',
+  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out text-center bg-transparent',
   {
     variants: {
       variant: {
@@ -50,7 +50,7 @@ const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out
   },
 });
 
-const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tabular-nums', {
+const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tabular-nums bg-transparent p-0 m-0', {
   variants: {
     variant: {
       body: 'text-body',
@@ -311,7 +311,7 @@ export function DateField(props: DateFieldProps) {
   return (
     <div>
       <div className="flex items-start justify-between gap-4">
-        <div className="flex max-w-[164px] gap-3">
+        <div className="flex w-[164px] gap-3">
           <div className="flex w-full flex-col" style={{ flex: 2 }}>
             {props.isEditing ? (
               <input
@@ -443,7 +443,7 @@ export function DateField(props: DateFieldProps) {
               </motion.div>
             </>
           ) : (
-            <p className="text-body uppercase">{meridiem}</p>
+            <p className={`${timeStyles({ variant: props.variant })} w-[28px] uppercase`}>{meridiem}</p>
           )}
         </div>
       </div>

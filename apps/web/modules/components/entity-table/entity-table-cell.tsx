@@ -40,7 +40,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
         }
 
         if (value.type === 'date') {
-          return <DateField isEditing={false} key={value.id} value={value.value} />;
+          return <DateField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
         }
 
         return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;

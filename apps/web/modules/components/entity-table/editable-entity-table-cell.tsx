@@ -240,6 +240,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
           value={Value.dateValue(firstTriple) ?? ''}
+          variant="tableCell"
         />
       )}
     </div>
