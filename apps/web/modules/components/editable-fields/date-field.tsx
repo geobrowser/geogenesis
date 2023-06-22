@@ -118,19 +118,22 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [hour, setHour] = useFieldWithValidation(initialHour.padStart(2, '0'), {
-    validate: (v: string) => {
-      const regex = /^[0-9]*$/;
+  const [hour, setHour] = useFieldWithValidation(
+    initialHour.padStart(2, '0') === '00' ? '12' : initialHour.padStart(2, '0'),
+    {
+      validate: (v: string) => {
+        const regex = /^[0-9]*$/;
 
-      if (v !== '') {
-        if (!regex.test(v)) throw new Error('Hour must be a number.');
-        if (Number(v) > 12) throw new Error('Hour must be 12 or less.');
-        if (Number(v) < 1) throw new Error('Hour must be greater than 0.');
-      }
+        if (v !== '') {
+          if (!regex.test(v)) throw new Error('Hour must be a number.');
+          if (Number(v) > 12) throw new Error('Hour must be 12 or less.');
+          if (Number(v) < 1) throw new Error('Hour must be greater than 0.');
+        }
 
-      return true;
-    },
-  });
+        return true;
+      },
+    }
+  );
 
   const [minute, setMinute] = useFieldWithValidation(initialMinute.padStart(2, '0'), {
     validate: (v: string) => {
@@ -406,7 +409,7 @@ export function DateField(props: DateFieldProps) {
               <>
                 <input
                   data-testid="date-field-hour"
-                  value={hour.value === '00' ? '12' : hour.value}
+                  value={hour.value}
                   onChange={onHourChange}
                   onBlur={() => onBlur(meridiem)}
                   placeholder="00"
@@ -425,7 +428,7 @@ export function DateField(props: DateFieldProps) {
               </>
             ) : (
               <>
-                <p className={timeStyles({ variant: props.variant })}>{hour.value === '00' ? '12' : hour.value}</p>
+                <p className={timeStyles({ variant: props.variant })}>{hour.value}</p>
                 <span>:</span>
                 <p className={timeStyles({ variant: props.variant })}>{minute.value}</p>
               </>
