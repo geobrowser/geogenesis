@@ -85,9 +85,6 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
 
   const isLoadingProposals = !proposals || isLoading;
 
-  // @TODO remove console.info for proposals
-  console.info('proposals:', proposals);
-
   return (
     <div className="flex items-center justify-between text-text">
       <div className="flex">

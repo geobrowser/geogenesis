@@ -193,9 +193,6 @@ const Proposals = () => {
 
   const { changes, proposals } = data;
 
-  // @TODO remove console.info for proposal.selected
-  console.info('selected:', proposals.selected);
-
   const changedEntityIds = Object.keys(changes);
 
   let selectedVersionChangeCount = 0;
