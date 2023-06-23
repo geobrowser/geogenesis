@@ -116,8 +116,13 @@ export interface INetwork {
     blockNumber?: number
   ) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
-  fetchProposedVersions: (entityId: string, spaceId: string, abortController?: AbortController) => Promise<Version[]>;
-  fetchProposals: (spaceId: string, abortController?: AbortController) => Promise<Proposal[]>;
+  fetchProposedVersions: (
+    entityId: string,
+    spaceId: string,
+    abortController?: AbortController,
+    page?: number
+  ) => Promise<Version[]>;
+  fetchProposals: (spaceId: string, abortController?: AbortController, page?: number) => Promise<Proposal[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
   publish: (options: PublishOptions) => Promise<void>;
@@ -653,7 +658,7 @@ export class Network implements INetwork {
     };
   };
 
-  fetchProposals = async (spaceId: string, abortController?: AbortController) => {
+  fetchProposals = async (spaceId: string, abortController?: AbortController, page = 0) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -661,7 +666,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.proposalsQuery(spaceId),
+        query: queries.proposalsQuery(spaceId, 10 * page),
       }),
     });
 
@@ -714,7 +719,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController) => {
+  fetchProposedVersions = async (entityId: string, spaceId: string, abortController?: AbortController, page = 0) => {
     const response = await fetch(this.subgraphUrl, {
       method: 'POST',
       headers: {
@@ -722,7 +727,7 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
-        query: queries.proposedVersionsQuery(entityId),
+        query: queries.proposedVersionsQuery(entityId, 10 * page),
       }),
     });
 
@@ -923,25 +928,29 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
 }
 
 async function addEntries(spaceContract: SpaceContract, uris: string[], onStartPublish: () => void) {
-  const gasResponse = await fetch('https://gasstation-mainnet.matic.network/v2');
+  const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
   const gasSuggestion: {
     safeLow: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
     standard: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
     fast: {
-      maxPriorityFee: number;
-      maxFee: number;
+      maxPriorityFee: string;
+      maxFee: string;
     };
-    estimatedBaseFee: number;
+    fastest: {
+      maxPriorityFee: string;
+      maxFee: string;
+    };
+    estimatedBaseFee: string;
   } = await gasResponse.json();
 
-  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee.toFixed().toString(), 'gwei');
-  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee.toFixed().toString(), 'gwei');
+  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee, 'gwei');
+  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee, 'gwei');
 
   const mintTx = await spaceContract.addEntries(uris, {
     maxFeePerGas: maxFeeAsGWei,

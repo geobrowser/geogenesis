@@ -36,17 +36,14 @@ export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }
   // an address – date format.
   const versionName = name ?? `${formatShortAddress(createdBy.id)} – ${formattedLastEditedDate}`;
 
-  // Names might be very long, so we truncate to make it work with the menu UI
-  const truncatedVersionName = versionName.length > 36 ? `${versionName.slice(0, 36)}...` : versionName;
-
   return (
     <button
       onClick={onClick}
       className="relative z-10 block w-full bg-white px-2 py-3 text-grey-04 hover:bg-bg hover:text-text"
     >
       <div className="flex items-center justify-between">
-        <Text as="h1" variant="metadataMedium" className="mb-2">
-          {truncatedVersionName}
+        <Text as="h1" variant="metadataMedium" className="mb-2 !text-sm">
+          {versionName}
         </Text>
       </div>
       <div className="flex items-center justify-between ">

@@ -1,12 +1,12 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/modules/types';
-import { HistoryItem, HistoryPanel } from '../history';
+import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 import { Action } from '~/modules/action';
-import { useQuery } from '@tanstack/react-query';
 import { Services } from '~/modules/services';
 import { Menu } from '~/modules/design-system/menu';
 import { Context } from '~/modules/design-system/icons/context';
@@ -15,6 +15,8 @@ import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { useDiff } from '~/modules/diff';
+import { Dots } from '~/modules/design-system/dots';
+import { SmallButton } from '~/modules/design-system/button';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -24,14 +26,29 @@ interface EntityPageMetadataHeaderProps {
 
 export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetadataHeaderProps) {
   const { network } = Services.useServices();
-  const { data: versions, isLoading } = useQuery({
+  const {
+    data: versions,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: async () => network.fetchProposedVersions(id, spaceId),
+    queryFn: async ({ pageParam = 0 }) => network.fetchProposedVersions(id, spaceId, undefined, pageParam),
+    getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
   const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
-  const isLoadingVersions = !versions || isLoading;
+  const isOnePage = versions?.pages && versions.pages[0].length < 10;
+
+  const isLastPage =
+    versions?.pages &&
+    versions.pages.length > 1 &&
+    versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
+
+  const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
+
+  const showMore = !isOnePage && !isLastPage;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -43,22 +60,38 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
         ))}
       </ul>
       <div className="flex items-center gap-3">
-        <HistoryPanel isLoading={isLoadingVersions} isEmpty={versions?.length === 0}>
-          {versions?.map((v, index) => (
-            <HistoryItem
-              key={v.id}
-              onClick={() => {
-                setCompareMode('versions');
-                setPreviousVersion(versions[index + 1]?.id ?? '');
-                setSelectedVersion(v.id);
-                setIsCompareOpen(true);
-              }}
-              changeCount={Action.getChangeCount(v.actions)}
-              createdAt={v.createdAt}
-              createdBy={v.createdBy}
-              name={v.name}
-            />
+        <HistoryPanel>
+          {versions?.pages?.length === 0 && <HistoryEmpty />}
+          {renderedVersions?.map(group => (
+            <>
+              {group.map((v, index) => (
+                <HistoryItem
+                  key={v.id}
+                  onClick={() => {
+                    setCompareMode('versions');
+                    setPreviousVersion(group[index + 1]?.id ?? '');
+                    setSelectedVersion(v.id);
+                    setIsCompareOpen(true);
+                  }}
+                  changeCount={Action.getChangeCount(v.actions)}
+                  createdAt={v.createdAt}
+                  createdBy={v.createdBy}
+                  name={v.name}
+                />
+              ))}
+            </>
           ))}
+          {showMore && (
+            <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+              {isFetching || isFetchingNextPage ? (
+                <Dots />
+              ) : (
+                <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                  Show more
+                </SmallButton>
+              )}
+            </div>
+          )}
         </HistoryPanel>
         <EntityPageContextMenu entityId={id} spaceId={spaceId} />
       </div>
@@ -76,14 +109,29 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
 
   const { network } = Services.useServices();
 
-  const { data: proposals, isLoading } = useQuery({
+  const {
+    data: proposals,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async () => network.fetchProposals(spaceId),
+    queryFn: async ({ pageParam = 0 }) => network.fetchProposals(spaceId, undefined, pageParam),
+    getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isLoadingProposals = !proposals || isLoading;
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+
+  const isLastPage =
+    proposals?.pages &&
+    proposals.pages.length > 1 &&
+    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+
+  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+
+  const showMore = !isOnePage && !isLastPage;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -91,24 +139,40 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
         <span className="mt-1 inline-block rounded bg-text px-[7px] py-px text-sm font-medium text-white">Space</span>
       </div>
       <div className="inline-flex items-center gap-4">
-        <HistoryPanel isLoading={isLoadingProposals} isEmpty={proposals?.length === 0}>
-          {proposals?.map((p, index) => (
-            <HistoryItem
-              key={p.id}
-              onClick={() => {
-                setCompareMode('proposals');
-                setPreviousProposal(proposals[index + 1]?.id ?? '');
-                setSelectedProposal(p.id);
-                setIsCompareOpen(true);
-              }}
-              changeCount={Action.getChangeCount(
-                p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-              )}
-              createdAt={p.createdAt}
-              createdBy={p.createdBy}
-              name={p.name}
-            />
+        <HistoryPanel>
+          {proposals?.pages?.length === 0 && <HistoryEmpty />}
+          {renderedProposals?.map(group => (
+            <>
+              {group.map((p, index) => (
+                <HistoryItem
+                  key={p.id}
+                  onClick={() => {
+                    setCompareMode('proposals');
+                    setPreviousProposal(group[index + 1]?.id ?? '');
+                    setSelectedProposal(p.id);
+                    setIsCompareOpen(true);
+                  }}
+                  changeCount={Action.getChangeCount(
+                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
+                  )}
+                  createdAt={p.createdAt}
+                  createdBy={p.createdBy}
+                  name={p.name}
+                />
+              ))}
+            </>
           ))}
+          {showMore && (
+            <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
+              {isFetching || isFetchingNextPage ? (
+                <Dots />
+              ) : (
+                <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                  Show more
+                </SmallButton>
+              )}
+            </div>
+          )}
         </HistoryPanel>
         <Menu
           open={open}
