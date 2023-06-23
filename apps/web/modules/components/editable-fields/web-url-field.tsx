@@ -7,6 +7,9 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
       body: 'text-body',
       tableCell: 'text-tableCell',
     },
+    editable: {
+      false: 'text-ctaPrimary hover:text-ctaHover underline transition-colors duration-75',
+    },
   },
   defaultVariants: {
     variant: 'body',
@@ -14,12 +17,24 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
 });
 
 interface Props {
+  isEditing?: boolean;
   placeholder?: string;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell';
 }
 
-export function WebUrlField({ variant = 'body', ...props }: Props) {
-  return <input {...props} className={webUrlFieldStyles({ variant: variant })} />;
+export function WebUrlField({ variant = 'body', isEditing = false, ...props }: Props) {
+  return isEditing ? (
+    <input {...props} className={webUrlFieldStyles({ variant: variant, editable: isEditing })} />
+  ) : (
+    <a
+      href={props.value}
+      target="_blank"
+      rel="noreferrer"
+      className={webUrlFieldStyles({ variant: variant, editable: isEditing })}
+    >
+      {props.value}
+    </a>
+  );
 }

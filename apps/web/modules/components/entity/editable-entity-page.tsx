@@ -426,7 +426,7 @@ function EntityAttributes({
       case 'date':
         return (
           <DateField
-            isEditing={true}
+            isEditing
             value={triple.value.value}
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
           />
@@ -434,6 +434,7 @@ function EntityAttributes({
       case 'url':
         return (
           <WebUrlField
+            isEditing
             placeholder="Add value..."
             value={triple.value.value}
             onChange={e => {
