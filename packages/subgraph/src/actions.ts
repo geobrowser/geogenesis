@@ -412,7 +412,7 @@ export function handleAction(
     let value = createTripleAction.value
     let valueId: string = ''
 
-    let imageValue = value.asDateValue()
+    let imageValue = value.asImageValue()
     let imgValue: string | null = null
     if (imageValue != null) {
       valueId = imageValue.id
