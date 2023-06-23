@@ -57,6 +57,11 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'date',
       value: '',
     },
+    url: {
+      id: ID.createValueId(),
+      type: 'url',
+      value: '',
+    },
   };
 
   return tripleValue[type];
@@ -198,6 +203,8 @@ export const getValue = (triple: Triple): string | null => {
     case 'image':
       return triple.value.value;
     case 'date':
+      return triple.value.value;
+    case 'url':
       return triple.value.value;
   }
 };

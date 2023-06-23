@@ -25,6 +25,8 @@ import { DateField } from '../editable-fields/date-field';
 import { Services } from '~/modules/services';
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
 import { Date } from '~/modules/design-system/icons/date';
+import { Url } from '~/modules/design-system/icons/url';
+import { WebUrlField } from '../editable-fields/web-url-field';
 
 interface Props {
   triples: ITriple[];
@@ -296,6 +298,17 @@ function EntityAttributes({
     });
   };
 
+  const createUrlTripleFromPlaceholder = (triple: ITriple, value: string) => {
+    send({
+      type: 'CREATE_URL_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
+        value,
+      },
+    });
+  };
+
   const createDateTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
       type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
@@ -307,22 +320,32 @@ function EntityAttributes({
     });
   };
 
-  const updateStringValue = (triple: ITriple, name: string) => {
+  const updateStringValue = (triple: ITriple, value: string) => {
     send({
       type: 'UPDATE_STRING_VALUE',
       payload: {
         triple,
-        value: name,
+        value,
       },
     });
   };
 
-  const updateDateValue = (triple: ITriple, name: string) => {
+  const updateUrlValue = (triple: ITriple, value: string) => {
+    send({
+      type: 'UPDATE_URL_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
+  const updateDateValue = (triple: ITriple, value: string) => {
     send({
       type: 'UPDATE_DATE_VALUE',
       payload: {
         triple,
-        value: name,
+        value,
       },
     });
   };
@@ -406,6 +429,18 @@ function EntityAttributes({
             isEditing={true}
             value={triple.value.value}
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
+          />
+        );
+      case 'url':
+        return (
+          <WebUrlField
+            placeholder="Add value..."
+            value={triple.value.value}
+            onChange={e => {
+              triple.placeholder
+                ? createUrlTripleFromPlaceholder(triple, e.target.value)
+                : updateUrlValue(triple, e.target.value);
+            }}
           />
         );
       case 'entity':
@@ -579,6 +614,18 @@ function EntityAttributes({
                           ),
                           value: 'date',
                           onClick: () => onChangeTriple('date', triples),
+                          disabled: false,
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Url />
+                              <Spacer width={8} />
+                              Web URL
+                            </div>
+                          ),
+                          value: 'date',
+                          onClick: () => onChangeTriple('url', triples),
                           disabled: false,
                         },
                       ]}
