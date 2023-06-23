@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
-import { Triple as TripleType, TripleValueType } from '~/modules/types';
+import { ImageValue, Triple as TripleType, TripleValueType } from '~/modules/types';
 import { groupBy } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { valueTypeNames, valueTypes } from '~/modules/value-types';
@@ -100,7 +100,14 @@ export type EditEvent =
       type: 'ADD_NEW_COLUMN';
     }
   | {
-      type: 'UPDATE_VALUE';
+      type: 'UPDATE_STRING_VALUE';
+      payload: {
+        value: string;
+        triple: TripleType;
+      };
+    }
+  | {
+      type: 'UPDATE_DATE_VALUE';
       payload: {
         value: string;
         triple: TripleType;
@@ -108,6 +115,14 @@ export type EditEvent =
     }
   | {
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE';
+      payload: {
+        value: string;
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
+      type: 'CREATE_DATE_TRIPLE_WITH_VALUE';
       payload: {
         value: string;
         attributeId: string;
@@ -270,8 +285,9 @@ const listener =
         return triples.forEach(triple => {
           const isString = type === 'string';
           const isImage = type === 'image';
+          const isDate = type === 'date';
 
-          const retainTripleValueId = isString || isImage;
+          const retainTripleValueId = isString || isImage || isDate;
 
           const newValue = retainTripleValueId ? { ...value, id: triple.value.id } : value;
 
@@ -397,6 +413,27 @@ const listener =
         );
       }
 
+      case 'CREATE_DATE_TRIPLE_WITH_VALUE': {
+        const { value, attributeId, attributeName } = event.payload;
+
+        if (!value) return;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId,
+            attributeName,
+            value: {
+              type: 'date',
+              id: ID.createValueId(),
+              value: value,
+            },
+          })
+        );
+      }
+
       case 'CREATE_IMAGE_TRIPLE_WITH_VALUE': {
         const { imageSrc, attributeId, attributeName } = event.payload;
 
@@ -481,7 +518,7 @@ const listener =
         return create(newTypeTriple);
       }
 
-      case 'UPDATE_VALUE': {
+      case 'UPDATE_STRING_VALUE': {
         const { value, triple } = event.payload;
 
         return update(
@@ -494,9 +531,22 @@ const listener =
         );
       }
 
+      case 'UPDATE_DATE_VALUE': {
+        const { value, triple } = event.payload;
+
+        return update(
+          {
+            ...triple,
+            placeholder: false,
+            value: { ...triple.value, type: 'date', value },
+          },
+          triple
+        );
+      }
+
       case 'REMOVE_IMAGE': {
         const { triple } = event.payload;
-        const newValue = { ...triple.value, value: '' };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: '' };
 
         return update(
           Triple.ensureStableId({
@@ -509,7 +559,7 @@ const listener =
 
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
-        const newValue = { ...triple.value, value: imageSrc };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: imageSrc };
 
         return update(
           Triple.ensureStableId({

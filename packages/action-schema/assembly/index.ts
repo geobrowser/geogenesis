@@ -1,7 +1,7 @@
 import { JSON } from 'assemblyscript-json/assembly'
-import { Root } from './generated'
+import { Root } from './types'
 
-export * from './generated'
+export * from './types'
 
 /**
  * Test that we can decode and encode json as the Root object

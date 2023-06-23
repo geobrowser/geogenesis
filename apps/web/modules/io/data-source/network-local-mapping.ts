@@ -9,7 +9,9 @@ type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue;
+type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
+
+type NetworkValue = NetworkNumberValue | NetworkStringValue | NetworkEntityValue | NetworkImageValue | NetworkDateValue;
 
 export type NetworkTriple = NetworkValue & {
   id: string;
@@ -60,13 +62,14 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
       return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY': {
+    case 'ENTITY':
       return {
         type: 'entity',
         id: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
-    }
+    case 'DATE':
+      return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
   }
 }
 
@@ -78,13 +81,14 @@ export function extractActionValue(networkAction: NetworkAction): Value {
       return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
     case 'NUMBER':
       return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
-    case 'ENTITY': {
+    case 'ENTITY':
       return {
         type: 'entity',
         id: networkAction.entityValue?.id ?? null,
         name: networkAction.entityValue?.name ?? null,
       };
-    }
+    case 'DATE':
+      return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
   }
 }
 
@@ -108,6 +112,8 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
+      return !networkTriple.stringValue;
+    case 'DATE':
       return !networkTriple.stringValue;
   }
 }
@@ -144,7 +150,8 @@ export function fromNetworkActions(networkActions: NetworkAction[], spaceId: str
     .map(networkAction => {
       // There's an edge-case bug where the value can be null even though it should be an object.
       // Right now we're not doing any triple validation, but once we do we will no longer be indexing
-      // empty triples.
+      // empty triples. This is likely a result of very old data that does not map to the expected
+      // type for value types.
       if (networkTripleHasEmptyValue(networkAction) || networkTripleHasEmptyAttribute(networkAction)) {
         return null;
       }

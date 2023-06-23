@@ -16,13 +16,15 @@ import { groupBy, NavUtils } from '~/modules/utils';
 import { EntityAutocompleteDialog } from './autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from './autocomplete/entity-text-autocomplete';
 import { useEditEvents } from './edit-events';
-import { PageImageField, PageStringField } from './editable-fields';
+import { PageImageField, PageStringField } from '../editable-fields/editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { EntityOthersToast } from './presence/entity-others-toast';
 import { EntityPresenceProvider } from './presence/entity-presence-provider';
 import { TripleTypeDropdown } from './triple-type-dropdown';
+import { DateField } from '../editable-fields/date-field';
 import { Services } from '~/modules/services';
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
+import { Date } from '~/modules/design-system/icons/date';
 
 interface Props {
   triples: ITriple[];
@@ -294,9 +296,30 @@ function EntityAttributes({
     });
   };
 
-  const updateValue = (triple: ITriple, name: string) => {
+  const createDateTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
-      type: 'UPDATE_VALUE',
+      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId: triple.attributeId,
+        attributeName: triple.attributeName || '',
+        value,
+      },
+    });
+  };
+
+  const updateStringValue = (triple: ITriple, name: string) => {
+    send({
+      type: 'UPDATE_STRING_VALUE',
+      payload: {
+        triple,
+        value: name,
+      },
+    });
+  };
+
+  const updateDateValue = (triple: ITriple, name: string) => {
+    send({
+      type: 'UPDATE_DATE_VALUE',
       payload: {
         triple,
         value: name,
@@ -357,7 +380,7 @@ function EntityAttributes({
             onChange={e => {
               triple.placeholder
                 ? createStringTripleFromPlaceholder(triple, e.target.value)
-                : updateValue(triple, e.target.value);
+                : updateStringValue(triple, e.target.value);
             }}
           />
         );
@@ -377,6 +400,14 @@ function EntityAttributes({
         );
       case 'number':
         return null;
+      case 'date':
+        return (
+          <DateField
+            isEditing={true}
+            value={triple.value.value}
+            onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
+          />
+        );
       case 'entity':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
@@ -453,7 +484,7 @@ function EntityAttributes({
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
-        const ITriple: TripleValueType = triples[0].value.type || 'string';
+        const tripleType: TripleValueType = triples[0].value.type || 'string';
 
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
@@ -500,7 +531,7 @@ function EntityAttributes({
                 {!isPlaceholder && (
                   <>
                     <TripleTypeDropdown
-                      value={ITriple as IconName}
+                      value={tripleType as IconName}
                       options={[
                         {
                           label: (
@@ -512,7 +543,7 @@ function EntityAttributes({
                           ),
                           value: 'string',
                           onClick: () => onChangeTriple('string', triples),
-                          disabled: !isEntityGroup,
+                          disabled: false,
                         },
                         {
                           label: (
@@ -524,7 +555,7 @@ function EntityAttributes({
                           ),
                           value: 'entity',
                           onClick: () => onChangeTriple('entity', triples),
-                          disabled: Boolean(isEntityGroup),
+                          disabled: false,
                         },
                         {
                           label: (
@@ -536,7 +567,19 @@ function EntityAttributes({
                           ),
                           value: 'image',
                           onClick: () => onChangeTriple('image', triples),
-                          disabled: Boolean(isEntityGroup),
+                          disabled: false,
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Date />
+                              <Spacer width={8} />
+                              Date
+                            </div>
+                          ),
+                          value: 'date',
+                          onClick: () => onChangeTriple('date', triples),
+                          disabled: false,
                         },
                       ]}
                     />

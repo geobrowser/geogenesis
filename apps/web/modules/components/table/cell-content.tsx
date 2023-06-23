@@ -11,6 +11,7 @@ interface Props {
 }
 
 export function CellContent({ isExpanded, value, href }: Props) {
+  // @TODO: Handle date values
   const content = href ? (
     <Link href={href} passHref>
       <a className="block break-words text-tableCell text-ctaPrimary transition-colors duration-150 ease-in-out hover:text-ctaHover hover:underline hover:decoration-ctaHover">
