@@ -6,6 +6,7 @@ import { NavUtils } from '../../utils';
 import { ImageZoom } from '../editable-fields/editable-fields';
 import { CellContent } from '../table/cell-content';
 import { DateField } from '../editable-fields/date-field';
+import { WebUrlField } from '../editable-fields/web-url-field';
 
 interface Props {
   cell: Cell;
@@ -37,6 +38,10 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
 
         if (value.type === 'image') {
           return <ImageZoom key={value.id} imageSrc={value.value} variant="table-cell" />;
+        }
+
+        if (value.type === 'url') {
+          return <WebUrlField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
         }
 
         if (value.type === 'date') {
