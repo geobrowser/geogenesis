@@ -8,6 +8,9 @@ function createValueId(value: Value): string {
   const dateValue = value.asDateValue()
   if (dateValue) return dateValue.id
 
+  const urlValue = value.asDateValue()
+  if (urlValue) return urlValue.id
+
   const stringValue = value.asStringValue()
   if (stringValue) return stringValue.id
 

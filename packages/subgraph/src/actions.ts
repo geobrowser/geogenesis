@@ -250,6 +250,18 @@ export function handleCreateTripleAction(
     }
   }
 
+  const urlValue = fact.value.asUrlValue()
+  if (urlValue) {
+    log.debug('Creating date value', [])
+    if (attribute.id == TYPES) {
+      addEntityTypeId(entity, urlValue.value)
+    }
+    triple.valueType = 'URL'
+    triple.valueId = urlValue.id
+    triple.stringValue = urlValue.value
+    log.debug('Finished creating url value', [])
+  }
+
   const imageValue = fact.value.asImageValue()
   if (imageValue) {
     triple.valueType = 'IMAGE'
@@ -368,7 +380,8 @@ export function getOrCreateAction(
   stringValue: string | null = null,
   entityValue: string | null = null,
   imageValue: string | null = null,
-  dateValue: string | null = null
+  dateValue: string | null = null,
+  urlValue: string | null = null
 ): ActionEntity {
   let action = ActionEntity.load(id)
   if (action == null) {
@@ -383,6 +396,7 @@ export function getOrCreateAction(
     if (entityValue) action.entityValue = entityValue
     if (imageValue) action.stringValue = imageValue
     if (dateValue) action.stringValue = dateValue
+    if (urlValue) action.stringValue = urlValue
 
     action.save()
   }
@@ -412,7 +426,7 @@ export function handleAction(
     let value = createTripleAction.value
     let valueId: string = ''
 
-    let imageValue = value.asDateValue()
+    let imageValue = value.asImageValue()
     let imgValue: string | null = null
     if (imageValue != null) {
       valueId = imageValue.id
@@ -424,6 +438,13 @@ export function handleAction(
     if (dateValue != null) {
       valueId = dateValue.id
       dValue = dateValue.value
+    }
+
+    let urlValue = value.asUrlValue()
+    let uValue: string | null = null
+    if (urlValue != null) {
+      valueId = urlValue.id
+      uValue = urlValue.value
     }
 
     let entityValue = value.asEntityValue()
@@ -455,7 +476,8 @@ export function handleAction(
       strValue,
       entValue,
       imgValue,
-      dValue
+      dValue,
+      uValue
     )
     return action.id
   }
@@ -488,6 +510,13 @@ export function handleAction(
       dValue = dateValue.value
     }
 
+    let urlValue = value.asUrlValue()
+    let uValue: string | null = null
+    if (urlValue != null) {
+      valueId = urlValue.id
+      uValue = urlValue.value
+    }
+
     let entityValue = value.asEntityValue()
     let entValue: string | null = null
     if (entityValue != null) {
@@ -517,7 +546,8 @@ export function handleAction(
       strValue,
       entValue,
       imgValue,
-      dValue
+      dValue,
+      uValue
     )
     return action.id
   }

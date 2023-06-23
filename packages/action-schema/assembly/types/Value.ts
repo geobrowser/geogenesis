@@ -5,6 +5,7 @@ import { StringValue } from './StringValue'
 import { EntityValue } from './EntityValue'
 import { ImageValue } from './ImageValue'
 import { DateValue } from './DateValue'
+import { UrlValue } from './UrlValue'
 
 export class Value {
   type: string
@@ -31,6 +32,10 @@ export class Value {
 
   asDateValue(): DateValue | null {
     return this.type == 'date' ? (this as DateValue) : null
+  }
+
+  asUrlValue(): UrlValue | null {
+    return this.type == 'url' ? (this as UrlValue) : null
   }
 
   toJSON(): JSON.Value {
