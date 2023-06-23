@@ -19,9 +19,9 @@ import { SlideUp } from './slide-up/slide-up';
 import { Avatar } from '../avatar';
 import { Entity } from '../entity';
 import { formatShortAddress } from '../utils';
-import { GeoDate } from '../utils';
 import { Action } from '../action';
 import { INetwork } from '../io/data-source/network';
+import type { Action as ActionType, Proposal as ProposalType } from '~/modules/types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
 
@@ -39,12 +39,12 @@ type SpaceId = string;
 type EntityId = string;
 
 const CompareChanges = () => {
-  const { setIsCompareOpen } = useDiff();
+  const { compareMode, setIsCompareOpen } = useDiff();
 
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
-        <div className="inline-flex items-center gap-4">Compare versions</div>
+        <div className="inline-flex items-center gap-4">Compare {compareMode}</div>
         <div>
           <Button variant="secondary" onClick={() => setIsCompareOpen(false)}>
             Cancel
@@ -53,7 +53,8 @@ const CompareChanges = () => {
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <Versions />
+          {compareMode === 'versions' && <Versions />}
+          {compareMode === 'proposals' && <Proposals />}
         </div>
       </div>
     </>
@@ -62,7 +63,7 @@ const CompareChanges = () => {
 
 const Versions = () => {
   const { selectedVersion, previousVersion } = useDiff();
-  const [data, isLoading] = useChanges(selectedVersion, previousVersion);
+  const [data, isLoading] = useChangesFromVersions(selectedVersion, previousVersion);
 
   if (isLoading || typeof data === 'boolean' || typeof data === 'undefined') {
     return <div className="text-metadataMedium">Loading...</div>;
@@ -74,7 +75,7 @@ const Versions = () => {
 
   const selectedVersionChangeCount = Action.getChangeCount(versions.selected.actions);
 
-  const selectedVersionLastEditedDate = GeoDate.fromGeoTime(versions.selected.createdAt);
+  const selectedVersionLastEditedDate = versions.selected.createdAt * 1000;
 
   const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
     day: '2-digit',
@@ -89,20 +90,20 @@ const Versions = () => {
   });
 
   let previousVersionChangeCount;
-  let previousVersionLastEditedDate;
   let previousVersionFormattedLastEditedDate;
   let previousVersionLastEditedTime;
 
   if (versions.previous) {
     previousVersionChangeCount = Action.getChangeCount(versions.previous.actions);
 
-    previousVersionLastEditedDate = GeoDate.fromGeoTime(versions.previous.createdAt);
-
-    previousVersionFormattedLastEditedDate = new Date(previousVersionLastEditedDate).toLocaleDateString(undefined, {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt * 1000).toLocaleDateString(
+      undefined,
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }
+    );
 
     previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
       hour: '2-digit',
@@ -160,6 +161,143 @@ const Versions = () => {
                   </div>
                   <p className="text-smallButton">
                     {versions?.selected?.createdBy?.name ?? formatShortAddress(versions?.selected?.createdBy?.id)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-smallButton">
+                    {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                    {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-16 divide-y divide-grey-02">
+        {changedEntityIds.map((entityId: EntityId) => (
+          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const Proposals = () => {
+  const { selectedProposal, previousProposal } = useDiff();
+  const [data, isLoading] = useChangesFromProposals(selectedProposal, previousProposal);
+
+  if (isLoading || typeof data !== 'object' || !data.changes) {
+    return <div className="text-metadataMedium">Loading...</div>;
+  }
+
+  const { changes, proposals } = data;
+
+  // @TODO remove console.info for proposal.selected
+  console.info('selected:', proposals.selected);
+
+  const changedEntityIds = Object.keys(changes);
+
+  let selectedVersionChangeCount = 0;
+
+  if (proposals.selected) {
+    const proposal: ProposalType = proposals.selected;
+
+    selectedVersionChangeCount = Action.getChangeCount(
+      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
+    );
+  }
+
+  const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
+    undefined,
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }
+  );
+
+  const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  let previousVersionChangeCount;
+  let previousVersionFormattedLastEditedDate;
+  let previousVersionLastEditedTime;
+
+  if (proposals.previous) {
+    const proposal: ProposalType = proposals.previous;
+
+    previousVersionChangeCount = Action.getChangeCount(
+      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
+    );
+
+    previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  return (
+    <div className="relative flex flex-col gap-16">
+      <div>
+        <div className="flex gap-8">
+          <div className="flex-1">
+            <div className="text-body">Previous proposal</div>
+            {proposals.previous && (
+              <>
+                <div className="text-mediumTitle">{proposals.previous.name}</div>
+                {proposals.previous?.createdBy && (
+                  <div className="mt-1 flex items-center gap-4">
+                    <div className="inline-flex items-center gap-1">
+                      <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                        <Avatar
+                          alt={`Avatar for ${
+                            proposals?.previous?.createdBy?.name ?? proposals?.previous?.createdBy?.id
+                          }`}
+                          avatarUrl={proposals?.previous?.createdBy?.avatarUrl}
+                          value={proposals?.previous?.createdBy?.name ?? proposals?.previous?.createdBy?.id}
+                        />
+                      </div>
+                      <p className="text-smallButton">
+                        {proposals?.previous?.createdBy?.name ?? formatShortAddress(proposals?.previous?.createdBy?.id)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-smallButton">
+                        {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                        {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="text-body">Selected proposal</div>
+            <div className="text-mediumTitle">{proposals.selected.name}</div>
+            {proposals?.selected?.createdBy && (
+              <div className="mt-1 flex items-center gap-4">
+                <div className="inline-flex items-center gap-1">
+                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                    <Avatar
+                      alt={`Avatar for ${proposals?.selected?.createdBy?.name ?? proposals?.selected?.createdBy?.id}`}
+                      avatarUrl={proposals?.selected?.createdBy?.avatarUrl}
+                      value={proposals?.selected?.createdBy?.name ?? proposals?.selected?.createdBy?.id}
+                    />
+                  </div>
+                  <p className="text-smallButton">
+                    {proposals?.selected?.createdBy?.name ?? formatShortAddress(proposals?.selected?.createdBy?.id)}
                   </p>
                 </div>
                 <div>
@@ -538,11 +676,21 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
   }
 };
 
-const useChanges = (selectedVersion: string, previousVersion: string) => {
+const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
   const { network } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: [`${selectedVersion}-changes`],
+    queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
     queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, network),
+  });
+
+  return [data, isLoading];
+};
+
+const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
+  const { network } = Services.useServices();
+  const { data, isLoading } = useQuery({
+    queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
+    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, network),
   });
 
   return [data, isLoading];

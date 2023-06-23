@@ -29,7 +29,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     queryFn: async () => network.fetchProposedVersions(id, spaceId),
   });
 
-  const { setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
+  const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
   const isLoadingVersions = !versions || isLoading;
 
@@ -48,6 +48,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
             <HistoryItem
               key={v.id}
               onClick={() => {
+                setCompareMode('versions');
                 setPreviousVersion(versions[index + 1]?.id ?? '');
                 setSelectedVersion(v.id);
                 setIsCompareOpen(true);
@@ -80,7 +81,12 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     queryFn: async () => network.fetchProposals(spaceId),
   });
 
+  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
+
   const isLoadingProposals = !proposals || isLoading;
+
+  // @TODO remove console.info for proposals
+  console.info('proposals:', proposals);
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -89,9 +95,15 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
       </div>
       <div className="inline-flex items-center gap-4">
         <HistoryPanel isLoading={isLoadingProposals} isEmpty={proposals?.length === 0}>
-          {proposals?.map(p => (
+          {proposals?.map((p, index) => (
             <HistoryItem
               key={p.id}
+              onClick={() => {
+                setCompareMode('proposals');
+                setPreviousProposal(proposals[index + 1]?.id ?? '');
+                setSelectedProposal(p.id);
+                setIsCompareOpen(true);
+              }}
               changeCount={Action.getChangeCount(
                 p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
               )}

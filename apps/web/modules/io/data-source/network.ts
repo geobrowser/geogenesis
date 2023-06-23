@@ -109,6 +109,7 @@ export interface INetwork {
   fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<any | null>;
+  fetchProposal: (id: string, abortController?: AbortController) => Promise<any | null>;
   fetchEntity: (
     id: string,
     abortController?: AbortController | null,
@@ -286,6 +287,47 @@ export class Network implements INetwork {
       };
     } catch (e) {
       console.error(`Unable to fetch proposed version, proposedVersionId: ${id}`);
+      console.error(e);
+      return null;
+    }
+  };
+
+  fetchProposal = async (id: string, abortController?: AbortController) => {
+    if (!id) return null;
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: queries.proposalQuery(id),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch proposal, proposalId: ${id}`);
+      console.error(`Failed fetch proposal response text: ${await response.text()}`);
+      return null;
+    }
+
+    try {
+      const json = await response.json();
+      const proposal = json?.data?.proposal;
+
+      if (!proposal) {
+        return null;
+      }
+
+      const maybeProfile = await this.fetchProfile(proposal.createdBy.id);
+
+      return {
+        ...proposal,
+        createdBy: maybeProfile !== null ? { ...maybeProfile[1], id: maybeProfile[0] } : proposal.createdby,
+      };
+    } catch (e) {
+      console.error(`Unable to fetch proposed version, proposalId: ${id}`);
       console.error(e);
       return null;
     }

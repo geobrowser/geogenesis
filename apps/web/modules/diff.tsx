@@ -10,13 +10,21 @@ type DiffState = {
   setIsReadyToPublish: (value: boolean) => void;
   isCompareOpen: boolean;
   setIsCompareOpen: (value: boolean) => void;
+  compareMode: CompareMode;
+  setCompareMode: (value: CompareMode) => void;
   activeEntity: string;
   setActiveEntity: (value: string) => void;
   selectedVersion: string;
   setSelectedVersion: (value: string) => void;
   previousVersion: string;
   setPreviousVersion: (value: string) => void;
+  selectedProposal: string;
+  setSelectedProposal: (value: string) => void;
+  previousProposal: string;
+  setPreviousProposal: (value: string) => void;
 };
+
+type CompareMode = 'versions' | 'proposals'
 
 const initialDiffState = {
   isReviewOpen: false,
@@ -27,12 +35,18 @@ const initialDiffState = {
   setIsReadyToPublish: (value: boolean) => null,
   isCompareOpen: false,
   setIsCompareOpen: (value: boolean) => null,
+  compareMode: 'versions' as CompareMode,
+  setCompareMode: (value: CompareMode) => null,
   activeEntity: '',
   setActiveEntity: (value: string) => null,
   selectedVersion: '',
   setSelectedVersion: (value: string) => null,
   previousVersion: '',
   setPreviousVersion: (value: string) => null,
+  selectedProposal: '',
+  setSelectedProposal: (value: string) => null,
+  previousProposal: '',
+  setPreviousProposal: (value: string) => null,
 };
 
 const DiffContext = createContext<DiffState>(initialDiffState);
@@ -46,9 +60,12 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [activeSpace, setActiveSpace] = useState<string>('');
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
+  const [compareMode, setCompareMode] = useState<CompareMode>('versions');
   const [activeEntity, setActiveEntity] = useState<string>('');
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [previousVersion, setPreviousVersion] = useState<string>('');
+  const [selectedProposal, setSelectedProposal] = useState<string>('');
+  const [previousProposal, setPreviousProposal] = useState<string>('');
 
   return (
     <DiffContext.Provider
@@ -61,12 +78,18 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
         setIsReadyToPublish,
         isCompareOpen,
         setIsCompareOpen,
+        compareMode,
+        setCompareMode,
         activeEntity,
         setActiveEntity,
         selectedVersion,
         setSelectedVersion,
         previousVersion,
         setPreviousVersion,
+        selectedProposal,
+        setSelectedProposal,
+        previousProposal,
+        setPreviousProposal,
       }}
     >
       {children}

@@ -270,3 +270,45 @@ export const proposedVersionQuery = (id: string) => `query {
     }
   }
 }`;
+
+export const proposalQuery = (id: string) => `query {
+  proposal(id: ${JSON.stringify(id)}) {
+    id
+    name
+    description
+    createdAt
+    createdAtBlock
+    createdBy {
+      id
+    }
+    status
+    proposedVersions {
+      id
+      name
+      createdAt
+      createdBy {
+        id
+      }
+      actions {
+        actionType
+        id
+        attribute {
+          id
+          name
+        }
+        entity {
+          id
+          name
+        }
+        entityValue {
+          id
+          name
+        }
+        numberValue
+        stringValue
+        valueType
+        valueId
+      }
+    }
+  }
+}`;

@@ -10,7 +10,7 @@ interface MergeDataSourceOptions {
   store: ActionsStore;
 }
 
-interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion'> {
+interface IMergeDataSource extends OmitStrict<INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
   rows: (
     options: Parameters<INetwork['rows']>[0],
     columns: Column[],

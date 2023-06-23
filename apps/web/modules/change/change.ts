@@ -595,6 +595,205 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   return { changes, versions };
 }
 
+export async function fromProposal(proposalId: string, previousProposalId: string, network: INetwork) {
+  const changes: Record<EntityId, Changeset> = {};
+
+  const [selectedProposal, previousProposal] = await Promise.all([
+    network.fetchProposal(proposalId),
+    network.fetchProposal(previousProposalId),
+  ]);
+
+  const proposals = {
+    selected: selectedProposal,
+    previous: previousProposal,
+  };
+
+  const selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
+  const previousBlock = selectedBlock - 1;
+
+  const entitySet = new Set<EntityId>();
+
+  if (selectedProposal) {
+    selectedProposal.proposedVersions.forEach((proposedVersion: any) => {
+      proposedVersion.actions.forEach((action: any) => {
+        entitySet.add(action.entity.id);
+      });
+    });
+  }
+
+  const entityIds = [...entitySet.values()];
+
+  for (const entityId of entityIds) {
+    const [selectedEntity, previousEntity] = await Promise.all([
+      network.fetchEntity(entityId, null, selectedBlock),
+      network.fetchEntity(entityId, null, previousBlock),
+    ]);
+
+    const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
+      ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+      : [];
+
+    const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
+      ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+      : [];
+
+    const [
+      maybeRemoteSelectedEntityBlocks,
+      maybeRemotePreviousEntityBlocks,
+      maybeAdditionalRemotePreviousEntityBlocks,
+    ] = await Promise.all([
+      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, selectedBlock))),
+      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+      Promise.all(previousEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+    ]);
+
+    if (selectedEntity) {
+      changes[entityId] = {
+        name: selectedEntity.name ?? '',
+      };
+
+      selectedEntity.triples.map(triple => {
+        switch (triple.value.type) {
+          case 'entity': {
+            changes[entityId] = {
+              ...changes[entityId],
+              attributes: {
+                ...(changes[entityId]?.attributes ?? {}),
+                [triple.attributeId]: {
+                  ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                  type: triple.value.type ?? '',
+                  name: triple.attributeName ?? '',
+                  before: [],
+                  after: [...(changes[entityId]?.attributes?.[triple.attributeId]?.after ?? []), triple.value.name],
+                  actions: [],
+                },
+              },
+            };
+            break;
+          }
+
+          default: {
+            changes[entityId] = {
+              ...changes[entityId],
+              attributes: {
+                ...(changes[entityId]?.attributes ?? {}),
+                [triple.attributeId]: {
+                  ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                  type: triple.value.type ?? '',
+                  name: triple.attributeName ?? '',
+                  before: null,
+                  after: Triple.getValue(triple) ?? '',
+                  actions: [],
+                },
+              },
+            };
+            break;
+          }
+        }
+      });
+    }
+
+    if (previousEntity) {
+      previousEntity.triples.map(triple => {
+        switch (triple.value.type) {
+          case 'entity': {
+            changes[entityId] = {
+              ...changes[entityId],
+              attributes: {
+                ...(changes[entityId]?.attributes ?? {}),
+                [triple.attributeId]: {
+                  ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                  type: triple.value.type ?? '',
+                  name: triple.attributeName ?? '',
+                  before: [...(changes[entityId]?.attributes?.[triple.attributeId]?.before ?? []), triple.value.name],
+                  after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
+                  actions: [],
+                },
+              },
+            };
+            break;
+          }
+          default: {
+            changes[entityId] = {
+              ...changes[entityId],
+              attributes: {
+                ...(changes[entityId]?.attributes ?? {}),
+                [triple.attributeId]: {
+                  ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
+                  type: triple.value.type ?? '',
+                  name: triple.attributeName ?? '',
+                  before: Triple.getValue(triple) ?? '',
+                  after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
+                  actions: [],
+                },
+              },
+            };
+            break;
+          }
+        }
+      });
+    }
+
+    if (maybeRemoteSelectedEntityBlocks) {
+      maybeRemoteSelectedEntityBlocks.forEach(selectedEntityBlock => {
+        if (selectedEntityBlock === null) return;
+
+        changes[entityId] = {
+          ...changes[entityId],
+          blocks: {
+            ...(changes[entityId]?.blocks ?? {}),
+            [selectedEntityBlock.id]: {
+              type: getBlockTypeFromTriples(selectedEntityBlock.triples),
+              before: null,
+              after: getBlockValueFromTriples(selectedEntityBlock.triples),
+            },
+          },
+        };
+      });
+    }
+
+    if (maybeRemotePreviousEntityBlocks) {
+      maybeRemotePreviousEntityBlocks.forEach(previousEntityBlock => {
+        if (previousEntityBlock === null) return;
+
+        changes[entityId] = {
+          ...changes[entityId],
+          blocks: {
+            ...(changes[entityId]?.blocks ?? {}),
+            [previousEntityBlock.id]: {
+              ...(changes[entityId]?.blocks?.[previousEntityBlock.id] ?? {}),
+              before: getBlockValueFromTriples(previousEntityBlock.triples),
+            } as BlockChange,
+          },
+        };
+      });
+    }
+
+    if (maybeAdditionalRemotePreviousEntityBlocks) {
+      maybeAdditionalRemotePreviousEntityBlocks.forEach(previousEntityBlock => {
+        if (previousEntityBlock === null) return;
+
+        changes[entityId] = {
+          ...changes[entityId],
+          blocks: {
+            ...(changes[entityId]?.blocks ?? {}),
+            [previousEntityBlock.id]: {
+              ...(changes[entityId]?.blocks?.[previousEntityBlock.id] ?? {}),
+              type: getBlockTypeFromTriples(previousEntityBlock.triples),
+              before: getBlockValueFromTriples(previousEntityBlock.triples),
+              after: changes[entityId]?.blocks?.[previousEntityBlock.id]?.after ?? null,
+            },
+          },
+        };
+      });
+    }
+  }
+
+  return { changes, proposals };
+}
+
 const getBlockTypeFromTriples = (triples: TripleType[]): BlockValueType => {
   const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
 
