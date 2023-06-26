@@ -651,7 +651,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
       Promise.all(previousEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
     ]);
 
-    if (selectedEntity) {
+    if (selectedEntity && !selectedEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       changes[entityId] = {
         name: selectedEntity.name ?? '',
       };
@@ -697,7 +697,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
       });
     }
 
-    if (previousEntity) {
+    if (previousEntity && !previousEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       previousEntity.triples.map(triple => {
         switch (triple.value.type) {
           case 'entity': {
