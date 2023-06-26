@@ -20,6 +20,12 @@ const nextConfig = {
       },
     ],
   },
+  // bug in connectkit means we need to disable these in next's webpack config
+  // https://github.com/family/connectkit/discussions/235#discussioncomment-6081996
+  webpack: config => {
+    config.resolve.fallback = { fs: false, net: false, tls: false };
+    return config;
+  },
   async redirects() {
     return [
       {
