@@ -24,7 +24,7 @@ type DiffState = {
   setPreviousProposal: (value: string) => void;
 };
 
-type CompareMode = 'versions' | 'proposals'
+type CompareMode = 'versions' | 'proposals';
 
 const initialDiffState = {
   isReviewOpen: false,
