@@ -786,20 +786,20 @@ type ChipProps = {
   children: React.ReactNode;
 };
 
-const Chip = ({ status = 'unchanged', children }: ChipProps) => {
-  const chip = cva(
-    'inline-flex min-h-[1.5rem] items-center rounded-sm px-2 py-1 text-left text-metadataMedium shadow-inner shadow-text',
-    {
-      variants: {
-        status: {
-          added: 'bg-successTertiary',
-          removed: 'bg-errorTertiary line-through',
-          unchanged: 'bg-white',
-        },
+const chip = cva(
+  'inline-flex min-h-[1.5rem] items-center rounded-sm px-2 py-1 text-left text-metadataMedium shadow-inner shadow-text',
+  {
+    variants: {
+      status: {
+        added: 'bg-successTertiary',
+        removed: 'bg-errorTertiary line-through',
+        unchanged: 'bg-white',
       },
-    }
-  );
+    },
+  }
+);
 
+const Chip = ({ status = 'unchanged', children }: ChipProps) => {
   return <span className={chip({ status })}>{children}</span>;
 };
 

@@ -8,7 +8,8 @@ import { Cell, Triple } from '../../types';
 import { EntityAutocompleteDialog } from '../entity/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autocomplete';
 import { useEditEvents } from '../entity/edit-events';
-import { TableImageField, TableStringField } from '../entity/editable-fields';
+import { TableImageField, TableStringField } from '../editable-fields/editable-fields';
+import { DateField } from '../editable-fields/date-field';
 
 interface Props {
   cell: Cell;
@@ -56,6 +57,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isRelationValueType = valueType === SYSTEM_IDS.RELATION;
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
+  const isDateValueType = valueType === SYSTEM_IDS.DATE;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
@@ -101,6 +103,17 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
+  const createDateTripleWithValue = (value: string) => {
+    send({
+      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId,
+        attributeName: columnName,
+        value,
+      },
+    });
+  };
+
   const uploadImage = (triple: Triple, imageSrc: string) => {
     send({
       type: 'UPLOAD_IMAGE',
@@ -133,7 +146,17 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPDATE_VALUE',
+      type: 'UPDATE_STRING_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
+  const updateDateTripleValue = (triple: Triple, value: string) => {
+    send({
+      type: 'UPDATE_DATE_VALUE',
       payload: {
         triple,
         value,
@@ -195,7 +218,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               ? createStringTripleWithValue(e.target.value)
               : updateStringTripleValue(firstTriple, e.target.value)
           }
-          value={Value.stringValue(firstTriple) || ''}
+          value={Value.stringValue(firstTriple) ?? ''}
         />
       )}
 
@@ -209,6 +232,15 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           onImageRemove={() => {
             removeImage(firstTriple);
           }}
+        />
+      )}
+
+      {isDateValueType && (
+        <DateField
+          isEditing={true}
+          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
+          value={Value.dateValue(firstTriple) ?? ''}
+          variant="tableCell"
         />
       )}
     </div>

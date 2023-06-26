@@ -41,6 +41,8 @@ function createValueId(value: Value): string {
       return `n~${value.value}`;
     case 'image':
       return `i~${value.value}`;
+    case 'date':
+      return `d~${value.value}`;
   }
 }
 
