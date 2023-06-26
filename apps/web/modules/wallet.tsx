@@ -24,6 +24,9 @@ const LOCAL_CHAIN: Chain = {
     default: {
       http: [Config.options.development.rpc],
     },
+    public: {
+      http: [Config.options.development.rpc],
+    },
   },
 };
 
@@ -31,6 +34,9 @@ const TESTNET_CHAIN: Chain = {
   ...polygonMumbai,
   rpcUrls: {
     default: {
+      http: [Config.options.testnet.rpc],
+    },
+    public: {
       http: [Config.options.testnet.rpc],
     },
   },
@@ -42,6 +48,9 @@ const DEFAULT_CHAIN: Chain = {
     default: {
       http: [Config.options.production.rpc],
     },
+    public: {
+      http: [Config.options.production.rpc],
+    },
   },
 };
 
@@ -51,15 +60,16 @@ const { chains, provider, webSocketProvider } = configureChains(
   [publicProvider()]
 );
 
-const wagmiClient = createClient({
-  ...getDefaultClient({
+const wagmiClient = createClient(
+  getDefaultClient({
     appName: 'Geo Genesis',
     chains,
     webSocketProvider,
     provider,
     autoConnect: true,
-  }),
-});
+    walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+  })
+);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
