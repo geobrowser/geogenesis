@@ -19,4 +19,5 @@ The frontend relies on [Liveblocks](https://liveblocks.io) for a frontend-specif
 ```bash
 # .env.local
 NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 ```
