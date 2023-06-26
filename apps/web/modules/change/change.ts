@@ -12,6 +12,8 @@ import type {
   TripleValueType,
 } from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
+import type { NetworkVersion } from '../io/data-source/network-local-mapping';
+import type { NetworkAction } from '../io/data-source/network-local-mapping';
 
 export type ActionId = string;
 export type EntityId = string;
@@ -614,8 +616,8 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
   const entitySet = new Set<EntityId>();
 
   if (selectedProposal) {
-    selectedProposal.proposedVersions.forEach((proposedVersion: any) => {
-      proposedVersion.actions.forEach((action: any) => {
+    selectedProposal.proposedVersions.forEach((proposedVersion: NetworkVersion) => {
+      proposedVersion.actions.forEach((action: NetworkAction) => {
         entitySet.add(action.entity.id);
       });
     });

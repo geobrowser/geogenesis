@@ -727,6 +727,8 @@ const markdownComponent: Record<number, MarkdownType> = {
   6: 'h6',
 };
 
+// Parse raw markdown into basic formatting
+// faster than rendering TipTap editor
 function parseMarkdown(markdownString: string) {
   let markdownType: MarkdownType = 'p';
   let markdownContent = markdownString;
