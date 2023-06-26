@@ -39,6 +39,8 @@ import { Cog } from './icons/cog';
 import { NewTab } from './icons/new-tab';
 import { Date } from './icons/date';
 import { Minus } from './icons/minus';
+import { Wallet } from './icons/wallet';
+import { DisconnectWallet } from './icons/disconnect-wallet';
 
 export type IconName =
   | 'blank'
@@ -81,7 +83,9 @@ export type IconName =
   | 'dash'
   | 'cog'
   | 'newTab'
-  | 'minus';
+  | 'minus'
+  | 'wallet'
+  | 'disconnectWallet';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -138,4 +142,6 @@ const icons: Record<IconName, React.ElementType> = {
   cog: Cog,
   newTab: NewTab,
   minus: Minus,
+  wallet: Wallet,
+  disconnectWallet: DisconnectWallet,
 };
