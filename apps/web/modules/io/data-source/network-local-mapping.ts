@@ -37,6 +37,10 @@ export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
   createdBy: {
     id: string;
   };
+  entity: {
+    id: string;
+    name: string;
+  };
 };
 
 export type NetworkProposal = {
@@ -45,6 +49,7 @@ export type NetworkProposal = {
     id: string;
   };
   createdAt: number;
+  createdAtBlock: string;
   name: string | null;
   description: string | null;
   space: string;

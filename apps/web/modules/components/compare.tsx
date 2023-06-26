@@ -71,6 +71,10 @@ const Versions = () => {
 
   const { changes, versions } = data;
 
+  if (!versions.selected) {
+    return <div className="text-metadataMedium">No versions found.</div>;
+  }
+
   const changedEntityIds = Object.keys(changes);
 
   const selectedVersionChangeCount = Action.getChangeCount(versions.selected.actions);
@@ -192,6 +196,10 @@ const Proposals = () => {
   }
 
   const { changes, proposals } = data;
+
+  if (!proposals.selected) {
+    return <div className="text-metadataMedium">No proposals found.</div>;
+  }
 
   const changedEntityIds = Object.keys(changes);
 

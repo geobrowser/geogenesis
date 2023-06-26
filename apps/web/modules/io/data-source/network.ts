@@ -108,8 +108,8 @@ export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
-  fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<any | null>;
-  fetchProposal: (id: string, abortController?: AbortController) => Promise<any | null>;
+  fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<Version | null>;
+  fetchProposal: (id: string, abortController?: AbortController) => Promise<Proposal | null>;
   fetchEntity: (
     id: string,
     abortController?: AbortController | null,

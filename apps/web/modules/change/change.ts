@@ -10,9 +10,10 @@ import type {
   Entity as EntityType,
   Triple as TripleType,
   TripleValueType,
+  Version as VersionType,
+  Proposal as ProposalType,
 } from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
-import type { NetworkVersion } from '../io/data-source/network-local-mapping';
 import type { NetworkAction } from '../io/data-source/network-local-mapping';
 
 export type ActionId = string;
@@ -426,10 +427,16 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
     previous: previousVersion,
   };
 
-  const entityId = selectedVersion.entity.id;
+  let entityId = '';
+  let selectedBlock = 0;
+  let previousBlock = 0;
 
-  const selectedBlock = parseInt(selectedVersion.createdAtBlock, 10);
-  const previousBlock = selectedBlock - 1;
+  if (selectedVersion) {
+    entityId = selectedVersion.entity.id;
+
+    selectedBlock = parseInt(selectedVersion.createdAtBlock, 10);
+    previousBlock = selectedBlock - 1;
+  }
 
   const [selectedEntity, previousEntity] = await Promise.all([
     network.fetchEntity(entityId, null, selectedBlock),
@@ -610,14 +617,16 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     previous: previousProposal,
   };
 
-  const selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
-  const previousBlock = selectedBlock - 1;
-
+  let selectedBlock = 0;
+  let previousBlock = 0;
   const entitySet = new Set<EntityId>();
 
   if (selectedProposal) {
-    selectedProposal.proposedVersions.forEach((proposedVersion: NetworkVersion) => {
-      proposedVersion.actions.forEach((action: NetworkAction) => {
+    selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
+    previousBlock = selectedBlock - 1;
+
+    selectedProposal.proposedVersions.forEach((proposedVersion: VersionType) => {
+      proposedVersion.actions.forEach((action: any) => {
         entitySet.add(action.entity.id);
       });
     });

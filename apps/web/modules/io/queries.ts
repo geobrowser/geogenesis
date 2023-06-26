@@ -142,6 +142,7 @@ export const proposalsQuery = (spaceId: string, skip = 0) => `query {
     name
     description
     createdAt
+    createdAtBlock
     createdBy {
       id
     }
@@ -150,6 +151,7 @@ export const proposalsQuery = (spaceId: string, skip = 0) => `query {
       id
       name
       createdAt
+      createdAtBlock
       createdBy {
         id
       }
@@ -184,6 +186,7 @@ export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
     id
     name
     createdAt
+    createdAtBlock
     createdBy {
       id
     }
@@ -206,6 +209,10 @@ export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
       stringValue
       valueType
       valueId
+    }
+    entity {
+      id
+      name
     }
   }
 }`;
