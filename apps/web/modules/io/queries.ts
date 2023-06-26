@@ -134,8 +134,10 @@ export const tableEntitiesQuery = (filter: string, first = 100, skip = 0) => {
   }`;
 };
 
-export const proposalsQuery = (spaceId: string) => `query {
-  proposals(first: 10, where: {space: ${JSON.stringify(spaceId)}}, orderBy: createdAt, orderDirection: desc) {
+export const proposalsQuery = (spaceId: string, skip = 0) => `query {
+  proposals(first: 10, where: {space: ${JSON.stringify(
+    spaceId
+  )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
     id
     name
     description
@@ -175,8 +177,10 @@ export const proposalsQuery = (spaceId: string) => `query {
   }
 }`;
 
-export const proposedVersionsQuery = (entityId: string) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(entityId)}}, orderBy: createdAt, orderDirection: desc, first: 10) {
+export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
+  proposedVersions(where: {entity: ${JSON.stringify(
+    entityId
+  )}}, orderBy: createdAt, orderDirection: desc, first: 10, skip: ${skip}) {
     id
     name
     createdAt
