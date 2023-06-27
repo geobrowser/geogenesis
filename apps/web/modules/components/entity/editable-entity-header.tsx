@@ -80,18 +80,20 @@ export function EditableHeading({
         </div>
       ) : (
         <div>
-          <div className="flex items-center">
+          <div className="flex items-center justify-between">
             <Truncate maxLines={3} shouldTruncate>
               <Text as="h1" variant="mainPage">
                 {name}
               </Text>
             </Truncate>
             {isEditing && (
-              <div className="absolute top-0 right-0 flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {(isAdmin || isEditorController) && (
                   <Link href={NavUtils.toAdmin(spaceId)} passHref>
                     <a>
-                      <Button variant="secondary">Access control</Button>
+                      <Button className="shrink" variant="secondary">
+                        Access control
+                      </Button>
                     </a>
                   </Link>
                 )}
