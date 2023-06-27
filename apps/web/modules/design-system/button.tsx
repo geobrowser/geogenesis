@@ -28,7 +28,7 @@ const buttonClassNames = (className = '') =>
           tertiary: 'text-white bg-text border-white shadow-none',
           done: 'text-text bg-green border-green',
           // using a variant for disabled to overwrite the background/text styles
-          disabled: ' text-grey-03 bg-divider hover:bg-divider border-transparent',
+          disabled: 'text-grey-03 bg-divider hover:bg-divider border-transparent',
         },
         small: {
           false: 'px-3 py-2 gap-2 text-[1.0625rem] leading-[1.125rem] text-button',
