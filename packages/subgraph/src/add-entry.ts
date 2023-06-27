@@ -66,7 +66,16 @@ export function addEntry(params: EntryParams): void {
     }
   } else if (uri.startsWith(IPFS_URI_SCHEME)) {
     const cidString = uri.slice(IPFS_URI_SCHEME.length)
-    const bytes = ipfs.cat(cidString)
+
+    let bytes: Bytes | null = null
+    let retryCount = 0
+
+    // cat isn't deterministic and might time out. This is fixed using
+    // File DataSources in subgraphs. For now we have this retry mechanism.
+    while (!bytes && retryCount < 3) {
+      bytes = ipfs.cat(cidString)
+      retryCount = retryCount + 1
+    }
 
     if (bytes) {
       entry.decoded = bytes

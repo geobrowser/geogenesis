@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ActionsStoreProvider } from './action';
-import { ReviewProvider } from './review';
+import { DiffProvider } from './diff';
 import { Services } from './services';
 import { WalletProvider } from './wallet';
 import { LocalData } from '~/modules/io';
@@ -15,9 +15,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <Services.Provider>
         <ActionsStoreProvider>
           <LocalData.LocalStoreProvider>
-            <ReviewProvider>
+            <DiffProvider>
               <WalletProvider>{children}</WalletProvider>
-            </ReviewProvider>
+            </DiffProvider>
           </LocalData.LocalStoreProvider>
         </ActionsStoreProvider>
       </Services.Provider>

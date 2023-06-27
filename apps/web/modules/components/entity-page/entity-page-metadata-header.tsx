@@ -14,6 +14,7 @@ import { Close } from '~/modules/design-system/icons/close';
 import { Text } from '~/modules/design-system/text';
 import { Action as IAction } from '~/modules/types';
 import { EntityPageContextMenu } from './entity-page-context-menu';
+import { useDiff } from '~/modules/diff';
 import { Dots } from '~/modules/design-system/dots';
 import { SmallButton } from '~/modules/design-system/button';
 
@@ -35,6 +36,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     queryFn: async ({ pageParam = 0 }) => network.fetchProposedVersions(id, spaceId, undefined, pageParam),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
+
+  const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
   const isOnePage = versions?.pages && versions.pages[0].length < 10;
 
@@ -61,9 +64,15 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
           {versions?.pages?.length === 0 && <HistoryEmpty />}
           {renderedVersions?.map(group => (
             <>
-              {group.map(v => (
+              {group.map((v, index) => (
                 <HistoryItem
                   key={v.id}
+                  onClick={() => {
+                    setCompareMode('versions');
+                    setPreviousVersion(group[index + 1]?.id ?? '');
+                    setSelectedVersion(v.id);
+                    setIsCompareOpen(true);
+                  }}
                   changeCount={Action.getChangeCount(v.actions)}
                   createdAt={v.createdAt}
                   createdBy={v.createdBy}
@@ -111,6 +120,8 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
+  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
+
   const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
 
   const isLastPage =
@@ -132,9 +143,15 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
           {renderedProposals?.map(group => (
             <>
-              {group.map(p => (
+              {group.map((p, index) => (
                 <HistoryItem
                   key={p.id}
+                  onClick={() => {
+                    setCompareMode('proposals');
+                    setPreviousProposal(group[index + 1]?.id ?? '');
+                    setSelectedProposal(p.id);
+                    setIsCompareOpen(true);
+                  }}
                   changeCount={Action.getChangeCount(
                     p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
                   )}

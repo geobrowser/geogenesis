@@ -20,7 +20,7 @@ function createValueId(value: Value): string {
   const entityValue = value.asEntityValue()
   if (entityValue) return entityValue.id
 
-  throw new Error('Bad serialization')
+  throw new Error('Bad serialization of value id in createValueId()')
 }
 
 export function createTripleId(

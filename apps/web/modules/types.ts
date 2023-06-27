@@ -155,6 +155,7 @@ export type Proposal = {
   description: string | null;
   createdBy: Profile;
   createdAt: number;
+  createdAtBlock: string;
   proposedVersions: Version[];
 };
 
@@ -164,7 +165,12 @@ export type Version = {
   description: string | null;
   createdBy: Profile;
   createdAt: number;
+  createdAtBlock: string;
   actions: Action[];
+  entity: {
+    id: string;
+    name: string;
+  };
 };
 
 export type Profile = {

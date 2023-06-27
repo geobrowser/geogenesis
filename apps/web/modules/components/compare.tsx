@@ -1,294 +1,336 @@
 import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
 import cx from 'classnames';
 import { cva } from 'class-variance-authority';
-import { useSigner } from 'wagmi';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { motion, AnimatePresence } from 'framer-motion';
-import pluralize from 'pluralize';
-import { diffWords } from 'diff';
+import { diffWords, diffArrays } from 'diff';
 import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
+import pluralize from 'pluralize';
 import BoringAvatar from 'boring-avatars';
 
-import { Action } from '../action';
 import { Change } from '../change';
-import { Button, SmallButton, SquareButton } from '~/modules/design-system/button';
+import { Button } from '~/modules/design-system/button';
 import { colors } from '~/modules/design-system/theme/colors';
-import { Dropdown } from '~/modules/design-system/dropdown';
-import { Spinner } from '~/modules/design-system/spinner';
 import { useDiff } from '~/modules/diff';
-import { useSpaces } from '~/modules/spaces/use-spaces';
-import { useActionsStore } from '../action';
 import { Services } from '../services';
 import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
-import { Entity } from '../entity';
 import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
-import { INetwork } from '../io/data-source/network';
 import { SlideUp } from './slide-up/slide-up';
-import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
+import { Avatar } from '../avatar';
+import { Entity } from '../entity';
+import { formatShortAddress } from '../utils';
+import { Action } from '../action';
+import { INetwork } from '../io/data-source/network';
+import type { Action as ActionType, Proposal as ProposalType } from '~/modules/types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
 
-export const Review = () => {
-  const { isReviewOpen, setIsReviewOpen } = useDiff();
+export const Compare = () => {
+  const { isCompareOpen, setIsCompareOpen } = useDiff();
 
   return (
-    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
-      <ReviewChanges />
+    <SlideUp isOpen={isCompareOpen} setIsOpen={setIsCompareOpen}>
+      <CompareChanges />
     </SlideUp>
   );
 };
 
 type SpaceId = string;
-type Proposals = Record<SpaceId, Proposal>;
-
-type Proposal = {
-  name: string;
-  description: string;
-};
-
 type EntityId = string;
 
-const ReviewChanges = () => {
-  const { spaces } = useSpaces();
-  const { allSpacesWithActions } = useActionsStore();
-  const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
-
-  // Set a new default active space when active spaces change
-  useEffect(() => {
-    if (allSpacesWithActions.length === 0) {
-      setIsReviewOpen(false);
-      return;
-    }
-    setActiveSpace(allSpacesWithActions[0] ?? '');
-  }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen]);
-
-  // Options for space selector dropdown
-  const options = allSpacesWithActions.map(spaceId => ({
-    value: spaceId,
-    label: (
-      <span className="inline-flex items-center gap-2 text-button text-text">
-        <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-          <img
-            src={getSpaceImage(spaces, spaceId)}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-            alt=""
-          />
-        </span>
-        <span>{spaces.find(({ id }) => id === spaceId)?.attributes.name}</span>
-      </span>
-    ),
-    disabled: activeSpace === spaceId,
-    onClick: () => setActiveSpace(spaceId),
-  }));
-
-  // Proposal state
-  const [reviewState, setReviewState] = useState<ReviewState>('idle');
-  const [proposals, setProposals] = useState<Proposals>({});
-  const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
-  const isReadyToPublish = proposalName?.length > 3;
-  const [unstagedChanges, setUnstagedChanges] = useState<Record<string, unknown>>({});
-  const { actionsFromSpace, publish, clear } = useActionsStore(activeSpace);
-  const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [data, isLoading] = useChanges(actions, activeSpace);
-
-  // Publishing logic
-  const { data: signer } = useSigner();
-
-  const handlePublish = useCallback(async () => {
-    if (!activeSpace || !signer) return;
-    const clearProposalName = () => {
-      setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
-    };
-    await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
-    clearProposalName();
-  }, [activeSpace, proposalName, proposals, publish, signer, unstagedChanges]);
-
-  if (isLoading || typeof data !== 'object') {
-    return null;
-  }
-
-  const { changes, entities } = data;
-  const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
-  const totalEdits = getTotalEdits(
-    changes as Record<string, Change.Changeset>,
-    unstagedChanges as Record<string, Record<string, boolean>>
-  );
-
-  const changedEntityIds = Object.keys(changes);
+const CompareChanges = () => {
+  const { compareMode, setIsCompareOpen } = useDiff();
 
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
-        <div className="inline-flex items-center gap-4">
-          <SquareButton onClick={() => setIsReviewOpen(false)} icon="close" />
-          {allSpacesWithActions.length > 0 && (
-            <div className="inline-flex items-center gap-2">
-              <span className="text-metadataMedium leading-none">Review your edits in</span>
-              {allSpacesWithActions.length === 1 && (
-                <span className="inline-flex items-center gap-2 text-button text-text ">
-                  <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <img
-                      src={getSpaceImage(spaces, activeSpace)}
-                      className="absolute inset-0 h-full w-full object-cover object-center"
-                      alt=""
-                    />
-                  </span>
-                  <span>{spaces.find(({ id }) => id === activeSpace)?.attributes.name}</span>
-                </span>
-              )}
-              {allSpacesWithActions.length > 1 && (
-                <Dropdown
-                  trigger={
-                    <span className="inline-flex items-center gap-2">
-                      <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                        <img
-                          src={getSpaceImage(spaces, activeSpace)}
-                          className="absolute inset-0 h-full w-full object-cover object-center"
-                          alt=""
-                        />
-                      </span>
-                      <span>{spaces.find(({ id }) => id === activeSpace)?.attributes.name}</span>
-                    </span>
-                  }
-                  align="start"
-                  options={options}
-                />
-              )}
-            </div>
-          )}
-        </div>
+        <div className="inline-flex items-center gap-4">Compare {compareMode}</div>
         <div>
-          <Button onClick={handlePublish} disabled={!isReadyToPublish}>
-            Publish
+          <Button variant="secondary" onClick={() => setIsCompareOpen(false)}>
+            Cancel
           </Button>
         </div>
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <div className="relative flex flex-col gap-16">
-            <div className="absolute top-0 right-0 flex items-center gap-8">
-              <div className="inline-flex items-center gap-2">
-                <span>
-                  <span className="font-medium">
-                    {totalEdits} {pluralize('edit', totalEdits)}
-                  </span>{' '}
-                  selected to publish
-                </span>
-                <SquareButton
-                  icon={totalEdits === 0 ? 'blank' : totalEdits === totalChanges ? 'tick' : 'dash'}
-                  onClick={() => setUnstagedChanges({})}
-                />
-              </div>
-              <div>
-                <SmallButton onClick={() => clear(activeSpace)}>Delete all</SmallButton>
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <div className="text-body">Proposal name</div>
-              <input
-                type="text"
-                value={proposals[activeSpace]?.name ?? ''}
-                onChange={({ currentTarget }) =>
-                  setProposals({
-                    ...proposals,
-                    [activeSpace]: { ...proposals[activeSpace], name: currentTarget.value },
-                  })
-                }
-                placeholder="Name your proposal..."
-                className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-col gap-16 divide-y divide-grey-02">
-              {changedEntityIds.map((entityId: EntityId) => (
-                <ChangedEntity
-                  key={entityId}
-                  spaceId={activeSpace}
-                  change={changes[entityId] as Changeset}
-                  entityId={entityId}
-                  entity={entities[entityId] as EntityType}
-                  unstagedChanges={unstagedChanges}
-                  setUnstagedChanges={setUnstagedChanges}
-                />
-              ))}
-            </div>
-          </div>
+          {compareMode === 'versions' && <Versions />}
+          {compareMode === 'proposals' && <Proposals />}
         </div>
       </div>
-      <StatusBar reviewState={reviewState} />
     </>
   );
 };
 
-const getTotalChanges = (changes: Record<string, Change.Changeset>) => {
-  let totalChanges = 0;
+const Versions = () => {
+  const { selectedVersion, previousVersion } = useDiff();
+  const [data, isLoading] = useChangesFromVersions(selectedVersion, previousVersion);
 
-  for (const key in changes) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.attributes) {
-      totalChanges++;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.blocks) {
-      totalChanges++;
-    }
+  if (isLoading) {
+    return <div className="text-metadataMedium">Loading...</div>;
   }
 
-  return totalChanges;
+  if (data === undefined) {
+    return <div className="text-metadataMedium">No versions found.</div>;
+  }
+
+  const { changes, versions } = data;
+
+  if (!versions.selected) {
+    return <div className="text-metadataMedium">No versions found.</div>;
+  }
+
+  const changedEntityIds = Object.keys(changes);
+
+  const selectedVersionChangeCount = Action.getChangeCount(versions.selected.actions);
+
+  const selectedVersionLastEditedDate = versions.selected.createdAt * 1000;
+
+  const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  let previousVersionChangeCount;
+  let previousVersionFormattedLastEditedDate;
+  let previousVersionLastEditedTime;
+
+  if (versions.previous) {
+    previousVersionChangeCount = Action.getChangeCount(versions.previous.actions);
+
+    previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt * 1000).toLocaleDateString(
+      undefined,
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }
+    );
+
+    previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  return (
+    <div className="relative flex flex-col gap-16">
+      <div>
+        <div className="flex gap-8">
+          <div className="flex-1">
+            <div className="text-body">Previous version</div>
+            {versions.previous && (
+              <>
+                <div className="text-mediumTitle">{versions.previous.name}</div>
+                <div className="mt-1 flex items-center gap-4">
+                  <div className="inline-flex items-center gap-1">
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${versions.previous.createdBy.name ?? versions.previous.createdBy.id}`}
+                        avatarUrl={versions.previous.createdBy.avatarUrl}
+                        value={versions.previous.createdBy.name ?? versions.previous.createdBy.id}
+                      />
+                    </div>
+                    <p className="text-smallButton">
+                      {versions.previous.createdBy.name ?? formatShortAddress(versions.previous.createdBy.id)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="text-body">Selected version</div>
+            <div className="text-mediumTitle">{versions.selected.name}</div>
+            <div className="mt-1 flex items-center gap-4">
+              <div className="inline-flex items-center gap-1">
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${versions.selected.createdBy.name ?? versions.selected.createdBy.id}`}
+                    avatarUrl={versions.selected.createdBy.avatarUrl}
+                    value={versions.selected.createdBy.name ?? versions.selected.createdBy.id}
+                  />
+                </div>
+                <p className="text-smallButton">
+                  {versions.selected.createdBy.name ?? formatShortAddress(versions.selected.createdBy.id)}
+                </p>
+              </div>
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-16 divide-y divide-grey-02">
+        {changedEntityIds.map((entityId: EntityId) => (
+          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
+        ))}
+      </div>
+    </div>
+  );
 };
 
-const getTotalEdits = (
-  changes: Record<string, Change.Changeset>,
-  unstagedChanges: Record<string, Record<string, boolean>>
-) => {
-  let totalEdits = 0;
+const Proposals = () => {
+  const { selectedProposal, previousProposal } = useDiff();
+  const [data, isLoading] = useChangesFromProposals(selectedProposal, previousProposal);
 
-  for (const key in changes) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.attributes) {
-      totalEdits++;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.blocks) {
-      totalEdits++;
-    }
+  if (isLoading) {
+    return <div className="text-metadataMedium">Loading...</div>;
   }
 
-  for (const key in unstagedChanges) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in unstagedChanges[key]) {
-      totalEdits--;
-    }
+  if (data === undefined) {
+    return <div className="text-metadataMedium">No proposals found.</div>;
   }
 
-  return totalEdits;
+  const { changes, proposals } = data;
+
+  if (!proposals.selected) {
+    return <div className="text-metadataMedium">No proposals found.</div>;
+  }
+
+  const changedEntityIds = Object.keys(changes);
+
+  let selectedVersionChangeCount = 0;
+
+  if (proposals.selected) {
+    const proposal: ProposalType = proposals.selected;
+
+    selectedVersionChangeCount = Action.getChangeCount(
+      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
+    );
+  }
+
+  const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
+    undefined,
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }
+  );
+
+  const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  let previousVersionChangeCount;
+  let previousVersionFormattedLastEditedDate;
+  let previousVersionLastEditedTime;
+
+  if (proposals.previous) {
+    const proposal: ProposalType = proposals.previous;
+
+    previousVersionChangeCount = Action.getChangeCount(
+      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
+    );
+
+    previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  return (
+    <div className="relative flex flex-col gap-16">
+      <div>
+        <div className="flex gap-8">
+          <div className="flex-1">
+            <div className="text-body">Previous proposal</div>
+            {proposals.previous && (
+              <>
+                <div className="text-mediumTitle">{proposals.previous.name}</div>
+                <div className="mt-1 flex items-center gap-4">
+                  <div className="inline-flex items-center gap-1">
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}`}
+                        avatarUrl={proposals.previous.createdBy.avatarUrl}
+                        value={proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}
+                      />
+                    </div>
+                    <p className="text-smallButton">
+                      {proposals.previous.createdBy.name ?? formatShortAddress(proposals.previous.createdBy.id)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="text-body">Selected proposal</div>
+            <div className="text-mediumTitle">{proposals.selected.name}</div>
+            <div className="mt-1 flex items-center gap-4">
+              <div className="inline-flex items-center gap-1">
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}`}
+                    avatarUrl={proposals.selected.createdBy.avatarUrl}
+                    value={proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}
+                  />
+                </div>
+                <p className="text-smallButton">
+                  {proposals.selected.createdBy.name ?? formatShortAddress(proposals.selected.createdBy.id)}
+                </p>
+              </div>
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-16 divide-y divide-grey-02">
+        {changedEntityIds.map((entityId: EntityId) => (
+          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 type ChangedEntityProps = {
-  spaceId: SpaceId;
+  spaceId?: SpaceId;
   change: Changeset;
   entityId: EntityId;
-  entity: EntityType;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
-const ChangedEntity = ({
-  spaceId,
-  change,
-  entityId,
-  entity,
-  unstagedChanges,
-  setUnstagedChanges,
-}: ChangedEntityProps) => {
-  const { name, blocks = {}, attributes = {}, actions = [] } = change;
-
-  const { deleteActions } = useActionsStore(spaceId);
-
-  const handleDeleteActions = useCallback(() => {
-    deleteActions(spaceId, actions);
-  }, [spaceId, actions, deleteActions]);
+const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
+  const { name, blocks = {}, attributes = {} } = change;
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -308,15 +350,10 @@ const ChangedEntity = ({
   return (
     <div className="relative -top-12 pt-12">
       <div className="flex flex-col gap-5">
-        <div className="text-mediumTitle">{renderedName}</div>
+        <h3 className="text-mediumTitle">{renderedName}</h3>
         <div className="flex gap-8">
-          <div className="flex-1 text-body">Current version</div>
-          <div className="relative flex-1 text-body">
-            Your proposed edits
-            <div className="absolute top-0 right-0">
-              <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
-            </div>
-          </div>
+          <div className="flex-1 text-body">Previous version</div>
+          <div className="relative flex-1 text-body">This version</div>
         </div>
       </div>
       {blockIds.length > 0 && (
@@ -331,13 +368,9 @@ const ChangedEntity = ({
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
               key={attributeId}
-              spaceId={spaceId}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
               entityId={entityId}
-              entity={entity}
-              unstagedChanges={unstagedChanges}
-              setUnstagedChanges={setUnstagedChanges}
             />
           ))}
         </div>
@@ -355,7 +388,10 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
   const { before, after } = block;
 
   // Don't show dead changes
-  if (!before && !after) return null;
+  if (!before && !after) return <></>;
+
+  // Don't show unchanged blocks
+  if (JSON.stringify(before) === JSON.stringify(after)) return <></>;
 
   switch (block.type) {
     case 'markdownContent': {
@@ -519,59 +555,22 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
 };
 
 type ChangedAttributeProps = {
-  spaceId: SpaceId;
   attributeId: AttributeId;
   attribute: AttributeChange;
   entityId: EntityId;
-  entity: EntityType;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
-const ChangedAttribute = ({
-  spaceId,
-  attributeId,
-  attribute,
-  entityId,
-  entity,
-  unstagedChanges,
-  setUnstagedChanges,
-}: ChangedAttributeProps) => {
-  const { actions = [] } = attribute;
-
-  const { deleteActions } = useActionsStore(spaceId);
-
-  const handleDeleteActions = useCallback(() => {
-    deleteActions(spaceId, actions);
-  }, [spaceId, actions, deleteActions]);
-
+const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => {
   // Don't show page blocks
-  if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+  if (attributeId === SYSTEM_IDS.BLOCKS) return <></>;
 
   const { name, before, after } = attribute;
 
-  const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
-
-  const handleStaging = () => {
-    if (!unstaged) {
-      setUnstagedChanges({
-        ...unstagedChanges,
-        [entityId]: {
-          ...(unstagedChanges[entityId] ?? {}),
-          [attributeId]: true,
-        },
-      });
-    } else {
-      const newUnstagedChanges: any = { ...unstagedChanges };
-      if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
-        delete newUnstagedChanges?.[entityId]?.[attributeId];
-      }
-      setUnstagedChanges(newUnstagedChanges);
-    }
-  };
-
   // Don't show dead changes
-  if (!before && !after) return null;
+  if (!before && !after) return <></>;
+
+  // Don't show unchanged attributes
+  if (JSON.stringify(before) === JSON.stringify(after)) return <></>;
 
   switch (attribute.type) {
     case 'string': {
@@ -594,10 +593,6 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
-            </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -613,57 +608,46 @@ const ChangedAttribute = ({
       );
     }
     case 'entity': {
+      if (!Array.isArray(before) || !Array.isArray(after)) return <></>;
+
+      const diffs = diffArrays(before, after);
+
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
-              {entity?.triples
-                .filter((triple: any) => triple.attributeId === attributeId && !before?.includes(triple.value.name))
-                .map((triple: any) => (
-                  <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
-                  </Chip>
-                ))}
-              {Array.isArray(before) && (
-                <>
-                  {before.map(item => (
-                    <Chip key={item} status="removed">
-                      {before}
-                    </Chip>
-                  ))}
-                </>
-              )}
+              {diffs
+                .filter(items => !items.added)
+                .map(items => {
+                  return (
+                    <>
+                      {items.value.map(item => (
+                        <Chip key={item} status={items.removed ? 'removed' : 'unchanged'}>
+                          {item}
+                        </Chip>
+                      ))}
+                    </>
+                  );
+                })}
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
-            </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
-              {entity?.triples
-                .filter(
-                  (triple: any) =>
-                    triple.attributeId === attributeId &&
-                    !before?.includes(triple.value.name) &&
-                    !after?.includes(triple.value.name)
-                )
-                .map((triple: any) => (
-                  <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
-                  </Chip>
-                ))}
-              {Array.isArray(after) && (
-                <>
-                  {after.map(item => (
-                    <Chip key={item} status="added">
-                      {item}
-                    </Chip>
-                  ))}
-                </>
-              )}
+              {diffs
+                .filter(items => !items.removed)
+                .map(items => {
+                  return (
+                    <>
+                      {items.value.map(item => (
+                        <Chip key={item} status={items.added ? 'added' : 'unchanged'}>
+                          {item}
+                        </Chip>
+                      ))}
+                    </>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -675,6 +659,7 @@ const ChangedAttribute = ({
           <div className="flex-1 border border-grey-02 p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
+              {/* @TODO: When can this be object? */}
               {typeof before !== 'object' && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
                   <img src={before} className="rounded" />
@@ -683,12 +668,9 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
-            </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
+              {/* @TODO: When can this be object? */}
               {typeof after !== 'object' && (
                 <span className="inline-block rounded bg-successTertiary p-1">
                   <img src={after} className="rounded" />
@@ -706,52 +688,26 @@ const ChangedAttribute = ({
   }
 };
 
-type StatusBarProps = {
-  reviewState: ReviewState;
-};
-
-const StatusBar = ({ reviewState }: StatusBarProps) => {
-  return (
-    <AnimatePresence>
-      {reviewState !== 'idle' && (
-        <div className="fixed bottom-0 right-0 left-0 flex w-full justify-center">
-          <motion.div
-            variants={statusVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={transition}
-            className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
-          >
-            {publishingStates.includes(reviewState) && <Spinner />}
-            <span>{message[reviewState]}</span>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
   const { network } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: [`${spaceId}-changes-${actions.length}`],
-    queryFn: async () => Change.fromActions(actions, network),
+    queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
+    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, network),
   });
 
-  return [data, isLoading];
+  // Typescript thinks is an array
+  return [data, isLoading] as const;
 };
 
-const message: Record<ReviewState, string> = {
-  idle: '',
-  reviewing: '',
-  'publishing-ipfs': 'Uploading changes to IPFS',
-  'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to The Graph',
-  'publish-complete': 'Changes published!',
-};
+const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
+  const { network } = Services.useServices();
+  const { data, isLoading } = useQuery({
+    queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
+    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, network),
+  });
 
-const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
+  return [data, isLoading] as const;
+};
 
 type ChipProps = {
   status?: 'added' | 'removed' | 'unchanged';
@@ -804,20 +760,6 @@ function parseMarkdown(markdownString: string) {
 
   return { markdownType, markdownContent };
 }
-
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return (
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-    'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-  );
-}
-
-const statusVariants = {
-  hidden: { opacity: 0, y: '4px' },
-  visible: { opacity: 1, y: '0px' },
-};
-
-const transition = { type: 'spring', duration: 0.5, bounce: 0 };
 
 type TableFiltersProps = {
   rawFilter: string;

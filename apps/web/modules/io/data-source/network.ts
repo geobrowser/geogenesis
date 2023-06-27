@@ -108,7 +108,13 @@ export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
-  fetchEntity: (id: string, abortController?: AbortController) => Promise<EntityType | null>;
+  fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<Version | null>;
+  fetchProposal: (id: string, abortController?: AbortController) => Promise<Proposal | null>;
+  fetchEntity: (
+    id: string,
+    abortController?: AbortController | null,
+    blockNumber?: number
+  ) => Promise<EntityType | null>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<EntityType[]>;
   fetchProposedVersions: (
     entityId: string,
@@ -250,7 +256,7 @@ export class Network implements INetwork {
     }
   };
 
-  fetchEntity = async (id: string, abortController?: AbortController): Promise<EntityType | null> => {
+  fetchProposedVersion = async (id: string, abortController?: AbortController) => {
     if (!id) return null;
 
     const response = await fetch(this.subgraphUrl, {
@@ -260,8 +266,108 @@ export class Network implements INetwork {
       },
       signal: abortController?.signal,
       body: JSON.stringify({
+        query: queries.proposedVersionQuery(id),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch proposed version, proposedVersionId: ${id}`);
+      console.error(`Failed fetch proposed version response text: ${await response.text()}`);
+      return null;
+    }
+
+    try {
+      const json = await response.json();
+      const proposedVersion: NetworkVersion | null = json?.data?.proposedVersion;
+
+      if (!proposedVersion) {
+        return null;
+      }
+
+      const maybeProfile = await this.fetchProfile(proposedVersion.createdBy.id);
+
+      return {
+        ...proposedVersion,
+        createdBy: maybeProfile !== null ? maybeProfile[1] : proposedVersion.createdBy,
+      };
+    } catch (e) {
+      console.error(`Unable to fetch proposed version, proposedVersionId: ${id}`);
+      console.error(e);
+      return null;
+    }
+  };
+
+  fetchProposal = async (id: string, abortController?: AbortController) => {
+    if (!id) return null;
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        query: queries.proposalQuery(id),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Unable to fetch proposal, proposalId: ${id}`);
+      console.error(`Failed fetch proposal response text: ${await response.text()}`);
+      return null;
+    }
+
+    try {
+      const json = await response.json();
+      const proposal: NetworkProposal | null = json?.data?.proposal;
+
+      if (!proposal) {
+        return null;
+      }
+
+      const maybeProfile = await this.fetchProfile(proposal.createdBy.id);
+
+      return {
+        ...proposal,
+        createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+        proposedVersions: proposal.proposedVersions.map(v => {
+          return {
+            ...v,
+            createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+            actions: fromNetworkActions(v.actions, proposal.space),
+          };
+        }),
+      };
+    } catch (e) {
+      console.error(`Unable to fetch proposed version, proposalId: ${id}`);
+      console.error(e);
+      return null;
+    }
+  };
+
+  fetchEntity = async (
+    id: string,
+    abortController?: AbortController | null,
+    blockNumber?: number
+  ): Promise<EntityType | null> => {
+    if (!id) return null;
+
+    if (typeof blockNumber === 'number' && blockNumber < 36472399) {
+      console.error(`36472399 is the earliest block number in GEO`);
+      return null;
+    }
+
+    const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
+
+    const response = await fetch(this.subgraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: abortController?.signal,
+      body: JSON.stringify({
         query: `query {
-          geoEntity(id: ${JSON.stringify(id)}) {
+          geoEntity(id: ${JSON.stringify(id)}${blockNumberQuery}) {
             id,
             name
             entityOf {
