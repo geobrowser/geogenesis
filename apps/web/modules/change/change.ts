@@ -626,7 +626,25 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     previousBlock = selectedBlock - 1;
 
     selectedProposal.proposedVersions.forEach((proposedVersion: VersionType) => {
-      entitySet.add(proposedVersion.entity.id);
+      proposedVersion.actions.forEach(action => {
+        switch (action.type) {
+          case 'createTriple':
+            entitySet.add(action.entityId);
+            break;
+
+          case 'deleteTriple':
+            entitySet.add(action.entityId);
+            break;
+
+          // This should never trigger since all network actions are only create/delete
+          case 'editTriple':
+            console.error(
+              `editTriple found in subgraph action: proposalId: ${selectedProposal.id} entityId: ${action.after.entityId}`
+            );
+            entitySet.add(action.after.entityId);
+            break;
+        }
+      });
     });
   }
 
