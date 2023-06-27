@@ -24,7 +24,7 @@ export class UrlValue extends Value {
     return __obj
   }
 
-  static fromJSON(__json: JSON.Value): DateValue | null {
+  static fromJSON(__json: JSON.Value): UrlValue | null {
     if (!__json.isObj) {
       log.debug('UrlValue.fromJSON(): __json.isObj is false', [])
       return null
