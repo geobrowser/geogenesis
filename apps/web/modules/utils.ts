@@ -28,6 +28,7 @@ export function titleCase(string: string): string {
 }
 
 export const NavUtils = {
+  toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
   toCreateEntity: (spaceId: string, typeId?: string | null, filterId?: string | null, filterValue?: string | null) => {
