@@ -626,9 +626,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     previousBlock = selectedBlock - 1;
 
     selectedProposal.proposedVersions.forEach((proposedVersion: VersionType) => {
-      proposedVersion.actions.forEach((action: any) => {
-        entitySet.add(action.entity.id);
-      });
+      entitySet.add(proposedVersion.entity.id);
     });
   }
 

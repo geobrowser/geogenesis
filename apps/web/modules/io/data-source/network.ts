@@ -278,7 +278,7 @@ export class Network implements INetwork {
 
     try {
       const json = await response.json();
-      const proposedVersion = json?.data?.proposedVersion;
+      const proposedVersion: NetworkVersion | null = json?.data?.proposedVersion;
 
       if (!proposedVersion) {
         return null;
@@ -288,7 +288,7 @@ export class Network implements INetwork {
 
       return {
         ...proposedVersion,
-        createdBy: maybeProfile !== null ? { ...maybeProfile[1], id: maybeProfile[0] } : proposedVersion.createdby,
+        createdBy: maybeProfile !== null ? maybeProfile[1] : proposedVersion.createdBy,
       };
     } catch (e) {
       console.error(`Unable to fetch proposed version, proposedVersionId: ${id}`);
@@ -319,7 +319,7 @@ export class Network implements INetwork {
 
     try {
       const json = await response.json();
-      const proposal = json?.data?.proposal;
+      const proposal: NetworkProposal | null = json?.data?.proposal;
 
       if (!proposal) {
         return null;
@@ -329,7 +329,14 @@ export class Network implements INetwork {
 
       return {
         ...proposal,
-        createdBy: maybeProfile !== null ? { ...maybeProfile[1], id: maybeProfile[0] } : proposal.createdby,
+        createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+        proposedVersions: proposal.proposedVersions.map(v => {
+          return {
+            ...v,
+            createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+            actions: fromNetworkActions(v.actions, proposal.space),
+          };
+        }),
       };
     } catch (e) {
       console.error(`Unable to fetch proposed version, proposalId: ${id}`);

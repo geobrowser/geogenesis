@@ -1,4 +1,4 @@
-import { Action, Entity, OmitStrict, Space, Triple, Value, Version } from '~/modules/types';
+import { Action, Entity, OmitStrict, Profile, Space, Triple, Value, Version } from '~/modules/types';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -34,9 +34,7 @@ export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
 
   // The NetworkVersion does not have a name or avatar associated
   // with the createdBy field
-  createdBy: {
-    id: string;
-  };
+  createdBy: Profile;
   entity: {
     id: string;
     name: string;
@@ -45,9 +43,7 @@ export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
 
 export type NetworkProposal = {
   id: string;
-  createdBy: {
-    id: string;
-  };
+  createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
   name: string | null;
