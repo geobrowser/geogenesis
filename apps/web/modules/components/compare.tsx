@@ -65,8 +65,12 @@ const Versions = () => {
   const { selectedVersion, previousVersion } = useDiff();
   const [data, isLoading] = useChangesFromVersions(selectedVersion, previousVersion);
 
-  if (isLoading || typeof data === 'boolean' || typeof data === 'undefined') {
+  if (isLoading) {
     return <div className="text-metadataMedium">Loading...</div>;
+  }
+
+  if (data === undefined) {
+    return <div className="text-metadataMedium">No versions found.</div>;
   }
 
   const { changes, versions } = data;
@@ -125,56 +129,52 @@ const Versions = () => {
             {versions.previous && (
               <>
                 <div className="text-mediumTitle">{versions.previous.name}</div>
-                {versions.previous?.createdBy && (
-                  <div className="mt-1 flex items-center gap-4">
-                    <div className="inline-flex items-center gap-1">
-                      <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                        <Avatar
-                          alt={`Avatar for ${versions?.previous?.createdBy?.name ?? versions?.previous?.createdBy?.id}`}
-                          avatarUrl={versions?.previous?.createdBy?.avatarUrl}
-                          value={versions?.previous?.createdBy?.name ?? versions?.previous?.createdBy?.id}
-                        />
-                      </div>
-                      <p className="text-smallButton">
-                        {versions?.previous?.createdBy?.name ?? formatShortAddress(versions?.previous?.createdBy?.id)}
-                      </p>
+                <div className="mt-1 flex items-center gap-4">
+                  <div className="inline-flex items-center gap-1">
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${versions.previous.createdBy.name ?? versions.previous.createdBy.id}`}
+                        avatarUrl={versions.previous.createdBy.avatarUrl}
+                        value={versions.previous.createdBy.name ?? versions.previous.createdBy.id}
+                      />
                     </div>
-                    <div>
-                      <p className="text-smallButton">
-                        {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
-                        {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
-                      </p>
-                    </div>
+                    <p className="text-smallButton">
+                      {versions.previous.createdBy.name ?? formatShortAddress(versions.previous.createdBy.id)}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
               </>
             )}
           </div>
           <div className="flex-1">
             <div className="text-body">Selected version</div>
             <div className="text-mediumTitle">{versions.selected.name}</div>
-            {versions?.selected?.createdBy && (
-              <div className="mt-1 flex items-center gap-4">
-                <div className="inline-flex items-center gap-1">
-                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                    <Avatar
-                      alt={`Avatar for ${versions?.selected?.createdBy?.name ?? versions?.selected?.createdBy?.id}`}
-                      avatarUrl={versions?.selected?.createdBy?.avatarUrl}
-                      value={versions?.selected?.createdBy?.name ?? versions?.selected?.createdBy?.id}
-                    />
-                  </div>
-                  <p className="text-smallButton">
-                    {versions?.selected?.createdBy?.name ?? formatShortAddress(versions?.selected?.createdBy?.id)}
-                  </p>
+            <div className="mt-1 flex items-center gap-4">
+              <div className="inline-flex items-center gap-1">
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${versions.selected.createdBy.name ?? versions.selected.createdBy.id}`}
+                    avatarUrl={versions.selected.createdBy.avatarUrl}
+                    value={versions.selected.createdBy.name ?? versions.selected.createdBy.id}
+                  />
                 </div>
-                <div>
-                  <p className="text-smallButton">
-                    {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
-                    {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
-                  </p>
-                </div>
+                <p className="text-smallButton">
+                  {versions.selected.createdBy.name ?? formatShortAddress(versions.selected.createdBy.id)}
+                </p>
               </div>
-            )}
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -191,8 +191,12 @@ const Proposals = () => {
   const { selectedProposal, previousProposal } = useDiff();
   const [data, isLoading] = useChangesFromProposals(selectedProposal, previousProposal);
 
-  if (isLoading || typeof data !== 'object' || !data.changes) {
+  if (isLoading) {
     return <div className="text-metadataMedium">Loading...</div>;
+  }
+
+  if (data === undefined) {
+    return <div className="text-metadataMedium">No proposals found.</div>;
   }
 
   const { changes, proposals } = data;
@@ -261,58 +265,52 @@ const Proposals = () => {
             {proposals.previous && (
               <>
                 <div className="text-mediumTitle">{proposals.previous.name}</div>
-                {proposals.previous?.createdBy && (
-                  <div className="mt-1 flex items-center gap-4">
-                    <div className="inline-flex items-center gap-1">
-                      <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                        <Avatar
-                          alt={`Avatar for ${
-                            proposals?.previous?.createdBy?.name ?? proposals?.previous?.createdBy?.id
-                          }`}
-                          avatarUrl={proposals?.previous?.createdBy?.avatarUrl}
-                          value={proposals?.previous?.createdBy?.name ?? proposals?.previous?.createdBy?.id}
-                        />
-                      </div>
-                      <p className="text-smallButton">
-                        {proposals?.previous?.createdBy?.name ?? formatShortAddress(proposals?.previous?.createdBy?.id)}
-                      </p>
+                <div className="mt-1 flex items-center gap-4">
+                  <div className="inline-flex items-center gap-1">
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}`}
+                        avatarUrl={proposals.previous.createdBy.avatarUrl}
+                        value={proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}
+                      />
                     </div>
-                    <div>
-                      <p className="text-smallButton">
-                        {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
-                        {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
-                      </p>
-                    </div>
+                    <p className="text-smallButton">
+                      {proposals.previous.createdBy.name ?? formatShortAddress(proposals.previous.createdBy.id)}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
               </>
             )}
           </div>
           <div className="flex-1">
             <div className="text-body">Selected proposal</div>
             <div className="text-mediumTitle">{proposals.selected.name}</div>
-            {proposals?.selected?.createdBy && (
-              <div className="mt-1 flex items-center gap-4">
-                <div className="inline-flex items-center gap-1">
-                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                    <Avatar
-                      alt={`Avatar for ${proposals?.selected?.createdBy?.name ?? proposals?.selected?.createdBy?.id}`}
-                      avatarUrl={proposals?.selected?.createdBy?.avatarUrl}
-                      value={proposals?.selected?.createdBy?.name ?? proposals?.selected?.createdBy?.id}
-                    />
-                  </div>
-                  <p className="text-smallButton">
-                    {proposals?.selected?.createdBy?.name ?? formatShortAddress(proposals?.selected?.createdBy?.id)}
-                  </p>
+            <div className="mt-1 flex items-center gap-4">
+              <div className="inline-flex items-center gap-1">
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}`}
+                    avatarUrl={proposals.selected.createdBy.avatarUrl}
+                    value={proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}
+                  />
                 </div>
-                <div>
-                  <p className="text-smallButton">
-                    {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
-                    {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
-                  </p>
-                </div>
+                <p className="text-smallButton">
+                  {proposals.selected.createdBy.name ?? formatShortAddress(proposals.selected.createdBy.id)}
+                </p>
               </div>
-            )}
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -351,6 +349,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
 
   return (
     <div className="relative -top-12 pt-12">
+      <h3 className="text-smallTitle">{renderedName}</h3>
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
@@ -688,7 +687,7 @@ const useChangesFromVersions = (selectedVersion: string, previousVersion: string
     queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, network),
   });
 
-  return [data, isLoading];
+  return [data, isLoading] as const;
 };
 
 const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
@@ -698,7 +697,7 @@ const useChangesFromProposals = (selectedProposal: string, previousProposal: str
     queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, network),
   });
 
-  return [data, isLoading];
+  return [data, isLoading] as const;
 };
 
 type ChipProps = {
