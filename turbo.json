@@ -24,9 +24,6 @@
     "test": {
       "dependsOn": ["build"]
     },
-    "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
-    },
     "@geogenesis/subgraph#codegen": {
       "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     },
@@ -40,6 +37,9 @@
     },
     "@geogenesis/contracts#build": {
       "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
+    },
+    "web": {
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
