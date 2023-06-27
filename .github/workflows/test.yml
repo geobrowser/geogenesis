@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -24,5 +24,7 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
 
       - run: pnpm test
