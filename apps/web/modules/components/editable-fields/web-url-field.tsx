@@ -8,7 +8,7 @@ const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 fo
       tableCell: 'text-tableCell',
     },
     editable: {
-      false: 'text-ctaPrimary hover:text-ctaHover underline transition-colors duration-75',
+      false: 'text-ctaPrimary hover:text-ctaHover underline transition-colors duration-75 truncate',
     },
   },
   defaultVariants: {
@@ -26,13 +26,13 @@ interface Props {
 
 export function WebUrlField({ variant = 'body', isEditing = false, ...props }: Props) {
   return isEditing ? (
-    <input {...props} className={webUrlFieldStyles({ variant: variant, editable: isEditing })} />
+    <input {...props} className={webUrlFieldStyles({ variant, editable: isEditing })} />
   ) : (
     <a
       href={props.value}
       target="_blank"
       rel="noreferrer"
-      className={webUrlFieldStyles({ variant: variant, editable: isEditing })}
+      className={webUrlFieldStyles({ variant, editable: isEditing })}
     >
       {props.value}
     </a>
