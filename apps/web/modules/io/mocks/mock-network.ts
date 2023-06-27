@@ -139,6 +139,14 @@ export class MockNetwork implements INetwork {
     return '';
   };
 
+  fetchProposedVersion = async () => {
+    return null;
+  };
+
+  fetchProposal = async () => {
+    return null;
+  };
+
   fetchProposedVersions = async () => {
     return [];
   };

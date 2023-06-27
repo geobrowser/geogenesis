@@ -4,7 +4,7 @@ import pluralize from 'pluralize';
 
 import { Button } from '~/modules/design-system/button';
 import { useEditable } from '~/modules/stores/use-editable';
-import { useReview } from '~/modules/review';
+import { useDiff } from '~/modules/diff';
 import { Action, useActionsStore } from '../action';
 import { A, D, pipe } from '@mobily/ts-belt';
 import { useToast } from '../hooks/use-toast';
@@ -12,7 +12,7 @@ import { useToast } from '../hooks/use-toast';
 export const FlowBar = () => {
   const [toast] = useToast();
   const { editable } = useEditable();
-  const { isReviewOpen, setIsReviewOpen } = useReview();
+  const { isReviewOpen, setIsReviewOpen } = useDiff();
   const { allActions, allSpacesWithActions } = useActionsStore();
 
   const allUnpublishedSquashedActions = Action.prepareActionsForPublishing(allActions);

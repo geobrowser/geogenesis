@@ -142,6 +142,7 @@ export const proposalsQuery = (spaceId: string, skip = 0) => `query {
     name
     description
     createdAt
+    createdAtBlock
     createdBy {
       id
     }
@@ -150,6 +151,7 @@ export const proposalsQuery = (spaceId: string, skip = 0) => `query {
       id
       name
       createdAt
+      createdAtBlock
       createdBy {
         id
       }
@@ -184,6 +186,7 @@ export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
     id
     name
     createdAt
+    createdAtBlock
     createdBy {
       id
     }
@@ -206,6 +209,10 @@ export const proposedVersionsQuery = (entityId: string, skip = 0) => `query {
       stringValue
       valueType
       valueId
+    }
+    entity {
+      id
+      name
     }
   }
 }`;
@@ -234,6 +241,84 @@ export const profileQuery = (address: string) => `query {
       entity {
         id
         name
+      }
+    }
+  }
+}`;
+
+export const proposedVersionQuery = (id: string) => `query {
+  proposedVersion(id: ${JSON.stringify(id)}) {
+    id
+    name
+    createdAt
+    createdAtBlock
+    createdBy {
+      id
+    }
+    actions {
+      actionType
+      id
+      attribute {
+        id
+        name
+      }
+      entity {
+        id
+        name
+      }
+      entityValue {
+        id
+        name
+      }
+      numberValue
+      stringValue
+      valueType
+      valueId
+    }
+    entity {
+      id
+      name
+    }
+  }
+}`;
+
+export const proposalQuery = (id: string) => `query {
+  proposal(id: ${JSON.stringify(id)}) {
+    id
+    name
+    description
+    createdAt
+    createdAtBlock
+    createdBy {
+      id
+    }
+    status
+    proposedVersions {
+      id
+      name
+      createdAt
+      createdBy {
+        id
+      }
+      actions {
+        actionType
+        id
+        attribute {
+          id
+          name
+        }
+        entity {
+          id
+          name
+        }
+        entityValue {
+          id
+          name
+        }
+        numberValue
+        stringValue
+        valueType
+        valueId
       }
     }
   }

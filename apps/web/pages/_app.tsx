@@ -18,13 +18,14 @@ import { ClientOnly } from '~/modules/components/client-only';
 import { FlowBar } from '~/modules/components/flow-bar';
 import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
+import { useDiff } from '~/modules/diff';
 import { Toast } from '~/modules/hooks/use-toast';
-import { useReview } from '~/modules/review';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
+import { Compare } from '~/modules/components/compare';
 
 function Root(props: AppProps) {
   return (
@@ -45,7 +46,7 @@ function App({ Component, pageProps }: AppProps) {
   const { setEditable, editable } = useEditable();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = useState(false);
-  const { isReviewOpen, setIsReviewOpen } = useReview();
+  const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   // Ideally memoization happens in the useKeyboardShortcuts hook
   const memoizedShortcuts = React.useMemo(
@@ -94,6 +95,7 @@ function App({ Component, pageProps }: AppProps) {
         <Toast />
         <FlowBar />
         <Review />
+        <Compare />
         <Persistence />
       </ClientOnly>
       <Analytics />
