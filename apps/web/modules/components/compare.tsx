@@ -349,7 +349,13 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
 
   return (
     <div className="relative -top-12 pt-12">
-      <h3 className="text-smallTitle">{renderedName}</h3>
+      <div className="flex flex-col gap-5">
+        <h3 className="text-mediumTitle">{renderedName}</h3>
+        <div className="flex gap-8">
+          <div className="flex-1 text-body">Last version</div>
+          <div className="relative flex-1 text-body">This version</div>
+        </div>
+      </div>
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
@@ -358,7 +364,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
         </div>
       )}
       {attributeIds.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
               key={attributeId}
@@ -653,6 +659,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
           <div className="flex-1 border border-grey-02 p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
+              {/* @TODO: When can this be object? */}
               {typeof before !== 'object' && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
                   <img src={before} className="rounded" />
@@ -663,6 +670,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
           <div className="group relative flex-1 border border-grey-02 p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
+              {/* @TODO: When can this be object? */}
               {typeof after !== 'object' && (
                 <span className="inline-block rounded bg-successTertiary p-1">
                   <img src={after} className="rounded" />

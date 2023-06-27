@@ -307,32 +307,27 @@ const ChangedEntity = ({
 
   return (
     <div className="relative -top-12 pt-12">
-      <div className="text-mediumTitle">{renderedName}</div>
-      <div className="flex gap-8">
-        <div className="flex-1 text-body">Current version</div>
-        <div className="relative flex-1 text-body">
-          Your proposed edits
-          <div className="absolute top-0 right-0">
-            <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
+      <div className="flex flex-col gap-5">
+        <div className="text-mediumTitle">{renderedName}</div>
+        <div className="flex gap-8">
+          <div className="flex-1 text-body">Current version</div>
+          <div className="relative flex-1 text-body">
+            Your proposed edits
+            <div className="absolute top-0 right-0">
+              <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
+            </div>
           </div>
         </div>
       </div>
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
-            <ChangedBlock
-              key={blockId}
-              blockId={blockId}
-              block={blocks[blockId]}
-              entity={entity}
-              unstagedChanges={unstagedChanges}
-              setUnstagedChanges={setUnstagedChanges}
-            />
+            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
           ))}
         </div>
       )}
       {attributeIds.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
               key={attributeId}
@@ -354,12 +349,9 @@ const ChangedEntity = ({
 type ChangedBlockProps = {
   blockId: BlockId;
   block: BlockChange;
-  entity: EntityType;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
 };
 
-const ChangedBlock = ({ blockId, block, entity, unstagedChanges, setUnstagedChanges }: ChangedBlockProps) => {
+const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
   const { before, after } = block;
 
   // Don't show dead changes
