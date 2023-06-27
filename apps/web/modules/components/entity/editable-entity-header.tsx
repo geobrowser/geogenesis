@@ -31,7 +31,7 @@ export function EditableHeading({
 }) {
   const { triples: localTriples, update, create, remove } = useEntityStore();
   const { editable } = useEditable();
-  const { isEditor } = useAccessControl(spaceId);
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { actionsFromSpace } = useActionsStore(spaceId);
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
@@ -80,11 +80,31 @@ export function EditableHeading({
         </div>
       ) : (
         <div>
-          <Truncate maxLines={3} shouldTruncate>
-            <Text as="h1" variant="mainPage">
-              {name}
-            </Text>
-          </Truncate>
+          <div className="flex items-center justify-between">
+            <Truncate maxLines={3} shouldTruncate>
+              <Text as="h1" variant="mainPage">
+                {name}
+              </Text>
+            </Truncate>
+            {isEditing && (
+              <div className="flex shrink-0 items-center gap-2">
+                {(isAdmin || isEditorController) && (
+                  <Link href={NavUtils.toAdmin(spaceId)} passHref>
+                    <a>
+                      <Button className="shrink" variant="secondary">
+                        Access control
+                      </Button>
+                    </a>
+                  </Link>
+                )}
+                <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
+                  <a>
+                    <Button icon="create">New entity</Button>
+                  </a>
+                </Link>
+              </div>
+            )}
+          </div>
           <Spacer height={12} />
         </div>
       )}
@@ -95,15 +115,6 @@ export function EditableHeading({
       )}
       <Spacer height={40} />
       <Editor editable={isEditing} />
-      {space && isEditing && (
-        <div className="absolute top-0 right-0">
-          <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-            <a>
-              <Button icon="create">New entity</Button>
-            </a>
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
