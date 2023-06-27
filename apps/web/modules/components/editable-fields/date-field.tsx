@@ -75,7 +75,14 @@ export function DateField(props: DateFieldProps) {
     minute: initialMinute,
   } = GeoDate.fromISOStringUTC(props.value);
 
-  const [day, setDay] = useFieldWithValidation(initialDay.padStart(2, '0'), {
+  const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
+  const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
+  const formattedInitialYear = initialYear === '' ? initialYear : initialYear.padStart(4, '0');
+  const formattedInitialHour =
+    initialHour === '' ? initialHour : initialHour.padStart(2, '0') === '00' ? '12' : initialHour.padStart(2, '0');
+  const formattedInitialMinute = initialMinute === '' ? initialMinute : initialMinute.padStart(2, '0');
+
+  const [day, setDay] = useFieldWithValidation(formattedInitialDay, {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -90,7 +97,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [month, setMonth] = useFieldWithValidation(initialMonth.padStart(2, '0'), {
+  const [month, setMonth] = useFieldWithValidation(formattedInitialMonth, {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -105,7 +112,7 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [year, setYear] = useFieldWithValidation(initialYear.padStart(4, '0'), {
+  const [year, setYear] = useFieldWithValidation(formattedInitialYear, {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -118,24 +125,21 @@ export function DateField(props: DateFieldProps) {
     },
   });
 
-  const [hour, setHour] = useFieldWithValidation(
-    initialHour.padStart(2, '0') === '00' ? '12' : initialHour.padStart(2, '0'),
-    {
-      validate: (v: string) => {
-        const regex = /^[0-9]*$/;
+  const [hour, setHour] = useFieldWithValidation(formattedInitialHour, {
+    validate: (v: string) => {
+      const regex = /^[0-9]*$/;
 
-        if (v !== '') {
-          if (!regex.test(v)) throw new Error('Hour must be a number.');
-          if (Number(v) > 12) throw new Error('Hour must be 12 or less.');
-          if (Number(v) < 1) throw new Error('Hour must be greater than 0.');
-        }
+      if (v !== '') {
+        if (!regex.test(v)) throw new Error('Hour must be a number.');
+        if (Number(v) > 12) throw new Error('Hour must be 12 or less.');
+        if (Number(v) < 1) throw new Error('Hour must be greater than 0.');
+      }
 
-        return true;
-      },
-    }
-  );
+      return true;
+    },
+  });
 
-  const [minute, setMinute] = useFieldWithValidation(initialMinute.padStart(2, '0'), {
+  const [minute, setMinute] = useFieldWithValidation(formattedInitialMinute, {
     validate: (v: string) => {
       const regex = /^[0-9]*$/;
 
@@ -263,17 +267,17 @@ export function DateField(props: DateFieldProps) {
         setHour(newHour);
       }
 
-      if (Number(day.value) < 10) {
+      if (Number(day.value) < 10 && day.value !== '') {
         newDay = day.value.padStart(2, '0');
         setDay(newDay);
       }
 
-      if (Number(month.value) < 10) {
+      if (Number(month.value) < 10 && month.value !== '') {
         newMonth = month.value.padStart(2, '0');
         setMonth(newMonth);
       }
 
-      if (Number(year.value) < 1000 || Number(year.value) < 100 || Number(year.value) < 10) {
+      if ((Number(year.value) < 1000 || Number(year.value) < 100 || Number(year.value) < 10) && year.value !== '') {
         newYear = year.value.padStart(4, '0');
         setYear(newYear);
       }
