@@ -352,7 +352,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
       <div className="flex flex-col gap-5">
         <h3 className="text-mediumTitle">{renderedName}</h3>
         <div className="flex gap-8">
-          <div className="flex-1 text-body">Last version</div>
+          <div className="flex-1 text-body">Previous version</div>
           <div className="relative flex-1 text-body">This version</div>
         </div>
       </div>
@@ -695,6 +695,7 @@ const useChangesFromVersions = (selectedVersion: string, previousVersion: string
     queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, network),
   });
 
+  // Typescript thinks is an array
   return [data, isLoading] as const;
 };
 
