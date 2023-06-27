@@ -88,6 +88,55 @@ export class GeoDate {
   static fromGeoTime(value: number) {
     return new Date(value * 1000);
   }
+
+  static isValidDate(date: Date): date is Date {
+    return date instanceof Date && !isNaN(date.getMilliseconds());
+  }
+
+  // Geo DateField expects ISO strings to be set in UTC time.
+  static toISOStringUTC({
+    day,
+    month,
+    year,
+    hour,
+    minute,
+  }: {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+  }): string {
+    const isoDate = new Date(`${month}-${day}-${year} ${hour}:${minute} UTC`);
+    return isoDate.toISOString();
+  }
+
+  // Geo DateField parses ISO strings in UTC time into day, month, year, hour, minute.
+  static fromISOStringUTC(dateString: string): {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+  } {
+    const date = new Date(dateString);
+    const isDate = GeoDate.isValidDate(date);
+    const day = isDate ? date.getUTCDate().toString() : '';
+    const month = isDate ? (date.getUTCMonth() + 1).toString() : '';
+    const year = isDate ? date.getUTCFullYear().toString() : '';
+    const hour = isDate ? date.getUTCHours().toString() : '';
+    const minute = isDate ? date.getUTCMinutes().toString() : '';
+
+    return { day, month, year, hour, minute };
+  }
+
+  static isLeapYear(year: number): boolean {
+    return year % 4 === 0;
+  }
+
+  static isMonth30Days(month: number): boolean {
+    return [4, 6, 9, 11].includes(month);
+  }
 }
 // https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {

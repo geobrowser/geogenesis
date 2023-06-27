@@ -1,8 +1,12 @@
 import { Value } from '@geogenesis/action-schema/assembly'
+import { log } from '@graphprotocol/graph-ts'
 
 function createValueId(value: Value): string {
   const imageValue = value.asImageValue()
   if (imageValue) return imageValue.id
+
+  const dateValue = value.asDateValue()
+  if (dateValue) return dateValue.id
 
   const stringValue = value.asStringValue()
   if (stringValue) return stringValue.id
@@ -22,5 +26,9 @@ export function createTripleId(
   attributeId: string,
   value: Value
 ): string {
-  return `${spaceId}:${entityId}:${attributeId}:${createValueId(value)}`
+  let valueId = createValueId(value)
+  log.debug(`entityId: ${entityId}`, [])
+  log.debug(`attributeId: ${attributeId}`, [])
+  log.debug(`valueId: ${valueId}`, [])
+  return `${spaceId}:${entityId}:${attributeId}:${valueId}`
 }

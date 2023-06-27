@@ -262,8 +262,6 @@ function convertTypeName(schema: JSONSchema7, property: JSONSchema7) {
     case 'boolean':
     case 'string':
       return 'string'
-    case 'image':
-      return 'string'
     case 'number':
       return 'f64'
     case 'array':

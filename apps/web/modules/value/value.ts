@@ -10,6 +10,12 @@ export function stringValue(triple?: Triple) {
   return triple?.value?.type === 'string' ? triple.value.value : null;
 }
 
+export function dateValue(triple?: Triple) {
+  if (!triple) return null;
+
+  return triple?.value?.type === 'date' ? triple.value.value : null;
+}
+
 export function imageValue(triple: Triple) {
   return triple?.value?.type === 'image' ? triple.value.value : null;
 }

@@ -37,6 +37,10 @@ import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { Dash } from './icons/dash';
 import { Cog } from './icons/cog';
 import { NewTab } from './icons/new-tab';
+import { Date } from './icons/date';
+import { Minus } from './icons/minus';
+import { Wallet } from './icons/wallet';
+import { DisconnectWallet } from './icons/disconnect-wallet';
 
 export type IconName =
   | 'blank'
@@ -73,11 +77,15 @@ export type IconName =
   | 'editorTable'
   | 'context'
   | 'filterTable'
+  | 'date'
   | 'filterTableWithFilters'
   | 'checkCloseSmall'
   | 'dash'
   | 'cog'
-  | 'newTab';
+  | 'newTab'
+  | 'minus'
+  | 'wallet'
+  | 'disconnectWallet';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -126,10 +134,14 @@ const icons: Record<IconName, React.ElementType> = {
   upload: Upload,
   context: Context,
   filterTable: FilterTable,
+  date: Date,
   filterTableWithFilters: FilterTableWithFilters,
   chevronDownSmall: ChevronDownSmall,
   checkCloseSmall: CheckCloseSmall,
   dash: Dash,
   cog: Cog,
   newTab: NewTab,
+  minus: Minus,
+  wallet: Wallet,
+  disconnectWallet: DisconnectWallet,
 };

@@ -7,7 +7,6 @@ import { Entity, useEntityStore } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
 import { Triple } from '~/modules/types';
 import { useEditEvents } from './edit-events';
-import { PageStringField } from './editable-fields';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Truncate } from '~/modules/design-system/truncate';
 import { Text } from '~/modules/design-system/text';
@@ -15,6 +14,7 @@ import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '../entity-pag
 import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
+import { PageStringField } from '../editable-fields/editable-fields';
 
 export function EditableHeading({
   spaceId,

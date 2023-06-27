@@ -125,6 +125,7 @@ type Action @entity {
   numberValue: BigDecimal
   stringValue: String
   entityValue: GeoEntity
+  arrayValue: [String!]
 }
 
 enum ActionType {
@@ -145,6 +146,7 @@ type Triple @entity {
   valueId: String!
   numberValue: BigDecimal
   stringValue: String
+  arrayValue: [String!]
   entityValue: GeoEntity
   isProtected: Boolean!
   space: Space!
@@ -156,4 +158,5 @@ enum ValueType {
   STRING
   ENTITY
   IMAGE
+  DATE
 }

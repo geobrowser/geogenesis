@@ -10,6 +10,14 @@ export function useAccessControl(space?: string) {
   const { address } = useAccount();
   const { admins, editors, editorControllers } = useSpaces();
 
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      isAdmin: true,
+      isEditorController: true,
+      isEditor: true,
+    };
+  }
+
   if (!address || !hydrated || !space) {
     return {
       isAdmin: false,
