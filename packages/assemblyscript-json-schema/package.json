@@ -5,8 +5,7 @@
   "license": "MIT",
   "scripts": {
     "test": "vitest run",
-    "clean": "rimraf dist",
-    "build": "npm run clean && tsc && cp -r static dist/static"
+    "clean": "rimraf dist"
   },
   "main": "./dist/src/index.js",
   "bin": "./dist/src/bin.js",
