@@ -1,4 +1,4 @@
-export * from './dist/build/types'
+export { Space__factory, Space } from './dist/build/types'
 export {
   EntryAddedEventObject,
   EntryAddedEvent,
