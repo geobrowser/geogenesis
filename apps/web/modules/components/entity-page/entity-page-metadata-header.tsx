@@ -62,8 +62,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
       <div className="flex items-center gap-3">
         <HistoryPanel>
           {versions?.pages?.length === 0 && <HistoryEmpty />}
-          {renderedVersions?.map(group => (
-            <>
+          {renderedVersions?.map((group, index) => (
+            <React.Fragment key={index}>
               {group.map((v, index) => (
                 <HistoryItem
                   key={v.id}
@@ -79,7 +79,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
                   name={v.name}
                 />
               ))}
-            </>
+            </React.Fragment>
           ))}
           {showMore && (
             <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
@@ -141,8 +141,8 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
       <div className="inline-flex items-center gap-4">
         <HistoryPanel>
           {proposals?.pages?.length === 0 && <HistoryEmpty />}
-          {renderedProposals?.map(group => (
-            <>
+          {renderedProposals?.map((group, index) => (
+            <React.Fragment key={index}>
               {group.map((p, index) => (
                 <HistoryItem
                   key={p.id}
@@ -160,7 +160,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
                   name={p.name}
                 />
               ))}
-            </>
+            </React.Fragment>
           ))}
           {showMore && (
             <div className="flex h-12 w-full flex-shrink-0 items-center justify-center bg-white">
