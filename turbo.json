@@ -30,6 +30,22 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "web": {
+      "dependsOn": ["@geogenesis/contracts#build"]
+    },
+    "@geogenesis/subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"]
+    },
+    "@geogenesis/subgraph#build": {
+      "dependsOn": [
+        "@geogenesis/contracts#build",
+        "@geogenesis/subgraph#codegen"
+      ]
+    },
+    "@geogenesis/contracts#build": {
+      "dependsOn": ["@geogenesis/action-schema#build"],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
