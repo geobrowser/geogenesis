@@ -3,13 +3,7 @@
   "pipeline": {
     "build": {
       "dependsOn": ["codegen", "^build"],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "dist/**",
-        "build/**",
-        "generated/**"
-      ]
+      "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -31,20 +25,20 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/contracts#build",
+        "@geogenesis/ids#build",
+        "@geogenesis/contracts#codegen",
         "@geogenesis/subgraph#codegen"
       ]
     },
     "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/action-schema#build"],
-      "outputs": ["dist/**", "build/**", "generated/**"]
+      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
