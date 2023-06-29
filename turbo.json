@@ -2,7 +2,8 @@
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["codegen", "^build"]
+      "dependsOn": ["codegen", "^build"],
+      "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -24,20 +25,24 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "outputs": [".next/**"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+    },
+    "@geogenesis/subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+    },
+    "@geogenesis/subgraph#build": {
+      "dependsOn": [
+        "@geogenesis/ids#build",
+        "@geogenesis/contracts#codegen",
+        "@geogenesis/subgraph#codegen"
+      ]
+    },
+    "@geogenesis/contracts#build": {
+      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
-    },
-    "@geogenesis/action-schema": {
-      "outputs": ["dist/**", "build/**", "assembly/**"]
-    },
-    "@geogenesis/contracts": {
-      "outputs": ["dist/**", "build/**"]
-    },
-    "@geogenesis/subgraph": {
-      "outputs": ["build/**", "generated/**"]
     }
   }
 }
