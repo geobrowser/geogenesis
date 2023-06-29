@@ -16,7 +16,7 @@
   "scripts": {
     "clean": "npx hardhat clean && rimraf build dist && rimraf .openzeppelin/unknown-31337.json",
     "compile": "npx hardhat compile",
-    "build": "pnpm run compile && npx tsc",
+    "build": "pnpm run clean && pnpm run compile && npx tsc",
     "devnet": "npx hardhat node --hostname 0.0.0.0",
     "deploy": "hardhat migrate",
     "deploy:local": "npx hardhat run --network localhost scripts/deploy.ts",
