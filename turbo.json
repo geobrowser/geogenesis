@@ -3,7 +3,13 @@
   "pipeline": {
     "build": {
       "dependsOn": ["codegen", "^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**", "generated/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "build/**",
+        "generated/**"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -32,7 +38,7 @@
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/contracts#build"
+        "@geogenesis/contracts#build",
         "@geogenesis/subgraph#codegen"
       ]
     },
