@@ -31,7 +31,7 @@ export function WebUrlField({ variant = 'body', isEditing = false, ...props }: P
   const [localValue, setLocalValue] = React.useState(props.value);
 
   React.useEffect(() => {
-    if (localValue !== props.value) setLocalValue(props.value);
+    setLocalValue(props.value);
   }, [props.value]);
 
   return isEditing ? (
