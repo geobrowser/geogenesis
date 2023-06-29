@@ -750,11 +750,11 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
   let afterDateTime = null;
 
   if (before) {
-    beforeDateTime = GeoDate.fromISOStringUTC(before as string);
+    beforeDateTime = GeoDate.fromISOStringUTC(before);
   }
 
   if (after) {
-    afterDateTime = GeoDate.fromISOStringUTC(after as string);
+    afterDateTime = GeoDate.fromISOStringUTC(after);
   }
 
   const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
