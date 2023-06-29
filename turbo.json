@@ -35,7 +35,8 @@
       ]
     },
     "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
+      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"],
+      "outputs": ["dist/**", "build/**"]
     },
     "web": {
       "dependsOn": ["@geogenesis/ids#build", "@geogenesis/contracts#build"]
