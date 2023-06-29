@@ -17332,6 +17332,7 @@ packages:
 
   /turbo/1.4.6:
     resolution: {integrity: sha512-FKtBXlOJ7YjSK22yj4sJLCtDcHFElypt7xw9cZN7Wyv9x4XBrTmh5KP6RmcGnRR1/GJlTNwD2AY2T9QTPnHh+g==}
+    hasBin: true
     requiresBuild: true
     optionalDependencies:
       turbo-android-arm64: 1.4.6
