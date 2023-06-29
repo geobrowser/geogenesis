@@ -25,7 +25,8 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"],
+      "outputs": [".next/**"]
     },
     "@geogenesis/subgraph#codegen": {
       "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
