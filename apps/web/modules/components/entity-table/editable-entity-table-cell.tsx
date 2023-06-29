@@ -59,7 +59,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
   const isDateValueType = valueType === SYSTEM_IDS.DATE;
-  const isUrlValueType = valueType === '@TODO:URL';
+  const isUrlValueType = valueType === SYSTEM_IDS.WEB_URL;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
@@ -270,7 +270,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       {isUrlValueType && (
         <WebUrlField
           isEditing={true}
-          onChange={e =>
+          onBlur={e =>
             isEmptyCell
               ? createUrlTripleWithValue(e.currentTarget.value)
               : updateUrlTripleValue(firstTriple, e.currentTarget.value)

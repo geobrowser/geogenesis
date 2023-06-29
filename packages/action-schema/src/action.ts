@@ -58,7 +58,7 @@ interface DateValue {
 interface UrlValue {
   type: 'url'
   id: string
-  value: string // This is represented as an ISO-8601 datetime string
+  value: string
 }
 
 type Value =
