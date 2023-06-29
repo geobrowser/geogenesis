@@ -35,6 +35,10 @@
       "dependsOn": ["@geogenesis/contracts#build"],
       "cache": false
     },
+    "@geogenesis/action-schema#build": {
+      "dependsOn": ["codegen"],
+      "cache": false
+    },
     "@geogenesis/subgraph#codegen": {
       "dependsOn": ["@geogenesis/contracts#build"]
     },
