@@ -2,8 +2,7 @@
   "$schema": "https://turborepo.org/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["codegen", "^build"],
-      "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
+      "dependsOn": ["codegen", "^build"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -24,9 +23,21 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "web": {
+      "outputs": [".next/**"]
+    },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
+    },
+    "@geogenesis/action-schema": {
+      "outputs": ["dist/**", "build/**", "assembly/**"]
+    },
+    "@geogenesis/contracts": {
+      "outputs": ["dist/**", "build/**"]
+    },
+    "@geogenesis/subgraph": {
+      "outputs": ["build/**", "generated/**"]
     }
   }
 }
