@@ -5,7 +5,8 @@
   "license": "MIT",
   "scripts": {
     "clean": "rimraf build generated .turbo",
-    "build": "graph codegen && graph build",
+    "codegen": "graph codegen",
+    "build": "graph build",
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "deploy:testnet": "graph deploy --product hosted-service --network mumbai baiirun/banana",
