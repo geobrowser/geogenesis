@@ -969,6 +969,7 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
   onStartPublish();
 
   const transferEvent = await findEvents(mintTx, 'EntryAdded');
+
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
   return eventObject;
