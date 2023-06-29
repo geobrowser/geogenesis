@@ -25,29 +25,25 @@
       "dependsOn": ["build"]
     },
     "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"],
+      "dependsOn": ["@geogenesis/contracts#build"],
       "outputs": [".next/**"]
     },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+      "dependsOn": ["@geogenesis/contracts#build"]
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/ids#build",
         "@geogenesis/contracts#codegen",
         "@geogenesis/subgraph#codegen"
       ]
     },
     "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"],
+      "dependsOn": ["@geogenesis/action-schema#build"],
       "outputs": ["dist/**", "build/**"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
-    },
-    "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
     }
   }
 }
