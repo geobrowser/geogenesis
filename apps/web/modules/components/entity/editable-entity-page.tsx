@@ -437,7 +437,7 @@ function EntityAttributes({
             isEditing
             placeholder="Add value..."
             value={triple.value.value}
-            onChange={e => {
+            onBlur={e => {
               triple.placeholder
                 ? createUrlTripleFromPlaceholder(triple, e.target.value)
                 : updateUrlValue(triple, e.target.value);
