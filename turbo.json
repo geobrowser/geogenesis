@@ -34,6 +34,7 @@
     "@geogenesis/subgraph#build": {
       "dependsOn": [
         "@geogenesis/contracts#codegen",
+        "@geogenesis/contracts#build",
         "@geogenesis/subgraph#codegen"
       ]
     },
