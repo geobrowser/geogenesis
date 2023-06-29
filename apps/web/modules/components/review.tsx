@@ -26,6 +26,9 @@ import { Entity } from '../entity';
 import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
 import { INetwork } from '../io/data-source/network';
 import { SlideUp } from './slide-up/slide-up';
+import { GeoDate } from '~/modules/utils';
+import { Minus } from '~/modules/design-system/icons/minus';
+import { Spacer } from '~/modules/design-system/spacer';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
@@ -699,12 +702,120 @@ const ChangedAttribute = ({
         </div>
       );
     }
+    case 'date': {
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+            </div>
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
+            </div>
+          </div>
+        </div>
+      );
+    }
     default: {
       // required for <ChangedAttribute /> to be valid JSX
       return <React.Fragment />;
     }
   }
 };
+
+type DateTimeProps = {
+  mode: 'before' | 'after';
+  before: string | null;
+  after: string | null;
+};
+
+type DateTimeType = {
+  day: string;
+  month: string;
+  year: string;
+  hour: string;
+  minute: string;
+};
+
+export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
+  let beforeDateTime = null;
+  let afterDateTime = null;
+
+  if (before) {
+    beforeDateTime = GeoDate.fromISOStringUTC(before as string);
+  }
+
+  if (after) {
+    afterDateTime = GeoDate.fromISOStringUTC(after as string);
+  }
+
+  const renderedDateTime: DateTimeType = (mode === 'before' ? beforeDateTime : afterDateTime) as DateTimeType;
+  const highlightClassName = mode === 'before' ? 'bg-errorTertiary' : 'bg-successTertiary';
+
+  return (
+    <div className="flex items-start gap-4">
+      <div className="flex w-[164px] gap-3">
+        <div className="flex w-full flex-[2] flex-col">
+          <p className={cx(beforeDateTime?.month !== afterDateTime?.month && highlightClassName, dateFieldClassNames)}>
+            {renderedDateTime.month.padStart(2, '0')}
+          </p>
+          <span className={labelClassNames}>Month</span>
+        </div>
+        <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
+        <div className="flex flex-[2] flex-col items-center">
+          <p className={cx(beforeDateTime?.day !== afterDateTime?.day && highlightClassName, dateFieldClassNames)}>
+            {renderedDateTime.day.padStart(2, '0')}
+          </p>
+          <span className={labelClassNames}>Day</span>
+        </div>
+        <span className="flex-[1] pt-[3px] text-grey-02">/</span>
+        <div className="flex w-full flex-[4] flex-col items-center">
+          <p className={cx(beforeDateTime?.year !== afterDateTime?.year && highlightClassName, dateFieldClassNames)}>
+            {renderedDateTime.year}
+          </p>
+          <span className={labelClassNames}>Year</span>
+        </div>
+      </div>
+      <div className="flex items-center">
+        <Minus color="grey-03" />
+        <Spacer width={18} />
+        <div className="flex items-center gap-1">
+          <p className={cx(beforeDateTime?.hour !== afterDateTime?.hour && highlightClassName, timeClassNames)}>
+            {renderedDateTime.hour.padStart(2, '0')}
+          </p>
+          <span>:</span>
+          <p className={cx(beforeDateTime?.minute !== afterDateTime?.minute && highlightClassName, timeClassNames)}>
+            {renderedDateTime.minute.padStart(2, '0')}
+          </p>
+        </div>
+        <p
+          className={cx(
+            (!before || !after || Number(beforeDateTime?.hour) < 12 !== Number(afterDateTime?.hour) < 12) &&
+              highlightClassName,
+            'uppercase',
+            timeClassNames
+          )}
+        >
+          {Number(renderedDateTime.hour) < 12 ? 'am' : 'pm'}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const dateFieldClassNames = `w-full bg-transparent text-center text-body tabular-nums`;
+
+const labelClassNames = `text-footnote text-grey-04`;
+
+const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 type StatusBarProps = {
   reviewState: ReviewState;
@@ -739,7 +850,7 @@ const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
     queryFn: async () => Change.fromActions(actions, network),
   });
 
-  return [data, isLoading];
+  return [data, isLoading] as const;
 };
 
 const message: Record<ReviewState, string> = {

@@ -21,6 +21,7 @@ import { Entity } from '../entity';
 import { formatShortAddress } from '../utils';
 import { Action } from '../action';
 import { INetwork } from '../io/data-source/network';
+import { DateTimeDiff } from './review';
 import type { Action as ActionType, Proposal as ProposalType } from '~/modules/types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '../change/change';
 import type { TableBlockFilter } from './editor/blocks/table/table-block-store';
@@ -676,6 +677,24 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                   <img src={after} className="rounded" />
                 </span>
               )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'date': {
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
+            </div>
+          </div>
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="text-body">
+              {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
         </div>

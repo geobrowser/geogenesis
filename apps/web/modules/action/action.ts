@@ -135,16 +135,13 @@ export const getValue = (action: Action, fallback: unknown = false): string => {
   let value: string | null = '';
 
   switch (checkedAction.value.type) {
-    case 'number':
-      value = checkedAction.value.value;
-      break;
-    case 'string':
-      value = checkedAction.value.value;
-      break;
     case 'entity':
       value = checkedAction.value.id;
       break;
+    case 'string':
+    case 'number':
     case 'image':
+    case 'date':
       value = checkedAction.value.value;
       break;
   }
