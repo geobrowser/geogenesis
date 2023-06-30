@@ -252,7 +252,7 @@ export function handleCreateTripleAction(
 
   const urlValue = fact.value.asUrlValue()
   if (urlValue) {
-    log.debug('Creating date value', [])
+    log.debug('Creating url value', [])
     if (attribute.id == TYPES) {
       addEntityTypeId(entity, urlValue.value)
     }
