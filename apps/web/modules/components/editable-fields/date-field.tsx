@@ -322,7 +322,7 @@ export function DateField(props: DateFieldProps) {
     <div>
       <div className="flex items-start justify-between gap-4">
         <div className="flex w-[164px] gap-3">
-          <div className="flex w-full flex-col" style={{ flex: 2 }}>
+          <div className="flex w-full flex-[2] flex-col">
             {props.isEditing ? (
               <input
                 data-testid="date-field-month"
@@ -349,11 +349,9 @@ export function DateField(props: DateFieldProps) {
             </span>
           </div>
 
-          <span style={{ flex: 1 }} className="w-full pt-[3px] text-grey-02">
-            /
-          </span>
+          <span className="w-full flex-[1] pt-[3px] text-grey-02">/</span>
 
-          <div className="flex flex-col items-center" style={{ flex: 2 }}>
+          <div className="flex flex-[2] flex-col items-center">
             {props.isEditing ? (
               <input
                 data-testid="date-field-day"
@@ -381,11 +379,9 @@ export function DateField(props: DateFieldProps) {
             </span>
           </div>
 
-          <span style={{ flex: 1 }} className="pt-[3px] text-grey-02">
-            /
-          </span>
+          <span className="flex-[1] pt-[3px] text-grey-02">/</span>
 
-          <div className="flex w-full flex-col items-center" style={{ flex: 4 }}>
+          <div className="flex w-full flex-[4] flex-col items-center">
             {props.isEditing ? (
               <input
                 data-testid="date-field-year"
@@ -446,14 +442,16 @@ export function DateField(props: DateFieldProps) {
                 <SmallButton
                   onClick={() => (props.isEditing ? onToggleMeridiem() : undefined)}
                   variant="secondary"
-                  className="uppercase"
+                  className="whitespace-nowrap uppercase"
                 >
                   {meridiem}
                 </SmallButton>
               </motion.div>
             </>
           ) : (
-            <p className={`${timeStyles({ variant: props.variant })} w-[28px] uppercase`}>{meridiem}</p>
+            <p className={`${timeStyles({ variant: props.variant })} w-[28px] whitespace-nowrap uppercase`}>
+              {meridiem}
+            </p>
           )}
         </div>
       </div>
