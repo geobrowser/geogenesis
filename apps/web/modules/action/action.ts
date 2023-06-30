@@ -142,6 +142,7 @@ export const getValue = (action: Action, fallback: unknown = false): string => {
     case 'number':
     case 'image':
     case 'date':
+    case 'url':
       value = checkedAction.value.value;
       break;
   }
