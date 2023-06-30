@@ -19,38 +19,33 @@
       "dependsOn": ["^format"]
     },
     "codegen": {
-      "dependsOn": ["^codegen"],
-      "cache": false
+      "dependsOn": ["^codegen"]
     },
     "clean": {
       "dependsOn": ["^clean"]
     },
     "dev": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
       "outputs": [".next/**", "dist/**", "build/**"]
     },
     "test": {
       "dependsOn": ["build"]
     },
-    "@geogenesis/action-schema#codegen": {
-      "cache": false
-    },
-    "@geogenesis/action-schema#build": {
-      "dependsOn": ["codegen"],
-      "cache": false
-    },
-    "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/action-schema#build"],
-      "outputs": ["dist/**", "build/**", "generated/**"],
-      "cache": false
-    },
-    "web": {
-      "dependsOn": ["@geogenesis/contracts#build"],
-      "cache": false
-    },
+    // "@geogenesis/action-schema#build": {
+    //   "dependsOn": ["codegen"],
+    //   "cache": false
+    // },
+    // "@geogenesis/contracts#build": {
+    //   "dependsOn": ["@geogenesis/action-schema#build"],
+    //   "outputs": ["dist/**", "build/**", "generated/**"],
+    //   "cache": false
+    // },
+    // "web": {
+    //   "dependsOn": ["@geogenesis/contracts#build"],
+    //   "cache": false
+    // },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build"],
-      "cache": false
+      "dependsOn": ["@geogenesis/contracts#build"]
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
