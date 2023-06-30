@@ -24,8 +24,8 @@ import { TripleTypeDropdown } from './triple-type-dropdown';
 import { DateField } from '../editable-fields/date-field';
 import { Services } from '~/modules/services';
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
-import { Url } from '~/modules/design-system/icons/url';
 import { WebUrlField } from '../editable-fields/web-url-field';
+// import { Url } from '~/modules/design-system/icons/url';
 // import { Date } from '~/modules/design-system/icons/date';
 
 interface Props {
@@ -617,18 +617,18 @@ function EntityAttributes({
                         //   onClick: () => onChangeTriple('date', triples),
                         //   disabled: false,
                         // },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Url />
-                              <Spacer width={8} />
-                              Web URL
-                            </div>
-                          ),
-                          value: 'date',
-                          onClick: () => onChangeTriple('url', triples),
-                          disabled: false,
-                        },
+                        // {
+                        //   label: (
+                        //     <div style={{ display: 'flex', alignItems: 'center' }}>
+                        //       <Url />
+                        //       <Spacer width={8} />
+                        //       Web URL
+                        //     </div>
+                        //   ),
+                        //   value: 'date',
+                        //   onClick: () => onChangeTriple('url', triples),
+                        //   disabled: false,
+                        // },
                       ]}
                     />
                   </>
