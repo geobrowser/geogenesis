@@ -32,7 +32,7 @@
     },
 
     "@geogenesis/action-schema#build": {
-      "dependsOn": ["codegen"],
+      "dependsOn": ["@geogenesis/action-schema#codegen"],
       "outputs": ["dist/**", "build/**"]
     },
     "@geogenesis/contracts#build": {
