@@ -3,13 +3,7 @@
   "pipeline": {
     "build": {
       "dependsOn": ["codegen", "^build"],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "dist/**",
-        "build/**",
-        "generated/**"
-      ]
+      "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -33,7 +27,18 @@
       "dependsOn": ["build"]
     },
     "@geogenesis/subgraph#build": {
-      "dependsOn": ["codegen", "@geogenesis/contracts#build"]
+      "dependsOn": [
+        "@geogenesis/subgraph#codegen",
+        "@geogenesis/contracts#build"
+      ],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
+    "web": {
+      "dependsOn": [
+        "@geogenesis/action-schema#build",
+        "@geogenesis/contracts#build"
+      ],
+      "outputs": [".next/**"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
