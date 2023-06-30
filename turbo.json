@@ -19,7 +19,8 @@
       "dependsOn": ["^format"]
     },
     "codegen": {
-      "dependsOn": ["^codegen"]
+      "dependsOn": ["^codegen"],
+      "cache": false
     },
     "clean": {
       "dependsOn": ["^clean"]
@@ -31,6 +32,9 @@
     "test": {
       "dependsOn": ["build"]
     },
+    // "@geogenesis/action-schema#codegen": {
+    //   "cache": false
+    // },
     // "@geogenesis/action-schema#build": {
     //   "dependsOn": ["codegen"],
     //   "cache": false
