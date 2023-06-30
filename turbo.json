@@ -33,7 +33,7 @@
       "dependsOn": ["build"]
     },
     "@geogenesis/subgraph#build": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["codegen", "@geogenesis/contracts#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
