@@ -37,13 +37,6 @@
       ],
       "outputs": ["dist/**", "build/**", "generated/**"]
     },
-    "web": {
-      "dependsOn": [
-        "@geogenesis/action-schema#build",
-        "@geogenesis/contracts#build"
-      ],
-      "outputs": [".next/**"]
-    },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
       "outputs": []
