@@ -744,6 +744,8 @@ export class EntityStore implements IEntityStore {
 
     const blockIds = populatedContent.map(node => node.attrs?.id);
 
+    console.log('content', content);
+
     batch(() => {
       this.upsertBlocksTriple(blockIds);
 

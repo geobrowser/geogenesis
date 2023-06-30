@@ -35,9 +35,12 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
 
   const invokeItem = (item: CommandSuggestionItem) => {
     const isTableMode = item.title === tableCommandItem.title && mode === 'select-block';
+    console.log('item', item);
 
     if (isTableMode) {
       setMode('select-table');
+    } else if (item.title === 'Text') {
+      command({ ...item, spaceId: entityStore.spaceId });
     } else {
       command(item);
     }

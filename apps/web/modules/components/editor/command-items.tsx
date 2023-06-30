@@ -28,8 +28,27 @@ export const tableCommandItem: CommandSuggestionItem = {
       .insertContent({
         type: 'tableNode',
         attrs: {
-          typeId: props.selectedType.entityId,
-          typeName: props.selectedType.entityName,
+          spaceId: props.spaceId,
+        },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
+export const textCommandItem: CommandSuggestionItem = {
+  icon: <EditorText />,
+  title: 'Text',
+  command: ({ editor, range, props }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent({
+        type: 'paragraph',
+        attrs: {
           spaceId: props.spaceId,
         },
       })
@@ -41,13 +60,14 @@ export const tableCommandItem: CommandSuggestionItem = {
 };
 
 export const commandItems: CommandSuggestionItem[] = [
-  {
-    icon: <EditorText />,
-    title: 'Text',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setParagraph().run();
-    },
-  },
+  // {
+  //   icon: <EditorText />,
+  //   title: 'Text',
+  //   command: ({ editor, range }) => {
+  //     editor.chain().focus().deleteRange(range).setParagraph().run();
+  //   },
+  // },
+  textCommandItem,
   {
     icon: <EditorH1 />,
     title: 'Heading 1',

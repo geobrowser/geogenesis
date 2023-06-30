@@ -12,13 +12,16 @@ import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
 import { IdExtension } from './id-extension';
 import { TableNode } from './table-node';
+import { TextNode } from './text-node';
 
 interface Props {
   editable?: boolean;
 }
 
 export const tiptapExtensions = [
-  StarterKit,
+  StarterKit.configure({
+    paragraph: false,
+  }),
   ConfiguredCommandExtension,
   Gapcursor,
   TableNode,
@@ -30,29 +33,27 @@ export const tiptapExtensions = [
     },
   }),
   IdExtension,
+  TextNode,
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const entityStore = useEntityStore();
 
-  const editor = useEditor(
-    {
-      extensions: tiptapExtensions,
-      editable: editable,
-      content: entityStore.editorJson,
-      onBlur({ editor }) {
-        /*
+  const editor = useEditor({
+    extensions: tiptapExtensions,
+    editable: true,
+    content: entityStore.editorJson,
+    onBlur({ editor }) {
+      /*
         Responsible for converting all editor blocks to triples
         Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
         */
-        entityStore.updateEditorBlocks(editor);
-      },
-      editorProps: {
-        transformPastedHTML: html => removeIdAttributes(html),
-      },
+      entityStore.updateEditorBlocks(editor);
     },
-    [editable]
-  );
+    editorProps: {
+      transformPastedHTML: html => removeIdAttributes(html),
+    },
+  });
 
   if (!editable && entityStore.blockIds.length === 0) return null;
 
