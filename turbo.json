@@ -31,27 +31,27 @@
     "test": {
       "dependsOn": ["build"]
     },
-    "web": {
-      "dependsOn": ["@geogenesis/contracts#build"],
-      "cache": false
-    },
-    "@geogenesis/action-schema#build": {
-      "dependsOn": ["codegen"],
-      "cache": false
-    },
+    // "@geogenesis/action-schema#build": {
+    //   "dependsOn": ["codegen"],
+    //   "cache": false
+    // },
+    // "@geogenesis/contracts#build": {
+    //   "dependsOn": ["@geogenesis/action-schema#build"],
+    //   "outputs": ["dist/**", "build/**", "generated/**"],
+    //   "cache": false
+    // },
+    // "web": {
+    //   "dependsOn": ["@geogenesis/contracts#build"],
+    //   "cache": false
+    // },
     "@geogenesis/subgraph#codegen": {
       "dependsOn": ["@geogenesis/contracts#build"]
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/contracts#build",
-        "@geogenesis/subgraph#codegen"
+        "@geogenesis/subgraph#codegen",
+        "@geogenesis/contracts#build"
       ],
-      "cache": false
-    },
-    "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/action-schema#build"],
-      "outputs": ["dist/**", "build/**", "generated/**"],
       "cache": false
     },
     "deploy": {
