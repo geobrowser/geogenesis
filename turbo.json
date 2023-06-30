@@ -26,6 +26,10 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "@geogenesis/subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
         "@geogenesis/subgraph#codegen",
