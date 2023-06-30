@@ -45,7 +45,8 @@
     //   "cache": false
     // },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build"]
+      "dependsOn": ["@geogenesis/contracts#build"],
+      "cache": false
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
