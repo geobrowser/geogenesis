@@ -130,7 +130,7 @@ export function prepareActionsForPublishing(actions: Action[]) {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
 
-export const getValue = (action: Action, fallback: unknown = false): string => {
+export const getValue = (action: ActionType, fallback: boolean | string = false): string => {
   const checkedAction = action.type === 'editTriple' ? action.after : action;
   let value: string | null = '';
 
