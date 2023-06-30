@@ -5,18 +5,10 @@
       "dependsOn": ["codegen", "^build"],
       "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "format": {
-      "dependsOn": ["^format"]
-    },
-    "codegen": {
-      "dependsOn": ["^codegen"]
-    },
-    "clean": {
-      "dependsOn": ["^clean"]
-    },
+    "lint": {},
+    "format": {},
+    "codegen": {},
+    "clean": {},
     "dev": {
       "dependsOn": ["build"],
       "outputs": [".next/**", "dist/**", "build/**"],
@@ -32,14 +24,11 @@
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/subgraph#codegen",
-        "@geogenesis/contracts#build"
+        "@geogenesis/action-schema#build",
+        "@geogenesis/contracts#build",
+        "@geogenesis/subgraph#codegen"
       ],
       "outputs": ["dist/**", "build/**", "generated/**"]
-    },
-    "deploy": {
-      "dependsOn": ["build", "test", "lint", "format"],
-      "outputs": []
     }
   }
 }
