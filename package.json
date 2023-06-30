@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "test": "turbo run test",
-    "build": "turbo run build --force",
+    "build": "turbo run build --force --verbosity=2 --continue",
     "codegen": "turbo run codegen",
     "lint": "turbo run lint",
     "format": "turbo run format",
