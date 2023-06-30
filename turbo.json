@@ -3,7 +3,13 @@
   "pipeline": {
     "build": {
       "dependsOn": ["codegen", "^build"],
-      "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "build/**",
+        "generated/**"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -18,27 +24,19 @@
       "dependsOn": ["^clean"]
     },
     "dev": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**", "build/**"]
+      "dependsOn": ["build"],
+      "outputs": [".next/**", "dist/**", "build/**"],
+      "persistent": true,
+      "cache": false
     },
     "test": {
       "dependsOn": ["build"]
     },
-    "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
-    },
-    "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
-    },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/ids#build",
-        "@geogenesis/contracts#codegen",
-        "@geogenesis/subgraph#codegen"
+        "@geogenesis/subgraph#codegen",
+        "@geogenesis/contracts#build"
       ]
-    },
-    "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
     },
     "deploy": {
       "dependsOn": ["build", "test", "lint", "format"],
