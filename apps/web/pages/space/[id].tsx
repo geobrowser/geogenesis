@@ -129,8 +129,22 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 
+  // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
+  // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
+  if (entity?.nameTripleSpace) {
+    if (spaceId !== entity?.nameTripleSpace) {
+      return {
+        redirect: {
+          destination: `/space/${entity?.nameTripleSpace}/${entityId}`,
+          permanent: false,
+        },
+        props: {},
+      };
+    }
+  }
+
   const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-  const serverAvatarUrl = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const serverCoverUrl = Entity.cover(entity?.triples);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
@@ -154,15 +168,16 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
 
-  // @TODO: Try and use fetchEntity instead. blockTriples are the triples of each block that contain
-  // the content for the block. e.g., the Markdown triple or the RowType triple, etc. Ideally we fetch
-  // the entire entity for each block so the query isn't dependenent on the space and we have the types
-  // associated with each block entity (TableBlock, TextBlock, etc.)
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
         return network.fetchTriples({
-          space: spaceId,
+          // Previously we would scope the triples we're fetching to the space we're in. Right now
+          // this model doesn't make sense since triples can only exist in one space at a time.
+          // Eventually entities can have triples spanning many spaces so adding back the space
+          // will make sense at that point. Additionally there's a bug where we do not navigate
+          // to the correct space when navigating to an entity in a different space. It _happens_
+          // to work correctly because we do not scope the triples to the space.
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,
