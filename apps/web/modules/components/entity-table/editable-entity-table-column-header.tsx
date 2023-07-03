@@ -157,7 +157,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
             //       Web URL
             //     </div>
             //   ),
-            //   value: 'date',
+            //   value: 'url',
             //   onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
             //   disabled: false,
             // },

@@ -617,7 +617,6 @@ function EntityAttributes({
                           onClick: () => onChangeTriple('date', triples),
                           disabled: false,
                         },
-
                         // {
                         //   label: (
                         //     <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -626,8 +625,8 @@ function EntityAttributes({
                         //       Web URL
                         //     </div>
                         //   ),
-                        //   value: 'date',
-                        //   onClick: () => onChangeTriple('url', triples),
+                        //   value: 'url',
+                        //   onClick: () => onChangeTripleType('url', triples),
                         //   disabled: false,
                         // },
                       ]}
