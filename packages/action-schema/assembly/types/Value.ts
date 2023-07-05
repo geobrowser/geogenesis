@@ -5,6 +5,7 @@ import { StringValue } from './StringValue'
 import { EntityValue } from './EntityValue'
 import { ImageValue } from './ImageValue'
 import { DateValue } from './DateValue'
+import { UrlValue } from './UrlValue'
 
 export class Value {
   type: string
@@ -33,12 +34,17 @@ export class Value {
     return this.type == 'date' ? (this as DateValue) : null
   }
 
+  asUrlValue(): UrlValue | null {
+    return this.type == 'url' ? (this as UrlValue) : null
+  }
+
   toJSON(): JSON.Value {
     if (this.type == 'number') return (this as NumberValue).toJSON()
     if (this.type == 'string') return (this as StringValue).toJSON()
     if (this.type == 'entity') return (this as EntityValue).toJSON()
     if (this.type == 'image') return (this as ImageValue).toJSON()
     if (this.type == 'date') return (this as DateValue).toJSON()
+    if (this.type == 'url') return (this as UrlValue).toJSON()
     throw `undefined variant of: Value.${this.type}`
   }
 
@@ -59,6 +65,7 @@ export class Value {
     if (typeName == 'entity') return EntityValue.fromJSON(__json)
     if (typeName == 'image') return ImageValue.fromJSON(__json)
     if (typeName == 'date') return DateValue.fromJSON(__json)
+    if (typeName == 'url') return UrlValue.fromJSON(__json)
     log.debug(`Value.fromJSON(): unhandled variant '${typeName}'`, [])
     return null
   }

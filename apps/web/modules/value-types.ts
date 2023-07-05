@@ -7,6 +7,7 @@ export const valueTypes: Record<string, TripleValueType> = {
   [SYSTEM_IDS.RELATION]: 'entity',
   [SYSTEM_IDS.IMAGE]: 'image',
   [SYSTEM_IDS.DATE]: 'date',
+  [SYSTEM_IDS.WEB_URL]: 'url',
 };
 
 export const valueTypeNames: Record<string, string> = {
@@ -14,4 +15,5 @@ export const valueTypeNames: Record<string, string> = {
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.IMAGE]: 'Image',
   [SYSTEM_IDS.DATE]: 'Date',
+  [SYSTEM_IDS.WEB_URL]: 'Web URL',
 };

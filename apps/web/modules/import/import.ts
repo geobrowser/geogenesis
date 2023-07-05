@@ -43,6 +43,8 @@ function createValueId(value: Value): string {
       return `i~${value.value}`;
     case 'date':
       return `d~${value.value}`;
+    case 'url':
+      return `u~${value.value}`;
   }
 }
 

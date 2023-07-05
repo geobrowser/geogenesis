@@ -159,4 +159,5 @@ enum ValueType {
   ENTITY
   IMAGE
   DATE
+  URL
 }

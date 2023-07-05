@@ -1,48 +1,34 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["codegen", "^build"],
       "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "format": {
-      "dependsOn": ["^format"]
-    },
-    "codegen": {
-      "dependsOn": ["^codegen"]
-    },
-    "clean": {
-      "dependsOn": ["^clean"]
-    },
+    "lint": {},
+    "format": {},
+    "codegen": {},
+    "clean": {},
     "dev": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**", "build/**"]
+      "dependsOn": ["build"],
+      "outputs": [".next/**", "dist/**", "build/**"],
+      "persistent": true,
+      "cache": false
     },
     "test": {
       "dependsOn": ["build"]
     },
-    "web": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
-    },
     "@geogenesis/subgraph#codegen": {
-      "dependsOn": ["@geogenesis/contracts#build", "@geogenesis/ids#build"]
+      "dependsOn": ["@geogenesis/contracts#build"],
+      "outputs": ["dist/**", "build/**", "generated/**"]
     },
     "@geogenesis/subgraph#build": {
       "dependsOn": [
-        "@geogenesis/ids#build",
-        "@geogenesis/contracts#codegen",
+        "@geogenesis/action-schema#build",
+        "@geogenesis/contracts#build",
         "@geogenesis/subgraph#codegen"
-      ]
-    },
-    "@geogenesis/contracts#build": {
-      "dependsOn": ["@geogenesis/ids#build", "@geogenesis/action-schema#build"]
-    },
-    "deploy": {
-      "dependsOn": ["build", "test", "lint", "format"],
-      "outputs": []
+      ],
+      "outputs": ["dist/**", "build/**", "generated/**"]
     }
   }
 }
