@@ -18,29 +18,7 @@ interface Props {
   spaces: Space[];
 }
 
-// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
-// Temporarily we just filter some Spaces when we fetch Spaces.
-export const HIDDEN_SPACES: Array<string> = [
-  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
-  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
-  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
-  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
-  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in San Francisco
-  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in San Francisco
-  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street outreach in San Francisco
-  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
-];
-
-// @HACK: Right now we hide some spaces from the front page. There's no way to remove
-// Spaces from the Subgraph store yet.
-const filterHiddenSpaces = (space: Space) => !HIDDEN_SPACES.includes(space.id);
-
-const sortByCreatedAtBlock = (a: Space, b: Space) =>
-  parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
-
 export default function Spaces({ spaces }: Props) {
-  const renderedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
-
   return (
     <div>
       <Head>
@@ -63,7 +41,7 @@ export default function Spaces({ spaces }: Props) {
         <Text variant="mainPage">All spaces</Text>
         <Spacer height={40} />
         <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
-          {renderedSpaces.map((space: Space) => (
+          {spaces.map((space: Space) => (
             <Card
               key={space.id}
               spaceId={space.id}
@@ -95,10 +73,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
   try {
     const network = new NetworkData.Network(storage, config.subgraph);
     const spaces = await network.fetchSpaces();
+    const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
     return {
       props: {
-        spaces,
+        spaces: filteredAndSortedSpaces,
       },
     };
   } catch (e) {
@@ -111,3 +90,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     };
   }
 };
+
+const sortByCreatedAtBlock = (a: Space, b: Space) =>
+  parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
+
+// @HACK: Right now we hide some spaces from the front page. There's no way to remove
+// Spaces from the Subgraph store yet.
+const filterHiddenSpaces = (space: Space) => !HIDDEN_SPACES.includes(space.id);
+
+// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
+// Temporarily we just filter some Spaces when we fetch Spaces.
+export const HIDDEN_SPACES: Array<string> = [
+  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
+  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
+  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
+  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
+  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in San Francisco
+  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in San Francisco
+  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street outreach in San Francisco
+  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
+];
