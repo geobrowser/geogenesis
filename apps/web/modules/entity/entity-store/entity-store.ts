@@ -749,14 +749,7 @@ export class EntityStore implements IEntityStore {
       return isNonParagraph || isParagraphWithContent;
     });
 
-    // @TODO remove console.info for populatedContent
-    console.info('populatedContent:', populatedContent);
-
-    // @TODO revise to get attrs id of inner paragraph of list items!
     const blockIds = populatedContent.map(node => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id);
-
-    // @TODO remove console.info for blockIds
-    console.info('blockIds:', blockIds);
 
     batch(() => {
       this.upsertBlocksTriple(blockIds);
