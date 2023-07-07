@@ -32,6 +32,7 @@
     "@tiptap/core": "2.0.3",
     "@tiptap/extension-bubble-menu": "2.0.3",
     "@tiptap/extension-gapcursor": "^2.0.3",
+    "@tiptap/extension-heading": "^2.0.3",
     "@tiptap/extension-image": "2.0.3",
     "@tiptap/extension-paragraph": "^2.0.3",
     "@tiptap/extension-placeholder": "2.0.3",

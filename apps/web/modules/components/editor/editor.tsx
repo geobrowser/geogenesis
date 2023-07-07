@@ -13,6 +13,7 @@ import { removeIdAttributes } from './editor-utils';
 import { createIdExtension } from './id-extension';
 import { TableNode } from './table-node';
 import { ParagraphNode } from './paragraph-node';
+import { HeadingNode } from './heading-node';
 
 interface Props {
   editable?: boolean;
@@ -21,8 +22,10 @@ interface Props {
 export const tiptapExtensions = [
   StarterKit.configure({
     paragraph: false,
+    heading: false,
   }),
   ParagraphNode,
+  HeadingNode,
   ConfiguredCommandExtension,
   Gapcursor,
   TableNode,
@@ -57,7 +60,6 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const editor = useEditor(
     {
       extensions: [...tiptapExtensions, createIdExtension(entityStore.spaceId)],
-      // @TODO: Default to false once all editing state is handled in components
       editable: true,
       content: memoizedJson,
       onBlur({ editor }) {

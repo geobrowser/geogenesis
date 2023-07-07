@@ -11,6 +11,7 @@ import Paragraph from '@tiptap/extension-paragraph';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 
 export const ParagraphNode = Paragraph.extend({
+  ...Paragraph,
   name: 'paragraph',
   spanning: true,
   defining: true,
