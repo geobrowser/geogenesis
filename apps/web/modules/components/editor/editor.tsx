@@ -39,21 +39,42 @@ export const tiptapExtensions = [
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const entityStore = useEntityStore();
 
-  const editor = useEditor({
-    extensions: tiptapExtensions,
-    editable: true,
-    content: entityStore.editorJson,
-    onBlur({ editor }) {
-      /*
+  console.log('entityStore.editorJson', entityStore.editorJson);
+
+  // @HACK: Janky but works for now. Will probably be super slow for large pages.
+  // We need to keep the editor in sync with the local data store. Without this level
+  // of memoization the editor will re-render on every blur and edit toggle which causes
+  // all of the custom react components within the editor to re-mount. This is janky,
+  // especially for the table node which has a lot of state and data fetching.
+  //
+  // An alternative to this approach is to wait to render the editor until we know
+  // that we have all the local data merged in already. In that approach we would
+  // only ever need to render the editor the first time.
+  //
+  // A third approach is to cache all requests in table nodes and just allow the
+  // editor to re-mount the internal react components. Not sure how viable this is
+  // as I haven't tested it.
+  const stringifiedJson = JSON.stringify(entityStore.editorJson);
+  const memoizedJson = React.useMemo(() => entityStore.editorJson, [stringifiedJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const editor = useEditor(
+    {
+      extensions: tiptapExtensions,
+      editable: true,
+      content: memoizedJson,
+      onBlur({ editor }) {
+        /*
         Responsible for converting all editor blocks to triples
         Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
         */
-      entityStore.updateEditorBlocks(editor);
+        entityStore.updateEditorBlocks(editor);
+      },
+      editorProps: {
+        transformPastedHTML: html => removeIdAttributes(html),
+      },
     },
-    editorProps: {
-      transformPastedHTML: html => removeIdAttributes(html),
-    },
-  });
+    [memoizedJson]
+  );
 
   if (!editable && entityStore.blockIds.length === 0) return null;
 
