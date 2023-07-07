@@ -12,7 +12,7 @@ import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
 import { IdExtension } from './id-extension';
 import { TableNode } from './table-node';
-import { TextNode } from './text-node';
+import { ParagraphNode } from './paragraph-node';
 
 interface Props {
   editable?: boolean;
@@ -33,18 +33,16 @@ export const tiptapExtensions = [
     },
   }),
   IdExtension,
-  TextNode,
+  ParagraphNode,
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const entityStore = useEntityStore();
 
-  console.log('entityStore.editorJson', entityStore.editorJson);
-
   // @HACK: Janky but works for now. Will probably be super slow for large pages.
   // We need to keep the editor in sync with the local data store. Without this level
   // of memoization the editor will re-render on every blur and edit toggle which causes
-  // all of the custom react components within the editor to re-mount. This is janky,
+  // all of the custom react components within the editor to re-mount. This is janky UX,
   // especially for the table node which has a lot of state and data fetching.
   //
   // An alternative to this approach is to wait to render the editor until we know

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import {
   mergeAttributes,
-  Node,
   NodeViewRendererProps,
   NodeViewWrapper,
   NodeViewContent,
@@ -11,15 +10,13 @@ import {
 import Paragraph from '@tiptap/extension-paragraph';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 
-export const TextNode = Paragraph.extend({
+export const ParagraphNode = Paragraph.extend({
   name: 'paragraph',
-  // group: 'block',
-  // atom: true,
-  // spanning: false,
-  // allowGapCursor: false,
-  // defining: true,
-  // exitable: true,
-  content: 'inline*',
+  spanning: true,
+  defining: true,
+  exitable: true,
+  code: false,
+  content: 'text*',
 
   parseHTML() {
     return [
@@ -32,12 +29,6 @@ export const TextNode = Paragraph.extend({
 
   addAttributes() {
     return {
-      typeId: {
-        default: null,
-      },
-      typeName: {
-        default: null,
-      },
       spaceId: {
         default: '',
       },
@@ -55,6 +46,7 @@ export const TextNode = Paragraph.extend({
 
 function TextNodeComponent({ node }: NodeViewRendererProps) {
   console.log('node', node);
+  console.log('spaceId', node.attrs.spaceId);
 
   const isEditable = useUserIsEditing(node.attrs.spaceId);
 
