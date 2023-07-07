@@ -26,6 +26,8 @@
   float: left;
   height: 0;
   pointer-events: none;
+
+  @apply text-body;
 }
 
 /* Display a Placeholder only for the first line in an empty editor. */
