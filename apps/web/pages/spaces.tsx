@@ -31,7 +31,16 @@ export const HIDDEN_SPACES: Array<string> = [
   '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
 ];
 
+// @HACK: Right now we hide some spaces from the front page. There's no way to remove
+// Spaces from the Subgraph store yet.
+const filterHiddenSpaces = (space: Space) => !HIDDEN_SPACES.includes(space.id);
+
+const sortByCreatedAtBlock = (a: Space, b: Space) =>
+  parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
+
 export default function Spaces({ spaces }: Props) {
+  const renderedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
+
   return (
     <div>
       <Head>
@@ -54,16 +63,14 @@ export default function Spaces({ spaces }: Props) {
         <Text variant="mainPage">All spaces</Text>
         <Spacer height={40} />
         <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
-          {spaces.map(space => {
-            // @HACK: Right now we hide some spaces from the front page. There's no way to remove
-            // Spaces from the Subgraph store yet.
-            if (HIDDEN_SPACES.includes(space.id)) return null;
-
-            const name = space.attributes.name;
-            const image = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
-
-            return <Card key={space.id} spaceId={space.id} name={name} image={image} />;
-          })}
+          {renderedSpaces.map((space: Space) => (
+            <Card
+              key={space.id}
+              spaceId={space.id}
+              name={space.attributes.name}
+              image={space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+            />
+          ))}
         </div>
         <Spacer height={100} />
         <div className="max-w-[830px] self-center text-center">

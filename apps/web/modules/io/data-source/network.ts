@@ -556,6 +556,7 @@ export class Network implements INetwork {
                 }
               }
             }
+            createdAtBlock
           }
         }`,
       }),
@@ -574,6 +575,7 @@ export class Network implements INetwork {
               id: string;
               entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
             };
+            createdAtBlock: string;
           }[];
         };
       } = await spacesResponse.json();
@@ -597,6 +599,7 @@ export class Network implements INetwork {
           entityId: space.entity?.id || '',
           attributes,
           spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
+          createdAtBlock: space.createdAtBlock,
         };
       });
 

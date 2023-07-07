@@ -66,6 +66,7 @@ export type Space = {
   attributes: Dictionary<string, string>;
   entityId: string;
   spaceConfigEntityId: string | null;
+  createdAtBlock: string;
 };
 
 export type Account = {
