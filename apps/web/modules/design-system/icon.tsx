@@ -26,6 +26,7 @@ import { EditorH3 } from './icons/editor-h3';
 import { EditorImage } from './icons/editor-image';
 import { EditorTable } from './icons/editor-table';
 import { EditorText } from './icons/editor-text';
+import { EditorList } from './icons/editor-list';
 import { Image } from './icons/image';
 import { Plus } from './icons/plus';
 import type { ColorName } from '~/modules/design-system/theme/colors';
@@ -74,6 +75,7 @@ export type IconName =
   | 'editorH2'
   | 'editorH3'
   | 'editorText'
+  | 'editorList'
   | 'editorImage'
   | 'editorTable'
   | 'context'
@@ -131,6 +133,7 @@ const icons: Record<IconName, React.ElementType> = {
   editorImage: EditorImage,
   editorTable: EditorTable,
   editorText: EditorText,
+  editorList: EditorList,
   string: Text,
   image: Image,
   upload: Upload,

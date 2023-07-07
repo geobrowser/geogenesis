@@ -445,7 +445,7 @@ export class EntityStore implements IEntityStore {
   We don't support changing types of blocks, so all we need to do is create a new block with the new type
   */
   createBlockTypeTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
     const entityName = this.nodeName(node);
 
     const blockTypeValue: EntityValue = getBlockTypeValue(node.type);
@@ -470,7 +470,7 @@ export class EntityStore implements IEntityStore {
   Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
     const entityName = this.nodeName(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
@@ -502,9 +502,10 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
   upsertBlockMarkdownTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
     const isImageNode = node.type === 'image';
     const isTableNode = node.type === 'tableNode';
+    const isList = node.type === 'bulletList';
 
     if (isImageNode || isTableNode) {
       return null;
@@ -513,7 +514,13 @@ export class EntityStore implements IEntityStore {
     const nodeHTML = this.textNodeHTML(node);
 
     const entityName = this.nodeName(node);
-    const markdown = markdownConverter.makeMarkdown(nodeHTML);
+    let markdown = markdownConverter.makeMarkdown(nodeHTML);
+
+    //  Overrides Showdown's unwanted "consecutive list" behavior found in
+    //  `src/subParsers/makeMarkdown/list.js`
+    if (isList) {
+      markdown = markdown.replaceAll('\n<!-- -->\n', '');
+    }
 
     const triple = Triple.withId({
       space: this.spaceId,
@@ -551,7 +558,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating backlinks to the parent entity  */
   createParentEntityTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.PARENT_ENTITY });
 
@@ -742,7 +749,14 @@ export class EntityStore implements IEntityStore {
       return isNonParagraph || isParagraphWithContent;
     });
 
-    const blockIds = populatedContent.map(node => node.attrs?.id);
+    // @TODO remove console.info for populatedContent
+    console.info('populatedContent:', populatedContent);
+
+    // @TODO revise to get attrs id of inner paragraph of list items!
+    const blockIds = populatedContent.map(node => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id);
+
+    // @TODO remove console.info for blockIds
+    console.info('blockIds:', blockIds);
 
     batch(() => {
       this.upsertBlocksTriple(blockIds);
