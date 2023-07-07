@@ -26,14 +26,6 @@ export const ParagraphNode = Paragraph.extend({
     ];
   },
 
-  addAttributes() {
-    return {
-      spaceId: {
-        default: '',
-      },
-    };
-  },
-
   renderHTML({ HTMLAttributes }) {
     return ['p', mergeAttributes(HTMLAttributes), 0];
   },
@@ -44,9 +36,6 @@ export const ParagraphNode = Paragraph.extend({
 });
 
 function TextNodeComponent({ node }: NodeViewRendererProps) {
-  console.log('node', node);
-  console.log('spaceId', node.attrs.spaceId);
-
   const isEditable = useUserIsEditing(node.attrs.spaceId);
 
   return (

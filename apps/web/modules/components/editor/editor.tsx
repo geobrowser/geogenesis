@@ -10,7 +10,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
-import { IdExtension } from './id-extension';
+import { createIdExtension } from './id-extension';
 import { TableNode } from './table-node';
 import { ParagraphNode } from './paragraph-node';
 
@@ -22,6 +22,7 @@ export const tiptapExtensions = [
   StarterKit.configure({
     paragraph: false,
   }),
+  ParagraphNode,
   ConfiguredCommandExtension,
   Gapcursor,
   TableNode,
@@ -32,8 +33,6 @@ export const tiptapExtensions = [
       return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
-  IdExtension,
-  ParagraphNode,
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
@@ -57,7 +56,8 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
 
   const editor = useEditor(
     {
-      extensions: tiptapExtensions,
+      extensions: [...tiptapExtensions, createIdExtension(entityStore.spaceId)],
+      // @TODO: Default to false once all editing state is handled in components
       editable: true,
       content: memoizedJson,
       onBlur({ editor }) {
