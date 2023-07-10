@@ -51,7 +51,7 @@ export default function EntityPage(props: Props) {
   }, []);
 
   if (props.redirect && isMounted) {
-    router.push(props.redirect);
+    router.replace(props.redirect);
   }
 
   const { isEditor } = useAccessControl(props.spaceId);
