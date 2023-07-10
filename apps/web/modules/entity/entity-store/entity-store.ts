@@ -126,6 +126,7 @@ export class EntityStore implements IEntityStore {
 
       return pipe(
         spaceActions,
+        actions => Action.squashChanges(actions),
         actions => Triple.fromActions(actions, initialTriples),
         A.filter(t => t.entityId === id),
         triples =>
