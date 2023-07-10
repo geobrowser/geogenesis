@@ -120,24 +120,6 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIdsTriple$ = computed(() => {
-      const localBlockIdsForEntity = pipe(
-        ActionsStore.allActions$.get(),
-        actions => Action.squashChanges(actions),
-        actions => Triple.fromActions(actions, initialBlockIdsTriple ? [initialBlockIdsTriple] : []),
-        A.filter(t => t.entityId === id),
-        A.find(t => t.attributeId === SYSTEM_IDS.BLOCKS)
-      );
-
-      // Favor the local version of the blockIdsTriple if it exists
-      return localBlockIdsForEntity ?? null;
-    });
-
-    this.blockIds$ = computed(() => {
-      const blockIdsTriple = this.blockIdsTriple$.get();
-
-      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
-    });
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
@@ -154,6 +136,20 @@ export class EntityStore implements IEntityStore {
             triples
           )
       );
+    });
+
+    this.blockIdsTriple$ = computed(() => {
+      const triples = this.triples$.get();
+      const blocksIdTriple = triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
+
+      // Favor the local version of the blockIdsTriple if it exists
+      return blocksIdTriple ?? initialBlockIdsTriple ?? null;
+    });
+
+    this.blockIds$ = computed(() => {
+      const blockIdsTriple = this.blockIdsTriple$.get();
+
+      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
     });
 
     this.name$ = computed(() => {
