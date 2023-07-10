@@ -578,7 +578,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
   createTableBlockMetadata = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isTableNode = node.type === 'tableNode';
     const rowTypeEntityId = node.attrs?.typeId;
     const rowTypeEntityName = node.attrs?.typeName;
@@ -637,7 +637,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating a new block image triple for IMAGE_BLOCKs only  */
   createBlockImageTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isImageNode = node.type === 'image';
 
     if (!isImageNode || !node.attrs?.src) {
