@@ -32,6 +32,7 @@ import {
   VALUE_TYPE,
   RELATION_VALUE_RELATIONSHIP_TYPE,
   DATE,
+  WEB_URL,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -67,6 +68,7 @@ const entities: string[] = [
   PARENT_ENTITY,
   RELATION_VALUE_RELATIONSHIP_TYPE,
   DATE,
+  WEB_URL,
 ]
 
 class Tuple<T, U> {
@@ -86,6 +88,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
   { _0: IMAGE, _1: new StringValue(TEXT, 'Image') },
   { _0: DATE, _1: new StringValue(DATE, 'Date') },
+  { _0: WEB_URL, _1: new StringValue(WEB_URL, 'Web URL') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
   {
@@ -140,6 +143,7 @@ const types: Tuple<string, string[]>[] = [
   { _0: RELATION, _1: [] },
   { _0: IMAGE, _1: [] },
   { _0: DATE, _1: [] },
+  { _0: WEB_URL, _1: [] },
   { _0: ATTRIBUTE, _1: [VALUE_TYPE] },
   { _0: SCHEMA_TYPE, _1: [ATTRIBUTES] },
   { _0: SPACE_CONFIGURATION, _1: [FOREIGN_TYPES] },

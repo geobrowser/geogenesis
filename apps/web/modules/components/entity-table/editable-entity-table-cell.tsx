@@ -10,6 +10,7 @@ import { EntityTextAutocomplete } from '../entity/autocomplete/entity-text-autoc
 import { useEditEvents } from '../entity/edit-events';
 import { TableImageField, TableStringField } from '../editable-fields/editable-fields';
 import { DateField } from '../editable-fields/date-field';
+import { WebUrlField } from '../editable-fields/web-url-field';
 
 interface Props {
   cell: Cell;
@@ -58,6 +59,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isTextValueType = valueType === SYSTEM_IDS.TEXT;
   const isImageValueType = valueType === SYSTEM_IDS.IMAGE;
   const isDateValueType = valueType === SYSTEM_IDS.DATE;
+  const isUrlValueType = valueType === SYSTEM_IDS.WEB_URL;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueType && isEmptyCell;
@@ -95,6 +97,17 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const createStringTripleWithValue = (value: string) => {
     send({
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
+      payload: {
+        attributeId,
+        attributeName: columnName,
+        value,
+      },
+    });
+  };
+
+  const createUrlTripleWithValue = (value: string) => {
+    send({
+      type: 'CREATE_URL_TRIPLE_WITH_VALUE',
       payload: {
         attributeId,
         attributeName: columnName,
@@ -147,6 +160,16 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
       type: 'UPDATE_STRING_VALUE',
+      payload: {
+        triple,
+        value,
+      },
+    });
+  };
+
+  const updateUrlTripleValue = (triple: Triple, value: string) => {
+    send({
+      type: 'UPDATE_URL_VALUE',
       payload: {
         triple,
         value,
@@ -240,6 +263,20 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
           value={Value.dateValue(firstTriple) ?? ''}
+          variant="tableCell"
+        />
+      )}
+
+      {isUrlValueType && (
+        <WebUrlField
+          isEditing={true}
+          onBlur={e =>
+            isEmptyCell
+              ? createUrlTripleWithValue(e.currentTarget.value)
+              : updateUrlTripleValue(firstTriple, e.currentTarget.value)
+          }
+          value={Value.urlValue(firstTriple) ?? ''}
+          placeholder="Add value..."
           variant="tableCell"
         />
       )}

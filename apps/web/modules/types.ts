@@ -6,7 +6,7 @@ import {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url';
 
 export type NumberValue = {
   type: 'number';
@@ -38,7 +38,13 @@ export type DateValue = {
   value: string;
 };
 
-export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue;
+export type UrlValue = {
+  type: 'url';
+  id: string;
+  value: string;
+};
+
+export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue;
 
 export type Triple = {
   id: string;
@@ -60,6 +66,7 @@ export type Space = {
   attributes: Dictionary<string, string>;
   entityId: string;
   spaceConfigEntityId: string | null;
+  createdAtBlock: string;
 };
 
 export type Account = {

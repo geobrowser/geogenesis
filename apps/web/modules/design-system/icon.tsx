@@ -39,6 +39,7 @@ import { Cog } from './icons/cog';
 import { NewTab } from './icons/new-tab';
 import { Date } from './icons/date';
 import { Minus } from './icons/minus';
+import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
 import { DisconnectWallet } from './icons/disconnect-wallet';
 
@@ -84,6 +85,7 @@ export type IconName =
   | 'cog'
   | 'newTab'
   | 'minus'
+  | 'url'
   | 'wallet'
   | 'disconnectWallet';
 
@@ -142,6 +144,7 @@ const icons: Record<IconName, React.ElementType> = {
   cog: Cog,
   newTab: NewTab,
   minus: Minus,
+  url: Url,
   wallet: Wallet,
   disconnectWallet: DisconnectWallet,
 };

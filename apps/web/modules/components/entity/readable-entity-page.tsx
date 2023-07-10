@@ -17,6 +17,7 @@ import { RightArrowDiagonal } from '~/modules/design-system/icons/right-arrow-di
 import { useEntityStore } from '~/modules/entity';
 import { DateField } from '../editable-fields/date-field';
 import { SmallButton } from '~/modules/design-system/button';
+import { WebUrlField } from '../editable-fields/web-url-field';
 
 interface Props {
   triples: Triple[];
@@ -66,6 +67,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
             {triple.value.value}
           </Text>
         );
+
       case 'image':
         return (
           <ImageZoom
@@ -75,6 +77,8 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
         );
       case 'date':
         return <DateField isEditing={false} value={triple.value.value} />;
+      case 'url':
+        return <WebUrlField isEditing={false} value={triple.value.value} />;
       case 'entity': {
         return (
           <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">

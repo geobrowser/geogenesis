@@ -33,6 +33,9 @@ export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 // Date of Birth -> VALUE_TYPE -> DATE
 export const DATE = '167664f6-68f8-40e1-976b-20bd16ed8d47'
 
+// Twitter -> VALUE_TYPE -> WEB_URL
+export const WEB_URL = 'dfc221d9-8cce-4f0b-9353-e437a98387e3'
+
 // This sets the type of values which can be set as part of a relation value.
 // e.g. An attribute called People can only accept values of type Person
 export const RELATION_VALUE_RELATIONSHIP_TYPE =

@@ -8,6 +8,9 @@ function createValueId(value: Value): string {
   const dateValue = value.asDateValue()
   if (dateValue) return dateValue.id
 
+  const urlValue = value.asUrlValue()
+  if (urlValue) return urlValue.id
+
   const stringValue = value.asStringValue()
   if (stringValue) return stringValue.id
 
@@ -17,7 +20,7 @@ function createValueId(value: Value): string {
   const entityValue = value.asEntityValue()
   if (entityValue) return entityValue.id
 
-  throw new Error('Bad serialization')
+  throw new Error('Bad serialization of value id in createValueId()')
 }
 
 export function createTripleId(

@@ -107,6 +107,13 @@ export type EditEvent =
       };
     }
   | {
+      type: 'UPDATE_URL_VALUE';
+      payload: {
+        value: string;
+        triple: TripleType;
+      };
+    }
+  | {
       type: 'UPDATE_DATE_VALUE';
       payload: {
         value: string;
@@ -115,6 +122,14 @@ export type EditEvent =
     }
   | {
       type: 'CREATE_STRING_TRIPLE_WITH_VALUE';
+      payload: {
+        value: string;
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
+      type: 'CREATE_URL_TRIPLE_WITH_VALUE';
       payload: {
         value: string;
         attributeId: string;
@@ -413,6 +428,27 @@ const listener =
         );
       }
 
+      case 'CREATE_URL_TRIPLE_WITH_VALUE': {
+        const { value, attributeId, attributeName } = event.payload;
+
+        if (!value) return;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId,
+            attributeName,
+            value: {
+              type: 'url',
+              id: ID.createValueId(),
+              value: value,
+            },
+          })
+        );
+      }
+
       case 'CREATE_DATE_TRIPLE_WITH_VALUE': {
         const { value, attributeId, attributeName } = event.payload;
 
@@ -526,6 +562,19 @@ const listener =
             ...triple,
             placeholder: false,
             value: { ...triple.value, type: 'string', value },
+          },
+          triple
+        );
+      }
+
+      case 'UPDATE_URL_VALUE': {
+        const { value, triple } = event.payload;
+
+        return update(
+          {
+            ...triple,
+            placeholder: false,
+            value: { ...triple.value, type: 'url', value },
           },
           triple
         );
