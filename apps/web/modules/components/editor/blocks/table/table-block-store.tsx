@@ -282,10 +282,6 @@ export class TableBlockStore {
       );
     }
 
-    if (newFiltersString === '') {
-      return this.ActionsStore.remove(filterTriple);
-    }
-
     return this.ActionsStore.update(
       Triple.ensureStableId({
         ...filterTriple,
