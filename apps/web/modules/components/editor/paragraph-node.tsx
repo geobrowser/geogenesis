@@ -17,6 +17,7 @@ export const ParagraphNode = Paragraph.extend({
   defining: true,
   exitable: true,
   content: 'inline*',
+  code: false,
 
   parseHTML() {
     return [

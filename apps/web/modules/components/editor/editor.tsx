@@ -23,6 +23,7 @@ export const tiptapExtensions = [
   StarterKit.configure({
     paragraph: false,
     heading: false,
+    code: false,
   }),
   ParagraphNode,
   HeadingNode,
