@@ -16,6 +16,8 @@ import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
 import { ID } from '~/modules/id';
 import { Value } from '~/modules/value';
+import { QueryClient } from '@tanstack/query-core';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const PAGE_SIZE = 10;
 
@@ -43,6 +45,8 @@ interface ITableBlockStoreConfig {
   selectedType: SelectedEntityType;
 
   spaceId: string;
+
+  queryClient: QueryClient;
 }
 
 /**
@@ -55,9 +59,10 @@ interface ITableBlockStoreConfig {
  * For now we are fine with the duplication.
  */
 export class TableBlockStore {
-  api: NetworkData.INetwork;
-  ActionsStore: ActionsStore;
-  MergedData: MergedData;
+  private queryClient: QueryClient;
+  private api: NetworkData.INetwork;
+  private ActionsStore: ActionsStore;
+  private MergedData: MergedData;
   entityId: string;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -74,7 +79,8 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
+  constructor({ api, spaceId, ActionsStore, entityId, selectedType, queryClient }: ITableBlockStoreConfig) {
+    this.queryClient = queryClient;
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
@@ -142,22 +148,30 @@ export class TableBlockStore {
           /**
            * Aggregate columns from local and server columns.
            */
-          const { columns } = await this.MergedData.columns({
-            params,
-            abortController: this.abortController,
+          const { columns } = await this.queryClient.fetchQuery({
+            queryKey: ['columns', params],
+            queryFn: () =>
+              this.MergedData.columns({
+                params,
+                abortController: this.abortController,
+              }),
           });
 
           /**
            * Aggregate data for the rows from local and server entities.
            */
-          const { rows } = await this.MergedData.rows(
-            {
-              params,
-              abortController: this.abortController,
-            },
-            columns,
-            selectedType?.entityId
-          );
+          const { rows } = await this.queryClient.fetchQuery({
+            queryKey: ['rows', params, columns, selectedType?.entityId],
+            queryFn: () =>
+              this.MergedData.rows(
+                {
+                  params,
+                  abortController: this.abortController,
+                },
+                columns,
+                selectedType?.entityId
+              ),
+          });
 
           this.isLoading$.set(false);
 
@@ -316,6 +330,7 @@ interface Props {
 // scoped specifically for table blocks since it has functionality
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
+  const queryClient = useQueryClient();
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
@@ -328,13 +343,14 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
 
   const store = useMemo(() => {
     return new TableBlockStore({
+      queryClient,
       api: network,
       spaceId,
       ActionsStore,
       selectedType,
       entityId,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId]);
+  }, [network, spaceId, selectedType, ActionsStore, entityId, queryClient]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
