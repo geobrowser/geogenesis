@@ -40,7 +40,7 @@ export const tiptapExtensions = [
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
-  const entityStore = useEntityStore();
+  const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
 
   // @HACK: Janky but works for now. Will probably be super slow for large pages.
   // We need to keep the editor in sync with the local data store. Without this level
@@ -55,12 +55,12 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
   // A third approach is to cache all requests in table nodes and just allow the
   // editor to re-mount the internal react components. Not sure how viable this is
   // as I haven't tested it.
-  const stringifiedJson = JSON.stringify(entityStore.editorJson);
-  const memoizedJson = React.useMemo(() => entityStore.editorJson, [stringifiedJson]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stringifiedJson = JSON.stringify(editorJson);
+  const memoizedJson = React.useMemo(() => editorJson, [stringifiedJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const editor = useEditor(
     {
-      extensions: [...tiptapExtensions, createIdExtension(entityStore.spaceId)],
+      extensions: [...tiptapExtensions, createIdExtension(spaceId)],
       editable: true,
       content: memoizedJson,
       onBlur({ editor }) {
@@ -68,7 +68,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
         Responsible for converting all editor blocks to triples
         Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
         */
-        entityStore.updateEditorBlocks(editor);
+        updateEditorBlocks(editor);
       },
       editorProps: {
         transformPastedHTML: html => removeIdAttributes(html),
@@ -77,7 +77,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
     [memoizedJson]
   );
 
-  if (!editable && entityStore.blockIds.length === 0) return null;
+  if (!editable && blockIds.length === 0) return null;
 
   if (!editor) return null;
 

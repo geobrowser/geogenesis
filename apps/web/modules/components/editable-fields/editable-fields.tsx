@@ -60,11 +60,19 @@ interface PageStringFieldProps {
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
   return (
     <Textarea
       {...props}
-      onChange={props.onChange}
-      value={props.value}
+      onBlur={props.onChange}
+      onChange={e => setLocalValue(e.currentTarget.value)}
+      value={localValue}
       className={textareaStyles({ variant: props.variant })}
     />
   );

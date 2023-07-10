@@ -87,7 +87,7 @@ export class TableBlockStore {
     this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore });
-    this.isLoading$ = observable(true);
+    this.isLoading$ = observable(false);
     this.abortController = new AbortController();
 
     this.blockEntity$ = makeOptionalComputed(
@@ -148,30 +148,22 @@ export class TableBlockStore {
           /**
            * Aggregate columns from local and server columns.
            */
-          const { columns } = await this.queryClient.fetchQuery({
-            queryKey: ['columns', params],
-            queryFn: () =>
-              this.MergedData.columns({
-                params,
-                abortController: this.abortController,
-              }),
+          const { columns } = await this.MergedData.columns({
+            params,
+            abortController: this.abortController,
           });
 
           /**
            * Aggregate data for the rows from local and server entities.
            */
-          const { rows } = await this.queryClient.fetchQuery({
-            queryKey: ['rows', params, columns, selectedType?.entityId],
-            queryFn: () =>
-              this.MergedData.rows(
-                {
-                  params,
-                  abortController: this.abortController,
-                },
-                columns,
-                selectedType?.entityId
-              ),
-          });
+          const { rows } = await this.MergedData.rows(
+            {
+              params,
+              abortController: this.abortController,
+            },
+            columns,
+            selectedType?.entityId
+          );
 
           this.isLoading$.set(false);
 
