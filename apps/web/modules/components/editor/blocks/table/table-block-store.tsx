@@ -16,8 +16,6 @@ import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
 import { ID } from '~/modules/id';
 import { Value } from '~/modules/value';
-import { QueryClient } from '@tanstack/query-core';
-import { useQueryClient } from '@tanstack/react-query';
 
 export const PAGE_SIZE = 10;
 
@@ -45,8 +43,6 @@ interface ITableBlockStoreConfig {
   selectedType: SelectedEntityType;
 
   spaceId: string;
-
-  queryClient: QueryClient;
 }
 
 /**
@@ -59,10 +55,9 @@ interface ITableBlockStoreConfig {
  * For now we are fine with the duplication.
  */
 export class TableBlockStore {
-  private queryClient: QueryClient;
-  private api: NetworkData.INetwork;
-  private ActionsStore: ActionsStore;
-  private MergedData: MergedData;
+  api: NetworkData.INetwork;
+  ActionsStore: ActionsStore;
+  MergedData: MergedData;
   entityId: string;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -79,8 +74,7 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, spaceId, ActionsStore, entityId, selectedType, queryClient }: ITableBlockStoreConfig) {
-    this.queryClient = queryClient;
+  constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
@@ -322,7 +316,6 @@ interface Props {
 // scoped specifically for table blocks since it has functionality
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
-  const queryClient = useQueryClient();
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
 
@@ -335,14 +328,13 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
 
   const store = useMemo(() => {
     return new TableBlockStore({
-      queryClient,
       api: network,
       spaceId,
       ActionsStore,
       selectedType,
       entityId,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId, queryClient]);
+  }, [network, spaceId, selectedType, ActionsStore, entityId]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
