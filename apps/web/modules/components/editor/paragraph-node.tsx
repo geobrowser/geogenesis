@@ -33,18 +33,18 @@ export const ParagraphNode = Paragraph.extend({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(TextNodeComponent);
+    return ReactNodeViewRenderer(ParagraphNodeComponent);
   },
 });
 
-function TextNodeComponent({ node }: NodeViewRendererProps) {
+function ParagraphNodeComponent({ node }: NodeViewRendererProps) {
   const isEditable = useUserIsEditing(node.attrs.spaceId);
 
   return (
     <NodeViewWrapper>
-      <p contentEditable={isEditable ? 'true' : 'false'}>
-        <NodeViewContent />
-      </p>
+      {/* <p contentEditable={isEditable ? 'true' : 'false'}> */}
+      <NodeViewContent as="p" contentEditable={isEditable ? 'true' : 'false'} />
+      {/* </p> */}
     </NodeViewWrapper>
   );
 }
