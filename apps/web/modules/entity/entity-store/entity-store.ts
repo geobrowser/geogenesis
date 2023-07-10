@@ -445,7 +445,7 @@ export class EntityStore implements IEntityStore {
   We don't support changing types of blocks, so all we need to do is create a new block with the new type
   */
   createBlockTypeTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const entityName = this.nodeName(node);
 
     const blockTypeValue: EntityValue = getBlockTypeValue(node.type);
@@ -470,7 +470,7 @@ export class EntityStore implements IEntityStore {
   Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const entityName = this.nodeName(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
@@ -502,7 +502,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
   upsertBlockMarkdownTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isImageNode = node.type === 'image';
     const isTableNode = node.type === 'tableNode';
     const isList = node.type === 'bulletList';
@@ -558,7 +558,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating backlinks to the parent entity  */
   createParentEntityTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
+    const blockEntityId = getNodeId(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.PARENT_ENTITY });
 
@@ -749,7 +749,7 @@ export class EntityStore implements IEntityStore {
       return isNonParagraph || isParagraphWithContent;
     });
 
-    const blockIds = populatedContent.map(node => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id);
+    const blockIds = populatedContent.map(node => getNodeId(node));
 
     batch(() => {
       this.upsertBlocksTriple(blockIds);
@@ -765,6 +765,9 @@ export class EntityStore implements IEntityStore {
     });
   };
 }
+
+// Returns the id of the first paragraph even if nested inside of a list
+const getNodeId = (node: JSONContent) => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
 
 const getBlockTypeValue = (nodeType?: string): EntityValue => {
   switch (nodeType) {
