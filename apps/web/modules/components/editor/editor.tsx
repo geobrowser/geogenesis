@@ -67,9 +67,6 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
   const hasHydrated = useHydrated();
 
-  console.log('hasHydrated', hasHydrated);
-  console.log('editorJson', editorJson);
-
   // @HACK: Janky but works for now.
   //
   // We need to keep the editor in sync with the local data store. Without this level
