@@ -4,10 +4,12 @@ import { Entity, EntityTable } from '~/modules/entity';
 import { Triple } from '~/modules/triple';
 import { Column, OmitStrict, Row, Version } from '~/modules/types';
 import { INetwork } from './network';
+import { LocalData } from '.';
 
 interface MergeDataSourceOptions {
   api: INetwork;
   store: ActionsStore;
+  localStore: LocalData.LocalStore;
 }
 
 interface IMergeDataSource
@@ -22,10 +24,12 @@ interface IMergeDataSource
 export class Merged implements IMergeDataSource {
   private api: INetwork;
   private store: ActionsStore;
+  private localStore: LocalData.LocalStore;
 
-  constructor({ api, store }: MergeDataSourceOptions) {
+  constructor({ api, store, localStore }: MergeDataSourceOptions) {
     this.api = api;
     this.store = store;
+    this.localStore = localStore;
   }
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -105,8 +109,7 @@ export class Merged implements IMergeDataSource {
       // Need to find the local version of this entity if it exists and merge it with the network entity
       // if it exists. If the network entity doesn't exist, we search the local store for the entity.
       const entity = pipe(
-        this.store.actions$.get(),
-        actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),
+        this.localStore.entities$.get(),
         A.find(e => e.id === id)
       );
 
@@ -125,7 +128,7 @@ export class Merged implements IMergeDataSource {
     const { columns: serverColumns } = await this.api.columns(options);
 
     const columns = EntityTable.columnsFromActions(
-      this.store.allActions$.get(),
+      this.localStore.triples$.get(),
       serverColumns,
       options.params.typeIds?.[0]
     );
@@ -135,6 +138,8 @@ export class Merged implements IMergeDataSource {
 
   rows = async (options: Parameters<INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
     const { rows: serverRows } = await this.api.rows(options);
+
+    console.log('rerunning merged data rows');
 
     /**
      * Aggregate data for the rows from local and server entities.
@@ -155,9 +160,7 @@ export class Merged implements IMergeDataSource {
     // if it does, we can do `this.fetchEntity` to get the entire entity, regardless of whether it
     // is local-only or not.
     const changedEntitiesIdsFromAnotherType = pipe(
-      this.store.allActions$.get(),
-      actions => Triple.fromActions(actions, []),
-      triples => Entity.entitiesFromTriples(triples),
+      this.localStore.entities$.get(),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
       A.map(t => t.id)
     );
@@ -180,8 +183,7 @@ export class Merged implements IMergeDataSource {
     const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
     const entitiesCreatedOrChangedLocally = pipe(
-      this.store.actions$.get(),
-      actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
+      this.localStore.entities$.get(),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId))
     );
 

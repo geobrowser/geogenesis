@@ -9,7 +9,7 @@ import { Action, ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/editor/editor';
 import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
-import { MergedData, NetworkData } from '~/modules/io';
+import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as ITriple } from '~/modules/types';
 import { Value } from '~/modules/value';
@@ -82,10 +82,12 @@ interface IEntityStoreConfig {
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
   ActionsStore: ActionsStore;
+  LocalStore: LocalData.LocalStore;
 }
 
 export class EntityStore implements IEntityStore {
   private api: NetworkData.INetwork;
+  private LocalStore: LocalData.LocalStore;
   id: string;
   spaceId: string;
   triples$: ObservableComputed<ITriple[]>;
@@ -112,6 +114,7 @@ export class EntityStore implements IEntityStore {
     spaceId,
     id,
     ActionsStore,
+    LocalStore,
   }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
@@ -120,6 +123,7 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
+    this.LocalStore = LocalStore;
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
@@ -279,7 +283,7 @@ export class EntityStore implements IEntityStore {
         ];
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
         const maybeRelationAttributeTypes = await Promise.all(
           attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
         );

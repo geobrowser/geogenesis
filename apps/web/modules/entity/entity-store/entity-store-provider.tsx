@@ -5,6 +5,7 @@ import { useActionsStoreContext } from '../../action';
 import { Services } from '../../services';
 import { Triple } from '../../types';
 import { EntityStore } from './entity-store';
+import { LocalData } from '~/modules/io';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
 
@@ -29,6 +30,7 @@ export function EntityStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreContext();
+  const LocalStore = LocalData.useLocalStoreContext();
 
   const store = useMemo(() => {
     return new EntityStore({
@@ -40,6 +42,7 @@ export function EntityStoreProvider({
       initialSchemaTriples,
       id,
       ActionsStore,
+      LocalStore,
     });
   }, [
     network,
@@ -50,6 +53,7 @@ export function EntityStoreProvider({
     initialSchemaTriples,
     id,
     ActionsStore,
+    LocalStore,
   ]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;

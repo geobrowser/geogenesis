@@ -1,7 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-
-import { Triple } from '~/modules/triple';
-import { Action, Column, Entity, Row } from '~/modules/types';
+import { Triple as ITriple, Column, Entity, Row } from '~/modules/types';
 
 export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
@@ -30,27 +28,20 @@ export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
 }
 
 export function columnsFromActions(
-  actions: Action[] | undefined,
+  localTriples: ITriple[] | undefined,
   columns: Column[],
   selectedTypeId?: string
 ): Column[] {
-  if (!actions) return columns;
-
-  const newTriples = Triple.fromActions(
-    actions,
-    columns.flatMap(t => t.triples)
-  );
-
-  const triplesWithNames = Triple.withLocalNames(actions, newTriples);
+  if (!localTriples) return columns;
 
   // Only show the column if it is an attribute of the selected type
-  const triplesThatAreAttributes = triplesWithNames.filter(
+  const triplesThatAreAttributes = localTriples.filter(
     triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES && triple.entityId === selectedTypeId
   );
 
   const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
     id: triple.value.id,
-    triples: triplesWithNames.filter(t => {
+    triples: localTriples.filter(t => {
       return t.entityId === triple.value.id;
     }),
   }));

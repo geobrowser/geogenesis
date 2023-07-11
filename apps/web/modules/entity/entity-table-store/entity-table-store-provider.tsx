@@ -9,6 +9,7 @@ import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, Row, Triple } from '../../types';
 import { EntityTableStore } from './entity-table-store';
+import { LocalData } from '~/modules/io';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
@@ -31,6 +32,7 @@ export function EntityTableStoreProvider({
   const router = useRouter();
   const SpaceStore = useSpaceStore();
   const ActionsStore = useActionsStoreContext();
+  const LocalStore = LocalData.useLocalStoreContext();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -47,8 +49,9 @@ export function EntityTableStoreProvider({
       initialColumns,
       ActionsStore,
       SpaceStore,
+      LocalStore,
     });
-  }, [network, spaceId, initialRows, initialSelectedType, initialColumns, ActionsStore, SpaceStore]);
+  }, [network, spaceId, initialRows, initialSelectedType, initialColumns, ActionsStore, SpaceStore, LocalStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);

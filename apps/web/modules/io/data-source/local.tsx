@@ -4,7 +4,7 @@ import { ObservableComputed, computed, observable } from '@legendapp/state';
 import { Action, ActionsStore, useActionsStoreContext } from '../../action';
 import { Entity as IEntity, Triple as ITriple } from '../../types';
 import { makeOptionalComputed } from '../../utils';
-import { pipe } from '@mobily/ts-belt';
+import { A, pipe } from '@mobily/ts-belt';
 import { Triple } from '../../triple';
 import { Entity } from '../../entity';
 import { useSelector } from '@legendapp/state/react';
@@ -12,6 +12,7 @@ import { useSelector } from '@legendapp/state/react';
 export class LocalStore {
   private store: ActionsStore;
   triples$: ObservableComputed<ITriple[]> = observable([]);
+  triplesByEntityId$: ObservableComputed<Record<string, ITriple[]>> = observable<Record<string, ITriple[]>>({});
   unpublishedTriples$: ObservableComputed<ITriple[]> = observable([]);
   entities$: ObservableComputed<IEntity[]> = observable([]);
   unpublishedEntities$: ObservableComputed<IEntity[]> = observable([]);
@@ -27,6 +28,19 @@ export class LocalStore {
         const allActions = this.store.allActions$.get();
         const triples = Triple.fromActions(allActions, []);
         return Triple.withLocalNames(allActions, triples);
+      })
+    );
+
+    this.triplesByEntityId$ = makeOptionalComputed(
+      {} as Record<string, ITriple[]>,
+      computed(() => {
+        const triples = this.triples$.get();
+
+        return triples.reduce<Record<string, ITriple[]>>((acc, triple) => {
+          if (!acc[triple.entityId]) acc[triple.entityId] = [];
+          acc[triple.entityId] = acc[triple.entityId].concat(triple);
+          return acc;
+        }, {});
       })
     );
 

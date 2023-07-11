@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A, pipe } from '@mobily/ts-belt';
+import { A } from '@mobily/ts-belt';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 
@@ -9,7 +9,7 @@ import { ActionsStore, useActionsStoreContext } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
 import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
-import { MergedData, NetworkData } from '~/modules/io';
+import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
 import { FetchRowsOptions } from '~/modules/io/data-source/network';
@@ -32,6 +32,9 @@ interface ITableBlockStoreConfig {
   // We use the ActionsStore to derive any new columns or rows that might exist
   // locally but not remotely.
   ActionsStore: ActionsStore;
+
+  // We use the LocalStore to read any data that might exist locally but not remotely.
+  LocalStore: LocalData.LocalStore;
 
   // Entity ID of the TableBlock entity. We use this to manipulate Table properties
   // such as name, the Table image, sorting, filtering, etc. since these properties
@@ -58,6 +61,7 @@ export class TableBlockStore {
   api: NetworkData.INetwork;
   ActionsStore: ActionsStore;
   MergedData: MergedData;
+  LocalStore: LocalData.LocalStore;
   entityId: string;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -74,44 +78,40 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, spaceId, ActionsStore, entityId, selectedType }: ITableBlockStoreConfig) {
+  constructor({ api, ActionsStore, entityId, selectedType, LocalStore }: ITableBlockStoreConfig) {
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
+    this.LocalStore = LocalStore;
     this.type = selectedType;
     this.pageNumber$ = observable(0);
-    this.MergedData = new MergedData({ api, store: ActionsStore });
+    this.MergedData = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
-    this.blockEntity$ = makeOptionalComputed(
-      null,
-      computed(() => {
-        // HACK: This is a hack to rerun this computed when actions change.
-        // In the future we should pass in the actions as a dependency to
-        // the MergedData method calls to trigger any re-runs of computeds.
-        this.ActionsStore.allActions$.get();
-        return this.MergedData.fetchEntity(entityId);
-      })
-    );
+    this.blockEntity$ = computed(async () => {
+      // HACK: This is a hack to rerun this computed when actions change.
+      // In the future we should pass in the actions as a dependency to
+      // the MergedData method calls to trigger any re-runs of computeds.
+      // this.LocalStore.triples$.get();
+      return await this.MergedData.fetchEntity(entityId);
+    });
 
     this.filterState$ = makeOptionalComputed(
       [],
       computed(async () => {
         // 1. Get either the server Filter triple or the local Filter triple
         // 2. Map the value of the Filter triple to TableBlockFilter[]
+
         const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-        const localFilterTriple = pipe(
-          this.ActionsStore.allActions$.get(),
-          actions => Triple.fromActions(actions, []),
-          A.find(t => t.entityId === entityId && t.attributeId === SYSTEM_IDS.FILTER)
-        );
+        const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+        const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
 
         // Default to the locally changed version of a filter if it exists
         const filter = localFilterTriple ?? serverFilterTriple;
         const filterValue = Value.stringValue(filter) ?? '';
 
-        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
+        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.api.fetchEntity);
       })
     );
 
@@ -194,7 +194,7 @@ export class TableBlockStore {
     });
 
     this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(this.ActionsStore.actions$.get()[spaceId], [], selectedType?.entityId);
+      return EntityTable.columnsFromActions(this.LocalStore.triples$.get(), [], selectedType?.entityId);
     });
 
     this.columnRelationTypes$ = makeOptionalComputed(
@@ -215,7 +215,8 @@ export class TableBlockStore {
 
         // Merge all local and server triples
         const mergedTriples = A.uniqBy(
-          Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
+          // Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
+          [...relationTypeEntities, ...this.LocalStore.triples$.get()],
           t => t.id
         );
 
@@ -322,6 +323,7 @@ interface Props {
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
+  const LocalStore = LocalData.useLocalStoreContext();
   const ActionsStore = useActionsStoreContext();
 
   if (!selectedType) {
@@ -336,10 +338,11 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
       api: network,
       spaceId,
       ActionsStore,
+      LocalStore,
       selectedType,
       entityId,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId]);
+  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
