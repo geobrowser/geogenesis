@@ -30,6 +30,8 @@ export const tableCommandItem: CommandSuggestionItem = {
         type: 'tableNode',
         attrs: {
           spaceId: props.spaceId,
+          typeId: props.selectedType.entityId,
+          typeName: props.selectedType.entityName,
         },
       })
       .createParagraphNear()
