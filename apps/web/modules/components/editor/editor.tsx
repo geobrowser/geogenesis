@@ -42,7 +42,8 @@ export const tiptapExtensions = [
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
 
-  // @HACK: Janky but works for now. Will probably be super slow for large pages.
+  // @HACK: Janky but works for now.
+  //
   // We need to keep the editor in sync with the local data store. Without this level
   // of memoization the editor will re-render on every blur and edit toggle which causes
   // all of the custom react components within the editor to re-mount. This is janky UX,

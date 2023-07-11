@@ -140,8 +140,13 @@ export class EntityStore implements IEntityStore {
     });
 
     this.blockIdsTriple$ = computed(() => {
-      const triples = this.triples$.get();
-      const blocksIdTriple = triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
+      // We deeply track the specific blockIdsTriple for this entity. This is so the block editor
+      // does not re-render when other properties of the entity are changed.
+      const entityChanges = ActionsStore.actionsByEntityId$[id];
+
+      // @ts-expect-error legendstate's types do not like accessing a nested computed value in a
+      // record by id like this.
+      const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS]?.get();
 
       // Favor the local version of the blockIdsTriple if it exists
       return blocksIdTriple ?? initialBlockIdsTriple ?? null;
