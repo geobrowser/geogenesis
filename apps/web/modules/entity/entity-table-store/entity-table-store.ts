@@ -169,12 +169,16 @@ export class EntityTableStore implements IEntityTableStore {
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(this.LocalStore.triples$.get(), [], this.selectedType$.get()?.entityId);
+      return EntityTable.columnsFromLocalChanges(
+        this.LocalStore.triples$.get(),
+        [],
+        this.selectedType$.get()?.entityId
+      );
     });
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      return EntityTable.columnsFromActions(
+      return EntityTable.columnsFromLocalChanges(
         this.LocalStore.triples$.get(),
         columns,
         this.selectedType$.get()?.entityId

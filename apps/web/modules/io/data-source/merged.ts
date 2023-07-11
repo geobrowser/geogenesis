@@ -127,7 +127,7 @@ export class Merged implements IMergeDataSource {
   columns = async (options: Parameters<INetwork['columns']>[0]) => {
     const { columns: serverColumns } = await this.api.columns(options);
 
-    const columns = EntityTable.columnsFromActions(
+    const columns = EntityTable.columnsFromLocalChanges(
       this.localStore.triples$.get(),
       serverColumns,
       options.params.typeIds?.[0]

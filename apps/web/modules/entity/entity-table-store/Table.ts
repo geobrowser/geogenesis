@@ -27,7 +27,7 @@ export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   };
 }
 
-export function columnsFromActions(
+export function columnsFromLocalChanges(
   localTriples: ITriple[] | undefined,
   columns: Column[],
   selectedTypeId?: string

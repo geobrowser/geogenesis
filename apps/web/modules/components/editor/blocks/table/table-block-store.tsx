@@ -105,7 +105,7 @@ export class TableBlockStore {
         const filter = localFilterTriple ?? serverFilterTriple;
         const filterValue = Value.stringValue(filter) ?? '';
 
-        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.api.fetchEntity);
+        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
       })
     );
 
@@ -188,7 +188,7 @@ export class TableBlockStore {
     });
 
     this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(this.LocalStore.triples$.get(), [], selectedType?.entityId);
+      return EntityTable.columnsFromLocalChanges(this.LocalStore.triples$.get(), [], selectedType?.entityId);
     });
 
     this.columnRelationTypes$ = makeOptionalComputed(
@@ -209,8 +209,7 @@ export class TableBlockStore {
 
         // Merge all local and server triples
         const mergedTriples = A.uniqBy(
-          // Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
-          [...relationTypeEntities, ...this.LocalStore.triples$.get()],
+          Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
           t => t.id
         );
 

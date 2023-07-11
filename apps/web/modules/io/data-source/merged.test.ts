@@ -4,7 +4,7 @@ import { Entity } from '~/modules/entity';
 import { CreateTripleAction, StringValue, Triple } from '~/modules/types';
 import { MockNetwork, makeStubTriple } from '../mocks/mock-network';
 import { Merged as MergeDataSource } from './merged';
-import { LocalData } from '.';
+import { LocalStore } from './local';
 
 describe('MergeDataSource merges local triples with network triples', () => {
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -14,7 +14,7 @@ describe('MergeDataSource merges local triples with network triples', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
@@ -47,7 +47,7 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     store.remove(stubTriple);
 
@@ -77,7 +77,7 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
@@ -109,7 +109,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
       ...stubTriple,
@@ -136,7 +136,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = makeStubTriple('Bob');
     store.create(changedLocalTriple);
@@ -158,7 +158,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const mergedNetwork = new MergeDataSource({ api, store, localStore });
     const entity = await mergedNetwork.fetchEntity(stubTriple.id);
@@ -172,7 +172,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const api = new MockNetwork({ triples: [stubTriple] });
     const store = new ActionsStore({ api: api });
-    const localStore = new LocalData.LocalStore({ store: store });
+    const localStore = new LocalStore({ store: store });
 
     const mergedNetwork = new MergeDataSource({ api, store, localStore });
     const entity = await mergedNetwork.fetchEntity('Banana');
