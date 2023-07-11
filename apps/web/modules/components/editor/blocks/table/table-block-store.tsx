@@ -147,6 +147,11 @@ export class TableBlockStore {
             abortController: this.abortController,
           });
 
+          const dedupedColumns = columns.reduce((acc, column) => {
+            if (acc.find(c => c.id === column.id)) return acc;
+            return [...acc, column];
+          }, [] as Column[]);
+
           /**
            * Aggregate data for the rows from local and server entities.
            */
@@ -162,7 +167,7 @@ export class TableBlockStore {
           this.isLoading$.set(false);
 
           return {
-            columns,
+            columns: dedupedColumns,
             rows: rows.slice(0, PAGE_SIZE),
             hasNextPage: rows.length > PAGE_SIZE,
           };
