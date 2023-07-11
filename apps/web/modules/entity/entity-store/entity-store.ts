@@ -120,30 +120,13 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIdsTriple$ = computed(() => {
-      const localBlockIdsForEntity = pipe(
-        ActionsStore.allActions$.get(),
-        actions => Action.squashChanges(actions),
-        actions => Triple.fromActions(actions, initialBlockIdsTriple ? [initialBlockIdsTriple] : []),
-        A.filter(t => t.entityId === id),
-        A.find(t => t.attributeId === SYSTEM_IDS.BLOCKS)
-      );
-
-      // Favor the local version of the blockIdsTriple if it exists
-      return localBlockIdsForEntity ?? null;
-    });
-
-    this.blockIds$ = computed(() => {
-      const blockIdsTriple = this.blockIdsTriple$.get();
-
-      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
-    });
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
 
       return pipe(
         spaceActions,
+        actions => Action.squashChanges(actions),
         actions => Triple.fromActions(actions, initialTriples),
         A.filter(t => t.entityId === id),
         triples =>
@@ -154,6 +137,25 @@ export class EntityStore implements IEntityStore {
             triples
           )
       );
+    });
+
+    this.blockIdsTriple$ = computed(() => {
+      // We deeply track the specific blockIdsTriple for this entity. This is so the block editor
+      // does not re-render when other properties of the entity are changed.
+      const entityChanges = ActionsStore.actionsByEntityId$[id];
+
+      // @ts-expect-error legendstate's types do not like accessing a nested computed value in a
+      // record by id like this.
+      const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS]?.get();
+
+      // Favor the local version of the blockIdsTriple if it exists
+      return blocksIdTriple ?? initialBlockIdsTriple ?? null;
+    });
+
+    this.blockIds$ = computed(() => {
+      const blockIdsTriple = this.blockIdsTriple$.get();
+
+      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
     });
 
     this.name$ = computed(() => {

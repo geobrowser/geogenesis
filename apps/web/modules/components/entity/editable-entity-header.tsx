@@ -15,6 +15,7 @@ import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
 import { PageStringField } from '../editable-fields/editable-fields';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 export function EditableHeading({
   spaceId,
@@ -76,7 +77,7 @@ export function EditableHeading({
             the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
             have to manually adjust the spacing here to remove the layout shift.
           */}
-          <Spacer height={2} />
+          <Spacer height={3.5} />
         </div>
       ) : (
         <div>

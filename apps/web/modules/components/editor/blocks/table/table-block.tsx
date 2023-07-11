@@ -96,9 +96,9 @@ export function TableBlock({ spaceId }: Props) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between py-1">
-        <div className="flex w-full items-center gap-2">
-          <span className="overflow-hidden rounded">
+      <div className="mb-2 flex h-8 items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 overflow-hidden rounded">
             <BoringAvatar
               size={16}
               square={true}

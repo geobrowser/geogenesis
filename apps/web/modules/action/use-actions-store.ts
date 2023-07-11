@@ -13,6 +13,7 @@ export function useActionsStore(spaceId?: string) {
     actions$,
     allActions$,
     allSpacesWithActions$,
+    actionsByEntityId$,
     restore,
     publish,
     clear,
@@ -24,6 +25,7 @@ export function useActionsStore(spaceId?: string) {
   const actions = useSelector(actions$);
   const allActions = useSelector(allActions$);
   const allSpacesWithActions = useSelector(allSpacesWithActions$);
+  const actionsByEntityId = useSelector(actionsByEntityId$);
 
   if (!spaceId) {
     return {
@@ -31,6 +33,7 @@ export function useActionsStore(spaceId?: string) {
       actionsFromSpace: [],
       allActions,
       allSpacesWithActions,
+      actionsByEntityId,
       restore,
       publish,
       clear,
@@ -46,6 +49,7 @@ export function useActionsStore(spaceId?: string) {
     actionsFromSpace: actions[spaceId] ?? [],
     allActions,
     allSpacesWithActions,
+    actionsByEntityId,
     restore,
     publish,
     clear,

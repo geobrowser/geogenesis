@@ -13,15 +13,24 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { useEntityStore } from '~/modules/entity';
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
-import { IdExtension } from './id-extension';
+import { createIdExtension } from './id-extension';
 import { TableNode } from './table-node';
+import { ParagraphNode } from './paragraph-node';
+import { HeadingNode } from './heading-node';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 interface Props {
   editable?: boolean;
 }
 
 export const tiptapExtensions = [
-  StarterKit,
+  StarterKit.configure({
+    paragraph: false,
+    heading: false,
+    code: false,
+  }),
+  ParagraphNode,
+  HeadingNode,
   ConfiguredCommandExtension,
   Gapcursor,
   HardBreak.extend({
@@ -52,32 +61,38 @@ export const tiptapExtensions = [
       return isHeading ? 'Heading...' : '/ to select content block or write some content...';
     },
   }),
-  IdExtension,
 ];
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
-  const entityStore = useEntityStore();
+  const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
+
+  // @HACK: Janky but works for now.
+  //
+  // We only want to render the editor once the editorJson has been hydrated with local data.
+  // We shouldn't re-render the editor every time the editorJson changes as that would result
+  // in a janky UX. We let the editor handle block state internally while each block handles
+  // it's own state.
+  const hasHydrated = useHydrated();
 
   const editor = useEditor(
     {
-      extensions: tiptapExtensions,
-      editable: editable,
-      content: entityStore.editorJson,
+      extensions: [...tiptapExtensions, createIdExtension(spaceId)],
+      editable: true,
+      content: editorJson,
       onBlur({ editor }) {
-        /*
-        Responsible for converting all editor blocks to triples
-        Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-        */
-        entityStore.updateEditorBlocks(editor);
+        // Responsible for converting all editor blocks to triples
+        // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
+        updateEditorBlocks(editor);
       },
       editorProps: {
         transformPastedHTML: html => removeIdAttributes(html),
       },
     },
-    [editable]
+    [hasHydrated]
   );
 
-  if (!editable && entityStore.blockIds.length === 0) return null;
+  // We are in edit mode and there is no content.
+  if (!editable && blockIds.length === 0) return null;
 
   if (!editor) return null;
 
