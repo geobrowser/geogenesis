@@ -4,6 +4,9 @@ import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
 import Gapcursor from '@tiptap/extension-gapcursor';
+import HardBreak from '@tiptap/extension-hard-break';
+import BulletList from '@tiptap/extension-bullet-list';
+import ListItem from '@tiptap/extension-list-item';
 
 import { SquareButton } from '~/modules/design-system/button';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -21,6 +24,26 @@ export const tiptapExtensions = [
   StarterKit,
   ConfiguredCommandExtension,
   Gapcursor,
+  HardBreak.extend({
+    addKeyboardShortcuts() {
+      // Make hard breaks behave like normal paragraphs
+      const handleEnter = () =>
+        this.editor.commands.first(({ commands }) => [
+          () => commands.newlineInCode(),
+          () => commands.createParagraphNear(),
+          () => commands.liftEmptyBlock(),
+          () => commands.splitBlock(),
+        ]);
+
+      return {
+        Enter: handleEnter,
+        'Mod-Enter': handleEnter,
+        'Shift-Enter': handleEnter,
+      };
+    },
+  }),
+  BulletList,
+  ListItem,
   TableNode,
   Image,
   Placeholder.configure({
