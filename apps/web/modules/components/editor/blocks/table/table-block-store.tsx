@@ -81,7 +81,7 @@ export class TableBlockStore {
     this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore });
-    this.isLoading$ = observable(false);
+    this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
     this.blockEntity$ = makeOptionalComputed(
