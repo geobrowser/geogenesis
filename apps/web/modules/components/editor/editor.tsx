@@ -65,24 +65,14 @@ export const tiptapExtensions = [
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
-  const hasHydrated = useHydrated();
 
   // @HACK: Janky but works for now.
   //
-  // We need to keep the editor in sync with the local data store. Without this level
-  // of memoization the editor will re-render on every blur and edit toggle which causes
-  // all of the custom react components within the editor to re-mount. This is janky UX,
-  // especially for the table node which has a lot of state and data fetching.
-  //
-  // An alternative to this approach is to wait to render the editor until we know
-  // that we have all the local data merged in already. In that approach we would
-  // only ever need to render the editor the first time.
-  //
-  // A third approach is to cache all requests in table nodes and just allow the
-  // editor to re-mount the internal react components. Not sure how viable this is
-  // as I haven't tested it.
-  const stringifiedJson = JSON.stringify(editorJson);
-  const memoizedJson = React.useMemo(() => editorJson, [stringifiedJson]); // eslint-disable-line react-hooks/exhaustive-deps
+  // We only want to render the editor once the editorJson has been hydrated with local data.
+  // We shouldn't re-render the editor every time the editorJson changes as that would result
+  // in a janky UX. We let the editor handle block state internally while each block handles
+  // it's own state.
+  const hasHydrated = useHydrated();
 
   const editor = useEditor(
     {
@@ -90,10 +80,8 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
       editable: true,
       content: editorJson,
       onBlur({ editor }) {
-        /*
-        Responsible for converting all editor blocks to triples
-        Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-        */
+        // Responsible for converting all editor blocks to triples
+        // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
         updateEditorBlocks(editor);
       },
       editorProps: {
@@ -103,6 +91,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
     [hasHydrated]
   );
 
+  // We are in edit mode and there is no content.
   if (!editable && blockIds.length === 0) return null;
 
   if (!editor) return null;
