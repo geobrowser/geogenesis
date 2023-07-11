@@ -700,6 +700,40 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
+    case 'url': {
+      const checkedBefore = typeof before === 'string' ? before : '';
+      const checkedAfter = typeof after === 'string' ? after : '';
+      const differences = diffWords(checkedBefore, checkedAfter);
+
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="truncate text-ctaPrimary no-underline">
+              {differences
+                .filter(item => !item.added)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="truncate text-ctaPrimary no-underline">
+              {differences
+                .filter(item => !item.removed)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
     default: {
       // required for <ChangedAttribute /> to be valid JSX
       return <React.Fragment />;

@@ -724,6 +724,44 @@ const ChangedAttribute = ({
         </div>
       );
     }
+    case 'url': {
+      const checkedBefore = typeof before === 'string' ? before : '';
+      const checkedAfter = typeof after === 'string' ? after : '';
+      const differences = diffWords(checkedBefore, checkedAfter);
+
+      return (
+        <div key={attributeId} className="-mt-px flex gap-8">
+          <div className="flex-1 border border-grey-02 p-4">
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="truncate text-ctaPrimary no-underline">
+              {differences
+                .filter(item => !item.added)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+          <div className="group relative flex-1 border border-grey-02 p-4">
+            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+            </div>
+            <div className="text-bodySemibold capitalize">{name}</div>
+            <div className="truncate text-ctaPrimary no-underline">
+              {differences
+                .filter(item => !item.removed)
+                .map((difference: Difference, index: number) => (
+                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                    {difference.value}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
     default: {
       // required for <ChangedAttribute /> to be valid JSX
       return <React.Fragment />;

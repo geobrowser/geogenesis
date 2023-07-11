@@ -26,7 +26,7 @@ import { Services } from '~/modules/services';
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
 import { WebUrlField } from '../editable-fields/web-url-field';
 // import { Url } from '~/modules/design-system/icons/url';
-import { Date } from '~/modules/design-system/icons/date';
+// import { Date } from '~/modules/design-system/icons/date';
 
 interface Props {
   triples: ITriple[];
@@ -605,18 +605,18 @@ function EntityAttributes({
                           onClick: () => onChangeTriple('image', triples),
                           disabled: false,
                         },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Date />
-                              <Spacer width={8} />
-                              Date
-                            </div>
-                          ),
-                          value: 'date',
-                          onClick: () => onChangeTriple('date', triples),
-                          disabled: false,
-                        },
+                        // {
+                        //   label: (
+                        //     <div style={{ display: 'flex', alignItems: 'center' }}>
+                        //       <Date />
+                        //       <Spacer width={8} />
+                        //       Date
+                        //     </div>
+                        //   ),
+                        //   value: 'date',
+                        //   onClick: () => onChangeTriple('date', triples),
+                        //   disabled: false,
+                        // },
                         // {
                         //   label: (
                         //     <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -626,7 +626,7 @@ function EntityAttributes({
                         //     </div>
                         //   ),
                         //   value: 'url',
-                        //   onClick: () => onChangeTripleType('url', triples),
+                        //   onClick: () => onChangeTriple('url', triples),
                         //   disabled: false,
                         // },
                       ]}
