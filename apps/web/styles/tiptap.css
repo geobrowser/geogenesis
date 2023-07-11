@@ -86,3 +86,11 @@
 .ProseMirror .node-tableNode {
   @apply mt-8;
 }
+
+.ProseMirror ul {
+  @apply contents;
+}
+
+.ProseMirror ul li {
+  @apply ml-4 list-item list-disc;
+}

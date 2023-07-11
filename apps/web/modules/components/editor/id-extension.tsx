@@ -2,7 +2,7 @@ import { Extension, findChildren } from '@tiptap/core';
 
 import { ID } from '~/modules/id';
 
-const nodeTypes = ['heading', 'paragraph', 'tableNode', 'image'];
+const nodeTypes = ['heading', 'list', 'paragraph', 'tableNode', 'image'];
 
 export const createIdExtension = (spaceId: string) => {
   return Extension.create({

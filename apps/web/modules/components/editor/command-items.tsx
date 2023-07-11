@@ -9,6 +9,7 @@ import { EditorH2 } from '~/modules/design-system/icons/editor-h2';
 import { EditorH3 } from '~/modules/design-system/icons/editor-h3';
 import { EditorTable } from '~/modules/design-system/icons/editor-table';
 import { EditorText } from '~/modules/design-system/icons/editor-text';
+import { EditorList } from '~/modules/design-system/icons/editor-list';
 import { EditorImage } from '~/modules/design-system/icons/editor-image';
 
 export interface CommandSuggestionItem {
@@ -68,6 +69,13 @@ export const commandItems: CommandSuggestionItem[] = [
   //   },
   // },
   textCommandItem,
+  {
+    icon: <EditorList />,
+    title: 'List',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleBulletList().run();
+    },
+  },
   {
     icon: <EditorH1 />,
     title: 'Heading 1',
