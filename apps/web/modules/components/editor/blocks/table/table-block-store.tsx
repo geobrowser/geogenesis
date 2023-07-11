@@ -89,13 +89,7 @@ export class TableBlockStore {
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
-    this.blockEntity$ = computed(async () => {
-      // HACK: This is a hack to rerun this computed when actions change.
-      // In the future we should pass in the actions as a dependency to
-      // the MergedData method calls to trigger any re-runs of computeds.
-      // this.LocalStore.triples$.get();
-      return await this.MergedData.fetchEntity(entityId);
-    });
+    this.blockEntity$ = computed(async () => await this.MergedData.fetchEntity(entityId));
 
     this.filterState$ = makeOptionalComputed(
       [],
