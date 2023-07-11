@@ -39,13 +39,11 @@ const tags: Record<Level, 'h1' | 'h2' | 'h3' | 'p'> = {
 function HeadingNodeComponent({ node }: NodeViewRendererProps) {
   const isEditable = useUserIsEditing(node.attrs.spaceId);
 
-  const Tag = tags[node.attrs.level as Level] ?? 'p';
+  const tag = tags[node.attrs.level as Level] ?? 'p';
 
   return (
     <NodeViewWrapper>
-      <Tag contentEditable={isEditable ? 'true' : 'false'}>
-        <NodeViewContent />
-      </Tag>
+      <NodeViewContent as={tag} contentEditable={isEditable ? 'true' : 'false'} />
     </NodeViewWrapper>
   );
 }
