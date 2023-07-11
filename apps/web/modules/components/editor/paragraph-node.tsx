@@ -42,9 +42,7 @@ function ParagraphNodeComponent({ node }: NodeViewRendererProps) {
 
   return (
     <NodeViewWrapper>
-      {/* <p contentEditable={isEditable ? 'true' : 'false'}> */}
       <NodeViewContent as="p" contentEditable={isEditable ? 'true' : 'false'} />
-      {/* </p> */}
     </NodeViewWrapper>
   );
 }
