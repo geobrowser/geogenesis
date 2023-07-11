@@ -160,7 +160,7 @@ export class TableBlockStore {
               params,
               abortController: this.abortController,
             },
-            columns,
+            dedupedColumns,
             selectedType?.entityId
           );
 
