@@ -15,6 +15,7 @@ import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
 import { PageStringField } from '../editable-fields/editable-fields';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 export function EditableHeading({
   spaceId,
@@ -33,6 +34,7 @@ export function EditableHeading({
   const { editable } = useEditable();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { actionsFromSpace } = useActionsStore(spaceId);
+  const hasHydrated = useHydrated();
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
@@ -114,7 +116,7 @@ export function EditableHeading({
         <SpacePageMetadataHeader spaceId={spaceId} />
       )}
       <Spacer height={40} />
-      <Editor editable={isEditing} />
+      <Editor key={hasHydrated ? 'true' : 'false'} editable={isEditing} />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { createIdExtension } from './id-extension';
 import { TableNode } from './table-node';
 import { ParagraphNode } from './paragraph-node';
 import { HeadingNode } from './heading-node';
+import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 interface Props {
   editable?: boolean;
@@ -64,6 +65,10 @@ export const tiptapExtensions = [
 
 export const Editor = React.memo(function Editor({ editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityStore();
+  const hasHydrated = useHydrated();
+
+  console.log('hasHydrated', hasHydrated);
+  console.log('editorJson', editorJson);
 
   // @HACK: Janky but works for now.
   //
@@ -86,7 +91,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
     {
       extensions: [...tiptapExtensions, createIdExtension(spaceId)],
       editable: true,
-      content: memoizedJson,
+      content: editorJson,
       onBlur({ editor }) {
         /*
         Responsible for converting all editor blocks to triples
@@ -98,7 +103,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
         transformPastedHTML: html => removeIdAttributes(html),
       },
     },
-    [memoizedJson]
+    [hasHydrated]
   );
 
   if (!editable && blockIds.length === 0) return null;
