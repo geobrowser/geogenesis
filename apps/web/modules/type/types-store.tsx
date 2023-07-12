@@ -8,6 +8,7 @@ import { A, pipe } from '@mobily/ts-belt';
 import { Triple } from '../triple';
 import { SelectedEntityType } from '../entity';
 import { useSelector } from '@legendapp/state/react';
+import { LocalData } from '../io';
 
 export class TypesStore {
   actions: ActionsStore;
@@ -21,10 +22,12 @@ export class TypesStore {
 
   constructor({
     actions,
+    localStore,
     initialTypes,
     space,
   }: {
     actions: ActionsStore;
+    localStore: LocalData.LocalStore;
     initialTypes: TripleType[];
     space: Space | null;
   }) {
@@ -36,8 +39,7 @@ export class TypesStore {
       computed(() => {
         if (!space) return [];
 
-        const spaceActions = this.actions.actions$.get()[space.id] ?? [];
-        const triplesFromSpaceActions = Triple.fromActions(spaceActions, []);
+        const triplesFromSpaceActions = localStore.triples$.get().filter(t => t.space === space.id);
 
         const spaceConfigId = space.spaceConfigEntityId;
 
@@ -47,8 +49,7 @@ export class TypesStore {
           )?.entityId;
 
           const localForeignTriples = pipe(
-            this.actions.actions$.get(),
-            actions => Triple.fromActions(actions[space.id], []),
+            localStore.triples$.get(),
             A.filter(t => t.entityId === localSpaceConfigId),
             A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
             // HACK: Right now the type-dialog is the only place consuming this.types$. It only
@@ -66,8 +67,7 @@ export class TypesStore {
         }
 
         const localForeignTypes = pipe(
-          this.actions.actions$.get(),
-          actions => Triple.fromActions(actions[space.id], []),
+          localStore.triples$.get(),
           A.filter(t => t.entityId === spaceConfigId),
           A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
           // HACK: Right now the type-dialog is the only place consuming this.types$. It only
@@ -121,15 +121,17 @@ export function TypesStoreProvider({
   initialTypes: TripleType[];
   space: Space | null;
 }) {
+  const LocalStore = LocalData.useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
 
   const typesStore = React.useMemo(() => {
     return new TypesStore({
       actions: ActionsStore,
+      localStore: LocalStore,
       initialTypes,
       space,
     });
-  }, [ActionsStore, space, initialTypes]);
+  }, [ActionsStore, space, initialTypes, LocalStore]);
 
   return <TypesStoreContext.Provider value={typesStore}>{children}</TypesStoreContext.Provider>;
 }

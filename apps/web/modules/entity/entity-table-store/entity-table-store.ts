@@ -209,9 +209,7 @@ export class EntityTableStore implements IEntityTableStore {
          * needs to render the columnSchema.
          */
         const changedEntitiesIdsFromAnotherType = pipe(
-          this.ActionsStore.actions$.get()[spaceId],
-          actions => Triple.fromActions(actions, []),
-          triples => Entity.entitiesFromTriples(triples),
+          this.LocalStore.entities$.get(),
           A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId)),
           A.map(t => t.id)
         );
