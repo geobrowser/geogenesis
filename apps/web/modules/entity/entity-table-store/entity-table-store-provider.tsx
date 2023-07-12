@@ -4,7 +4,7 @@ import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 
 import { useActionsStoreInstance } from '~/modules/action';
-import { useSpaceStore } from '~/modules/spaces/space-store';
+import { useSpaceStoreInstance } from '~/modules/spaces/space-store';
 import { Params } from '../../params';
 import { Services } from '../../services';
 import { Column, Row, Triple } from '../../types';
@@ -30,7 +30,7 @@ export function EntityTableStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
-  const SpaceStore = useSpaceStore();
+  const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = LocalData.useLocalStoreInstance();
   const replace = useRef(router.replace);
