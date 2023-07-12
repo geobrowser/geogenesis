@@ -113,11 +113,19 @@ export function useLocalStoreContext() {
 }
 
 export function useLocalStore() {
-  const { entities$, triples$, spaces$, unpublishedEntities$, unpublishedSpaces$, unpublishedTriples$ } =
-    useLocalStoreContext();
+  const {
+    entities$,
+    triples$,
+    spaces$,
+    unpublishedEntities$,
+    unpublishedSpaces$,
+    unpublishedTriples$,
+    triplesByEntityId$,
+  } = useLocalStoreContext();
 
   const entities = useSelector(entities$);
   const triples = useSelector(triples$);
+  const triplesByEntityId = useSelector(triplesByEntityId$);
   const unpublishedEntities = useSelector(unpublishedEntities$);
   const unpublishedTriples = useSelector(unpublishedTriples$);
   const spaces = useSelector(spaces$);
@@ -126,6 +134,7 @@ export function useLocalStore() {
   return {
     entities,
     triples,
+    triplesByEntityId,
     unpublishedEntities,
     unpublishedTriples,
     spaces,
