@@ -109,7 +109,8 @@ export class Merged implements IMergeDataSource {
       // Need to find the local version of this entity if it exists and merge it with the network entity
       // if it exists. If the network entity doesn't exist, we search the local store for the entity.
       const entity = pipe(
-        this.localStore.entities$.get(),
+        this.store.actions$.get(),
+        actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),
         A.find(e => e.id === id)
       );
 
@@ -138,8 +139,6 @@ export class Merged implements IMergeDataSource {
 
   rows = async (options: Parameters<INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
     const { rows: serverRows } = await this.api.rows(options);
-
-    console.log('rerunning merged data rows');
 
     /**
      * Aggregate data for the rows from local and server entities.
@@ -183,7 +182,8 @@ export class Merged implements IMergeDataSource {
     const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
     const entitiesCreatedOrChangedLocally = pipe(
-      this.localStore.entities$.get(),
+      this.store.actions$.get(),
+      actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId))
     );
 
