@@ -5,7 +5,7 @@ import { A } from '@mobily/ts-belt';
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 
-import { ActionsStore, useActionsStoreContext } from '~/modules/action';
+import { ActionsStore, useActionsStoreInstance } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
 import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
@@ -316,8 +316,8 @@ interface Props {
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
-  const LocalStore = LocalData.useLocalStoreContext();
-  const ActionsStore = useActionsStoreContext();
+  const LocalStore = LocalData.useLocalStoreInstance();
+  const ActionsStore = useActionsStoreInstance();
 
   if (!selectedType) {
     // A table block might reference a type that has been deleted which will not be found
@@ -340,7 +340,7 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
 
-export function useTableBlockStore() {
+export function useTableBlockStoreInstance() {
   const value = useContext(TableBlockStoreContext);
 
   if (!value) {
@@ -365,7 +365,7 @@ export function useTableBlock() {
     setFilterState,
     isLoading$,
     columnRelationTypes$,
-  } = useTableBlockStore();
+  } = useTableBlockStoreInstance();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);

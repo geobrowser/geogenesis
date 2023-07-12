@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { useActionsStoreContext } from '../../action';
+import { useActionsStoreInstance } from '../../action';
 import { Services } from '../../services';
 import { Triple } from '../../types';
 import { EntityStore } from './entity-store';
@@ -29,8 +29,8 @@ export function EntityStoreProvider({
   initialSchemaTriples,
 }: Props) {
   const { network } = Services.useServices();
-  const ActionsStore = useActionsStoreContext();
-  const LocalStore = LocalData.useLocalStoreContext();
+  const ActionsStore = useActionsStoreInstance();
+  const LocalStore = LocalData.useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityStore({
@@ -59,7 +59,7 @@ export function EntityStoreProvider({
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
 
-export function useEntityStoreContext() {
+export function useEntityStoreInstance() {
   const value = useContext(EntityStoreContext);
 
   if (!value) {

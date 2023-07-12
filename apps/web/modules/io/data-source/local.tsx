@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { ObservableComputed, computed, observable } from '@legendapp/state';
-import { Action, ActionsStore, useActionsStoreContext } from '../../action';
+import { Action, ActionsStore, useActionsStoreInstance } from '../../action';
 import { Entity as IEntity, Triple as ITriple } from '../../types';
 import { makeOptionalComputed } from '../../utils';
-import { A, pipe } from '@mobily/ts-belt';
+import { pipe } from '@mobily/ts-belt';
 import { Triple } from '../../triple';
 import { Entity } from '../../entity';
 import { useSelector } from '@legendapp/state/react';
@@ -93,7 +93,7 @@ interface Props {
 }
 
 export function LocalStoreProvider({ children }: Props) {
-  const ActionsStore = useActionsStoreContext();
+  const ActionsStore = useActionsStoreInstance();
 
   const store = useMemo(() => {
     return new LocalStore({ store: ActionsStore });
@@ -102,7 +102,7 @@ export function LocalStoreProvider({ children }: Props) {
   return <LocalStoreContext.Provider value={store}>{children}</LocalStoreContext.Provider>;
 }
 
-export function useLocalStoreContext() {
+export function useLocalStoreInstance() {
   const value = useContext(LocalStoreContext);
 
   if (!value) {
@@ -121,7 +121,7 @@ export function useLocalStore() {
     unpublishedSpaces$,
     unpublishedTriples$,
     triplesByEntityId$,
-  } = useLocalStoreContext();
+  } = useLocalStoreInstance();
 
   const entities = useSelector(entities$);
   const triples = useSelector(triples$);

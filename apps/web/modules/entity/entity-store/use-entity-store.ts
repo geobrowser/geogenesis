@@ -1,7 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 
 import { Triple } from '~/modules/types';
-import { useEntityStoreContext } from './entity-store-provider';
+import { useEntityStoreInstance } from './entity-store-provider';
 
 export function useEntityPageStore() {
   const {
@@ -18,7 +18,7 @@ export function useEntityPageStore() {
     updateEditorBlocks,
     editorJson$,
     attributeRelationTypes$,
-  } = useEntityStoreContext();
+  } = useEntityStoreInstance();
   const triples = useSelector(triples$);
   const schemaTriples = useSelector<Triple[]>(schemaTriples$);
   const hiddenSchemaIds = useSelector<string[]>(hiddenSchemaIds$);

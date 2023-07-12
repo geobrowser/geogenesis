@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 
-import { useActionsStoreContext } from '~/modules/action';
+import { useActionsStoreInstance } from '~/modules/action';
 import { useSpaceStore } from '~/modules/spaces/space-store';
 import { Params } from '../../params';
 import { Services } from '../../services';
@@ -31,8 +31,8 @@ export function EntityTableStoreProvider({
   const { network } = Services.useServices();
   const router = useRouter();
   const SpaceStore = useSpaceStore();
-  const ActionsStore = useActionsStoreContext();
-  const LocalStore = LocalData.useLocalStoreContext();
+  const ActionsStore = useActionsStoreInstance();
+  const LocalStore = LocalData.useLocalStoreInstance();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -73,7 +73,7 @@ export function EntityTableStoreProvider({
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }
 
-export function useEntityTableStore() {
+export function useEntityTableStoreInstance() {
   const value = useContext(EntityTableStoreContext);
 
   if (!value) {

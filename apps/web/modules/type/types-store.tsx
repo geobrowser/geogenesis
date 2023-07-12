@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ObservableComputed, computed } from '@legendapp/state';
-import { ActionsStore, useActionsStoreContext } from '../action';
+import { ActionsStore, useActionsStoreInstance } from '../action';
 import { Space, Triple as TripleType } from '../types';
 import { makeOptionalComputed } from '../utils';
 import { SYSTEM_IDS } from '@geogenesis/ids';
@@ -121,7 +121,7 @@ export function TypesStoreProvider({
   initialTypes: TripleType[];
   space: Space | null;
 }) {
-  const ActionsStore = useActionsStoreContext();
+  const ActionsStore = useActionsStoreInstance();
 
   const typesStore = React.useMemo(() => {
     return new TypesStore({
@@ -134,7 +134,7 @@ export function TypesStoreProvider({
   return <TypesStoreContext.Provider value={typesStore}>{children}</TypesStoreContext.Provider>;
 }
 
-export function useTypesStoreContext() {
+export function useTypesStoreInstance() {
   const context = React.useContext(TypesStoreContext);
 
   if (context === null) {
@@ -145,7 +145,7 @@ export function useTypesStoreContext() {
 }
 
 export function useTypesStore() {
-  const { types$, localForeignTypes$ } = useTypesStoreContext();
+  const { types$, localForeignTypes$ } = useTypesStoreInstance();
 
   const types = useSelector(types$);
   const localForeignTypes = useSelector(localForeignTypes$);

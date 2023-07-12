@@ -12,7 +12,7 @@ import {
 import { cx } from 'class-variance-authority';
 import { useState } from 'react';
 
-import { useActionsStoreContext } from '~/modules/action';
+import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { DEFAULT_PAGE_SIZE, Entity, useEntityTable } from '~/modules/entity';
 import { useEditable } from '~/modules/stores/use-editable';
@@ -71,7 +71,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions$ } = useActionsStoreContext();
+    const { create, update, remove, actions } = useActionsStore();
     // We know that cell is rendered as a React component by react-table
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -86,7 +86,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const valueType = columnValueType(cellData.columnId, columns);
 
     const cellTriples = pipe(
-      actions$.get()[space],
+      actions[space],
       actions => Triple.fromActions(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;

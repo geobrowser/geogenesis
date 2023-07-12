@@ -1,6 +1,6 @@
 import { useSelector } from '@legendapp/state/react';
 
-import { useEntityTableStore } from './entity-table-store-provider';
+import { useEntityTableStoreInstance } from './entity-table-store-provider';
 
 export const useEntityTable = () => {
   const {
@@ -21,7 +21,7 @@ export const useEntityTable = () => {
     createForeignType,
     createType,
     columnRelationTypes$,
-  } = useEntityTableStore();
+  } = useEntityTableStoreInstance();
   const rows = useSelector(rows$);
   const columns = useSelector(columns$);
   const hydrated = useSelector(hydrated$);

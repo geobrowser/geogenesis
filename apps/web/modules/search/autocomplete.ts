@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { Services } from '~/modules/services';
 import { makeOptionalComputed } from '~/modules/utils';
-import { ActionsStore, useActionsStoreContext } from '../action';
+import { ActionsStore, useActionsStoreInstance } from '../action';
 import { Entity as EntityType, FilterState } from '../types';
 import { LocalData, MergedData, NetworkData } from '~/modules/io';
 
@@ -69,8 +69,8 @@ interface AutocompleteOptions {
 
 export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
   const { network } = Services.useServices();
-  const ActionsStore = useActionsStoreContext();
-  const LocalStore = LocalData.useLocalStoreContext();
+  const ActionsStore = useActionsStoreInstance();
+  const LocalStore = LocalData.useLocalStoreInstance();
 
   // @TODO(baiirun): fix this
   const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
