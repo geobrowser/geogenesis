@@ -183,7 +183,7 @@ function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: Re
         <div className="flex items-center gap-1">
           {referencedByEntity.space.image && (
             <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} />
+              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} alt="" />
             </span>
           )}
           <Text as="p" variant="footnoteMedium">

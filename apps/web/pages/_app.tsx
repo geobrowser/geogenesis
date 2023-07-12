@@ -20,12 +20,12 @@ import { Review } from '~/modules/components/review';
 import { Persistence } from '~/modules/persistence';
 import { useDiff } from '~/modules/diff';
 import { Toast } from '~/modules/hooks/use-toast';
+import { Compare } from '~/modules/components/compare';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
-import { Compare } from '~/modules/components/compare';
 
 function Root(props: AppProps) {
   return (

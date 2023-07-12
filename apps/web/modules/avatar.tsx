@@ -7,7 +7,7 @@ interface Props {
   alt?: string;
 }
 
-export const Avatar = ({ value, avatarUrl, alt }: Props) => {
+export const Avatar = ({ value, avatarUrl, alt = '' }: Props) => {
   return avatarUrl ? (
     <Image objectFit="cover" layout="fill" src={avatarUrl} alt={alt} />
   ) : (
