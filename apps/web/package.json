@@ -57,7 +57,7 @@
     "framer-motion": "^10.3.2",
     "immer": "^9.0.16",
     "js-confetti": "^0.11.0",
-    "next": "^12.1.6",
+    "next": "^13.4.9",
     "papaparse": "^5.3.2",
     "pluralize": "^8.0.0",
     "raw-body": "^2.5.1",
