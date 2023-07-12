@@ -12,22 +12,24 @@ interface NavbarBreadcrumbProps {
 
 export function NavbarBreadcrumb({ children, href, img }: NavbarBreadcrumbProps) {
   return (
-    <Link href={href} passHref>
-      <a className="flex cursor-pointer items-center whitespace-nowrap bg-white no-underline" title={children}>
-        {img && (
-          <>
-            <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-              <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
-            </div>
-            <Spacer width={8} />
-          </>
-        )}
-        <div className="truncate sm:max-w-[20ch]">
-          <Text variant="button" className="hover:!text-text">
-            {children}
-          </Text>
-        </div>
-      </a>
+    <Link
+      href={href}
+      className="flex cursor-pointer items-center whitespace-nowrap bg-white no-underline"
+      title={children}
+    >
+      {img && (
+        <>
+          <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+            <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
+          </div>
+          <Spacer width={8} />
+        </>
+      )}
+      <div className="truncate sm:max-w-[20ch]">
+        <Text variant="button" className="hover:!text-text">
+          {children}
+        </Text>
+      </div>
     </Link>
   );
 }

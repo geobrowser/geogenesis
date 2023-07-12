@@ -23,19 +23,15 @@ const SpaceActions = ({ spaceId }: Props) => {
         <div className="flex w-full items-center justify-between">
           {(isEditorController || isAdmin) && (
             <Link href={NavUtils.toAdmin(spaceId)}>
-              <a>
-                <Button variant="secondary">Access control</Button>
-              </a>
+              <Button variant="secondary">Access control</Button>
             </Link>
           )}
           {isAdmin && isEditor && <Spacer width={8} />}
           {isEditor && (
             <>
               <Spacer width={12} />
-              <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-                <a>
-                  <Button icon="create">New entity</Button>
-                </a>
+              <Link href={NavUtils.toCreateEntity(spaceId)}>
+                <Button icon="create">New entity</Button>
               </Link>
             </>
           )}

@@ -181,12 +181,13 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
           className="max-w-[5.8rem] whitespace-nowrap"
         >
-          <Link href={`${router.asPath}/entities`}>
-            <a className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg">
-              <Text variant="button" className="hover:!text-text">
-                View data
-              </Text>
-            </a>
+          <Link
+            href={`${router.asPath}/entities`}
+            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+          >
+            <Text variant="button" className="hover:!text-text">
+              View data
+            </Text>
           </Link>
         </Menu>
       </div>

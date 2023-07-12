@@ -20,10 +20,8 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
   );
 
   return (
-    <Link href={href} passHref>
-      <a className={linkableChipStyles()}>
-        <span>{children}</span>
-      </a>
+    <Link href={href} className={linkableChipStyles()}>
+      <span>{children}</span>
     </Link>
   );
 }
@@ -58,8 +56,8 @@ export function DeletableChipButton({ onClick, children, href }: ChipButtonProps
 
   return (
     <button className={deletableChipStyles({ isWarning })}>
-      <Link href={href} passHref>
-        <a className="text-current">{children}</a>
+      <Link href={href} className="text-current">
+        {children}
       </Link>
       <button
         className={deleteButtonStyles({ isWarning })}

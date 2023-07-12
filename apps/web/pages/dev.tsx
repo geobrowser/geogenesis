@@ -30,13 +30,9 @@ const Typography = Object.keys(typography.light).map((name, index) => {
 export default function Dev() {
   return (
     <>
-      <Link href="/dev">
-        <a>Design system</a>
-      </Link>
+      <Link href="/dev">Design system</Link>
       <Spacer width={4} />
-      <Link href="/spaces">
-        <a>Spaces</a>
-      </Link>
+      <Link href="/spaces">Spaces</Link>
       <ConnectKitButton />
       <div className="flex flex-col flex-wrap gap-[12px]">
         <div className="flex flex-wrap gap-[25px]">
