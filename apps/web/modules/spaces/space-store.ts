@@ -60,6 +60,6 @@ export class SpaceStore {
   }
 }
 
-export function useSpaceStore() {
+export function useSpaceStoreInstance() {
   return Services.useServices().spaceStore;
 }

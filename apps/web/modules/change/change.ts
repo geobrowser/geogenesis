@@ -11,10 +11,8 @@ import type {
   Triple as TripleType,
   TripleValueType,
   Version as VersionType,
-  Proposal as ProposalType,
 } from '~/modules/types';
 import type { INetwork } from '~/modules/io/data-source/network';
-import type { NetworkAction } from '../io/data-source/network-local-mapping';
 
 export type ActionId = string;
 export type EntityId = string;
