@@ -941,26 +941,26 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
   const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
   const gasSuggestion: {
     safeLow: {
-      maxPriorityFee: string;
-      maxFee: string;
+      maxPriorityFee: number;
+      maxFee: number;
     };
     standard: {
-      maxPriorityFee: string;
-      maxFee: string;
+      maxPriorityFee: number;
+      maxFee: number;
     };
     fast: {
-      maxPriorityFee: string;
-      maxFee: string;
+      maxPriorityFee: number;
+      maxFee: number;
     };
     fastest: {
-      maxPriorityFee: string;
-      maxFee: string;
+      maxPriorityFee: number;
+      maxFee: number;
     };
-    estimatedBaseFee: string;
+    estimatedBaseFee: number;
   } = await gasResponse.json();
 
-  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee, 'gwei');
-  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee, 'gwei');
+  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee.toString(), 'gwei');
+  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee.toString(), 'gwei');
 
   const mintTx = await spaceContract.addEntries(uris, {
     maxFeePerGas: maxFeeAsGWei,
