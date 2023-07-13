@@ -134,14 +134,7 @@ const UPLOAD_CHUNK_SIZE = 2000;
 export class Network implements INetwork {
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
-  publish = async ({
-    actions,
-    signer,
-    onChangePublishState,
-    space,
-    name,
-    description = undefined,
-  }: PublishOptions): Promise<void> => {
+  publish = async ({ actions, signer, onChangePublishState, space, name }: PublishOptions): Promise<void> => {
     const contract = Space__factory.connect(space, signer);
 
     onChangePublishState('publishing-ipfs');
@@ -938,41 +931,47 @@ async function findEvents(tx: ContractTransaction, name: string): Promise<Event[
 }
 
 async function addEntries(spaceContract: SpaceContract, uris: string[], onStartPublish: () => void) {
-  const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
-  const gasSuggestion: {
-    safeLow: {
-      maxPriorityFee: number;
-      maxFee: number;
-    };
-    standard: {
-      maxPriorityFee: number;
-      maxFee: number;
-    };
-    fast: {
-      maxPriorityFee: number;
-      maxFee: number;
-    };
-    fastest: {
-      maxPriorityFee: number;
-      maxFee: number;
-    };
-    estimatedBaseFee: number;
-  } = await gasResponse.json();
+  try {
+    let maxFee = 400;
+    let maxPriorityFee = 80;
 
-  const maxFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxFee.toString(), 'gwei');
-  const maxPriorityFeeAsGWei = utils.parseUnits(gasSuggestion.fast.maxPriorityFee.toString(), 'gwei');
+    // Sometimes responses from the gas station fail or the API values/endpoint changes. We provide
+    // fallback values in case there are issues fetching the realtime estimates.
+    try {
+      const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
 
-  const mintTx = await spaceContract.addEntries(uris, {
-    maxFeePerGas: maxFeeAsGWei,
-    maxPriorityFeePerGas: maxPriorityFeeAsGWei,
-  });
+      const gasSuggestion: {
+        fast: {
+          maxPriorityFee: number;
+          maxFee: number;
+        };
+      } = await gasResponse.json();
 
-  console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
+      maxFee = gasSuggestion.fast.maxFee;
+      maxPriorityFee = gasSuggestion.fast.maxPriorityFee;
+    } catch (e) {
+      console.log(`Unable to fetch gas suggestions. Using defaults maxFee of ${400} and maxPriorityFee of ${80}. ${e}`);
+    }
 
-  onStartPublish();
+    const maxFeeAsGWei = utils.parseUnits(maxFee.toString(), 'gwei');
+    const maxPriorityFeeAsGWei = utils.parseUnits(maxPriorityFee.toString(), 'gwei');
 
-  const transferEvent = await findEvents(mintTx, 'EntryAdded');
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
-  return eventObject;
+    const mintTx = await spaceContract.addEntries(uris, {
+      maxFeePerGas: maxFeeAsGWei,
+      maxPriorityFeePerGas: maxPriorityFeeAsGWei,
+    });
+
+    console.log(`Transaction receipt: ${JSON.stringify(mintTx)}`);
+
+    onStartPublish();
+
+    const transferEvent = await findEvents(mintTx, 'EntryAdded');
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
+    return eventObject;
+  } catch (e) {
+    console.error('There was an issue sending the transaction. Please try again.');
+    console.error(e);
+    return null;
+  }
 }
