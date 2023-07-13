@@ -970,7 +970,7 @@ async function addEntries(spaceContract: SpaceContract, uris: string[], onStartP
     const eventObject = transferEvent.pop()!.args as unknown as EntryAddedEventObject;
     return eventObject;
   } catch (e) {
-    console.error('There was an issue ');
+    console.error('There was an issue sending the transaction. Please try again.');
     console.error(e);
     return null;
   }
