@@ -218,11 +218,6 @@ export class TableBlockStore {
           // eslint-disable-next-line @typescript-eslint/no-empty-function
           return new Promise(() => {});
         }
-
-        // TODO: Real error handling
-        this.rows$.set([]);
-        this.columns$.set([]);
-        this.hasNextPage$.set(false);
       }
     });
 
