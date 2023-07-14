@@ -76,6 +76,7 @@ export class TableBlockStore {
   columns$: Observable<Column[]>;
   rows$: Observable<Row[]>;
   type: SelectedEntityType;
+  blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterTriple$: ObservableComputed<ITriple | null>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
@@ -100,12 +101,12 @@ export class TableBlockStore {
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
-    const blockEntity$ = computed(async () => {
+    this.blockEntity$ = computed(async () => {
       return this.MergedData.fetchEntity(entityId);
     });
 
     this.nameTriple$ = computed(() => {
-      const blockEntity = blockEntity$.get();
+      const blockEntity = this.blockEntity$.get();
       const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
       const localNameTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.NAME);
       const serverNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
@@ -114,7 +115,7 @@ export class TableBlockStore {
     });
 
     this.filterTriple$ = computed(() => {
-      const blockEntity = blockEntity$.get();
+      const blockEntity = this.blockEntity$.get();
       const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
       const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
       const serverTripleFilter = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
@@ -406,6 +407,7 @@ export function useTableBlock() {
     columns$,
     type,
     unpublishedColumns$,
+    blockEntity$,
     hasNextPage$,
     hasPreviousPage$,
     setPage,
@@ -421,6 +423,7 @@ export function useTableBlock() {
   const pageNumber = useSelector(pageNumber$);
   const hasNextPage = useSelector(hasNextPage$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
+  const blockEntity = useSelector(blockEntity$);
   const filterState = useSelector<TableBlockFilter[]>(filterState$);
   const isLoading = useSelector(isLoading$);
   const columnRelationTypes = useSelector(columnRelationTypes$);
@@ -437,6 +440,7 @@ export function useTableBlock() {
     hasNextPage,
     hasPreviousPage,
     setPage,
+    blockEntity,
     filterState,
     setFilterState,
     isLoading,
