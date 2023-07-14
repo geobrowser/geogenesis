@@ -98,6 +98,7 @@ export class TableBlockStore {
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
+      console.log('rerunning');
       return this.MergedData.fetchEntity(entityId);
     });
 
@@ -127,36 +128,13 @@ export class TableBlockStore {
 
     observe(async e => {
       try {
-        // @HACK: This is a hack to get this observe to re-run when filterState changes. It _should_
-        // be doing it below in the observe for localTriplesForEntityId but it's not for some reason
-        // even though we've double checked that localTriplesForEntityId is changing.
-        this.filterState$.get();
-
         this.abortController.abort();
         this.abortController = new AbortController();
 
         const pageNumber = this.pageNumber$.get();
         this.isLoading$.set(true);
 
-        // We fetch the block entity here again to be sure that on first render we are getting the
-        // server filters before we fetch the first time.
-        const blockEntity = await this.MergedData.fetchEntity(entityId);
-
-        const serverFilterTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-        const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
-        const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-
-        // Default to the locally changed version of a filter if it exists
-        const filter = localFilterTriple ?? serverFilterTriple;
-        const filterValue = Value.stringValue(filter) ?? '';
-
-        const filterState = await queryClient.fetchQuery({
-          queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: async () =>
-            await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
-        });
-
-        const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
+        const filterString = TableBlockSdk.createGraphQLStringFromFilters(this.filterState$.get(), this.type.entityId);
 
         const params: FetchRowsOptions['params'] = {
           query: '',
