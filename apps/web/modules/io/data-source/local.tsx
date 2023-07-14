@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
-import { ObservableComputed, computed, observable } from '@legendapp/state';
+import { ObservableComputed, computed } from '@legendapp/state';
 import { Action, ActionsStore, useActionsStoreInstance } from '../../action';
 import { Entity as IEntity, Triple as ITriple } from '../../types';
 import { makeOptionalComputed } from '../../utils';
@@ -11,13 +11,13 @@ import { useSelector } from '@legendapp/state/react';
 
 export class LocalStore {
   private store: ActionsStore;
-  triples$: ObservableComputed<ITriple[]> = observable([]);
-  triplesByEntityId$: ObservableComputed<Record<string, ITriple[]>> = observable<Record<string, ITriple[]>>({});
-  unpublishedTriples$: ObservableComputed<ITriple[]> = observable([]);
-  entities$: ObservableComputed<IEntity[]> = observable([]);
-  unpublishedEntities$: ObservableComputed<IEntity[]> = observable([]);
-  spaces$: ObservableComputed<string[]> = observable<string[]>([]);
-  unpublishedSpaces$: ObservableComputed<string[]> = observable<string[]>([]);
+  triples$: ObservableComputed<ITriple[]>;
+  triplesByEntityId$: ObservableComputed<Record<string, ITriple[]>>;
+  unpublishedTriples$: ObservableComputed<ITriple[]>;
+  entities$: ObservableComputed<IEntity[]>;
+  unpublishedEntities$: ObservableComputed<IEntity[]>;
+  spaces$: ObservableComputed<string[]>;
+  unpublishedSpaces$: ObservableComputed<string[]>;
 
   constructor({ store }: { store: ActionsStore }) {
     this.store = store;

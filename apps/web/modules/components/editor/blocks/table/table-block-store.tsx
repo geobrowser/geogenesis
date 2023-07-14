@@ -98,10 +98,9 @@ export class TableBlockStore {
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
-      return await queryClient.fetchQuery({
-        queryKey: ['entity', entityId],
-        queryFn: () => this.MergedData.fetchEntity(entityId),
-      });
+      this.LocalStore.triplesByEntityId$[this.entityId].get();
+      console.log('rerunning blockEntity');
+      return this.MergedData.fetchEntity(entityId);
     });
 
     this.filterState$ = makeOptionalComputed(
@@ -118,14 +117,22 @@ export class TableBlockStore {
         const filter = localFilterTriple ?? serverFilterTriple;
         const filterValue = Value.stringValue(filter) ?? '';
 
-        return await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
+        const filterState = await queryClient.fetchQuery({
+          queryKey: ['filterState in table block', entityId, filterValue],
+          queryFn: async () =>
+            await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+        });
+
+        return filterState;
       })
     );
 
-    // const localTriplesForEntityId$ = this.LocalStore.triplesByEntityId$[this.entityId].get();
-
-    observe(async () => {
+    observe(async e => {
       try {
+        // @HACK: This is a hack to get this observe to re-run when filterState changes. It _should_
+        // be doing it below in the observe for localTriplesForEntityId but it's not for some reason.
+        this.filterState$.get();
+
         this.abortController.abort();
         this.abortController = new AbortController();
 
@@ -134,10 +141,7 @@ export class TableBlockStore {
 
         // We fetch the block entity here again to be sure that on first render we are getting the
         // server filters before we fetch the first time.
-        const blockEntity = await queryClient.fetchQuery({
-          queryKey: ['entity', entityId],
-          queryFn: () => this.MergedData.fetchEntity(entityId),
-        });
+        const blockEntity = await this.MergedData.fetchEntity(entityId);
 
         const serverFilterTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
         const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
@@ -149,7 +153,8 @@ export class TableBlockStore {
 
         const filterState = await queryClient.fetchQuery({
           queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+          queryFn: async () =>
+            await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
         });
 
         const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
@@ -201,6 +206,8 @@ export class TableBlockStore {
           this.columns$.set(dedupedColumns);
           this.hasNextPage$.set(rows.length > PAGE_SIZE);
         });
+
+        e.onCleanup = () => this.abortController.abort();
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
           // eslint-disable-next-line @typescript-eslint/no-empty-function
