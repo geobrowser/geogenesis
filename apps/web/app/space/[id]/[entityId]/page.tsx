@@ -1,75 +1,35 @@
 import * as React from 'react';
-import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import { useRouter } from 'next/router';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { useAccessControl } from '~/modules/auth/use-access-control';
-import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
 import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
+import { Entity } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
-import { useEditable } from '~/modules/stores/use-editable';
-import { Space, Triple } from '~/modules/types';
+import { ServerSideEnvParams } from '~/modules/types';
 import { NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
-import { TypesStoreProvider } from '~/modules/type/types-store';
-import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 import { getOpenGraphImageUrl } from '~/modules/utils';
+import { Component } from './component';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
-interface Props {
-  triples: Triple[];
-  id: string;
-  name: string;
-  description: string | null;
-  spaceId: string;
-  referencedByEntities: ReferencedByEntity[];
-  serverAvatarUrl: string | null;
-  serverCoverUrl: string | null;
+export default async function EntityPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string; entityId: string };
+  searchParams: ServerSideEnvParams;
+}) {
+  const props = await getData(params.id, params.entityId, searchParams);
 
-  // For the page editor
-  blockTriples: Triple[];
-  blockIdsTriple: Triple | null;
-
-  spaceTypes: Triple[];
-  space: Space | null;
-  redirect: string | null;
-}
-
-export default function EntityPage(props: Props) {
-  const router = useRouter();
-  const [isMounted, setIsMounted] = React.useState(false);
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  if (props.redirect && isMounted) {
-    router.replace(props.redirect);
-  }
-
-  const { isEditor } = useAccessControl(props.spaceId);
-  const { editable } = useEditable();
-
-  const renderEditablePage = isEditor && editable;
-  const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
-
-  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
   const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
   const description =
     props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
-
-  if (props.redirect) {
-    return null;
-  }
 
   return (
     <>
@@ -85,33 +45,15 @@ export default function EntityPage(props: Props) {
         <meta name="twitter:description" content={description} />
       </Head>
 
-      <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
-        <EntityStoreProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialTriples={props.triples}
-          initialSchemaTriples={[]}
-          initialBlockIdsTriple={props.blockIdsTriple}
-          initialBlockTriples={props.blockTriples}
-        >
-          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-
-          <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            <Page {...props} />
-          </EntityPageContentContainer>
-        </EntityStoreProvider>
-      </TypesStoreProvider>
+      <Component {...props} />
     </>
   );
 }
 
-export const getServerSideProps: GetServerSideProps<Props> = async context => {
-  const spaceId = context.query.id as string;
-  const entityId = context.query.entityId as string;
-
+export const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
   try {
-    const config = Params.getConfigFromUrl(context.resolvedUrl, context.req.cookies[Params.ENV_PARAM_NAME]);
+    const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+    const config = Params.getConfigFromParams(searchParams, env);
 
     const storage = new StorageClient(config.ipfs);
     const network = new NetworkData.Network(storage, config.subgraph);
@@ -135,20 +77,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
     if (entity?.nameTripleSpace) {
       if (spaceId !== entity?.nameTripleSpace) {
-        return {
-          redirect: {
-            destination: `/space/${entity?.nameTripleSpace}/${entityId}`,
-            permanent: false,
-          },
-          props: {},
-        };
+        return redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
       }
     }
 
     // Redirect from space configuration page to space page
-    let redirect: string | null = null;
     if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
-      redirect = `/space/${entity?.nameTripleSpace}`;
+      return redirect(`/space/${entity?.nameTripleSpace}`);
     }
 
     const serverAvatarUrl = Entity.avatar(entity?.triples);
@@ -195,46 +130,40 @@ export const getServerSideProps: GetServerSideProps<Props> = async context => {
     ).flatMap(block => block.triples);
 
     return {
-      props: {
-        triples: entity?.triples ?? [],
-        id: entityId,
-        name: entity?.name ?? entityId,
-        description: Entity.description(entity?.triples ?? []),
-        spaceId,
-        referencedByEntities,
-        key: entityId,
-        serverAvatarUrl,
-        serverCoverUrl,
+      triples: entity?.triples ?? [],
+      id: entityId,
+      name: entity?.name ?? entityId,
+      description: Entity.description(entity?.triples ?? []),
+      spaceId,
+      referencedByEntities,
+      key: entityId,
+      serverAvatarUrl,
+      serverCoverUrl,
 
-        // For entity page editor
-        blockIdsTriple,
-        blockTriples,
+      // For entity page editor
+      blockIdsTriple,
+      blockTriples,
 
-        space,
-        spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
-        redirect,
-      },
+      space,
+      spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
     };
   } catch (e) {
     console.error(`Could not fetch entity ${entityId} on entity page`, e);
 
     return {
-      props: {
-        triples: [],
-        name: entityId,
-        description: '',
-        id: entityId,
-        blockIdsTriple: null,
-        blockTriples: [],
-        spaceId,
-        referencedByEntities: [],
-        key: entityId,
-        serverAvatarUrl: null,
-        serverCoverUrl: null,
-        space: null,
-        spaceTypes: [],
-        redirect: null,
-      },
+      triples: [],
+      name: entityId,
+      description: '',
+      id: entityId,
+      blockIdsTriple: null,
+      blockTriples: [],
+      spaceId,
+      referencedByEntities: [],
+      key: entityId,
+      serverAvatarUrl: null,
+      serverCoverUrl: null,
+      space: null,
+      spaceTypes: [],
     };
   }
 };
