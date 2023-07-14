@@ -272,40 +272,54 @@ type TableBlockPlaceholderProps = {
   className?: string;
   columns?: number;
   rows?: number;
+  withName?: boolean;
 };
 
-export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }: TableBlockPlaceholderProps) {
+export function TableBlockPlaceholder({
+  className = '',
+  columns = 3,
+  rows = 10,
+  withName = false,
+}: TableBlockPlaceholderProps) {
   const PLACEHOLDER_COLUMNS = new Array(columns).fill(0);
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
   return (
-    <div className={cx('overflow-x-scroll rounded-sm', className)}>
-      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-        <thead>
-          <tr>
-            {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
-              <th
-                key={index}
-                className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-                style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-              >
-                <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
-            <tr key={index}>
+    <div>
+      {withName && (
+        <div className="flex items-center gap-2">
+          <span className="lg:min-w-none h-5 w-5 rounded-sm bg-divider p-[10px]" />
+          <span className="lg:min-w-none h-5 w-16 rounded-sm bg-divider p-[10px]" />
+        </div>
+      )}
+      <div className={cx('overflow-x-scroll rounded-sm', className)}>
+        <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+          <thead>
+            <tr>
               {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
-                <td key={index} className="border border-grey-02 bg-transparent p-[10px] align-top">
-                  <p className="h-5 rounded-sm bg-divider" />
-                </td>
+                <th
+                  key={index}
+                  className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+                  style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+                >
+                  <p className="h-5 w-16 rounded-sm bg-divider align-middle"></p>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
+              <tr key={index}>
+                {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+                  <td key={index} className="border border-grey-02 bg-transparent p-[10px] align-top">
+                    <p className="h-5 rounded-sm bg-divider" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
