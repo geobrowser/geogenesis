@@ -13,7 +13,7 @@ import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 import { getOpenGraphImageUrl } from '~/modules/utils';
 import { Component } from './component';
-// import { cookies } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export default async function EntityPage({
@@ -51,8 +51,8 @@ export default async function EntityPage({
 
 const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
   try {
-    // const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-    const config = Params.getConfigFromParams(searchParams, undefined);
+    const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+    const config = Params.getConfigFromParams(searchParams, env);
 
     const storage = new StorageClient(config.ipfs);
     const network = new NetworkData.Network(storage, config.subgraph);
