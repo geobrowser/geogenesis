@@ -61,9 +61,8 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
-    if (!entityId) {
-      return redirect(`/space/${spaceId}/entities`);
-    }
+    console.log(`Redirecting to /space/${spaceId}/entities`);
+    redirect(`/space/${spaceId}/entities`);
   }
 
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
@@ -82,7 +81,8 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
   if (entity?.nameTripleSpace) {
     if (spaceId !== entity?.nameTripleSpace) {
-      return redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
+      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
     }
   }
 
