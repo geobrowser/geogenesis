@@ -1,3 +1,5 @@
+'use client';
+
 import { useSelector } from '@legendapp/state/react';
 
 import { useEntityTableStoreInstance } from './entity-table-store-provider';

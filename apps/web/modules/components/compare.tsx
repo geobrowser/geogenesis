@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import cx from 'classnames';
 import { cva } from 'class-variance-authority';

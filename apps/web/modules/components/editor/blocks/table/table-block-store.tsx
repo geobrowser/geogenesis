@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';

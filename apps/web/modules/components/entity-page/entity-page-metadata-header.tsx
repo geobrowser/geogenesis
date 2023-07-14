@@ -1,6 +1,7 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/modules/types';
@@ -17,6 +18,7 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 import { useDiff } from '~/modules/diff';
 import { Dots } from '~/modules/design-system/dots';
 import { SmallButton } from '~/modules/design-system/button';
+import { usePathname } from 'next/navigation';
 
 interface EntityPageMetadataHeaderProps {
   id: string;
@@ -105,7 +107,7 @@ interface SpacePageMetadataHeaderProps {
 
 export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProps) {
   const [open, onOpenChange] = React.useState(false);
-  const router = useRouter();
+  const pathname = usePathname();
 
   const { network } = Services.useServices();
 
@@ -182,7 +184,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           className="max-w-[5.8rem] whitespace-nowrap"
         >
           <Link
-            href={`${router.asPath}/entities`}
+            href={`${pathname}/entities`}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
             <Text variant="button" className="hover:!text-text">

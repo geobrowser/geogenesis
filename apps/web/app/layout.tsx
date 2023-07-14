@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { Metadata } from 'next';
 import { Providers } from '~/modules/providers';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 import 'react-medium-image-zoom/dist/styles.css';
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { App } from './entry';
 
 // <title>Geo Genesis</title>
 //       <meta property="og:title" content="Geo Genesis" />
@@ -69,7 +70,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Geo Genesis',
     description: "Browse and organize the world's public knowledge and information in a decentralized way.",
-    url: 'https://geobrowser.io/spaces',
+    url: 'https://geobrowser.io/',
     siteName: 'geobrowser.io',
     images: [
       {
@@ -91,7 +92,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <div className="relative">
+          <Providers>
+            <App>{children}</App>
+          </Providers>
+        </div>
       </body>
     </html>
   );

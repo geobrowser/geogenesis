@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';

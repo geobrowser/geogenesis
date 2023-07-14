@@ -1,3 +1,5 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 import {

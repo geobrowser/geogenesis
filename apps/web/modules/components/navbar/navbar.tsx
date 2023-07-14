@@ -1,7 +1,9 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 
 import { ChevronRight } from '~/modules/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
@@ -17,9 +19,8 @@ interface Props {
 }
 
 export function Navbar({ onSearchClick }: Props) {
-  const router = useRouter();
-  const asPath = router.asPath;
-  const components = asPath.split('/');
+  const asPath = usePathname();
+  const components = asPath?.split('/') ?? [];
   const { spaces } = useSpaces();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));

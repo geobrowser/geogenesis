@@ -1,3 +1,5 @@
+'use client';
+
 import { useSelector } from '@legendapp/state/react';
 import { useRouter } from 'next/router';
 import * as React from 'react';
