@@ -16,6 +16,8 @@ import { Component } from './component';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+export const runtime = 'edge';
+
 export default async function EntityPage({
   params,
   searchParams,
@@ -72,19 +74,21 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 
+  // Redirect from space configuration page to space page
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${entity?.nameTripleSpace}`);
+    return redirect(`/space/${entity?.nameTripleSpace}`);
+  }
+
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
   if (entity?.nameTripleSpace) {
     if (spaceId !== entity?.nameTripleSpace) {
-      console.log(`Redirecting to /space/${entity?.nameTripleSpace}/${entityId}`);
-      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      console.log(
+        `Redirecting from incorrect space ${spaceId} to correct space ${entity?.nameTripleSpace} for entity ${entityId}`
+      );
+      return redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
     }
-  }
-
-  // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
-    console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-    redirect(`/space/${entity?.nameTripleSpace}`);
   }
 
   const serverAvatarUrl = Entity.avatar(entity?.triples);
