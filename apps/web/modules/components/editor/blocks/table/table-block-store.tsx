@@ -10,7 +10,7 @@ import { observe } from '@legendapp/state';
 import { ActionsStore, useActionsStoreInstance } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType, Triple as ITriple } from '~/modules/types';
 import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -68,14 +68,16 @@ export class TableBlockStore {
   MergedData: MergedData;
   LocalStore: LocalData.LocalStore;
   entityId: string;
+  spaceId: string;
+  nameTriple$: ObservableComputed<ITriple | null>;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: Observable<boolean>;
   columns$: Observable<Column[]>;
   rows$: Observable<Row[]>;
   type: SelectedEntityType;
-  blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
+  filterTriple$: ObservableComputed<ITriple | null>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
   columnRelationTypes$: ObservableComputed<
@@ -83,9 +85,10 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, ActionsStore, entityId, selectedType, LocalStore, queryClient }: ITableBlockStoreConfig) {
+  constructor({ api, ActionsStore, entityId, spaceId, selectedType, LocalStore, queryClient }: ITableBlockStoreConfig) {
     this.api = api;
     this.entityId = entityId;
+    this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
     this.LocalStore = LocalStore;
     this.rows$ = observable([]);
@@ -97,30 +100,37 @@ export class TableBlockStore {
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
-    this.blockEntity$ = computed(async () => {
-      // @HACK: this is a hack to re-run the merge logic when any local changes
-      // are made to the TableBlock entity.
-      this.LocalStore.triplesByEntityId$[this.entityId].get();
+    const blockEntity$ = computed(async () => {
       return this.MergedData.fetchEntity(entityId);
+    });
+
+    this.nameTriple$ = computed(() => {
+      const blockEntity = blockEntity$.get();
+      const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+      const localNameTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.NAME);
+      const serverNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+
+      return localNameTriple ?? serverNameTriple ?? null;
+    });
+
+    this.filterTriple$ = computed(() => {
+      const blockEntity = blockEntity$.get();
+      const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+      const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+      const serverTripleFilter = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+      return localFilterTriple ?? serverTripleFilter ?? null;
     });
 
     this.filterState$ = makeOptionalComputed(
       [],
       computed(async () => {
-        // 1. Get either the server Filter triple or the local Filter triple
-        // 2. Map the value of the Filter triple to TableBlockFilter[]
-        const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-        const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
-        const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-
-        // Default to the locally changed version of a filter if it exists
-        const filter = localFilterTriple ?? serverFilterTriple;
-        const filterValue = Value.stringValue(filter) ?? '';
+        const filter = this.filterTriple$.get();
+        const filterValue = Value.stringValue(filter ?? undefined) ?? '';
 
         const filterState = await queryClient.fetchQuery({
           queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: async () =>
-            await TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
         });
 
         return filterState;
@@ -289,11 +299,14 @@ export class TableBlockStore {
 
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
-    const filterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+    const filterTriple = this.filterTriple$.get();
 
     // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
     const newFiltersString =
       newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type.entityId);
+
+    const nameTriple = this.nameTriple$.get();
+    const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
 
     if (!filterTriple) {
       return this.ActionsStore.create(
@@ -301,8 +314,8 @@ export class TableBlockStore {
           attributeId: SYSTEM_IDS.FILTER,
           attributeName: 'Filter',
           entityId: this.entityId,
-          space: this.blockEntity$.get()?.nameTripleSpace ?? '',
-          entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+          space: this.spaceId,
+          entityName,
           value: {
             type: 'string',
             value: newFiltersString,
@@ -315,7 +328,7 @@ export class TableBlockStore {
     return this.ActionsStore.update(
       Triple.ensureStableId({
         ...filterTriple,
-        entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+        entityName,
         value: {
           ...filterTriple.value,
           type: 'string',
@@ -385,12 +398,14 @@ export function useTableBlockStoreInstance() {
 
 export function useTableBlock() {
   const {
+    spaceId,
+    entityId,
+    nameTriple$,
     rows$,
     pageNumber$,
     columns$,
     type,
     unpublishedColumns$,
-    blockEntity$,
     hasNextPage$,
     hasPreviousPage$,
     setPage,
@@ -399,18 +414,21 @@ export function useTableBlock() {
     isLoading$,
     columnRelationTypes$,
   } = useTableBlockStoreInstance();
+  const nameTriple = useSelector(nameTriple$);
   const rows = useSelector<Row[]>(rows$);
   const columns = useSelector<Column[]>(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const pageNumber = useSelector(pageNumber$);
   const hasNextPage = useSelector(hasNextPage$);
   const hasPreviousPage = useSelector(hasPreviousPage$);
-  const blockEntity = useSelector(blockEntity$);
   const filterState = useSelector<TableBlockFilter[]>(filterState$);
   const isLoading = useSelector(isLoading$);
   const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
+    nameTriple,
+    spaceId,
+    entityId,
     type,
     rows,
     columns,
@@ -419,7 +437,6 @@ export function useTableBlock() {
     hasNextPage,
     hasPreviousPage,
     setPage,
-    blockEntity,
     filterState,
     setFilterState,
     isLoading,

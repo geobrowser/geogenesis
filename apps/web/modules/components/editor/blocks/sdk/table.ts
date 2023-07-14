@@ -1,39 +1,38 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Entity } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
 import { EntityValue, Entity as IEntity, Triple as ITriple, TripleValueType } from '~/modules/types';
 
 export function upsertName({
-  blockEntity,
-  name,
+  newName,
+  entityId,
+  spaceId,
+  nameTriple,
   api,
 }: {
-  blockEntity: IEntity | null;
-  name: string;
+  newName: string;
+  nameTriple: ITriple | null;
+  entityId: string;
+  spaceId: string;
   api: {
     create: (triple: ITriple) => void;
     update: (triple: ITriple, oldTriple: ITriple) => void;
   };
 }) {
-  if (!blockEntity) return;
-
-  const nameTriple = Entity.nameTriple(blockEntity?.triples ?? []);
-
   if (!nameTriple)
     return api.create(
       Triple.withId({
         attributeId: SYSTEM_IDS.NAME,
-        entityId: blockEntity.id,
-        entityName: name,
+        entityId: entityId,
+        entityName: newName,
         attributeName: 'Name',
-        space: blockEntity.nameTripleSpace ?? '',
-        value: { type: 'string', id: ID.createValueId(), value: name },
+        space: spaceId,
+        value: { type: 'string', id: ID.createValueId(), value: newName },
       })
     );
 
-  api.update({ ...nameTriple, value: { ...nameTriple.value, type: 'string', value: name } }, nameTriple);
+  api.update({ ...nameTriple, value: { ...nameTriple.value, type: 'string', value: newName } }, nameTriple);
 }
 
 // @TODO: Some of the functionality in here could be re-used for all blocks
