@@ -4,11 +4,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A } from '@mobily/ts-belt';
 import { Observable, ObservableComputed, batch, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { observe } from '@legendapp/state';
 
 import { ActionsStore, useActionsStoreInstance } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, EntityValue, Entity as IEntity, Row, TripleValueType, OmitStrict } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
 import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -16,8 +18,6 @@ import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
 import { ID } from '~/modules/id';
 import { Value } from '~/modules/value';
-import { QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
-import { observe } from '@legendapp/state';
 
 export const PAGE_SIZE = 10;
 
@@ -94,12 +94,10 @@ export class TableBlockStore {
     this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
-    this.isLoading$ = observable(false);
+    this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
-      this.LocalStore.triplesByEntityId$[this.entityId].get();
-      console.log('rerunning blockEntity');
       return this.MergedData.fetchEntity(entityId);
     });
 
@@ -130,7 +128,8 @@ export class TableBlockStore {
     observe(async e => {
       try {
         // @HACK: This is a hack to get this observe to re-run when filterState changes. It _should_
-        // be doing it below in the observe for localTriplesForEntityId but it's not for some reason.
+        // be doing it below in the observe for localTriplesForEntityId but it's not for some reason
+        // even though we've double checked that localTriplesForEntityId is changing.
         this.filterState$.get();
 
         this.abortController.abort();
@@ -405,8 +404,8 @@ export function useTableBlock() {
     isLoading$,
     columnRelationTypes$,
   } = useTableBlockStoreInstance();
-  const rows = useSelector(rows$);
-  const columns = useSelector(columns$);
+  const rows = useSelector<Row[]>(rows$);
+  const columns = useSelector<Column[]>(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const pageNumber = useSelector(pageNumber$);
   const hasNextPage = useSelector(hasNextPage$);
