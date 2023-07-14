@@ -13,7 +13,7 @@ import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces
 import { getOpenGraphImageUrl } from '~/modules/utils';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import Component from './component';
+import { Component } from './component';
 import { ServerSideEnvParams } from '~/modules/types';
 
 export default async function SpacePage({

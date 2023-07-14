@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { Component, useEffect } from 'react';
 import { createRoomContext } from '@liveblocks/react';

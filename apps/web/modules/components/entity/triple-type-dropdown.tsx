@@ -1,3 +1,5 @@
+'use client';
+
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';

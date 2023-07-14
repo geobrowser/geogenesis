@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
 
@@ -15,7 +17,6 @@ import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
 import { PageStringField } from '../editable-fields/editable-fields';
-import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 export function EditableHeading({
   spaceId,

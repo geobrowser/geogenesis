@@ -1,10 +1,8 @@
 'use client';
 
 import * as React from 'react';
-
 import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity, EntityStoreProvider } from '~/modules/entity';
-
 import { Space, Triple } from '~/modules/types';
 
 import { TypesStoreProvider } from '~/modules/type/types-store';
@@ -54,7 +52,13 @@ export function Component(props: Props) {
         <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
 
         <EntityPageContentContainer>
-          <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+          <EditableHeading
+            spaceId={props.spaceId}
+            entityId={props.id}
+            name={props.name}
+            triples={props.triples}
+            space={true}
+          />
           <Page {...props} />
         </EntityPageContentContainer>
       </EntityStoreProvider>

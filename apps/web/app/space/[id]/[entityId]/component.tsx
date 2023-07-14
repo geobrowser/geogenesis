@@ -1,10 +1,8 @@
 'use client';
 
 import * as React from 'react';
-
 import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity, EntityStoreProvider } from '~/modules/entity';
-
 import { Space, Triple } from '~/modules/types';
 
 import { TypesStoreProvider } from '~/modules/type/types-store';

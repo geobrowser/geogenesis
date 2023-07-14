@@ -1,4 +1,3 @@
-import * as React from 'react';
 import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
@@ -14,7 +13,7 @@ import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
 import { getOpenGraphImageUrl } from '~/modules/utils';
 import { Component } from './component';
-import { cookies } from 'next/headers';
+// import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export default async function EntityPage({
@@ -50,10 +49,10 @@ export default async function EntityPage({
   );
 }
 
-export const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
+const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
   try {
-    const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-    const config = Params.getConfigFromParams(searchParams, env);
+    // const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+    const config = Params.getConfigFromParams(searchParams, undefined);
 
     const storage = new StorageClient(config.ipfs);
     const network = new NetworkData.Network(storage, config.subgraph);
@@ -136,7 +135,6 @@ export const getData = async (spaceId: string, entityId: string, searchParams: S
       description: Entity.description(entity?.triples ?? []),
       spaceId,
       referencedByEntities,
-      key: entityId,
       serverAvatarUrl,
       serverCoverUrl,
 
@@ -159,7 +157,6 @@ export const getData = async (spaceId: string, entityId: string, searchParams: S
       blockTriples: [],
       spaceId,
       referencedByEntities: [],
-      key: entityId,
       serverAvatarUrl: null,
       serverCoverUrl: null,
       space: null,
