@@ -29,7 +29,6 @@ interface ITripleStoreConfig {
   ActionsStore: ActionsStore;
   initialParams?: InitialTripleStoreParams;
   pageSize?: number;
-  initialTriples: TripleType[];
 }
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -59,14 +58,12 @@ export class TripleStore implements ITripleStore {
   constructor({
     api,
     space,
-    initialTriples,
     ActionsStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
     this.api = api;
     this.ActionsStore = ActionsStore;
-    this.triples$ = observable(initialTriples);
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
       initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState

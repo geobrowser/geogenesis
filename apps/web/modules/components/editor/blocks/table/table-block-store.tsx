@@ -98,7 +98,9 @@ export class TableBlockStore {
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
-      console.log('rerunning');
+      // @HACK: this is a hack to re-run the merge logic when any local changes
+      // are made to the TableBlock entity.
+      this.LocalStore.triplesByEntityId$[this.entityId].get();
       return this.MergedData.fetchEntity(entityId);
     });
 
@@ -107,7 +109,6 @@ export class TableBlockStore {
       computed(async () => {
         // 1. Get either the server Filter triple or the local Filter triple
         // 2. Map the value of the Filter triple to TableBlockFilter[]
-
         const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
         const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
         const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
@@ -126,7 +127,7 @@ export class TableBlockStore {
       })
     );
 
-    observe(async e => {
+    observe(async () => {
       try {
         this.abortController.abort();
         this.abortController = new AbortController();
@@ -152,6 +153,12 @@ export class TableBlockStore {
           queryFn: () =>
             this.MergedData.columns({
               params,
+              // we only use an abort signal for columns since rows is dependent on columns,
+              // and this function will throw when the signal is triggered so the rows call
+              // won't be triggered anyway.
+              //
+              // ideally we let react query handle the signals but for some reason it's not
+              // working as expected and there's a flash of incorrect data.
               abortController: this.abortController,
             }),
         });
@@ -170,7 +177,6 @@ export class TableBlockStore {
             this.MergedData.rows(
               {
                 params,
-                abortController: this.abortController,
               },
               dedupedColumns,
               selectedType?.entityId
@@ -183,8 +189,6 @@ export class TableBlockStore {
           this.columns$.set(dedupedColumns);
           this.hasNextPage$.set(rows.length > PAGE_SIZE);
         });
-
-        e.onCleanup = () => this.abortController.abort();
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
           // eslint-disable-next-line @typescript-eslint/no-empty-function
