@@ -9,7 +9,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { NetworkData } from '~/modules/io';
 import { Params } from '~/modules/params';
 import { StorageClient } from '~/modules/services/storage';
-import { Space } from '~/modules/types';
+import { ServerSideEnvParams, Space } from '~/modules/types';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',
@@ -51,7 +51,7 @@ const filterHiddenSpaces = (space: Space) => !HIDDEN_SPACES.includes(space.id);
 
 // Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
 // Temporarily we just filter some Spaces when we fetch Spaces.
-export const HIDDEN_SPACES: Array<string> = [
+const HIDDEN_SPACES: Array<string> = [
   '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
   '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
   '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
@@ -62,12 +62,11 @@ export const HIDDEN_SPACES: Array<string> = [
   '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
 ];
 
-export default async function Spaces() {
+export default async function Spaces({ searchParams }: { searchParams: ServerSideEnvParams }) {
   // const params = useSearchParams();
-  const params = new URLSearchParams();
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
 
-  const config = Params.getConfigFromParams(params, env);
+  const config = Params.getConfigFromParams(searchParams, env);
   const storage = new StorageClient(config.ipfs);
 
   const network = new NetworkData.Network(storage, config.subgraph);

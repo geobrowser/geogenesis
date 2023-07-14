@@ -14,10 +14,16 @@ import { getOpenGraphImageUrl } from '~/modules/utils';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Component from './component';
+import { ServerSideEnvParams } from '~/modules/types';
 
-export default async function SpacePage({ params }: { params: { id: string } }) {
-  console.log('params', params);
-  const props = await getData(params.id);
+export default async function SpacePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: ServerSideEnvParams;
+}) {
+  const props = await getData(params.id, searchParams);
 
   const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
@@ -43,11 +49,9 @@ export default async function SpacePage({ params }: { params: { id: string } }) 
   );
 }
 
-const getData = async (spaceId: string) => {
-  const params = new URLSearchParams();
+const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-
-  const config = Params.getConfigFromParams(params, env);
+  const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
   const network = new NetworkData.Network(storage, config.subgraph);

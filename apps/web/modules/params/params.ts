@@ -1,5 +1,5 @@
-import { AppConfig, AppEnv, Config } from '~/modules/config';
-import { FilterField, FilterState } from '~/modules/types';
+import { AppConfig, Config } from '~/modules/config';
+import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/modules/types';
 import { InitialTripleStoreParams } from '~/modules/triple';
 import { InitialEntityTableStoreParams } from '~/modules/entity';
 
@@ -128,8 +128,8 @@ export function getConfigFromUrl(url: string, cookie: string | undefined): AppCo
   return Config.getConfig(config.chainId);
 }
 
-export function getConfigFromParams(params: URLSearchParams | null, cookie: string | undefined): AppConfig {
-  const env: AppEnv | undefined | null = params?.get('env') as AppEnv;
+export function getConfigFromParams(params: ServerSideEnvParams, cookie: string | undefined): AppConfig {
+  const env: AppEnv | undefined = params['env'] as AppEnv;
 
   if (!(cookie && cookie in Config.options) && !(env && env in Config.options)) {
     console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);

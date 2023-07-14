@@ -20,11 +20,10 @@ import { NavUtils } from '~/modules/utils';
 
 export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const x = useParams();
-  console.log('params', x);
-  // const { id: spaceId } = router.query as { id: string | undefined };
+  const params = useParams();
+  const spaceId: string | null | undefined = params?.id as string;
   const { setEditable, editable } = useEditable();
-  const { isEditor, isAdmin, isEditorController } = useAccessControl();
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = React.useState(false);
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 

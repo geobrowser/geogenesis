@@ -179,3 +179,9 @@ export type Profile = {
   name: string | null;
   avatarUrl: string | null;
 };
+
+export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';
+
+export type ServerSideEnvParams = {
+  env?: AppEnv;
+};

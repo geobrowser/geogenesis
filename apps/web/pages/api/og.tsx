@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
 
 export const config = {
-  runtime: 'experimental-edge',
+  runtime: 'edge',
 };
 
 export default async function handler(request: NextRequest) {
