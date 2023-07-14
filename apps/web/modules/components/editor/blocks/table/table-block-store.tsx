@@ -2,7 +2,7 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A } from '@mobily/ts-belt';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { Observable, ObservableComputed, batch, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 
 import { ActionsStore, useActionsStoreInstance } from '~/modules/action';
@@ -16,8 +16,8 @@ import { FetchRowsOptions } from '~/modules/io/data-source/network';
 import { TableBlockSdk } from '../sdk';
 import { ID } from '~/modules/id';
 import { Value } from '~/modules/value';
-import { useQuery } from '@tanstack/react-query';
-import { TableBlockPlaceholder } from './table-block';
+import { QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
+import { observe } from '@legendapp/state';
 
 export const PAGE_SIZE = 10;
 
@@ -29,6 +29,9 @@ export interface TableBlockFilter {
 }
 
 interface ITableBlockStoreConfig {
+  // We pass through React Query's QueryClient so we can cache data fetches in the store.
+  queryClient: QueryClient;
+
   api: NetworkData.INetwork;
 
   // We use the ActionsStore to derive any new columns or rows that might exist
@@ -48,11 +51,6 @@ interface ITableBlockStoreConfig {
   selectedType: SelectedEntityType;
 
   spaceId: string;
-
-  initialData: {
-    columns: Column[];
-    rows: Row[];
-  };
 }
 
 /**
@@ -72,9 +70,9 @@ export class TableBlockStore {
   entityId: string;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
-  hasNextPage$: ObservableComputed<boolean>;
-  columns$: ObservableComputed<Column[]>;
-  rows$: ObservableComputed<Row[]>;
+  hasNextPage$: Observable<boolean>;
+  columns$: Observable<Column[]>;
+  rows$: Observable<Row[]>;
   type: SelectedEntityType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
@@ -85,20 +83,26 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, ActionsStore, entityId, selectedType, LocalStore, initialData }: ITableBlockStoreConfig) {
+  constructor({ api, ActionsStore, entityId, selectedType, LocalStore, queryClient }: ITableBlockStoreConfig) {
     this.api = api;
     this.entityId = entityId;
     this.ActionsStore = ActionsStore;
     this.LocalStore = LocalStore;
+    this.rows$ = observable([]);
+    this.columns$ = observable([]);
+    this.hasNextPage$ = observable(false);
     this.type = selectedType;
-    this.rows$ = computed(() => initialData.rows);
-    this.columns$ = computed(() => initialData.columns);
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
     this.isLoading$ = observable(false);
     this.abortController = new AbortController();
 
-    this.blockEntity$ = computed(async () => await this.MergedData.fetchEntity(entityId));
+    this.blockEntity$ = computed(async () => {
+      return await queryClient.fetchQuery({
+        queryKey: ['entity', entityId],
+        queryFn: () => this.MergedData.fetchEntity(entityId),
+      });
+    });
 
     this.filterState$ = makeOptionalComputed(
       [],
@@ -118,20 +122,37 @@ export class TableBlockStore {
       })
     );
 
-    const networkData$ = computed<{
-      columns: Column[];
-      rows: Row[];
-      hasNextPage: boolean;
-    }>(async () => {
+    // const localTriplesForEntityId$ = this.LocalStore.triplesByEntityId$[this.entityId].get();
+
+    observe(async () => {
       try {
         this.abortController.abort();
         this.abortController = new AbortController();
 
         const pageNumber = this.pageNumber$.get();
-
         this.isLoading$.set(true);
 
-        const filterString = TableBlockSdk.createGraphQLStringFromFilters(this.filterState$.get(), this.type.entityId);
+        // We fetch the block entity here again to be sure that on first render we are getting the
+        // server filters before we fetch the first time.
+        const blockEntity = await queryClient.fetchQuery({
+          queryKey: ['entity', entityId],
+          queryFn: () => this.MergedData.fetchEntity(entityId),
+        });
+
+        const serverFilterTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+        const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+        // Default to the locally changed version of a filter if it exists
+        const filter = localFilterTriple ?? serverFilterTriple;
+        const filterValue = Value.stringValue(filter) ?? '';
+
+        const filterState = await queryClient.fetchQuery({
+          queryKey: ['filterState in table block', entityId, filterValue],
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+        });
+
+        const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
 
         const params: FetchRowsOptions['params'] = {
           query: '',
@@ -144,9 +165,13 @@ export class TableBlockStore {
         /**
          * Aggregate columns from local and server columns.
          */
-        const { columns } = await this.MergedData.columns({
-          params,
-          abortController: this.abortController,
+        const { columns } = await queryClient.fetchQuery({
+          queryKey: ['columns in table block', entityId, params],
+          queryFn: () =>
+            this.MergedData.columns({
+              params,
+              abortController: this.abortController,
+            }),
         });
 
         const dedupedColumns = columns.reduce((acc, column) => {
@@ -157,22 +182,25 @@ export class TableBlockStore {
         /**
          * Aggregate data for the rows from local and server entities.
          */
-        const { rows } = await this.MergedData.rows(
-          {
-            params,
-            abortController: this.abortController,
-          },
-          dedupedColumns,
-          selectedType?.entityId
-        );
+        const { rows } = await queryClient.fetchQuery({
+          queryKey: ['rows in table block', entityId, params],
+          queryFn: () =>
+            this.MergedData.rows(
+              {
+                params,
+                abortController: this.abortController,
+              },
+              dedupedColumns,
+              selectedType?.entityId
+            ),
+        });
 
-        this.isLoading$.set(false);
-
-        return {
-          columns: dedupedColumns,
-          rows: rows.slice(0, PAGE_SIZE),
-          hasNextPage: rows.length > PAGE_SIZE,
-        };
+        batch(() => {
+          this.isLoading$.set(false);
+          this.rows$.set(rows);
+          this.columns$.set(dedupedColumns);
+          this.hasNextPage$.set(rows.length > PAGE_SIZE);
+        });
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
           // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -180,23 +208,10 @@ export class TableBlockStore {
         }
 
         // TODO: Real error handling
-        return { columns: [], rows: [], hasNextPage: false };
+        this.rows$.set([]);
+        this.columns$.set([]);
+        this.hasNextPage$.set(false);
       }
-    });
-
-    this.rows$ = computed(() => {
-      const data = networkData$.get();
-
-      if (!data?.rows) return initialData.rows;
-
-      return data.rows;
-    });
-
-    this.columns$ = computed(() => {
-      const data = networkData$.get();
-
-      if (!data?.columns) return initialData.columns;
-      return data.columns;
     });
 
     this.unpublishedColumns$ = computed(() => {
@@ -213,9 +228,11 @@ export class TableBlockStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))
-        );
+        const maybeRelationAttributeTypes = await queryClient.fetchQuery({
+          queryKey: ['relation attribute types in table block', entityId, columns],
+          queryFn: () =>
+            Promise.all(columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))),
+        });
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
@@ -247,12 +264,6 @@ export class TableBlockStore {
         );
       })
     );
-
-    this.hasNextPage$ = computed(() => {
-      const data = networkData$.get();
-      if (!data?.hasNextPage) return false;
-      return data.hasNextPage;
-    });
 
     this.hasPreviousPage$ = computed(() => {
       return this.pageNumber$.get() > 0;
@@ -326,66 +337,6 @@ interface Props {
   entityId: string;
 }
 
-interface InitialDataDependencies extends OmitStrict<ITableBlockStoreConfig, 'initialData' | 'selectedType'> {
-  selectedType?: SelectedEntityType;
-}
-
-async function getInitialData({ ActionsStore, LocalStore, api, entityId, selectedType }: InitialDataDependencies) {
-  if (!selectedType) {
-    return null;
-  }
-
-  const merged = new MergedData({ api, localStore: LocalStore, store: ActionsStore });
-  const blockEntity = await merged.fetchEntity(entityId);
-
-  const serverFilterTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-  const localTriplesForEntityId = LocalStore.triplesByEntityId$[entityId].get();
-  const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
-
-  // Default to the locally changed version of a filter if it exists
-  const filter = localFilterTriple ?? serverFilterTriple;
-  const filterValue = Value.stringValue(filter) ?? '';
-
-  const pageNumber = 0;
-
-  const params: FetchRowsOptions['params'] = {
-    query: '',
-    filter: filterValue,
-    typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
-    first: PAGE_SIZE + 1,
-    skip: pageNumber * PAGE_SIZE,
-  };
-
-  /**
-   * Aggregate columns from local and server columns.
-   */
-  const { columns } = await merged.columns({
-    params,
-  });
-
-  const dedupedColumns = columns.reduce((acc, column) => {
-    if (acc.find(c => c.id === column.id)) return acc;
-    return [...acc, column];
-  }, [] as Column[]);
-
-  /**
-   * Aggregate data for the rows from local and server entities.
-   */
-  const { rows } = await merged.rows(
-    {
-      params,
-    },
-    dedupedColumns,
-    selectedType?.entityId
-  );
-
-  return {
-    columns: dedupedColumns,
-    rows: rows.slice(0, PAGE_SIZE),
-    hasNextPage: rows.length > PAGE_SIZE,
-  };
-}
-
 // This component is used to wrap table blocks in the entity page
 // and provide store context for the table to load and edit data
 // for that specific table block.
@@ -397,11 +348,7 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
   const { network } = Services.useServices();
   const LocalStore = LocalData.useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
-  const { data } = useQuery({
-    queryKey: ['table-block-store', spaceId, selectedType, entityId],
-    queryFn: async () =>
-      await getInitialData({ ActionsStore, LocalStore, api: network, entityId, selectedType, spaceId }),
-  });
+  const queryClient = useQueryClient();
 
   if (!selectedType) {
     // A table block might reference a type that has been deleted which will not be found
@@ -411,8 +358,6 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
   }
 
   const store = useMemo(() => {
-    if (!data) return null;
-
     return new TableBlockStore({
       api: network,
       spaceId,
@@ -420,11 +365,9 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
       LocalStore,
       selectedType,
       entityId,
-      initialData: data,
+      queryClient,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore, data]);
-
-  if (!store) return <TableBlockPlaceholder withName />;
+  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore, queryClient]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
