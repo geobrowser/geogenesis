@@ -149,16 +149,18 @@ export class TableBlockStore {
          * Aggregate columns from local and server columns.
          */
         const { columns } = await queryClient.fetchQuery({
-          queryKey: ['columns in table block', entityId, params],
+          queryKey: [
+            'columns in table block',
+            entityId,
+            params.filter,
+            params.first,
+            params.query,
+            params.skip,
+            params.typeIds,
+          ],
           queryFn: () =>
             this.MergedData.columns({
               params,
-              // we only use an abort signal for columns since rows is dependent on columns,
-              // and this function will throw when the signal is triggered so the rows call
-              // won't be triggered anyway.
-              //
-              // ideally we let react query handle the signals but for some reason it's not
-              // working as expected and there's a flash of incorrect data.
               abortController: this.abortController,
             }),
         });
@@ -172,11 +174,22 @@ export class TableBlockStore {
          * Aggregate data for the rows from local and server entities.
          */
         const { rows } = await queryClient.fetchQuery({
-          queryKey: ['rows in table block', entityId, params],
+          queryKey: [
+            'rows in table block',
+            entityId,
+            params.filter,
+            params.first,
+            params.query,
+            params.skip,
+            params.typeIds,
+            selectedType?.entityId,
+            dedupedColumns,
+          ],
           queryFn: () =>
             this.MergedData.rows(
               {
                 params,
+                abortController: this.abortController,
               },
               dedupedColumns,
               selectedType?.entityId
