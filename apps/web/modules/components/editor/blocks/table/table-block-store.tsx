@@ -143,13 +143,46 @@ export class TableBlockStore {
 
     observe(async () => {
       try {
+        // @NOTE: For some reason this.LocalStore.triplesByEntityId$[this.entityId].get() doesn't
+        // cause the `observe` to re-run when the triples for this block change. For now we manually
+        // re-run all the previous computations to ensure that we have the latest data at this point.
+        //
+        // This is so first render of the table has all of the table filter information ahead of time.
+        // By caching all the async calls we should be avoiding any unnecessary network requests in
+        // the places we are duplicating requests.
+        //
+        // @HACK: We manually trigger a re-run when this.filterState$.get() changes. This works even though
+        // this.filterState$ itself re-runs when this.LocalStore.triplesByEntityId$[this.entityId].get()
+        // changes. :shrug:
+        this.filterState$.get();
+
         this.abortController.abort();
         this.abortController = new AbortController();
 
         const pageNumber = this.pageNumber$.get();
         this.isLoading$.set(true);
 
-        const filterString = TableBlockSdk.createGraphQLStringFromFilters(this.filterState$.get(), this.type.entityId);
+        const blockEntity = await queryClient.fetchQuery({
+          queryKey: ['blockEntity in table block', entityId],
+          queryFn: () => this.MergedData.fetchEntity(entityId),
+        });
+
+        // @NOTE: See @NOTE at top of this observe block
+        const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+        const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const serverTripleFilter = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+        const filterTriple = localFilterTriple ?? serverTripleFilter ?? null;
+
+        const filter = filterTriple;
+        const filterValue = Value.stringValue(filter ?? undefined) ?? '';
+
+        const filterState = await queryClient.fetchQuery({
+          queryKey: ['filterState in table block', entityId, filterValue],
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+        });
+
+        const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
 
         const params: FetchRowsOptions['params'] = {
           query: '',
