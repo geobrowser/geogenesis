@@ -63,7 +63,6 @@ const HIDDEN_SPACES: Array<string> = [
 ];
 
 export default async function Spaces({ searchParams }: { searchParams: ServerSideEnvParams }) {
-  // const params = useSearchParams();
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
 
   const config = Params.getConfigFromParams(searchParams, env);
