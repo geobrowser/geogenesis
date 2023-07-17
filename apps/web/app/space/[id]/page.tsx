@@ -1,4 +1,3 @@
-import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import type { Metadata } from 'next';
 
@@ -83,15 +82,7 @@ export default async function SpacePage({ params, searchParams }: Props) {
   const description =
     props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
 
-  return (
-    <>
-      <Head>
-        <link rel="preload" as="image" href={openGraphImageUrl} />
-      </Head>
-
-      <Component {...props} />
-    </>
-  );
+  return <Component {...props} />;
 }
 
 const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
