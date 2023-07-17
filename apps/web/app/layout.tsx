@@ -9,9 +9,6 @@ import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
 
-//       {/* Less essential */}
-//       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL!),
   title: 'Geo Genesis',
