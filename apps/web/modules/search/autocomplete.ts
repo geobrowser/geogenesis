@@ -50,6 +50,11 @@ class EntityAutocomplete {
           this.loading$.set(false);
           return entities;
         } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') {
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
+            return new Promise(() => {});
+          }
+
           console.log("Couldn't fetch entities", e);
           return [];
         }

@@ -2,13 +2,15 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A } from '@mobily/ts-belt';
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+import { Observable, ObservableComputed, batch, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { observe } from '@legendapp/state';
 
 import { ActionsStore, useActionsStoreInstance } from '~/modules/action';
 import { Entity, EntityTable, SelectedEntityType } from '~/modules/entity';
 import { Services } from '~/modules/services';
-import { Column, EntityValue, Entity as IEntity, Row, TripleValueType } from '~/modules/types';
+import { Column, EntityValue, Entity as IEntity, Row, TripleValueType, Triple as ITriple } from '~/modules/types';
 import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { makeOptionalComputed } from '~/modules/utils';
 import { Triple } from '~/modules/triple';
@@ -27,6 +29,9 @@ export interface TableBlockFilter {
 }
 
 interface ITableBlockStoreConfig {
+  // We pass through React Query's QueryClient so we can cache data fetches in the store.
+  queryClient: QueryClient;
+
   api: NetworkData.INetwork;
 
   // We use the ActionsStore to derive any new columns or rows that might exist
@@ -63,14 +68,17 @@ export class TableBlockStore {
   MergedData: MergedData;
   LocalStore: LocalData.LocalStore;
   entityId: string;
+  spaceId: string;
+  nameTriple$: ObservableComputed<ITriple | null>;
   pageNumber$: Observable<number>;
   hasPreviousPage$: ObservableComputed<boolean>;
-  hasNextPage$: ObservableComputed<boolean>;
-  columns$: ObservableComputed<Column[]>;
-  rows$: ObservableComputed<Row[]>;
+  hasNextPage$: Observable<boolean>;
+  columns$: Observable<Column[]>;
+  rows$: Observable<Row[]>;
   type: SelectedEntityType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
+  filterTriple$: ObservableComputed<ITriple | null>;
   filterState$: ObservableComputed<TableBlockFilter[]>;
   isLoading$: Observable<boolean>;
   columnRelationTypes$: ObservableComputed<
@@ -78,113 +86,175 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, ActionsStore, entityId, selectedType, LocalStore }: ITableBlockStoreConfig) {
+  constructor({ api, ActionsStore, entityId, spaceId, selectedType, LocalStore, queryClient }: ITableBlockStoreConfig) {
     this.api = api;
     this.entityId = entityId;
+    this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
     this.LocalStore = LocalStore;
+    this.rows$ = observable<Row[]>([]);
+    this.columns$ = observable<Column[]>([]);
+    this.hasNextPage$ = observable(false);
     this.type = selectedType;
     this.pageNumber$ = observable(0);
     this.MergedData = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
-    this.blockEntity$ = computed(async () => await this.MergedData.fetchEntity(entityId));
+    this.blockEntity$ = computed(async () => {
+      return await queryClient.fetchQuery({
+        queryKey: ['blockEntity in table block', entityId],
+        queryFn: () => this.MergedData.fetchEntity(entityId),
+      });
+    });
+
+    this.nameTriple$ = computed(() => {
+      const blockEntity = this.blockEntity$.get();
+      const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+      const localNameTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.NAME);
+      const serverNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+
+      return localNameTriple ?? serverNameTriple ?? null;
+    });
+
+    this.filterTriple$ = computed(() => {
+      const blockEntity = this.blockEntity$.get();
+      const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
+      const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+      const serverTripleFilter = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+
+      return localFilterTriple ?? serverTripleFilter ?? null;
+    });
 
     this.filterState$ = makeOptionalComputed(
       [],
       computed(async () => {
-        // 1. Get either the server Filter triple or the local Filter triple
-        // 2. Map the value of the Filter triple to TableBlockFilter[]
+        const filter = this.filterTriple$.get();
+        const filterValue = Value.stringValue(filter ?? undefined) ?? '';
 
-        const serverFilterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const filterState = await queryClient.fetchQuery({
+          queryKey: ['filterState in table block', entityId, filterValue],
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+        });
+
+        return filterState;
+      })
+    );
+
+    observe(async () => {
+      try {
+        // @NOTE: For some reason this.LocalStore.triplesByEntityId$[this.entityId].get() doesn't
+        // cause the `observe` to re-run when the triples for this block change. For now we manually
+        // re-run all the previous computations to ensure that we have the latest data at this point.
+        //
+        // This is so first render of the table has all of the table filter information ahead of time.
+        // By caching all the async calls we should be avoiding any unnecessary network requests in
+        // the places we are duplicating requests.
+        //
+        // @HACK: We manually trigger a re-run when this.filterState$.get() changes. This works even though
+        // this.filterState$ itself re-runs when this.LocalStore.triplesByEntityId$[this.entityId].get()
+        // changes. :shrug:
+        this.filterState$.get();
+
+        this.abortController.abort();
+        this.abortController = new AbortController();
+
+        const pageNumber = this.pageNumber$.get();
+        this.isLoading$.set(true);
+
+        const blockEntity = await queryClient.fetchQuery({
+          queryKey: ['blockEntity in table block', entityId],
+          queryFn: () => this.MergedData.fetchEntity(entityId),
+        });
+
+        // @NOTE: See @NOTE at top of this observe block
         const localTriplesForEntityId = this.LocalStore.triplesByEntityId$[this.entityId].get();
         const localFilterTriple = localTriplesForEntityId?.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+        const serverTripleFilter = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
 
-        // Default to the locally changed version of a filter if it exists
-        const filter = localFilterTriple ?? serverFilterTriple;
-        const filterValue = Value.stringValue(filter) ?? '';
+        const filterTriple = localFilterTriple ?? serverTripleFilter ?? null;
 
-        return TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity);
-      })
-    );
+        const filter = filterTriple;
+        const filterValue = Value.stringValue(filter ?? undefined) ?? '';
 
-    const networkData$ = makeOptionalComputed(
-      { columns: [], rows: [], hasNextPage: false },
-      computed(async () => {
-        try {
-          this.abortController.abort();
-          this.abortController = new AbortController();
+        const filterState = await queryClient.fetchQuery({
+          queryKey: ['filterState in table block', entityId, filterValue],
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+        });
 
-          const pageNumber = this.pageNumber$.get();
+        const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
 
-          this.isLoading$.set(true);
+        const params: FetchRowsOptions['params'] = {
+          query: '',
+          filter: filterString,
+          typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
+          first: PAGE_SIZE + 1,
+          skip: pageNumber * PAGE_SIZE,
+        };
 
-          const filterString = TableBlockSdk.createGraphQLStringFromFilters(
-            this.filterState$.get(),
-            this.type.entityId
-          );
-
-          const params: FetchRowsOptions['params'] = {
-            query: '',
-            filter: filterString,
-            typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
-            first: PAGE_SIZE + 1,
-            skip: pageNumber * PAGE_SIZE,
-          };
-
-          /**
-           * Aggregate columns from local and server columns.
-           */
-          const { columns } = await this.MergedData.columns({
-            params,
-            abortController: this.abortController,
-          });
-
-          const dedupedColumns = columns.reduce((acc, column) => {
-            if (acc.find(c => c.id === column.id)) return acc;
-            return [...acc, column];
-          }, [] as Column[]);
-
-          /**
-           * Aggregate data for the rows from local and server entities.
-           */
-          const { rows } = await this.MergedData.rows(
-            {
+        /**
+         * Aggregate columns from local and server columns.
+         */
+        const { columns } = await queryClient.fetchQuery({
+          queryKey: [
+            'columns in table block',
+            entityId,
+            params.filter,
+            params.first,
+            params.query,
+            params.skip,
+            params.typeIds,
+          ],
+          queryFn: () =>
+            this.MergedData.columns({
               params,
               abortController: this.abortController,
-            },
+            }),
+        });
+
+        const dedupedColumns = columns.reduce((acc, column) => {
+          if (acc.find(c => c.id === column.id)) return acc;
+          return [...acc, column];
+        }, [] as Column[]);
+
+        /**
+         * Aggregate data for the rows from local and server entities.
+         */
+        const { rows } = await queryClient.fetchQuery({
+          queryKey: [
+            'rows in table block',
+            entityId,
+            params.filter,
+            params.first,
+            params.query,
+            params.skip,
+            params.typeIds,
+            selectedType?.entityId,
             dedupedColumns,
-            selectedType?.entityId
-          );
+          ],
+          queryFn: () =>
+            this.MergedData.rows(
+              {
+                params,
+                abortController: this.abortController,
+              },
+              dedupedColumns,
+              selectedType?.entityId
+            ),
+        });
 
+        batch(() => {
           this.isLoading$.set(false);
-
-          return {
-            columns: dedupedColumns,
-            rows: rows.slice(0, PAGE_SIZE),
-            hasNextPage: rows.length > PAGE_SIZE,
-          };
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') {
-            // eslint-disable-next-line @typescript-eslint/no-empty-function
-            return new Promise(() => {});
-          }
-
-          // TODO: Real error handling
-          return { columns: [], rows: [], hasNextPage: false };
+          this.rows$.set(rows);
+          this.columns$.set(dedupedColumns);
+          this.hasNextPage$.set(rows.length > PAGE_SIZE);
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') {
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          return new Promise(() => {});
         }
-      })
-    );
-
-    this.rows$ = computed(() => {
-      const { rows } = networkData$.get();
-      return rows;
-    });
-
-    this.columns$ = computed(() => {
-      const { columns } = networkData$.get();
-      return columns;
+      }
     });
 
     this.unpublishedColumns$ = computed(() => {
@@ -201,9 +271,11 @@ export class TableBlockStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))
-        );
+        const maybeRelationAttributeTypes = await queryClient.fetchQuery({
+          queryKey: ['relation attribute types in table block', entityId, columns],
+          queryFn: () =>
+            Promise.all(columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))),
+        });
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
@@ -236,8 +308,9 @@ export class TableBlockStore {
       })
     );
 
-    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
-    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+    this.hasPreviousPage$ = computed(() => {
+      return this.pageNumber$.get() > 0;
+    });
   }
 
   setPage = (page: number | 'next' | 'previous') => {
@@ -258,11 +331,14 @@ export class TableBlockStore {
 
   setFilterState = (filters: TableBlockFilter[]) => {
     const newState = filters.length === 0 ? [] : filters;
-    const filterTriple = this.blockEntity$.get()?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER);
+    const filterTriple = this.filterTriple$.get();
 
     // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
     const newFiltersString =
       newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, this.type.entityId);
+
+    const nameTriple = this.nameTriple$.get();
+    const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
 
     if (!filterTriple) {
       return this.ActionsStore.create(
@@ -270,8 +346,8 @@ export class TableBlockStore {
           attributeId: SYSTEM_IDS.FILTER,
           attributeName: 'Filter',
           entityId: this.entityId,
-          space: this.blockEntity$.get()?.nameTripleSpace ?? '',
-          entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+          space: this.spaceId,
+          entityName,
           value: {
             type: 'string',
             value: newFiltersString,
@@ -284,7 +360,7 @@ export class TableBlockStore {
     return this.ActionsStore.update(
       Triple.ensureStableId({
         ...filterTriple,
-        entityName: Entity.name(this.blockEntity$.get()?.triples ?? []) ?? '',
+        entityName,
         value: {
           ...filterTriple.value,
           type: 'string',
@@ -318,6 +394,7 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
   const { network } = Services.useServices();
   const LocalStore = LocalData.useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
+  const queryClient = useQueryClient();
 
   if (!selectedType) {
     // A table block might reference a type that has been deleted which will not be found
@@ -334,8 +411,9 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
       LocalStore,
       selectedType,
       entityId,
+      queryClient,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore]);
+  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore, queryClient]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }
@@ -352,6 +430,9 @@ export function useTableBlockStoreInstance() {
 
 export function useTableBlock() {
   const {
+    spaceId,
+    entityId,
+    nameTriple$,
     rows$,
     pageNumber$,
     columns$,
@@ -366,8 +447,9 @@ export function useTableBlock() {
     isLoading$,
     columnRelationTypes$,
   } = useTableBlockStoreInstance();
-  const rows = useSelector(rows$);
-  const columns = useSelector(columns$);
+  const nameTriple = useSelector(nameTriple$);
+  const rows = useSelector<Row[]>(rows$);
+  const columns = useSelector<Column[]>(columns$);
   const unpublishedColumns = useSelector(unpublishedColumns$);
   const pageNumber = useSelector(pageNumber$);
   const hasNextPage = useSelector(hasNextPage$);
@@ -378,6 +460,9 @@ export function useTableBlock() {
   const columnRelationTypes = useSelector(columnRelationTypes$);
 
   return {
+    nameTriple,
+    spaceId,
+    entityId,
     type,
     rows,
     columns,

@@ -36,9 +36,7 @@ interface IEntityTableStoreConfig {
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
-  initialRows: Row[];
   initialSelectedType: TripleType | null;
-  initialColumns: Column[];
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
   LocalStore: LocalData.LocalStore;
@@ -86,9 +84,7 @@ export class EntityTableStore implements IEntityTableStore {
   constructor({
     api,
     spaceId,
-    initialRows,
     initialSelectedType,
-    initialColumns,
     ActionsStore,
     LocalStore,
     SpaceStore,
@@ -100,10 +96,8 @@ export class EntityTableStore implements IEntityTableStore {
     this.SpaceStore = SpaceStore;
     this.LocalStore = LocalStore;
     this.hydrated$ = observable(false);
-    this.rows$ = observable(initialRows);
     this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
-    this.columns$ = observable(initialColumns);
 
     this.spaceId = spaceId;
     this.query$ = observable(initialParams.query);
