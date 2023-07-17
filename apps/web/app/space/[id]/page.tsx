@@ -36,13 +36,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   if (!entityId) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
-    redirect(`/space/${spaceId}/entities`);
+    return redirect(`/space/${spaceId}/entities`);
   }
 
   const entity = await network.fetchEntity(entityId);
 
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+  const spaceName = entity?.name ?? null;
+  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
   const serverCoverUrl = Entity.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
