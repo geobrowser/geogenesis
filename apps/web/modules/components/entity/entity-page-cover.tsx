@@ -13,8 +13,6 @@ type EntityPageCoverProps = {
 export const EntityPageCover = ({ avatarUrl, coverUrl, space = false }: EntityPageCoverProps) => {
   if (!coverUrl && !avatarUrl) return null;
 
-  console.log('coverUrl', coverUrl);
-
   if (coverUrl) {
     return (
       <div className={cx('relative mx-auto h-[320px] w-full max-w-[1192px]', !space && avatarUrl ? 'mb-20' : 'mb-8')}>
