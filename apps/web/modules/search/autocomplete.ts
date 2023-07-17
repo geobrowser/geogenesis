@@ -79,7 +79,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
 
   // @TODO(baiirun): fix this
   const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
-  const memoizedFilter = useMemo(() => filter, [filter]);
+  const memoizedFilter = useMemo(() => filter, [JSON.stringify(filter)]);
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({
