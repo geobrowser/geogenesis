@@ -139,7 +139,12 @@ export class GeoDate {
     return [4, 6, 9, 11].includes(month);
   }
 }
-// https://geobrowser.io/api/og?hash=
+
+// We rewrite the URL to use the geobrowser preview API in vercel.json.
+// This forces the image to be fetched with a file extension as a workaround
+// for some services not parsing images without a file extension. Looking at
+// you TWITTER.
+// https://geobrowser.io/preview/{hash}.png -> https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {
   if (value.startsWith('https://api.thegraph.com/ipfs')) {
     const hash = value.split('=')[1];
