@@ -39,17 +39,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
-    network.fetchEntity(entityId),
-
-    network.fetchEntities({
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-
-    fetchSpaceTypeTriples(network, spaceId),
-    space ? fetchForeignTypeTriples(network, space) : [],
-  ]);
+  const entity = await network.fetchEntity(entityId);
 
   const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
   const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
