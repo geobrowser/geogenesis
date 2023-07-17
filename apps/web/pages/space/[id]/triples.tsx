@@ -33,7 +33,7 @@ export default function TriplesPage({ spaceId, spaceName, spaceImage, initialTri
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TripleStoreProvider space={spaceId} initialTriples={initialTriples}>
+      <TripleStoreProvider space={spaceId}>
         <Triples spaceId={spaceId} initialTriples={initialTriples} />
       </TripleStoreProvider>
     </div>
