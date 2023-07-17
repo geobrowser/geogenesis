@@ -92,8 +92,8 @@ export class TableBlockStore {
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
     this.LocalStore = LocalStore;
-    this.rows$ = observable([]);
-    this.columns$ = observable([]);
+    this.rows$ = observable<Row[]>([]);
+    this.columns$ = observable<Column[]>([]);
     this.hasNextPage$ = observable(false);
     this.type = selectedType;
     this.pageNumber$ = observable(0);
