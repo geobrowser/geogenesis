@@ -1,7 +1,7 @@
 import pluralize from 'pluralize';
 import { Text } from '~/modules/design-system/text';
 import { formatShortAddress, GeoDate } from '~/modules/utils';
-import { Avatar } from '~/modules/avatar';
+import { Avatar } from '~/modules/design-system/avatar';
 import { Profile } from '~/modules/types';
 
 interface Props {

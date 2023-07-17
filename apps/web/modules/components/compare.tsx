@@ -18,7 +18,7 @@ import { Services } from '../services';
 import { TableBlockPlaceholder } from './editor/blocks/table/table-block';
 import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
 import { SlideUp } from './slide-up/slide-up';
-import { Avatar } from '../avatar';
+import { Avatar } from '../design-system/avatar';
 import { Entity } from '../entity';
 import { formatShortAddress } from '../utils';
 import { Action } from '../action';
