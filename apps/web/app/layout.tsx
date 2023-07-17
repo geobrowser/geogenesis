@@ -9,10 +9,6 @@ import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
 
-//       <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
-
-//       <link rel="apple-touch-icon" sizes="76x76" href="/static/apple-touch-icon.png" />
-
 //       {/* Less essential */}
 //       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -28,7 +24,10 @@ export const metadata: Metadata = {
   icons: {
     icon: '/static/favicon.png',
     shortcut: '/static/favicon.png',
-    apple: '/static/apple-icon.png',
+    apple: {
+      sizes: '76x76',
+      url: '/static/apple-icon.png',
+    },
     other: [
       {
         rel: 'apple-touch-icon-precomposed',
