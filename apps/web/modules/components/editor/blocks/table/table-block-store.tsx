@@ -102,7 +102,10 @@ export class TableBlockStore {
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
-      return this.MergedData.fetchEntity(entityId);
+      return await queryClient.fetchQuery({
+        queryKey: ['blockEntity in table block', entityId],
+        queryFn: () => this.MergedData.fetchEntity(entityId),
+      });
     });
 
     this.nameTriple$ = computed(() => {
