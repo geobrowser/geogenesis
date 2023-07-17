@@ -1,6 +1,8 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from './constants';
+import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE } from './constants';
+import { Entity } from './entity';
+import { Entity as IEntity } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -156,4 +158,19 @@ export const getOpenGraphImageUrl = (value: string) => {
   } else {
     return DEFAULT_OPENGRAPH_IMAGE;
   }
+};
+
+export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
+  const entityName = entity?.name ?? null;
+  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
+  const serverCoverUrl = Entity.cover(entity?.triples);
+  const imageUrl = serverAvatarUrl || serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+
+  return {
+    entityName,
+    openGraphImageUrl,
+    description,
+  };
 };

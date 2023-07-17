@@ -1,5 +1,5 @@
-import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import type { Metadata } from 'next';
 
 import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity } from '~/modules/entity';
@@ -7,50 +7,63 @@ import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
 import { ServerSideEnvParams } from '~/modules/types';
-import { NavUtils } from '~/modules/utils';
+import { getOpenGraphMetadataForEntity, NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
-import { getOpenGraphImageUrl } from '~/modules/utils';
 import { Component } from './component';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-export default async function EntityPage({
-  params,
-  searchParams,
-}: {
+interface Props {
   params: { id: string; entityId: string };
   searchParams: ServerSideEnvParams;
-}) {
+}
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const spaceId = params.id;
+  const entityId = params.entityId;
+  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  const config = Params.getConfigFromParams(searchParams, env);
+
+  const storage = new StorageClient(config.ipfs);
+  const network = new NetworkData.Network(storage, config.subgraph);
+
+  const entity = await network.fetchEntity(entityId);
+  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+
+  return {
+    title: entityName ?? spaceId,
+    description,
+    openGraph: {
+      title: entityName ?? spaceId,
+      description,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      description,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+  };
+}
+
+export default async function EntityPage({ params, searchParams }: Props) {
   const props = await getData(params.id, params.entityId, searchParams);
 
-  const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description =
-    props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
-
-  return (
-    <>
-      {/* <Head>
-        <title>{props.name ?? props.id}</title>
-        <meta property="og:title" content={props.name} />
-        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        <meta property="og:image" content={openGraphImageUrl} />
-        <meta name="twitter:image" content={openGraphImageUrl} />
-        <link rel="preload" as="image" href={openGraphImageUrl} />
-        <meta property="description" content={description} />
-        <meta property="og:description" content={description} />
-        <meta name="twitter:description" content={description} />
-      </Head> */}
-
-      <Component {...props} />
-    </>
-  );
+  return <Component {...props} />;
 }
 
 const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
-  // try {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
 
@@ -149,22 +162,4 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
     space,
     spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
   };
-  // } catch (e) {
-  // console.error(`Could not fetch entity ${entityId} on entity page`, e);
-
-  // return {
-  //   triples: [],
-  //   name: entityId,
-  //   description: '',
-  //   id: entityId,
-  //   blockIdsTriple: null,
-  //   blockTriples: [],
-  //   spaceId,
-  //   referencedByEntities: [],
-  //   serverAvatarUrl: null,
-  //   serverCoverUrl: null,
-  //   space: null,
-  //   spaceTypes: [],
-  // };
-  // }
 };

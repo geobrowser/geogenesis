@@ -6,11 +6,10 @@ import { Entity } from '~/modules/entity';
 import { Params } from '~/modules/params';
 import { NetworkData } from '~/modules/io';
 import { StorageClient } from '~/modules/services/storage';
-import { NavUtils } from '~/modules/utils';
+import { getOpenGraphMetadataForEntity, NavUtils } from '~/modules/utils';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import { Value } from '~/modules/value';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
-import { getOpenGraphImageUrl } from '~/modules/utils';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Component } from './component';
@@ -40,20 +39,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const entity = await network.fetchEntity(entityId);
 
-  const spaceName = entity?.name ?? null;
-  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
-  const imageUrl = serverAvatarUrl || serverCoverUrl || '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description =
-    Entity.description(entity?.triples ?? []) ||
-    `Browse and organize the world's public knowledge and information in a decentralized way.`;
+  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
-    title: spaceName ?? spaceId,
+    title: entityName ?? spaceId,
     description,
     openGraph: {
-      title: spaceName ?? spaceId,
+      title: entityName ?? spaceId,
       description,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
       images: [
@@ -76,11 +68,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function SpacePage({ params, searchParams }: Props) {
   const props = await getData(params.id, searchParams);
-
-  const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
-  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description =
-    props.description || `Browse and organize the world's public knowledge and information in a decentralized way.`;
 
   return <Component {...props} />;
 }
