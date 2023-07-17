@@ -159,21 +159,9 @@ export class TableBlockStore {
         /**
          * Aggregate columns from local and server columns.
          */
-        const { columns } = await queryClient.fetchQuery({
-          queryKey: [
-            'columns in table block',
-            entityId,
-            params.filter,
-            params.first,
-            params.query,
-            params.skip,
-            params.typeIds,
-          ],
-          queryFn: () =>
-            this.MergedData.columns({
-              params,
-              abortController: this.abortController,
-            }),
+        const { columns } = await this.MergedData.columns({
+          params,
+          abortController: this.abortController,
         });
 
         const dedupedColumns = columns.reduce((acc, column) => {
@@ -184,28 +172,14 @@ export class TableBlockStore {
         /**
          * Aggregate data for the rows from local and server entities.
          */
-        const { rows } = await queryClient.fetchQuery({
-          queryKey: [
-            'rows in table block',
-            entityId,
-            params.filter,
-            params.first,
-            params.query,
-            params.skip,
-            params.typeIds,
-            selectedType?.entityId,
-            dedupedColumns,
-          ],
-          queryFn: () =>
-            this.MergedData.rows(
-              {
-                params,
-                abortController: this.abortController,
-              },
-              dedupedColumns,
-              selectedType?.entityId
-            ),
-        });
+        const { rows } = await this.MergedData.rows(
+          {
+            params,
+            abortController: this.abortController,
+          },
+          dedupedColumns,
+          selectedType?.entityId
+        );
 
         batch(() => {
           this.isLoading$.set(false);
@@ -235,11 +209,9 @@ export class TableBlockStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const maybeRelationAttributeTypes = await queryClient.fetchQuery({
-          queryKey: ['relation attribute types in table block', entityId, columns],
-          queryFn: () =>
-            Promise.all(columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))),
-        });
+        const maybeRelationAttributeTypes = await Promise.all(
+          columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))
+        );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
