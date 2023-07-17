@@ -129,10 +129,10 @@ export class TableBlockStore {
         const filter = this.filterTriple$.get();
         const filterValue = Value.stringValue(filter ?? undefined) ?? '';
 
-        const filterState = await queryClient.fetchQuery({
-          queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
-        });
+        const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
+          filterValue,
+          this.MergedData.fetchEntity
+        );
 
         return filterState;
       })
