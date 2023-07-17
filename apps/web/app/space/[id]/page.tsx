@@ -1,5 +1,6 @@
 import Head from 'next/head';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import type { Metadata } from 'next';
 
 import { ReferencedByEntity } from '~/modules/components/entity/types';
 import { Entity } from '~/modules/entity';
@@ -16,13 +17,75 @@ import { redirect } from 'next/navigation';
 import { Component } from './component';
 import { ServerSideEnvParams } from '~/modules/types';
 
-export default async function SpacePage({
-  params,
-  searchParams,
-}: {
+interface Props {
   params: { id: string };
   searchParams: ServerSideEnvParams;
-}) {
+}
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const spaceId = params.id;
+  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  const config = Params.getConfigFromParams(searchParams, env);
+
+  const storage = new StorageClient(config.ipfs);
+  const network = new NetworkData.Network(storage, config.subgraph);
+
+  const spaces = await network.fetchSpaces();
+  const space = spaces.find(s => s.id === spaceId) ?? null;
+  const entityId = space?.spaceConfigEntityId;
+
+  if (!entityId) {
+    console.log(`Redirecting to /space/${spaceId}/entities`);
+    redirect(`/space/${spaceId}/entities`);
+  }
+
+  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
+    network.fetchEntity(entityId),
+
+    network.fetchEntities({
+      query: '',
+      filter: [{ field: 'linked-to', value: entityId }],
+    }),
+
+    fetchSpaceTypeTriples(network, spaceId),
+    space ? fetchForeignTypeTriples(network, space) : [],
+  ]);
+
+  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+  const serverCoverUrl = Entity.cover(entity?.triples);
+  const imageUrl = serverAvatarUrl || serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description =
+    Entity.description(entity?.triples ?? []) ||
+    `Browse and organize the world's public knowledge and information in a decentralized way.`;
+
+  return {
+    title: spaceName ?? spaceId,
+    description,
+    openGraph: {
+      title: spaceName ?? spaceId,
+      description,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      description,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+  };
+}
+
+export default async function SpacePage({ params, searchParams }: Props) {
   const props = await getData(params.id, searchParams);
 
   const imageUrl = props.serverAvatarUrl || props.serverCoverUrl || '';
@@ -33,15 +96,7 @@ export default async function SpacePage({
   return (
     <>
       <Head>
-        <title>{props.name ?? props.id}</title>
-        <meta property="og:title" content={props.name} />
-        <meta property="og:url" content={`https://geobrowser.io${NavUtils.toEntity(props.spaceId, props.id)}`} />
-        <meta property="og:image" content={openGraphImageUrl} />
-        <meta name="twitter:image" content={openGraphImageUrl} />
         <link rel="preload" as="image" href={openGraphImageUrl} />
-        <meta property="description" content={description} />
-        <meta property="og:description" content={description} />
-        <meta name="twitter:description" content={description} />
       </Head>
 
       <Component {...props} />
