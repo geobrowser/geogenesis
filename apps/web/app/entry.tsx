@@ -17,6 +17,7 @@ import { Persistence } from '~/modules/persistence';
 import { Dialog } from '~/modules/search';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
+import { Analytics } from '@vercel/analytics/react';
 
 export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -75,7 +76,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <Compare />
         <Persistence />
       </ClientOnly>
-      {/* <Analytics /> */}
+      <Analytics />
     </>
   );
 }
