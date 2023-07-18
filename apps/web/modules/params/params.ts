@@ -146,8 +146,8 @@ export function getConfigFromUrl(url: string, cookie: string | undefined): AppCo
   return Config.getConfig(config.chainId);
 }
 
-export function getConfigFromParams(params: ServerSideEnvParams, cookie: string | undefined): AppConfig {
-  const env: AppEnv | undefined = params['env'] as AppEnv;
+export function getConfigFromParams(searchParams: ServerSideEnvParams, cookie: string | undefined): AppConfig {
+  const env: AppEnv | undefined = searchParams['env'] as AppEnv;
 
   if (!(cookie && cookie in Config.options) && !(env && env in Config.options)) {
     console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);
