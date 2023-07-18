@@ -5,21 +5,18 @@ import { InitialEntityTableStoreParams } from '~/modules/entity';
 
 export const ENV_PARAM_NAME = 'env';
 
-export function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
-  const params = new URLSearchParams(url.split('?')[1]);
-  const query = params.get('query') || '';
-  const pageNumber = Number(params.get('page') || 0);
-  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
-
-  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-    const value = params.get(key);
-    if (!value) return acc;
-    return [...acc, { field: key as FilterField, value }];
-  }, []);
+export function parseTripleQueryFilterFromParams(params: { query?: string; page?: string }): InitialTripleStoreParams {
+  const filterStateResult = Object.entries(params)
+    .map(([key, value]) => {
+      if (key === 'query' || key === 'page' || key === 'typeId') return null; // filter out additional params
+      if (!value) return null;
+      return { field: key as FilterField, value };
+    })
+    .flatMap(x => (x ? [x] : [])); // filter out null values
 
   return {
-    query,
-    pageNumber,
+    query: params.query ?? '',
+    pageNumber: Number(params.page ?? 0),
     filterState: filterStateResult,
   };
 }
