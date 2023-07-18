@@ -40,6 +40,8 @@ interface IEntityTableStoreConfig {
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
   LocalStore: LocalData.LocalStore;
+  initialColumns: Column[];
+  initialRows: Row[];
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -86,6 +88,8 @@ export class EntityTableStore implements IEntityTableStore {
     spaceId,
     initialSelectedType,
     ActionsStore,
+    initialRows,
+    initialColumns,
     LocalStore,
     SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
@@ -101,6 +105,9 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.spaceId = spaceId;
     this.query$ = observable(initialParams.query);
+
+    this.rows$ = computed(() => initialRows);
+    this.columns$ = computed(() => initialColumns);
 
     const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },

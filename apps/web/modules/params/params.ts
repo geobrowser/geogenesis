@@ -24,7 +24,7 @@ export function parseTripleQueryParameters(url: string): InitialTripleStoreParam
   };
 }
 
-export function parseEntityTableQueryParameters(url: string): InitialEntityTableStoreParams {
+export function parseEntityTableQueryFilterFromUrl(url: string): InitialEntityTableStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -43,6 +43,33 @@ export function parseEntityTableQueryParameters(url: string): InitialEntityTable
     query,
     pageNumber,
     typeId,
+    filterState: filterStateResult,
+  };
+}
+
+export function parseEntityTableQueryFilterFromParams(params: {
+  query?: string;
+  page?: string;
+  typeId?: string;
+}): InitialEntityTableStoreParams {
+  const filterStateResult = Object.entries(params)
+    .map(([key, value]) => {
+      if (key === 'query' || key === 'page' || key === 'typeId') return null; // filter out additional params
+      if (!value) return null;
+      return { field: key as FilterField, value };
+    })
+    .flatMap(x => (x ? [x] : [])); // filter out null values
+
+  // const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
+  //   const value = params[key];
+  //   if (!value) return acc;
+  //   return [...acc, { field: key as FilterField, value }];
+  // }, []);
+
+  return {
+    query: params.query ?? '',
+    pageNumber: Number(params.page ?? 0),
+    typeId: params.typeId ?? '',
     filterState: filterStateResult,
   };
 }

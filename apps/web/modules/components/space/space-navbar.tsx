@@ -1,6 +1,7 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Button } from '~/modules/design-system/button';
@@ -8,6 +9,7 @@ import { Spacer } from '~/modules/design-system/spacer';
 import { TabLink } from '~/modules/design-system/tab-link';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
+import { usePathname } from 'next/navigation';
 
 interface Props {
   spaceId: string;
@@ -42,21 +44,21 @@ const SpaceActions = ({ spaceId }: Props) => {
 };
 
 export const SpaceNavbar = ({ spaceId }: Props) => {
-  const { route, query } = useRouter();
+  const path = usePathname();
 
-  const tabEntitiesSelected = !route.includes('/triples');
-  const tabTriplesSelected = route.includes('/triples');
+  const tabEntitiesSelected = !path?.includes('/triples');
+  const tabTriplesSelected = path?.includes('/triples');
 
   const tabs = [
     {
       name: 'Entities',
-      href: `/space/${spaceId}`,
-      selected: tabEntitiesSelected,
+      href: `/space/${spaceId}/entities`,
+      selected: Boolean(tabEntitiesSelected),
     },
     {
       name: 'Triples',
-      href: `/space/${query.id}/triples`,
-      selected: tabTriplesSelected,
+      href: `/space/${spaceId}/triples`,
+      selected: Boolean(tabTriplesSelected),
     },
   ];
 
