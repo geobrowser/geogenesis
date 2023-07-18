@@ -10,7 +10,7 @@ import '../styles/styles.css';
 import '../styles/tiptap.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.ENV_URL!),
+  metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
   title: 'Geo Genesis',
   themeColor: [
     { media: '(prefers-color-scheme: dark)', color: '#FBFBFB' },
