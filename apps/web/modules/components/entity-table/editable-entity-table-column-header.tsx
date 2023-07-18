@@ -15,8 +15,8 @@ import { Column } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
 import { useEditEvents } from '../entity/edit-events';
 import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
-// import { Url } from '~/modules/design-system/icons/url';
-// import { Date } from '~/modules/design-system/icons/date';
+import { Url } from '~/modules/design-system/icons/url';
+import { Date } from '~/modules/design-system/icons/date';
 
 interface Props {
   column: Column;
@@ -139,30 +139,30 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
               onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
               disabled: false,
             },
-            // {
-            //   label: (
-            //     <div style={{ display: 'flex', alignItems: 'center' }}>
-            //       <Date />
-            //       <Spacer width={8} />
-            //       Date
-            //     </div>
-            //   ),
-            //   value: 'date',
-            //   onClick: () => onChangeTripleType(SYSTEM_IDS.DATE),
-            //   disabled: false,
-            // },
-            // {
-            //   label: (
-            //     <div style={{ display: 'flex', alignItems: 'center' }}>
-            //       <Url />
-            //       <Spacer width={8} />
-            //       Web URL
-            //     </div>
-            //   ),
-            //   value: 'url',
-            //   onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
-            //   disabled: false,
-            // },
+            {
+              label: (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Date />
+                  <Spacer width={8} />
+                  Date
+                </div>
+              ),
+              value: 'date',
+              onClick: () => onChangeTripleType(SYSTEM_IDS.DATE),
+              disabled: false,
+            },
+            {
+              label: (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Url />
+                  <Spacer width={8} />
+                  Web URL
+                </div>
+              ),
+              value: 'url',
+              onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
+              disabled: false,
+            },
           ]}
         />
       )}
