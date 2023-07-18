@@ -57,12 +57,6 @@ export function parseEntityTableQueryFilterFromParams(params: {
     })
     .flatMap(x => (x ? [x] : [])); // filter out null values
 
-  // const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-  //   const value = params[key];
-  //   if (!value) return acc;
-  //   return [...acc, { field: key as FilterField, value }];
-  // }, []);
-
   return {
     query: params.query ?? '',
     pageNumber: Number(params.page ?? 0),

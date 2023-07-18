@@ -35,8 +35,6 @@ const getData = async ({ params, searchParams }: Props) => {
   const config = Params.getConfigFromParams(searchParams, env);
   const storage = new StorageClient(config.ipfs);
 
-  console.log('initialparams', initialParams);
-
   const network = new NetworkData.Network(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
