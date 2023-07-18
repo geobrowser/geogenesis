@@ -67,7 +67,6 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
             {triple.value.value}
           </Text>
         );
-
       case 'image':
         return (
           <ImageZoom

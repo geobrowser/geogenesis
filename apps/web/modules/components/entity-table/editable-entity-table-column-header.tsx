@@ -13,6 +13,7 @@ import { Column } from '~/modules/types';
 import { valueTypes } from '~/modules/value-types';
 import { useEditEvents } from '../entity/edit-events';
 import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
+
 import { Url } from '~/modules/design-system/icons/url';
 import { Date } from '~/modules/design-system/icons/date';
 
@@ -161,6 +162,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
               onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
               disabled: false,
             },
+
           ]}
         />
       )}

@@ -9,7 +9,7 @@ import { Action, ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/modules/components/editor/editor';
 import { htmlToPlainText } from '~/modules/components/editor/editor-utils';
 import { ID } from '~/modules/id';
-import { MergedData, NetworkData } from '~/modules/io';
+import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as ITriple } from '~/modules/types';
 import { Value } from '~/modules/value';
@@ -82,10 +82,12 @@ interface IEntityStoreConfig {
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
   ActionsStore: ActionsStore;
+  LocalStore: LocalData.LocalStore;
 }
 
 export class EntityStore implements IEntityStore {
   private api: NetworkData.INetwork;
+  private LocalStore: LocalData.LocalStore;
   id: string;
   spaceId: string;
   triples$: ObservableComputed<ITriple[]>;
@@ -112,6 +114,7 @@ export class EntityStore implements IEntityStore {
     spaceId,
     id,
     ActionsStore,
+    LocalStore,
   }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
@@ -120,30 +123,14 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.blockIdsTriple$ = computed(() => {
-      const localBlockIdsForEntity = pipe(
-        ActionsStore.allActions$.get(),
-        actions => Action.squashChanges(actions),
-        actions => Triple.fromActions(actions, initialBlockIdsTriple ? [initialBlockIdsTriple] : []),
-        A.filter(t => t.entityId === id),
-        A.find(t => t.attributeId === SYSTEM_IDS.BLOCKS)
-      );
-
-      // Favor the local version of the blockIdsTriple if it exists
-      return localBlockIdsForEntity ?? null;
-    });
-
-    this.blockIds$ = computed(() => {
-      const blockIdsTriple = this.blockIdsTriple$.get();
-
-      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
-    });
+    this.LocalStore = LocalStore;
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
 
       return pipe(
         spaceActions,
+        actions => Action.squashChanges(actions),
         actions => Triple.fromActions(actions, initialTriples),
         A.filter(t => t.entityId === id),
         triples =>
@@ -154,6 +141,25 @@ export class EntityStore implements IEntityStore {
             triples
           )
       );
+    });
+
+    this.blockIdsTriple$ = computed(() => {
+      // We deeply track the specific blockIdsTriple for this entity. This is so the block editor
+      // does not re-render when other properties of the entity are changed.
+      const entityChanges = ActionsStore.actionsByEntityId$[id];
+
+      // @ts-expect-error legendstate's types do not like accessing a nested computed value in a
+      // record by id like this.
+      const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS]?.get();
+
+      // Favor the local version of the blockIdsTriple if it exists
+      return blocksIdTriple ?? initialBlockIdsTriple ?? null;
+    });
+
+    this.blockIds$ = computed(() => {
+      const blockIdsTriple = this.blockIdsTriple$.get();
+
+      return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
     });
 
     this.name$ = computed(() => {
@@ -277,7 +283,7 @@ export class EntityStore implements IEntityStore {
         ];
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
         const maybeRelationAttributeTypes = await Promise.all(
           attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
         );
@@ -445,7 +451,7 @@ export class EntityStore implements IEntityStore {
   We don't support changing types of blocks, so all we need to do is create a new block with the new type
   */
   createBlockTypeTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const entityName = this.nodeName(node);
 
     const blockTypeValue: EntityValue = getBlockTypeValue(node.type);
@@ -470,7 +476,7 @@ export class EntityStore implements IEntityStore {
   Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   */
   upsertBlockNameTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const entityName = this.nodeName(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
@@ -502,9 +508,10 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
   upsertBlockMarkdownTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isImageNode = node.type === 'image';
     const isTableNode = node.type === 'tableNode';
+    const isList = node.type === 'bulletList';
 
     if (isImageNode || isTableNode) {
       return null;
@@ -513,7 +520,13 @@ export class EntityStore implements IEntityStore {
     const nodeHTML = this.textNodeHTML(node);
 
     const entityName = this.nodeName(node);
-    const markdown = markdownConverter.makeMarkdown(nodeHTML);
+    let markdown = markdownConverter.makeMarkdown(nodeHTML);
+
+    //  Overrides Showdown's unwanted "consecutive list" behavior found in
+    //  `src/subParsers/makeMarkdown/list.js`
+    if (isList) {
+      markdown = markdown.replaceAll('\n<!-- -->\n', '');
+    }
 
     const triple = Triple.withId({
       space: this.spaceId,
@@ -551,7 +564,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating backlinks to the parent entity  */
   createParentEntityTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
 
     const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.PARENT_ENTITY });
 
@@ -571,7 +584,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
   createTableBlockMetadata = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isTableNode = node.type === 'tableNode';
     const rowTypeEntityId = node.attrs?.typeId;
     const rowTypeEntityName = node.attrs?.typeName;
@@ -630,7 +643,7 @@ export class EntityStore implements IEntityStore {
 
   /* Helper function for creating a new block image triple for IMAGE_BLOCKs only  */
   createBlockImageTriple = (node: JSONContent) => {
-    const blockEntityId = node.attrs?.id;
+    const blockEntityId = getNodeId(node);
     const isImageNode = node.type === 'image';
 
     if (!isImageNode || !node.attrs?.src) {
@@ -742,7 +755,7 @@ export class EntityStore implements IEntityStore {
       return isNonParagraph || isParagraphWithContent;
     });
 
-    const blockIds = populatedContent.map(node => node.attrs?.id);
+    const blockIds = populatedContent.map(node => getNodeId(node));
 
     batch(() => {
       this.upsertBlocksTriple(blockIds);
@@ -758,6 +771,9 @@ export class EntityStore implements IEntityStore {
     });
   };
 }
+
+// Returns the id of the first paragraph even if nested inside of a list
+const getNodeId = (node: JSONContent) => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
 
 const getBlockTypeValue = (nodeType?: string): EntityValue => {
   switch (nodeType) {

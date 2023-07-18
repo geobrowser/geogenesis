@@ -1,6 +1,6 @@
 import { useSelector } from '@legendapp/state/react';
 
-import { useActionsStoreContext } from './actions-store-provider';
+import { useActionsStoreInstance } from './actions-store-provider';
 
 /**
  * Hook to consume state/effects from the global ActionsStore.
@@ -13,6 +13,7 @@ export function useActionsStore(spaceId?: string) {
     actions$,
     allActions$,
     allSpacesWithActions$,
+    actionsByEntityId$,
     restore,
     publish,
     clear,
@@ -20,10 +21,11 @@ export function useActionsStore(spaceId?: string) {
     update,
     remove,
     deleteActions,
-  } = useActionsStoreContext();
+  } = useActionsStoreInstance();
   const actions = useSelector(actions$);
   const allActions = useSelector(allActions$);
   const allSpacesWithActions = useSelector(allSpacesWithActions$);
+  const actionsByEntityId = useSelector(actionsByEntityId$);
 
   if (!spaceId) {
     return {
@@ -31,6 +33,7 @@ export function useActionsStore(spaceId?: string) {
       actionsFromSpace: [],
       allActions,
       allSpacesWithActions,
+      actionsByEntityId,
       restore,
       publish,
       clear,
@@ -46,6 +49,7 @@ export function useActionsStore(spaceId?: string) {
     actionsFromSpace: actions[spaceId] ?? [],
     allActions,
     allSpacesWithActions,
+    actionsByEntityId,
     restore,
     publish,
     clear,

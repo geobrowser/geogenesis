@@ -5,7 +5,7 @@ import { ActionsStore } from '~/modules/action';
 import { SpaceStore } from '~/modules/spaces/space-store';
 import { Triple } from '~/modules/triple';
 import { Entity, EntityTable } from '..';
-import { MergedData, NetworkData } from '~/modules/io';
+import { LocalData, MergedData, NetworkData } from '~/modules/io';
 import { Column, EntityValue, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
@@ -36,11 +36,10 @@ interface IEntityTableStoreConfig {
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
-  initialRows: Row[];
   initialSelectedType: TripleType | null;
-  initialColumns: Column[];
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
+  LocalStore: LocalData.LocalStore;
 }
 
 export const DEFAULT_PAGE_SIZE = 50;
@@ -79,15 +78,15 @@ export class EntityTableStore implements IEntityTableStore {
   spaceId: string;
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
+  LocalStore: LocalData.LocalStore;
   abortController: AbortController = new AbortController();
 
   constructor({
     api,
     spaceId,
-    initialRows,
     initialSelectedType,
-    initialColumns,
     ActionsStore,
+    LocalStore,
     SpaceStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
@@ -95,11 +94,10 @@ export class EntityTableStore implements IEntityTableStore {
     this.api = api;
     this.ActionsStore = ActionsStore;
     this.SpaceStore = SpaceStore;
+    this.LocalStore = LocalStore;
     this.hydrated$ = observable(false);
-    this.rows$ = observable(initialRows);
     this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
-    this.columns$ = observable(initialColumns);
 
     this.spaceId = spaceId;
     this.query$ = observable(initialParams.query);
@@ -165,8 +163,8 @@ export class EntityTableStore implements IEntityTableStore {
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
-      return EntityTable.columnsFromActions(
-        this.ActionsStore.actions$.get()[spaceId],
+      return EntityTable.columnsFromLocalChanges(
+        this.LocalStore.triples$.get(),
         [],
         this.selectedType$.get()?.entityId
       );
@@ -174,8 +172,8 @@ export class EntityTableStore implements IEntityTableStore {
 
     this.columns$ = computed(() => {
       const { columns } = networkData$.get();
-      return EntityTable.columnsFromActions(
-        this.ActionsStore.actions$.get()[spaceId],
+      return EntityTable.columnsFromLocalChanges(
+        this.LocalStore.triples$.get(),
         columns,
         this.selectedType$.get()?.entityId
       );
@@ -205,9 +203,7 @@ export class EntityTableStore implements IEntityTableStore {
          * needs to render the columnSchema.
          */
         const changedEntitiesIdsFromAnotherType = pipe(
-          this.ActionsStore.actions$.get()[spaceId],
-          actions => Triple.fromActions(actions, []),
-          triples => Entity.entitiesFromTriples(triples),
+          this.LocalStore.entities$.get(),
           A.filter(e => e.types.some(t => t.id === this.selectedType$.get()?.entityId)),
           A.map(t => t.id)
         );
@@ -278,7 +274,7 @@ export class EntityTableStore implements IEntityTableStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore });
+        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
         const maybeRelationAttributeTypes = await Promise.all(
           columns.map(column => mergedStore.fetchEntity(column.id))
         );

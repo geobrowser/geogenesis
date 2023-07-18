@@ -20,7 +20,7 @@ export function ActionsStoreProvider({ children }: Props) {
   return <ActionsStoreContext.Provider value={store}>{children}</ActionsStoreContext.Provider>;
 }
 
-export function useActionsStoreContext() {
+export function useActionsStoreInstance() {
   const value = useContext(ActionsStoreContext);
 
   if (!value) {

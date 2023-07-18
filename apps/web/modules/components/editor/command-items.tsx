@@ -9,6 +9,7 @@ import { EditorH2 } from '~/modules/design-system/icons/editor-h2';
 import { EditorH3 } from '~/modules/design-system/icons/editor-h3';
 import { EditorTable } from '~/modules/design-system/icons/editor-table';
 import { EditorText } from '~/modules/design-system/icons/editor-text';
+import { EditorList } from '~/modules/design-system/icons/editor-list';
 import { EditorImage } from '~/modules/design-system/icons/editor-image';
 
 export interface CommandSuggestionItem {
@@ -28,8 +29,29 @@ export const tableCommandItem: CommandSuggestionItem = {
       .insertContent({
         type: 'tableNode',
         attrs: {
+          spaceId: props.spaceId,
           typeId: props.selectedType.entityId,
           typeName: props.selectedType.entityName,
+        },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
+export const textCommandItem: CommandSuggestionItem = {
+  icon: <EditorText />,
+  title: 'Text',
+  command: ({ editor, range, props }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent({
+        type: 'paragraph',
+        attrs: {
           spaceId: props.spaceId,
         },
       })
@@ -41,11 +63,19 @@ export const tableCommandItem: CommandSuggestionItem = {
 };
 
 export const commandItems: CommandSuggestionItem[] = [
+  // {
+  //   icon: <EditorText />,
+  //   title: 'Text',
+  //   command: ({ editor, range }) => {
+  //     editor.chain().focus().deleteRange(range).setParagraph().run();
+  //   },
+  // },
+  textCommandItem,
   {
-    icon: <EditorText />,
-    title: 'Text',
+    icon: <EditorList />,
+    title: 'List',
     command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setParagraph().run();
+      editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
   },
   {

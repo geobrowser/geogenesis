@@ -7,19 +7,25 @@ import Zoom from 'react-medium-image-zoom';
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
 
-const textareaStyles = cva('w-full resize-none bg-transparent m-0 p-0 placeholder:text-grey-02 focus:outline-none', {
-  variants: {
-    variant: {
-      mainPage: 'text-mainPage',
-      body: 'text-body',
-      tableCell: 'text-tableCell',
-      smallTitle: 'text-smallTitle',
+const textareaStyles = cva(
+  // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
+  // of -1px to compensate for this. This results in the correct line heights between both edit and
+  // browse modes.
+  'w-full resize-none bg-transparent m-0 p-0 placeholder:text-grey-02 focus:outline-none -mb-[1px]',
+  {
+    variants: {
+      variant: {
+        mainPage: 'text-mainPage',
+        body: 'text-body',
+        tableCell: 'text-tableCell',
+        smallTitle: 'text-smallTitle',
+      },
     },
-  },
-  defaultVariants: {
-    variant: 'body',
-  },
-});
+    defaultVariants: {
+      variant: 'body',
+    },
+  }
+);
 
 interface TableStringFieldProps {
   onBlur: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -54,11 +60,19 @@ interface PageStringFieldProps {
 }
 
 export function PageStringField({ ...props }: PageStringFieldProps) {
+  const [localValue, setLocalValue] = React.useState(props.value || '');
+
+  useEffect(() => {
+    // Update local value if value prop changes from outside the component
+    setLocalValue(props.value || '');
+  }, [props.value]);
+
   return (
     <Textarea
       {...props}
-      onChange={props.onChange}
-      value={props.value}
+      onBlur={props.onChange}
+      onChange={e => setLocalValue(e.currentTarget.value)}
+      value={localValue}
       className={textareaStyles({ variant: props.variant })}
     />
   );

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
-import { ObservableComputed, computed, observable } from '@legendapp/state';
-import { Action, ActionsStore, useActionsStoreContext } from '../../action';
+import { ObservableComputed, computed } from '@legendapp/state';
+import { Action, ActionsStore, useActionsStoreInstance } from '../../action';
 import { Entity as IEntity, Triple as ITriple } from '../../types';
 import { makeOptionalComputed } from '../../utils';
 import { pipe } from '@mobily/ts-belt';
@@ -11,12 +11,13 @@ import { useSelector } from '@legendapp/state/react';
 
 export class LocalStore {
   private store: ActionsStore;
-  triples$: ObservableComputed<ITriple[]> = observable([]);
-  unpublishedTriples$: ObservableComputed<ITriple[]> = observable([]);
-  entities$: ObservableComputed<IEntity[]> = observable([]);
-  unpublishedEntities$: ObservableComputed<IEntity[]> = observable([]);
-  spaces$: ObservableComputed<string[]> = observable<string[]>([]);
-  unpublishedSpaces$: ObservableComputed<string[]> = observable<string[]>([]);
+  triples$: ObservableComputed<ITriple[]>;
+  triplesByEntityId$: ObservableComputed<Record<string, ITriple[]>>;
+  unpublishedTriples$: ObservableComputed<ITriple[]>;
+  entities$: ObservableComputed<IEntity[]>;
+  unpublishedEntities$: ObservableComputed<IEntity[]>;
+  spaces$: ObservableComputed<string[]>;
+  unpublishedSpaces$: ObservableComputed<string[]>;
 
   constructor({ store }: { store: ActionsStore }) {
     this.store = store;
@@ -27,6 +28,19 @@ export class LocalStore {
         const allActions = this.store.allActions$.get();
         const triples = Triple.fromActions(allActions, []);
         return Triple.withLocalNames(allActions, triples);
+      })
+    );
+
+    this.triplesByEntityId$ = makeOptionalComputed(
+      {} as Record<string, ITriple[]>,
+      computed(() => {
+        const triples = this.triples$.get();
+
+        return triples.reduce<Record<string, ITriple[]>>((acc, triple) => {
+          if (!acc[triple.entityId]) acc[triple.entityId] = [];
+          acc[triple.entityId] = acc[triple.entityId].concat(triple);
+          return acc;
+        }, {});
       })
     );
 
@@ -79,7 +93,7 @@ interface Props {
 }
 
 export function LocalStoreProvider({ children }: Props) {
-  const ActionsStore = useActionsStoreContext();
+  const ActionsStore = useActionsStoreInstance();
 
   const store = useMemo(() => {
     return new LocalStore({ store: ActionsStore });
@@ -88,7 +102,7 @@ export function LocalStoreProvider({ children }: Props) {
   return <LocalStoreContext.Provider value={store}>{children}</LocalStoreContext.Provider>;
 }
 
-export function useLocalStoreContext() {
+export function useLocalStoreInstance() {
   const value = useContext(LocalStoreContext);
 
   if (!value) {
@@ -99,11 +113,19 @@ export function useLocalStoreContext() {
 }
 
 export function useLocalStore() {
-  const { entities$, triples$, spaces$, unpublishedEntities$, unpublishedSpaces$, unpublishedTriples$ } =
-    useLocalStoreContext();
+  const {
+    entities$,
+    triples$,
+    spaces$,
+    unpublishedEntities$,
+    unpublishedSpaces$,
+    unpublishedTriples$,
+    triplesByEntityId$,
+  } = useLocalStoreInstance();
 
   const entities = useSelector(entities$);
   const triples = useSelector(triples$);
+  const triplesByEntityId = useSelector(triplesByEntityId$);
   const unpublishedEntities = useSelector(unpublishedEntities$);
   const unpublishedTriples = useSelector(unpublishedTriples$);
   const spaces = useSelector(spaces$);
@@ -112,6 +134,7 @@ export function useLocalStore() {
   return {
     entities,
     triples,
+    triplesByEntityId,
     unpublishedEntities,
     unpublishedTriples,
     spaces,

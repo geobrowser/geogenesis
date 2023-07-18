@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { memo } from 'react';
 
-import { useActionsStoreContext } from '~/modules/action';
+import { useActionsStore } from '~/modules/action';
 import { Plus } from '~/modules/design-system/icons/plus';
 import { SelectedEntityType } from '~/modules/entity';
 import { useEditEvents } from '../entity/edit-events';
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: Props) {
-  const { update, create, remove } = useActionsStoreContext();
+  const { update, create, remove } = useActionsStore();
 
   const send = useEditEvents({
     context: {

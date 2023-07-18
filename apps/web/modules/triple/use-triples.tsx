@@ -1,7 +1,7 @@
 import { useSelector } from '@legendapp/state/react';
 
 import { FilterState } from '../types';
-import { useTripleStoreContext } from './triple-store-provider';
+import { useTripleStoreInstance } from './triple-store-provider';
 
 export const useTriples = () => {
   const {
@@ -17,7 +17,7 @@ export const useTriples = () => {
     filterState$,
     hydrated$,
     setFilterState,
-  } = useTripleStoreContext();
+  } = useTripleStoreInstance();
   const triples = useSelector(triples$);
   const pageNumber = useSelector(pageNumber$);
   const hasPreviousPage = useSelector(hasPreviousPage$);

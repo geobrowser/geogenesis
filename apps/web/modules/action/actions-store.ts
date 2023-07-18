@@ -9,15 +9,16 @@ import {
   DeleteTripleAction,
   EditTripleAction,
   ReviewState,
-  Triple as TripleType,
+  Triple as ITriple,
 } from '../types';
 import { makeOptionalComputed } from '../utils';
+import { Triple } from '../triple';
 
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
-  create(triple: TripleType): void;
-  update(triple: TripleType, oldTriple: TripleType): void;
-  remove(triple: TripleType): void;
+  create(triple: ITriple): void;
+  update(triple: ITriple, oldTriple: ITriple): void;
+  remove(triple: ITriple): void;
   deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
   publish(
     spaceId: string,
@@ -37,21 +38,28 @@ interface IActionsStoreConfig {
 export type SpaceId = string;
 export type SpaceActions = Record<SpaceId, ActionType[]>;
 
+export type EntityId = string;
+export type AttributeId = string;
+export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
+
 export class ActionsStore implements IActionsStore {
   private api: NetworkData.INetwork;
   actions$: Observable<SpaceActions>;
   allActions$;
   allSpacesWithActions$;
+  actionsByEntityId$;
 
   constructor({ api }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
 
     this.api = api;
     this.actions$ = actions;
+
     this.allActions$ = makeOptionalComputed(
       [],
       computed(() => Object.values(this.actions$.get()).flatMap(actions => actions) ?? [])
     );
+
     this.allSpacesWithActions$ = makeOptionalComputed(
       [],
       computed(
@@ -61,6 +69,35 @@ export class ActionsStore implements IActionsStore {
           ) ?? []
       )
     );
+
+    this.actionsByEntityId$ = computed(() => {
+      const actions = this.allActions$.get();
+
+      return actions.reduce<EntityActions>((acc, action) => {
+        const tripleFromAction = Triple.fromActions([action], [])[0];
+
+        if (!tripleFromAction) return acc;
+
+        switch (action.type) {
+          case 'createTriple':
+          case 'deleteTriple':
+            acc[action.entityId] = {
+              ...acc[action.entityId],
+              [action.attributeId]: tripleFromAction,
+            };
+
+            return acc;
+
+          case 'editTriple':
+            acc[action.after.entityId] = {
+              ...acc[action.after.entityId],
+              [action.after.attributeId]: tripleFromAction,
+            };
+
+            return acc;
+        }
+      }, {});
+    });
   }
 
   private addActions = (spaceId: string, actions: ActionType[]) => {
@@ -91,7 +128,7 @@ export class ActionsStore implements IActionsStore {
     this.actions$.set(newActions);
   };
 
-  create = (triple: TripleType) => {
+  create = (triple: ITriple) => {
     const action: CreateTripleAction = {
       ...triple,
       type: 'createTriple',
@@ -100,7 +137,7 @@ export class ActionsStore implements IActionsStore {
     this.addActions(triple.space, [action]);
   };
 
-  remove = (triple: TripleType) => {
+  remove = (triple: ITriple) => {
     const spaceId = triple.space;
 
     const actions: DeleteTripleAction = {
@@ -111,7 +148,7 @@ export class ActionsStore implements IActionsStore {
     this.addActions(spaceId, [actions]);
   };
 
-  update = (triple: TripleType, oldTriple: TripleType) => {
+  update = (triple: ITriple, oldTriple: ITriple) => {
     const action: EditTripleAction = {
       type: 'editTriple',
       before: {

@@ -197,9 +197,9 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
 
               {!autocomplete.isLoading && autocomplete.query && (
                 <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
-                  <p>
+                  <span>
                     {autocomplete.results.length} {pluralize('entity', autocomplete.results.length)} found
-                  </p>
+                  </span>
                   <div className="flex items-baseline gap-3">
                     {/* {!UserAgent.isMobile() && (
                       <p className="rounded-sm text-smallButton tabular-nums text-text">

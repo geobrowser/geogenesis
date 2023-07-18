@@ -3,34 +3,28 @@ import { useRouter } from 'next/router';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 
-import { useActionsStoreContext } from '~/modules/action';
-import { useSpaceStore } from '~/modules/spaces/space-store';
+import { useActionsStoreInstance } from '~/modules/action';
+import { useSpaceStoreInstance } from '~/modules/spaces/space-store';
 import { Params } from '../../params';
 import { Services } from '../../services';
-import { Column, Row, Triple } from '../../types';
+import { Triple } from '../../types';
 import { EntityTableStore } from './entity-table-store';
+import { LocalData } from '~/modules/io';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
-  initialRows: Row[];
   initialSelectedType: Triple | null;
-  initialColumns: Column[];
 }
 
-export function EntityTableStoreProvider({
-  spaceId,
-  children,
-  initialRows,
-  initialSelectedType,
-  initialColumns,
-}: Props) {
+export function EntityTableStoreProvider({ spaceId, children, initialSelectedType }: Props) {
   const { network } = Services.useServices();
   const router = useRouter();
-  const SpaceStore = useSpaceStore();
-  const ActionsStore = useActionsStoreContext();
+  const SpaceStore = useSpaceStoreInstance();
+  const ActionsStore = useActionsStoreInstance();
+  const LocalStore = LocalData.useLocalStoreInstance();
   const replace = useRef(router.replace);
   const urlRef = useRef(router.asPath);
 
@@ -42,13 +36,12 @@ export function EntityTableStoreProvider({
       api: network,
       spaceId,
       initialParams,
-      initialRows,
       initialSelectedType,
-      initialColumns,
       ActionsStore,
       SpaceStore,
+      LocalStore,
     });
-  }, [network, spaceId, initialRows, initialSelectedType, initialColumns, ActionsStore, SpaceStore]);
+  }, [network, spaceId, initialSelectedType, ActionsStore, SpaceStore, LocalStore]);
 
   const query = useSelector(store.query$);
   const pageNumber = useSelector(store.pageNumber$);
@@ -70,7 +63,7 @@ export function EntityTableStoreProvider({
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
 }
 
-export function useEntityTableStore() {
+export function useEntityTableStoreInstance() {
   const value = useContext(EntityTableStoreContext);
 
   if (!value) {

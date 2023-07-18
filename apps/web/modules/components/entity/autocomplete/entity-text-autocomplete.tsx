@@ -145,17 +145,15 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
                     <Dots />
                   </motion.span>
                 ) : (
-                  <motion.p
+                  <motion.span
                     key="entities found"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.1 }}
                   >
-                    <p>
-                      {results.length} {pluralize('entity', results.length)} found
-                    </p>
-                  </motion.p>
+                    {results.length} {pluralize('entity', results.length)} found
+                  </motion.span>
                 )}
               </AnimatePresence>
               <div className="flex items-baseline gap-3">

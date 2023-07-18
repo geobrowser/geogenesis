@@ -26,6 +26,8 @@
   float: left;
   height: 0;
   pointer-events: none;
+
+  @apply text-body;
 }
 
 /* Display a Placeholder only for the first line in an empty editor. */
@@ -83,4 +85,12 @@
 
 .ProseMirror .node-tableNode {
   @apply mt-8;
+}
+
+.ProseMirror ul {
+  @apply contents;
+}
+
+.ProseMirror ul li {
+  @apply ml-4 list-item list-disc;
 }
