@@ -46,7 +46,7 @@ export default async function CreateEntity({ params, searchParams }: Props) {
   return <Component {...props} />;
 }
 
-export const getData = async ({ params, searchParams }: Props) => {
+const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id as string;
   const typeId = searchParams.typeId as string | undefined;
   const filterId = searchParams.filterId as string | undefined;
