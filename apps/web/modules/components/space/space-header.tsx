@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Image from 'next/image';
+import Image from 'next/legacy/image';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { Text } from '~/modules/design-system/text';

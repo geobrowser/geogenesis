@@ -1,5 +1,5 @@
 import BoringAvatar from 'boring-avatars';
-import Image from 'next/image';
+import Image from 'next/legacy/image';
 
 interface Props {
   avatarUrl?: string | null;

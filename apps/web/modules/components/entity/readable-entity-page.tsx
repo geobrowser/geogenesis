@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
+import Image from 'next/legacy/image';
 import Link from 'next/link';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
