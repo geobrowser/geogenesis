@@ -166,7 +166,12 @@ export class ActionsStore implements IActionsStore {
     this.addActions(spaceId, [action]);
   };
 
-  clear = (spaceId: string) => {
+  clear = (spaceId?: string) => {
+    if (!spaceId) {
+      this.actions$.set({});
+      return;
+    }
+
     this.actions$.set({
       ...this.actions$.get(),
       [spaceId]: [],
