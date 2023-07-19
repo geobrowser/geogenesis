@@ -18,9 +18,14 @@
     "paths": {
       "~/*": ["./*"],
       "@geogenesis/*": ["../packages/*"]
-    }
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "types": ["@testing-library/jest-dom"],
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "next.config.ts"]
 }

@@ -1,51 +1,31 @@
-import * as React from 'react';
-import { useState } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { Analytics } from '@vercel/analytics/react';
-import type { AppProps } from 'next/app';
+'use client';
 
+import * as React from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useAccessControl } from '~/modules/auth/use-access-control';
-import { Navbar } from '~/modules/components/navbar/navbar';
-import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
-import { OnboardingDialog } from '~/modules/onboarding/dialog';
-import { Providers } from '~/modules/providers';
-import { Dialog } from '~/modules/search';
+import { ClientOnly } from '~/modules/components/client-only';
+import { Compare } from '~/modules/components/compare';
+import { FlowBar } from '~/modules/components/flow-bar';
 import { Main } from '~/modules/components/main';
+import { Navbar } from '~/modules/components/navbar/navbar';
+import { Review } from '~/modules/components/review';
+import { useDiff } from '~/modules/diff';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
+import { Toast } from '~/modules/hooks/use-toast';
+import { OnboardingDialog } from '~/modules/onboarding/dialog';
+import { Persistence } from '~/modules/persistence';
+import { Dialog } from '~/modules/search';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
-import { ClientOnly } from '~/modules/components/client-only';
-import { FlowBar } from '~/modules/components/flow-bar';
-import { Review } from '~/modules/components/review';
-import { Persistence } from '~/modules/persistence';
-import { useDiff } from '~/modules/diff';
-import { Toast } from '~/modules/hooks/use-toast';
+import { Analytics } from '@vercel/analytics/react';
 
-import 'react-medium-image-zoom/dist/styles.css';
-import '../styles/fonts.css';
-import '../styles/styles.css';
-import '../styles/tiptap.css';
-import { Compare } from '~/modules/components/compare';
-
-function Root(props: AppProps) {
-  return (
-    <div className="relative">
-      <Providers>
-        <Head>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-        </Head>
-        <App {...props} />
-      </Providers>
-    </div>
-  );
-}
-
-function App({ Component, pageProps }: AppProps) {
+export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { id: spaceId } = router.query as { id: string | undefined };
+  const params = useParams();
+  const spaceId: string | null | undefined = params?.id as string;
   const { setEditable, editable } = useEditable();
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = React.useState(false);
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
   // Ideally memoization happens in the useKeyboardShortcuts hook
@@ -87,9 +67,7 @@ function App({ Component, pageProps }: AppProps) {
           setOpen(false);
         }}
       />
-      <Main>
-        <Component {...pageProps} />
-      </Main>
+      <Main>{children}</Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <Toast />
@@ -102,5 +80,3 @@ function App({ Component, pageProps }: AppProps) {
     </>
   );
 }
-
-export default Root;

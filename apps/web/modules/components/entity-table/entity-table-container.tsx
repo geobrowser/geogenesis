@@ -1,3 +1,5 @@
+'use client';
+
 import { memo } from 'react';
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { Spacer } from '~/modules/design-system/spacer';
@@ -11,7 +13,7 @@ import { PageContainer, PageNumberContainer } from '../table/styles';
 import { NextButton, PageNumber, PreviousButton } from '../table/table-pagination';
 import { EntityInput } from './entity-input';
 import { EntityTable } from './entity-table';
-import { EntityTableErrorBoundary } from './entity-table-error-boundary';
+import { ErrorBoundary } from 'react-error-boundary';
 
 interface Props {
   spaceId: string;
@@ -32,7 +34,15 @@ export const EntityTableContainer = memo(function EntityTableContainer({
   const { editable } = useEditable();
 
   return (
-    <EntityTableErrorBoundary spaceId={spaceId} typeId={entityTableStore.selectedType?.entityId ?? ''}>
+    <ErrorBoundary
+      onError={error =>
+        console.error(
+          `Error in EntityTableErrorBoundary in space: ${spaceId}, typeId: ${entityTableStore.selectedType?.entityId}`,
+          error
+        )
+      }
+      fallback={<Text variant="mediumTitle">Something went wrong. Try refreshing the page.</Text>}
+    >
       <PageContainer>
         {showHeader && (
           <>
@@ -95,6 +105,6 @@ export const EntityTableContainer = memo(function EntityTableContainer({
           <EntityOthersToast />
         </SpacePresenceProvider>
       )}
-    </EntityTableErrorBoundary>
+    </ErrorBoundary>
   );
 });

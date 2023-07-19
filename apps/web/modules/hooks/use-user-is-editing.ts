@@ -1,3 +1,5 @@
+'use client';
+
 import { useAccessControl } from '../auth/use-access-control';
 import { useEditable } from '../stores/use-editable';
 

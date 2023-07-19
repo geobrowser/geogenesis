@@ -1,6 +1,8 @@
+'use client';
+
 import * as React from 'react';
 
-import { useRouter } from 'next/router';
+import { usePathname, useRouter } from 'next/navigation';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Context } from '~/modules/design-system/icons/context';
@@ -15,8 +17,9 @@ export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
   const { spaces } = useSpaces();
+  const path = usePathname();
 
-  const components = router.asPath.split('/');
+  const components = path?.split('/') ?? [];
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';

@@ -1,3 +1,5 @@
+'use client';
+
 import { useSelector } from '@legendapp/state/react';
 
 import { useActionsStoreInstance } from './actions-store-provider';

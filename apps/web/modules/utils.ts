@@ -1,6 +1,8 @@
 import { computed, ObservableComputed } from '@legendapp/state';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from './constants';
+import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE } from './constants';
+import { Entity } from './entity';
+import { Entity as IEntity } from './types';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {
@@ -139,7 +141,12 @@ export class GeoDate {
     return [4, 6, 9, 11].includes(month);
   }
 }
-// https://geobrowser.io/api/og?hash=
+
+// We rewrite the URL to use the geobrowser preview API in vercel.json.
+// This forces the image to be fetched with a file extension as a workaround
+// for some services not parsing images without a file extension. Looking at
+// you TWITTER.
+// https://geobrowser.io/preview/{hash}.png -> https://geobrowser.io/api/og?hash=
 export const getOpenGraphImageUrl = (value: string) => {
   if (value.startsWith('https://api.thegraph.com/ipfs')) {
     const hash = value.split('=')[1];
@@ -151,4 +158,19 @@ export const getOpenGraphImageUrl = (value: string) => {
   } else {
     return DEFAULT_OPENGRAPH_IMAGE;
   }
+};
+
+export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
+  const entityName = entity?.name ?? null;
+  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
+  const serverCoverUrl = Entity.cover(entity?.triples);
+  const imageUrl = serverAvatarUrl || serverCoverUrl || '';
+  const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
+  const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+
+  return {
+    entityName,
+    openGraphImageUrl,
+    description,
+  };
 };

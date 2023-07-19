@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import Image from '@tiptap/extension-image';

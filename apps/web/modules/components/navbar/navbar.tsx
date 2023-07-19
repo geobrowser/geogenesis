@@ -1,7 +1,9 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 
 import { ChevronRight } from '~/modules/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
@@ -17,9 +19,8 @@ interface Props {
 }
 
 export function Navbar({ onSearchClick }: Props) {
-  const router = useRouter();
-  const asPath = router.asPath;
-  const components = asPath.split('/');
+  const asPath = usePathname();
+  const components = asPath?.split('/') ?? [];
   const { spaces } = useSpaces();
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
@@ -61,10 +62,8 @@ export function Navbar({ onSearchClick }: Props) {
   return (
     <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
       <div className="flex items-center gap-8 md:gap-4">
-        <Link href="/spaces" passHref>
-          <a>
-            <GeoLogoLarge />
-          </a>
+        <Link href="/spaces">
+          <GeoLogoLarge />
         </Link>
         {!isHomePage && (
           <div className="flex items-center gap-2">

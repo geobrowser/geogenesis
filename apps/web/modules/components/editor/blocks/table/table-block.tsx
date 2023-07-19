@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
@@ -157,22 +159,21 @@ export function TableBlock({ spaceId }: Props) {
             trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
             className="max-w-[5.8rem] whitespace-nowrap"
           >
-            <Link href={NavUtils.toEntity(spaceId, blockEntity?.id ?? '')}>
-              <a className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg">
-                <Text variant="button" className="hover:!text-text">
-                  View data
-                </Text>
-              </a>
+            <Link
+              href={NavUtils.toEntity(spaceId, blockEntity?.id ?? '')}
+              className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            >
+              <Text variant="button" className="hover:!text-text">
+                View data
+              </Text>
             </Link>
           </Menu>
           <span>
             {isEditing && (
               <>
                 <Spacer width={12} />
-                <Link href={NavUtils.toCreateEntity(spaceId, typeId, filterId, filterValue)} passHref>
-                  <a>
-                    <SmallButton className="whitespace-nowrap">New entity</SmallButton>
-                  </a>
+                <Link href={NavUtils.toCreateEntity(spaceId, typeId, filterId, filterValue)}>
+                  <SmallButton className="whitespace-nowrap">New entity</SmallButton>
                 </Link>
               </>
             )}
@@ -329,10 +330,11 @@ export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId
                   Something went wrong. Make sure this table is configured correctly.
                 </p>
                 <Spacer height={12} />
-                <Link href={NavUtils.toEntity(spaceId, blockId ?? '')}>
-                  <a className="flex cursor-pointer items-center rounded-sm text-button text-grey-04 transition-colors duration-75 hover:text-text">
-                    View table block data
-                  </a>
+                <Link
+                  href={NavUtils.toEntity(spaceId, blockId ?? '')}
+                  className="flex cursor-pointer items-center rounded-sm text-button text-grey-04 transition-colors duration-75 hover:text-text"
+                >
+                  View table block data
                 </Link>
               </td>
             </tr>

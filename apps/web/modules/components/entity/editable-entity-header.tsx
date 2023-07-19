@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
 
@@ -15,7 +17,6 @@ import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
 import { PageStringField } from '../editable-fields/editable-fields';
-import { useHydrated } from '~/modules/hooks/use-hydrated';
 
 export function EditableHeading({
   spaceId,
@@ -90,18 +91,14 @@ export function EditableHeading({
             {isEditing && (
               <div className="flex shrink-0 items-center gap-2">
                 {(isAdmin || isEditorController) && (
-                  <Link href={NavUtils.toAdmin(spaceId)} passHref>
-                    <a>
-                      <Button className="shrink" variant="secondary">
-                        Access control
-                      </Button>
-                    </a>
+                  <Link href={NavUtils.toAdmin(spaceId)}>
+                    <Button className="shrink" variant="secondary">
+                      Access control
+                    </Button>
                   </Link>
                 )}
-                <Link href={NavUtils.toCreateEntity(spaceId)} passHref>
-                  <a>
-                    <Button icon="create">New entity</Button>
-                  </a>
+                <Link href={NavUtils.toCreateEntity(spaceId)}>
+                  <Button icon="create">New entity</Button>
                 </Link>
               </div>
             )}

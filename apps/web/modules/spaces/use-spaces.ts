@@ -1,3 +1,5 @@
+'use client';
+
 import { useSelector } from '@legendapp/state/react';
 
 import { useSpaceStoreInstance } from './space-store';

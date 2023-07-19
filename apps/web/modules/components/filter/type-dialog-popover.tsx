@@ -1,3 +1,5 @@
+'use client';
+
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
