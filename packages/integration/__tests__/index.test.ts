@@ -1,5 +1,6 @@
 import pRetry from 'p-retry'
 import { expect, it } from 'vitest'
+import { fetch } from 'node-fetch'
 
 type NodeError = {
   errno: number
