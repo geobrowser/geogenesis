@@ -27,7 +27,7 @@ async function checkRunning() {
 
     json = await response.json()
   } catch (e) {
-    if ((e as { cause: NodeError }).cause.code === 'ECONNREFUSED') {
+    if ((e as { cause: NodeError })?.cause?.code === 'ECONNREFUSED') {
       throw new Error(`Connection refused by '${url}'`)
     }
 
