@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv'
 
+import '@nomiclabs/hardhat-ethers'
 import '@nomiclabs/hardhat-etherscan'
 import '@nomiclabs/hardhat-waffle'
 import '@openzeppelin/hardhat-upgrades'

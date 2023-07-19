@@ -2,27 +2,34 @@
 pragma solidity ^0.8.14;
 
 import "./Space.sol";
+import "./ISpaceFactory.sol";
 
-contract SpaceFactory {
-   string version = "0.0.1";
+// @TODO: How do we handle newer implementations of Space?
+contract SpaceFactory is ISpaceFactory {
    Space[] public spaces;
 
   /**
     Q: Do we need to rate-limit this somehow?
   */
-   function CreateSpace() public returns (address) {
+   function createSpace() public returns (address newSpace) {
+    // @TODO: Every one of these needs to a BeaconProxy that points
+    // to the PERMISSIONED_SPACE_BEACON_ADDRESS
      Space space = new Space();
-     space.initialize();
-     spaces.push(space);
+     
+     emit SelfAddress(address(this));
+     emit OriginalOwner(space.owner());
+    //  space.transferOwnership(address(this));
+    //  space.configureRoles();
+    //  spaces.push(space);
 
      // @TODO: emit event
 
      // @TODO: Do we need to return the address of the new space
      // or the whole contract?
-     return address(space);
+     return address(this);
    }
 
-    function getVersion() public virtual view returns (string memory) {
-      return version;
+    function version() public pure returns (string memory) {
+      return "0.0.1";
     }
   }

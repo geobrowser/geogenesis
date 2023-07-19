@@ -13,7 +13,10 @@ module.exports = {
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    ecmaVersion: 12,
+    parserOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    },
   },
   rules: {
     'prettier/prettier': 'error',
@@ -21,6 +24,12 @@ module.exports = {
       'error',
       { ignores: ['modules'] },
     ],
+    '@typescript-eslint/no-non-null-assertion': 0,
+    '@typescript-eslint/no-unused-vars': 1,
+    '@typescript-eslint/no-empty-interface': 0,
+    'no-undef': 1,
+    'no-unused-vars': 1,
+    'node/no-missing-import': 0,
     camelcase: 'off',
   },
   // index relies on build artifacts that may not exist during linting

@@ -1,9 +1,8 @@
-/* eslint-disable node/no-missing-import */
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { Contract } from 'ethers'
 import { ethers, upgrades } from 'hardhat'
 
-import { Space, PermissionlessSpace } from '../build/types'
+import { Space, PermissionlessSpace, SpaceFactory } from '../build/types'
 
 type DeployOptions = {
   debug?: true
@@ -62,7 +61,7 @@ export async function upgradeToSpaceV2(beacon: Contract) {
 
 export async function deployPermissionlessSpaceBeacon(
   options: DeployOptions = {}
-): Promise<Contract> {
+) {
   const { signer, debug } = options
   const PermissionlessSpace = await ethers.getContractFactory(
     'PermissionlessSpace'
@@ -117,5 +116,64 @@ export async function deployPermissionlessSpaceInstance(
 
 export async function upgradeToPermissionlessSpaceV2(beacon: Contract) {
   const SpaceV2 = await ethers.getContractFactory('FakeSpaceV2')
+  await upgrades.upgradeBeacon(beacon.address, SpaceV2)
+}
+
+export async function deploySpaceFactoryBeacon(options: DeployOptions = {}) {
+  const { signer, debug } = options
+  const SpaceFactory = await ethers.getContractFactory('SpaceFactory')
+
+  const spaceFactoryBeacon = await upgrades.deployBeacon(SpaceFactory)
+
+  if (debug) {
+    console.log(
+      `Deploying SpaceFactory Beacon at ${spaceFactoryBeacon.address}...`
+    )
+  }
+
+  const deployed = await spaceFactoryBeacon.deployed()
+
+  if (debug) {
+    console.log(`Deployed SpaceFactory Beacon at ${spaceFactoryBeacon.address}`)
+  }
+
+  return signer ? deployed.connect(signer) : deployed
+}
+
+export async function deploySpaceFactoryInstance(
+  spaceFactoryBeaconInstance: Contract,
+  options: DeployOptions = {}
+) {
+  const { signer, debug } = options
+  const SpaceFactory = await ethers.getContractFactory('SpaceFactory')
+  const space = (await upgrades.deployBeaconProxy(
+    spaceFactoryBeaconInstance,
+    SpaceFactory
+  )) as SpaceFactory
+
+  if (debug) {
+    console.log(`Deploying SpaceFactory Instance at ${space.address}...`)
+  }
+
+  const deployed = await space.deployed()
+
+  if (debug) {
+    console.log(`Deployed SpaceFactory Instance at ${space.address}`)
+  }
+
+  return signer ? deployed.connect(signer) : deployed
+}
+
+/**
+ * Generic function for upgrading a beacon implementation to a new one.
+ *
+ * @param beacon The contract instance of the beacon to upgrade
+ * @param implementation The name of the contract implementation to upgrade the beacon to
+ */
+export async function upgradeBeaconImplementation(
+  beacon: Contract,
+  implementation: 'Space' | 'PermissionlessSpace' | 'SpaceFactory'
+) {
+  const SpaceV2 = await ethers.getContractFactory(implementation)
   await upgrades.upgradeBeacon(beacon.address, SpaceV2)
 }
