@@ -119,51 +119,6 @@ export async function upgradeToPermissionlessSpaceV2(beacon: Contract) {
   await upgrades.upgradeBeacon(beacon.address, SpaceV2)
 }
 
-export async function deploySpaceFactoryBeacon(options: DeployOptions = {}) {
-  const { signer, debug } = options
-  const SpaceFactory = await ethers.getContractFactory('SpaceFactory')
-
-  const spaceFactoryBeacon = await upgrades.deployBeacon(SpaceFactory)
-
-  if (debug) {
-    console.log(
-      `Deploying SpaceFactory Beacon at ${spaceFactoryBeacon.address}...`
-    )
-  }
-
-  const deployed = await spaceFactoryBeacon.deployed()
-
-  if (debug) {
-    console.log(`Deployed SpaceFactory Beacon at ${spaceFactoryBeacon.address}`)
-  }
-
-  return signer ? deployed.connect(signer) : deployed
-}
-
-export async function deploySpaceFactoryInstance(
-  spaceFactoryBeaconInstance: Contract,
-  options: DeployOptions = {}
-) {
-  const { signer, debug } = options
-  const SpaceFactory = await ethers.getContractFactory('SpaceFactory')
-  const space = (await upgrades.deployBeaconProxy(
-    spaceFactoryBeaconInstance,
-    SpaceFactory
-  )) as SpaceFactory
-
-  if (debug) {
-    console.log(`Deploying SpaceFactory Instance at ${space.address}...`)
-  }
-
-  const deployed = await space.deployed()
-
-  if (debug) {
-    console.log(`Deployed SpaceFactory Instance at ${space.address}`)
-  }
-
-  return signer ? deployed.connect(signer) : deployed
-}
-
 /**
  * Generic function for upgrading a beacon implementation to a new one.
  *
@@ -172,7 +127,7 @@ export async function deploySpaceFactoryInstance(
  */
 export async function upgradeBeaconImplementation(
   beacon: Contract,
-  implementation: 'Space' | 'PermissionlessSpace' | 'SpaceFactory'
+  implementation: 'Space' | 'PermissionlessSpace'
 ) {
   const SpaceV2 = await ethers.getContractFactory(implementation)
   await upgrades.upgradeBeacon(beacon.address, SpaceV2)
