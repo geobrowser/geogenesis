@@ -8,7 +8,6 @@ import {
   deployPermissionlessSpaceInstance,
   deploySpaceBeacon,
   deploySpaceInstance,
-  upgradeToPermissionlessSpaceV2,
   upgradeToSpaceV2,
 } from '../src/deploy'
 import { addEntry } from '../src/entry'

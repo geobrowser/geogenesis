@@ -24,4 +24,4 @@ Each deployed contract for each type is tied to a [Beacon Proxy](https://docs.op
 
 There's a beacon for all instances of a `Space`, and a beacon for all instances of a `PermissionlessSpace`.
 
-[Read more about proxy upgrades here](https://docs.openzeppelin.com/upgrades-plugins/1.x/proxies)
+[Read more about proxy upgrades here](https://docs.openzeppelin.com/upgrades-plugins/1.x/proxies) and [about beacon proxies here](https://docs.openzeppelin.com/upgrades-plugins/1.x/hardhat-upgrades#beacon-proxies)
