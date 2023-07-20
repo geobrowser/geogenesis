@@ -3,13 +3,23 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { MockNetworkData } from '~/modules/io';
-import TriplesPage from '~/pages/space/[id]/triples';
+import { Component } from '~/app/space/[id]/triples/component';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <Component
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTriples={[]}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+          }}
+        />
       </Providers>
     );
 
@@ -20,7 +30,17 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <Component
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTriples={[]}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+          }}
+        />
       </Providers>
     );
 
@@ -30,11 +50,16 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <TriplesPage
+        <Component
           spaceId="1"
           spaceName="Banana"
           spaceImage={null}
           initialTriples={[MockNetworkData.makeStubTriple('Alice')]}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+          }}
         />
       </Providers>
     );
@@ -48,7 +73,17 @@ describe('Space page', () => {
 
     render(
       <Providers>
-        <TriplesPage spaceId="1" spaceName="Banana" spaceImage={null} initialTriples={[]} />
+        <Component
+          spaceId="1"
+          spaceName="Banana"
+          spaceImage={null}
+          initialTriples={[]}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+          }}
+        />
       </Providers>
     );
 

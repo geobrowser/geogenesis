@@ -1,11 +1,13 @@
+'use client';
+
 import * as React from 'react';
 import { FormEvent } from 'react';
-import { useRouter } from 'next/router';
 import { Space, Space__factory } from '@geogenesis/contracts';
 import { useSigner } from 'wagmi';
 
 import { useAccessControl } from '~/modules/auth/use-access-control';
 import { useSpaces } from '~/modules/spaces/use-spaces';
+import { useParams } from 'next/navigation';
 
 type RoleType = 'editor' | 'admin' | 'editorController';
 
@@ -22,8 +24,9 @@ const getRole = (contract: Space, roleType: RoleType): Promise<string> => {
 
 export default function AccessControl() {
   const store = useSpaces();
-  const router = useRouter();
-  const { id: spaceId } = router.query as { id: string };
+  const params = useParams();
+  const spaceId = params?.['id'] as string | undefined;
+
   const { isAdmin, isEditorController } = useAccessControl(spaceId);
   const { data: signer } = useSigner();
 
@@ -32,7 +35,7 @@ export default function AccessControl() {
     const formData = new FormData(e.currentTarget);
     const address = formData.get('address');
 
-    if (signer) {
+    if (signer && spaceId) {
       const contract = Space__factory.connect(spaceId, signer);
       const roleToChange = await getRole(contract, type);
       const tx = await contract.grantRole(roleToChange, address as string);
@@ -41,7 +44,7 @@ export default function AccessControl() {
   };
 
   const onRevoke = async (address: string, type: RoleType) => {
-    if (signer) {
+    if (signer && spaceId) {
       const contract = Space__factory.connect(spaceId, signer);
       const roleToChange = await getRole(contract, type);
       const tx = await contract.revokeRole(roleToChange, address);

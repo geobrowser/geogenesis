@@ -1,5 +1,7 @@
+'use client';
+
 import * as React from 'react';
-import Image from 'next/image';
+import Image from 'next/legacy/image';
 import Link from 'next/link';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
@@ -162,42 +164,45 @@ function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: Re
   const [isHovered, hover] = React.useState(false);
 
   return (
-    <Link href={NavUtils.toEntity(referencedByEntity.space.id, referencedByEntity.id)} passHref>
-      <a onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} className="relative">
-        <div className="flex items-center justify-between">
-          <Text as="h3" variant="metadataMedium">
-            {referencedByEntity.name}
-          </Text>
-          {isHovered && (
-            <div className="absolute right-0 animate-fade-in transition-opacity duration-100">
-              <RightArrowDiagonal color="grey-04" />
-            </div>
+    <Link
+      href={NavUtils.toEntity(referencedByEntity.space.id, referencedByEntity.id)}
+      onMouseEnter={() => hover(true)}
+      onMouseLeave={() => hover(false)}
+      className="relative"
+    >
+      <div className="flex items-center justify-between">
+        <Text as="h3" variant="metadataMedium">
+          {referencedByEntity.name}
+        </Text>
+        {isHovered && (
+          <div className="absolute right-0 animate-fade-in transition-opacity duration-100">
+            <RightArrowDiagonal color="grey-04" />
+          </div>
+        )}
+      </div>
+      <Spacer height={8} />
+      <div className="flex items-center">
+        <div className="flex items-center gap-1">
+          {referencedByEntity.space.image && (
+            <span className="relative h-3 w-3 overflow-hidden rounded-xs">
+              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} alt="" />
+            </span>
           )}
+          <Text as="p" variant="footnoteMedium">
+            {referencedByEntity.space.name}
+          </Text>
         </div>
-        <Spacer height={8} />
-        <div className="flex items-center">
-          <div className="flex items-center gap-1">
-            {referencedByEntity.space.image && (
-              <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-                <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} />
-              </span>
-            )}
-            <Text as="p" variant="footnoteMedium">
-              {referencedByEntity.space.name}
-            </Text>
-          </div>
-          <Spacer width={8} />
-          <span className="-rotate-90">
-            <ChevronDownSmall />
-          </span>
-          <Spacer width={8} />
-          <div className="flex items-center gap-1">
-            {referencedByEntity.types.map(type => (
-              <Tag key={type.id}>{type.name}</Tag>
-            ))}
-          </div>
+        <Spacer width={8} />
+        <span className="-rotate-90">
+          <ChevronDownSmall />
+        </span>
+        <Spacer width={8} />
+        <div className="flex items-center gap-1">
+          {referencedByEntity.types.map(type => (
+            <Tag key={type.id}>{type.name}</Tag>
+          ))}
         </div>
-      </a>
+      </div>
     </Link>
   );
 }

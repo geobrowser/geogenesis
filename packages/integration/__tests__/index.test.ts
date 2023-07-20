@@ -1,5 +1,6 @@
 import pRetry from 'p-retry'
 import { expect, it } from 'vitest'
+import { fetch } from 'node-fetch'
 
 type NodeError = {
   errno: number
@@ -27,7 +28,7 @@ async function checkRunning() {
 
     json = await response.json()
   } catch (e) {
-    if ((e as { cause: NodeError }).cause.code === 'ECONNREFUSED') {
+    if ((e as { cause: NodeError })?.cause?.code === 'ECONNREFUSED') {
       throw new Error(`Connection refused by '${url}'`)
     }
 

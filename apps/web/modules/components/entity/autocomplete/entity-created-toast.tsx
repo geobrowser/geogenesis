@@ -1,4 +1,6 @@
-import { useRouter } from 'next/router';
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { SmallButton } from '~/modules/design-system/button';
 import { Icon } from '~/modules/design-system/icon';
 import { useToast } from '~/modules/hooks/use-toast';

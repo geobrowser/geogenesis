@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { Command } from 'cmdk';
 import { SYSTEM_IDS } from '@geogenesis/ids';

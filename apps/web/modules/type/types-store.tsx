@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { ObservableComputed, computed } from '@legendapp/state';
 import { ActionsStore, useActionsStoreInstance } from '../action';

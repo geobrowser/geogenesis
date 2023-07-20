@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import Link from 'next/link';
 
@@ -34,10 +36,8 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
               <SquareButton onClick={toggleExpanded} icon={isExpanded ? 'contractSmall' : 'expandSmall'} />
             )}
             {isLinkable && href && (
-              <Link href={href} passHref>
-                <a>
-                  <SquareButton icon="rightArrowLongSmall" />
-                </a>
+              <Link href={href}>
+                <SquareButton icon="rightArrowLongSmall" />
               </Link>
             )}
           </div>

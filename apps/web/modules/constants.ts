@@ -10,3 +10,6 @@ export const ROOT_SPACE_IMAGE =
   'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmU3TRxyXGKbgCFPFVddJmRnxHQ6ojnppumU3zpPUjJ4WK';
 
 export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-social-image-v2.png';
+
+export const DEFAULT_OPENGRAPH_DESCRIPTION =
+  "Browse and organize the world's public knowledge and information in a decentralized way.";

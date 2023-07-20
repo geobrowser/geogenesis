@@ -1,30 +1,27 @@
-import { AppConfig, AppEnv, Config } from '~/modules/config';
-import { FilterField, FilterState } from '~/modules/types';
+import { AppConfig, Config } from '~/modules/config';
+import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/modules/types';
 import { InitialTripleStoreParams } from '~/modules/triple';
 import { InitialEntityTableStoreParams } from '~/modules/entity';
 
 export const ENV_PARAM_NAME = 'env';
 
-export function parseTripleQueryParameters(url: string): InitialTripleStoreParams {
-  const params = new URLSearchParams(url.split('?')[1]);
-  const query = params.get('query') || '';
-  const pageNumber = Number(params.get('page') || 0);
-  const activeAdvancedFilterKeys = [...params.keys()].filter(key => key !== 'query' && key !== 'page');
-
-  const filterStateResult = activeAdvancedFilterKeys.reduce<FilterState>((acc, key) => {
-    const value = params.get(key);
-    if (!value) return acc;
-    return [...acc, { field: key as FilterField, value }];
-  }, []);
+export function parseTripleQueryFilterFromParams(params: { query?: string; page?: string }): InitialTripleStoreParams {
+  const filterStateResult = Object.entries(params)
+    .map(([key, value]) => {
+      if (key === 'query' || key === 'page' || key === 'typeId') return null; // filter out additional params
+      if (!value) return null;
+      return { field: key as FilterField, value };
+    })
+    .flatMap(x => (x ? [x] : [])); // filter out null values
 
   return {
-    query,
-    pageNumber,
+    query: params.query ?? '',
+    pageNumber: Number(params.page ?? 0),
     filterState: filterStateResult,
   };
 }
 
-export function parseEntityTableQueryParameters(url: string): InitialEntityTableStoreParams {
+export function parseEntityTableQueryFilterFromUrl(url: string): InitialEntityTableStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
   const query = params.get('query') || '';
   const pageNumber = Number(params.get('page') || 0);
@@ -43,6 +40,27 @@ export function parseEntityTableQueryParameters(url: string): InitialEntityTable
     query,
     pageNumber,
     typeId,
+    filterState: filterStateResult,
+  };
+}
+
+export function parseEntityTableQueryFilterFromParams(params: {
+  query?: string;
+  page?: string;
+  typeId?: string;
+}): InitialEntityTableStoreParams {
+  const filterStateResult = Object.entries(params)
+    .map(([key, value]) => {
+      if (key === 'query' || key === 'page' || key === 'typeId') return null; // filter out additional params
+      if (!value) return null;
+      return { field: key as FilterField, value };
+    })
+    .flatMap(x => (x ? [x] : [])); // filter out null values
+
+  return {
+    query: params.query ?? '',
+    pageNumber: Number(params.page ?? 0),
+    typeId: params.typeId ?? '',
     filterState: filterStateResult,
   };
 }
@@ -119,6 +137,19 @@ export function getConfigFromUrl(url: string, cookie: string | undefined): AppCo
   const env: AppEnv = params.get('env') as AppEnv;
 
   if (!(cookie && cookie in Config.options) && !(env in Config.options)) {
+    console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);
+    return Config.options[Config.DEFAULT_ENV];
+  }
+
+  // Default to the environment if it's set, otherwise use the cookie
+  const config = Config.options[env ?? cookie];
+  return Config.getConfig(config.chainId);
+}
+
+export function getConfigFromParams(searchParams: ServerSideEnvParams, cookie: string | undefined): AppConfig {
+  const env: AppEnv | undefined = searchParams['env'] as AppEnv;
+
+  if (!(cookie && cookie in Config.options) && !(env && env in Config.options)) {
     console.log(`Invalid environment "${env}", defaulting to ${Config.DEFAULT_ENV}`);
     return Config.options[Config.DEFAULT_ENV];
   }

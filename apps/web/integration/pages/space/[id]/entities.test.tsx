@@ -2,13 +2,13 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Providers } from '~/modules/providers';
 import { MockNetworkData } from '~/modules/io';
-import SpacePage from '~/pages/space/[id]/entities';
+import { Component } from '~/app/space/[id]/entities/component';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
       <Providers>
-        <SpacePage
+        <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
@@ -16,6 +16,12 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+            typeId: '',
+          }}
         />
       </Providers>
     );
@@ -27,7 +33,7 @@ describe('Space page', () => {
   it('Should render empty table', () => {
     render(
       <Providers>
-        <SpacePage
+        <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
@@ -35,6 +41,12 @@ describe('Space page', () => {
           initialColumns={[]}
           initialRows={[]}
           initialSelectedType={null}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+            typeId: '',
+          }}
         />
       </Providers>
     );
@@ -45,7 +57,7 @@ describe('Space page', () => {
   it('Should render non-empty table', () => {
     render(
       <Providers>
-        <SpacePage
+        <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
           spaceImage={null}
@@ -61,6 +73,12 @@ describe('Space page', () => {
             },
           ]}
           initialSelectedType={null}
+          initialParams={{
+            filterState: [],
+            pageNumber: 0,
+            query: '',
+            typeId: '',
+          }}
         />
       </Providers>
     );

@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 
 export function useDebouncedValue<T>(value: T, delay = 200): T {

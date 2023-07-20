@@ -1,4 +1,4 @@
-export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';
+import { AppEnv } from '../types';
 
 export type SupportedChainId = '137' | '1337' | '80001' | '31337';
 

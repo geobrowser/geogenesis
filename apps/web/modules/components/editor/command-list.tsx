@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import cx from 'classnames';

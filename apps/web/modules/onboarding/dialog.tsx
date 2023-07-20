@@ -1,3 +1,5 @@
+'use client';
+
 import { observer } from '@legendapp/state/react';
 import { Command } from 'cmdk';
 import BoringAvatar from 'boring-avatars';
