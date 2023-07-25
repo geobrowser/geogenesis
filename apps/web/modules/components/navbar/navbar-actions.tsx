@@ -1,97 +1,38 @@
 import * as React from 'react';
-import cx from 'classnames';
 import { useAccount } from 'wagmi';
 
-import { Dropdown } from '~/modules/design-system/dropdown';
-import { Edit } from '~/modules/design-system/icons/edit';
-import { Eye } from '~/modules/design-system/icons/eye';
-import { Spacer } from '~/modules/design-system/spacer';
-import { useAccessControl } from '~/modules/auth/use-access-control';
-import { useEditable } from '~/modules/stores/use-editable';
-import { ColorName } from '~/modules/design-system/theme/colors';
 import { GeoConnectButton } from '~/modules/wallet';
-import { textColors } from '~/modules/design-system/theme/colors';
+import { Avatar } from '~/modules/design-system/avatar';
+import { Menu } from '~/modules/design-system/menu';
 
-type LabelRowProps = React.ComponentPropsWithoutRef<'div'> & {
-  color: ColorName;
-};
-
-const LabelRow = ({ color, className = '', ...rest }: LabelRowProps) => (
-  <div className={cx(textColors[color], 'flex items-center', className)} {...rest} />
-);
-
-type DropdownOptionValue = 'browse-mode' | 'edit-mode' | 'connect-wallet';
-
-type DropdownOption = {
-  label: React.ReactNode;
-  sublabel?: string;
-  value: DropdownOptionValue;
-  disabled: boolean;
-  onClick: () => void;
-};
-
-function getEditSublabel(isEditor: boolean, address?: string) {
-  if (address && isEditor) return undefined;
-  if (!address) return 'Connect wallet to edit';
-  return 'You don’t have edit access';
-}
-
-interface Props {
-  spaceId: string;
-}
-
-export function NavbarActions({ spaceId }: Props) {
-  const { isEditor } = useAccessControl(spaceId);
+export function NavbarActions() {
+  const [open, onOpenChange] = React.useState(false);
   const { address } = useAccount();
-  const { setEditable, editable } = useEditable();
 
   if (!address) {
     return <GeoConnectButton />;
   }
 
-  const options: DropdownOption[] = [
-    {
-      label: (
-        <LabelRow color={!editable ? 'text' : 'grey-04'}>
-          <Eye />
-          <Spacer width={8} />
-          Browse mode
-        </LabelRow>
-      ),
-      value: 'browse-mode',
-      disabled: false,
-      onClick: () => {
-        setEditable(false);
-      },
-    },
-    {
-      label: (
-        <LabelRow color={editable ? 'text' : 'grey-04'}>
-          <Edit />
-          <Spacer width={8} />
-          Edit mode
-        </LabelRow>
-      ),
-      sublabel: getEditSublabel(isEditor, address),
-      value: 'edit-mode',
-      disabled: !isEditor,
-      onClick: () => {
-        if (isEditor) setEditable(true);
-      },
-    },
-    {
-      label: <GeoConnectButton />,
-      value: 'connect-wallet',
-      disabled: false,
-      onClick: () => {
-        //
-      },
-    },
-  ];
-
   return (
     <div className="flex items-center gap-4">
-      <Dropdown trigger={editable ? 'Edit mode' : 'Browse mode'} options={options} />
+      <Menu
+        trigger={<Avatar value={address} size={28} />}
+        open={open}
+        onOpenChange={onOpenChange}
+        className="w-[165px]"
+      >
+        <AvatarMenuItem>
+          <GeoConnectButton />
+        </AvatarMenuItem>
+      </Menu>
+    </div>
+  );
+}
+
+function AvatarMenuItem({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex select-none items-center justify-between bg-white py-2 px-3 text-button text-grey-04 hover:bg-bg hover:text-text hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04">
+      {children}
     </div>
   );
 }

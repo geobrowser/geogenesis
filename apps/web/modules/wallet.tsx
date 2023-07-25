@@ -107,10 +107,10 @@ export function GeoConnectButton() {
               onClick={isConnected ? () => disconnect() : show}
               className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0 text-ctaPrimary"
             >
-              {isConnected ? <DisconnectWallet /> : <Wallet />}
+              <DisconnectWallet />
               <Spacer width={8} />
               <Text color="ctaPrimary" variant="button">
-                {isConnected ? 'Disconnect' : 'Connect'}
+                Disconnect
               </Text>
             </button>
           );

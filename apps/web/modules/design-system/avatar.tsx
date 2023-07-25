@@ -5,12 +5,13 @@ interface Props {
   avatarUrl?: string | null;
   value?: string;
   alt?: string;
+  size?: number;
 }
 
-export const Avatar = ({ value, avatarUrl, alt = '' }: Props) => {
+export const Avatar = ({ value, avatarUrl, alt = '', size = 12 }: Props) => {
   return avatarUrl ? (
     <Image objectFit="cover" layout="fill" src={avatarUrl} alt={alt} />
   ) : (
-    <BoringAvatar size={12} square={true} variant="pixel" name={value} />
+    <BoringAvatar size={size} variant="pixel" name={value} />
   );
 };

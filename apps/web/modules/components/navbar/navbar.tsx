@@ -33,7 +33,7 @@ export function Navbar({ onSearchClick }: Props) {
   const getActiveLink = () => `/space/${urlComponents[1] ?? ''}`;
 
   return (
-    <nav className="flex w-full items-center justify-between gap-1 border-b border-divider py-1 px-4 md:py-3 md:px-4">
+    <nav className="flex h-11 w-full items-center justify-between gap-1 border-b border-divider py-1 px-4">
       <div className="flex items-center gap-8 md:gap-4">
         <Link href="/spaces">
           <GeoLogoLarge />
@@ -58,7 +58,7 @@ export function Navbar({ onSearchClick }: Props) {
         </button>
         <div className="flex items-center sm:hidden">
           <Spacer width={16} />
-          <NavbarActions spaceId={urlComponents?.[1] ?? ''} />
+          <NavbarActions />
         </div>
       </div>
     </nav>
