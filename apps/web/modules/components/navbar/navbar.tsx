@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A } from '@mobily/ts-belt';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
 
@@ -59,7 +58,7 @@ export function Navbar({ onSearchClick }: Props) {
         </button>
         <div className="flex items-center sm:hidden">
           <Spacer width={16} />
-          <NavbarActions spaceId={urlComponents?.[2]?.split('?')[0] ?? ''} />
+          <NavbarActions spaceId={urlComponents?.[1] ?? ''} />
         </div>
       </div>
     </nav>
