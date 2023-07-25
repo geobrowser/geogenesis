@@ -32,17 +32,22 @@ export function titleCase(string: string): string {
 export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
-  toEntity: (spaceId: string, entityId: string) => `/space/${spaceId}/${entityId}`,
-  toCreateEntity: (spaceId: string, typeId?: string | null, filterId?: string | null, filterValue?: string | null) => {
+  toEntity: (
+    spaceId: string,
+    newEntityId: string,
+    typeId?: string | null,
+    filterId?: string | null,
+    filterValue?: string | null
+  ) => {
     if (typeId && filterId && filterValue) {
-      return `/space/${spaceId}/create-entity?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
     }
 
     if (typeId) {
-      return `/space/${spaceId}/create-entity?typeId=${typeId}`;
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
     }
 
-    return `/space/${spaceId}/create-entity`;
+    return `/space/${spaceId}/${newEntityId}`;
   },
 };
 

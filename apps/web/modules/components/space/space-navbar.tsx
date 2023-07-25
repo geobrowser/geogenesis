@@ -10,6 +10,7 @@ import { TabLink } from '~/modules/design-system/tab-link';
 import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { usePathname } from 'next/navigation';
+import { ID } from '~/modules/id';
 
 interface Props {
   spaceId: string;
@@ -32,7 +33,7 @@ const SpaceActions = ({ spaceId }: Props) => {
           {isEditor && (
             <>
               <Spacer width={12} />
-              <Link href={NavUtils.toCreateEntity(spaceId)}>
+              <Link href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
                 <Button icon="create">New entity</Button>
               </Link>
             </>

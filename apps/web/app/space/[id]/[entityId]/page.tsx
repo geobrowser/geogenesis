@@ -17,7 +17,11 @@ import { redirect } from 'next/navigation';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: ServerSideEnvParams;
+  searchParams: ServerSideEnvParams & {
+    typeId?: string;
+    filterId?: string;
+    filterValue?: string;
+  };
 }
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
@@ -59,8 +63,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function EntityPage({ params, searchParams }: Props) {
   const props = await getData(params.id, params.entityId, searchParams);
+  const filterId = searchParams.filterId ?? null;
+  const filterValue = searchParams.filterValue ?? null;
+  const typeId = searchParams.typeId ?? null;
 
-  return <Component {...props} />;
+  return <Component {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />;
 }
 
 const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
