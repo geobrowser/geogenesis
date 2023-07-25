@@ -27,6 +27,7 @@ import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
 import { useSpaces } from '~/modules/spaces/use-spaces';
+import { ID } from '~/modules/id';
 
 interface Props {
   spaceId: string;
@@ -172,7 +173,7 @@ export function TableBlock({ spaceId }: Props) {
             {isEditing && (
               <>
                 <Spacer width={12} />
-                <Link href={NavUtils.toCreateEntity(spaceId, typeId, filterId, filterValue)}>
+                <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filterId, filterValue)}>
                   <SmallButton className="whitespace-nowrap">New entity</SmallButton>
                 </Link>
               </>

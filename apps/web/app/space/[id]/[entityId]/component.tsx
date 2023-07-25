@@ -29,6 +29,11 @@ interface Props {
 
   spaceTypes: Triple[];
   space: Space | null;
+
+  // Sets schema and type values based url params
+  typeId: string | null;
+  filterId: string | null;
+  filterValue: string | null;
 }
 
 export function Component(props: Props) {
