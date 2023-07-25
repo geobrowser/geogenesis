@@ -8,7 +8,6 @@ import { publicProvider } from 'wagmi/providers/public';
 
 import { Config } from './config';
 import { Spacer } from './design-system/spacer';
-import { Text } from './design-system/text';
 import { ClientOnly } from './components/client-only';
 import { Wallet } from './design-system/icons/wallet';
 import { DisconnectWallet } from './design-system/icons/disconnect-wallet';
@@ -105,13 +104,11 @@ export function GeoConnectButton() {
             // We're using an anonymous function for disconnect to appease the TS gods.
             <button
               onClick={isConnected ? () => disconnect() : show}
-              className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0 text-ctaPrimary"
+              className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
             >
               <DisconnectWallet />
               <Spacer width={8} />
-              <Text color="ctaPrimary" variant="button">
-                Disconnect
-              </Text>
+              <p className="text-button">Disconnect</p>
             </button>
           );
         }}
