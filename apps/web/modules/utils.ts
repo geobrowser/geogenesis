@@ -174,3 +174,27 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
     description,
   };
 };
+
+// Get the image path from an IPFS hash
+export const getImagePath = (value: string) => {
+  if (!value) {
+    return '';
+    // If the value starts with `http`, it already includes the IPFS gateway path
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
+    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH ?? 'https://api.thegraph.com/ipfs/api/v0/cat?arg='}${value}`;
+  }
+};
+
+// Get the IPFS hash from an image path
+export const getImageHash = (value: string) => {
+  const searchParams = new URLSearchParams(value) as any;
+
+  if (searchParams.has('arg')) {
+    return searchParams.arg as string;
+    // If the value does not contain an arg query parameter, it already is a hash
+  } else {
+    return value;
+  }
+};

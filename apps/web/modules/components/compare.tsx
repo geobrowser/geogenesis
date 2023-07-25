@@ -20,7 +20,7 @@ import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
 import { SlideUp } from './slide-up/slide-up';
 import { Avatar } from '../design-system/avatar';
 import { Entity } from '../entity';
-import { formatShortAddress } from '../utils';
+import { formatShortAddress, getImagePath } from '~/modules/utils';
 import { Action } from '../action';
 import { INetwork } from '../io/data-source/network';
 import { DateTimeDiff } from './review';
@@ -440,7 +440,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={before} className="rounded" />
+                  <img src={getImagePath(before)} className="rounded" />
                 </span>
               )}
             </div>
@@ -449,7 +449,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={after} className="rounded" />
+                  <img src={getImagePath(after)} className="rounded" />
                 </span>
               )}
             </div>
@@ -665,7 +665,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
               {/* @TODO: When can this be object? */}
               {typeof before !== 'object' && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={before} className="rounded" />
+                  <img src={getImagePath(before)} className="rounded" />
                 </span>
               )}
             </div>
@@ -676,7 +676,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
               {/* @TODO: When can this be object? */}
               {typeof after !== 'object' && (
                 <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={after} className="rounded" />
+                  <img src={getImagePath(after)} className="rounded" />
                 </span>
               )}
             </div>

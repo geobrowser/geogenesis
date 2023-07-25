@@ -3,6 +3,7 @@ import { Editor, Range } from '@tiptap/core';
 
 import { Config } from '~/modules/config';
 import { NetworkData } from '~/modules/io';
+import { getImageHash } from '~/modules/utils';
 import { StorageClient } from '~/modules/services/storage';
 import { EditorH1 } from '~/modules/design-system/icons/editor-h1';
 import { EditorH2 } from '~/modules/design-system/icons/editor-h2';

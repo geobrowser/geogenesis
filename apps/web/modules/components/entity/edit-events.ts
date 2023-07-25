@@ -7,7 +7,7 @@ import { EntityStore } from '~/modules/entity';
 import { ID } from '~/modules/id';
 import { Triple } from '~/modules/triple';
 import { ImageValue, Triple as TripleType, TripleValueType } from '~/modules/types';
-import { groupBy } from '~/modules/utils';
+import { groupBy, getImageHash } from '~/modules/utils';
 import { Value } from '~/modules/value';
 import { valueTypeNames, valueTypes } from '~/modules/value-types';
 
@@ -487,7 +487,7 @@ const listener =
             value: {
               type: 'image',
               id: ID.createValueId(),
-              value: imageSrc,
+              value: getImageHash(imageSrc),
             },
           })
         );
@@ -610,7 +610,7 @@ const listener =
 
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
-        const newValue: ImageValue = { ...triple.value, type: 'image', value: imageSrc };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: getImageHash(imageSrc) };
 
         return update(
           Triple.ensureStableId({
