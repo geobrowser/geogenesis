@@ -175,26 +175,40 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   };
 };
 
-// Get the image path from an IPFS hash
-export const getImagePath = (value: string) => {
-  if (!value) {
-    return '';
-    // If the value starts with `http`, it already includes the IPFS gateway path
-  } else if (value.startsWith('http')) {
-    return value;
+// Get the image hash from an image path
+export const getImageHash = (value: string) => {
+  // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
+  if (value.includes('?arg=')) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    const [_prefix, hash] = value.split('?arg=');
+    return hash as string;
+  } else if (value.includes('://')) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+    const [_protocol, hash] = value.split('://');
+    return hash as string;
+    // If the value does not contain an arg query parameter or protocol, it already is a hash
   } else {
-    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH ?? 'https://api.thegraph.com/ipfs/api/v0/cat?arg='}${value}`;
+    return value;
   }
 };
 
-// Get the IPFS hash from an image path
-export const getImageHash = (value: string) => {
-  const splitArgs = value.split('?arg=');
-
-  if (splitArgs.length > 1) {
-    return splitArgs[1] as string;
-    // If the value does not contain an arg query parameter, it already is a hash
-  } else {
+// Get the image path from an image triple value
+export const getImagePath = (value: string) => {
+  // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
+  if (value.startsWith('http')) {
     return value;
+  } else if (value.startsWith('ipfs://')) {
+    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+  } else {
+    return '';
+  }
+};
+
+// Get the image triple value from an image path
+export const getImageValue = (value: string) => {
+  if (value.includes('ipfs') && value.includes('?arg=')) {
+    return `ipfs://${getImageHash(value)}`;
+  } else {
+    return '';
   }
 };

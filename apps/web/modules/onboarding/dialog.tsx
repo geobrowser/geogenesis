@@ -13,7 +13,7 @@ import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Button, SquareButton } from '../design-system/button';
 import { Text } from '../design-system/text';
 import { Services } from '../services';
-import { formatShortAddress, getImageHash, getImagePath } from '~/modules/utils';
+import { formatShortAddress, getImagePath, getImageValue } from '~/modules/utils';
 import { useOnboarding } from './use-onboarding';
 
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
@@ -204,8 +204,8 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await network.uploadFile(file);
-      const hash = getImageHash(ipfsUri);
-      setAvatar(hash);
+      const imageValue = getImageValue(ipfsUri);
+      setAvatar(imageValue);
     }
   };
 
