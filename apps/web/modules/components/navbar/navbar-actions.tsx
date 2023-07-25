@@ -45,6 +45,10 @@ export function NavbarActions({ spaceId }: Props) {
   const { address } = useAccount();
   const { setEditable, editable } = useEditable();
 
+  if (!address) {
+    return <GeoConnectButton />;
+  }
+
   const options: DropdownOption[] = [
     {
       label: (
@@ -85,5 +89,9 @@ export function NavbarActions({ spaceId }: Props) {
     },
   ];
 
-  return <Dropdown trigger={editable ? 'Edit mode' : 'Browse mode'} options={options} />;
+  return (
+    <div className="flex items-center gap-4">
+      <Dropdown trigger={editable ? 'Edit mode' : 'Browse mode'} options={options} />
+    </div>
+  );
 }

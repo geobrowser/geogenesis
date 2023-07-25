@@ -12,6 +12,7 @@ import { Text } from './design-system/text';
 import { ClientOnly } from './components/client-only';
 import { Wallet } from './design-system/icons/wallet';
 import { DisconnectWallet } from './design-system/icons/disconnect-wallet';
+import { Button } from './design-system/button';
 
 const LOCAL_CHAIN: Chain = {
   id: Number(Config.options.development.chainId),
@@ -91,6 +92,15 @@ export function GeoConnectButton() {
     <ClientOnly>
       <ConnectKitButton.Custom>
         {({ show, isConnected }) => {
+          if (!isConnected) {
+            return (
+              <Button onClick={show} variant="secondary">
+                <Wallet />
+                Connect
+              </Button>
+            );
+          }
+
           return (
             // We're using an anonymous function for disconnect to appease the TS gods.
             <button
@@ -100,7 +110,7 @@ export function GeoConnectButton() {
               {isConnected ? <DisconnectWallet /> : <Wallet />}
               <Spacer width={8} />
               <Text color="ctaPrimary" variant="button">
-                {isConnected ? 'Disconnect wallet' : 'Connect wallet'}
+                {isConnected ? 'Disconnect' : 'Connect'}
               </Text>
             </button>
           );
