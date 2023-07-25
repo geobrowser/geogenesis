@@ -189,10 +189,10 @@ export const getImagePath = (value: string) => {
 
 // Get the IPFS hash from an image path
 export const getImageHash = (value: string) => {
-  const searchParams = new URLSearchParams(value) as any;
+  const splitArgs = value.split('?arg=');
 
-  if (searchParams.has('arg')) {
-    return searchParams.arg as string;
+  if (splitArgs.length > 1) {
+    return splitArgs[1] as string;
     // If the value does not contain an arg query parameter, it already is a hash
   } else {
     return value;
