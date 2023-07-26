@@ -179,3 +179,35 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
     description,
   };
 };
+
+// Get the image hash from an image path
+// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> HASH
+// e.g., ipfs://HASH -> HASH
+export const getImageHash = (value: string) => {
+  // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
+  if (value.includes('?arg=')) {
+    const [, hash] = value.split('?arg=');
+    return hash as string;
+  } else if (value.includes('://')) {
+    const [, hash] = value.split('://');
+    return hash as string;
+    // If the value does not contain an arg query parameter or protocol prefix, it already is a hash
+  } else {
+    return value;
+  }
+};
+
+// Get the image URL from an image triple value
+// this allows us to render images on the front-end based on a raw triple value
+// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH
+export const getImagePath = (value: string) => {
+  // Add the IPFS gateway path for images with the ipfs:// protocol
+  if (value.startsWith('ipfs://')) {
+    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
+  } else if (value.startsWith('http')) {
+    return value;
+  } else {
+    return '';
+  }
+};

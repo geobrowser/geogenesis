@@ -13,7 +13,8 @@ import { GeoLogoLarge } from '~/modules/design-system/icons/geo-logo-large';
 import { Button, SquareButton } from '../design-system/button';
 import { Text } from '../design-system/text';
 import { Services } from '../services';
-import { formatShortAddress } from '../utils';
+import { Value } from '~/modules/value';
+import { formatShortAddress, getImagePath } from '~/modules/utils';
 import { useOnboarding } from './use-onboarding';
 
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
@@ -192,7 +193,7 @@ function StepName({ onNext, name, setName }: StepNameProps) {
 type StepAvatarProps = {
   onNext: () => void;
   avatar: string;
-  setAvatar: (file: string) => void;
+  setAvatar: (hash: string) => void;
   name: string;
   address: string;
 };
@@ -204,7 +205,8 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await network.uploadFile(file);
-      setAvatar(ipfsUri);
+      const imageValue = Value.toImageValue(ipfsUri);
+      setAvatar(imageValue);
     }
   };
 
@@ -219,7 +221,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
             <div
               className="rounded border-8 border-black bg-cover bg-center"
               style={{
-                backgroundImage: `url(${avatar})`,
+                backgroundImage: `url(${getImagePath(avatar)})`,
                 height: 154,
                 width: 154,
               }}

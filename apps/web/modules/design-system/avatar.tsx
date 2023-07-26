@@ -2,6 +2,8 @@ import BoringAvatar from 'boring-avatars';
 import Image from 'next/legacy/image';
 import { colors } from './theme/colors';
 
+import { getImagePath } from '~/modules/utils';
+
 interface Props {
   avatarUrl?: string | null;
   value?: string;
@@ -11,7 +13,7 @@ interface Props {
 
 export const Avatar = ({ value, avatarUrl, alt = '', size = 12 }: Props) => {
   return avatarUrl ? (
-    <Image objectFit="cover" layout="fill" src={avatarUrl} alt={alt} />
+    <Image objectFit="cover" layout="fill" src={getImagePath(avatarUrl)} alt={alt} />
   ) : (
     <BoringAvatar
       size={size}
