@@ -12,6 +12,7 @@ import { Services } from '~/modules/services';
 import { useEditable } from '~/modules/stores/use-editable';
 import { EyeSmall } from '~/modules/design-system/icons/eye-small';
 import { BulkEdit } from '~/modules/design-system/icons/bulk-edit';
+import { NotificationEmpty } from '~/modules/design-system/icons/notification-empty';
 
 function useUserProfile(address?: string) {
   const { network } = Services.useServices();
@@ -51,6 +52,18 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="w-[165px]"
       >
+        <AvatarMenuItem>
+          <div className="flex items-center gap-2">
+            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+            <p className="text-button">Personal Space</p>
+          </div>
+        </AvatarMenuItem>
+        <AvatarMenuItem>
+          <div className="flex items-center gap-2">
+            <NotificationEmpty />
+            <p className="text-button">Notifications</p>
+          </div>
+        </AvatarMenuItem>
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>
