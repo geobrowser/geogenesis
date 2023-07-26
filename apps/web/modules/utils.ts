@@ -194,7 +194,7 @@ export const getImageHash = (value: string) => {
 
 // Get the image URL from an image triple value
 // this allows us to render images on the front-end based on a raw triple value
-// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=
+// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
