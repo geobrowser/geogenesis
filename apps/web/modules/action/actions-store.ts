@@ -214,7 +214,7 @@ export class ActionsStore implements IActionsStore {
       onChangePublishState('publish-complete');
       await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
     } catch (e) {
-      console.error(e);
+      console.error('Error during publishing', e);
       onChangePublishState('idle');
       return;
     }
