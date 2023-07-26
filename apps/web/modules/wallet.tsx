@@ -101,7 +101,7 @@ export function GeoConnectButton() {
         return (
           // We're using an anonymous function for disconnect to appease the TS gods.
           <button
-            onClick={isConnected ? () => disconnect() : show}
+            onClick={() => disconnect()}
             className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
           >
             <DisconnectWallet />
