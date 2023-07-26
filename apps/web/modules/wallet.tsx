@@ -8,7 +8,6 @@ import { publicProvider } from 'wagmi/providers/public';
 
 import { Config } from './config';
 import { Spacer } from './design-system/spacer';
-import { ClientOnly } from './components/client-only';
 import { Wallet } from './design-system/icons/wallet';
 import { DisconnectWallet } from './design-system/icons/disconnect-wallet';
 import { Button } from './design-system/button';
@@ -88,31 +87,29 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
 
   return (
-    <ClientOnly>
-      <ConnectKitButton.Custom>
-        {({ show, isConnected }) => {
-          if (!isConnected) {
-            return (
-              <Button onClick={show} variant="secondary">
-                <Wallet />
-                Connect
-              </Button>
-            );
-          }
-
+    <ConnectKitButton.Custom>
+      {({ show, isConnected }) => {
+        if (!isConnected) {
           return (
-            // We're using an anonymous function for disconnect to appease the TS gods.
-            <button
-              onClick={isConnected ? () => disconnect() : show}
-              className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
-            >
-              <DisconnectWallet />
-              <Spacer width={8} />
-              <p className="text-button">Disconnect</p>
-            </button>
+            <Button onClick={show} variant="secondary">
+              <Wallet />
+              Connect
+            </Button>
           );
-        }}
-      </ConnectKitButton.Custom>
-    </ClientOnly>
+        }
+
+        return (
+          // We're using an anonymous function for disconnect to appease the TS gods.
+          <button
+            onClick={isConnected ? () => disconnect() : show}
+            className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
+          >
+            <DisconnectWallet />
+            <Spacer width={8} />
+            <p className="text-button">Disconnect</p>
+          </button>
+        );
+      }}
+    </ConnectKitButton.Custom>
   );
 }
