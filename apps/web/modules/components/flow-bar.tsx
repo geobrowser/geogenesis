@@ -72,11 +72,11 @@ const flowVariants = {
     y: custom ? '0px' : '4px',
     transition: {
       type: 'spring',
-      duration: 0.5,
+      duration: 0.15,
       bounce: 0,
-      delay: custom ? 0.5 : 0,
+      delay: custom ? 0.15 : 0,
     },
   }),
 };
 
-const transition = { type: 'spring', duration: 0.5, bounce: 0 };
+const transition = { type: 'spring', duration: 0.15, bounce: 0 };
