@@ -28,7 +28,7 @@ import { Entity } from '../entity';
 import { createFiltersFromGraphQLString } from './editor/blocks/sdk/table';
 import { INetwork } from '../io/data-source/network';
 import { SlideUp } from './slide-up/slide-up';
-import { GeoDate } from '~/modules/utils';
+import { GeoDate, getImagePath } from '~/modules/utils';
 import { Minus } from '~/modules/design-system/icons/minus';
 import { Spacer } from '~/modules/design-system/spacer';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '../types';
@@ -406,7 +406,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
             <div>
               {before && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={before} className="rounded" />
+                  <img src={getImagePath(before)} className="rounded" />
                 </span>
               )}
             </div>
@@ -415,7 +415,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
             <div>
               {after && (
                 <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={after} className="rounded" />
+                  <img src={getImagePath(after)} className="rounded" />
                 </span>
               )}
             </div>
@@ -682,7 +682,7 @@ const ChangedAttribute = ({
             <div>
               {typeof before !== 'object' && (
                 <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={before} className="rounded" />
+                  <img src={getImagePath(before)} className="rounded" />
                 </span>
               )}
             </div>
@@ -696,7 +696,7 @@ const ChangedAttribute = ({
             <div>
               {typeof after !== 'object' && (
                 <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={after} className="rounded" />
+                  <img src={getImagePath(after)} className="rounded" />
                 </span>
               )}
             </div>

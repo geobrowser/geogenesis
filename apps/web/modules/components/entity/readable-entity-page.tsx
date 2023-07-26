@@ -9,7 +9,7 @@ import { LinkableChip } from '~/modules/design-system/chip';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
 import { Triple } from '~/modules/types';
-import { groupBy, NavUtils } from '~/modules/utils';
+import { groupBy, NavUtils, getImagePath } from '~/modules/utils';
 import { ImageZoom } from '../editable-fields/editable-fields';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { ReferencedByEntity } from './types';
@@ -185,7 +185,7 @@ function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: Re
         <div className="flex items-center gap-1">
           {referencedByEntity.space.image && (
             <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-              <Image layout="fill" objectFit="cover" src={referencedByEntity.space.image} alt="" />
+              <Image layout="fill" objectFit="cover" src={getImagePath(referencedByEntity.space.image)} alt="" />
             </span>
           )}
           <Text as="p" variant="footnoteMedium">

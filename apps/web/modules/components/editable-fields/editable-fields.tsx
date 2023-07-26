@@ -8,6 +8,7 @@ import Zoom from 'react-medium-image-zoom';
 
 import { SmallButton, SquareButton } from '~/modules/design-system/button';
 import { Services } from '~/modules/services';
+import { getImagePath } from '~/modules/utils';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
@@ -108,7 +109,7 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={imageSrc} className="h-full rounded object-cover" />
+        <img src={getImagePath(imageSrc)} className="h-full rounded object-cover" />
       </div>
     </Zoom>
   );

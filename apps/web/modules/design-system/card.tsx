@@ -6,7 +6,7 @@ import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import { Text } from '~/modules/design-system/text';
-import { NavUtils } from '../utils';
+import { NavUtils, getImagePath } from '~/modules/utils';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
 interface Props {
@@ -32,7 +32,7 @@ export function Card({ spaceId, name = spaceId, image = 'https://via.placeholder
       {image && (
         <div className="relative aspect-video w-full object-cover transition-all duration-150 ease-in-out">
           <Image
-            src={image}
+            src={getImagePath(image)}
             alt={`Cover image for ${name}`}
             className="transition-all duration-150 ease-in-out group-hover:scale-105"
             objectFit="cover"
