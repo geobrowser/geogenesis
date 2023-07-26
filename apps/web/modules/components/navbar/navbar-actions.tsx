@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAccount } from 'wagmi';
-import { motion } from 'framer-motion';
+import { AnimationControls, motion, useAnimation } from 'framer-motion';
 
 import { GeoConnectButton } from '~/modules/wallet';
 import { Avatar } from '~/modules/design-system/avatar';
@@ -14,6 +14,8 @@ import { EyeSmall } from '~/modules/design-system/icons/eye-small';
 import { BulkEdit } from '~/modules/design-system/icons/bulk-edit';
 import { NotificationEmpty } from '~/modules/design-system/icons/notification-empty';
 import { cva } from 'class-variance-authority';
+import { useAccessControl } from '~/modules/auth/use-access-control';
+import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
 
 function useUserProfile(address?: string) {
   const { network } = Services.useServices();
@@ -30,7 +32,11 @@ function useUserProfile(address?: string) {
   return data ? data[1] : null;
 }
 
-export function NavbarActions() {
+interface Props {
+  spaceId?: string;
+}
+
+export function NavbarActions({ spaceId }: Props) {
   const [open, onOpenChange] = React.useState(false);
 
   const { address } = useAccount();
@@ -42,7 +48,7 @@ export function NavbarActions() {
 
   return (
     <div className="flex items-center gap-4">
-      <ModeToggle />
+      <ModeToggle spaceId={spaceId} />
 
       <Menu
         trigger={
@@ -106,25 +112,70 @@ function AvatarMenuItem({
   );
 }
 
-function ModeToggle() {
+const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
+
+const variants = {
+  shake: {
+    x: shake,
+    transition: {
+      duration: 0.15,
+      type: 'spring',
+      bounce: 0,
+    },
+  },
+  toggle: {
+    transition: {
+      duration: 0.15,
+      type: 'spring',
+      bounce: 0,
+    },
+  },
+};
+
+function ModeToggle({ spaceId }: Props) {
   // @TODO: This should only be toggle-able if they have edit access
   // @TODO: Animation when they don't have edit access
-  const { editable, setEditable } = useEditable();
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
+  const { setEditable, editable } = useEditable();
+  const controls = useAnimation();
+  const isUserEditing = isEditor && editable;
+
+  // Toggle edit mode when ⌘ + e is pressed
+  const memoizedShortcuts = React.useMemo(
+    () => [
+      // Toggle edit mode when ⌘ + e is pressed
+      {
+        key: 'e',
+        callback: () => {
+          if (isEditor || isAdmin || isEditorController) setEditable(!editable);
+          else controls.start('shake');
+        },
+      },
+    ],
+    [editable, isEditor, isAdmin, isEditorController, setEditable, controls]
+  );
+
+  useKeyboardShortcuts(memoizedShortcuts);
+
+  const onToggle = () => {
+    if (!isEditor && !editable) {
+      controls.start('shake');
+    }
+
+    if (isEditor) setEditable(!editable);
+  };
 
   return (
-    <button
-      onClick={() => setEditable(!editable)}
-      className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
-    >
+    <button onClick={onToggle} className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1">
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && <AnimatedTogglePill />}
-        <motion.div className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}>
+        {!isUserEditing && <AnimatedTogglePill controls={controls} />}
+        <motion.div className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}>
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && <AnimatedTogglePill />}
-        <motion.div className={`z-10 transition-colors duration-300 ${editable ? 'text-text' : 'text-grey-03'}`}>
+        {isUserEditing && <AnimatedTogglePill controls={controls} />}
+        <motion.div className={`z-10 transition-colors duration-300 ${isUserEditing ? 'text-text' : 'text-grey-03'}`}>
           <BulkEdit />
         </motion.div>
       </div>
@@ -132,12 +183,14 @@ function ModeToggle() {
   );
 }
 
-function AnimatedTogglePill() {
+function AnimatedTogglePill({ controls }: { controls: AnimationControls }) {
   return (
     <motion.div
+      animate={controls}
+      variants={variants}
       transition={{
-        type: 'spring',
         duration: 0.15,
+        type: 'spring',
         bounce: 0,
       }}
       layoutId="edit-toggle"
