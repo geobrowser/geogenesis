@@ -13,6 +13,7 @@ import { useEditable } from '~/modules/stores/use-editable';
 import { EyeSmall } from '~/modules/design-system/icons/eye-small';
 import { BulkEdit } from '~/modules/design-system/icons/bulk-edit';
 import { NotificationEmpty } from '~/modules/design-system/icons/notification-empty';
+import { cva } from 'class-variance-authority';
 
 function useUserProfile(address?: string) {
   const { network } = Services.useServices();
@@ -31,6 +32,7 @@ function useUserProfile(address?: string) {
 
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
+
   const { address } = useAccount();
   const profile = useUserProfile(address);
 
@@ -52,14 +54,15 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="w-[165px]"
       >
-        <AvatarMenuItem>
-          <div className="flex items-center gap-2">
+        <AvatarMenuItem disabled>
+          <div className="flex items-center gap-2 grayscale">
             <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
             <p className="text-button">Personal Space</p>
           </div>
         </AvatarMenuItem>
-        <AvatarMenuItem>
-          <div className="flex items-center gap-2">
+
+        <AvatarMenuItem disabled>
+          <div className="flex items-center gap-2 grayscale">
             <NotificationEmpty />
             <p className="text-button">Notifications</p>
           </div>
@@ -72,11 +75,34 @@ export function NavbarActions() {
   );
 }
 
-function AvatarMenuItem({ children }: { children: React.ReactNode }) {
+const avatarMenuItemStyles = cva(
+  'flex w-full select-none items-center justify-between bg-white py-2 px-3 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  {
+    variants: {
+      disabled: {
+        true: 'cursor-not-allowed text-grey-03',
+        false: 'cursor-pointer text-grey-04 hover:text-text hover:bg-bg',
+      },
+    },
+    defaultVariants: {
+      disabled: false,
+    },
+  }
+);
+
+function AvatarMenuItem({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <div className="flex select-none items-center justify-between bg-white py-2 px-3 text-button text-grey-04 hover:bg-bg hover:text-text hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04">
+    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
       {children}
-    </div>
+    </button>
   );
 }
 
