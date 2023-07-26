@@ -79,13 +79,13 @@ function ModeToggle() {
     >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {!editable && <AnimatedTogglePill />}
-        <motion.div className={`z-10 transition-colors duration-500 ${!editable ? 'text-text' : 'text-grey-03'}`}>
+        <motion.div className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}>
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {editable && <AnimatedTogglePill />}
-        <motion.div className={`z-10 transition-colors duration-500 ${editable ? 'text-text' : 'text-grey-03'}`}>
+        <motion.div className={`z-10 transition-colors duration-300 ${editable ? 'text-text' : 'text-grey-03'}`}>
           <BulkEdit />
         </motion.div>
       </div>

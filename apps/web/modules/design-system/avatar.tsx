@@ -1,5 +1,6 @@
 import BoringAvatar from 'boring-avatars';
 import Image from 'next/legacy/image';
+import { colors } from './theme/colors';
 
 interface Props {
   avatarUrl?: string | null;
@@ -12,6 +13,17 @@ export const Avatar = ({ value, avatarUrl, alt = '', size = 12 }: Props) => {
   return avatarUrl ? (
     <Image objectFit="cover" layout="fill" src={avatarUrl} alt={alt} />
   ) : (
-    <BoringAvatar size={size} variant="pixel" name={value} />
+    <BoringAvatar
+      size={size}
+      variant="beam"
+      name={value}
+      colors={[
+        colors.light.ctaPrimary,
+        colors.light.purple,
+        colors.light.pink,
+        colors.light.orange,
+        colors.light.green,
+      ]}
+    />
   );
 };
