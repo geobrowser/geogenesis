@@ -1,6 +1,7 @@
 import Image from 'next/legacy/image';
 import { Spacer } from '~/modules/design-system/spacer';
 import { Text } from '~/modules/design-system/text';
+import { getImagePath } from '~/modules/utils';
 
 interface NavbarLinkMenuItemProps {
   children: string;
@@ -14,7 +15,13 @@ export function NavbarLinkMenuItem({ children, onClick, img }: NavbarLinkMenuIte
       {img && (
         <>
           <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-            <Image priority layout="fill" objectFit="cover" src={img} alt="Image representing the current Space" />
+            <Image
+              priority
+              layout="fill"
+              objectFit="cover"
+              src={getImagePath(img)}
+              alt="Image representing the current Space"
+            />
           </div>
           <Spacer width={8} />
         </>

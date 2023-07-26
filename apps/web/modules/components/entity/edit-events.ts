@@ -487,7 +487,7 @@ const listener =
             value: {
               type: 'image',
               id: ID.createValueId(),
-              value: imageSrc,
+              value: Value.toImageValue(imageSrc),
             },
           })
         );
@@ -610,7 +610,7 @@ const listener =
 
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
-        const newValue: ImageValue = { ...triple.value, type: 'image', value: imageSrc };
+        const newValue: ImageValue = { ...triple.value, type: 'image', value: Value.toImageValue(imageSrc) };
 
         return update(
           Triple.ensureStableId({

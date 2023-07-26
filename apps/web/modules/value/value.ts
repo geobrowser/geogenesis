@@ -1,4 +1,5 @@
-import { Triple } from '../types';
+import { getImageHash } from '../utils';
+import type { Triple } from '../types';
 
 export function nameOfEntityValue(triple: Triple) {
   return triple?.value?.type === 'entity' ? triple.value.name : null;
@@ -24,4 +25,16 @@ export function dateValue(triple?: Triple) {
 
 export function imageValue(triple: Triple) {
   return triple?.value?.type === 'image' ? triple.value.value : null;
+}
+
+// Get the image triple value from an image path
+// this converts the raw image string from `this.storageClient.uploadFile` into the appropriate
+// format for storing in the triple
+// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
+export function toImageValue(rawValue: string) {
+  if (rawValue.includes('ipfs') && rawValue.includes('?arg=')) {
+    return `ipfs://${getImageHash(rawValue)}`;
+  } else {
+    return '';
+  }
 }
