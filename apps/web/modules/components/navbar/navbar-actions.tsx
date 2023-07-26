@@ -77,38 +77,32 @@ function ModeToggle() {
       onClick={() => setEditable(!editable)}
       className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
     >
-      <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && (
-          <motion.div
-            transition={{
-              type: 'spring',
-              duration: 0.15,
-              bounce: 0,
-            }}
-            layoutId="edit-toggle"
-            className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-          />
-        )}
+      <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
+        {!editable && <AnimatedTogglePill />}
         <motion.div className={`z-10 transition-colors duration-500 ${!editable ? 'text-text' : 'text-grey-03'}`}>
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && (
-          <motion.div
-            transition={{
-              type: 'spring',
-              duration: 0.15,
-              bounce: 0,
-            }}
-            layoutId="edit-toggle"
-            className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-          />
-        )}
+        {editable && <AnimatedTogglePill />}
         <motion.div className={`z-10 transition-colors duration-500 ${editable ? 'text-text' : 'text-grey-03'}`}>
           <BulkEdit />
         </motion.div>
       </div>
     </button>
+  );
+}
+
+function AnimatedTogglePill() {
+  return (
+    <motion.div
+      transition={{
+        type: 'spring',
+        duration: 0.15,
+        bounce: 0,
+      }}
+      layoutId="edit-toggle"
+      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+    />
   );
 }
