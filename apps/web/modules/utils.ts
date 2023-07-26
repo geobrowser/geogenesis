@@ -176,35 +176,41 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
 };
 
 // Get the image hash from an image path
+// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> HASH
+// e.g., ipfs://HASH -> HASH
 export const getImageHash = (value: string) => {
   // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
   if (value.includes('?arg=')) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    const [_prefix, hash] = value.split('?arg=');
+    const [, hash] = value.split('?arg=');
     return hash as string;
   } else if (value.includes('://')) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    const [_protocol, hash] = value.split('://');
+    const [, hash] = value.split('://');
     return hash as string;
-    // If the value does not contain an arg query parameter or protocol, it already is a hash
+    // If the value does not contain an arg query parameter or protocol prefix, it already is a hash
   } else {
     return value;
   }
 };
 
-// Get the image path from an image triple value
+// Get the image URL from an image triple value
+// this allows us to render images on the front-end based on a raw triple value
+// e.g., ipfs://HASH -> https://api.thegraph.com/ipfs/api/v0/cat?arg=
 export const getImagePath = (value: string) => {
-  // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
-  if (value.startsWith('http')) {
-    return value;
-  } else if (value.startsWith('ipfs://')) {
+  // Add the IPFS gateway path for images with the ipfs:// protocol
+  if (value.startsWith('ipfs://')) {
     return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
+  } else if (value.startsWith('http')) {
+    return value;
   } else {
     return '';
   }
 };
 
 // Get the image triple value from an image path
+// this converts the raw image string from `this.storageClient.uploadFile` into the appropriate
+// format for storing in the triple
+// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
 export const getImageValue = (value: string) => {
   if (value.includes('ipfs') && value.includes('?arg=')) {
     return `ipfs://${getImageHash(value)}`;
