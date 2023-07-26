@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { useAccount } from 'wagmi';
-import { AnimationControls, motion, useAnimation } from 'framer-motion';
+import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import * as Popover from '@radix-ui/react-popover';
 
 import { GeoConnectButton } from '~/modules/wallet';
 import { Avatar } from '~/modules/design-system/avatar';
@@ -125,12 +126,16 @@ const variants = {
   },
 };
 
+const MotionPopoverContent = motion(Popover.Content);
+
 function ModeToggle({ spaceId }: Props) {
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
   const controls = useAnimation();
   const canUserEdit = isEditor || isAdmin || isEditorController;
   const isUserEditing = isEditor && editable;
+  const [attemptCount, setAttemptCount] = React.useState(0);
+  const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
   // If a user doesn't have edit access on the page, make sure we set the toggle
   // state to false. This can happen if a user is in edit mode in a space they
@@ -141,9 +146,16 @@ function ModeToggle({ spaceId }: Props) {
   const onToggle = React.useCallback(() => {
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
     // otherwise toggle the edit mode
-    if (!canUserEdit) controls.start('shake');
-    else setEditable(!editable);
-  }, [canUserEdit, controls, editable, setEditable]);
+    if (!canUserEdit) {
+      controls.start('shake');
+
+      // Allow the user two attempts to toggle edit mode before showing the tooltip
+      if (attemptCount > 1) {
+        setShowEditAccessTooltip(true);
+        setAttemptCount(0);
+      } else setAttemptCount(attemptCount => attemptCount + 1);
+    } else setEditable(!editable);
+  }, [canUserEdit, controls, editable, setEditable, attemptCount]);
 
   const memoizedShortcuts = React.useMemo(
     () => [
@@ -172,6 +184,37 @@ function ModeToggle({ spaceId }: Props) {
           <BulkEdit />
         </motion.div>
       </div>
+
+      <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+        {/* 
+            Set an empty trigger so the Popover has a place to render itself. Without the trigger the popoover
+            won't render even though we're controlling it imperatively.
+        */}
+        <Popover.Trigger />
+        <Popover.Portal>
+          <AnimatePresence mode="popLayout">
+            {showEditAccessTooltip && (
+              <MotionPopoverContent
+                className="z-100 origin-top-right rounded border border-grey-02 bg-white px-3 py-2 shadow-button focus:outline-none"
+                side="bottom"
+                align="end"
+                sideOffset={20}
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{
+                  type: 'spring',
+                  duration: 0.15,
+                  bounce: 0,
+                }}
+              >
+                <h1 className="mb-1 text-button">You do not have edit access in this space</h1>
+                <p>Coming soon you will be able to request edit access in any space.</p>
+              </MotionPopoverContent>
+            )}
+          </AnimatePresence>
+        </Popover.Portal>
+      </Popover.Root>
     </button>
   );
 }
