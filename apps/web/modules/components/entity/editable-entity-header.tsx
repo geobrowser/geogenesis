@@ -17,6 +17,7 @@ import { Editor } from '../editor/editor';
 import { Button } from '~/modules/design-system/button';
 import { NavUtils } from '~/modules/utils';
 import { PageStringField } from '../editable-fields/editable-fields';
+import { ID } from '~/modules/id';
 
 export function EditableHeading({
   spaceId,
@@ -97,7 +98,7 @@ export function EditableHeading({
                     </Button>
                   </Link>
                 )}
-                <Link href={NavUtils.toCreateEntity(spaceId)}>
+                <Link href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
                   <Button icon="create">New entity</Button>
                 </Link>
               </div>
