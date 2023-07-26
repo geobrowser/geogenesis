@@ -145,17 +145,17 @@ function ModeToggle({ spaceId }: Props) {
 
   const onToggle = React.useCallback(() => {
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
-    // otherwise toggle the edit mode
-    if (!canUserEdit) {
+    // otherwise toggle the edit mode. Only handle shaking and attempt logic in the context of a space.
+    if (!canUserEdit && spaceId) {
       controls.start('shake');
 
-      // Allow the user two attempts to toggle edit mode before showing the tooltip
+      // Allow the user two attempts to toggle edit mode before showing the tooltip.
       if (attemptCount > 1) {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
     } else setEditable(!editable);
-  }, [canUserEdit, controls, editable, setEditable, attemptCount]);
+  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId]);
 
   const memoizedShortcuts = React.useMemo(
     () => [
