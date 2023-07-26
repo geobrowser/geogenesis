@@ -206,15 +206,3 @@ export const getImagePath = (value: string) => {
     return '';
   }
 };
-
-// Get the image triple value from an image path
-// this converts the raw image string from `this.storageClient.uploadFile` into the appropriate
-// format for storing in the triple
-// e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
-export const getImageValue = (value: string) => {
-  if (value.includes('ipfs') && value.includes('?arg=')) {
-    return `ipfs://${getImageHash(value)}`;
-  } else {
-    return '';
-  }
-};

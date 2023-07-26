@@ -16,7 +16,7 @@ import { Value } from '~/modules/value';
 import { Entity } from '..';
 import { makeOptionalComputed } from '~/modules/utils';
 import { TableBlockSdk } from '~/modules/components/editor/blocks/sdk';
-import { getImagePath, getImageValue } from '~/modules/utils';
+import { getImagePath } from '~/modules/utils';
 
 const markdownConverter = new showdown.Converter();
 
@@ -660,7 +660,7 @@ export class EntityStore implements IEntityStore {
         entityName: this.nodeName(node),
         attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
         attributeName: 'Image',
-        value: { id: ID.createValueId(), type: 'image', value: getImageValue(src) },
+        value: { id: ID.createValueId(), type: 'image', value: Value.toImageValue(src) },
       })
     );
   };
