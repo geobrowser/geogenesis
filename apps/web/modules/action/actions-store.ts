@@ -200,24 +200,24 @@ export class ActionsStore implements IActionsStore {
         name,
         description,
       });
+
+      const publishedActions = actionsToPublish.map(action => ({
+        ...action,
+        hasBeenPublished: true,
+      }));
+
+      this.actions$.set({
+        ...this.actions$.get(),
+        [spaceId]: [...publishedActions, ...actionsToPersist],
+      });
+
+      onChangePublishState('publish-complete');
+      await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
     } catch (e) {
       console.error(e);
       onChangePublishState('idle');
       return;
     }
-
-    const publishedActions = actionsToPublish.map(action => ({
-      ...action,
-      hasBeenPublished: true,
-    }));
-
-    this.actions$.set({
-      ...this.actions$.get(),
-      [spaceId]: [...publishedActions, ...actionsToPersist],
-    });
-
-    onChangePublishState('publish-complete');
-    await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
 
