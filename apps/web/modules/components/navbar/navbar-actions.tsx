@@ -123,47 +123,40 @@ const variants = {
       bounce: 0,
     },
   },
-  toggle: {
-    transition: {
-      duration: 0.15,
-      type: 'spring',
-      bounce: 0,
-    },
-  },
 };
 
 function ModeToggle({ spaceId }: Props) {
-  // @TODO: This should only be toggle-able if they have edit access
-  // @TODO: Animation when they don't have edit access
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
   const controls = useAnimation();
+  const canUserEdit = isEditor || isAdmin || isEditorController;
   const isUserEditing = isEditor && editable;
 
-  // Toggle edit mode when ⌘ + e is pressed
+  // If a user doesn't have edit access on the page, make sure we set the toggle
+  // state to false. This can happen if a user is in edit mode in a space they
+  // have edit access in, then they navigate to a space they don't have edit
+  // access in.
+  if (!isEditor && !isAdmin && !isEditorController) setEditable(false);
+
+  const onToggle = React.useCallback(() => {
+    // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
+    // otherwise toggle the edit mode
+    if (!canUserEdit) controls.start('shake');
+    else setEditable(!editable);
+  }, [canUserEdit, controls, editable, setEditable]);
+
   const memoizedShortcuts = React.useMemo(
     () => [
       // Toggle edit mode when ⌘ + e is pressed
       {
         key: 'e',
-        callback: () => {
-          if (isEditor || isAdmin || isEditorController) setEditable(!editable);
-          else controls.start('shake');
-        },
+        callback: onToggle,
       },
     ],
-    [editable, isEditor, isAdmin, isEditorController, setEditable, controls]
+    [onToggle]
   );
 
   useKeyboardShortcuts(memoizedShortcuts);
-
-  const onToggle = () => {
-    if (!isEditor && !editable) {
-      controls.start('shake');
-    }
-
-    if (isEditor) setEditable(!editable);
-  };
 
   return (
     <button onClick={onToggle} className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1">
