@@ -2,24 +2,22 @@
 
 import * as React from 'react';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ZERO_WIDTH_SPACE } from '~/modules/constants';
 import { Context } from '~/modules/design-system/icons/context';
 import { Menu } from '~/modules/design-system/menu';
 import { useSpaces } from '~/modules/spaces/use-spaces';
 import { Dictionary } from '~/modules/types';
-import { titleCase } from '~/modules/utils';
 import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 import { Close } from '~/modules/design-system/icons/close';
+import { ErrorBoundary } from 'react-error-boundary';
 
 export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);
   const router = useRouter();
   const { spaces } = useSpaces();
-  const path = usePathname();
+  const urlComponents = useSelectedLayoutSegments();
 
-  const components = path?.split('/') ?? [];
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
@@ -29,38 +27,38 @@ export function NavbarLinkMenu() {
   };
 
   return (
-    <Menu
-      open={open}
-      onOpenChange={onOpenChange}
-      align="start"
-      trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-    >
-      {components.map((component, index) => {
-        if (index === 0 || index === 3) return null; // skip the "Geo" part
-        const { path, title, img } = getComponentRoute({
-          components,
-          index,
-          spaceNames,
-          spaceImages,
-          pageName: '',
-        });
+    <ErrorBoundary fallback={null} onError={e => console.error(e.message)}>
+      <Menu
+        open={open}
+        onOpenChange={onOpenChange}
+        align="start"
+        trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
+      >
+        {urlComponents.map((component, index) => {
+          if (index >= 2) return null; // skip the "/space/" part
+          const { path, title, img } = getComponentRoute({
+            urlComponents,
+            index,
+            spaceNames,
+            spaceImages,
+          });
 
-        return (
-          <NavbarLinkMenuItem key={index + path} onClick={() => onClick(path)} img={img}>
-            {title.slice(0, 36) + (title.length > 36 ? '...' : '')}
-          </NavbarLinkMenuItem>
-        );
-      })}
-    </Menu>
+          return (
+            <NavbarLinkMenuItem key={index + path} onClick={() => onClick(path)} img={img}>
+              {title.slice(0, 36) + (title.length > 36 ? '...' : '')}
+            </NavbarLinkMenuItem>
+          );
+        })}
+      </Menu>
+    </ErrorBoundary>
   );
 }
 
 type GetComponentRouteConfig = {
-  components: string[];
+  urlComponents: string[];
   index: number;
   spaceNames: Dictionary<string, string>;
   spaceImages: Dictionary<string, string>;
-  pageName: string;
 };
 
 type ComponentRoute = {
@@ -69,30 +67,17 @@ type ComponentRoute = {
   img: string | null;
 };
 
-function getComponentRoute({
-  components,
-  index,
-  spaceNames,
-  spaceImages,
-  pageName,
-}: GetComponentRouteConfig): ComponentRoute {
-  const component = components[index];
-  const path = components.slice(0, index + 1).join('/');
+function getComponentRoute({ urlComponents, index, spaceNames, spaceImages }: GetComponentRouteConfig): ComponentRoute {
+  const component = urlComponents[index];
 
-  // Remove any query params
-  const componentName = component.split('?')?.[0];
-
-  switch (components[1]) {
-    case 'space':
-      switch (index) {
-        case 1:
-          return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
-        case 2:
-          return { path, title: spaceNames[componentName] ?? ZERO_WIDTH_SPACE, img: spaceImages[componentName] ?? '' };
-        case 3:
-          return { path, title: pageName || titleCase(componentName), img: '/facts.svg' };
-      }
+  switch (index) {
+    case 0:
+      return { path: '/spaces', title: 'Spaces', img: '/spaces.png' };
+    case 1:
+      return { path: `/space/${component}`, title: spaceNames[component] ?? '', img: spaceImages[component] ?? '' };
+    default:
+      throw new Error(
+        `Generated a breadcrumb component for a nested route structure that is not supported: ${urlComponents}, ${component}`
+      );
   }
-
-  return { path, title: titleCase(component), img: '/spaces.png' };
 }

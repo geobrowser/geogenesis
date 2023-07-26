@@ -1,8 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useAccessControl } from '~/modules/auth/use-access-control';
+import { useRouter } from 'next/navigation';
 import { ClientOnly } from '~/modules/components/client-only';
 import { Compare } from '~/modules/components/compare';
 import { FlowBar } from '~/modules/components/flow-bar';
@@ -15,16 +14,11 @@ import { Toast } from '~/modules/hooks/use-toast';
 import { OnboardingDialog } from '~/modules/onboarding/dialog';
 import { Persistence } from '~/modules/persistence';
 import { Dialog } from '~/modules/search';
-import { useEditable } from '~/modules/stores/use-editable';
 import { NavUtils } from '~/modules/utils';
 import { Analytics } from '@vercel/analytics/react';
 
 export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const params = useParams();
-  const spaceId: string | null | undefined = params?.id as string;
-  const { setEditable, editable } = useEditable();
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const [open, setOpen] = React.useState(false);
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -40,15 +34,8 @@ export function App({ children }: { children: React.ReactNode }) {
         key: '.',
         callback: () => setIsReviewOpen(!isReviewOpen),
       },
-      // Toggle edit mode when ⌘ + e is pressed
-      {
-        key: 'e',
-        callback: () => {
-          if (isEditor || isAdmin || isEditorController) setEditable(!editable);
-        },
-      },
     ],
-    [editable, isEditor, isAdmin, isEditorController, setOpen, setEditable, setIsReviewOpen, isReviewOpen]
+    [setOpen, setIsReviewOpen, isReviewOpen]
   );
 
   useKeyboardShortcuts(memoizedShortcuts);

@@ -43,6 +43,7 @@ import { Minus } from './icons/minus';
 import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
 import { DisconnectWallet } from './icons/disconnect-wallet';
+import { EyeSmall } from './icons/eye-small';
 
 export type IconName =
   | 'blank'
@@ -51,6 +52,7 @@ export type IconName =
   | 'publish'
   | 'close'
   | 'eye'
+  | 'eyeSmall'
   | 'expand'
   | 'entity'
   | 'expandSmall'
@@ -111,6 +113,7 @@ const icons: Record<IconName, React.ElementType> = {
   close: Close,
   publish: Publish,
   eye: Eye,
+  eyeSmall: EyeSmall,
   expand: Expand,
   expandSmall: ExpandSmall,
   contractSmall: ContractSmall,
