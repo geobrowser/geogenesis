@@ -1,14 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { OboardingCarousel } from '~/partials/spaces/carousel';
+import { OboardingCarousel } from '~/partials/spaces-page/carousel';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
 import { Network, StorageClient } from '~/core/io';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams, Space } from '~/core/types';
-import { Email } from '~/partials/spaces/email';
+import { Email } from '~/partials/spaces-page/email';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',
