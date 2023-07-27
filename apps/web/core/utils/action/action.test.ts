@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
 import { Action as ActionType } from '~/core/types';
-import { getChangeCount, unpublishedChanges } from '../../core/utils/action';
+import { getChangeCount, unpublishedChanges } from './action';
 
 // Count should be 3
 const basicActions: ActionType[] = [

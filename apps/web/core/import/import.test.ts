@@ -3,8 +3,8 @@ import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { describe, expect, it } from 'vitest';
 
-import { Triple } from '../triple';
 import { convertLegacyHealthData, eavRowsToTriples, importCSVFile, readFileAsText, unique } from './import';
+import { Triple } from '../utils/triple';
 
 function readMockFile(filename: string) {
   const simple = readFileSync(path.join(__dirname, 'csv', filename), 'utf8');

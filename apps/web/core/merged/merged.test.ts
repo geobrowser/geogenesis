@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Entity } from '~/core/utils/entity';
 import { CreateTripleAction, StringValue, Triple } from '~/core/types';
-import { MockNetwork, makeStubTriple } from '../mocks/mock-network';
+import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
 import { Merged as MergeDataSource } from './merged';
-import { LocalStore } from '../../state/local-store/local-store';
+import { LocalStore } from '../state/local-store/local-store';
 import { ActionsStore } from '~/core/state/actions-store';
 
 describe('MergeDataSource merges local triples with network triples', () => {

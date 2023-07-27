@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Config } from '../environment';
+import { Environment } from '../environment';
 import {
   getConfigFromUrl,
   stringifyQueryParameters,
@@ -100,26 +100,26 @@ describe('EntityTableStore params', () => {
 describe('Config params', () => {
   it('Parses environment from url', () => {
     const config = getConfigFromUrl('https://banana.com/?env=development', undefined);
-    expect(config).toEqual(Config.options.development);
+    expect(config).toEqual(Environment.options.development);
   });
 
   it("Defaults to production if there's no param", () => {
     const config = getConfigFromUrl('https://banana.com/', undefined);
-    expect(config).toEqual(Config.options.production);
+    expect(config).toEqual(Environment.options.production);
   });
 
   it('Defaults to production if param not in config options', () => {
     const config = getConfigFromUrl('https://banana.com/?env=banana', undefined);
-    expect(config).toEqual(Config.options.production);
+    expect(config).toEqual(Environment.options.production);
   });
 
   it('Defaults to cookie environment if it exists', () => {
     const config = getConfigFromUrl('https://banana.com/', 'development');
-    expect(config).toEqual(Config.options.development);
+    expect(config).toEqual(Environment.options.development);
   });
 
   it('Defaults to url param if both the param and cookie exists', () => {
     const config = getConfigFromUrl('https://banana.com/?env=production', 'development');
-    expect(config).toEqual(Config.options.production);
+    expect(config).toEqual(Environment.options.production);
   });
 });

@@ -1,9 +1,9 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 
-import { ActionsStore } from '../action';
-import { MockNetworkData } from '../../core/io';
 import { TripleStore } from './triple-store';
+import { MockNetworkData } from '~/core/io';
+import { ActionsStore } from '../actions-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {
@@ -11,7 +11,6 @@ describe('TripleStore', () => {
     const store = new TripleStore({
       api: network,
       space: 's',
-      initialTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
     expect(store.triples$.get()).toStrictEqual([]);
@@ -25,7 +24,6 @@ describe('TripleStore', () => {
       api: network,
       pageSize: 1,
       space: 's',
-      initialTriples: [],
       ActionsStore: new ActionsStore({ api: network }),
     });
 
