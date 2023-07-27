@@ -7,8 +7,8 @@ import Textarea from 'react-textarea-autosize';
 import Zoom from 'react-medium-image-zoom';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
-import { Services } from '~/core/services/services';
-import { getImagePath } from '~/modules/utils';
+import { Services } from '~/core/services';
+import { getImagePath } from '~/core/utils/utils';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin

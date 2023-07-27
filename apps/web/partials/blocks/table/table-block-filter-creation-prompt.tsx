@@ -11,7 +11,6 @@ import { Select } from '~/design-system/select';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
-import { useAutocomplete } from '~/modules/search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Text } from '~/design-system/text';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -19,6 +18,7 @@ import { Breadcrumb } from '~/design-system/breadcrumb';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Tag } from '~/design-system/tag';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;

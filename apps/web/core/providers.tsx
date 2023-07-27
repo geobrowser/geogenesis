@@ -5,7 +5,7 @@ import * as React from 'react';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { Services } from './services';
-import { WalletProvider } from './wallet/wallet';
+import { WalletProvider } from './wallet';
 import { LocalData } from '~/core/io';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';

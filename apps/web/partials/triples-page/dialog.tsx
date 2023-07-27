@@ -14,7 +14,7 @@ import { intersperse } from '~/core/utils/utils';
 import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { FilterInputGroup } from '../modules/components/filter/input-group';
+import { FilterInputGroup } from './input-group';
 
 const MotionContent = motion(PopoverPrimitive.Content);
 

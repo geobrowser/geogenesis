@@ -8,7 +8,7 @@ import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
 import { TabLink } from '~/design-system/tab-link';
 import { useEditable } from '~/core/state/editable-store/editable-store';
-import { NavUtils } from '~/modules/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { usePathname } from 'next/navigation';
 import { ID } from '~/core/id';
 

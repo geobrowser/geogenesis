@@ -2,7 +2,7 @@ import * as React from 'react';
 import Image from 'next/legacy/image';
 import { Spacer } from './spacer';
 import { Text } from './text';
-import { getImagePath } from '~/modules/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 interface BreadcrumbProps {
   children: string;

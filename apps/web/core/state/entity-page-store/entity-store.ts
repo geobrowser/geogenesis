@@ -5,18 +5,18 @@ import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
 import showdown from 'showdown';
 import pluralize from 'pluralize';
 
-import { Action, ActionsStore } from '~/modules/action';
 import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 import { ID } from '~/core/id';
 import { LocalData, MergedData, NetworkData } from '~/core/io';
-import { Triple } from '~/modules/triple';
 import { EntityValue, Triple as ITriple } from '~/core/types';
-import { Value } from '~/modules/value';
-import { Entity } from '../../utils/entity';
-import { makeOptionalComputed } from '~/modules/utils';
-import { TableBlockSdk } from '~/partials/editor/blocks/sdk';
-import { getImagePath } from '~/modules/utils';
+import { Triple } from '~/core/utils/triple';
+import { ActionsStore } from '../actions-store';
+import { Action } from '~/core/utils/action';
+import { getImagePath, makeOptionalComputed } from '~/core/utils/utils';
+import { Entity } from '~/core/utils/entity';
+import { Value } from '~/core/utils/value';
+import { TableBlockSdk } from '~/core/blocks-sdk';
 
 const markdownConverter = new showdown.Converter();
 

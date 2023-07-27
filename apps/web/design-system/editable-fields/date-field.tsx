@@ -3,12 +3,12 @@
 import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GeoDate } from '~/modules/utils';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 import { SmallButton } from '~/design-system/button';
-import { useFieldWithValidation } from '~/modules/hooks/use-field-with-validation';
-import { useFormWithValidation } from '~/modules/hooks/use-form-with-validation';
+import { GeoDate } from '~/core/utils/utils';
+import { useFieldWithValidation } from '~/core/hooks/use-field-with-validation';
+import { useFormWithValidation } from '~/core/hooks/use-form-with-validation';
 
 interface DateFieldProps {
   onBlur?: (date: string) => void;

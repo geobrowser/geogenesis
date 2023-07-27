@@ -8,7 +8,7 @@ import {
 } from '@tiptap/react';
 
 import Paragraph from '@tiptap/extension-paragraph';
-import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 export const ParagraphNode = Paragraph.extend({
   ...Paragraph,

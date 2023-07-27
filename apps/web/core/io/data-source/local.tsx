@@ -3,13 +3,14 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { ObservableComputed, computed } from '@legendapp/state';
-import { Action, ActionsStore, useActionsStoreInstance } from '../../../modules/action';
 import { Entity as IEntity, Triple as ITriple } from '../../types';
-import { makeOptionalComputed } from '../../utils';
 import { pipe } from '@mobily/ts-belt';
-import { Triple } from '../../../modules/triple';
 import { Entity } from '../../utils/entity';
 import { useSelector } from '@legendapp/state/react';
+import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
+import { makeOptionalComputed } from '~/core/utils/utils';
+import { Triple } from '~/core/utils/triple';
+import { Action } from '~/core/utils/action';
 
 export class LocalStore {
   private store: ActionsStore;

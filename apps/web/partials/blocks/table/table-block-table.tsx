@@ -14,22 +14,22 @@ import {
 import { cx } from 'class-variance-authority';
 import { useState } from 'react';
 
-import { useActionsStore } from '~/modules/action';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Entity } from '~/core/utils/entity';
 import { useEditable } from '~/core/state/editable-store/editable-store';
-import { Triple } from '~/modules/triple';
-import { NavUtils } from '~/modules/utils';
 import { valueTypes } from '~/core/value-types';
-import { useTableBlock } from '../../../core/state/table-block-store/table-block-store';
-import { EditableEntityTableColumnHeader } from '~/partials/entity-table/editable-entity-table-column-header';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Text } from '~/design-system/text';
 import { Cell, Column, Row } from '~/core/types';
-import { EditableEntityTableCell } from '~/partials/entity-table/editable-entity-table-cell';
-import { EntityTableCell } from '~/partials/entity-table/entity-table-cell';
 import { EmptyTableText } from '~/design-system/table/styles';
 import { TableCell } from '~/design-system/table/cell';
+import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { columnName, columnValueType } from './utils';
+import { Triple } from '~/core/utils/triple';
+import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
+import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
+import { NavUtils } from '~/core/utils/utils';
 
 const columnHelper = createColumnHelper<Row>();
 

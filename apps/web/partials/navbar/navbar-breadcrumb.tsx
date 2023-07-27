@@ -3,7 +3,7 @@ import Image from 'next/legacy/image';
 import Link from 'next/link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { getImagePath } from '~/modules/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 interface NavbarBreadcrumbProps {
   href: string;

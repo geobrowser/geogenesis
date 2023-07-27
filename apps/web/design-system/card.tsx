@@ -6,7 +6,7 @@ import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import { Text } from '~/design-system/text';
-import { NavUtils, getImagePath } from '~/modules/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
 interface Props {

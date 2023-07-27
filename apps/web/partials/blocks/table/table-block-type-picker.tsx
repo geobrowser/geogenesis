@@ -4,10 +4,10 @@ import * as React from 'react';
 
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
-import { SelectedEntityType } from '~/core/utils/entity';
-import { ResultItem, ResultsList } from '../../../entity/autocomplete/results-list';
 import { Spacer } from '~/design-system/spacer';
 import { useTypesStore } from '~/core/state/types-store/types-store';
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
+import { SelectedEntityType } from '~/core/state/entity-table-store';
 
 interface Props {
   handleSelect: (type: SelectedEntityType) => void;

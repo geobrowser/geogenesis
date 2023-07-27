@@ -3,11 +3,11 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { useActionsStoreInstance } from '../../action';
-import { Services } from '../../services/services';
+import { Services } from '../../services';
 import { Triple } from '../../types';
 import { EntityStore } from './entity-store';
 import { LocalData } from '~/core/io';
+import { useActionsStoreInstance } from '../actions-store';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
 

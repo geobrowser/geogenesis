@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import * as Popover from '@radix-ui/react-popover';
 
-import { GeoConnectButton } from '~/core/wallet/wallet';
+import { GeoConnectButton } from '~/core/wallet';
 import { Avatar } from '~/design-system/avatar';
 import { Menu } from '~/design-system/menu';
 import { useQuery } from '@tanstack/react-query';

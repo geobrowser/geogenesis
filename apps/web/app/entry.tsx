@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ClientOnly } from '~/design-system/client-only';
 import { Compare } from '~/partials/history/compare';
-import { Main } from '~/modules/components/main';
+import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { useDiff } from '~/core/state/diff-store/diff-store';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';

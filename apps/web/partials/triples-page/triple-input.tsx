@@ -4,13 +4,13 @@ import * as React from 'react';
 import { useRef } from 'react';
 import { useRect } from '@radix-ui/react-use-rect';
 
-import { CheckCloseSmall } from '../../design-system/icons/check-close-small';
-import { Search } from '../../design-system/icons/search';
-import { Input } from '../../design-system/input';
-import { Spacer } from '../../design-system/spacer';
-import { useTriples } from '../../core/hooks/use-triples';
-import { FilterDialog } from '../../public/dialog';
-import type { FilterClause, FilterState } from '../../core/types';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { Search } from '~/design-system/icons/search';
+import { Input } from '~/design-system/input';
+import { Spacer } from '~/design-system/spacer';
+import { useTriples } from '~/core/hooks/use-triples';
+import { FilterDialog } from './dialog';
+import type { FilterClause, FilterState } from '~/core/types';
 
 const defaultFilterState: FilterState = [
   {

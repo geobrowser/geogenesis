@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { ID } from '~/core/id';
-import { Triple } from '~/modules/triple';
 import { Entity as IEntity, Triple as ITriple, TripleValueType } from '~/core/types';
+import { Triple } from '../utils/triple';
 
 export function upsertName({
   newName,

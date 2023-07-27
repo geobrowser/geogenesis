@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import produce from 'immer';
 import BoringAvatar from 'boring-avatars';
 
-import { useTableBlock } from '../../../core/state/table-block-store/table-block-store';
+import { useTableBlock } from '~/core/state/table-block-store/table-block-store';
 import { TableBlockTable } from './table-block-table';
 import { Icon } from '~/design-system/icon';
 import { colors } from '~/design-system/theme/colors';
@@ -21,11 +21,11 @@ import { Entity } from '~/core/utils/entity';
 import { Menu } from '~/design-system/menu';
 import { Context } from '~/design-system/icons/context';
 import { Close } from '~/design-system/icons/close';
-import { NavUtils } from '~/modules/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockFilterPill } from './table-block-filter-pill';
-import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { ID } from '~/core/id';
 
