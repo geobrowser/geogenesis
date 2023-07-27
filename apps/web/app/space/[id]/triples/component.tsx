@@ -1,7 +1,7 @@
 'use client';
 
-import { SpaceHeader } from '~/partials/space/space-header';
-import { SpaceNavbar } from '~/partials/space/space-navbar';
+import { SpaceHeader } from '~/partials/space-page/space-header';
+import { SpaceNavbar } from '~/partials/space-page/space-navbar';
 import { Triples } from '~/partials/triples-page/triples';
 import { Spacer } from '~/design-system/spacer';
 import { Triple } from '~/core/types';
