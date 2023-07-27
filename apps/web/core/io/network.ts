@@ -22,6 +22,8 @@ import {
 } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import * as queries from './queries';
+import { IStorageClient } from './storage';
 import {
   NetworkEntity,
   NetworkProposal,
@@ -29,9 +31,7 @@ import {
   NetworkVersion,
   fromNetworkActions,
   fromNetworkTriples,
-} from './network-local-mapping';
-import * as queries from './queries';
-import { IStorageClient } from './storage';
+} from './subgraph/network-local-mapping';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
