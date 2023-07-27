@@ -12,7 +12,6 @@ import ListItem from '@tiptap/extension-list-item';
 
 import { SquareButton } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
 import { createIdExtension } from './id-extension';
@@ -20,6 +19,7 @@ import { TableNode } from './table-node';
 import { ParagraphNode } from './paragraph-node';
 import { HeadingNode } from './heading-node';
 import { useHydrated } from '~/core/hooks/use-hydrated';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 
 interface Props {
   editable?: boolean;

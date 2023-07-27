@@ -16,7 +16,7 @@ import { Button } from '~/design-system/button';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { ID } from '~/core/id';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { NavUtils } from '~/core/utils/utils';
 import { EntityPageMetadataHeader, SpacePageMetadataHeader } from './entity-page-metadata-header';
 

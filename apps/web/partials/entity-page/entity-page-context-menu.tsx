@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Icon } from '~/design-system/icon';
 import { Menu } from '~/design-system/menu';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { batch } from '@legendapp/state';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 

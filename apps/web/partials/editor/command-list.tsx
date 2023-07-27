@@ -6,11 +6,11 @@ import cx from 'classnames';
 import { Editor } from '@tiptap/react';
 
 import { Text } from '~/design-system/text';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { Triple } from '~/core/types';
 import { CommandSuggestionItem, tableCommandItem } from './command-items';
 import { TableBlockTypePicker } from '../blocks/table/table-block-type-picker';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;

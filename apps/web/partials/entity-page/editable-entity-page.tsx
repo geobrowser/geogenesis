@@ -13,7 +13,7 @@ import { Text as TextIcon } from '~/design-system/icons/text';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Entity } from '~/core/utils/entity';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Triple as ITriple, TripleValueType } from '~/core/types';
 import { groupBy, NavUtils } from '~/core/utils/utils';
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';

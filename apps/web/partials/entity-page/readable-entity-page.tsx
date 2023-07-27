@@ -19,7 +19,7 @@ import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { SmallButton } from '~/design-system/button';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { useEntityPageStore } from '~/core/state/entity-page-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 
 interface Props {
   triples: Triple[];
