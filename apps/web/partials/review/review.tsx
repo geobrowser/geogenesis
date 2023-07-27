@@ -13,7 +13,7 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useSigner } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
@@ -103,16 +103,16 @@ const ReviewChanges = () => {
   const [data, isLoading] = useChanges(actions, activeSpace);
 
   // Publishing logic
-  const { data: signer } = useSigner();
+  const { data: wallet } = useWalletClient();
 
   const handlePublish = useCallback(async () => {
-    if (!activeSpace || !signer) return;
+    if (!activeSpace || !wallet) return;
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
-    await publish(activeSpace, signer, setReviewState, unstagedChanges, proposalName);
+    await publish(activeSpace, wallet, setReviewState, unstagedChanges, proposalName);
     clearProposalName();
-  }, [activeSpace, proposalName, proposals, publish, signer, unstagedChanges]);
+  }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges]);
 
   if (isLoading || typeof data !== 'object') {
     return null;

@@ -16,15 +16,15 @@ const queryClient = new QueryClient();
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Services.Provider>
-        <ActionsStoreProvider>
-          <LocalStoreProvider>
-            <DiffProvider>
-              <WalletProvider>{children}</WalletProvider>
-            </DiffProvider>
-          </LocalStoreProvider>
-        </ActionsStoreProvider>
-      </Services.Provider>
+      <WalletProvider>
+        <Services.Provider>
+          <ActionsStoreProvider>
+            <LocalStoreProvider>
+              <DiffProvider>{children}</DiffProvider>
+            </LocalStoreProvider>
+          </ActionsStoreProvider>
+        </Services.Provider>
+      </WalletProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

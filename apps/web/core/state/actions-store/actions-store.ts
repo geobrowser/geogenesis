@@ -1,7 +1,9 @@
 import { Observable, computed, observable } from '@legendapp/state';
-import { Signer } from 'ethers';
 
-import { Network } from '~/core/io';
+import { WalletClient } from 'wagmi';
+
+import { IStorageClient, Network } from '~/core/io';
+import { publish } from '~/core/io/publish';
 import {
   Action as ActionType,
   CreateTripleAction,
@@ -22,7 +24,7 @@ interface IActionsStore {
   deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
   publish(
     spaceId: string,
-    signer: Signer,
+    wallet: WalletClient,
     onChangePublishState: (newState: ReviewState) => void,
     unstagedChanges: Record<string, unknown>,
     name: string,
@@ -33,6 +35,7 @@ interface IActionsStore {
 
 interface IActionsStoreConfig {
   api: Network.INetwork;
+  storageClient: IStorageClient;
 }
 
 export type SpaceId = string;
@@ -44,15 +47,17 @@ export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
 
 export class ActionsStore implements IActionsStore {
   private api: Network.INetwork;
+  private storageClient: IStorageClient;
   actions$: Observable<SpaceActions>;
   allActions$;
   allSpacesWithActions$;
   actionsByEntityId$;
 
-  constructor({ api }: IActionsStoreConfig) {
+  constructor({ api, storageClient }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
 
     this.api = api;
+    this.storageClient = storageClient;
     this.actions$ = actions;
 
     this.allActions$ = makeOptionalComputed(
@@ -180,11 +185,10 @@ export class ActionsStore implements IActionsStore {
 
   publish = async (
     spaceId: string,
-    signer: Signer,
+    wallet: WalletClient,
     onChangePublishState: (newState: ReviewState) => void,
     unstagedChanges: Record<string, unknown>,
-    name: string,
-    description: string | undefined = undefined
+    name: string
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
     const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
@@ -192,13 +196,13 @@ export class ActionsStore implements IActionsStore {
     if (actionsToPublish.length < 1) return;
 
     try {
-      await this.api.publish({
+      await publish({
+        storageClient: this.storageClient,
         actions: Action.prepareActionsForPublishing(actionsToPublish),
-        signer,
+        wallet,
         onChangePublishState,
         space: spaceId,
         name,
-        description,
       });
 
       const publishedActions = actionsToPublish.map(action => ({
