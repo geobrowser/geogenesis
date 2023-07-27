@@ -5,8 +5,8 @@ import { FormEvent } from 'react';
 import { Space, Space__factory } from '@geogenesis/contracts';
 import { useSigner } from 'wagmi';
 
-import { useAccessControl } from '~/modules/auth/use-access-control';
-import { useSpaces } from '~/modules/spaces/use-spaces';
+import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useSpaces } from '~/core/hooks/use-spaces';
 import { useSearchParams } from 'next/navigation';
 
 type RoleType = 'editor' | 'admin' | 'editorController';

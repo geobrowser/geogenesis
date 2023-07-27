@@ -2,20 +2,19 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ClientOnly } from '~/modules/components/client-only';
-import { Compare } from '~/modules/components/compare';
-import { FlowBar } from '~/modules/components/flow-bar';
-import { Main } from '~/modules/components/main';
-import { Navbar } from '~/modules/components/navbar/navbar';
-import { Review } from '~/modules/components/review';
-import { useDiff } from '~/modules/diff';
-import { useKeyboardShortcuts } from '~/modules/hooks/use-keyboard-shortcuts';
-import { Toast } from '~/modules/hooks/use-toast';
-import { OnboardingDialog } from '~/modules/onboarding/dialog';
-import { Persistence } from '~/modules/persistence';
-import { Dialog } from '~/modules/search';
-import { NavUtils } from '~/modules/utils';
+import { ClientOnly } from '~/design-system/client-only';
+import { Compare } from '~/partials/history/compare';
+import { Main } from '~/partials/main';
+import { Navbar } from '~/partials/navbar/navbar';
+import { useDiff } from '~/core/state/diff-store/diff-store';
+import { OnboardingDialog } from '~/partials/onboarding/dialog';
+import { Persistence } from '~/core/state/persistence';
 import { Analytics } from '@vercel/analytics/react';
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { Dialog } from '~/partials/search';
+import { NavUtils } from '~/core/utils/utils';
+import { FlowBar, Review } from '~/partials/review';
+import { Toast } from '~/core/hooks/use-toast';
 
 export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();

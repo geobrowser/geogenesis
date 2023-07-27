@@ -1,17 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
-import { Space, Triple } from '~/modules/types';
+import { Space, Triple } from '~/core/types';
 
-import { TypesStoreProvider } from '~/modules/type/types-store';
-import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
-import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
-import { EditableHeading } from '~/modules/components/entity/editable-entity-header';
-import { EditableEntityPage } from '~/modules/components/entity/editable-entity-page';
-import { ReadableEntityPage } from '~/modules/components/entity/readable-entity-page';
-import { useUserIsEditing } from '~/modules/hooks/use-user-is-editing';
+import { TypesStoreProvider } from '~/core/state/types-store/types-store';
+import { ReferencedByEntity } from '~/partials/entity-page/types';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
+import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
+import { Entity } from '~/core/utils/entity';
+import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 
 interface Props {
   triples: Triple[];

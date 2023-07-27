@@ -1,7 +1,7 @@
 import { ImageResponse } from '@vercel/og';
 import type { NextRequest } from 'next/server';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 
 export const runtime = 'edge';
 

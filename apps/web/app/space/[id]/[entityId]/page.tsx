@@ -1,19 +1,18 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import type { Metadata } from 'next';
 
-import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity } from '~/modules/entity';
-import { Params } from '~/modules/params';
-import { NetworkData } from '~/modules/io';
-import { StorageClient } from '~/modules/services/storage';
-import { ServerSideEnvParams } from '~/modules/types';
-import { getOpenGraphMetadataForEntity, NavUtils } from '~/modules/utils';
-import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { Value } from '~/modules/value';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/modules/spaces/fetch-types';
+import { Entity } from '~/core/utils/entity';
+import { Params } from '~/core/params';
+import { Network, StorageClient } from '~/core/io';
+import { ServerSideEnvParams } from '~/core/types';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Component } from './component';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { ReferencedByEntity } from '~/partials/entity-page/types';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { Value } from '~/core/utils/value';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -31,7 +30,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
 
   const entity = await network.fetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
@@ -75,7 +74,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
   const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
 
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId) ?? null;

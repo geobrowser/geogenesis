@@ -22,4 +22,6 @@ Additionally, WalletConnect v2 requires a project id.
 # .env.local
 NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+ENV_URL=
+NEXT_PUBLIC_IPFS_GATEWAY_PATH=
 ```

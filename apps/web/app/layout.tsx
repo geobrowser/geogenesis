@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Metadata } from 'next';
-import { Providers } from '~/modules/providers';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
+import { Providers } from '~/core/providers';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { App } from './entry';
 
 import 'react-medium-image-zoom/dist/styles.css';

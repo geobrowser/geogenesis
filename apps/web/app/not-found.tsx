@@ -1,9 +1,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 
-import { Button } from '~/modules/design-system/button';
-import { Spacer } from '~/modules/design-system/spacer';
-import { Text } from '~/modules/design-system/text';
+import { Button } from '~/design-system/button';
+import { Spacer } from '~/design-system/spacer';
+import { Text } from '~/design-system/text';
 
 export default function Custom404() {
   return (

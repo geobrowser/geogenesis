@@ -1,11 +1,11 @@
 'use client';
 
-import { SpaceHeader } from '~/modules/components/space/space-header';
-import { SpaceNavbar } from '~/modules/components/space/space-navbar';
-import { Triples } from '~/modules/components/triples';
-import { Spacer } from '~/modules/design-system/spacer';
-import { InitialTripleStoreParams, TripleStoreProvider } from '~/modules/triple';
-import { Triple } from '~/modules/types';
+import { SpaceHeader } from '~/partials/space-page/space-header';
+import { SpaceNavbar } from '~/partials/space-page/space-navbar';
+import { Triples } from '~/partials/triples-page/triples';
+import { Spacer } from '~/design-system/spacer';
+import { Triple } from '~/core/types';
+import { InitialTripleStoreParams, TripleStoreProvider } from '~/core/state/triple-store';
 
 interface Props {
   spaceId: string;

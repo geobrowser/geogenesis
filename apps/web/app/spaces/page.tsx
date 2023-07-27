@@ -1,15 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
-import { Email } from '~/modules/components/onboarding-carousel/email';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
-import { Card } from '~/modules/design-system/card';
-import { Spacer } from '~/modules/design-system/spacer';
-import { NetworkData } from '~/modules/io';
-import { Params } from '~/modules/params';
-import { StorageClient } from '~/modules/services/storage';
-import { ServerSideEnvParams, Space } from '~/modules/types';
+import { OboardingCarousel } from '~/partials/spaces-page/carousel';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Card } from '~/design-system/card';
+import { Spacer } from '~/design-system/spacer';
+import { Network, StorageClient } from '~/core/io';
+import { Params } from '~/core/params';
+import { ServerSideEnvParams, Space } from '~/core/types';
+import { Email } from '~/partials/spaces-page/email';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',
@@ -68,7 +67,7 @@ export default async function Spaces({ searchParams }: { searchParams: ServerSid
   const config = Params.getConfigFromParams(searchParams, env);
   const storage = new StorageClient(config.ipfs);
 
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
