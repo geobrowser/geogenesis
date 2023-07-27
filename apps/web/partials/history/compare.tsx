@@ -1,32 +1,35 @@
 'use client';
 
-import * as React from 'react';
-import cx from 'classnames';
-import { cva } from 'class-variance-authority';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { diffWords, diffArrays } from 'diff';
-import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
-import pluralize from 'pluralize';
 import BoringAvatar from 'boring-avatars';
+import { cva } from 'class-variance-authority';
+import cx from 'classnames';
+import { diffArrays, diffWords } from 'diff';
+import type { Change as Difference } from 'diff';
+import pluralize from 'pluralize';
 
-import { Change } from '~/core/utils/change';
-import { Button } from '~/design-system/button';
-import { colors } from '~/design-system/theme/colors';
-import { useDiff } from '~/core/state/diff-store/diff-store';
-import { Services } from '~/core/services';
-import { SlideUp } from '~/design-system/slide-up';
-import { Avatar } from '~/design-system/avatar';
-import { Entity } from '~/core/utils/entity';
-import { formatShortAddress, getImagePath } from '~/core/utils/utils';
-import { DateTimeDiff } from '~/partials/review';
-import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
-import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/utils/change/change';
-import { Action } from '~/core/utils/action';
-import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
-import { TableBlockFilter } from '~/core/state/table-block-store';
+import * as React from 'react';
+
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Network } from '~/core/io';
+import { Services } from '~/core/services';
+import { useDiff } from '~/core/state/diff-store/diff-store';
+import { TableBlockFilter } from '~/core/state/table-block-store';
+import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
+import { Action } from '~/core/utils/action';
+import { Change } from '~/core/utils/change';
+import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
+import { Entity } from '~/core/utils/entity';
+import { formatShortAddress, getImagePath } from '~/core/utils/utils';
+
+import { Avatar } from '~/design-system/avatar';
+import { Button } from '~/design-system/button';
+import { SlideUp } from '~/design-system/slide-up';
+import { colors } from '~/design-system/theme/colors';
+
+import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
+import { DateTimeDiff } from '~/partials/review';
 
 export const Compare = () => {
   const { isCompareOpen, setIsCompareOpen } = useDiff();

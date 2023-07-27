@@ -1,5 +1,6 @@
-import * as React from 'react';
 import cx from 'classnames';
+
+import * as React from 'react';
 
 import { textStyles } from '~/design-system/theme/typography';
 import type { TypographyName } from '~/design-system/theme/typography';

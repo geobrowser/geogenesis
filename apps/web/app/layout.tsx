@@ -1,13 +1,16 @@
-import * as React from 'react';
-import { Metadata } from 'next';
-import { Providers } from '~/core/providers';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
-import { App } from './entry';
-
 import 'react-medium-image-zoom/dist/styles.css';
+
+import * as React from 'react';
+
+import { Metadata } from 'next';
+
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Providers } from '~/core/providers';
+
 import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
+import { App } from './entry';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),

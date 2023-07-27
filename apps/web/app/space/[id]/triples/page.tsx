@@ -1,12 +1,14 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { cookies } from 'next/headers';
+
 import * as React from 'react';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Params } from '~/core/params';
 import { Network, StorageClient } from '~/core/io';
-import { ServerSideEnvParams } from '~/core/types';
-import { Component } from './component';
-import { cookies } from 'next/headers';
+import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { ServerSideEnvParams } from '~/core/types';
+
+import { Component } from './component';
 
 interface Props {
   params: { id: string };

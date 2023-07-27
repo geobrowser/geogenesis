@@ -2,10 +2,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { Providers } from '~/core/providers';
 import { MockNetworkData } from '~/core/io';
-import { EditableEntityPage } from './editable-entity-page';
+import { Providers } from '~/core/providers';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
+
+import { EditableEntityPage } from './editable-entity-page';
 
 describe('Editable Entity Page', () => {
   it('Renders text schema triples placeholders', async () => {

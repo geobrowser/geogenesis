@@ -2,8 +2,9 @@
 
 import { observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
-import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+
+import * as React from 'react';
 
 const toast$ = observable<React.ReactNode | null>(null);
 

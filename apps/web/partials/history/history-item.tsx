@@ -1,8 +1,10 @@
 import pluralize from 'pluralize';
-import { Text } from '~/design-system/text';
-import { formatShortAddress, GeoDate } from '~/core/utils/utils';
-import { Avatar } from '~/design-system/avatar';
+
 import { Profile } from '~/core/types';
+import { GeoDate, formatShortAddress } from '~/core/utils/utils';
+
+import { Avatar } from '~/design-system/avatar';
+import { Text } from '~/design-system/text';
 
 interface Props {
   // We want to group together all changes to the same property into a single

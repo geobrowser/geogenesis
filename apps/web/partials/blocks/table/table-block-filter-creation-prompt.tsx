@@ -1,24 +1,26 @@
-import * as React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Content, Root, Trigger, Portal } from '@radix-ui/react-popover';
-
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { TableBlockFilter, useTableBlock } from '../../../core/state/table-block-store/table-block-store';
-import { TripleValueType, Entity, Space } from '~/core/types';
-import { TextButton } from '~/design-system/text-button';
-import { Spacer } from '~/design-system/spacer';
-import { Select } from '~/design-system/select';
-import { Input } from '~/design-system/input';
-import { ResizableContainer } from '~/design-system/resizable-container';
-import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
+import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
+import { AnimatePresence, motion } from 'framer-motion';
+
+import * as React from 'react';
+
+import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Text } from '~/design-system/text';
+import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store/table-block-store';
+import { Entity, Space, TripleValueType } from '~/core/types';
+
+import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Input } from '~/design-system/input';
+import { ResizableContainer } from '~/design-system/resizable-container';
+import { Select } from '~/design-system/select';
+import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { Text } from '~/design-system/text';
+import { TextButton } from '~/design-system/text-button';
 
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;

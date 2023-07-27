@@ -1,20 +1,22 @@
 'use client';
 
-import * as React from 'react';
-import { Command } from 'cmdk';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Command } from 'cmdk';
 
-import { SquareButton } from '~/design-system/button';
-import { Input } from '~/design-system/input';
-import { Menu } from '~/design-system/menu';
-import { ResultContent } from '../../design-system/autocomplete/results-list';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { DeletableChipButton } from '~/design-system/chip';
-import { NavUtils } from '~/core/utils/utils';
-import { Entity } from '~/core/types';
+import * as React from 'react';
+
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { Entity } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
+import { NavUtils } from '~/core/utils/utils';
+
+import { ResultContent } from '~/design-system/autocomplete/results-list';
+import { SquareButton } from '~/design-system/button';
+import { DeletableChipButton } from '~/design-system/chip';
+import { Input } from '~/design-system/input';
+import { Menu } from '~/design-system/menu';
 
 interface Props {
   // This is the entityId of the attribute being configured with a relation type.

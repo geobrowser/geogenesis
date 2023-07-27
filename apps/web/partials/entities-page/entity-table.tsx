@@ -12,26 +12,29 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
+
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { useEditable } from '~/core/state/editable-store/editable-store';
-import { valueTypes } from '~/core/value-types';
-import { Text } from '~/design-system/text';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store';
 import { Cell, Column, Row } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
+import { NavUtils } from '~/core/utils/utils';
+import { valueTypes } from '~/core/value-types';
+
 import { TableCell } from '~/design-system/table/cell';
 import { EmptyTableText } from '~/design-system/table/styles';
-import { AddNewColumn } from './add-new-column';
+import { Text } from '~/design-system/text';
+
+import { columnName, columnValueType } from '../blocks/table/utils';
 import { EditableEntityTableCell } from '../entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '../entity-page/editable-entity-table-column-header';
+import { AddNewColumn } from './add-new-column';
 import { EntityTableCell } from './entity-table-cell';
-import { Entity } from '~/core/utils/entity';
-import { useEntityTable } from '~/core/hooks/use-entity-table';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { columnName, columnValueType } from '../blocks/table/utils';
-import { Triple } from '~/core/utils/triple';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store';
-import { NavUtils } from '~/core/utils/utils';
 
 const columnHelper = createColumnHelper<Row>();
 

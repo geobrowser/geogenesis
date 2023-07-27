@@ -1,18 +1,21 @@
 'use client';
 
-import * as React from 'react';
-import { useRef, useState } from 'react';
 import { useRect } from '@radix-ui/react-use-rect';
 import { motion } from 'framer-motion';
 
-import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
+import * as React from 'react';
+import { useRef, useState } from 'react';
+
 import { useWindowSize } from '~/core/hooks/use-window-size';
-import { OnboardingStep, ONBOARDING_CONTENT } from './content';
-import { Select } from '~/design-system/select';
-import { TabButton } from '~/design-system/tab-button';
+
 import { CaretUp } from '~/design-system/icons/caret-up';
+import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
+import { Select } from '~/design-system/select';
+import { Spacer } from '~/design-system/spacer';
+import { TabButton } from '~/design-system/tab-button';
+import { Text } from '~/design-system/text';
+
+import { ONBOARDING_CONTENT, OnboardingStep } from './content';
 
 const BREAKPOINT = 789;
 const DEFAULT_ARROW_LEFT = 62;

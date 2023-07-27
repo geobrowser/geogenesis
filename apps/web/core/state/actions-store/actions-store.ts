@@ -1,18 +1,18 @@
-import { Observable, observable, computed } from '@legendapp/state';
+import { Observable, computed, observable } from '@legendapp/state';
 import { Signer } from 'ethers';
 
-import { Action } from '~/core/utils/action';
 import { Network } from '~/core/io';
 import {
   Action as ActionType,
   CreateTripleAction,
   DeleteTripleAction,
   EditTripleAction,
-  ReviewState,
   Triple as ITriple,
+  ReviewState,
 } from '~/core/types';
-import { makeOptionalComputed } from '~/core/utils/utils';
+import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
+import { makeOptionalComputed } from '~/core/utils/utils';
 
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;

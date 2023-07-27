@@ -4,16 +4,19 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
+
 import { useState } from 'react';
 
-import { Filter } from '~/design-system/icons/filter';
 import { useWindowSize } from '~/core/hooks/use-window-size';
 import { initialFilterState } from '~/core/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/core/types';
 import { intersperse } from '~/core/utils/utils';
+
 import { Button } from '~/design-system/button';
+import { Filter } from '~/design-system/icons/filter';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
+
 import { FilterInputGroup } from './input-group';
 
 const MotionContent = motion(PopoverPrimitive.Content);

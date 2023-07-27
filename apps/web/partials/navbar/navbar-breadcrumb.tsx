@@ -1,9 +1,12 @@
-import * as React from 'react';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
+
+import * as React from 'react';
+
+import { getImagePath } from '~/core/utils/utils';
+
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { getImagePath } from '~/core/utils/utils';
 
 interface NavbarBreadcrumbProps {
   href: string;

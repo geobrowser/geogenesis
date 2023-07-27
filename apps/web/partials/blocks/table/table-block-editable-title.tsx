@@ -1,9 +1,9 @@
 import * as React from 'react';
 
+import { TableBlockSdk } from '~/core/blocks-sdk';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useTableBlock } from '~/core/state/table-block-store';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { TableBlockSdk } from '../../../core/blocks-sdk';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity } from '~/core/utils/entity';
 
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {

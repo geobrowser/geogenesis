@@ -1,15 +1,18 @@
 'use client';
 
-import * as React from 'react';
-import { ObservableComputed, computed } from '@legendapp/state';
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
-import { Space, Triple as TripleType } from '../../types';
-import { makeOptionalComputed } from '~/core/utils/utils';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A, pipe } from '@mobily/ts-belt';
-import { Triple } from '~/core/utils/triple';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { ObservableComputed, computed } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
+import { A, pipe } from '@mobily/ts-belt';
+
+import * as React from 'react';
+
+import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
+import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { Space, Triple as TripleType } from '~/core/types';
+import { Triple } from '~/core/utils/triple';
+import { makeOptionalComputed } from '~/core/utils/utils';
+
 import { LocalStore, useLocalStoreInstance } from '../local-store';
 
 export class TypesStore {

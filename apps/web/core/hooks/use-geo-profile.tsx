@@ -1,4 +1,5 @@
 import { useAccount } from 'wagmi';
+
 import { useHydrated } from './use-hydrated';
 
 export function useGeoProfile() {

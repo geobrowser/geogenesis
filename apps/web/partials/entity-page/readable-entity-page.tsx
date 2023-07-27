@@ -1,25 +1,28 @@
 'use client';
 
-import * as React from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
-import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { LinkableChip } from '~/design-system/chip';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
+import * as React from 'react';
+
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Triple } from '~/core/types';
-import { groupBy, NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
+
+import { SmallButton } from '~/design-system/button';
+import { LinkableChip } from '~/design-system/chip';
+import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
+import { Spacer } from '~/design-system/spacer';
+import { Tag } from '~/design-system/tag';
+import { Text } from '~/design-system/text';
+
 import { sortEntityPageTriples } from './entity-page-utils';
 import { ReferencedByEntity } from './types';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Tag } from '~/design-system/tag';
-import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
-import { DateField } from '~/design-system/editable-fields/date-field';
-import { SmallButton } from '~/design-system/button';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 
 interface Props {
   triples: Triple[];

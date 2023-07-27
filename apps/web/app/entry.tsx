@@ -1,20 +1,24 @@
 'use client';
 
-import * as React from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { useRouter } from 'next/navigation';
+
+import * as React from 'react';
+
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { Toast } from '~/core/hooks/use-toast';
+import { useDiff } from '~/core/state/diff-store/diff-store';
+import { Persistence } from '~/core/state/persistence';
+import { NavUtils } from '~/core/utils/utils';
+
 import { ClientOnly } from '~/design-system/client-only';
+
 import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
-import { useDiff } from '~/core/state/diff-store/diff-store';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';
-import { Persistence } from '~/core/state/persistence';
-import { Analytics } from '@vercel/analytics/react';
-import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { Dialog } from '~/partials/search';
-import { NavUtils } from '~/core/utils/utils';
 import { FlowBar, Review } from '~/partials/review';
-import { Toast } from '~/core/hooks/use-toast';
+import { Dialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {
   const router = useRouter();

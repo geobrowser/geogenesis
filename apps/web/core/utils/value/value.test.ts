@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Triple } from '../../types';
+import { Triple } from '~/core/types';
+
 import { nameOfEntityValue } from './value';
 
 const entityValueTriple: Triple = {

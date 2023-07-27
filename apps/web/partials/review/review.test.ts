@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
-import { Change } from '~/core/utils/change';
 import type { Action } from '~/core/types';
+import { Change } from '~/core/utils/change';
 import type { Changeset } from '~/core/utils/change/change';
 
 const STRING_ACTIONS: Array<Action> = [

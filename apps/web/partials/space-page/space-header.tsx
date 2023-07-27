@@ -1,20 +1,23 @@
 'use client';
 
-import * as React from 'react';
-import Image from 'next/legacy/image';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import Image from 'next/legacy/image';
 
-import { Text } from '~/design-system/text';
-import { ZERO_WIDTH_SPACE } from '../../core/constants';
-import { HistoryPanel, HistoryItem } from '../history';
-import { Action as IAction } from '~/core/types';
+import * as React from 'react';
+
+import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
-import { Dots } from '~/design-system/dots';
-import { SmallButton } from '~/design-system/button';
-import { HistoryEmpty } from '../history';
-import { getImagePath } from '~/core/utils/utils';
+import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
+import { getImagePath } from '~/core/utils/utils';
+
+import { SmallButton } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
+import { Text } from '~/design-system/text';
+
+import { HistoryItem, HistoryPanel } from '../history';
+import { HistoryEmpty } from '../history';
 
 interface Props {
   spaceId: string;

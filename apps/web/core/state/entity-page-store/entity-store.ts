@@ -1,24 +1,26 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch, computed, Observable, observable, ObservableComputed, observe } from '@legendapp/state';
+import { Observable, ObservableComputed, batch, computed, observable, observe } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
-import { Editor, generateHTML, generateJSON, JSONContent } from '@tiptap/core';
-import showdown from 'showdown';
+import { Editor, JSONContent, generateHTML, generateJSON } from '@tiptap/core';
 import pluralize from 'pluralize';
+import showdown from 'showdown';
+
+import { TableBlockSdk } from '~/core/blocks-sdk';
+import { ID } from '~/core/id';
+import { Network } from '~/core/io';
+import { Merged } from '~/core/merged';
+import { EntityValue, Triple as ITriple } from '~/core/types';
+import { Action } from '~/core/utils/action';
+import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
+import { getImagePath, makeOptionalComputed } from '~/core/utils/utils';
+import { Value } from '~/core/utils/value';
 
 import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
-import { ID } from '~/core/id';
-import { Network } from '~/core/io';
-import { EntityValue, Triple as ITriple } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+
 import { ActionsStore } from '../actions-store';
-import { Action } from '~/core/utils/action';
-import { getImagePath, makeOptionalComputed } from '~/core/utils/utils';
-import { Entity } from '~/core/utils/entity';
-import { Value } from '~/core/utils/value';
-import { TableBlockSdk } from '~/core/blocks-sdk';
 import { LocalStore } from '../local-store';
-import { Merged } from '~/core/merged';
 
 const markdownConverter = new showdown.Converter();
 

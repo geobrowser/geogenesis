@@ -1,7 +1,7 @@
-import { computed, ObservableComputed } from '@legendapp/state';
+import { ObservableComputed, computed } from '@legendapp/state';
 
-import { Services } from '../../services';
 import { Network } from '~/core/io';
+import { Services } from '~/core/services';
 import { Space } from '~/core/types';
 import { makeOptionalComputed } from '~/core/utils/utils';
 

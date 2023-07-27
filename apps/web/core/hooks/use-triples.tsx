@@ -2,8 +2,8 @@
 
 import { useSelector } from '@legendapp/state/react';
 
-import { FilterState } from '../types';
 import { useTripleStoreInstance } from '../state/triple-store/triple-store-provider';
+import { FilterState } from '../types';
 
 export const useTriples = () => {
   const {

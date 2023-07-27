@@ -1,8 +1,9 @@
 import BoringAvatar from 'boring-avatars';
 import Image from 'next/legacy/image';
-import { colors } from './theme/colors';
 
 import { getImagePath } from '~/core/utils/utils';
+
+import { colors } from './theme/colors';
 
 interface Props {
   avatarUrl?: string | null;

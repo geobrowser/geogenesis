@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { pipe } from '@mobily/ts-belt';
+
 import { Action, Action as ActionType } from '~/core/types';
 
 export function forEntityId(actions: ActionType[], entityId: string) {

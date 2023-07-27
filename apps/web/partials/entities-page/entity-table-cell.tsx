@@ -1,12 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Entity } from '~/core/utils/entity';
-import { LinkableChip } from '~/design-system/chip';
+
 import { Cell, Triple } from '~/core/types';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
-import { CellContent } from '~/design-system/table/cell-content';
-import { DateField } from '~/design-system/editable-fields/date-field';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+
+import { LinkableChip } from '~/design-system/chip';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { CellContent } from '~/design-system/table/cell-content';
 
 interface Props {
   cell: Cell;

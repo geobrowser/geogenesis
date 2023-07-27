@@ -1,18 +1,21 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import type { Metadata } from 'next';
-
-import { Entity } from '~/core/utils/entity';
-import { Params } from '~/core/params';
-import { Network, StorageClient } from '~/core/io';
-import { ServerSideEnvParams } from '~/core/types';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
-import { Component } from './component';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
-import { ReferencedByEntity } from '~/partials/entity-page/types';
+
+import type { Metadata } from 'next';
+
+import { Network, StorageClient } from '~/core/io';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
+import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { ServerSideEnvParams } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
+
+import { ReferencedByEntity } from '~/partials/entity-page/types';
+
+import { Component } from './component';
 
 interface Props {
   params: { id: string; entityId: string };

@@ -4,15 +4,17 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
 
+import { useSpaces } from '~/core/hooks/use-spaces';
+
+import { ClientOnly } from '~/design-system/client-only';
+import { Icon } from '~/design-system/icon';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
-import { Icon } from '~/design-system/icon';
 import { Spacer } from '~/design-system/spacer';
-import { useSpaces } from '~/core/hooks/use-spaces';
+
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
-import { ClientOnly } from '../../design-system/client-only';
 
 interface Props {
   onSearchClick: () => void;

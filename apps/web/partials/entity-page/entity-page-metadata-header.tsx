@@ -1,24 +1,27 @@
 'use client';
 
-import * as React from 'react';
-import Link from 'next/link';
 import { useInfiniteQuery } from '@tanstack/react-query';
-
-import { EntityType } from '~/core/types';
-import { EntityPageTypeChip } from './entity-page-type-chip';
-import { Services } from '~/core/services';
-import { Menu } from '~/design-system/menu';
-import { Context } from '~/design-system/icons/context';
-import { Close } from '~/design-system/icons/close';
-import { Text } from '~/design-system/text';
-import { Action as IAction } from '~/core/types';
-import { EntityPageContextMenu } from './entity-page-context-menu';
-import { useDiff } from '~/core/state/diff-store/diff-store';
-import { Dots } from '~/design-system/dots';
-import { SmallButton } from '~/design-system/button';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
+
+import * as React from 'react';
+
+import { Services } from '~/core/services';
+import { useDiff } from '~/core/state/diff-store/diff-store';
+import { EntityType } from '~/core/types';
+import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
+
+import { SmallButton } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
+import { Close } from '~/design-system/icons/close';
+import { Context } from '~/design-system/icons/context';
+import { Menu } from '~/design-system/menu';
+import { Text } from '~/design-system/text';
+
+import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
+import { EntityPageContextMenu } from './entity-page-context-menu';
+import { EntityPageTypeChip } from './entity-page-type-chip';
 
 interface EntityPageMetadataHeaderProps {
   id: string;

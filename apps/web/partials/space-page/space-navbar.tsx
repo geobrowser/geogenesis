@@ -1,16 +1,18 @@
 'use client';
 
-import * as React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+import * as React from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { ID } from '~/core/id';
+import { useEditable } from '~/core/state/editable-store/editable-store';
+import { NavUtils } from '~/core/utils/utils';
+
 import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
 import { TabLink } from '~/design-system/tab-link';
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { NavUtils } from '~/core/utils/utils';
-import { usePathname } from 'next/navigation';
-import { ID } from '~/core/id';
 
 interface Props {
   spaceId: string;

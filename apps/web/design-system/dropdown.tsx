@@ -1,14 +1,15 @@
 'use client';
 
+import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
+import { cva } from 'class-variance-authority';
+import { AnimatePresence, motion } from 'framer-motion';
+
 import * as React from 'react';
 import { useState } from 'react';
-import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Spacer } from './spacer';
 import { Text } from './text';
-import { cva } from 'class-variance-authority';
 
 const MotionContent = motion(DropdownPrimitive.Content);
 

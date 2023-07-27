@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Providers } from '~/core/providers';
 import { Space } from '~/core/types';
+
 import { ResultContent } from './results-list';
 
 const space: Space = {

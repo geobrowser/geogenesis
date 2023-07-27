@@ -1,16 +1,17 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-
-import { Params } from '~/core/params';
-import { Network } from '~/core/io';
-import { StorageClient } from '~/core/io';
-import { ServerSideEnvParams } from '~/core/types';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { Component } from './component';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { Network } from '~/core/io';
+import { StorageClient } from '~/core/io';
+import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
+import { Params } from '~/core/params';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { ServerSideEnvParams } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
+
+import { Component } from './component';
 
 interface Props {
   params: { id: string };

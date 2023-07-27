@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 
-import { Input } from '~/design-system/input';
-import { Text } from '~/design-system/text';
-import { Spacer } from '~/design-system/spacer';
-import { useTypesStore } from '~/core/state/types-store/types-store';
-import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { useTypesStore } from '~/core/state/types-store/types-store';
+
+import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
+import { Input } from '~/design-system/input';
+import { Spacer } from '~/design-system/spacer';
+import { Text } from '~/design-system/text';
 
 interface Props {
   handleSelect: (type: SelectedEntityType) => void;

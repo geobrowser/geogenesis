@@ -1,11 +1,14 @@
 'use client';
 
+import { batch } from '@legendapp/state';
+
 import * as React from 'react';
+
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+
 import { Icon } from '~/design-system/icon';
 import { Menu } from '~/design-system/menu';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { batch } from '@legendapp/state';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 interface Props {
   entityId: string;

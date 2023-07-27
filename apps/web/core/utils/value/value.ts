@@ -1,5 +1,6 @@
-import { getImageHash } from '../utils';
 import type { Triple } from '~/core/types';
+
+import { getImageHash } from '../utils';
 
 export function nameOfEntityValue(triple: Triple) {
   return triple?.value?.type === 'entity' ? triple.value.name : null;

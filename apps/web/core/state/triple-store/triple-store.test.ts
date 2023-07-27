@@ -1,9 +1,10 @@
 import { when } from '@legendapp/state';
 import { describe, expect, it } from 'vitest';
 
-import { TripleStore } from './triple-store';
 import { MockNetworkData } from '~/core/io';
+
 import { ActionsStore } from '../actions-store';
+import { TripleStore } from './triple-store';
 
 describe('TripleStore', () => {
   it('Initializes to empty', async () => {

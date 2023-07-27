@@ -1,12 +1,13 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { useMemo } from 'react';
 
-import { EntityStore } from '~/core/state/entity-page-store';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
+import { EntityStore } from '~/core/state/entity-page-store';
 import { ImageValue, Triple as TripleType, TripleValueType } from '~/core/types';
+import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';

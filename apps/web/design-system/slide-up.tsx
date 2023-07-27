@@ -1,8 +1,9 @@
+import * as Dialog from '@radix-ui/react-dialog';
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
+
 import * as React from 'react';
 import { useCallback } from 'react';
-import cx from 'classnames';
-import * as Dialog from '@radix-ui/react-dialog';
-import { motion, AnimatePresence } from 'framer-motion';
 
 type SlideUpProps = {
   isOpen: boolean;

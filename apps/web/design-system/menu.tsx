@@ -1,8 +1,8 @@
-import * as React from 'react';
-
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
-import { AnimatePresence, motion } from 'framer-motion';
 import { cva } from 'class-variance-authority';
+import { AnimatePresence, motion } from 'framer-motion';
+
+import * as React from 'react';
 
 interface Props {
   children: React.ReactNode;

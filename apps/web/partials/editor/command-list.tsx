@@ -1,16 +1,19 @@
 'use client';
 
-import * as React from 'react';
-import { forwardRef, ReactNode, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import cx from 'classnames';
 import { Editor } from '@tiptap/react';
+import cx from 'classnames';
 
-import { Text } from '~/design-system/text';
+import * as React from 'react';
+import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { Triple } from '~/core/types';
-import { CommandSuggestionItem, tableCommandItem } from './command-items';
+
+import { Text } from '~/design-system/text';
+
 import { TableBlockTypePicker } from '../blocks/table/table-block-type-picker';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { CommandSuggestionItem, tableCommandItem } from './command-items';
 
 export interface CommandListRef {
   onKeyDown: (o: { event: KeyboardEvent }) => boolean;

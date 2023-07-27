@@ -1,10 +1,11 @@
 import * as React from 'react';
 
+import { FilterClause, FilterField } from '~/core/types';
+
 import { Button } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Select } from '~/design-system/select';
 import { Spacer } from '~/design-system/spacer';
-import { FilterClause, FilterField } from '~/core/types';
 
 interface Props {
   filterClause: FilterClause;

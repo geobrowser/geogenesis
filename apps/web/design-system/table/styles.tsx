@@ -1,5 +1,6 @@
-import * as React from 'react';
 import cx from 'classnames';
+
+import * as React from 'react';
 
 type EmptyTableTextProps = React.ComponentPropsWithoutRef<'td'>;
 

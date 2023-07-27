@@ -1,10 +1,11 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { Value } from '../value';
+import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
+
 import { Triple } from '../triple';
-import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '../../types';
 import { groupBy } from '../utils';
+import { Value } from '../value';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the

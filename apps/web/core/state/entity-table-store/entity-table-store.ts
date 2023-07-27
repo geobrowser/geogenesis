@@ -1,20 +1,21 @@
-import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { A, pipe } from '@mobily/ts-belt';
 
-import { ActionsStore } from '~/core/state/actions-store';
-import { SpaceStore } from '~/core/state/spaces-store/space-store';
-import { Triple } from '~/core/utils/triple';
-import { Entity } from '../../utils/entity';
-import { EntityTable } from '../../utils/entity-table';
-import { Column, EntityValue, Row, Space, Triple as TripleType } from '../../types';
-import { makeOptionalComputed } from '~/core/utils/utils';
-import { InitialEntityTableStoreParams } from './entity-table-store-params';
-import { CreateType } from '~/core/type';
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { LocalStore } from '../local-store';
 import { Network } from '~/core/io';
 import { Merged } from '~/core/merged';
+import { ActionsStore } from '~/core/state/actions-store';
+import { SpaceStore } from '~/core/state/spaces-store/space-store';
+import { CreateType } from '~/core/type';
+import { Column, EntityValue, Row, Space, Triple as TripleType } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { EntityTable } from '~/core/utils/entity-table';
+import { Triple } from '~/core/utils/triple';
+import { makeOptionalComputed } from '~/core/utils/utils';
+
+import { LocalStore } from '../local-store';
+import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 

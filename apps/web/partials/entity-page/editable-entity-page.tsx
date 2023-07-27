@@ -1,35 +1,38 @@
 'use client';
 
-import * as React from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import * as React from 'react';
+
+import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { EntityOthersToast } from '~/core/presence/entity-others-toast';
+import { EntityPresenceProvider } from '~/core/presence/presence-provider';
+import { Services } from '~/core/services';
+import { Triple as ITriple, TripleValueType } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils, groupBy } from '~/core/utils/utils';
+
+import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { Button, SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { IconName } from '~/design-system/icon';
+import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
+import { Url } from '~/design-system/icons/url';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { Entity } from '~/core/utils/entity';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { Triple as ITriple, TripleValueType } from '~/core/types';
-import { groupBy, NavUtils } from '~/core/utils/utils';
-import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
-import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
-import { useEditEvents } from '~/core/events/edit-events';
-import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { sortEntityPageTriples } from './entity-page-utils';
-import { EntityOthersToast } from '~/core/presence/entity-others-toast';
-import { EntityPresenceProvider } from '~/core/presence/presence-provider';
-import { TripleTypeDropdown } from './triple-type-dropdown';
-import { DateField } from '~/design-system/editable-fields/date-field';
-import { Services } from '~/core/services';
+
 import { AttributeConfigurationMenu } from './attribute-configuration-menu';
-import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { Url } from '~/design-system/icons/url';
-import { Date } from '~/design-system/icons/date';
+import { sortEntityPageTriples } from './entity-page-utils';
+import { TripleTypeDropdown } from './triple-type-dropdown';
 
 interface Props {
   triples: ITriple[];

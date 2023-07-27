@@ -1,7 +1,8 @@
-import * as React from 'react';
-import { NodeViewRendererProps, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react';
-
 import Heading, { Level } from '@tiptap/extension-heading';
+import { NodeViewContent, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+
+import * as React from 'react';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 export const HeadingNode = Heading.extend({

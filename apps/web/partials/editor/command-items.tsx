@@ -1,15 +1,17 @@
-import * as React from 'react';
 import { Editor, Range } from '@tiptap/core';
+
+import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { Network, StorageClient } from '~/core/io';
+
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
+import { EditorImage } from '~/design-system/icons/editor-image';
+import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorTable } from '~/design-system/icons/editor-table';
 import { EditorText } from '~/design-system/icons/editor-text';
-import { EditorList } from '~/design-system/icons/editor-list';
-import { EditorImage } from '~/design-system/icons/editor-image';
 
 export interface CommandSuggestionItem {
   title: string;

@@ -1,13 +1,15 @@
 'use client';
 
+import { Space, Space__factory } from '@geogenesis/contracts';
+import { useParams } from 'next/navigation';
+
 import * as React from 'react';
 import { FormEvent } from 'react';
-import { Space, Space__factory } from '@geogenesis/contracts';
+
 import { useSigner } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { useParams } from 'next/navigation';
 
 type RoleType = 'editor' | 'admin' | 'editorController';
 

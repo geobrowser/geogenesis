@@ -5,9 +5,10 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { Services } from '~/core/services';
 import { Triple } from '~/core/types';
-import { EntityStore } from './entity-store';
+
 import { useActionsStoreInstance } from '../actions-store';
 import { useLocalStoreInstance } from '../local-store';
+import { EntityStore } from './entity-store';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
 

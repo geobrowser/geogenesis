@@ -1,5 +1,6 @@
-import * as React from 'react';
 import { cva } from 'class-variance-authority';
+
+import * as React from 'react';
 
 import { ColorName } from './theme/colors';
 import { TypographyName } from './theme/typography';

@@ -1,22 +1,25 @@
 'use client';
 
-import * as React from 'react';
-import { useAccount } from 'wagmi';
-import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import * as Popover from '@radix-ui/react-popover';
-
-import { GeoConnectButton } from '~/core/wallet';
-import { Avatar } from '~/design-system/avatar';
-import { Menu } from '~/design-system/menu';
 import { useQuery } from '@tanstack/react-query';
-import { Services } from '~/core/services';
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { EyeSmall } from '~/design-system/icons/eye-small';
-import { BulkEdit } from '~/design-system/icons/bulk-edit';
-import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { cva } from 'class-variance-authority';
+import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+
+import * as React from 'react';
+
+import { useAccount } from 'wagmi';
+
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { Services } from '~/core/services';
+import { useEditable } from '~/core/state/editable-store/editable-store';
+import { GeoConnectButton } from '~/core/wallet';
+
+import { Avatar } from '~/design-system/avatar';
+import { BulkEdit } from '~/design-system/icons/bulk-edit';
+import { EyeSmall } from '~/design-system/icons/eye-small';
+import { NotificationEmpty } from '~/design-system/icons/notification-empty';
+import { Menu } from '~/design-system/menu';
 
 function useUserProfile(address?: string) {
   const { network } = Services.useServices();

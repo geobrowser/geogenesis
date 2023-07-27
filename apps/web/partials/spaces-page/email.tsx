@@ -1,8 +1,9 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
+
 import * as React from 'react';
 import { useReducer } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 
 import { Button, ButtonVariant } from '~/design-system/button';
 import { Tick } from '~/design-system/icons/tick';

@@ -1,6 +1,7 @@
-import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
+
+import * as React from 'react';
 
 type Props = React.ComponentPropsWithoutRef<'a'> & {
   isActive: boolean;

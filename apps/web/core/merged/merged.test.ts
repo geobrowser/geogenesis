@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Entity } from '~/core/utils/entity';
-import { CreateTripleAction, StringValue, Triple } from '~/core/types';
-import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
-import { Merged as MergeDataSource } from './merged';
-import { LocalStore } from '../state/local-store/local-store';
+
 import { ActionsStore } from '~/core/state/actions-store';
+import { CreateTripleAction, StringValue, Triple } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+
+import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
+import { LocalStore } from '../state/local-store/local-store';
+import { Merged as MergeDataSource } from './merged';
 
 describe('MergeDataSource merges local triples with network triples', () => {
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra

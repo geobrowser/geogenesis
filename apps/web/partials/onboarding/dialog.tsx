@@ -1,21 +1,24 @@
 'use client';
 
 import { observer } from '@legendapp/state/react';
-import { Command } from 'cmdk';
 import BoringAvatar from 'boring-avatars';
+import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import Confetti from 'js-confetti';
+
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+
 import { useAccount } from 'wagmi';
 
-import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
-import { Button, SquareButton } from '../../design-system/button';
-import { Text } from '../../design-system/text';
-import { Services } from '../../core/services';
-import { Value } from '~/core/utils/value';
+import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { Services } from '~/core/services';
 import { formatShortAddress, getImagePath } from '~/core/utils/utils';
-import { useOnboarding } from '../../core/hooks/use-onboarding';
+import { Value } from '~/core/utils/value';
+
+import { Button, SquareButton } from '~/design-system/button';
+import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
+import { Text } from '~/design-system/text';
 
 type Steps = 'wallet' | 'name' | 'avatar' | 'success';
 

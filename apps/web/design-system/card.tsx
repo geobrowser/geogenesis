@@ -1,12 +1,15 @@
 'use client';
 
-import * as React from 'react';
-import { useState } from 'react';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 
-import { Text } from '~/design-system/text';
+import * as React from 'react';
+import { useState } from 'react';
+
 import { NavUtils, getImagePath } from '~/core/utils/utils';
+
+import { Text } from '~/design-system/text';
+
 import { RightArrowDiagonal } from './icons/right-arrow-diagonal';
 
 interface Props {

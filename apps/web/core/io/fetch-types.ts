@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { INetwork } from './network';
+
 import { Space } from '../types';
+import { INetwork } from './network';
 
 export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string, pageSize = 1000) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */

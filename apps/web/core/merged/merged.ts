@@ -1,11 +1,12 @@
 import { A, G, pipe } from '@mobily/ts-belt';
-import { Column, OmitStrict, Row, Version } from '~/core/types';
+
 import { Network } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
-import { Triple } from '~/core/utils/triple';
+import { LocalStore } from '~/core/state/local-store';
+import { Column, OmitStrict, Row, Version } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
-import { LocalStore } from '~/core/state/local-store';
+import { Triple } from '~/core/utils/triple';
 
 interface MergedDataSourceOptions {
   api: Network.INetwork;

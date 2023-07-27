@@ -1,11 +1,13 @@
 import * as React from 'react';
 
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
 import { useTriples } from '~/core/hooks/use-triples';
-import { Triple } from '../../core/types';
-import { PageContainer, PageNumberContainer } from '../../design-system/table/styles';
-import { NextButton, PageNumber, PreviousButton } from '../../design-system/table/table-pagination';
+import { Triple } from '~/core/types';
+
+import { Spacer } from '~/design-system/spacer';
+import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
+import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
+import { Text } from '~/design-system/text';
+
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 

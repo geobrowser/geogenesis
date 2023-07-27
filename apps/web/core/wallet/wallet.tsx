@@ -1,16 +1,19 @@
 'use client';
 
-import * as React from 'react';
 import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
-import { Chain, configureChains, createClient, useDisconnect, WagmiConfig } from 'wagmi';
+
+import * as React from 'react';
+
+import { Chain, WagmiConfig, configureChains, createClient, useDisconnect } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 
+import { Button } from '~/design-system/button';
+import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
+import { Wallet } from '~/design-system/icons/wallet';
+import { Spacer } from '~/design-system/spacer';
+
 import { Environment } from '../environment';
-import { Spacer } from '../../design-system/spacer';
-import { Wallet } from '../../design-system/icons/wallet';
-import { DisconnectWallet } from '../../design-system/icons/disconnect-wallet';
-import { Button } from '../../design-system/button';
 
 const LOCAL_CHAIN: Chain = {
   id: Number(Environment.options.development.chainId),
