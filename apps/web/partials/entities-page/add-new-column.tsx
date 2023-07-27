@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { memo } from 'react';
 
-import { Plus } from '~/design-system/icons/plus';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
+
+import { Plus } from '~/design-system/icons/plus';
 
 interface Props {
   selectedType: SelectedEntityType;

@@ -1,28 +1,31 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { batch } from '@legendapp/state';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import * as React from 'react';
-import { useState } from 'react';
 import pluralize from 'pluralize';
 
+import * as React from 'react';
+import { useState } from 'react';
+
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { useToast } from '~/core/hooks/use-toast';
+import { ID } from '~/core/id';
+import { Triple } from '~/core/utils/triple';
+
 import { SquareButton } from '~/design-system/button';
+import { Divider } from '~/design-system/divider';
+import { Dots } from '~/design-system/dots';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { ResultContent, ResultsList } from './results-list';
 import { TextButton } from '~/design-system/text-button';
-import { Divider } from '~/design-system/divider';
-import { Dots } from '~/design-system/dots';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Triple } from '~/core/utils/triple';
-import { ID } from '~/core/id';
-import { batch } from '@legendapp/state';
-import { useToast } from '~/core/hooks/use-toast';
+
 import { EntityCreatedToast } from './entity-created-toast';
+import { ResultContent, ResultsList } from './results-list';
 
 interface ContentProps {
   children: React.ReactNode;

@@ -1,6 +1,7 @@
-import * as React from 'react';
 import { motion } from 'framer-motion';
 import useMeasure from 'react-use-measure';
+
+import * as React from 'react';
 
 interface Props {
   children: React.ReactNode;

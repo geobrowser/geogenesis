@@ -1,7 +1,8 @@
-import { colors } from '~/design-system/theme/colors';
-import { TableBlockFilter } from '../../../core/state/table-block-store/table-block-store';
 import { useEditable } from '~/core/state/editable-store/editable-store';
+import { TableBlockFilter } from '~/core/state/table-block-store/table-block-store';
+
 import { IconButton } from '~/design-system/button';
+import { colors } from '~/design-system/theme/colors';
 
 function PublishedFilterIconFilled() {
   return (

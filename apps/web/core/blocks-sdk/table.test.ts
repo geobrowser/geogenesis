@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { createFiltersFromGraphQLString, createGraphQLStringFromFilters } from './table';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { describe, expect, it } from 'vitest';
+
 import { MockNetworkData } from '~/core/io';
+
+import { createFiltersFromGraphQLString, createGraphQLStringFromFilters } from './table';
 
 describe('TableBlock SDK', () => {
   /**

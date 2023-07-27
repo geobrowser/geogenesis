@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { Providers } from '~/core/providers';
+
 import { MockNetworkData } from '~/core/io';
+import { Providers } from '~/core/providers';
+
 import { Component } from '~/app/space/[id]/entities/component';
 
 describe('Space page', () => {

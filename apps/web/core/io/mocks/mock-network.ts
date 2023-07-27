@@ -1,8 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
-import { Entity } from '~/core/utils/entity';
 
 import { Space, Triple } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+
 import { FetchTriplesOptions, INetwork } from '../network';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {

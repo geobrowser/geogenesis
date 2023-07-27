@@ -1,12 +1,14 @@
-import * as React from 'react';
-import { useMemo } from 'react';
-import { mergeAttributes, Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 import { ErrorBoundary } from 'react-error-boundary';
 
-import { TableBlockStoreProvider } from '~/core/state/table-block-store';
-import { TableBlock, TableBlockError } from '../blocks/table/table-block';
-import { useTypesStore } from '~/core/state/types-store';
+import * as React from 'react';
+import { useMemo } from 'react';
+
 import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { TableBlockStoreProvider } from '~/core/state/table-block-store';
+import { useTypesStore } from '~/core/state/types-store';
+
+import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
 export const TableNode = Node.create({
   name: 'tableNode',

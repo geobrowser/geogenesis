@@ -1,6 +1,7 @@
+import { VariantProps, cva } from 'class-variance-authority';
+
 import * as React from 'react';
 import { ForwardedRef } from 'react';
-import { cva, VariantProps } from 'class-variance-authority';
 
 import { Search } from './icons/search';
 

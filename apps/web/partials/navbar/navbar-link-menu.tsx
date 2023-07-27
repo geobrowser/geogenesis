@@ -1,16 +1,19 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
+import { ErrorBoundary } from 'react-error-boundary';
+
 import * as React from 'react';
 
-import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Context } from '~/design-system/icons/context';
-import { Menu } from '~/design-system/menu';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Dictionary } from '~/core/types';
-import { NavbarLinkMenuItem } from './navbar-link-menu-item';
+
 import { Close } from '~/design-system/icons/close';
-import { ErrorBoundary } from 'react-error-boundary';
+import { Context } from '~/design-system/icons/context';
+import { Menu } from '~/design-system/menu';
+
+import { NavbarLinkMenuItem } from './navbar-link-menu-item';
 
 export function NavbarLinkMenu() {
   const [open, onOpenChange] = React.useState(false);

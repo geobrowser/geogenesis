@@ -1,6 +1,7 @@
+import cx from 'classnames';
+
 import * as React from 'react';
 import { ForwardedRef, forwardRef } from 'react';
-import cx from 'classnames';
 
 import { Entity } from './icons/entity';
 import { Facts } from './icons/facts';

@@ -1,14 +1,16 @@
 'use client';
 
+import { cva } from 'class-variance-authority';
+import Zoom from 'react-medium-image-zoom';
+import Textarea from 'react-textarea-autosize';
+
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
-import { cva } from 'class-variance-authority';
-import Textarea from 'react-textarea-autosize';
-import Zoom from 'react-medium-image-zoom';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
+
+import { SmallButton, SquareButton } from '~/design-system/button';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin

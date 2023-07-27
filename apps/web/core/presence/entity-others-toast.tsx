@@ -1,19 +1,22 @@
 'use client';
 
+import BoringAvatar from 'boring-avatars';
+import { AnimatePresence, motion } from 'framer-motion';
+import pluralize from 'pluralize';
+
 import * as React from 'react';
 import { useState } from 'react';
-import BoringAvatar from 'boring-avatars';
-import pluralize from 'pluralize';
-import { useAccount } from 'wagmi';
-import { AnimatePresence, motion } from 'framer-motion';
 
-import { EntityPresenceContext } from './presence-provider';
-import { Text } from '~/design-system/text';
+import { useAccount } from 'wagmi';
+
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { SmallButton } from '~/design-system/button';
-import { Spacer } from '~/design-system/spacer';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ResizableContainer } from '~/design-system/resizable-container';
-import { AvatarGroup } from '~/design-system/avatar-group';
+import { Spacer } from '~/design-system/spacer';
+import { Text } from '~/design-system/text';
+
+import { EntityPresenceContext } from './presence-provider';
 
 // Formatting for this truncated address differs from the one in utils
 function shortAddress(address: string) {

@@ -1,12 +1,14 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { Providers } from '~/core/providers';
-import { FlowBar } from './flow-bar';
-import { ActionsStoreContext } from '~/core/state/actions-store/actions-store-provider';
-import { MockNetworkData, Network, StorageClient } from '~/core/io';
+
 import { options } from '~/core/environment/environment';
-import { editable$ } from '~/core/state/editable-store/editable-store';
+import { MockNetworkData, Network, StorageClient } from '~/core/io';
+import { Providers } from '~/core/providers';
 import { ActionsStore } from '~/core/state/actions-store';
+import { ActionsStoreContext } from '~/core/state/actions-store/actions-store-provider';
+import { editable$ } from '~/core/state/editable-store/editable-store';
+
+import { FlowBar } from './flow-bar';
 
 // Most of these tests are covered by the action.test.ts file, but there are some
 // other cases we want to handle, particularly for rendering the flow bar in different

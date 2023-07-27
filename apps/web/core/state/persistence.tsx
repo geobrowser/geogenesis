@@ -1,12 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
-import type { SpaceActions } from './actions-store';
+
 import { useActionsStore } from '../hooks/use-actions-store';
 import { Action } from '../utils/action';
+import type { SpaceActions } from './actions-store';
 
 export const Persistence = () => {
   const [isInitialRender, setIsInitialRender] = useState<boolean>(true);

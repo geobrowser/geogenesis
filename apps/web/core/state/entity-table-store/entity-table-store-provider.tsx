@@ -3,13 +3,14 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
+import { Services } from '~/core/services';
 import { useActionsStoreInstance } from '~/core/state/actions-store';
 import { useSpaceStoreInstance } from '~/core/state/spaces-store/space-store';
-import { Services } from '../../services';
-import { Column, Row, Triple } from '../../types';
+import { Column, Row, Triple } from '~/core/types';
+
+import { useLocalStoreInstance } from '../local-store';
 import { EntityTableStore } from './entity-table-store';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
-import { useLocalStoreInstance } from '../local-store';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 

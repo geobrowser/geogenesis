@@ -1,9 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { TableBlockFilter, useTableBlock } from '../../../core/state/table-block-store/table-block-store';
-import { valueTypes } from '~/core/value-types';
+
+import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store/table-block-store';
 import { TripleValueType } from '~/core/types';
-import { SmallButton } from '~/design-system/button';
 import { Entity } from '~/core/utils/entity';
+import { valueTypes } from '~/core/value-types';
+
+import { SmallButton } from '~/design-system/button';
+
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
 export function TableBlockEditableFilters() {

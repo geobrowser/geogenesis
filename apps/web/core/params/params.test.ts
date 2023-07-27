@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { Environment } from '../environment';
 import {
   getConfigFromUrl,
-  stringifyQueryParameters,
-  parseTripleQueryFilterFromParams,
   parseEntityTableQueryFilterFromParams,
+  parseTripleQueryFilterFromParams,
+  stringifyQueryParameters,
 } from './params';
 
 describe('TripleStore params', () => {

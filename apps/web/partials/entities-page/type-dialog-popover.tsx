@@ -2,12 +2,15 @@
 
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
+
 import { useState } from 'react';
 
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
+import { SelectedEntityType } from '~/core/state/entity-table-store';
+
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Spacer } from '~/design-system/spacer';
+
 import { TypeDialog } from './type-dialog';
 
 const MotionContent = motion(PopoverPrimitive.Content);

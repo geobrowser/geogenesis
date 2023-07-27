@@ -1,7 +1,8 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { describe, expect, it } from 'vitest';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Action as ActionType, Triple as TripleType } from '../../types';
+import { Action as ActionType, Triple as TripleType } from '~/core/types';
+
 import { empty, withId, withLocalNames } from './triple';
 
 describe('Triple helpers', () => {

@@ -1,8 +1,9 @@
-import { computed, ObservableComputed } from '@legendapp/state';
+import { ObservableComputed, computed } from '@legendapp/state';
 
 import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
-import { Entity } from './entity';
 import { Entity as IEntity } from '~/core/types';
+
+import { Entity } from './entity';
 
 export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
   return computed(() => {

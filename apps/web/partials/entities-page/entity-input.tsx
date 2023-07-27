@@ -1,12 +1,15 @@
 'use client';
 
 import { useRect } from '@radix-ui/react-use-rect';
+
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { Input } from '~/design-system/input';
-import { TypeDialogPopover } from './type-dialog-popover';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
+
+import { Input } from '~/design-system/input';
+
+import { TypeDialogPopover } from './type-dialog-popover';
 
 interface Props {
   spaceId: string;

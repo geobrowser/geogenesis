@@ -1,7 +1,8 @@
 import { parse as parseCSV } from 'papaparse';
 
-import { ID } from '../id';
 import { Triple } from '~/core/utils/triple';
+
+import { ID } from '../id';
 import { Triple as TripleType, Value } from '../types';
 
 export function readFileAsText(file: File) {

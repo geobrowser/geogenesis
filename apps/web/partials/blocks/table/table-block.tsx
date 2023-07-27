@@ -1,33 +1,36 @@
 'use client';
 
-import * as React from 'react';
-import cx from 'classnames';
-import Link from 'next/link';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { motion, AnimatePresence } from 'framer-motion';
-import produce from 'immer';
 import BoringAvatar from 'boring-avatars';
+import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
+import produce from 'immer';
+import Link from 'next/link';
 
+import * as React from 'react';
+
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store/table-block-store';
-import { TableBlockTable } from './table-block-table';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
+
+import { IconButton, SmallButton } from '~/design-system/button';
 import { Icon } from '~/design-system/icon';
-import { colors } from '~/design-system/theme/colors';
+import { Close } from '~/design-system/icons/close';
+import { Context } from '~/design-system/icons/context';
+import { Menu } from '~/design-system/menu';
+import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
-import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { IconButton, SmallButton } from '~/design-system/button';
-import { Entity } from '~/core/utils/entity';
-import { Menu } from '~/design-system/menu';
-import { Context } from '~/design-system/icons/context';
-import { Close } from '~/design-system/icons/close';
-import { NavUtils } from '~/core/utils/utils';
-import { TableBlockEditableTitle } from './table-block-editable-title';
+import { colors } from '~/design-system/theme/colors';
+
 import { TableBlockEditableFilters } from './table-block-editable-filters';
+import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { ID } from '~/core/id';
+import { TableBlockTable } from './table-block-table';
 
 interface Props {
   spaceId: string;

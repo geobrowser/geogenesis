@@ -1,6 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import cx from 'classnames';
+
 import * as React from 'react';
+
+import { Entity, Space } from '~/core/types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -9,7 +12,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
-import { Entity, Space } from '~/core/types';
 
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 

@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { ID } from '../id';
-import { Triple } from '../utils/triple';
 import { Triple as ITriple } from '../types';
+import { Triple } from '../utils/triple';
 
 export function createForeignType(
   foreignType: ITriple,

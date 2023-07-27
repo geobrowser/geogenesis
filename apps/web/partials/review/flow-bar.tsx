@@ -1,16 +1,18 @@
 'use client';
 
-import * as React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { A, D, pipe } from '@mobily/ts-belt';
+import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
-import { Button } from '~/design-system/button';
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { useDiff } from '~/core/state/diff-store/diff-store';
-import { A, D, pipe } from '@mobily/ts-belt';
+import * as React from 'react';
+
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Action } from '~/core/utils/action';
 import { useToast } from '~/core/hooks/use-toast';
+import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useEditable } from '~/core/state/editable-store/editable-store';
+import { Action } from '~/core/utils/action';
+
+import { Button } from '~/design-system/button';
 
 export const FlowBar = () => {
   const [toast] = useToast();

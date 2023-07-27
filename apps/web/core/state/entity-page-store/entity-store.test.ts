@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ActionsStore } from '../actions-store';
 import { MockNetworkData } from '~/core/io';
-import { createInitialDefaultTriples, EntityStore } from './entity-store';
+
+import { ActionsStore } from '../actions-store';
 import { LocalStore } from '../local-store';
+import { EntityStore, createInitialDefaultTriples } from './entity-store';
 
 describe('EntityStore', () => {
   it('Initializes to defaults', async () => {

@@ -1,10 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Action } from '~/core/utils/action';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
-import { Value } from '~/core/utils/value';
-
+import { Network } from '~/core/io/';
 import type {
   Action as ActionType,
   Entity as EntityType,
@@ -12,7 +8,10 @@ import type {
   TripleValueType,
   Version as VersionType,
 } from '~/core/types';
-import { Network } from '~/core/io/';
+import { Action } from '~/core/utils/action';
+import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
+import { Value } from '~/core/utils/value';
 
 export type ActionId = string;
 export type EntityId = string;

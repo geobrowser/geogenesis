@@ -3,8 +3,9 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { useActionsStoreInstance } from '../actions-store';
 import { Services } from '~/core/services';
+
+import { useActionsStoreInstance } from '../actions-store';
 import { InitialTripleStoreParams, TripleStore } from './triple-store';
 
 const TripleStoreContext = createContext<TripleStore | undefined>(undefined);

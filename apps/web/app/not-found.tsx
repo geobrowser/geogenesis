@@ -1,5 +1,6 @@
-import * as React from 'react';
 import Link from 'next/link';
+
+import * as React from 'react';
 
 import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';

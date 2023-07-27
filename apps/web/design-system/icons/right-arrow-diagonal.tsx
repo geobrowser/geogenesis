@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { colors, ColorName } from '~/design-system/theme/colors';
+import { ColorName, colors } from '~/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;

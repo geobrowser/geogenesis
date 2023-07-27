@@ -19,31 +19,32 @@ import { Text } from '~/design-system/icons/text';
 import { Tick } from '~/design-system/icons/tick';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { History } from './icons/history';
+import type { ColorName } from '~/design-system/theme/colors';
+
+import { CheckCloseSmall } from './icons/check-close-small';
+import { ChevronDownSmall } from './icons/chevron-down-small';
+import { Cog } from './icons/cog';
+import { Context } from './icons/context';
+import { Dash } from './icons/dash';
+import { Date } from './icons/date';
+import { DisconnectWallet } from './icons/disconnect-wallet';
 import { EditorH1 } from './icons/editor-h1';
 import { EditorH2 } from './icons/editor-h2';
 import { EditorH3 } from './icons/editor-h3';
 import { EditorImage } from './icons/editor-image';
+import { EditorList } from './icons/editor-list';
 import { EditorTable } from './icons/editor-table';
 import { EditorText } from './icons/editor-text';
-import { EditorList } from './icons/editor-list';
-import { Image } from './icons/image';
-import { Plus } from './icons/plus';
-import type { ColorName } from '~/design-system/theme/colors';
-import { Context } from './icons/context';
+import { EyeSmall } from './icons/eye-small';
 import { FilterTable } from './icons/filter-table';
-import { ChevronDownSmall } from './icons/chevron-down-small';
-import { CheckCloseSmall } from './icons/check-close-small';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
-import { Dash } from './icons/dash';
-import { Cog } from './icons/cog';
-import { NewTab } from './icons/new-tab';
-import { Date } from './icons/date';
+import { History } from './icons/history';
+import { Image } from './icons/image';
 import { Minus } from './icons/minus';
+import { NewTab } from './icons/new-tab';
+import { Plus } from './icons/plus';
 import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
-import { DisconnectWallet } from './icons/disconnect-wallet';
-import { EyeSmall } from './icons/eye-small';
 
 export type IconName =
   | 'blank'

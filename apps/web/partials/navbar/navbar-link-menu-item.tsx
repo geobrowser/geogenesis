@@ -1,7 +1,9 @@
 import Image from 'next/legacy/image';
+
+import { getImagePath } from '~/core/utils/utils';
+
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { getImagePath } from '~/core/utils/utils';
 
 interface NavbarLinkMenuItemProps {
   children: string;

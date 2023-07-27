@@ -1,14 +1,17 @@
 'use client';
 
+import { createRoomContext } from '@liveblocks/react';
+import { ErrorBoundary } from 'react-error-boundary';
+
 import * as React from 'react';
 import { useEffect } from 'react';
-import { createRoomContext } from '@liveblocks/react';
+
 import { useAccount } from 'wagmi';
 
-import { client } from './entity-presence-client';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Action } from '~/core/utils/action';
-import { ErrorBoundary } from 'react-error-boundary';
+
+import { client } from './entity-presence-client';
 
 export const EntityPresenceContext = createRoomContext<{
   address: `0x${string}` | undefined;

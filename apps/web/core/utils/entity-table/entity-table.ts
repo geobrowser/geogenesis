@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Triple as ITriple, Column, Entity, Row } from '~/core/types';
+
+import { Column, Entity, Triple as ITriple, Row } from '~/core/types';
 
 export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */

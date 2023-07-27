@@ -1,17 +1,19 @@
 'use client';
 
-import { computed, Observable, observable, ObservableComputed } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, S } from '@mobily/ts-belt';
+
 import { useMemo } from 'react';
 
-import { Services } from '~/core/services';
-import { makeOptionalComputed } from '~/core/utils/utils';
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
-import { Entity as EntityType, FilterState } from '../types';
-import { LocalStore, useLocalStoreInstance } from '../state/local-store';
 import { Network } from '~/core/io';
 import { Merged } from '~/core/merged';
+import { Services } from '~/core/services';
+import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
+import { makeOptionalComputed } from '~/core/utils/utils';
+
+import { LocalStore, useLocalStoreInstance } from '../state/local-store';
+import { Entity as EntityType, FilterState } from '../types';
 
 interface EntityAutocompleteOptions {
   api: Network.INetwork;

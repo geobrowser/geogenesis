@@ -1,7 +1,8 @@
 'use client';
 
-import * as React from 'react';
 import { motion } from 'framer-motion';
+
+import * as React from 'react';
 
 import { useDiff } from '~/core/state/diff-store/diff-store';
 

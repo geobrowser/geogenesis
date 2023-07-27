@@ -1,10 +1,11 @@
-import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
+import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+
+import { Network } from '~/core/io';
+import { FilterState, Triple as TripleType } from '~/core/types';
+import { Triple } from '~/core/utils/triple';
+import { makeOptionalComputed } from '~/core/utils/utils';
 
 import { ActionsStore } from '../actions-store';
-import { Network } from '~/core/io';
-import { Triple } from '~/core/utils/triple';
-import { FilterState, Triple as TripleType } from '~/core/types';
-import { makeOptionalComputed } from '~/core/utils/utils';
 
 interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;

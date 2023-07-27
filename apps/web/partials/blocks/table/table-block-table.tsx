@@ -12,24 +12,28 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
+
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { Entity } from '~/core/utils/entity';
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { valueTypes } from '~/core/value-types';
-import { useTableBlock } from '~/core/state/table-block-store';
-import { Text } from '~/design-system/text';
-import { Cell, Column, Row } from '~/core/types';
-import { EmptyTableText } from '~/design-system/table/styles';
-import { TableCell } from '~/design-system/table/cell';
-import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { columnName, columnValueType } from './utils';
+import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useTableBlock } from '~/core/state/table-block-store';
+import { Cell, Column, Row } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
-import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { NavUtils } from '~/core/utils/utils';
+import { valueTypes } from '~/core/value-types';
+
+import { TableCell } from '~/design-system/table/cell';
+import { EmptyTableText } from '~/design-system/table/styles';
+import { Text } from '~/design-system/text';
+
+import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
+import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
+import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
+
+import { columnName, columnValueType } from './utils';
 
 const columnHelper = createColumnHelper<Row>();
 

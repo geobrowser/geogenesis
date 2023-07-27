@@ -7,16 +7,18 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+
 import { memo, useState } from 'react';
 
-import { LinkableChip } from '~/design-system/chip';
-import { Text } from '~/design-system/text';
 import { Triple, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+
+import { LinkableChip } from '~/design-system/chip';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { TableCell } from '~/design-system/table/cell';
 import { CellContent } from '~/design-system/table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from '~/design-system/table/styles';
+import { Text } from '~/design-system/text';
 
 const columnHelper = createColumnHelper<Triple>();
 

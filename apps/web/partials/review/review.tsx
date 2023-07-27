@@ -1,39 +1,43 @@
 'use client';
 
-import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
-import cx from 'classnames';
-import { cva } from 'class-variance-authority';
-import { useSigner } from 'wagmi';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { motion, AnimatePresence } from 'framer-motion';
-import pluralize from 'pluralize';
-import { diffWords } from 'diff';
-import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
+import { cva } from 'class-variance-authority';
+import cx from 'classnames';
+import { diffWords } from 'diff';
+import type { Change as Difference } from 'diff';
+import { AnimatePresence, motion } from 'framer-motion';
+import pluralize from 'pluralize';
 
-import { Change } from '~/core/utils/change';
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
-import { colors } from '~/design-system/theme/colors';
-import { Dropdown } from '~/design-system/dropdown';
-import { Spinner } from '~/design-system/spinner';
-import { useDiff } from '~/core/state/diff-store/diff-store';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Services } from '~/core/services';
-import { Entity } from '~/core/utils/entity';
-import { Network } from '~/core/io';
-import { SlideUp } from '~/design-system/slide-up';
-import { GeoDate, getImagePath } from '~/core/utils/utils';
-import { Minus } from '~/design-system/icons/minus';
-import { Spacer } from '~/design-system/spacer';
-import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '~/core/types';
-import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/utils/change/change';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Action } from '~/core/utils/action';
-import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
+import * as React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { useSigner } from 'wagmi';
+
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { Network } from '~/core/io';
+import { Services } from '~/core/services';
+import { useDiff } from '~/core/state/diff-store/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
+import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '~/core/types';
+import { Action } from '~/core/utils/action';
+import { Change } from '~/core/utils/change';
+import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
+import { Entity } from '~/core/utils/entity';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
+
+import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Dropdown } from '~/design-system/dropdown';
+import { Minus } from '~/design-system/icons/minus';
+import { SlideUp } from '~/design-system/slide-up';
+import { Spacer } from '~/design-system/spacer';
+import { Spinner } from '~/design-system/spinner';
+import { colors } from '~/design-system/theme/colors';
+
+import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useDiff();

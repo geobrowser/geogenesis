@@ -1,10 +1,11 @@
 'use client';
 
-import * as React from 'react';
-import { useState } from 'react';
+import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import Link from 'next/link';
-import { cva } from 'class-variance-authority';
+
+import * as React from 'react';
+import { useState } from 'react';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 

@@ -1,23 +1,27 @@
 'use client';
 
-import * as React from 'react';
 import Link from 'next/link';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { Entity } from '~/core/utils/entity';
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { Triple } from '~/core/types';
+import * as React from 'react';
+
 import { useEditEvents } from '~/core/events/edit-events';
-import { Spacer } from '~/design-system/spacer';
-import { Truncate } from '~/design-system/truncate';
-import { Text } from '~/design-system/text';
-import { Editor } from '~/partials/editor/editor';
-import { Button } from '~/design-system/button';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { ID } from '~/core/id';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { ID } from '~/core/id';
+import { useEditable } from '~/core/state/editable-store/editable-store';
+import { Triple } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+
+import { Button } from '~/design-system/button';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { Spacer } from '~/design-system/spacer';
+import { Text } from '~/design-system/text';
+import { Truncate } from '~/design-system/truncate';
+
+import { Editor } from '~/partials/editor/editor';
+
 import { EntityPageMetadataHeader, SpacePageMetadataHeader } from './entity-page-metadata-header';
 
 export function EditableHeading({

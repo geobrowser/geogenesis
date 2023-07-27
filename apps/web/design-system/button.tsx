@@ -1,9 +1,12 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
+
 import * as React from 'react';
 import { forwardRef } from 'react';
+
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
+
 import type { IconName } from '~/design-system/icon';
 import { Icon } from '~/design-system/icon';
 import type { ColorName } from '~/design-system/theme/colors';

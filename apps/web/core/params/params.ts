@@ -1,7 +1,7 @@
 import { AppConfig, Environment } from '~/core/environment';
-import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/core/types';
-import { InitialTripleStoreParams } from '~/core/state/triple-store';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
+import { InitialTripleStoreParams } from '~/core/state/triple-store';
+import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/core/types';
 
 export const ENV_PARAM_NAME = 'env';
 

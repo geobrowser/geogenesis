@@ -1,14 +1,15 @@
 'use client';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+
 import * as React from 'react';
 
+import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
-import { Services } from './services';
-import { WalletProvider } from './wallet';
-import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { LocalStoreProvider } from './state/local-store';
+import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();
 

@@ -1,13 +1,14 @@
-import * as React from 'react';
+import Paragraph from '@tiptap/extension-paragraph';
 import {
-  mergeAttributes,
+  NodeViewContent,
   NodeViewRendererProps,
   NodeViewWrapper,
-  NodeViewContent,
   ReactNodeViewRenderer,
+  mergeAttributes,
 } from '@tiptap/react';
 
-import Paragraph from '@tiptap/extension-paragraph';
+import * as React from 'react';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 export const ParagraphNode = Paragraph.extend({

@@ -1,19 +1,23 @@
 'use client';
 
+import { ErrorBoundary } from 'react-error-boundary';
+
 import { memo } from 'react';
+
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
+import { useEntityTable } from '~/core/hooks/use-entity-table';
+import { EntityOthersToast } from '~/core/presence/entity-others-toast';
+import { SpacePresenceProvider } from '~/core/presence/presence-provider';
 import { useEditable } from '~/core/state/editable-store';
 import { Column, Row } from '~/core/types';
+
+import { Spacer } from '~/design-system/spacer';
 import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
+import { Text } from '~/design-system/text';
+
 import { EntityInput } from './entity-input';
 import { EntityTable } from './entity-table';
-import { ErrorBoundary } from 'react-error-boundary';
-import { useEntityTable } from '~/core/hooks/use-entity-table';
-import { SpacePresenceProvider } from '~/core/presence/presence-provider';
-import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 
 interface Props {
   spaceId: string;

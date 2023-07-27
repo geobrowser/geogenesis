@@ -1,4 +1,5 @@
 import { observable } from '@legendapp/state';
+
 import { useAccount } from 'wagmi';
 
 // import { useGeoProfile } from './use-geo-profile';

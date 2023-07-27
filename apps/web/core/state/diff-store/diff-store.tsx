@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, createContext, useContext } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 type DiffState = {
   isReviewOpen: boolean;

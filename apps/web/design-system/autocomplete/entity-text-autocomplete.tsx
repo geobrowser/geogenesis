@@ -1,24 +1,27 @@
 'use client';
 
-import * as React from 'react';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { batch } from '@legendapp/state';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useRef } from 'react';
 import pluralize from 'pluralize';
 
-import { ResizableContainer } from '~/design-system/resizable-container';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { ResultContent, ResultsList } from './results-list';
-import { TextButton } from '~/design-system/text-button';
-import { Divider } from '~/design-system/divider';
-import { Dots } from '~/design-system/dots';
-import { ID } from '~/core/id';
-import { batch } from '@legendapp/state';
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { EntityCreatedToast } from './entity-created-toast';
-import { useToast } from '~/core/hooks/use-toast';
+import * as React from 'react';
+import { useEffect, useRef } from 'react';
+
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { useToast } from '~/core/hooks/use-toast';
+import { ID } from '~/core/id';
 import { Triple } from '~/core/utils/triple';
+
+import { Divider } from '~/design-system/divider';
+import { Dots } from '~/design-system/dots';
+import { ResizableContainer } from '~/design-system/resizable-container';
+import { TextButton } from '~/design-system/text-button';
+
+import { EntityCreatedToast } from './entity-created-toast';
+import { ResultContent, ResultsList } from './results-list';
 
 interface Props {
   placeholder?: string;

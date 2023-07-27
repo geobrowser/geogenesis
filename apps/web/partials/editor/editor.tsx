@@ -1,25 +1,28 @@
 'use client';
 
-import * as React from 'react';
-import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
-import Image from '@tiptap/extension-image';
-import Placeholder from '@tiptap/extension-placeholder';
-import StarterKit from '@tiptap/starter-kit';
+import BulletList from '@tiptap/extension-bullet-list';
 import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
-import BulletList from '@tiptap/extension-bullet-list';
+import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
+import Placeholder from '@tiptap/extension-placeholder';
+import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+
+import * as React from 'react';
+
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 
 import { SquareButton } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
+
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
-import { createIdExtension } from './id-extension';
-import { TableNode } from './table-node';
-import { ParagraphNode } from './paragraph-node';
 import { HeadingNode } from './heading-node';
-import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { createIdExtension } from './id-extension';
+import { ParagraphNode } from './paragraph-node';
+import { TableNode } from './table-node';
 
 interface Props {
   editable?: boolean;

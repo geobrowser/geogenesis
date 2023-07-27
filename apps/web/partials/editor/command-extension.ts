@@ -1,10 +1,10 @@
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
-import tippy from 'tippy.js';
 import type { SuggestionOptions } from '@tiptap/suggestion/dist/packages/suggestion/src/suggestion';
+import tippy from 'tippy.js';
 import type { Instance } from 'tippy.js';
 
-import { commandItems, CommandSuggestionItem } from './command-items';
+import { CommandSuggestionItem, commandItems } from './command-items';
 import { CommandList, CommandListRef } from './command-list';
 
 export const CommandExtension = Extension.create<{
