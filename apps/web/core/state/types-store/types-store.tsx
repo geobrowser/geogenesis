@@ -10,7 +10,7 @@ import { A, pipe } from '@mobily/ts-belt';
 import { Triple } from '~/core/utils/triple';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useSelector } from '@legendapp/state/react';
-import { LocalData } from '~/core/io';
+import { LocalStore, useLocalStoreInstance } from '../local-store';
 
 export class TypesStore {
   actions: ActionsStore;
@@ -29,7 +29,7 @@ export class TypesStore {
     space,
   }: {
     actions: ActionsStore;
-    localStore: LocalData.LocalStore;
+    localStore: LocalStore;
     initialTypes: TripleType[];
     space: Space | null;
   }) {
@@ -123,7 +123,7 @@ export function TypesStoreProvider({
   initialTypes: TripleType[];
   space: Space | null;
 }) {
-  const LocalStore = LocalData.useLocalStoreInstance();
+  const LocalStore = useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
 
   const typesStore = React.useMemo(() => {

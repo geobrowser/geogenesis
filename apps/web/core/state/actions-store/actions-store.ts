@@ -2,7 +2,7 @@ import { Observable, observable, computed } from '@legendapp/state';
 import { Signer } from 'ethers';
 
 import { Action } from '~/core/utils/action';
-import { NetworkData } from '~/core/io';
+import { Network } from '~/core/io';
 import {
   Action as ActionType,
   CreateTripleAction,
@@ -32,7 +32,7 @@ interface IActionsStore {
 }
 
 interface IActionsStoreConfig {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
 }
 
 export type SpaceId = string;
@@ -43,7 +43,7 @@ export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
 
 export class ActionsStore implements IActionsStore {
-  private api: NetworkData.INetwork;
+  private api: Network.INetwork;
   actions$: Observable<SpaceActions>;
   allActions$;
   allSpacesWithActions$;

@@ -15,13 +15,14 @@ import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Services } from '~/core/services';
 import { Column, EntityValue, Entity as IEntity, Row, TripleValueType, Triple as ITriple } from '~/core/types';
-import { LocalData, MergedData, NetworkData } from '~/core/io';
 import { makeOptionalComputed } from '~/core/utils/utils';
 import { Triple } from '~/core/utils/triple';
-import { FetchRowsOptions } from '~/core/io/data-source/network';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { ID } from '~/core/id';
 import { Value } from '~/core/utils/value';
+import { LocalStore, useLocalStoreInstance } from '../local-store';
+import { Network } from '~/core/io';
+import { Merged } from '~/core/merged';
 
 export const PAGE_SIZE = 10;
 
@@ -36,14 +37,14 @@ interface ITableBlockStoreConfig {
   // We pass through React Query's QueryClient so we can cache data fetches in the store.
   queryClient: QueryClient;
 
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
 
   // We use the ActionsStore to derive any new columns or rows that might exist
   // locally but not remotely.
   ActionsStore: ActionsStore;
 
   // We use the LocalStore to read any data that might exist locally but not remotely.
-  LocalStore: LocalData.LocalStore;
+  LocalStore: LocalStore;
 
   // Entity ID of the TableBlock entity. We use this to manipulate Table properties
   // such as name, the Table image, sorting, filtering, etc. since these properties
@@ -67,10 +68,10 @@ interface ITableBlockStoreConfig {
  * For now we are fine with the duplication.
  */
 export class TableBlockStore {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
   ActionsStore: ActionsStore;
-  MergedData: MergedData;
-  LocalStore: LocalData.LocalStore;
+  Merged: Merged;
+  LocalStore: LocalStore;
   entityId: string;
   spaceId: string;
   nameTriple$: ObservableComputed<ITriple | null>;
@@ -101,14 +102,14 @@ export class TableBlockStore {
     this.hasNextPage$ = observable(false);
     this.type = selectedType;
     this.pageNumber$ = observable(0);
-    this.MergedData = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
+    this.Merged = new Merged({ api, store: ActionsStore, localStore: LocalStore });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
     this.blockEntity$ = computed(async () => {
       return await queryClient.fetchQuery({
         queryKey: ['blockEntity in table block', entityId],
-        queryFn: () => this.MergedData.fetchEntity(entityId),
+        queryFn: () => this.Merged.fetchEntity(entityId),
       });
     });
 
@@ -138,7 +139,7 @@ export class TableBlockStore {
 
         const filterState = await queryClient.fetchQuery({
           queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.Merged.fetchEntity),
         });
 
         return filterState;
@@ -168,7 +169,7 @@ export class TableBlockStore {
 
         const blockEntity = await queryClient.fetchQuery({
           queryKey: ['blockEntity in table block', entityId],
-          queryFn: () => this.MergedData.fetchEntity(entityId),
+          queryFn: () => this.Merged.fetchEntity(entityId),
         });
 
         // @NOTE: See @NOTE at top of this observe block
@@ -183,12 +184,12 @@ export class TableBlockStore {
 
         const filterState = await queryClient.fetchQuery({
           queryKey: ['filterState in table block', entityId, filterValue],
-          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.MergedData.fetchEntity),
+          queryFn: () => TableBlockSdk.createFiltersFromGraphQLString(filterValue, this.Merged.fetchEntity),
         });
 
         const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState, this.type.entityId);
 
-        const params: FetchRowsOptions['params'] = {
+        const params: Network.FetchRowsOptions['params'] = {
           query: '',
           filter: filterString,
           typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
@@ -210,7 +211,7 @@ export class TableBlockStore {
             params.typeIds,
           ],
           queryFn: () =>
-            this.MergedData.columns({
+            this.Merged.columns({
               params,
               abortController: this.abortController,
             }),
@@ -237,7 +238,7 @@ export class TableBlockStore {
             dedupedColumns,
           ],
           queryFn: () =>
-            this.MergedData.rows(
+            this.Merged.rows(
               {
                 params,
                 abortController: this.abortController,
@@ -277,8 +278,7 @@ export class TableBlockStore {
         // Make sure we merge any unpublished entities
         const maybeRelationAttributeTypes = await queryClient.fetchQuery({
           queryKey: ['relation attribute types in table block', entityId, columns],
-          queryFn: () =>
-            Promise.all(columns.map(t => t.id).map(attributeId => this.MergedData.fetchEntity(attributeId))),
+          queryFn: () => Promise.all(columns.map(t => t.id).map(attributeId => this.Merged.fetchEntity(attributeId))),
         });
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
@@ -396,7 +396,7 @@ interface Props {
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
   const { network } = Services.useServices();
-  const LocalStore = LocalData.useLocalStoreInstance();
+  const LocalStore = useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const queryClient = useQueryClient();
 

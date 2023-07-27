@@ -6,9 +6,9 @@ import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { Services } from './services';
 import { WalletProvider } from './wallet';
-import { LocalData } from '~/core/io';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { LocalStoreProvider } from './state/local-store';
 
 const queryClient = new QueryClient();
 
@@ -17,11 +17,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <Services.Provider>
         <ActionsStoreProvider>
-          <LocalData.LocalStoreProvider>
+          <LocalStoreProvider>
             <DiffProvider>
               <WalletProvider>{children}</WalletProvider>
             </DiffProvider>
-          </LocalData.LocalStoreProvider>
+          </LocalStoreProvider>
         </ActionsStoreProvider>
       </Services.Provider>
       <ReactQueryDevtools initialIsOpen={false} />

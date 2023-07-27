@@ -22,8 +22,8 @@ import { useDiff } from '~/core/state/diff-store/diff-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { Entity } from '~/core/utils/entity';
-import { INetwork } from '~/core/io/data-source/network';
-import { SlideUp } from '../../design-system/slide-up';
+import { Network } from '~/core/io';
+import { SlideUp } from '~/design-system/slide-up';
 import { GeoDate, getImagePath } from '~/core/utils/utils';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
@@ -1029,7 +1029,7 @@ const useFilters = (rawFilter: string): [Array<TableBlockFilter & { columnName: 
   return [data, isLoading];
 };
 
-const getFilters = async (rawFilter: string, network: INetwork) => {
+const getFilters = async (rawFilter: string, network: Network.INetwork) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, network.fetchEntity);
   const { columns } = await network.columns({ params: { skip: 0, first: 0, filter: '' } });
   const filtersWithColumnName = filters.map(f => {

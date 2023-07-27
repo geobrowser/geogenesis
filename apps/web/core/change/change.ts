@@ -12,7 +12,7 @@ import type {
   TripleValueType,
   Version as VersionType,
 } from '~/core/types';
-import type { INetwork } from '~/core/io/data-source/network';
+import { Network } from '~/core/io/';
 
 export type ActionId = string;
 export type EntityId = string;
@@ -38,7 +38,7 @@ export type AttributeChange = {
   actions: Array<ActionId>;
 };
 
-export async function fromActions(actions: ActionType[], network: INetwork) {
+export async function fromActions(actions: ActionType[], network: Network.INetwork) {
   const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, network);
 
   const changes: Record<EntityId, Changeset> = {};
@@ -362,7 +362,7 @@ export async function fromActions(actions: ActionType[], network: INetwork) {
   return { changes, entities };
 }
 
-const getEntitiesFromActions = async (actions: ActionType[], network: INetwork) => {
+const getEntitiesFromActions = async (actions: ActionType[], network: Network.INetwork) => {
   const entities: Record<EntityId, EntityType> = {};
 
   const entitySet = new Set<EntityId>();
@@ -412,7 +412,7 @@ const getEntitiesFromActions = async (actions: ActionType[], network: INetwork) 
   return entities;
 };
 
-export async function fromVersion(versionId: string, previousVersionId: string, network: INetwork) {
+export async function fromVersion(versionId: string, previousVersionId: string, network: Network.INetwork) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedVersion, previousVersion] = await Promise.all([
@@ -602,7 +602,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   return { changes, versions };
 }
 
-export async function fromProposal(proposalId: string, previousProposalId: string, network: INetwork) {
+export async function fromProposal(proposalId: string, previousProposalId: string, network: Network.INetwork) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedProposal, previousProposal] = await Promise.all([

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { ActionsStore } from '../actions-store';
-import { LocalData, MockNetworkData } from '~/core/io';
+import { MockNetworkData } from '~/core/io';
 import { createInitialDefaultTriples, EntityStore } from './entity-store';
+import { LocalStore } from '../local-store';
 
 describe('EntityStore', () => {
   it('Initializes to defaults', async () => {
@@ -17,7 +18,7 @@ describe('EntityStore', () => {
       ActionsStore: actionsStore,
       initialBlockIdsTriple: null,
       initialBlockTriples: [],
-      LocalStore: new LocalData.LocalStore({ store: actionsStore }),
+      LocalStore: new LocalStore({ store: actionsStore }),
     });
 
     const defaultTriples = createInitialDefaultTriples('s', 'e');
@@ -49,7 +50,7 @@ describe('EntityStore', () => {
       ActionsStore: new ActionsStore({ api: network }),
       initialBlockIdsTriple: null,
       initialBlockTriples: [],
-      LocalStore: new LocalData.LocalStore({ store: actionsStore }),
+      LocalStore: new LocalStore({ store: actionsStore }),
     });
 
     expect(store.schemaTriples$.get()).toHaveLength(3);

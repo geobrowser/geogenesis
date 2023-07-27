@@ -3,11 +3,11 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { Services } from '../../services';
-import { Triple } from '../../types';
+import { Services } from '~/core/services';
+import { Triple } from '~/core/types';
 import { EntityStore } from './entity-store';
-import { LocalData } from '~/core/io';
 import { useActionsStoreInstance } from '../actions-store';
+import { useLocalStoreInstance } from '../local-store';
 
 const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
 
@@ -32,7 +32,7 @@ export function EntityStoreProvider({
 }: Props) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
-  const LocalStore = LocalData.useLocalStoreInstance();
+  const LocalStore = useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityStore({

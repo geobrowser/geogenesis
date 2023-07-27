@@ -1,11 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Params } from '~/core/params';
-import { NetworkData } from '~/core/io';
+import { Network } from '~/core/io';
 import { StorageClient } from '~/core/io';
 import { ServerSideEnvParams } from '~/core/types';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
-import { FetchRowsOptions } from '~/core/io/data-source/network';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Component } from './component';
@@ -36,7 +35,7 @@ const getData = async ({ params, searchParams }: Props) => {
   const config = Params.getConfigFromParams(searchParams, env);
   const storage = new StorageClient(config.ipfs);
 
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
 
@@ -74,7 +73,7 @@ const getData = async ({ params, searchParams }: Props) => {
   // initialTypes[0] can be empty if there's no types in the space
   const typeId: string | null = initialSelectedType?.entityId ?? null;
 
-  const fetchParams: FetchRowsOptions['params'] = {
+  const fetchParams: Network.FetchRowsOptions['params'] = {
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,

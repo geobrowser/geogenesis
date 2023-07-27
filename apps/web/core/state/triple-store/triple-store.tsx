@@ -1,7 +1,7 @@
 import { computed, observable, Observable, ObservableComputed } from '@legendapp/state';
 
 import { ActionsStore } from '../actions-store';
-import { NetworkData } from '~/core/io';
+import { Network } from '~/core/io';
 import { Triple } from '~/core/utils/triple';
 import { FilterState, Triple as TripleType } from '~/core/types';
 import { makeOptionalComputed } from '~/core/utils/utils';
@@ -24,7 +24,7 @@ export type InitialTripleStoreParams = {
 };
 
 interface ITripleStoreConfig {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
   space: string;
   ActionsStore: ActionsStore;
   initialParams?: InitialTripleStoreParams;
@@ -43,7 +43,7 @@ export function initialFilterState(): FilterState {
 }
 
 export class TripleStore implements ITripleStore {
-  private api: NetworkData.INetwork;
+  private api: Network.INetwork;
   triples$: ObservableComputed<TripleType[]> = observable([]);
   pageNumber$: Observable<number>;
   query$: Observable<string>;

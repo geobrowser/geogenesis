@@ -5,12 +5,12 @@ import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
-import { NetworkData } from '~/core/io';
+import { Network } from '~/core/io';
 import { StorageClient } from '~/core/io';
 import { SpaceStore } from '~/core/state/spaces-store/space-store';
 
 type Services = {
-  network: NetworkData.INetwork;
+  network: Network.INetwork;
   spaceStore: SpaceStore;
 };
 
@@ -29,7 +29,7 @@ export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
     const config = Environment.getConfig(chainId);
     const storageClient = new StorageClient(config.ipfs);
-    const network = new NetworkData.Network(storageClient, config.subgraph);
+    const network = new Network.NetworkClient(storageClient, config.subgraph);
 
     return {
       network,

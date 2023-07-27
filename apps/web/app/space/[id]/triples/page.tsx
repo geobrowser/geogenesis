@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Params } from '~/core/params';
-import { NetworkData, StorageClient } from '~/core/io';
+import { Network, StorageClient } from '~/core/io';
 import { ServerSideEnvParams } from '~/core/types';
 import { Component } from './component';
 import { cookies } from 'next/headers';
@@ -29,7 +29,7 @@ const getData = async ({ params, searchParams }: Props) => {
   const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;

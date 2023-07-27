@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Providers } from '~/core/providers';
 import { FlowBar } from './flow-bar';
 import { ActionsStoreContext } from '~/core/state/actions-store/actions-store-provider';
-import { MockNetworkData, NetworkData, StorageClient } from '~/core/io';
+import { MockNetworkData, Network, StorageClient } from '~/core/io';
 import { options } from '~/core/environment/environment';
 import { editable$ } from '~/core/state/editable-store/editable-store';
 import { ActionsStore } from '~/core/state/actions-store';
@@ -14,7 +14,7 @@ import { ActionsStore } from '~/core/state/actions-store';
 describe('Flow Bar', () => {
   it('Should not render the flow bar when there are not changes', () => {
     const store = new ActionsStore({
-      api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
     render(
@@ -30,7 +30,7 @@ describe('Flow Bar', () => {
 
   it('Should not render the flow bar when there are changes but not in edit mode', () => {
     const store = new ActionsStore({
-      api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
     render(
@@ -48,7 +48,7 @@ describe('Flow Bar', () => {
 
   it('Should render the flow bar when there are changes and in edit mode', () => {
     const store = new ActionsStore({
-      api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
     render(
@@ -76,7 +76,7 @@ describe('Flow Bar', () => {
    */
   it('Should show correct counts', () => {
     const store = new ActionsStore({
-      api: new NetworkData.Network(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
     });
 
     render(

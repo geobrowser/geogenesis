@@ -1,33 +1,37 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 import { Column, OmitStrict, Row, Version } from '~/core/types';
-import { INetwork } from './network';
-import { LocalData } from '.';
+import { Network } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { Triple } from '~/core/utils/triple';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
+import { LocalStore } from '~/core/state/local-store';
 
-interface MergeDataSourceOptions {
-  api: INetwork;
+interface MergedDataSourceOptions {
+  api: Network.INetwork;
   store: ActionsStore;
-  localStore: LocalData.LocalStore;
+  localStore: LocalStore;
 }
 
-interface IMergeDataSource
-  extends OmitStrict<INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
+interface IMergedDataSource
+  extends OmitStrict<Network.INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
   rows: (
-    options: Parameters<INetwork['rows']>[0],
+    options: Parameters<Network.INetwork['rows']>[0],
     columns: Column[],
     selectedTypeEntityId?: string
   ) => Promise<{ rows: Row[] }>;
 }
 
-export class Merged implements IMergeDataSource {
-  private api: INetwork;
+/**
+ * The Merged module attempts to merge local actions with network data. The API surface area for methods
+ * on the Merged class should be the same as the Network class.
+ */
+export class Merged implements IMergedDataSource {
+  private api: Network.INetwork;
   private store: ActionsStore;
-  private localStore: LocalData.LocalStore;
+  private localStore: LocalStore;
 
-  constructor({ api, store, localStore }: MergeDataSourceOptions) {
+  constructor({ api, store, localStore }: MergedDataSourceOptions) {
     this.api = api;
     this.store = store;
     this.localStore = localStore;
@@ -35,7 +39,7 @@ export class Merged implements IMergeDataSource {
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
   // triples that do not match the passed in query + filter.
-  fetchTriples = async (options: Parameters<INetwork['fetchTriples']>[0]) => {
+  fetchTriples = async (options: Parameters<Network.INetwork['fetchTriples']>[0]) => {
     const networkTriples = await this.api.fetchTriples(options);
 
     if (!options.space) return networkTriples;
@@ -54,7 +58,7 @@ export class Merged implements IMergeDataSource {
     };
   };
 
-  fetchEntities = async (options: Parameters<INetwork['fetchEntities']>[0]) => {
+  fetchEntities = async (options: Parameters<Network.INetwork['fetchEntities']>[0]) => {
     const networkEntities = await this.api.fetchEntities(options);
 
     // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
@@ -99,7 +103,7 @@ export class Merged implements IMergeDataSource {
    * * Local entity doesn't exist, network entity doesn't exist: Return null
    *
    */
-  fetchEntity = async (id: Parameters<INetwork['fetchEntity']>[0]) => {
+  fetchEntity = async (id: Parameters<Network.INetwork['fetchEntity']>[0]) => {
     try {
       const maybeNetworkEntity = await this.api.fetchEntity(id);
 
@@ -126,7 +130,7 @@ export class Merged implements IMergeDataSource {
     }
   };
 
-  columns = async (options: Parameters<INetwork['columns']>[0]) => {
+  columns = async (options: Parameters<Network.INetwork['columns']>[0]) => {
     const { columns: serverColumns } = await this.api.columns(options);
 
     const columns = EntityTable.columnsFromLocalChanges(
@@ -138,7 +142,7 @@ export class Merged implements IMergeDataSource {
     return { columns };
   };
 
-  rows = async (options: Parameters<INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
+  rows = async (options: Parameters<Network.INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
     const { rows: serverRows } = await this.api.rows(options);
 
     /**

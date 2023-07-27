@@ -19,7 +19,6 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Avatar } from '~/design-system/avatar';
 import { Entity } from '~/core/utils/entity';
 import { formatShortAddress, getImagePath } from '~/core/utils/utils';
-import { INetwork } from '~/core/io/data-source/network';
 import { DateTimeDiff } from '~/partials/review';
 import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
 import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/change/change';
@@ -27,6 +26,7 @@ import { Action } from '~/core/utils/action';
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { Network } from '~/core/io';
 
 export const Compare = () => {
   const { isCompareOpen, setIsCompareOpen } = useDiff();
@@ -875,7 +875,7 @@ const useFilters = (rawFilter: string): [Array<TableBlockFilter & { columnName: 
   return [data, isLoading];
 };
 
-const getFilters = async (rawFilter: string, network: INetwork) => {
+const getFilters = async (rawFilter: string, network: Network.INetwork) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, network.fetchEntity);
   const { columns } = await network.columns({ params: { skip: 0, first: 0, filter: '' } });
   const filtersWithColumnName = filters.map(f => {

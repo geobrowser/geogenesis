@@ -6,14 +6,15 @@ import { SpaceStore } from '~/core/state/spaces-store/space-store';
 import { Triple } from '~/core/utils/triple';
 import { Entity } from '../../utils/entity';
 import { EntityTable } from '../../utils/entity-table';
-import { LocalData, MergedData, NetworkData } from '~/core/io';
 import { Column, EntityValue, Row, Space, Triple as TripleType } from '../../types';
 import { makeOptionalComputed } from '~/core/utils/utils';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 import { CreateType } from '~/core/type';
-import { FetchRowsOptions } from '~/core/io/data-source/network';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { LocalStore } from '../local-store';
+import { Network } from '~/core/io';
+import { Merged } from '~/core/merged';
 
 export type SelectedType = { id: string; entityId: string; entityName: string | null };
 
@@ -33,14 +34,14 @@ interface IEntityTableStore {
 }
 
 interface IEntityTableStoreConfig {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
   initialSelectedType: TripleType | null;
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
-  LocalStore: LocalData.LocalStore;
+  LocalStore: LocalStore;
   initialColumns: Column[];
   initialRows: Row[];
 }
@@ -63,7 +64,7 @@ export const DEFAULT_INITIAL_PARAMS = {
  * For now we are fine with the duplication.
  */
 export class EntityTableStore implements IEntityTableStore {
-  private api: NetworkData.INetwork;
+  private api: Network.INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   unpublishedColumns$: ObservableComputed<Column[]>;
@@ -81,7 +82,7 @@ export class EntityTableStore implements IEntityTableStore {
   spaceId: string;
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
-  LocalStore: LocalData.LocalStore;
+  LocalStore: LocalStore;
   abortController: AbortController = new AbortController();
 
   constructor({
@@ -110,7 +111,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = computed(() => initialRows);
     this.columns$ = computed(() => initialColumns);
 
-    const networkData$ = makeOptionalComputed(
+    const Network$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
@@ -131,7 +132,7 @@ export class EntityTableStore implements IEntityTableStore {
             selectedType?.entityId ?? null
           );
 
-          const params: FetchRowsOptions['params'] = {
+          const params: Network.FetchRowsOptions['params'] = {
             filter: filterString,
             typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: pageSize + 1,
@@ -168,7 +169,7 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
+    this.hasNextPage$ = computed(() => Network$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromLocalChanges(
@@ -179,7 +180,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     this.columns$ = computed(() => {
-      const { columns } = networkData$.get();
+      const { columns } = Network$.get();
       return EntityTable.columnsFromLocalChanges(
         this.LocalStore.triples$.get(),
         columns,
@@ -196,7 +197,7 @@ export class EntityTableStore implements IEntityTableStore {
       [],
       computed(async () => {
         const columns = this.columns$.get();
-        const { rows: serverRows } = networkData$.get();
+        const { rows: serverRows } = Network$.get();
 
         /**
          * There are several edge-cases we need to handle in order to correctly merge local changes
@@ -282,7 +283,7 @@ export class EntityTableStore implements IEntityTableStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
+        const mergedStore = new Merged({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
         const maybeRelationAttributeTypes = await Promise.all(
           columns.map(column => mergedStore.fetchEntity(column.id))
         );

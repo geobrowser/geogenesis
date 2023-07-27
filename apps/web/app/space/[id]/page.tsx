@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 import { Entity } from '~/core/utils/entity';
 import { Params } from '~/core/params';
-import { NetworkData, StorageClient } from '~/core/io';
+import { Network, StorageClient } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -25,7 +25,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
 
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId) ?? null;
@@ -76,7 +76,7 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   const config = Params.getConfigFromParams(searchParams, env);
 
   const storage = new StorageClient(config.ipfs);
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
 
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId) ?? null;

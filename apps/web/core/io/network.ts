@@ -28,8 +28,8 @@ import {
   NetworkTriple,
   NetworkVersion,
 } from './network-local-mapping';
-import { IStorageClient } from '../storage';
-import * as queries from '../queries';
+import { IStorageClient } from './storage';
+import * as queries from './queries';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 
 function getActionFromChangeStatus(action: Action) {
@@ -131,7 +131,7 @@ export interface INetwork {
 
 const UPLOAD_CHUNK_SIZE = 2000;
 
-export class Network implements INetwork {
+export class NetworkClient implements INetwork {
   constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
   publish = async ({ actions, signer, onChangePublishState, space, name }: PublishOptions): Promise<void> => {

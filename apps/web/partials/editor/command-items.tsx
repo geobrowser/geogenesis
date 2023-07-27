@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Editor, Range } from '@tiptap/core';
 
 import { Environment } from '~/core/environment';
-import { NetworkData, StorageClient } from '~/core/io';
+import { Network, StorageClient } from '~/core/io';
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
@@ -115,7 +115,7 @@ export const commandItems: CommandSuggestionItem[] = [
         const chainId = Environment.options.production.chainId;
         const config = Environment.getConfig(chainId);
         const storageClient = new StorageClient(config.ipfs);
-        const network = new NetworkData.Network(storageClient, config.subgraph);
+        const network = new Network.NetworkClient(storageClient, config.subgraph);
         const src = await network.uploadFile(file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };

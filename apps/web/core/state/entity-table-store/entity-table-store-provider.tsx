@@ -8,8 +8,8 @@ import { useSpaceStoreInstance } from '~/core/state/spaces-store/space-store';
 import { Services } from '../../services';
 import { Column, Row, Triple } from '../../types';
 import { EntityTableStore } from './entity-table-store';
-import { LocalData } from '~/core/io';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
+import { useLocalStoreInstance } from '../local-store';
 
 const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
 
@@ -33,7 +33,7 @@ export function EntityTableStoreProvider({
   const { network } = Services.useServices();
   const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
-  const LocalStore = LocalData.useLocalStoreInstance();
+  const LocalStore = useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityTableStore({

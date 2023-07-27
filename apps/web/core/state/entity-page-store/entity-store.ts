@@ -8,7 +8,7 @@ import pluralize from 'pluralize';
 import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 import { ID } from '~/core/id';
-import { LocalData, MergedData, NetworkData } from '~/core/io';
+import { Network } from '~/core/io';
 import { EntityValue, Triple as ITriple } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { ActionsStore } from '../actions-store';
@@ -17,6 +17,8 @@ import { getImagePath, makeOptionalComputed } from '~/core/utils/utils';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { LocalStore } from '../local-store';
+import { Merged } from '~/core/merged';
 
 const markdownConverter = new showdown.Converter();
 
@@ -75,7 +77,7 @@ export const createInitialDefaultTriples = (spaceId: string, entityId: string): 
 const DEFAULT_PAGE_SIZE = 100;
 
 interface IEntityStoreConfig {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
   spaceId: string;
   id: string;
   initialTriples: ITriple[];
@@ -83,12 +85,12 @@ interface IEntityStoreConfig {
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
   ActionsStore: ActionsStore;
-  LocalStore: LocalData.LocalStore;
+  LocalStore: LocalStore;
 }
 
 export class EntityStore implements IEntityStore {
-  private api: NetworkData.INetwork;
-  private LocalStore: LocalData.LocalStore;
+  private api: Network.INetwork;
+  private LocalStore: LocalStore;
   id: string;
   spaceId: string;
   triples$: ObservableComputed<ITriple[]>;
@@ -284,7 +286,7 @@ export class EntityStore implements IEntityStore {
         ];
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new MergedData({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
+        const mergedStore = new Merged({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
         const maybeRelationAttributeTypes = await Promise.all(
           attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
         );

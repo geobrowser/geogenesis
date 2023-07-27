@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { NetworkData } from '.';
+import { INetwork } from './network';
 import { Space } from '../types';
 
-export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, spaceId: string, pageSize = 1000) => {
+export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string, pageSize = 1000) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
 
   const { triples } = await network.fetchTriples({
@@ -22,7 +22,7 @@ export const fetchSpaceTypeTriples = async (network: NetworkData.INetwork, space
   return triples;
 };
 
-export const fetchForeignTypeTriples = async (network: NetworkData.INetwork, space: Space, pageSize = 1000) => {
+export const fetchForeignTypeTriples = async (network: INetwork, space: Space, pageSize = 1000) => {
   if (!space.spaceConfigEntityId) {
     return [];
   }

@@ -5,7 +5,7 @@ import { OboardingCarousel } from '~/partials/spaces/carousel';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
-import { NetworkData, StorageClient } from '~/core/io';
+import { Network, StorageClient } from '~/core/io';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams, Space } from '~/core/types';
 import { Email } from '~/partials/spaces/email';
@@ -67,7 +67,7 @@ export default async function Spaces({ searchParams }: { searchParams: ServerSid
   const config = Params.getConfigFromParams(searchParams, env);
   const storage = new StorageClient(config.ipfs);
 
-  const network = new NetworkData.Network(storage, config.subgraph);
+  const network = new Network.NetworkClient(storage, config.subgraph);
   const spaces = await network.fetchSpaces();
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 

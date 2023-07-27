@@ -9,13 +9,15 @@ import { Services } from '~/core/services';
 import { makeOptionalComputed } from '~/core/utils/utils';
 import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
 import { Entity as EntityType, FilterState } from '../types';
-import { LocalData, MergedData, NetworkData } from '~/core/io';
+import { LocalStore, useLocalStoreInstance } from '../state/local-store';
+import { Network } from '~/core/io';
+import { Merged } from '~/core/merged';
 
 interface EntityAutocompleteOptions {
-  api: NetworkData.INetwork;
+  api: Network.INetwork;
   spaceId?: string;
   ActionsStore: ActionsStore;
-  LocalStore: LocalData.LocalStore;
+  LocalStore: LocalStore;
   filter?: FilterState;
   allowedTypes?: string[];
 }
@@ -25,10 +27,10 @@ class EntityAutocomplete {
   query$ = observable('');
   results$: ObservableComputed<EntityType[]>;
   abortController: AbortController = new AbortController();
-  mergedDataSource: MergedData;
+  mergedDataSource: Merged;
 
   constructor({ api, ActionsStore, LocalStore, allowedTypes, filter = [] }: EntityAutocompleteOptions) {
-    this.mergedDataSource = new MergedData({ api, store: ActionsStore, localStore: LocalStore });
+    this.mergedDataSource = new Merged({ api, store: ActionsStore, localStore: LocalStore });
 
     this.results$ = makeOptionalComputed(
       [],
@@ -77,7 +79,7 @@ interface AutocompleteOptions {
 export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
   const { network } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
-  const LocalStore = LocalData.useLocalStoreInstance();
+  const LocalStore = useLocalStoreInstance();
 
   // @TODO(baiirun): fix this
   const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
