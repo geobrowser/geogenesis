@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { v4 as uuid } from 'uuid';
 
 import { FilterField, FilterState } from '~/core/types';
 
@@ -54,6 +55,8 @@ type NetworkResult = {
   errors: unknown[];
 };
 export async function fetchTriples(options: FetchTriplesOptions) {
+  const queryId = uuid();
+
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,
     string
@@ -83,10 +86,11 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   // @TODO: Catch by known tag and unexpected errors
+  // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
     Effect.catchAll(() => {
       console.error(
-        `Unable to fetch triples, endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+        `Unable to fetch triples, queryId: ${queryId} endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
       );
       return Effect.succeed({
         data: {
@@ -102,7 +106,11 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   // @TODO: Fallback
   // @TODO: runtime validation of types
   // @TODO: log fail states
-  if (result.errors) {
+  if (result.errors?.length > 0) {
+    console.error(
+      `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`,
+      result.errors
+    );
     return [];
   }
 
