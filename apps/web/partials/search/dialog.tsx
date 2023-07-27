@@ -7,10 +7,10 @@ import { Input } from '~/design-system/input';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/types';
-import { ResultContent, ResultsList } from '../../design-system/autocomplete/results-list';
-import { ResizableContainer } from '../../design-system/resizable-container';
-import { Dots } from '../../design-system/dots';
-import { Search } from '../../design-system/icons/search';
+import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
+import { ResizableContainer } from '~/design-system/resizable-container';
+import { Dots } from '~/design-system/dots';
+import { Search } from '~/design-system/icons/search';
 
 interface Props {
   onDone: (result: Entity) => void;

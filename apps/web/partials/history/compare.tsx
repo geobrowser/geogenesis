@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import pluralize from 'pluralize';
 import BoringAvatar from 'boring-avatars';
 
-import { Change } from '~/core/change';
+import { Change } from '~/core/utils/change';
 import { Button } from '~/design-system/button';
 import { colors } from '~/design-system/theme/colors';
 import { useDiff } from '~/core/state/diff-store/diff-store';
@@ -21,7 +21,7 @@ import { Entity } from '~/core/utils/entity';
 import { formatShortAddress, getImagePath } from '~/core/utils/utils';
 import { DateTimeDiff } from '~/partials/review';
 import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
-import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/change/change';
+import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/utils/change/change';
 import { Action } from '~/core/utils/action';
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
 import { TableBlockFilter } from '~/core/state/table-block-store';

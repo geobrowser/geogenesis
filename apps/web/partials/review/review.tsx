@@ -13,7 +13,7 @@ import type { Change as Difference } from 'diff';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 
-import { Change } from '~/core/change';
+import { Change } from '~/core/utils/change';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { colors } from '~/design-system/theme/colors';
 import { Dropdown } from '~/design-system/dropdown';
@@ -28,7 +28,7 @@ import { GeoDate, getImagePath } from '~/core/utils/utils';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '~/core/types';
-import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/change/change';
+import type { Changeset, BlockId, BlockChange, AttributeId, AttributeChange } from '~/core/utils/change/change';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Action } from '~/core/utils/action';
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
