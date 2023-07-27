@@ -16,7 +16,8 @@ import { FlowBar } from './flow-bar';
 describe('Flow Bar', () => {
   it('Should not render the flow bar when there are not changes', () => {
     const store = new ActionsStore({
-      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(options.production.subgraph),
+      storageClient: new StorageClient(options.production.ipfs),
     });
 
     render(
@@ -32,7 +33,8 @@ describe('Flow Bar', () => {
 
   it('Should not render the flow bar when there are changes but not in edit mode', () => {
     const store = new ActionsStore({
-      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(options.production.subgraph),
+      storageClient: new StorageClient(options.production.ipfs),
     });
 
     render(
@@ -50,7 +52,8 @@ describe('Flow Bar', () => {
 
   it('Should render the flow bar when there are changes and in edit mode', () => {
     const store = new ActionsStore({
-      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(options.production.subgraph),
+      storageClient: new StorageClient(options.production.ipfs),
     });
 
     render(
@@ -78,7 +81,8 @@ describe('Flow Bar', () => {
    */
   it('Should show correct counts', () => {
     const store = new ActionsStore({
-      api: new Network.NetworkClient(new StorageClient(options.production.ipfs), options.production.subgraph),
+      api: new Network.NetworkClient(options.production.subgraph),
+      storageClient: new StorageClient(options.production.ipfs),
     });
 
     render(

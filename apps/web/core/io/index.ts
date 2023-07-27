@@ -4,3 +4,4 @@ export { MockNetworkData } from './mocks';
 export { StorageClient } from './storage';
 export type { IStorageClient } from './storage';
 export * as Subgraph from './subgraph';
+export * as Publish from './publish';

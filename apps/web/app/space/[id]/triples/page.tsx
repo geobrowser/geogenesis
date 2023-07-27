@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
-import { Network, StorageClient } from '~/core/io';
+import { Network } from '~/core/io';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
@@ -30,8 +30,7 @@ const getData = async ({ params, searchParams }: Props) => {
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const storage = new StorageClient(config.ipfs);
-  const network = new Network.NetworkClient(storage, config.subgraph);
+  const network = new Network.NetworkClient(config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;

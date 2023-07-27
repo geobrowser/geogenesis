@@ -2,8 +2,7 @@ import { Observable, computed, observable } from '@legendapp/state';
 
 import { WalletClient } from 'wagmi';
 
-import { IStorageClient, Network } from '~/core/io';
-import { publish } from '~/core/io/publish';
+import { IStorageClient, Network, Publish } from '~/core/io';
 import {
   Action as ActionType,
   CreateTripleAction,
@@ -196,7 +195,7 @@ export class ActionsStore implements IActionsStore {
     if (actionsToPublish.length < 1) return;
 
     try {
-      await publish({
+      await Publish.publish({
         storageClient: this.storageClient,
         actions: Action.prepareActionsForPublishing(actionsToPublish),
         wallet,

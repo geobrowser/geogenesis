@@ -31,7 +31,7 @@ export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
     const config = Environment.getConfig(chainId);
     const storageClient = new StorageClient(config.ipfs);
-    const network = new Network.NetworkClient(storageClient, config.subgraph);
+    const network = new Network.NetworkClient(config.subgraph);
 
     return {
       storageClient,

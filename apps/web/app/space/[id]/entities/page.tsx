@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Network } from '~/core/io';
-import { StorageClient } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -34,9 +33,8 @@ const getData = async ({ params, searchParams }: Props) => {
 
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
-  const storage = new StorageClient(config.ipfs);
 
-  const network = new Network.NetworkClient(storage, config.subgraph);
+  const network = new Network.NetworkClient(config.subgraph);
   const spaces = await network.fetchSpaces();
   const space = spaces.find(s => s.id === spaceId);
 
