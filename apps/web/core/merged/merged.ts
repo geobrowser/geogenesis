@@ -14,8 +14,7 @@ interface MergedDataSourceOptions {
   localStore: LocalStore;
 }
 
-interface IMergedDataSource
-  extends OmitStrict<Network.INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
+interface IMergedDataSource extends OmitStrict<Network.INetwork, 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
   rows: (
     options: Parameters<Network.INetwork['rows']>[0],
     columns: Column[],

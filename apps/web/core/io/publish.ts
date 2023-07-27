@@ -3,7 +3,7 @@ import { SpaceAbi } from '@geogenesis/contracts';
 import { parseGwei } from 'viem';
 
 import { WalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { prepareWriteContract, readContract, writeContract } from 'wagmi/actions';
 
 import { Action, ReviewState } from '../types';
 import { IStorageClient } from './storage';
@@ -29,14 +29,14 @@ export type PublishOptions = {
   storageClient: IStorageClient;
 };
 
-export const publish = async ({
+export async function publish({
   storageClient,
   actions,
   wallet,
   onChangePublishState,
   space,
   name,
-}: PublishOptions): Promise<void> => {
+}: PublishOptions): Promise<void> {
   onChangePublishState('publishing-ipfs');
   const cids: string[] = [];
 
@@ -80,9 +80,6 @@ export const publish = async ({
   const maxFeeAsGWei = parseGwei(maxFee.toString());
   const maxPriorityFeeAsGWei = parseGwei(maxPriorityFee.toString());
 
-  console.log('maxFeeAsGWei', maxFeeAsGWei);
-  console.log('maxPriorityFeeAsGWei', maxPriorityFeeAsGWei);
-
   const contractConfig = await prepareWriteContract({
     abi: SpaceAbi,
     address: space as unknown as `0x${string}`,
@@ -93,16 +90,73 @@ export const publish = async ({
     maxPriorityFeePerGas: maxPriorityFeeAsGWei,
   });
 
-  console.log('after prepareWriteContract');
   onChangePublishState('signing-wallet');
 
   const tx = await writeContract(contractConfig);
+
   onChangePublishState('publishing-contract');
-
   console.log(`Transaction receipt: ${JSON.stringify(tx.hash)}`);
-};
+}
 
-export const uploadFile = async (storageClient: IStorageClient, file: File): Promise<string> => {
+export async function uploadFile(storageClient: IStorageClient, file: File): Promise<string> {
   const fileUri = await storageClient.uploadFile(file);
   return fileUri;
-};
+}
+
+export async function getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE') {
+  const data = (await readContract({
+    abi: SpaceAbi,
+    address: spaceId as unknown as `0x${string}`,
+    functionName: role,
+  })) as string;
+
+  return data;
+}
+
+export async function grantRole({
+  spaceId,
+  wallet,
+  role,
+  userAddress,
+}: {
+  spaceId: string;
+  wallet: WalletClient;
+  role: string;
+  userAddress: string;
+}) {
+  const contractConfig = await prepareWriteContract({
+    abi: SpaceAbi,
+    address: spaceId as unknown as `0x${string}`,
+    functionName: 'grantRole',
+    walletClient: wallet,
+    args: [role, userAddress],
+  });
+
+  const tx = await writeContract(contractConfig);
+  console.log(`Role granted to ${userAddress}. Transaction hash: ${tx.hash}`);
+  return tx.hash;
+}
+
+export async function revokeRole({
+  spaceId,
+  wallet,
+  role,
+  userAddress,
+}: {
+  spaceId: string;
+  wallet: WalletClient;
+  role: string;
+  userAddress: string;
+}) {
+  const contractConfig = await prepareWriteContract({
+    abi: SpaceAbi,
+    address: spaceId as unknown as `0x${string}`,
+    functionName: 'revokeRole',
+    walletClient: wallet,
+    args: [role, userAddress],
+  });
+
+  const tx = await writeContract(contractConfig);
+  console.log(`Role revoked from ${userAddress}. Transaction hash: ${tx.hash}`);
+  return tx.hash;
+}

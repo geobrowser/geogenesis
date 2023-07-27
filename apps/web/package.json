@@ -54,7 +54,6 @@
     "connectkit": "1.5.0",
     "diff": "^5.1.0",
     "effect": "2.0.0-next.21",
-    "ethers": "^5.7.2",
     "framer-motion": "^10.3.2",
     "immer": "^9.0.16",
     "js-confetti": "^0.11.0",
