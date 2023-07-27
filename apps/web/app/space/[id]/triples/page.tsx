@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Params } from '~/modules/params';
-import { NetworkData } from '~/modules/io';
-import { StorageClient } from '~/modules/services/storage';
+import { Params } from '~/core/params';
+import { NetworkData } from '~/core/io';
+import { StorageClient } from '~/core/io/storage';
 import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
-import { ServerSideEnvParams } from '~/modules/types';
+import { ServerSideEnvParams } from '~/core/types';
 import { Component } from './component';
 import { cookies } from 'next/headers';
 

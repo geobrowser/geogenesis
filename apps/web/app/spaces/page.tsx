@@ -1,15 +1,15 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { OboardingCarousel } from '~/modules/components/onboarding-carousel/carousel';
-import { Email } from '~/modules/components/onboarding-carousel/email';
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/modules/constants';
-import { Card } from '~/modules/design-system/card';
-import { Spacer } from '~/modules/design-system/spacer';
-import { NetworkData } from '~/modules/io';
-import { Params } from '~/modules/params';
-import { StorageClient } from '~/modules/services/storage';
-import { ServerSideEnvParams, Space } from '~/modules/types';
+import { OboardingCarousel } from '~/partials/spaces/carousel';
+import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Card } from '~/design-system/card';
+import { Spacer } from '~/design-system/spacer';
+import { NetworkData } from '~/core/io';
+import { Params } from '~/core/params';
+import { StorageClient } from '~/core/io/storage';
+import { ServerSideEnvParams, Space } from '~/core/types';
+import { Email } from '~/partials/spaces/email';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',

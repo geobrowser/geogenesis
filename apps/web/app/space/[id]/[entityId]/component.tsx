@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 import { ReferencedByEntity } from '~/modules/components/entity/types';
-import { Entity, EntityStoreProvider } from '~/modules/entity';
-import { Space, Triple } from '~/modules/types';
+import { Entity, EntityStoreProvider } from '~/core/utils/entity';
+import { Space, Triple } from '~/core/types';
 
-import { TypesStoreProvider } from '~/modules/type/types-store';
+import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { EntityPageCover } from '~/modules/components/entity/entity-page-cover';
 import { EntityPageContentContainer } from '~/modules/components/entity/entity-page-content-container';
 import { EditableHeading } from '~/modules/components/entity/editable-entity-header';

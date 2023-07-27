@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { Cookie } from './modules/cookie';
-import { Params } from './modules/params';
+import { Cookie } from './core/cookie';
+import { Params } from './core/params';
 
 // export const config = {
 //   matcher: ['/', '/spaces', '/blog/:path*'],
