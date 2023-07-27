@@ -3,14 +3,15 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Entity } from '~/core/utils/entity';
 import { DeletableChipButton } from '~/design-system/chip';
 import { Cell, Triple } from '~/core/types';
-import { EntityAutocompleteDialog } from '../entity-page/autocomplete/entity-autocomplete';
-import { EntityTextAutocomplete } from '../entity-page/autocomplete/entity-text-autocomplete';
+
 import { useEditEvents } from '~/core/events/edit-events';
 import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
+import { EntityAutocompleteDialog } from '../../design-system/autocomplete/entity-autocomplete';
+import { EntityTextAutocomplete } from '../../design-system/autocomplete/entity-text-autocomplete';
 
 interface Props {
   cell: Cell;

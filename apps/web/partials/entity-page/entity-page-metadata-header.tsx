@@ -5,10 +5,8 @@ import Link from 'next/link';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { EntityType } from '~/core/types';
-import { HistoryEmpty, HistoryItem, HistoryPanel } from '../../../partials/history';
 import { EntityPageTypeChip } from './entity-page-type-chip';
-import { Action } from '~/modules/action';
-import { Services } from '~/core/services/services';
+import { Services } from '~/core/services';
 import { Menu } from '~/design-system/menu';
 import { Context } from '~/design-system/icons/context';
 import { Close } from '~/design-system/icons/close';
@@ -19,6 +17,8 @@ import { useDiff } from '~/core/state/diff-store/diff-store';
 import { Dots } from '~/design-system/dots';
 import { SmallButton } from '~/design-system/button';
 import { usePathname } from 'next/navigation';
+import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
+import { Action } from '~/core/utils/action';
 
 interface EntityPageMetadataHeaderProps {
   id: string;

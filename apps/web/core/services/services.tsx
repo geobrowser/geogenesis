@@ -4,10 +4,10 @@ import * as React from 'react';
 import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
-import { Environment } from '../environment';
-import { NetworkData } from '../io';
-import { StorageClient } from '../io/storage';
-import { SpaceStore } from '../state/spaces-store/space-store';
+import { Environment } from '~/core/environment';
+import { NetworkData } from '~/core/io';
+import { StorageClient } from '~/core/io';
+import { SpaceStore } from '~/core/state/spaces-store/space-store';
 
 type Services = {
   network: NetworkData.INetwork;

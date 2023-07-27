@@ -5,9 +5,8 @@ import { OboardingCarousel } from '~/partials/spaces/carousel';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
-import { NetworkData } from '~/core/io';
+import { NetworkData, StorageClient } from '~/core/io';
 import { Params } from '~/core/params';
-import { StorageClient } from '~/core/io/storage';
 import { ServerSideEnvParams, Space } from '~/core/types';
 import { Email } from '~/partials/spaces/email';
 

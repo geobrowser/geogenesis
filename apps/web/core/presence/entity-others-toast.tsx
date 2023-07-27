@@ -7,7 +7,7 @@ import pluralize from 'pluralize';
 import { useAccount } from 'wagmi';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { EntityPresenceContext } from './entity-presence-provider';
+import { EntityPresenceContext } from './presence-provider';
 import { Text } from '~/design-system/text';
 import { SmallButton } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';

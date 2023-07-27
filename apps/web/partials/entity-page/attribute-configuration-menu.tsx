@@ -7,7 +7,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { SquareButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
-import { ResultContent } from './autocomplete/results-list';
+import { ResultContent } from '../../design-system/autocomplete/results-list';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { DeletableChipButton } from '~/design-system/chip';
 import { NavUtils } from '~/core/utils/utils';

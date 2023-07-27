@@ -4,8 +4,8 @@ import { SpaceHeader } from '~/partials/space/space-header';
 import { SpaceNavbar } from '~/partials/space/space-navbar';
 import { Triples } from '~/partials/triples-page/triples';
 import { Spacer } from '~/design-system/spacer';
-import { InitialTripleStoreParams, TripleStoreProvider } from '~/modules/triple';
 import { Triple } from '~/core/types';
+import { InitialTripleStoreParams, TripleStoreProvider } from '~/core/state/triple-store';
 
 interface Props {
   spaceId: string;

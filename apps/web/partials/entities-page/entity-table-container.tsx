@@ -4,14 +4,16 @@ import { memo } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/state/editable-store';
 import { Column, Row } from '~/core/types';
+import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { EntityInput } from './entity-input';
 import { EntityTable } from './entity-table';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
-import { PageNumberContainer } from '~/design-system/table/styles';
+import { SpacePresenceProvider } from '~/core/presence/presence-provider';
+import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 
 interface Props {
   spaceId: string;
@@ -70,6 +72,8 @@ export const EntityTableContainer = memo(function EntityTableContainer({
                 <>
                   <Spacer width={16} />
                   <Text color="grey-03" variant="metadataMedium">
+                    ...
+                  </Text>
                   <Spacer width={16} />
                 </>
               ) : (

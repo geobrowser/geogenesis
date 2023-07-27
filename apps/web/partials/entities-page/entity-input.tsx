@@ -4,9 +4,9 @@ import { useRect } from '@radix-ui/react-use-rect';
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { useEntityTable } from '~/core/utils/entity';
-import { Input } from '../../design-system/input';
-import { TypeDialogPopover } from './type-dialog-popover';
+import { Input } from '~/design-system/input';
+import { TypeDialogPopover } from '../entity-page/type-dialog-popover';
+import { useEntityTable } from '~/core/hooks/use-entity-table';
 
 interface Props {
   spaceId: string;

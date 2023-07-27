@@ -3,20 +3,20 @@
 import { A, pipe } from '@mobily/ts-belt';
 import { memo, useState } from 'react';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { useActionsStore } from '~/modules/action';
 import { IconName } from '~/design-system/icon';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Spacer } from '~/design-system/spacer';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/modules/triple';
 import { Column } from '~/core/types';
 import { valueTypes } from '~/core/value-types';
 import { useEditEvents } from '~/core/events/edit-events';
-import { TripleTypeDropdown } from '../entity/triple-type-dropdown';
 import { Url } from '~/design-system/icons/url';
 import { Date } from '~/design-system/icons/date';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { Triple } from '~/core/utils/triple';
+import { TripleTypeDropdown } from '../entity-page/triple-type-dropdown';
 
 interface Props {
   column: Column;

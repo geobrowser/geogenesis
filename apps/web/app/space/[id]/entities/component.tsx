@@ -1,10 +1,10 @@
-import { EntityTableContainer } from '~/partials/entity-table/entity-table-container';
 import { SpaceHeader } from '~/partials/space/space-header';
 import { SpaceNavbar } from '~/partials/space/space-navbar';
 import { Spacer } from '~/design-system/spacer';
-import { EntityTableStoreProvider, InitialEntityTableStoreParams } from '~/core/utils/entity';
 import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { Column, Row, Space, Triple } from '~/core/types';
+import { EntityTableStoreProvider, InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
+import { EntityTableContainer } from '~/partials/entities-page/entity-table-container';
 
 interface Props {
   space: Space;

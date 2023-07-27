@@ -2,12 +2,11 @@ import * as React from 'react';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Params } from '~/core/params';
-import { NetworkData } from '~/core/io';
-import { StorageClient } from '~/core/io/storage';
-import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
+import { NetworkData, StorageClient } from '~/core/io';
 import { ServerSideEnvParams } from '~/core/types';
 import { Component } from './component';
 import { cookies } from 'next/headers';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 
 interface Props {
   params: { id: string };

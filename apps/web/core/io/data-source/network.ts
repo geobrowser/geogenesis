@@ -6,7 +6,6 @@ import { ContractTransaction, Event, Signer, utils } from 'ethers';
 
 import { ROOT_SPACE_IMAGE } from '~/core/constants';
 import { Entity } from '~/core/utils/entity';
-import { DEFAULT_PAGE_SIZE } from '~/modules/triple';
 import {
   Account,
   Action,
@@ -29,8 +28,9 @@ import {
   NetworkTriple,
   NetworkVersion,
 } from './network-local-mapping';
-import { IStorageClient } from '~/core/io/storage';
+import { IStorageClient } from '../storage';
 import * as queries from '../queries';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {

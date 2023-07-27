@@ -12,9 +12,9 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useEditable } from '~/core/state/editable-store/editable-store';
 import { Entity } from '~/core/types';
-import { Spacer } from '../../design-system/spacer';
-import { Text } from '../../design-system/text';
-import { ResultContent, ResultItem, ResultsList } from '../entity-page/autocomplete/results-list';
+import { Spacer } from '~/design-system/spacer';
+import { Text } from '~/design-system/text';
+import { ResultContent, ResultItem, ResultsList } from '../../design-system/autocomplete/results-list';
 import { useTypesStore } from '~/core/state/types-store/types-store';
 
 interface Props {
