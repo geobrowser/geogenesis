@@ -133,10 +133,7 @@ export interface INetwork {
 const UPLOAD_CHUNK_SIZE = 2000;
 
 export class NetworkClient implements INetwork {
-  constructor(
-    public storageClient: IStorageClient,
-    public subgraphUrl: string
-  ) {}
+  constructor(public storageClient: IStorageClient, public subgraphUrl: string) {}
 
   publish = async ({ actions, signer, onChangePublishState, space, name }: PublishOptions): Promise<void> => {
     const contract = Space__factory.connect(space, signer);

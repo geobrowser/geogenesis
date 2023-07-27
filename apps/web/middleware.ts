@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
 import { Cookie } from './core/cookie';
 import { Params } from './core/params';
 

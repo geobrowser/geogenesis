@@ -159,7 +159,7 @@ export function convertHealthFacts(
     Tips: string, // 45
     Tips: string,
     Tips: string,
-    Tips: string, // 48
+    Tips: string // 48
   ];
 
   const results = parseCSV<HealthDataFactRow>(csv);
@@ -360,7 +360,7 @@ export function convertHealthEntities(
     Contains: string,
     Contains: string,
     Contains: string,
-    Contains: string,
+    Contains: string
   ];
 
   const results = parseCSV<HealthDataFactRow>(csv);
@@ -967,7 +967,7 @@ function convertSanFranciscoData(
     Is_about: string,
     Is_about: string,
     Is_about: string,
-    Author: string,
+    Author: string
   ];
 
   const results = parseCSV<HealthDataSourceRow>(csv);

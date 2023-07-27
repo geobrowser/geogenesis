@@ -1,5 +1,6 @@
-import { NextApiRequest, NextApiResponse } from 'next';
 import mailchimp from '@mailchimp/mailchimp_marketing';
+
+import { NextApiRequest, NextApiResponse } from 'next';
 
 mailchimp.setConfig({
   apiKey: process.env.MAILCHIMP_API_KEY,

@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { Providers } from '~/core/providers';
+
 import { MockNetworkData } from '~/core/io';
+import { Providers } from '~/core/providers';
+
 import { Component } from '~/app/space/[id]/triples/component';
 
 describe('Space page', () => {
