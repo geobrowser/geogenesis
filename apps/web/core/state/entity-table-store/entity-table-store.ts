@@ -6,7 +6,7 @@ import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Network } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
-import { SpaceStore } from '~/core/state/spaces-store/space-store';
+import { SpaceStore } from '~/core/state/spaces-store';
 import { CreateType } from '~/core/type';
 import { Column, EntityValue, Row, Space, Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';

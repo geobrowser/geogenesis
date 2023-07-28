@@ -54,6 +54,13 @@ export const getFetchProfileQuery = (address: string) => {
   }`;
 };
 
+// Right now we use an ad-hoc Profile mechanism derived from Person entities in the People space.
+// We are currently working on the Geo Profile system which will replace this.
+//
+// We query for a wallet with the passed-in address. We then search for the Person relation associated
+// with the wallet and construct a Profile from that.
+//
+// Eventually this will all be indexed in the subgraph and we will be able to query for a Profile directly.
 export async function fetchProfile(options: FetchProfileOptions): Promise<[string, Profile] | null> {
   const queryId = uuid();
 
