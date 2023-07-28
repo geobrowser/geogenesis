@@ -114,7 +114,7 @@ export class TableBlockStore {
     this.hasNextPage$ = observable(false);
     this.type = selectedType;
     this.pageNumber$ = observable(0);
-    this.Merged = new Merged({ store: ActionsStore, localStore: LocalStore, subgraph, config });
+    this.Merged = new Merged({ store: ActionsStore, localStore: LocalStore, subgraph });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 

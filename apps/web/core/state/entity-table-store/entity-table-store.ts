@@ -305,7 +305,6 @@ export class EntityTableStore implements IEntityTableStore {
           store: this.ActionsStore,
           localStore: this.LocalStore,
           subgraph,
-          config,
         });
         const maybeRelationAttributeTypes = await Promise.all(
           columns.map(column => mergedStore.fetchEntity({ id: column.id, endpoint: config.subgraph }))

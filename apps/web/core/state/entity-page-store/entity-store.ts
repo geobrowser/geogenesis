@@ -297,7 +297,6 @@ export class EntityStore implements IEntityStore {
           store: this.ActionsStore,
           localStore: this.LocalStore,
           subgraph,
-          config,
         });
         const maybeRelationAttributeTypes = await Promise.all(
           attributesWithRelationValues.map(attributeId =>

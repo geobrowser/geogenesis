@@ -38,7 +38,6 @@ class EntityAutocomplete {
       store: ActionsStore,
       localStore: LocalStore,
       subgraph: Subgraph,
-      config,
     });
 
     this.results$ = makeOptionalComputed(

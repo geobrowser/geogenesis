@@ -8,7 +8,6 @@ import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
-import { Environment } from '../environment';
 import { columns } from '../io/fetch-columns';
 import { rows } from '../io/fetch-rows';
 
@@ -16,14 +15,24 @@ interface MergedDataSourceOptions {
   store: ActionsStore;
   localStore: LocalStore;
   subgraph: Subgraph.ISubgraph;
-  config: Environment.AppConfig;
 }
 
 interface IMergedDataSource
   extends OmitStrict<
     Subgraph.ISubgraph,
-    'fetchProposedVersion' | 'fetchProposal' | 'fetchProposals' | 'fetchTableRowEntities' | 'fetchProposedVersions'
+    // These data models don't have local equivalents, so we don't need merging logic for them.
+    | 'fetchProposedVersion'
+    | 'fetchProposal'
+    | 'fetchProposals'
+    | 'fetchTableRowEntities'
+    | 'fetchProposedVersions'
+    | 'fetchSpace'
+    | 'fetchSpaces'
+    | 'fetchProfile'
   > {
+  // Rows and columns aren't part of the subgraph API and instead are higher-order functions that
+  // call the subgraph APIs themselves. This is because rows and columns are not entities in the
+  // subgraph. We include them here so have a unified API for merging data in the app.
   rows: (
     options: Parameters<typeof rows>[0],
     columns: Column[],
@@ -40,13 +49,11 @@ export class Merged implements IMergedDataSource {
   private store: ActionsStore;
   private localStore: LocalStore;
   private subgraph: Subgraph.ISubgraph;
-  private config: Environment.AppConfig;
 
-  constructor({ store, localStore, subgraph, config }: MergedDataSourceOptions) {
+  constructor({ store, localStore, subgraph }: MergedDataSourceOptions) {
     this.store = store;
     this.localStore = localStore;
     this.subgraph = subgraph;
-    this.config = config;
   }
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -227,10 +234,4 @@ export class Merged implements IMergedDataSource {
 
     return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
   };
-
-  // Right now we can't create local spaces, so we just return the network spaces.
-  fetchSpaces = async () => this.subgraph.fetchSpaces({ endpoint: this.config.subgraph });
-  fetchSpace = async (options: Parameters<Subgraph.ISubgraph['fetchSpace']>[0]) => this.subgraph.fetchSpace(options);
-
-  fetchProfile = async () => null;
 }
