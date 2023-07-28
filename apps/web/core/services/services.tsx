@@ -6,7 +6,7 @@ import { ReactNode, createContext, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
-import { IStorageClient, Network } from '~/core/io';
+import { IStorageClient, Network, Subgraph } from '~/core/io';
 import { StorageClient } from '~/core/io';
 import { SpaceStore } from '~/core/state/spaces-store/space-store';
 
@@ -37,7 +37,8 @@ export function ServicesProvider({ children }: Props) {
       storageClient,
       network,
       spaceStore: new SpaceStore({
-        api: network,
+        config,
+        api: Subgraph,
       }),
     };
   }, [chainId]);

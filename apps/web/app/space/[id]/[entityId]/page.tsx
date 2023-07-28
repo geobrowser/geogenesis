@@ -77,7 +77,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
 
   const network = new Network.NetworkClient(config.subgraph);
 
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId) ?? null;
 
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
@@ -137,13 +137,8 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return network.fetchTriples({
-          // Previously we would scope the triples we're fetching to the space we're in. Right now
-          // this model doesn't make sense since triples can only exist in one space at a time.
-          // Eventually entities can have triples spanning many spaces so adding back the space
-          // will make sense at that point. Additionally there's a bug where we do not navigate
-          // to the correct space when navigating to an entity in a different space. It _happens_
-          // to work correctly because we do not scope the triples to the space.
+        return Subgraph.fetchTriples({
+          endpoint: config.subgraph,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,
@@ -151,7 +146,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
         });
       })
     )
-  ).flatMap(block => block.triples);
+  ).flatMap(triples => triples);
 
   return {
     triples: entity?.triples ?? [],

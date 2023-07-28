@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
-import { Network } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
@@ -30,13 +30,13 @@ const getData = async ({ params, searchParams }: Props) => {
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const network = new Network.NetworkClient(config.subgraph);
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId);
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
   const spaceName = spaceNames[spaceId];
-  const triples = await network.fetchTriples({
+  const triples = await Subgraph.fetchTriples({
+    endpoint: config.subgraph,
     query: initialParams.query,
     space: spaceId,
     first: DEFAULT_PAGE_SIZE,
@@ -48,7 +48,7 @@ const getData = async ({ params, searchParams }: Props) => {
     spaceId,
     spaceName,
     spaceImage,
-    initialTriples: triples.triples,
+    initialTriples: triples,
     initialParams,
   };
 };

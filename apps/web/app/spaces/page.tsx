@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams, Space } from '~/core/types';
 
@@ -67,11 +67,9 @@ const HIDDEN_SPACES: Array<string> = [
 
 export default async function Spaces({ searchParams }: { searchParams: ServerSideEnvParams }) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const network = new Network.NetworkClient(config.subgraph);
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
   return (

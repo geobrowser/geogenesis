@@ -1,6 +1,7 @@
 import { ObservableComputed, computed } from '@legendapp/state';
 
-import { Network } from '~/core/io';
+import { AppConfig } from '~/core/environment';
+import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Space } from '~/core/types';
 import { makeOptionalComputed } from '~/core/utils/utils';
@@ -8,20 +9,20 @@ import { makeOptionalComputed } from '~/core/utils/utils';
 type SpacesAccounts = Record<string, string[]>;
 
 export class SpaceStore {
-  private api: Network.INetwork;
+  private api: Subgraph.ISubgraph;
   spaces$: ObservableComputed<Space[]>;
   admins$: ObservableComputed<SpacesAccounts>;
   editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
-  constructor({ api }: { api: Network.INetwork }) {
+  constructor({ api, config }: { api: Subgraph.ISubgraph; config: AppConfig }) {
     this.api = api;
 
     this.spaces$ = makeOptionalComputed(
       [],
       computed(async () => {
         try {
-          return await this.api.fetchSpaces();
+          return await this.api.fetchSpaces({ endpoint: config.subgraph });
         } catch (e) {
           return [];
         }

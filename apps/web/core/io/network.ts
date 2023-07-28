@@ -82,7 +82,6 @@ interface FetchRowsResult {
 
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
-  fetchSpaces: () => Promise<Space[]>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
   fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<Version | null>;
   fetchProposal: (id: string, abortController?: AbortController) => Promise<Proposal | null>;
@@ -445,101 +444,6 @@ export class NetworkClient implements INetwork {
       });
     } catch (e) {
       console.error(`Unable to fetch entities, query: ${query} filter: ${JSON.stringify(filter)}`);
-      console.error(e);
-      return [];
-    }
-  };
-
-  fetchSpaces = async () => {
-    const { triples: spaceConfigTriples } = await this.fetchTriples({
-      query: '',
-      first: 1000,
-      skip: 0,
-      filter: [
-        { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-        { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
-      ],
-    });
-
-    const spacesResponse = await fetch(this.subgraphUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `query {
-          spaces {
-            id
-            isRootSpace
-            admins {
-              id
-            }
-            editors {
-              id
-            }
-            editorControllers {
-              id
-            }
-            entity {
-              id
-              entityOf {
-                id
-                stringValue
-                attribute {
-                  id
-                }
-              }
-            }
-            createdAtBlock
-          }
-        }`,
-      }),
-    });
-
-    try {
-      const json: {
-        data: {
-          spaces: {
-            id: string;
-            isRootSpace: boolean;
-            admins: Account[];
-            editors: Account[];
-            editorControllers: Account[];
-            entity?: {
-              id: string;
-              entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
-            };
-            createdAtBlock: string;
-          }[];
-        };
-      } = await spacesResponse.json();
-
-      const spaces = json.data.spaces.map((space): Space => {
-        const attributes = Object.fromEntries(
-          space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
-        );
-
-        if (space.isRootSpace) {
-          attributes.name = 'Root';
-          attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
-        }
-
-        return {
-          id: space.id,
-          isRootSpace: space.isRootSpace,
-          admins: space.admins.map(account => account.id),
-          editorControllers: space.editorControllers.map(account => account.id),
-          editors: space.editors.map(account => account.id),
-          entityId: space.entity?.id || '',
-          attributes,
-          spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
-          createdAtBlock: space.createdAtBlock,
-        };
-      });
-
-      return spaces;
-    } catch (e) {
-      console.error('Unable to fetch spaces');
       console.error(e);
       return [];
     }

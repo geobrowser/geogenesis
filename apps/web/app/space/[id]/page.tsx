@@ -29,7 +29,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const network = new Network.NetworkClient(config.subgraph);
 
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId) ?? null;
   const entityId = space?.spaceConfigEntityId;
 
@@ -79,7 +79,7 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
 
   const network = new Network.NetworkClient(config.subgraph);
 
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId) ?? null;
   const entityId = space?.spaceConfigEntityId;
 

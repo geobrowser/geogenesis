@@ -108,7 +108,12 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   // @TODO: log fail states
   if (result.errors?.length > 0) {
     console.error(
-      `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`,
+      `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${options.endpoint} space: ${
+        options.space
+      } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
+      
+      queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}1
+      `,
       result.errors
     );
     return [];

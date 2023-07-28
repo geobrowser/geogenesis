@@ -106,10 +106,6 @@ export class MockNetwork implements INetwork {
     return { rows: [], columns: [], hasNextPage: false };
   };
 
-  fetchSpaces = async () => {
-    return [];
-  };
-
   fetchEntities = async () => {
     return Entity.entitiesFromTriples(this.triples);
   };

@@ -174,7 +174,12 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
 
   if (result.errors?.length > 0) {
     console.error(
-      `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`,
+      `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${options.endpoint} query: ${
+        options.query
+      } skip: ${options.skip} first: ${options.first} filter: ${options.filter}
+      
+      queryString: ${getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip)}
+      `,
       result.errors
     );
     return [];

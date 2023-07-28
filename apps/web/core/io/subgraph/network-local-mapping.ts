@@ -1,4 +1,17 @@
-import { Action, Entity, OmitStrict, Profile, Space, Triple, Value, Version } from '~/core/types';
+import { Account, Action, Entity, OmitStrict, Profile, Space, Triple, Value, Version } from '~/core/types';
+
+export type NetworkSpace = {
+  id: string;
+  isRootSpace: boolean;
+  admins: Account[];
+  editors: Account[];
+  editorControllers: Account[];
+  entity?: {
+    id: string;
+    entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
+  };
+  createdAtBlock: string;
+};
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 

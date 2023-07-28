@@ -35,7 +35,7 @@ const getData = async ({ params, searchParams }: Props) => {
   const config = Params.getConfigFromParams(searchParams, env);
 
   const network = new Network.NetworkClient(config.subgraph);
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId);
 
   if (!space) notFound();
