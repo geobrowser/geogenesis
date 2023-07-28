@@ -6,7 +6,7 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
 
-const getFetchProposalsQuery = (spaceId: string, skip) => `query {
+const getFetchProposalsQuery = (spaceId: string, skip: number) => `query {
   proposals(first: 10, where: {space: ${JSON.stringify(
     spaceId
   )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
