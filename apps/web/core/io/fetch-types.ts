@@ -2,11 +2,18 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Space } from '../types';
 import { INetwork } from './network';
+import { ISubgraph } from './subgraph';
 
-export const fetchSpaceTypeTriples = async (network: INetwork, spaceId: string, pageSize = 1000) => {
+export const fetchSpaceTypeTriples = async (
+  fetchTriples: ISubgraph['fetchTriples'],
+  spaceId: string,
+  endpoint: string,
+  pageSize = 1000
+) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
 
-  const { triples } = await network.fetchTriples({
+  const triples = await fetchTriples({
+    endpoint,
     query: '',
     space: spaceId,
     skip: 0,

@@ -91,12 +91,13 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
     network.fetchEntity(entityId),
 
-    network.fetchEntities({
+    Subgraph.fetchEntities({
+      endpoint: config.subgraph,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    fetchSpaceTypeTriples(network, spaceId),
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 

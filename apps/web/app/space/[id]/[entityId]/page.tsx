@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -83,12 +83,13 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
     network.fetchEntity(entityId),
 
-    network.fetchEntities({
+    Subgraph.fetchEntities({
+      endpoint: config.subgraph,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    fetchSpaceTypeTriples(network, spaceId),
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
     space ? fetchForeignTypeTriples(network, space) : [],
   ]);
 

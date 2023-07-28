@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -45,9 +45,10 @@ const getData = async ({ params, searchParams }: Props) => {
   const spaceName = spaceNames[spaceId];
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(network, spaceId),
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
     fetchForeignTypeTriples(network, space),
-    network.fetchTriples({
+    Subgraph.fetchTriples({
+      endpoint: config.subgraph,
       query: '',
       skip: 0,
       first: DEFAULT_PAGE_SIZE,
@@ -64,7 +65,7 @@ const getData = async ({ params, searchParams }: Props) => {
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
-  const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
+  const defaultTypeId = defaultTypeTriples[0]?.value.id;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;

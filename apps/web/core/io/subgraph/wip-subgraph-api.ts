@@ -12,13 +12,6 @@ export async function fetchSpaces() {
   // map space values
 }
 
-export async function fetchEntities() {
-  // fetch error values for HTTP errors and JSON parsing errors
-  // fetch error values for GraphQL errors from `errors` field in result
-  // fetch entity values
-  // map entity values
-}
-
 export async function fetchEntity() {
   // fetch error values for HTTP errors and JSON parsing errors
   // fetch error values for GraphQL errors from `errors` field in result
