@@ -1,5 +1,7 @@
 import { ObservableComputed, computed } from '@legendapp/state';
 
+import React from 'react';
+
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
@@ -61,6 +63,27 @@ export class SpaceStore {
   }
 }
 
+const SpaceStoreContext = React.createContext<SpaceStore | null>(null);
+
+// This is a workaround to provide all stores in an in-memory cache. Once we have
+// permissionless spaches this won't be scalable anymore as there could be thousands
+// of spaces in different subgraphs and we'll need to rely on merging local data with
+// a remote cache (like RQ) instead.
+export function SpaceStoreProvider({ children }: { children: React.ReactNode }) {
+  const { config, subgraph } = Services.useServices();
+  const spaceStore = React.useMemo(() => {
+    return new SpaceStore({ api: subgraph, config });
+  }, [subgraph, config]);
+
+  return <SpaceStoreContext.Provider value={spaceStore}>{children}</SpaceStoreContext.Provider>;
+}
+
 export function useSpaceStoreInstance() {
-  return Services.useServices().spaceStore;
+  const value = React.useContext(SpaceStoreContext);
+
+  if (!value) {
+    throw new Error(`Missing SpaceStoreProvider`);
+  }
+
+  return value;
 }

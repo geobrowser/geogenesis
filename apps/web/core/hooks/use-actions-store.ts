@@ -2,7 +2,7 @@
 
 import { useSelector } from '@legendapp/state/react';
 
-import { useActionsStoreInstance } from '../state/actions-store/actions-store-provider';
+import { useActionsStoreInstance } from '../state/actions-store';
 
 /**
  * Hook to consume state/effects from the global ActionsStore.

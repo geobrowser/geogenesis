@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { Services } from '~/core/services';
 import { useActionsStoreInstance } from '~/core/state/actions-store';
-import { useSpaceStoreInstance } from '~/core/state/spaces-store/space-store';
+import { useSpaceStoreInstance } from '~/core/state/spaces-store';
 import { Column, Row, Triple } from '~/core/types';
 
 import { useLocalStoreInstance } from '../local-store';
