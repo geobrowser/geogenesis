@@ -3,7 +3,7 @@ import { Editor, Range } from '@tiptap/core';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { Publish, StorageClient } from '~/core/io';
+import { Publish, Storage } from '~/core/io';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -116,7 +116,7 @@ export const commandItems: CommandSuggestionItem[] = [
         // nodes are essentially production.
         const chainId = Environment.options.production.chainId;
         const config = Environment.getConfig(chainId);
-        const src = await Publish.uploadFile(new StorageClient(config.ipfs), file);
+        const src = await Publish.uploadFile(new Storage.StorageClient(config.ipfs), file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };
       input.click();

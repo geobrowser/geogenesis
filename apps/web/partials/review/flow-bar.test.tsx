@@ -2,11 +2,10 @@ import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { options } from '~/core/environment/environment';
-import { MockNetworkData, Network, StorageClient } from '~/core/io';
+import { MockNetworkData, Network, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
-import { ActionsStore } from '~/core/state/actions-store';
-import { ActionsStoreContext } from '~/core/state/actions-store/actions-store-provider';
-import { editable$ } from '~/core/state/editable-store/editable-store';
+import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
+import { editable$ } from '~/core/state/editable-store';
 
 import { FlowBar } from './flow-bar';
 
@@ -17,7 +16,7 @@ describe('Flow Bar', () => {
   it('Should not render the flow bar when there are not changes', () => {
     const store = new ActionsStore({
       api: new Network.NetworkClient(options.production.subgraph),
-      storageClient: new StorageClient(options.production.ipfs),
+      storageClient: new Storage.StorageClient(options.production.ipfs),
     });
 
     render(
@@ -34,7 +33,7 @@ describe('Flow Bar', () => {
   it('Should not render the flow bar when there are changes but not in edit mode', () => {
     const store = new ActionsStore({
       api: new Network.NetworkClient(options.production.subgraph),
-      storageClient: new StorageClient(options.production.ipfs),
+      storageClient: new Storage.StorageClient(options.production.ipfs),
     });
 
     render(
@@ -53,7 +52,7 @@ describe('Flow Bar', () => {
   it('Should render the flow bar when there are changes and in edit mode', () => {
     const store = new ActionsStore({
       api: new Network.NetworkClient(options.production.subgraph),
-      storageClient: new StorageClient(options.production.ipfs),
+      storageClient: new Storage.StorageClient(options.production.ipfs),
     });
 
     render(
@@ -82,7 +81,7 @@ describe('Flow Bar', () => {
   it('Should show correct counts', () => {
     const store = new ActionsStore({
       api: new Network.NetworkClient(options.production.subgraph),
-      storageClient: new StorageClient(options.production.ipfs),
+      storageClient: new Storage.StorageClient(options.production.ipfs),
     });
 
     render(
