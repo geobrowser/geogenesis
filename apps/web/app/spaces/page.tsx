@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
-import { Network, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams, Space } from '~/core/types';
 

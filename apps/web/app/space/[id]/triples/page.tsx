@@ -30,11 +30,9 @@ const getData = async ({ params, searchParams }: Props) => {
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId);
+  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
-  const spaceName = spaceNames[spaceId];
+  const spaceName = space?.attributes[SYSTEM_IDS.NAME];
   const triples = await Subgraph.fetchTriples({
     endpoint: config.subgraph,
     query: initialParams.query,

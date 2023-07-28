@@ -29,8 +29,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const network = new Network.NetworkClient(config.subgraph);
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -39,7 +38,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   }
 
   const entity = await network.fetchEntity(entityId);
-
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
