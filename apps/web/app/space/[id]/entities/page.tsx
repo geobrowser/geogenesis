@@ -78,7 +78,21 @@ const getData = async ({ params, searchParams }: Props) => {
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createGraphQLStringFromFilters([], typeId),
+    filter: TableBlockSdk.createGraphQLStringFromFilters(
+      [
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: initialParams.query,
+          valueType: 'string',
+        },
+        {
+          columnId: SYSTEM_IDS.SPACE,
+          value: spaceId,
+          valueType: 'string',
+        },
+      ],
+      typeId
+    ),
   };
 
   const { columns } = await network.columns({

@@ -112,7 +112,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = computed(() => initialRows);
     this.columns$ = computed(() => initialColumns);
 
-    const Network$ = makeOptionalComputed(
+    const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
@@ -127,6 +127,12 @@ export class EntityTableStore implements IEntityTableStore {
               {
                 columnId: SYSTEM_IDS.NAME,
                 value: this.query$.get(),
+                valueType: 'string',
+              },
+              // Only return rows that are in the current space
+              {
+                columnId: SYSTEM_IDS.SPACE,
+                value: this.spaceId,
                 valueType: 'string',
               },
             ],
@@ -170,7 +176,7 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-    this.hasNextPage$ = computed(() => Network$.get().hasNextPage);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromLocalChanges(
@@ -181,7 +187,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     this.columns$ = computed(() => {
-      const { columns } = Network$.get();
+      const { columns } = networkData$.get();
       return EntityTable.columnsFromLocalChanges(
         this.LocalStore.triples$.get(),
         columns,
@@ -198,7 +204,7 @@ export class EntityTableStore implements IEntityTableStore {
       [],
       computed(async () => {
         const columns = this.columns$.get();
-        const { rows: serverRows } = Network$.get();
+        const { rows: serverRows } = networkData$.get();
 
         /**
          * There are several edge-cases we need to handle in order to correctly merge local changes

@@ -64,7 +64,7 @@ export interface FetchTableEntitiesOptions {
   typeIds?: string[];
   first?: number;
   skip?: number;
-  filter: string;
+  filter: string; // this is a graphql query string
   abortController?: AbortController;
 }
 
