@@ -46,7 +46,7 @@ const getData = async ({ params, searchParams }: Props) => {
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    fetchForeignTypeTriples(network, space),
+    fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph),
     Subgraph.fetchTriples({
       endpoint: config.subgraph,
       query: '',

@@ -90,7 +90,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
     }),
 
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    space ? fetchForeignTypeTriples(network, space) : [],
+    space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
   ]);
 
   // Redirect from space configuration page to space page

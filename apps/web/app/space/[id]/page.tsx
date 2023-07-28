@@ -98,7 +98,7 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
     }),
 
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    space ? fetchForeignTypeTriples(network, space) : [],
+    space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
   ]);
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't

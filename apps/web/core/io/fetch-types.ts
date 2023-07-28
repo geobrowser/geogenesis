@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Space } from '../types';
-import { INetwork } from './network';
 import { ISubgraph } from './subgraph';
 
 export const fetchSpaceTypeTriples = async (
@@ -30,12 +29,18 @@ export const fetchSpaceTypeTriples = async (
   return triples;
 };
 
-export const fetchForeignTypeTriples = async (network: INetwork, space: Space, pageSize = 1000) => {
+export const fetchForeignTypeTriples = async (
+  fetchTriples: ISubgraph['fetchTriples'],
+  space: Space,
+  endpoint: string,
+  pageSize = 1000
+) => {
   if (!space.spaceConfigEntityId) {
     return [];
   }
 
-  const foreignTypesFromSpaceConfig = await network.fetchTriples({
+  const foreignTypesFromSpaceConfig = await fetchTriples({
+    endpoint,
     query: '',
     space: space.id,
     skip: 0,
@@ -46,11 +51,12 @@ export const fetchForeignTypeTriples = async (network: INetwork, space: Space, p
     ],
   });
 
-  const foreignTypesIds = foreignTypesFromSpaceConfig.triples.map(triple => triple.value.id);
+  const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.id);
 
   const foreignTypes = await Promise.all(
     foreignTypesIds.map(entityId =>
-      network.fetchTriples({
+      fetchTriples({
+        endpoint,
         query: '',
         skip: 0,
         first: pageSize,
@@ -63,5 +69,5 @@ export const fetchForeignTypeTriples = async (network: INetwork, space: Space, p
     )
   );
 
-  return foreignTypes.flatMap(foreignType => foreignType.triples);
+  return foreignTypes.flatMap(triples => triples);
 };
