@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Profile } from '~/core/types';
@@ -67,36 +67,42 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const fetchWalletsGraphqlFetchEffectWithErrorHandling = fetchWalletsGraphqlEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
-          options.endpoint
-        } address: ${options.address}
-        
-        queryString: ${getFetchProfileQuery(options.address)}
-        `,
-        error.message
-      );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(fetchWalletsGraphqlEffect));
 
-      return Effect.succeed({
-        geoEntities: [],
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${options.endpoint} address: ${options.address}`
-      );
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
 
-      return Effect.succeed({
-        geoEntities: [],
-      });
-    })
-  );
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
+              options.endpoint
+            } address: ${options.address}
+            
+            queryString: ${getFetchProfileQuery(options.address)}
+            `,
+            error.message
+          );
 
-  const walletsResult = await Effect.runPromise(fetchWalletsGraphqlFetchEffectWithErrorHandling);
+          return {
+            geoEntities: [],
+          };
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${options.endpoint} address: ${options.address}`
+          );
+
+          return {
+            geoEntities: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const walletsResult = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const walletEntities = walletsResult.geoEntities;
 

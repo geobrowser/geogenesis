@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Entity as IEntity } from '~/core/types';
@@ -67,36 +67,45 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${
-          options.endpoint
-        } query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${
-          options.filter
-        }
-        
-        queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
-        `,
-        error.message
-      );
-      return Effect.succeed({
-        geoEntities: [],
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch table row entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
-      );
-      return Effect.succeed({
-        geoEntities: [],
-      });
-    })
-  );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${
+              options.endpoint
+            } query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${
+              options.first
+            } filter: ${options.filter}
+            
+            queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
+            `,
+            error.message
+          );
+
+          return {
+            geoEntities: [],
+          };
+
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch table row entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+          );
+
+          return {
+            geoEntities: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   return result.geoEntities.map(result => {
     const triples = fromNetworkTriples(result.entityOf);

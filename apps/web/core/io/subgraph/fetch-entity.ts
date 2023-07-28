@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Entity as IEntity } from '~/core/types';
@@ -60,36 +60,42 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
-          options.id
-        } blockNumber: ${options.blockNumber}
-        
-        queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
-        `,
-        error.message
-      );
+  // @TODO: retries and runtime validation
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-      return Effect.succeed({
-        geoEntity: null,
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch entity, queryId: ${queryId} endpoint: ${options.endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
-      );
-      return Effect.succeed({
-        geoEntity: null,
-      });
-    })
-  );
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
+              options.id
+            } blockNumber: ${options.blockNumber}
+            
+            queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
+            `,
+            error.message
+          );
 
+          return {
+            geoEntity: null,
+          };
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${options.endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
+          );
+          return {
+            geoEntity: null,
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const entity = result.geoEntity;
 
   if (!entity) {

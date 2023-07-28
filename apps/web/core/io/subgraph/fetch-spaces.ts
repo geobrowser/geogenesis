@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { ROOT_SPACE_IMAGE } from '~/core/constants';
@@ -65,31 +65,39 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
-        
-        queryString: ${getFetchSpacesQuery()}
-        `,
-        error.message
-      );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-      return Effect.succeed({
-        spaces: [],
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(`Unable to fetch spaces, queryId: ${queryId} endpoint: ${options.endpoint}`);
-      return Effect.succeed({
-        spaces: [],
-      });
-    })
-  );
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
+            
+            queryString: ${getFetchSpacesQuery()}
+            `,
+            error.message
+          );
+
+          return {
+            spaces: [],
+          };
+
+        default:
+          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${options.endpoint}`);
+
+          return {
+            spaces: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.map((space): Space => {
     const attributes = Object.fromEntries(

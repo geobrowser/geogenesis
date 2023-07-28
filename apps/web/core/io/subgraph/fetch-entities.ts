@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Entity as IEntity } from '~/core/types';
@@ -152,34 +152,50 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
 
   // @TODO: Catch by known tag and unexpected errors
   // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${options.endpoint} query: ${
-          options.query
-        } skip: ${options.skip} first: ${options.first} filter: ${options.filter}
-      
-      queryString: ${getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip)}
-      `,
-        error.message
-      );
-      return Effect.succeed({
-        startEntities: [],
-        containEntities: [],
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
-      );
-      return Effect.succeed({
-        startEntities: [],
-        containEntities: [],
-      });
-    })
-  );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-  const { startEntities, containEntities } = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${
+              options.endpoint
+            } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
+          
+          queryString: ${getFetchEntitiesQuery(
+            options.query,
+            entityOfWhere,
+            options.typeIds,
+            options.first,
+            options.skip
+          )}
+          `,
+            error.message
+          );
+
+          return {
+            startEntities: [],
+            containEntities: [],
+          };
+
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+          );
+          return {
+            startEntities: [],
+            containEntities: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const { startEntities, containEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
 

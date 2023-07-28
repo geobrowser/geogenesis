@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { ProposedVersion } from '~/core/types';
@@ -66,31 +66,40 @@ export async function fetchProposedVersion({
     abortController: abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}
-        
-        queryString: ${getProposedVersionQuery(id)}
-        `,
-        error.message
-      );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-      return Effect.succeed({
-        proposedVersion: null,
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(`Unable to fetch proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}`);
-      return Effect.succeed({
-        proposedVersion: null,
-      });
-    })
-  );
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}
+            
+            queryString: ${getProposedVersionQuery(id)}
+            `,
+            error.message
+          );
+
+          return {
+            proposedVersion: null,
+          };
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}`
+          );
+
+          return {
+            proposedVersion: null,
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposedVersion = result.proposedVersion;
 
   if (!proposedVersion) {

@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
@@ -68,33 +68,41 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id} endpoint: ${
-          options.endpoint
-        }
-        
-        queryString: ${getFetchProposalQuery(options.id)}
-        `,
-        error.message
-      );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-      return Effect.succeed({
-        proposal: null,
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(`Unable to fetch proposal, queryId: ${queryId} id: ${options.id} endpoint: ${options.endpoint}`);
-      return Effect.succeed({
-        proposal: null,
-      });
-    })
-  );
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id} endpoint: ${
+              options.endpoint
+            }
+            
+            queryString: ${getFetchProposalQuery(options.id)}
+            `,
+            error.message
+          );
+
+          return {
+            proposal: null,
+          };
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch proposal, queryId: ${queryId} id: ${options.id} endpoint: ${options.endpoint}`
+          );
+          return {
+            proposal: null,
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const proposal = result.proposal;
 

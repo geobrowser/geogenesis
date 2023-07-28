@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { ROOT_SPACE_IMAGE } from '~/core/constants';
@@ -66,32 +66,43 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     abortController: options.abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${options.id} endpoint: ${
-          options.endpoint
-        }
-        
-        queryString: ${getFetchSpaceQuery(options.id)}
-        `,
-        error.message
-      );
-      return Effect.succeed({
-        space: null,
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(`Unable to fetch space, queryId: ${queryId} spaceId: ${options.id} endpoint: ${options.endpoint}`);
-      return Effect.succeed({
-        space: null,
-      });
-    })
-  );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${options.id} endpoint: ${
+              options.endpoint
+            }
+            
+            queryString: ${getFetchSpaceQuery(options.id)}
+            `,
+            error.message
+          );
+
+          return {
+            space: null,
+          };
+
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch space, queryId: ${queryId} spaceId: ${options.id} endpoint: ${options.endpoint}`
+          );
+
+          return {
+            space: null,
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   if (!result.space) {
     return null;

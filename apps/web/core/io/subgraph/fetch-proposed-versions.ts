@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { fetchProfile } from './fetch-profile';
@@ -70,32 +70,41 @@ export async function fetchProposedVersions({
     abortController: abortController,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
-  const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
-    Effect.catchTag('GraphqlRuntimeError', error => {
-      console.error(
-        `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
-        
-        queryString: ${getProposedVersionsQuery(entityId, page * 10)}
-        `,
-        error.message
-      );
-      return Effect.succeed({
-        proposedVersions: [],
-      });
-    }),
-    Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch proposedVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
-      );
-      return Effect.succeed({
-        proposedVersions: [],
-      });
-    })
-  );
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
-  const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            
+            queryString: ${getProposedVersionsQuery(entityId, page * 10)}
+            `,
+            error.message
+          );
+
+          return {
+            proposedVersions: [],
+          };
+
+        default:
+          console.error(
+            `${error._tag}: Unable to fetch proposedVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+          );
+
+          return {
+            proposedVersions: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
