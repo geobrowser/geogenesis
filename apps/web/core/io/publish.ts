@@ -6,7 +6,7 @@ import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, writeContract } from 'wagmi/actions';
 
 import { Action, ReviewState } from '../types';
-import { IStorageClient } from './storage';
+import { Storage } from './storage';
 
 const UPLOAD_CHUNK_SIZE = 2000;
 
@@ -26,7 +26,7 @@ export type PublishOptions = {
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
   name: string;
-  storageClient: IStorageClient;
+  storageClient: Storage.IStorageClient;
 };
 
 export async function publish({
@@ -98,7 +98,7 @@ export async function publish({
   console.log(`Transaction receipt: ${JSON.stringify(tx.hash)}`);
 }
 
-export async function uploadFile(storageClient: IStorageClient, file: File): Promise<string> {
+export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
   const fileUri = await storageClient.uploadFile(file);
   return fileUri;
 }

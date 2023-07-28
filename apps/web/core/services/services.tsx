@@ -6,13 +6,13 @@ import { ReactNode, createContext, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
-import { IStorageClient, Network, StorageClient, Subgraph } from '~/core/io';
+import { Network, Storage, Subgraph } from '~/core/io';
 import { SpaceStore } from '~/core/state/spaces-store';
 
 type Services = {
   network: Network.INetwork;
   spaceStore: SpaceStore;
-  storageClient: IStorageClient;
+  storageClient: Storage.IStorageClient;
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
 };
@@ -31,7 +31,7 @@ export function ServicesProvider({ children }: Props) {
 
   const services = useMemo((): Services => {
     const config = Environment.getConfig(chainId);
-    const storageClient = new StorageClient(config.ipfs);
+    const storageClient = new Storage.StorageClient(config.ipfs);
     const network = new Network.NetworkClient(config.subgraph);
 
     return {
