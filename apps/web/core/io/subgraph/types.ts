@@ -10,6 +10,6 @@ export interface ISubgraph {
   fetchTriples: (options: FetchTriplesOptions) => Promise<Triple[]>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<Entity[]>;
   fetchSpaces: (options: FetchSpacesOptions) => Promise<Space[]>;
-  fetchSpace: (options: FetchSpaceOptions) => Promise<Space>;
+  fetchSpace: (options: FetchSpaceOptions) => Promise<Space | null>;
   fetchEntity: (options: FetchEntityOptions) => Promise<Entity | null>;
 }

@@ -6,17 +6,14 @@ import { ReactNode, createContext, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
-import { IStorageClient, Network, Subgraph } from '~/core/io';
-import { StorageClient } from '~/core/io';
-import { SpaceStore } from '~/core/state/spaces-store/space-store';
-
-import { ISubgraph } from '../io/subgraph';
+import { IStorageClient, Network, StorageClient, Subgraph } from '~/core/io';
+import { SpaceStore } from '~/core/state/spaces-store';
 
 type Services = {
   network: Network.INetwork;
   spaceStore: SpaceStore;
   storageClient: IStorageClient;
-  subgraph: ISubgraph;
+  subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
 };
 
