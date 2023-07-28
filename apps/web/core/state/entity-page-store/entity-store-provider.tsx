@@ -31,7 +31,7 @@ export function EntityStoreProvider({
   initialTriples,
   initialSchemaTriples,
 }: Props) {
-  const { network } = Services.useServices();
+  const { network, subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
 
@@ -44,6 +44,8 @@ export function EntityStoreProvider({
       initialTriples,
       initialSchemaTriples,
       id,
+      subgraph,
+      config,
       ActionsStore,
       LocalStore,
     });
@@ -57,6 +59,8 @@ export function EntityStoreProvider({
     id,
     ActionsStore,
     LocalStore,
+    subgraph,
+    config,
   ]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;

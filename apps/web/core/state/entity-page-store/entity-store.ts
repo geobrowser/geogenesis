@@ -6,8 +6,9 @@ import pluralize from 'pluralize';
 import showdown from 'showdown';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { EntityValue, Triple as ITriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -80,6 +81,8 @@ const DEFAULT_PAGE_SIZE = 100;
 
 interface IEntityStoreConfig {
   api: Network.INetwork;
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
   spaceId: string;
   id: string;
   initialTriples: ITriple[];
@@ -120,6 +123,8 @@ export class EntityStore implements IEntityStore {
     id,
     ActionsStore,
     LocalStore,
+    subgraph,
+    config,
   }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
@@ -288,7 +293,13 @@ export class EntityStore implements IEntityStore {
         ];
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new Merged({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
+        const mergedStore = new Merged({
+          api: this.api,
+          store: this.ActionsStore,
+          localStore: this.LocalStore,
+          subgraph,
+          config,
+        });
         const maybeRelationAttributeTypes = await Promise.all(
           attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
         );

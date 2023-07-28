@@ -31,7 +31,7 @@ export function EntityTableStoreProvider({
   initialColumns,
   initialRows,
 }: Props) {
-  const { network } = Services.useServices();
+  const { network, subgraph, config } = Services.useServices();
   const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
@@ -47,6 +47,8 @@ export function EntityTableStoreProvider({
       LocalStore,
       initialColumns,
       initialRows,
+      subgraph,
+      config,
     });
   }, [
     network,
@@ -58,6 +60,8 @@ export function EntityTableStoreProvider({
     initialParams,
     initialColumns,
     initialRows,
+    subgraph,
+    config,
   ]);
 
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;

@@ -11,8 +11,9 @@ import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
 import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
@@ -36,6 +37,9 @@ export interface TableBlockFilter {
 }
 
 interface ITableBlockStoreConfig {
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
+
   // We pass through React Query's QueryClient so we can cache data fetches in the store.
   queryClient: QueryClient;
 
@@ -70,7 +74,6 @@ interface ITableBlockStoreConfig {
  * For now we are fine with the duplication.
  */
 export class TableBlockStore {
-  api: Network.INetwork;
   ActionsStore: ActionsStore;
   Merged: Merged;
   LocalStore: LocalStore;
@@ -93,8 +96,17 @@ export class TableBlockStore {
   >;
   abortController: AbortController;
 
-  constructor({ api, ActionsStore, entityId, spaceId, selectedType, LocalStore, queryClient }: ITableBlockStoreConfig) {
-    this.api = api;
+  constructor({
+    api,
+    ActionsStore,
+    entityId,
+    spaceId,
+    selectedType,
+    LocalStore,
+    queryClient,
+    subgraph,
+    config,
+  }: ITableBlockStoreConfig) {
     this.entityId = entityId;
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
@@ -104,7 +116,7 @@ export class TableBlockStore {
     this.hasNextPage$ = observable(false);
     this.type = selectedType;
     this.pageNumber$ = observable(0);
-    this.Merged = new Merged({ api, store: ActionsStore, localStore: LocalStore });
+    this.Merged = new Merged({ api, store: ActionsStore, localStore: LocalStore, subgraph, config });
     this.isLoading$ = observable(true);
     this.abortController = new AbortController();
 
@@ -397,7 +409,7 @@ interface Props {
 // scoped specifically for table blocks since it has functionality
 // unique to table blocks.
 export function TableBlockStoreProvider({ spaceId, children, selectedType, entityId }: Props) {
-  const { network } = Services.useServices();
+  const { network, subgraph, config } = Services.useServices();
   const LocalStore = useLocalStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const queryClient = useQueryClient();
@@ -418,8 +430,10 @@ export function TableBlockStoreProvider({ spaceId, children, selectedType, entit
       selectedType,
       entityId,
       queryClient,
+      subgraph,
+      config,
     });
-  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore, queryClient]);
+  }, [network, spaceId, selectedType, ActionsStore, entityId, LocalStore, queryClient, subgraph, config]);
 
   return <TableBlockStoreContext.Provider value={store}>{children}</TableBlockStoreContext.Provider>;
 }

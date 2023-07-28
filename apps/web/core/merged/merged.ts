@@ -1,6 +1,6 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 
-import { Network } from '~/core/io';
+import { Network, Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
 import { Column, OmitStrict, Row, Version } from '~/core/types';
@@ -8,10 +8,14 @@ import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
+import { Environment } from '../environment';
+
 interface MergedDataSourceOptions {
   api: Network.INetwork;
   store: ActionsStore;
   localStore: LocalStore;
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
 }
 
 interface IMergedDataSource extends OmitStrict<Network.INetwork, 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
@@ -30,11 +34,15 @@ export class Merged implements IMergedDataSource {
   private api: Network.INetwork;
   private store: ActionsStore;
   private localStore: LocalStore;
+  private subgraph: Subgraph.ISubgraph;
+  private config: Environment.AppConfig;
 
-  constructor({ api, store, localStore }: MergedDataSourceOptions) {
+  constructor({ api, store, localStore, subgraph, config }: MergedDataSourceOptions) {
     this.api = api;
     this.store = store;
     this.localStore = localStore;
+    this.subgraph = subgraph;
+    this.config = config;
   }
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -221,7 +229,7 @@ export class Merged implements IMergedDataSource {
   };
 
   // Right now we can't create local spaces, so we just return the network spaces.
-  fetchSpaces = async () => this.api.fetchSpaces();
+  fetchSpaces = async () => this.subgraph.fetchSpaces({ endpoint: this.config.subgraph });
 
   fetchProfile = async () => null;
 

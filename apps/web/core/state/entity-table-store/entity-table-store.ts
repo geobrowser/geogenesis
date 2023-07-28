@@ -3,7 +3,8 @@ import { Observable, ObservableComputed, computed, observable } from '@legendapp
 import { A, pipe } from '@mobily/ts-belt';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Network } from '~/core/io';
+import { Environment } from '~/core/environment';
+import { Network, Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
 import { SpaceStore } from '~/core/state/spaces-store';
@@ -35,6 +36,8 @@ interface IEntityTableStore {
 }
 
 interface IEntityTableStoreConfig {
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
   api: Network.INetwork;
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
@@ -95,6 +98,8 @@ export class EntityTableStore implements IEntityTableStore {
     initialColumns,
     LocalStore,
     SpaceStore,
+    subgraph,
+    config,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
@@ -234,7 +239,7 @@ export class EntityTableStore implements IEntityTableStore {
         // This will return null if the entity we're fetching does not exist remotely.
         // i.e., the entity was created locally and has not been published to the server.
         const maybeServerEntitiesChangedLocally = await Promise.all(
-          changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
+          changedEntitiesIdsFromAnotherType.map(id => subgraph.fetchEntity({ id, endpoint: config.subgraph }))
         );
 
         const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
@@ -290,7 +295,13 @@ export class EntityTableStore implements IEntityTableStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new Merged({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
+        const mergedStore = new Merged({
+          api: this.api,
+          store: this.ActionsStore,
+          localStore: this.LocalStore,
+          subgraph,
+          config,
+        });
         const maybeRelationAttributeTypes = await Promise.all(
           columns.map(column => mergedStore.fetchEntity(column.id))
         );
