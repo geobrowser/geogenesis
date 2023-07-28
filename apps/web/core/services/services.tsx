@@ -7,11 +7,9 @@ import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
 import { Network, Storage, Subgraph } from '~/core/io';
-import { SpaceStore } from '~/core/state/spaces-store';
 
 type Services = {
   network: Network.INetwork;
-  spaceStore: SpaceStore;
   storageClient: Storage.IStorageClient;
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
@@ -39,10 +37,6 @@ export function ServicesProvider({ children }: Props) {
       storageClient,
       network,
       subgraph: Subgraph,
-      spaceStore: new SpaceStore({
-        config,
-        api: Subgraph,
-      }),
     };
   }, [chainId]);
 
