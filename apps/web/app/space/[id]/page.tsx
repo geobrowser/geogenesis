@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
-import { Network, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -27,8 +27,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const network = new Network.NetworkClient(config.subgraph);
-
   const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   const entityId = space?.spaceConfigEntityId;
 
@@ -37,7 +35,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     return redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await network.fetchEntity(entityId);
+  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -75,8 +73,6 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const network = new Network.NetworkClient(config.subgraph);
-
   const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId) ?? null;
   const entityId = space?.spaceConfigEntityId;
@@ -87,8 +83,7 @@ const getData = async (spaceId: string, searchParams: ServerSideEnvParams) => {
   }
 
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
-    network.fetchEntity(entityId),
-
+    Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId }),
     Subgraph.fetchEntities({
       endpoint: config.subgraph,
       query: '',

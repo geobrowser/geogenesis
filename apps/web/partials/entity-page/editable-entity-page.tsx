@@ -56,7 +56,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   } = useEntityPageStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -87,7 +87,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     if (hasSetType) return;
 
     const setTypeTriple = async () => {
-      const typeEntity = await network.fetchEntity(typeId ?? '');
+      const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
 
       if (typeEntity) {
         send({
@@ -107,15 +107,17 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     }
 
     setHasSetType(true);
-  }, [hasSetType, network, send, typeId]);
+  }, [hasSetType, send, typeId, config, subgraph]);
 
   React.useEffect(() => {
     if (!hasSetType) return;
     if (hasSetFilter) return;
 
     const setFilterTriple = async () => {
-      const idEntity = await network.fetchEntity(filterId ?? '');
-      const valueEntity = await network.fetchEntity(filterValue ?? '');
+      const [idEntity, valueEntity] = await Promise.all([
+        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterId ?? '' }),
+        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterValue ?? '' }),
+      ]);
 
       if (filterId && filterValue && idEntity && valueEntity) {
         send({
@@ -135,7 +137,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     }
 
     setHasSetFilter(true);
-  }, [hasSetType, hasSetFilter, network, send, filterId, filterValue]);
+  }, [hasSetType, hasSetFilter, subgraph, config, send, filterId, filterValue]);
 
   return (
     <>

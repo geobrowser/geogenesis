@@ -10,10 +10,14 @@ import { IStorageClient, Network, Subgraph } from '~/core/io';
 import { StorageClient } from '~/core/io';
 import { SpaceStore } from '~/core/state/spaces-store/space-store';
 
+import { ISubgraph } from '../io/subgraph';
+
 type Services = {
   network: Network.INetwork;
   spaceStore: SpaceStore;
   storageClient: IStorageClient;
+  subgraph: ISubgraph;
+  config: Environment.AppConfig;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -34,8 +38,10 @@ export function ServicesProvider({ children }: Props) {
     const network = new Network.NetworkClient(config.subgraph);
 
     return {
+      config,
       storageClient,
       network,
+      subgraph: Subgraph,
       spaceStore: new SpaceStore({
         config,
         api: Subgraph,

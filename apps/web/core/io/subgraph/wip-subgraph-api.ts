@@ -1,17 +1,3 @@
-export async function fetchSpace() {
-  // fetch error values for HTTP errors and JSON parsing errors
-  // fetch error values for GraphQL errors from `errors` field in result
-  // fetch space values
-  // map space values
-}
-
-export async function fetchEntity() {
-  // fetch error values for HTTP errors and JSON parsing errors
-  // fetch error values for GraphQL errors from `errors` field in result
-  // fetch entity values
-  // map entity values
-}
-
 export async function fetchProposal() {
   // fetch error values for HTTP errors and JSON parsing errors
   // fetch error values for GraphQL errors from `errors` field in result

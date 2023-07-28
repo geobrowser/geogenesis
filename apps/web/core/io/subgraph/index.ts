@@ -3,6 +3,8 @@ export { fetchTriples } from './fetch-triples';
 export type { FetchTriplesOptions } from './fetch-triples';
 export { fetchEntities } from './fetch-entities';
 export type { FetchEntitiesOptions } from './fetch-entities';
+export { fetchEntity } from './fetch-entity';
+export type { FetchEntityOptions } from './fetch-entity';
 export { fetchSpaces } from './fetch-spaces';
 export type { FetchSpacesOptions } from './fetch-spaces';
 export { fetchSpace } from './fetch-space';
