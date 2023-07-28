@@ -42,8 +42,7 @@ export interface FetchSpacesOptions {
 }
 
 interface NetworkResult {
-  data: { spaces: NetworkSpace[] };
-  errors: unknown[];
+  spaces: NetworkSpace[];
 }
 
 export async function fetchSpaces(options: FetchSpacesOptions) {
@@ -69,34 +68,30 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
+        
+        queryString: ${getFetchSpacesQuery()}
+        `,
+        error.message
+      );
+
+      return Effect.succeed({
+        spaces: [],
+      });
+    }),
     Effect.catchAll(() => {
       console.error(`Unable to fetch spaces, queryId: ${queryId} endpoint: ${options.endpoint}`);
       return Effect.succeed({
-        data: {
-          spaces: [],
-        },
-        errors: [],
+        spaces: [],
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
 
-  // @TODO: Fallback
-  // @TODO: runtime validation of types
-  // @TODO: log fail states
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
-      
-      queryString: ${getFetchSpacesQuery()}
-      `,
-      result.errors
-    );
-    return [];
-  }
-
-  const spaces = result.data.spaces.map((space): Space => {
+  const spaces = result.spaces.map((space): Space => {
     const attributes = Object.fromEntries(
       space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
     );

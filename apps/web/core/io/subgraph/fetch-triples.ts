@@ -49,10 +49,7 @@ export interface FetchTriplesOptions {
 }
 
 interface NetworkResult {
-  data: {
-    triples: NetworkTriple[];
-  };
-  errors: unknown[];
+  triples: NetworkTriple[];
 }
 
 export async function fetchTriples(options: FetchTriplesOptions) {
@@ -89,36 +86,30 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${options.endpoint} space: ${
+          options.space
+        } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
+        
+        queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}1
+        `,
+        error.message
+      );
+      return Effect.succeed({
+        triples: [],
+      });
+    }),
     Effect.catchAll(() => {
       console.error(
         `Unable to fetch triples, queryId: ${queryId} endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
       );
       return Effect.succeed({
-        data: {
-          triples: [],
-        },
-        errors: [],
+        triples: [],
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
-
-  // @TODO: Fallback
-  // @TODO: runtime validation of types
-  // @TODO: log fail states
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${options.endpoint} space: ${
-        options.space
-      } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
-      
-      queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}1
-      `,
-      result.errors
-    );
-    return [];
-  }
-
-  return fromNetworkTriples(result.data.triples.filter(triple => !triple.isProtected));
+  return fromNetworkTriples(result.triples.filter(triple => !triple.isProtected));
 }

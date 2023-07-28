@@ -52,8 +52,7 @@ export interface FetchProposedVersionsOptions {
 }
 
 interface NetworkResult {
-  data: { proposedVersions: NetworkProposedVersion[] };
-  errors: unknown[];
+  proposedVersions: NetworkProposedVersion[];
 }
 
 export async function fetchProposedVersions({
@@ -74,39 +73,34 @@ export async function fetchProposedVersions({
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+        
+        queryString: ${getProposedVersionsQuery(entityId, page * 10)}
+        `,
+        error.message
+      );
+      return Effect.succeed({
+        proposedVersions: [],
+      });
+    }),
     Effect.catchAll(() => {
       console.error(
         `Unable to fetch proposedVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
       );
       return Effect.succeed({
-        data: {
-          proposedVersions: [],
-        },
-        errors: [],
+        proposedVersions: [],
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
 
-  // @TODO: Fallback
-  // @TODO: runtime validation of types
-  // @TODO: log fail states
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
-      
-      queryString: ${getProposedVersionsQuery(entityId, page * 10)}
-      `,
-      result.errors
-    );
-    return [];
-  }
-
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
   const maybeProfiles = await Promise.all(
-    result.data.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id, endpoint }))
+    result.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id, endpoint }))
   );
 
   // Create a map of wallet address -> profile so we can look it up when creating the application
@@ -114,7 +108,7 @@ export async function fetchProposedVersions({
   // of the user who created the ProposedVersion.
   const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-  return result.data.proposedVersions.map(v => {
+  return result.proposedVersions.map(v => {
     return {
       ...v,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.

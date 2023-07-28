@@ -50,8 +50,7 @@ export interface FetchProposedVersionOptions {
 }
 
 interface NetworkResult {
-  data: { proposedVersion: NetworkProposedVersion | null };
-  errors: unknown[];
+  proposedVersion: NetworkProposedVersion | null;
 }
 
 export async function fetchProposedVersion({
@@ -70,34 +69,29 @@ export async function fetchProposedVersion({
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}
+        
+        queryString: ${getProposedVersionQuery(id)}
+        `,
+        error.message
+      );
+
+      return Effect.succeed({
+        proposedVersion: null,
+      });
+    }),
     Effect.catchAll(() => {
       console.error(`Unable to fetch proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}`);
       return Effect.succeed({
-        data: {
-          proposedVersion: null,
-        },
-        errors: [],
+        proposedVersion: null,
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
-
-  // @TODO: Fallback
-  // @TODO: runtime validation of types
-  // @TODO: log fail states
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}
-      
-      queryString: ${getProposedVersionQuery(id)}
-      `,
-      result.errors
-    );
-    return null;
-  }
-
-  const proposedVersion = result.data.proposedVersion;
+  const proposedVersion = result.proposedVersion;
 
   if (!proposedVersion) {
     return null;

@@ -56,8 +56,7 @@ export interface FetchProposalOptions {
 }
 
 interface NetworkResult {
-  data: { proposal: NetworkProposal | null };
-  errors: unknown[];
+  proposal: NetworkProposal | null;
 }
 
 export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
@@ -72,36 +71,32 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id} endpoint: ${
+          options.endpoint
+        }
+        
+        queryString: ${getFetchProposalQuery(options.id)}
+        `,
+        error.message
+      );
+
+      return Effect.succeed({
+        proposal: null,
+      });
+    }),
     Effect.catchAll(() => {
       console.error(`Unable to fetch proposal, queryId: ${queryId} id: ${options.id} endpoint: ${options.endpoint}`);
       return Effect.succeed({
-        data: {
-          proposal: null,
-        },
-        errors: [],
+        proposal: null,
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
 
-  // @TODO: Fallback
-  // @TODO: runtime validation of types
-  // @TODO: log fail states
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id} endpoint: ${
-        options.endpoint
-      }
-      
-      queryString: ${getFetchProposalQuery(options.id)}
-      `,
-      result.errors
-    );
-    return null;
-  }
-
-  const proposal = result.data.proposal;
+  const proposal = result.proposal;
 
   if (!proposal) {
     return null;

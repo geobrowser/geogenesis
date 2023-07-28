@@ -7,20 +7,6 @@ import { Entity } from '~/core/utils/entity';
 import { graphql } from './graphql';
 import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
-export interface FetchEntityOptions {
-  endpoint: string;
-  id: string;
-  blockNumber?: number;
-  abortController?: AbortController;
-}
-
-interface NetworkResult {
-  data: {
-    geoEntity: NetworkEntity | null;
-  };
-  errors: unknown[];
-}
-
 function getFetchEntityQuery(id: string, blockNumber?: number) {
   const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
 
@@ -54,6 +40,17 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
   }`;
 }
 
+export interface FetchEntityOptions {
+  endpoint: string;
+  id: string;
+  blockNumber?: number;
+  abortController?: AbortController;
+}
+
+interface NetworkResult {
+  geoEntity: NetworkEntity | null;
+}
+
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
 
@@ -66,35 +63,34 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
+          options.id
+        } blockNumber: ${options.blockNumber}
+        
+        queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
+        `,
+        error.message
+      );
+
+      return Effect.succeed({
+        geoEntity: null,
+      });
+    }),
     Effect.catchAll(() => {
       console.error(
         `Unable to fetch entity, queryId: ${queryId} endpoint: ${options.endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
       );
       return Effect.succeed({
-        data: {
-          geoEntity: null,
-        },
-        errors: [],
+        geoEntity: null,
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
 
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
-        options.id
-      } blockNumber: ${options.blockNumber}
-      
-      queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
-      `,
-      result.errors
-    );
-    return null;
-  }
-
-  const entity = result.data.geoEntity;
+  const entity = result.geoEntity;
 
   if (!entity) {
     return null;

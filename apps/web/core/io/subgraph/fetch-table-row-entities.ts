@@ -55,10 +55,7 @@ export interface FetchTableRowEntitiesOptions {
 }
 
 interface NetworkResult {
-  data: {
-    geoEntities: NetworkEntity[];
-  };
-  errors: unknown[];
+  geoEntities: NetworkEntity[];
 }
 
 export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
@@ -73,37 +70,35 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${
+          options.endpoint
+        } query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${
+          options.filter
+        }
+        
+        queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
+        `,
+        error.message
+      );
+      return Effect.succeed({
+        geoEntities: [],
+      });
+    }),
     Effect.catchAll(() => {
       console.error(
         `Unable to fetch table row entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
       );
       return Effect.succeed({
-        data: {
-          geoEntities: [],
-        },
-        errors: [],
+        geoEntities: [],
       });
     })
   );
 
   const result = await Effect.runPromise(graphqlFetchEffectWithErrorHandling);
 
-  if (result.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${
-        options.endpoint
-      } query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${
-        options.filter
-      }
-      
-      queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
-      `,
-      result.errors
-    );
-    return [];
-  }
-
-  return result.data.geoEntities.map(result => {
+  return result.geoEntities.map(result => {
     const triples = fromNetworkTriples(result.entityOf);
     const nameTriple = Entity.nameTriple(triples);
 

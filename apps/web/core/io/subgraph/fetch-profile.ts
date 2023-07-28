@@ -15,10 +15,7 @@ export interface FetchProfileOptions {
 }
 
 interface NetworkResult {
-  data: {
-    geoEntities: NetworkEntity[];
-  };
-  errors: unknown[];
+  geoEntities: NetworkEntity[];
 }
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
@@ -73,35 +70,35 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   // @TODO: Catch by known tag and unexpected errors
   // retries
   const fetchWalletsGraphqlFetchEffectWithErrorHandling = fetchWalletsGraphqlEffect.pipe(
+    Effect.catchTag('GraphqlRuntimeError', error => {
+      console.error(
+        `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
+          options.endpoint
+        } address: ${options.address}
+        
+        queryString: ${getFetchProfileQuery(options.address)}
+        `,
+        error.message
+      );
+
+      return Effect.succeed({
+        geoEntities: [],
+      });
+    }),
     Effect.catchAll(() => {
       console.error(
         `Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${options.endpoint} address: ${options.address}`
       );
+
       return Effect.succeed({
-        data: {
-          geoEntities: [],
-        },
-        errors: [],
+        geoEntities: [],
       });
     })
   );
 
   const walletsResult = await Effect.runPromise(fetchWalletsGraphqlFetchEffectWithErrorHandling);
 
-  if (walletsResult.errors?.length > 0) {
-    console.error(
-      `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${options.endpoint} address: ${
-        options.address
-      }
-      
-      queryString: ${getFetchProfileQuery(options.address)}
-      `,
-      walletsResult.errors
-    );
-    return null;
-  }
-
-  const walletEntities = walletsResult.data.geoEntities;
+  const walletEntities = walletsResult.geoEntities;
 
   // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
   // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.

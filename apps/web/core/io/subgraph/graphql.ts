@@ -11,14 +11,19 @@ class HttpError {
 }
 
 class JsonParseError {
-  readonly _tag = 'JSONParseError';
+  readonly _tag = 'JsonParseError';
 }
 
-export function graphql<T>({
-  endpoint,
-  query,
-  abortController,
-}: GraphqlConfig): Effect.Effect<never, HttpError | JsonParseError, T> {
+class GraphqlRuntimeError extends Error {
+  readonly _tag = 'GraphqlRuntimeError';
+}
+
+interface GraphqlResponse<T> {
+  data: T;
+  errors: unknown[];
+}
+
+export function graphql<T>({ endpoint, query, abortController }: GraphqlConfig) {
   const graphqlFetchEffect = Effect.tryPromise({
     try: () =>
       fetch(endpoint, {
@@ -37,11 +42,17 @@ export function graphql<T>({
     const response = yield* awaited(graphqlFetchEffect);
     const json = yield* awaited(
       Effect.tryPromise({
-        try: () => response.json() as Promise<T>,
+        try: () => response.json() as Promise<GraphqlResponse<T>>,
         catch: () => new JsonParseError(),
       })
     );
 
-    return json;
+    if (json.errors?.length > 0) {
+      return yield* awaited(
+        Effect.fail(new GraphqlRuntimeError(json.errors.map(error => JSON.stringify(error)).join(', ')))
+      );
+    }
+
+    return json.data;
   });
 }
