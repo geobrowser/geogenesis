@@ -9,7 +9,7 @@ import { Entity } from '~/core/utils/entity';
 import { graphql } from './graphql';
 import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
-export type FetchEntitiesOptions = {
+export interface FetchEntitiesOptions {
   endpoint: string;
   query?: string;
   typeIds?: string[];
@@ -17,23 +17,23 @@ export type FetchEntitiesOptions = {
   skip?: number;
   filter: FilterState;
   abortController?: AbortController;
-};
+}
 
-type NetworkResult = {
+interface NetworkResult {
   data: {
     startEntities: NetworkEntity[];
     containEntities: NetworkEntity[];
   };
   errors: unknown[];
-};
+}
 
-export const getFetchEntitiesQuery = (
+function getFetchEntitiesQuery(
   query: string | undefined,
   entityOfWhere: string,
   typeIds?: string[],
   first = 100,
   skip = 0
-) => {
+) {
   const typeIdsString =
     typeIds && typeIds.length > 0 ? `typeIds_contains_nocase: [${typeIds?.map(t => `"${t}"`).join(', ')}]` : '';
 
@@ -124,7 +124,7 @@ export const getFetchEntitiesQuery = (
       }
     }
   }`;
-};
+}
 
 export async function fetchEntities(options: FetchEntitiesOptions) {
   const queryId = uuid();

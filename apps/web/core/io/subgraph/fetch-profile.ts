@@ -8,22 +8,22 @@ import { fetchEntity } from './fetch-entity';
 import { graphql } from './graphql';
 import { NetworkEntity } from './network-local-mapping';
 
-export type FetchProfileOptions = {
+export interface FetchProfileOptions {
   endpoint: string;
   address: string;
   abortController?: AbortController;
-};
+}
 
-type NetworkResult = {
+interface NetworkResult {
   data: {
     geoEntities: NetworkEntity[];
   };
   errors: unknown[];
-};
+}
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
 // same as the actual wallet address.
-export const getFetchProfileQuery = (address: string) => {
+function getFetchProfileQuery(address: string) {
   return `query {
     geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(address)}}, first: 1) {
       id
@@ -52,7 +52,7 @@ export const getFetchProfileQuery = (address: string) => {
       }
     }
   }`;
-};
+}
 
 // Right now we use an ad-hoc Profile mechanism derived from Person entities in the People space.
 // We are currently working on the Geo Profile system which will replace this.

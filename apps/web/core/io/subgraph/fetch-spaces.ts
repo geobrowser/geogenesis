@@ -41,10 +41,10 @@ export interface FetchSpacesOptions {
   abortController?: AbortController;
 }
 
-type NetworkResult = {
+interface NetworkResult {
   data: { spaces: NetworkSpace[] };
   errors: unknown[];
-};
+}
 
 export async function fetchSpaces(options: FetchSpacesOptions) {
   const queryId = uuid();

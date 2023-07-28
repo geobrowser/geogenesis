@@ -11,3 +11,5 @@ export { fetchSpace } from './fetch-space';
 export type { FetchSpaceOptions } from './fetch-space';
 export { fetchProfile } from './fetch-profile';
 export type { FetchProfileOptions } from './fetch-profile';
+export { fetchProposals } from './fetch-proposals';
+export type { FetchProposalsOptions } from './fetch-proposals';

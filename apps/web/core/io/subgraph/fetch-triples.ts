@@ -48,12 +48,13 @@ export interface FetchTriplesOptions {
   abortController?: AbortController;
 }
 
-type NetworkResult = {
+interface NetworkResult {
   data: {
     triples: NetworkTriple[];
   };
   errors: unknown[];
-};
+}
+
 export async function fetchTriples(options: FetchTriplesOptions) {
   const queryId = uuid();
 

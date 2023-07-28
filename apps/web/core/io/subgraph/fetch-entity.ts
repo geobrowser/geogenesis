@@ -7,21 +7,21 @@ import { Entity } from '~/core/utils/entity';
 import { graphql } from './graphql';
 import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
-export type FetchEntityOptions = {
+export interface FetchEntityOptions {
   endpoint: string;
   id: string;
   blockNumber?: number;
   abortController?: AbortController;
-};
+}
 
-type NetworkResult = {
+interface NetworkResult {
   data: {
     geoEntity: NetworkEntity | null;
   };
   errors: unknown[];
-};
+}
 
-export const getFetchEntityQuery = (id: string, blockNumber?: number) => {
+function getFetchEntityQuery(id: string, blockNumber?: number) {
   const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
 
   return `query {
@@ -52,7 +52,7 @@ export const getFetchEntityQuery = (id: string, blockNumber?: number) => {
       }
     }
   }`;
-};
+}
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
