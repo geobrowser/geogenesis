@@ -5,6 +5,7 @@ import { FetchEntityOptions } from './fetch-entity';
 import { FetchProfileOptions } from './fetch-profile';
 import { FetchProposalOptions } from './fetch-proposal';
 import { FetchProposalsOptions } from './fetch-proposals';
+import { FetchProposedVersionOptions } from './fetch-proposed-version';
 import { FetchProposedVersionsOptions } from './fetch-proposed-versions';
 import { FetchSpaceOptions } from './fetch-space';
 import { FetchSpacesOptions } from './fetch-spaces';
@@ -20,4 +21,5 @@ export interface ISubgraph {
   fetchProposals: (options: FetchProposalsOptions) => Promise<Proposal[]>;
   fetchProposal: (options: FetchProposalOptions) => Promise<Proposal | null>;
   fetchProposedVersions: (options: FetchProposedVersionsOptions) => Promise<ProposedVersion[]>;
+  fetchProposedVersion: (options: FetchProposedVersionOptions) => Promise<ProposedVersion | null>;
 }

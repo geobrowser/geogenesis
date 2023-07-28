@@ -747,10 +747,10 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 };
 
 const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
-    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, network),
+    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, subgraph, config),
   });
 
   // Typescript thinks is an array

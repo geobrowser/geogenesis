@@ -1,9 +1,11 @@
 import { Effect } from 'effect';
 import { v4 as uuid } from 'uuid';
 
+import { ProposedVersion } from '~/core/types';
+
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposedVersion, fromNetworkActions } from './network-local-mapping';
+import { NetworkProposedVersion } from './network-local-mapping';
 
 export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
@@ -48,11 +50,15 @@ export interface FetchProposedVersionOptions {
 }
 
 interface NetworkResult {
-  data: { proposedVersions: NetworkProposedVersion[] };
+  data: { proposedVersion: NetworkProposedVersion | null };
   errors: unknown[];
 }
 
-export async function fetchProposedVersion({ endpoint, id, abortController }: FetchProposedVersionOptions) {
+export async function fetchProposedVersion({
+  endpoint,
+  id,
+  abortController,
+}: FetchProposedVersionOptions): Promise<ProposedVersion | null> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -68,7 +74,7 @@ export async function fetchProposedVersion({ endpoint, id, abortController }: Fe
       console.error(`Unable to fetch proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}`);
       return Effect.succeed({
         data: {
-          proposedVersions: [],
+          proposedVersion: null,
         },
         errors: [],
       });
@@ -88,26 +94,19 @@ export async function fetchProposedVersion({ endpoint, id, abortController }: Fe
       `,
       result.errors
     );
-    return [];
+    return null;
   }
 
-  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
-  // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(
-    result.data.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id, endpoint }))
-  );
+  const proposedVersion = result.data.proposedVersion;
 
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
+  if (!proposedVersion) {
+    return null;
+  }
 
-  return result.data.proposedVersions.map(v => {
-    return {
-      ...v,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[v.createdBy.id] ?? v.createdBy,
-      actions: fromNetworkActions(v.actions, spaceId),
-    };
-  });
+  const maybeProfile = await fetchProfile({ address: proposedVersion.createdBy.id, endpoint });
+
+  return {
+    ...proposedVersion,
+    createdBy: maybeProfile !== null ? maybeProfile[1] : proposedVersion.createdBy,
+  };
 }

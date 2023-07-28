@@ -23,3 +23,5 @@ export type { FetchProposalOptions } from './fetch-proposal';
 
 export { fetchProposedVersions } from './fetch-proposed-versions';
 export type { FetchProposedVersionsOptions } from './fetch-proposed-versions';
+export { fetchProposedVersion } from './fetch-proposed-version';
+export type { FetchProposedVersionOptions } from './fetch-proposed-version';

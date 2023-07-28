@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
-import { Network, Subgraph } from '~/core/io/';
+import { Subgraph } from '~/core/io/';
 import type {
   Action as ActionType,
   Entity as EntityType,
@@ -418,12 +418,17 @@ const getEntitiesFromActions = async (
   return entities;
 };
 
-export async function fromVersion(versionId: string, previousVersionId: string, network: Network.INetwork) {
+export async function fromVersion(
+  versionId: string,
+  previousVersionId: string,
+  subgraph: Subgraph.ISubgraph,
+  config: Environment.AppConfig
+) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedVersion, previousVersion] = await Promise.all([
-    network.fetchProposedVersion(versionId),
-    network.fetchProposedVersion(previousVersionId),
+    subgraph.fetchProposedVersion({ id: versionId, endpoint: config.subgraph }),
+    subgraph.fetchProposedVersion({ id: previousVersionId, endpoint: config.subgraph }),
   ]);
 
   const versions = {
@@ -443,8 +448,8 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   }
 
   const [selectedEntity, previousEntity] = await Promise.all([
-    network.fetchEntity(entityId, null, selectedBlock),
-    network.fetchEntity(entityId, null, previousBlock),
+    subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock, endpoint: config.subgraph }),
+    subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph }),
   ]);
 
   const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
@@ -459,9 +464,21 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
   const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
     await Promise.all([
-      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, selectedBlock))),
-      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
-      Promise.all(previousEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+      Promise.all(
+        selectedEntityBlockIds.map(entityId =>
+          subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock, endpoint: config.subgraph })
+        )
+      ),
+      Promise.all(
+        selectedEntityBlockIds.map(entityId =>
+          subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph })
+        )
+      ),
+      Promise.all(
+        previousEntityBlockIds.map(entityId =>
+          subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph })
+        )
+      ),
     ]);
 
   if (selectedEntity) {
