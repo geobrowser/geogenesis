@@ -888,10 +888,10 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
 };
 
 const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${spaceId}-changes-${actions.length}`],
-    queryFn: async () => Change.fromActions(actions, network),
+    queryFn: async () => Change.fromActions(actions, subgraph, config),
   });
 
   return [data, isLoading] as const;

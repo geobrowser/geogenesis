@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Network } from '~/core/io/';
+import { Environment } from '~/core/environment';
+import { Network, Subgraph } from '~/core/io/';
 import type {
   Action as ActionType,
   Entity as EntityType,
@@ -37,8 +38,8 @@ export type AttributeChange = {
   actions: Array<ActionId>;
 };
 
-export async function fromActions(actions: ActionType[], network: Network.INetwork) {
-  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, network);
+export async function fromActions(actions: ActionType[], subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) {
+  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, subgraph, config);
 
   const changes: Record<EntityId, Changeset> = {};
 
@@ -361,7 +362,11 @@ export async function fromActions(actions: ActionType[], network: Network.INetwo
   return { changes, entities };
 }
 
-const getEntitiesFromActions = async (actions: ActionType[], network: Network.INetwork) => {
+const getEntitiesFromActions = async (
+  actions: ActionType[],
+  subgraph: Subgraph.ISubgraph,
+  config: Environment.AppConfig
+) => {
   const entities: Record<EntityId, EntityType> = {};
 
   const entitySet = new Set<EntityId>();
@@ -379,7 +384,9 @@ const getEntitiesFromActions = async (actions: ActionType[], network: Network.IN
   });
 
   const maybeRemoteEntities = await Promise.all(
-    [...entitySet.values()].map((entityId: EntityId) => network.fetchEntity(entityId))
+    [...entitySet.values()].map((entityId: EntityId) =>
+      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph })
+    )
   );
   const remoteEntities = maybeRemoteEntities.flatMap(entity => (entity ? [entity] : []));
 
@@ -400,7 +407,7 @@ const getEntitiesFromActions = async (actions: ActionType[], network: Network.IN
   const parentEntityIds = [...parentEntitySet.values()];
 
   const maybeRemoteParentEntities = await Promise.all(
-    parentEntityIds.map((entityId: EntityId) => network.fetchEntity(entityId))
+    parentEntityIds.map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph }))
   );
   const remoteParentEntities = maybeRemoteParentEntities.flatMap(entity => (entity ? [entity] : []));
 
@@ -601,12 +608,17 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   return { changes, versions };
 }
 
-export async function fromProposal(proposalId: string, previousProposalId: string, network: Network.INetwork) {
+export async function fromProposal(
+  proposalId: string,
+  previousProposalId: string,
+  subgraph: Subgraph.ISubgraph,
+  config: Environment.AppConfig
+) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedProposal, previousProposal] = await Promise.all([
-    network.fetchProposal(proposalId),
-    network.fetchProposal(previousProposalId),
+    subgraph.fetchProposal({ id: proposalId, endpoint: config.subgraph }),
+    subgraph.fetchProposal({ id: previousProposalId, endpoint: config.subgraph }),
   ]);
 
   const proposals = {
@@ -649,8 +661,8 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
 
   for (const entityId of entityIds) {
     const [selectedEntity, previousEntity] = await Promise.all([
-      network.fetchEntity(entityId, null, selectedBlock),
-      network.fetchEntity(entityId, null, previousBlock),
+      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: selectedBlock }),
+      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: previousBlock }),
     ]);
 
     const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
@@ -668,9 +680,21 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
       maybeRemotePreviousEntityBlocks,
       maybeAdditionalRemotePreviousEntityBlocks,
     ] = await Promise.all([
-      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, selectedBlock))),
-      Promise.all(selectedEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
-      Promise.all(previousEntityBlockIds.map(entityId => network.fetchEntity(entityId, null, previousBlock))),
+      Promise.all(
+        selectedEntityBlockIds.map(entityId =>
+          subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: selectedBlock })
+        )
+      ),
+      Promise.all(
+        selectedEntityBlockIds.map(entityId =>
+          subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: previousBlock })
+        )
+      ),
+      Promise.all(
+        previousEntityBlockIds.map(previousEntityId =>
+          subgraph.fetchEntity({ id: previousEntityId, endpoint: config.subgraph, blockNumber: previousBlock })
+        )
+      ),
     ]);
 
     if (selectedEntity && !selectedEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {

@@ -758,10 +758,10 @@ const useChangesFromVersions = (selectedVersion: string, previousVersion: string
 };
 
 const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
-    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, network),
+    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, subgraph, config),
   });
 
   return [data, isLoading] as const;
