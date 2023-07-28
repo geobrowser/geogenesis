@@ -16,8 +16,7 @@ import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Text } from '~/design-system/text';
 
-import { HistoryItem, HistoryPanel } from '../history';
-import { HistoryEmpty } from '../history';
+import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
 
 interface Props {
   spaceId: string;
