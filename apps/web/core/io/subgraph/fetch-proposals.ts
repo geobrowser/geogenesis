@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
 
@@ -69,6 +70,8 @@ export async function fetchProposals({
   abortController,
   page = 0,
 }: FetchProposalsOptions): Promise<Proposal[]> {
+  const queryId = uuid();
+
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
     query: getFetchProposalsQuery(spaceId, page * 10),
@@ -79,7 +82,9 @@ export async function fetchProposals({
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
     Effect.catchAll(() => {
-      console.error(`Unable to fetch proposals, spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`);
+      console.error(
+        `Unable to fetch proposals, queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+      );
       return Effect.succeed({
         data: {
           proposals: [],
@@ -96,7 +101,7 @@ export async function fetchProposals({
   // @TODO: log fail states
   if (result.errors?.length > 0) {
     console.error(
-      `Encountered runtime graphql error in fetchProposals. spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+      `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
       
       queryString: ${getFetchProposalsQuery(spaceId, page * 10)}
       `,

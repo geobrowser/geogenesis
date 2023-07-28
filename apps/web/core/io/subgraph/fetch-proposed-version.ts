@@ -5,10 +5,8 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposedVersion, fromNetworkActions } from './network-local-mapping';
 
-const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(
-    entityId
-  )}}, orderBy: createdAt, orderDirection: desc, first: 10, skip: ${skip}) {
+export const getProposedVersionQuery = (id: string) => `query {
+  proposedVersion(id: ${JSON.stringify(id)}) {
     id
     name
     createdAt
@@ -43,11 +41,9 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   }
 }`;
 
-export interface FetchProposedVersionsOptions {
+export interface FetchProposedVersionOptions {
   endpoint: string;
-  entityId: string;
-  spaceId: string;
-  page?: number;
+  id: string;
   abortController?: AbortController;
 }
 
@@ -56,18 +52,12 @@ interface NetworkResult {
   errors: unknown[];
 }
 
-export async function fetchProposedVersions({
-  endpoint,
-  entityId,
-  spaceId,
-  abortController,
-  page = 0,
-}: FetchProposedVersionsOptions) {
+export async function fetchProposedVersion({ endpoint, id, abortController }: FetchProposedVersionOptions) {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
-    query: getProposedVersionsQuery(entityId, page * 10),
+    query: getProposedVersionQuery(id),
     abortController: abortController,
   });
 
@@ -75,9 +65,7 @@ export async function fetchProposedVersions({
   // retries
   const graphqlFetchEffectWithErrorHandling = graphqlFetchEffect.pipe(
     Effect.catchAll(() => {
-      console.error(
-        `Unable to fetch proposedVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
-      );
+      console.error(`Unable to fetch proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}`);
       return Effect.succeed({
         data: {
           proposedVersions: [],
@@ -94,9 +82,9 @@ export async function fetchProposedVersions({
   // @TODO: log fail states
   if (result.errors?.length > 0) {
     console.error(
-      `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+      `Encountered runtime graphql error in proposedVersion. queryId: ${queryId} id: ${id} endpoint: ${endpoint}
       
-      queryString: ${getProposedVersionsQuery(entityId, page * 10)}
+      queryString: ${getProposedVersionQuery(id)}
       `,
       result.errors
     );
