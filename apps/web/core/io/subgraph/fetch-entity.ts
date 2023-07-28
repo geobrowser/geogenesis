@@ -60,7 +60,6 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     abortController: options.abortController,
   });
 
-  // @TODO: retries and runtime validation
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
@@ -73,7 +72,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
             `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
               options.id
             } blockNumber: ${options.blockNumber}
-            
+
             queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
             `,
             error.message
