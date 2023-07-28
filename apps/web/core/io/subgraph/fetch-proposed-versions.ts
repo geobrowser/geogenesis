@@ -4,7 +4,7 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposedVersion, fromNetworkActions } from './network-local-mapping';
 
-const getProposedVersionsQuery = (entityId: string, skip) => `query {
+const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(where: {entity: ${JSON.stringify(
     entityId
   )}}, orderBy: createdAt, orderDirection: desc, first: 10, skip: ${skip}) {
