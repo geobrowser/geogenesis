@@ -20,3 +20,6 @@ export { fetchProposals } from './fetch-proposals';
 export type { FetchProposalsOptions } from './fetch-proposals';
 export { fetchProposal } from './fetch-proposal';
 export type { FetchProposalOptions } from './fetch-proposal';
+
+export { fetchProposedVersions } from './fetch-proposed-versions';
+export type { FetchProposedVersionsOptions } from './fetch-proposed-versions';

@@ -5,9 +5,9 @@ import { Network, Subgraph } from '~/core/io/';
 import type {
   Action as ActionType,
   Entity as EntityType,
+  ProposedVersion,
   Triple as TripleType,
   TripleValueType,
-  Version as VersionType,
 } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
@@ -634,7 +634,7 @@ export async function fromProposal(
     selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
     previousBlock = selectedBlock - 1;
 
-    selectedProposal.proposedVersions.forEach((proposedVersion: VersionType) => {
+    selectedProposal.proposedVersions.forEach((proposedVersion: ProposedVersion) => {
       proposedVersion.actions.forEach(action => {
         switch (action.type) {
           case 'createTriple':

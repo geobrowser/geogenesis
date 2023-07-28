@@ -11,9 +11,9 @@ import {
   FilterState,
   Profile,
   Proposal,
+  ProposedVersion,
   Space,
   Triple as TripleType,
-  Version,
 } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
@@ -21,8 +21,8 @@ import * as queries from './queries';
 import {
   NetworkEntity,
   NetworkProposal,
+  NetworkProposedVersion,
   NetworkTriple,
-  NetworkVersion,
   fromNetworkActions,
   fromNetworkTriples,
 } from './subgraph/network-local-mapping';
@@ -83,7 +83,7 @@ interface FetchRowsResult {
 export interface INetwork {
   fetchTriples: (options: FetchTriplesOptions) => Promise<FetchTriplesResult>;
   fetchProfile: (address: string, abortController?: AbortController) => Promise<[string, Profile] | null>;
-  fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<Version | null>;
+  fetchProposedVersion: (id: string, abortController?: AbortController) => Promise<ProposedVersion | null>;
   fetchProposal: (id: string, abortController?: AbortController) => Promise<Proposal | null>;
   fetchEntity: (
     id: string,
@@ -96,7 +96,7 @@ export interface INetwork {
     spaceId: string,
     abortController?: AbortController,
     page?: number
-  ) => Promise<Version[]>;
+  ) => Promise<ProposedVersion[]>;
   fetchProposals: (spaceId: string, abortController?: AbortController, page?: number) => Promise<Proposal[]>;
   columns: (options: FetchColumnsOptions) => Promise<FetchColumnsResult>;
   rows: (options: FetchRowsOptions) => Promise<FetchRowsResult>;
@@ -211,7 +211,7 @@ export class NetworkClient implements INetwork {
 
     try {
       const json = await response.json();
-      const proposedVersion: NetworkVersion | null = json?.data?.proposedVersion;
+      const proposedVersion: NetworkProposedVersion | null = json?.data?.proposedVersion;
 
       if (!proposedVersion) {
         return null;
@@ -587,7 +587,7 @@ export class NetworkClient implements INetwork {
 
     const json: {
       data: {
-        proposedVersions: NetworkVersion[];
+        proposedVersions: NetworkProposedVersion[];
       };
       errors: any[];
     } = await response.json();

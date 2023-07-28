@@ -157,10 +157,10 @@ export type Proposal = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  proposedVersions: Version[];
+  proposedVersions: ProposedVersion[];
 };
 
-export type Version = {
+export type ProposedVersion = {
   id: string;
   name: string | null;
   description: string | null;

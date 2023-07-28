@@ -3,7 +3,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { Network, Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row, Version } from '~/core/types';
+import { Column, OmitStrict, ProposedVersion, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -238,7 +238,7 @@ export class Merged implements IMergedDataSource {
     entityId: string,
     spaceId: string,
     abortController?: AbortController
-  ): Promise<Version[]> => {
+  ): Promise<ProposedVersion[]> => {
     return this.api.fetchProposedVersions(entityId, spaceId, abortController);
   };
 
