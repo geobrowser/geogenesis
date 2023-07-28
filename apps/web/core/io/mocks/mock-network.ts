@@ -4,7 +4,8 @@ import { observable } from '@legendapp/state';
 import { Space, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
-import { FetchTriplesOptions, INetwork } from '../network';
+import { Subgraph } from '..';
+import { ISubgraph } from '../subgraph';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
@@ -84,7 +85,7 @@ export const makeStubSpace = (spaceId: string): Space => {
   };
 };
 
-export class MockNetwork implements INetwork {
+export class MockNetwork implements ISubgraph {
   pageNumber$ = observable(0);
   query$ = observable('');
   spaces$ = observable([]);
@@ -94,12 +95,20 @@ export class MockNetwork implements INetwork {
     this.triples = triples;
   }
 
-  fetchTriples = async ({ skip, first }: FetchTriplesOptions) => {
-    const triples = this.triples.slice(skip, skip + first);
+  fetchSpaces = async () => {
+    return [];
+  };
 
-    return {
-      triples,
-    };
+  fetchSpace = async () => {
+    return null;
+  };
+
+  fetchTableRowEntities = async () => {
+    return [];
+  };
+
+  fetchTriples = async ({ skip, first }: Subgraph.FetchTriplesOptions) => {
+    return this.triples.slice(skip, skip + first);
   };
 
   fetchEntityTableData = async () => {
@@ -110,7 +119,7 @@ export class MockNetwork implements INetwork {
     return Entity.entitiesFromTriples(this.triples);
   };
 
-  fetchEntity = async (id: string) => {
+  fetchEntity = async ({ id }: Subgraph.FetchEntityOptions) => {
     const entity = Entity.entitiesFromTriples(this.triples).find(e => e.id === id);
     if (!entity) return null;
     return entity;

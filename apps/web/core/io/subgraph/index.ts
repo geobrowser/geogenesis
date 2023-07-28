@@ -25,3 +25,6 @@ export { fetchProposedVersions } from './fetch-proposed-versions';
 export type { FetchProposedVersionsOptions } from './fetch-proposed-versions';
 export { fetchProposedVersion } from './fetch-proposed-version';
 export type { FetchProposedVersionOptions } from './fetch-proposed-version';
+
+export { fetchTableRowEntities } from './fetch-table-row-entities';
+export type { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';

@@ -8,7 +8,7 @@ import showdown from 'showdown';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
-import { Network, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { EntityValue, Triple as ITriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -80,7 +80,6 @@ export const createInitialDefaultTriples = (spaceId: string, entityId: string): 
 const DEFAULT_PAGE_SIZE = 100;
 
 interface IEntityStoreConfig {
-  api: Network.INetwork;
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
   spaceId: string;
@@ -94,8 +93,9 @@ interface IEntityStoreConfig {
 }
 
 export class EntityStore implements IEntityStore {
-  private api: Network.INetwork;
   private LocalStore: LocalStore;
+  private subgraph: Subgraph.ISubgraph;
+  private config: Environment.AppConfig;
   id: string;
   spaceId: string;
   triples$: ObservableComputed<ITriple[]>;
@@ -114,7 +114,6 @@ export class EntityStore implements IEntityStore {
   >;
 
   constructor({
-    api,
     initialTriples,
     initialBlockIdsTriple,
     initialBlockTriples,
@@ -128,8 +127,9 @@ export class EntityStore implements IEntityStore {
   }: IEntityStoreConfig) {
     const defaultTriples = createInitialDefaultTriples(spaceId, id);
 
+    this.subgraph = subgraph;
+    this.config = config;
     this.id = id;
-    this.api = api;
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
@@ -294,14 +294,15 @@ export class EntityStore implements IEntityStore {
 
         // Make sure we merge any unpublished entities
         const mergedStore = new Merged({
-          api: this.api,
           store: this.ActionsStore,
           localStore: this.LocalStore,
           subgraph,
           config,
         });
         const maybeRelationAttributeTypes = await Promise.all(
-          attributesWithRelationValues.map(attributeId => mergedStore.fetchEntity(attributeId))
+          attributesWithRelationValues.map(attributeId =>
+            mergedStore.fetchEntity({ id: attributeId, endpoint: config.subgraph })
+          )
         );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
@@ -364,7 +365,8 @@ export class EntityStore implements IEntityStore {
 
       const attributes = await Promise.all(
         typeTriples.map(triple => {
-          return this.api.fetchTriples({
+          return this.subgraph.fetchTriples({
+            endpoint: this.config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             abortController: this.abortController,
@@ -383,11 +385,12 @@ export class EntityStore implements IEntityStore {
         })
       );
 
-      const attributeTriples = attributes.flatMap(attribute => attribute.triples);
+      const attributeTriples = attributes.flatMap(triples => triples);
 
       const valueTypes = await Promise.all(
         attributeTriples.map(attribute => {
-          return this.api.fetchTriples({
+          return this.subgraph.fetchTriples({
+            endpoint: this.config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             skip: 0,
@@ -406,7 +409,7 @@ export class EntityStore implements IEntityStore {
         })
       );
 
-      const valueTypeTriples = valueTypes.flatMap(valueType => valueType.triples);
+      const valueTypeTriples = valueTypes.flatMap(triples => triples);
 
       const schemaTriples = attributeTriples.map((attribute, index) => {
         const valueType = valueTypeTriples[index]?.value.id;
@@ -719,7 +722,9 @@ export class EntityStore implements IEntityStore {
     const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
 
     // Fetch all the subgraph data for all the deleted block entities.
-    const maybeRemoteBlocks = await Promise.all(removedBlockIds.map(async blockId => this.api.fetchEntity(blockId)));
+    const maybeRemoteBlocks = await Promise.all(
+      removedBlockIds.map(async blockId => this.subgraph.fetchEntity({ id: blockId, endpoint: this.config.subgraph }))
+    );
     const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
     batch(() =>

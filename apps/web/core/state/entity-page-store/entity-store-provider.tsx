@@ -31,13 +31,12 @@ export function EntityStoreProvider({
   initialTriples,
   initialSchemaTriples,
 }: Props) {
-  const { network, subgraph, config } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityStore({
-      api: network,
       spaceId,
       initialBlockIdsTriple,
       initialBlockTriples,
@@ -50,7 +49,6 @@ export function EntityStoreProvider({
       LocalStore,
     });
   }, [
-    network,
     spaceId,
     initialBlockTriples,
     initialTriples,

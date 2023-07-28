@@ -4,7 +4,9 @@ import { A, pipe } from '@mobily/ts-belt';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Environment } from '~/core/environment';
-import { Network, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
+import { columns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, rows } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
 import { SpaceStore } from '~/core/state/spaces-store';
@@ -38,7 +40,6 @@ interface IEntityTableStore {
 interface IEntityTableStoreConfig {
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
-  api: Network.INetwork;
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
@@ -68,7 +69,6 @@ export const DEFAULT_INITIAL_PARAMS = {
  * For now we are fine with the duplication.
  */
 export class EntityTableStore implements IEntityTableStore {
-  private api: Network.INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   unpublishedColumns$: ObservableComputed<Column[]>;
@@ -90,7 +90,6 @@ export class EntityTableStore implements IEntityTableStore {
   abortController: AbortController = new AbortController();
 
   constructor({
-    api,
     spaceId,
     initialSelectedType,
     ActionsStore,
@@ -103,7 +102,6 @@ export class EntityTableStore implements IEntityTableStore {
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
-    this.api = api;
     this.ActionsStore = ActionsStore;
     this.SpaceStore = SpaceStore;
     this.LocalStore = LocalStore;
@@ -144,19 +142,27 @@ export class EntityTableStore implements IEntityTableStore {
             selectedType?.entityId ?? null
           );
 
-          const params: Network.FetchRowsOptions['params'] = {
+          const params: FetchRowsOptions['params'] = {
+            endpoint: config.subgraph,
             filter: filterString,
             typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: pageSize + 1,
             skip: pageNumber * pageSize,
           };
 
-          const { columns: serverColumns } = await this.api.columns({
+          const serverColumns = await columns({
+            api: {
+              fetchEntity: subgraph.fetchEntity,
+              fetchTriples: subgraph.fetchTriples,
+            },
             params,
             abortController: this.abortController,
           });
 
-          const { rows: serverRows } = await this.api.rows({
+          const serverRows = await rows({
+            api: {
+              fetchTableRowEntities: subgraph.fetchTableRowEntities,
+            },
             params,
             abortController: this.abortController,
           });
@@ -296,14 +302,13 @@ export class EntityTableStore implements IEntityTableStore {
 
         // Make sure we merge any unpublished entities
         const mergedStore = new Merged({
-          api: this.api,
           store: this.ActionsStore,
           localStore: this.LocalStore,
           subgraph,
           config,
         });
         const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(column => mergedStore.fetchEntity(column.id))
+          columns.map(column => mergedStore.fetchEntity({ id: column.id, endpoint: config.subgraph }))
         );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

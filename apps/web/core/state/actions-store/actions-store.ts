@@ -2,7 +2,7 @@ import { Observable, computed, observable } from '@legendapp/state';
 
 import { WalletClient } from 'wagmi';
 
-import { Network, Publish, Storage } from '~/core/io';
+import { Publish, Storage } from '~/core/io';
 import {
   Action as ActionType,
   CreateTripleAction,
@@ -33,7 +33,6 @@ interface IActionsStore {
 }
 
 interface IActionsStoreConfig {
-  api: Network.INetwork;
   storageClient: Storage.IStorageClient;
 }
 
@@ -45,17 +44,15 @@ export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
 
 export class ActionsStore implements IActionsStore {
-  private api: Network.INetwork;
   private storageClient: Storage.IStorageClient;
   actions$: Observable<SpaceActions>;
   allActions$;
   allSpacesWithActions$;
   actionsByEntityId$;
 
-  constructor({ api, storageClient }: IActionsStoreConfig) {
+  constructor({ storageClient }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
 
-    this.api = api;
     this.storageClient = storageClient;
     this.actions$ = actions;
 

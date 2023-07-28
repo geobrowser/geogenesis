@@ -11,20 +11,20 @@ import { makeOptionalComputed } from '~/core/utils/utils';
 type SpacesAccounts = Record<string, string[]>;
 
 export class SpaceStore {
-  private api: Subgraph.ISubgraph;
+  private subgraph: Subgraph.ISubgraph;
   spaces$: ObservableComputed<Space[]>;
   admins$: ObservableComputed<SpacesAccounts>;
   editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
-  constructor({ api, config }: { api: Subgraph.ISubgraph; config: AppConfig }) {
-    this.api = api;
+  constructor({ subgraph, config }: { subgraph: Subgraph.ISubgraph; config: AppConfig }) {
+    this.subgraph = subgraph;
 
     this.spaces$ = makeOptionalComputed(
       [],
       computed(async () => {
         try {
-          return await this.api.fetchSpaces({ endpoint: config.subgraph });
+          return await this.subgraph.fetchSpaces({ endpoint: config.subgraph });
         } catch (e) {
           return [];
         }
@@ -72,7 +72,7 @@ const SpaceStoreContext = React.createContext<SpaceStore | null>(null);
 export function SpaceStoreProvider({ children }: { children: React.ReactNode }) {
   const { config, subgraph } = Services.useServices();
   const spaceStore = React.useMemo(() => {
-    return new SpaceStore({ api: subgraph, config });
+    return new SpaceStore({ subgraph, config });
   }, [subgraph, config]);
 
   return <SpaceStoreContext.Provider value={spaceStore}>{children}</SpaceStoreContext.Provider>;

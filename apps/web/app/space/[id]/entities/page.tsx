@@ -3,7 +3,9 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Network, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
+import { columns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, rows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -34,7 +36,6 @@ const getData = async ({ params, searchParams }: Props) => {
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const network = new Network.NetworkClient(config.subgraph);
   const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId);
 
@@ -73,8 +74,9 @@ const getData = async ({ params, searchParams }: Props) => {
   // initialTypes[0] can be empty if there's no types in the space
   const typeId: string | null = initialSelectedType?.entityId ?? null;
 
-  const fetchParams: Network.FetchRowsOptions['params'] = {
+  const fetchParams: FetchRowsOptions['params'] = {
     ...initialParams,
+    endpoint: config.subgraph,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
@@ -95,15 +97,22 @@ const getData = async ({ params, searchParams }: Props) => {
     ),
   };
 
-  const { columns } = await network.columns({
+  const serverColumns = await columns({
+    params: fetchParams,
+    api: {
+      fetchTriples: Subgraph.fetchTriples,
+      fetchEntity: Subgraph.fetchEntity,
+    },
+  });
+
+  const serverRows = await rows({
+    api: {
+      fetchTableRowEntities: Subgraph.fetchTableRowEntities,
+    },
     params: fetchParams,
   });
 
-  const { rows: serverRows } = await network.rows({
-    params: fetchParams,
-  });
-
-  const { rows } = EntityTable.fromColumnsAndRows(serverRows, columns);
+  const { rows: finalRows } = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
 
   return {
     space,
@@ -111,8 +120,8 @@ const getData = async ({ params, searchParams }: Props) => {
     spaceImage,
     initialSelectedType,
     initialForeignTypes,
-    initialColumns: columns,
-    initialRows: rows,
+    initialColumns: serverColumns,
+    initialRows: finalRows,
     initialTypes,
     initialParams,
   };

@@ -12,7 +12,9 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Network } from '~/core/io';
+import { Environment } from '~/core/environment';
+import { Subgraph } from '~/core/io';
+import { columns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
@@ -826,7 +828,7 @@ type TableFiltersProps = {
 const TableFilters = ({ rawFilter }: TableFiltersProps) => {
   const [filters, isLoading] = useFilters(rawFilter);
 
-  if (isLoading || !Array.isArray(filters) || filters.length === 0) return null;
+  if (isLoading || !filters || filters.length === 0) return null;
 
   return (
     <>
@@ -868,19 +870,28 @@ const TableFilter = ({ filter }: TableFilterProps) => {
   );
 };
 
-const useFilters = (rawFilter: string): [Array<TableBlockFilter & { columnName: string }> | undefined, boolean] => {
-  const { network } = Services.useServices();
+const useFilters = (rawFilter: string) => {
+  const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, network),
+    queryFn: async () => getFilters(rawFilter, subgraph, config),
   });
 
-  return [data, isLoading];
+  return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, network: Network.INetwork) => {
-  const filters = await createFiltersFromGraphQLString(rawFilter, network.fetchEntity);
-  const { columns } = await network.columns({ params: { skip: 0, first: 0, filter: '' } });
+const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
+  const filters = await createFiltersFromGraphQLString(
+    rawFilter,
+    async id => await subgraph.fetchEntity({ id, endpoint: config.subgraph })
+  );
+  const serverColumns = await columns({
+    params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
+    api: {
+      fetchEntity: subgraph.fetchEntity,
+      fetchTriples: subgraph.fetchTriples,
+    },
+  });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {
       return {
@@ -890,7 +901,7 @@ const getFilters = async (rawFilter: string, network: Network.INetwork) => {
     }
     return {
       ...f,
-      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

@@ -1,6 +1,7 @@
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 
-import { Network } from '~/core/io';
+import { Environment } from '~/core/environment';
+import { Subgraph } from '~/core/io';
 import { FilterState, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
@@ -25,7 +26,8 @@ export type InitialTripleStoreParams = {
 };
 
 interface ITripleStoreConfig {
-  api: Network.INetwork;
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
   space: string;
   ActionsStore: ActionsStore;
   initialParams?: InitialTripleStoreParams;
@@ -44,7 +46,6 @@ export function initialFilterState(): FilterState {
 }
 
 export class TripleStore implements ITripleStore {
-  private api: Network.INetwork;
   triples$: ObservableComputed<TripleType[]> = observable([]);
   pageNumber$: Observable<number>;
   query$: Observable<string>;
@@ -57,13 +58,13 @@ export class TripleStore implements ITripleStore {
   abortController: AbortController = new AbortController();
 
   constructor({
-    api,
+    subgraph,
+    config,
     space,
     ActionsStore,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: ITripleStoreConfig) {
-    this.api = api;
     this.ActionsStore = ActionsStore;
     this.pageNumber$ = observable(initialParams.pageNumber);
     this.filterState$ = observable<FilterState>(
@@ -79,7 +80,8 @@ export class TripleStore implements ITripleStore {
           this.abortController.abort();
           this.abortController = new AbortController();
 
-          const { triples } = await this.api.fetchTriples({
+          const triples = await subgraph.fetchTriples({
+            endpoint: config.subgraph,
             query: this.query$.get(),
             space: this.space,
             skip: this.pageNumber$.get() * pageSize,

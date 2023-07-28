@@ -31,14 +31,13 @@ export function EntityTableStoreProvider({
   initialColumns,
   initialRows,
 }: Props) {
-  const { network, subgraph, config } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityTableStore({
-      api: network,
       spaceId,
       initialParams,
       initialSelectedType,
@@ -51,7 +50,6 @@ export function EntityTableStoreProvider({
       config,
     });
   }, [
-    network,
     spaceId,
     initialSelectedType,
     ActionsStore,

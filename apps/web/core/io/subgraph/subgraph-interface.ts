@@ -9,6 +9,7 @@ import { FetchProposedVersionOptions } from './fetch-proposed-version';
 import { FetchProposedVersionsOptions } from './fetch-proposed-versions';
 import { FetchSpaceOptions } from './fetch-space';
 import { FetchSpacesOptions } from './fetch-spaces';
+import { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';
 import { FetchTriplesOptions } from './fetch-triples';
 
 export interface ISubgraph {
@@ -22,4 +23,5 @@ export interface ISubgraph {
   fetchProposal: (options: FetchProposalOptions) => Promise<Proposal | null>;
   fetchProposedVersions: (options: FetchProposedVersionsOptions) => Promise<ProposedVersion[]>;
   fetchProposedVersion: (options: FetchProposedVersionOptions) => Promise<ProposedVersion | null>;
+  fetchTableRowEntities: (options: FetchTableRowEntitiesOptions) => Promise<Entity[]>;
 }
