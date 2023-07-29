@@ -18,7 +18,7 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
   const linkableChipStyles = cva(
     cx(
       'text-metadataMedium rounded-sm shadow-inner shadow-text min-h-[1.5rem] px-2 py-1 inline-flex items-center bg-white text-left hover:cursor-pointer hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary break-words !font-normal !leading-[1.125rem]',
-      typeof children === 'string' && children.length >= 42 && 'line-clamp-1'
+      typeof children === 'string' && children.length >= 42 && 'line-clamp-2'
     )
   );
 
