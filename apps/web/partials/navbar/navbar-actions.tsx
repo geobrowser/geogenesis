@@ -187,7 +187,11 @@ function ModeToggle({ spaceId }: Props) {
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {isUserEditing && <AnimatedTogglePill controls={controls} />}
-        <div className={`z-10 transition-colors duration-300 ${isUserEditing ? 'text-text' : 'text-grey-03'}`}>
+        <div
+          className={`z-10 transition-colors duration-300 ${
+            showEditAccessTooltip ? 'text-red-01' : isUserEditing ? 'text-text' : 'text-grey-03'
+          }`}
+        >
           <BulkEdit />
         </div>
       </div>
