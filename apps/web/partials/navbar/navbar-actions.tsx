@@ -62,7 +62,7 @@ export function NavbarActions({ spaceId }: Props) {
         }
         open={open}
         onOpenChange={onOpenChange}
-        className="w-[10rem]"
+        className="max-w-[165px]"
       >
         <AvatarMenuItem disabled>
           <div className="flex items-center gap-2 grayscale">
