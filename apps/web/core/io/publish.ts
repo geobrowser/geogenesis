@@ -3,7 +3,7 @@ import { SpaceAbi } from '@geogenesis/contracts';
 import { parseGwei } from 'viem';
 
 import { WalletClient } from 'wagmi';
-import { prepareWriteContract, readContract, writeContract } from 'wagmi/actions';
+import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { Action, ReviewState } from '../types';
 import { Storage } from './storage';
@@ -18,6 +18,10 @@ function getActionFromChangeStatus(action: Action) {
     case 'editTriple':
       return [action.before, action.after];
   }
+}
+
+class TransactionFailedError extends Error {
+  readonly _tag = 'TransactionFailedError';
 }
 
 export type PublishOptions = {
@@ -91,11 +95,30 @@ export async function publish({
   });
 
   onChangePublishState('signing-wallet');
-
   const tx = await writeContract(contractConfig);
+  console.log('Transaction hash: ', tx.hash);
 
   onChangePublishState('publishing-contract');
-  console.log(`Transaction receipt: ${JSON.stringify(tx.hash)}`);
+  const transaction = await waitForTransaction({
+    hash: tx.hash,
+  });
+
+  if (transaction.status !== 'success') {
+    throw new TransactionFailedError(`Transaction failed: 
+    hash: ${transaction.transactionHash}
+    status: ${transaction.status}
+    blockNumber: ${transaction.blockNumber}
+    blockHash: ${transaction.blockHash}
+    ${JSON.stringify(transaction)}
+    `);
+  }
+
+  console.log(`Transaction receipt: 
+  hash: ${transaction.transactionHash}
+  status: ${transaction.status}
+  blockNumber: ${transaction.blockNumber}
+  blockHash: ${transaction.blockHash}
+  `);
 }
 
 export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
