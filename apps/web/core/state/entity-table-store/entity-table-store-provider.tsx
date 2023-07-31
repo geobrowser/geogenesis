@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { Services } from '~/core/services';
 import { useActionsStoreInstance } from '~/core/state/actions-store';
-import { useSpaceStoreInstance } from '~/core/state/spaces-store/space-store';
+import { useSpaceStoreInstance } from '~/core/state/spaces-store';
 import { Column, Row, Triple } from '~/core/types';
 
 import { useLocalStoreInstance } from '../local-store';
@@ -31,14 +31,13 @@ export function EntityTableStoreProvider({
   initialColumns,
   initialRows,
 }: Props) {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
 
   const store = useMemo(() => {
     return new EntityTableStore({
-      api: network,
       spaceId,
       initialParams,
       initialSelectedType,
@@ -47,9 +46,10 @@ export function EntityTableStoreProvider({
       LocalStore,
       initialColumns,
       initialRows,
+      subgraph,
+      config,
     });
   }, [
-    network,
     spaceId,
     initialSelectedType,
     ActionsStore,
@@ -58,6 +58,8 @@ export function EntityTableStoreProvider({
     initialParams,
     initialColumns,
     initialRows,
+    subgraph,
+    config,
   ]);
 
   return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;

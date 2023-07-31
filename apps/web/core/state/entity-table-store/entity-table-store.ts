@@ -3,10 +3,13 @@ import { Observable, ObservableComputed, computed, observable } from '@legendapp
 import { A, pipe } from '@mobily/ts-belt';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Network } from '~/core/io';
+import { Environment } from '~/core/environment';
+import { Subgraph } from '~/core/io';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
-import { SpaceStore } from '~/core/state/spaces-store/space-store';
+import { SpaceStore } from '~/core/state/spaces-store';
 import { CreateType } from '~/core/type';
 import { Column, EntityValue, Row, Space, Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -35,7 +38,8 @@ interface IEntityTableStore {
 }
 
 interface IEntityTableStoreConfig {
-  api: Network.INetwork;
+  subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
@@ -65,7 +69,6 @@ export const DEFAULT_INITIAL_PARAMS = {
  * For now we are fine with the duplication.
  */
 export class EntityTableStore implements IEntityTableStore {
-  private api: Network.INetwork;
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
   unpublishedColumns$: ObservableComputed<Column[]>;
@@ -87,7 +90,6 @@ export class EntityTableStore implements IEntityTableStore {
   abortController: AbortController = new AbortController();
 
   constructor({
-    api,
     spaceId,
     initialSelectedType,
     ActionsStore,
@@ -95,10 +97,11 @@ export class EntityTableStore implements IEntityTableStore {
     initialColumns,
     LocalStore,
     SpaceStore,
+    subgraph,
+    config,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
-    this.api = api;
     this.ActionsStore = ActionsStore;
     this.SpaceStore = SpaceStore;
     this.LocalStore = LocalStore;
@@ -112,7 +115,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.rows$ = computed(() => initialRows);
     this.columns$ = computed(() => initialColumns);
 
-    const Network$ = makeOptionalComputed(
+    const networkData$ = makeOptionalComputed(
       { columns: [], rows: [], hasNextPage: false },
       computed(async () => {
         try {
@@ -129,23 +132,37 @@ export class EntityTableStore implements IEntityTableStore {
                 value: this.query$.get(),
                 valueType: 'string',
               },
+              // Only return rows that are in the current space
+              {
+                columnId: SYSTEM_IDS.SPACE,
+                value: this.spaceId,
+                valueType: 'string',
+              },
             ],
             selectedType?.entityId ?? null
           );
 
-          const params: Network.FetchRowsOptions['params'] = {
+          const params: FetchRowsOptions['params'] = {
+            endpoint: config.subgraph,
             filter: filterString,
             typeIds: selectedType?.entityId ? [selectedType.entityId] : [],
             first: pageSize + 1,
             skip: pageNumber * pageSize,
           };
 
-          const { columns: serverColumns } = await this.api.columns({
+          const serverColumns = await fetchColumns({
+            api: {
+              fetchEntity: subgraph.fetchEntity,
+              fetchTriples: subgraph.fetchTriples,
+            },
             params,
             abortController: this.abortController,
           });
 
-          const { rows: serverRows } = await this.api.rows({
+          const serverRows = await fetchRows({
+            api: {
+              fetchTableRowEntities: subgraph.fetchTableRowEntities,
+            },
             params,
             abortController: this.abortController,
           });
@@ -170,7 +187,7 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-    this.hasNextPage$ = computed(() => Network$.get().hasNextPage);
+    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {
       return EntityTable.columnsFromLocalChanges(
@@ -181,7 +198,7 @@ export class EntityTableStore implements IEntityTableStore {
     });
 
     this.columns$ = computed(() => {
-      const { columns } = Network$.get();
+      const { columns } = networkData$.get();
       return EntityTable.columnsFromLocalChanges(
         this.LocalStore.triples$.get(),
         columns,
@@ -198,7 +215,7 @@ export class EntityTableStore implements IEntityTableStore {
       [],
       computed(async () => {
         const columns = this.columns$.get();
-        const { rows: serverRows } = Network$.get();
+        const { rows: serverRows } = networkData$.get();
 
         /**
          * There are several edge-cases we need to handle in order to correctly merge local changes
@@ -228,7 +245,7 @@ export class EntityTableStore implements IEntityTableStore {
         // This will return null if the entity we're fetching does not exist remotely.
         // i.e., the entity was created locally and has not been published to the server.
         const maybeServerEntitiesChangedLocally = await Promise.all(
-          changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
+          changedEntitiesIdsFromAnotherType.map(id => subgraph.fetchEntity({ id, endpoint: config.subgraph }))
         );
 
         const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
@@ -284,9 +301,13 @@ export class EntityTableStore implements IEntityTableStore {
         // 3. Return the type id and name of the relation type
 
         // Make sure we merge any unpublished entities
-        const mergedStore = new Merged({ api: this.api, store: this.ActionsStore, localStore: this.LocalStore });
+        const mergedStore = new Merged({
+          store: this.ActionsStore,
+          localStore: this.LocalStore,
+          subgraph,
+        });
         const maybeRelationAttributeTypes = await Promise.all(
-          columns.map(column => mergedStore.fetchEntity(column.id))
+          columns.map(column => mergedStore.fetchEntity({ id: column.id, endpoint: config.subgraph }))
         );
 
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
-import { Network, StorageClient } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -32,10 +32,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const storage = new StorageClient(config.ipfs);
-  const network = new Network.NetworkClient(storage, config.subgraph);
-
-  const entity = await network.fetchEntity(entityId);
+  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -76,22 +73,20 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
 
-  const storage = new StorageClient(config.ipfs);
-  const network = new Network.NetworkClient(storage, config.subgraph);
-
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId) ?? null;
 
   const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
-    network.fetchEntity(entityId),
+    Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId }),
 
-    network.fetchEntities({
+    Subgraph.fetchEntities({
+      endpoint: config.subgraph,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
 
-    fetchSpaceTypeTriples(network, spaceId),
-    space ? fetchForeignTypeTriples(network, space) : [],
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
+    space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
   ]);
 
   // Redirect from space configuration page to space page
@@ -138,13 +133,8 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return network.fetchTriples({
-          // Previously we would scope the triples we're fetching to the space we're in. Right now
-          // this model doesn't make sense since triples can only exist in one space at a time.
-          // Eventually entities can have triples spanning many spaces so adding back the space
-          // will make sense at that point. Additionally there's a bug where we do not navigate
-          // to the correct space when navigating to an entity in a different space. It _happens_
-          // to work correctly because we do not scope the triples to the space.
+        return Subgraph.fetchTriples({
+          endpoint: config.subgraph,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,
@@ -152,7 +142,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
         });
       })
     )
-  ).flatMap(block => block.triples);
+  ).flatMap(triples => triples);
 
   return {
     triples: entity?.triples ?? [],

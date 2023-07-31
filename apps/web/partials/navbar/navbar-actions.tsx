@@ -22,14 +22,14 @@ import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { Menu } from '~/design-system/menu';
 
 function useUserProfile(address?: string) {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
 
   // @TODO: Merge with local data
   const { data } = useQuery({
     queryKey: ['user-profile', address],
     queryFn: async () => {
       if (!address) return null;
-      return await network.fetchProfile(address);
+      return await subgraph.fetchProfile({ address, endpoint: config.subgraph });
     },
   });
 
@@ -62,7 +62,7 @@ export function NavbarActions({ spaceId }: Props) {
         }
         open={open}
         onOpenChange={onOpenChange}
-        className="w-[10rem]"
+        className="max-w-[165px]"
       >
         <AvatarMenuItem disabled>
           <div className="flex items-center gap-2 grayscale">

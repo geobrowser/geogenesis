@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { options } from '~/core/environment/environment';
 import { MockNetworkData } from '~/core/io';
 import type { Action } from '~/core/types';
 import { Change } from '~/core/utils/change';
@@ -113,7 +114,7 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
 describe('Actions to changes transformer (string values)', () => {
   it('Generates changes from actions', async () => {
     const network = new MockNetworkData.MockNetwork();
-    const { changes } = await Change.fromActions(STRING_ACTIONS, network);
+    const { changes } = await Change.fromActions(STRING_ACTIONS, network, options.development);
     expect(changes).toEqual(STRING_CHANGES);
   });
 });
@@ -121,7 +122,7 @@ describe('Actions to changes transformer (string values)', () => {
 describe('Actions to changes transformer (entity values)', () => {
   it('Generates changes from actions', async () => {
     const network = new MockNetworkData.MockNetwork();
-    const { changes } = await Change.fromActions(ENTITY_ACTIONS, network);
+    const { changes } = await Change.fromActions(ENTITY_ACTIONS, network, options.development);
     expect(changes).toEqual(ENTITY_CHANGES);
   });
 });

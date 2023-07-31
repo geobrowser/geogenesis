@@ -1,6 +1,9 @@
 import { ObservableComputed, computed } from '@legendapp/state';
 
-import { Network } from '~/core/io';
+import React from 'react';
+
+import { AppConfig } from '~/core/environment';
+import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Space } from '~/core/types';
 import { makeOptionalComputed } from '~/core/utils/utils';
@@ -8,20 +11,20 @@ import { makeOptionalComputed } from '~/core/utils/utils';
 type SpacesAccounts = Record<string, string[]>;
 
 export class SpaceStore {
-  private api: Network.INetwork;
+  private subgraph: Subgraph.ISubgraph;
   spaces$: ObservableComputed<Space[]>;
   admins$: ObservableComputed<SpacesAccounts>;
   editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
-  constructor({ api }: { api: Network.INetwork }) {
-    this.api = api;
+  constructor({ subgraph, config }: { subgraph: Subgraph.ISubgraph; config: AppConfig }) {
+    this.subgraph = subgraph;
 
     this.spaces$ = makeOptionalComputed(
       [],
       computed(async () => {
         try {
-          return await this.api.fetchSpaces();
+          return await this.subgraph.fetchSpaces({ endpoint: config.subgraph });
         } catch (e) {
           return [];
         }
@@ -60,6 +63,27 @@ export class SpaceStore {
   }
 }
 
+const SpaceStoreContext = React.createContext<SpaceStore | null>(null);
+
+// This is a workaround to provide all stores in an in-memory cache. Once we have
+// permissionless spaches this won't be scalable anymore as there could be thousands
+// of spaces in different subgraphs and we'll need to rely on merging local data with
+// a remote cache (like RQ) instead.
+export function SpaceStoreProvider({ children }: { children: React.ReactNode }) {
+  const { config, subgraph } = Services.useServices();
+  const spaceStore = React.useMemo(() => {
+    return new SpaceStore({ subgraph, config });
+  }, [subgraph, config]);
+
+  return <SpaceStoreContext.Provider value={spaceStore}>{children}</SpaceStoreContext.Provider>;
+}
+
 export function useSpaceStoreInstance() {
-  return Services.useServices().spaceStore;
+  const value = React.useContext(SpaceStoreContext);
+
+  if (!value) {
+    throw new Error(`Missing SpaceStoreProvider`);
+  }
+
+  return value;
 }

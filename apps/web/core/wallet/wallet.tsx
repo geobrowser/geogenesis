@@ -1,10 +1,10 @@
 'use client';
 
-import { ConnectKitButton, ConnectKitProvider, getDefaultClient } from 'connectkit';
+import { ConnectKitButton, ConnectKitProvider, getDefaultConfig } from 'connectkit';
 
 import * as React from 'react';
 
-import { Chain, WagmiConfig, configureChains, createClient, useDisconnect } from 'wagmi';
+import { Chain, WagmiConfig, configureChains, createConfig, useDisconnect } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -58,18 +58,18 @@ const DEFAULT_CHAIN: Chain = {
   },
 };
 
-const { chains, provider, webSocketProvider } = configureChains(
+const { chains, publicClient, webSocketPublicClient } = configureChains(
   // Only make the dev chains available in development
   [DEFAULT_CHAIN, ...(process.env.NODE_ENV === 'development' ? [TESTNET_CHAIN, LOCAL_CHAIN] : [])],
   [publicProvider()]
 );
 
-const wagmiClient = createClient(
-  getDefaultClient({
+const wagmiConfig = createConfig(
+  getDefaultConfig({
     appName: 'Geo Genesis',
     chains,
-    webSocketProvider,
-    provider,
+    webSocketPublicClient,
+    publicClient,
     autoConnect: true,
     walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   })
@@ -77,7 +77,7 @@ const wagmiClient = createClient(
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
-    <WagmiConfig client={wagmiClient}>
+    <WagmiConfig config={wagmiConfig}>
       <ConnectKitProvider>{children}</ConnectKitProvider>
     </WagmiConfig>
   );

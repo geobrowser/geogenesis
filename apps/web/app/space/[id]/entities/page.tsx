@@ -3,8 +3,9 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Network } from '~/core/io';
-import { StorageClient } from '~/core/io';
+import { Subgraph } from '~/core/io';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -34,10 +35,8 @@ const getData = async ({ params, searchParams }: Props) => {
 
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
-  const storage = new StorageClient(config.ipfs);
 
-  const network = new Network.NetworkClient(storage, config.subgraph);
-  const spaces = await network.fetchSpaces();
+  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const space = spaces.find(s => s.id === spaceId);
 
   if (!space) notFound();
@@ -47,9 +46,10 @@ const getData = async ({ params, searchParams }: Props) => {
   const spaceName = spaceNames[spaceId];
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(network, spaceId),
-    fetchForeignTypeTriples(network, space),
-    network.fetchTriples({
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
+    fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph),
+    Subgraph.fetchTriples({
+      endpoint: config.subgraph,
       query: '',
       skip: 0,
       first: DEFAULT_PAGE_SIZE,
@@ -66,7 +66,7 @@ const getData = async ({ params, searchParams }: Props) => {
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
 
-  const defaultTypeId = defaultTypeTriples.triples[0]?.value.id;
+  const defaultTypeId = defaultTypeTriples[0]?.value.id;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
@@ -74,23 +74,45 @@ const getData = async ({ params, searchParams }: Props) => {
   // initialTypes[0] can be empty if there's no types in the space
   const typeId: string | null = initialSelectedType?.entityId ?? null;
 
-  const fetchParams: Network.FetchRowsOptions['params'] = {
+  const fetchParams: FetchRowsOptions['params'] = {
     ...initialParams,
+    endpoint: config.subgraph,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createGraphQLStringFromFilters([], typeId),
+    filter: TableBlockSdk.createGraphQLStringFromFilters(
+      [
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: initialParams.query,
+          valueType: 'string',
+        },
+        {
+          columnId: SYSTEM_IDS.SPACE,
+          value: spaceId,
+          valueType: 'string',
+        },
+      ],
+      typeId
+    ),
   };
 
-  const { columns } = await network.columns({
+  const serverColumns = await fetchColumns({
+    params: fetchParams,
+    api: {
+      fetchTriples: Subgraph.fetchTriples,
+      fetchEntity: Subgraph.fetchEntity,
+    },
+  });
+
+  const serverRows = await fetchRows({
+    api: {
+      fetchTableRowEntities: Subgraph.fetchTableRowEntities,
+    },
     params: fetchParams,
   });
 
-  const { rows: serverRows } = await network.rows({
-    params: fetchParams,
-  });
-
-  const { rows } = EntityTable.fromColumnsAndRows(serverRows, columns);
+  const { rows: finalRows } = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
 
   return {
     space,
@@ -98,8 +120,8 @@ const getData = async ({ params, searchParams }: Props) => {
     spaceImage,
     initialSelectedType,
     initialForeignTypes,
-    initialColumns: columns,
-    initialRows: rows,
+    initialColumns: serverColumns,
+    initialRows: finalRows,
     initialTypes,
     initialParams,
   };

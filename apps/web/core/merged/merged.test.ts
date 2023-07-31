@@ -4,9 +4,13 @@ import { ActionsStore } from '~/core/state/actions-store';
 import { CreateTripleAction, StringValue, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { options } from '../environment/environment';
+import { Storage } from '../io';
 import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
 import { LocalStore } from '../state/local-store/local-store';
 import { Merged as MergeDataSource } from './merged';
+
+const storageClient = new Storage.StorageClient(options.development.ipfs);
 
 describe('MergeDataSource merges local triples with network triples', () => {
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
@@ -14,8 +18,7 @@ describe('MergeDataSource merges local triples with network triples', () => {
   it('merges local and network triples', async () => {
     const stubTriple = makeStubTriple('Alice');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
@@ -25,8 +28,14 @@ describe('MergeDataSource merges local triples with network triples', () => {
     };
     store.update(changedLocalTriple, stubTriple);
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
+    const mergedNetwork = new MergeDataSource({
+      subgraph: new MockNetwork({ triples: [stubTriple] }),
+      store,
+      localStore,
+    });
+
     const triples = await mergedNetwork.fetchTriples({
+      endpoint: options.development.subgraph,
       space: stubTriple.space,
       query: '',
       first: 10,
@@ -39,7 +48,7 @@ describe('MergeDataSource merges local triples with network triples', () => {
       ...changedLocalTriple,
     };
 
-    expect(triples.triples).toEqual([changedLocalTripleAsAction]);
+    expect(triples).toEqual([changedLocalTripleAsAction]);
   });
 });
 
@@ -47,8 +56,8 @@ describe('MergeDataSource merges local entities with network entities', () => {
   it('without a query', async () => {
     const stubTriple = makeStubTriple('Alice');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
     store.remove(stubTriple);
@@ -60,8 +69,13 @@ describe('MergeDataSource merges local entities with network entities', () => {
     };
     store.update(changedLocalTriple, stubTriple);
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
+    const mergedNetwork = new MergeDataSource({
+      subgraph,
+      store,
+      localStore,
+    });
     const entities = await mergedNetwork.fetchEntities({
+      endpoint: options.development.subgraph,
       query: '',
       filter: [],
     });
@@ -77,8 +91,8 @@ describe('MergeDataSource merges local entities with network entities', () => {
   it('with a query', async () => {
     const stubTriple = makeStubTriple('Alice');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
@@ -89,8 +103,9 @@ describe('MergeDataSource merges local entities with network entities', () => {
 
     store.update(changedLocalTriple, stubTriple);
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
+    const mergedNetwork = new MergeDataSource({ subgraph, store, localStore });
     const entities = await mergedNetwork.fetchEntities({
+      endpoint: options.development.subgraph,
       query: 'Bob',
       filter: [],
     });
@@ -109,8 +124,8 @@ describe('MergeDataSource merges local entity with network entity', () => {
   it('local entity and network entity both exist', async () => {
     const stubTriple = makeStubTriple('Alice');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
     const changedLocalTriple: Triple = {
@@ -121,8 +136,8 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     store.update(changedLocalTriple, stubTriple);
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
-    const entity = await mergedNetwork.fetchEntity(stubTriple.id);
+    const mergedNetwork = new MergeDataSource({ subgraph, store, localStore });
+    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id, endpoint: options.development.subgraph });
 
     const changedLocalTripleAsAction: CreateTripleAction = {
       type: 'createTriple',
@@ -136,15 +151,18 @@ describe('MergeDataSource merges local entity with network entity', () => {
   it('local entity exists and network entity does not exist', async () => {
     const stubTriple = makeStubTriple('Devin');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
-    const changedLocalTriple: Triple = makeStubTriple('Bob');
+    const changedLocalTriple = makeStubTriple('Bob');
     store.create(changedLocalTriple);
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
-    const entity = await mergedNetwork.fetchEntity(changedLocalTriple.id);
+    const mergedNetwork = new MergeDataSource({ subgraph, store, localStore });
+    const entity = await mergedNetwork.fetchEntity({
+      id: changedLocalTriple.id,
+      endpoint: options.development.subgraph,
+    });
 
     const changedLocalTripleAsAction: CreateTripleAction = {
       type: 'createTriple',
@@ -158,12 +176,12 @@ describe('MergeDataSource merges local entity with network entity', () => {
   it('local entity does not exist and network entity exists', async () => {
     const stubTriple = makeStubTriple('Devin');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
-    const entity = await mergedNetwork.fetchEntity(stubTriple.id);
+    const mergedNetwork = new MergeDataSource({ subgraph, store, localStore });
+    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id, endpoint: options.development.subgraph });
 
     expect(entity).toEqual(Entity.entitiesFromTriples([stubTriple])[0]);
   });
@@ -172,12 +190,12 @@ describe('MergeDataSource merges local entity with network entity', () => {
   it('local entity does not exist and network does not exist', async () => {
     const stubTriple = makeStubTriple('Devin');
 
-    const api = new MockNetwork({ triples: [stubTriple] });
-    const store = new ActionsStore({ api: api });
+    const subgraph = new MockNetwork({ triples: [stubTriple] });
+    const store = new ActionsStore({ storageClient });
     const localStore = new LocalStore({ store: store });
 
-    const mergedNetwork = new MergeDataSource({ api, store, localStore });
-    const entity = await mergedNetwork.fetchEntity('Banana');
+    const mergedNetwork = new MergeDataSource({ subgraph, store, localStore });
+    const entity = await mergedNetwork.fetchEntity({ id: 'Banana', endpoint: options.development.subgraph });
 
     expect(entity).toEqual(null);
   });

@@ -6,20 +6,22 @@ import { A, S } from '@mobily/ts-belt';
 
 import { useMemo } from 'react';
 
-import { Network } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
 import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
+import { Environment } from '../environment';
 import { LocalStore, useLocalStoreInstance } from '../state/local-store';
 import { Entity as EntityType, FilterState } from '../types';
 
 interface EntityAutocompleteOptions {
-  api: Network.INetwork;
   spaceId?: string;
   ActionsStore: ActionsStore;
   LocalStore: LocalStore;
+  Subgraph: Subgraph.ISubgraph;
+  config: Environment.AppConfig;
   filter?: FilterState;
   allowedTypes?: string[];
 }
@@ -31,8 +33,12 @@ class EntityAutocomplete {
   abortController: AbortController = new AbortController();
   mergedDataSource: Merged;
 
-  constructor({ api, ActionsStore, LocalStore, allowedTypes, filter = [] }: EntityAutocompleteOptions) {
-    this.mergedDataSource = new Merged({ api, store: ActionsStore, localStore: LocalStore });
+  constructor({ ActionsStore, LocalStore, allowedTypes, Subgraph, config, filter = [] }: EntityAutocompleteOptions) {
+    this.mergedDataSource = new Merged({
+      store: ActionsStore,
+      localStore: LocalStore,
+      subgraph: Subgraph,
+    });
 
     this.results$ = makeOptionalComputed(
       [],
@@ -47,6 +53,7 @@ class EntityAutocomplete {
 
           this.loading$.set(true);
           const entities = await this.mergedDataSource.fetchEntities({
+            endpoint: config.subgraph,
             query,
             abortController: this.abortController,
             filter,
@@ -79,7 +86,7 @@ interface AutocompleteOptions {
 }
 
 export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
 
@@ -89,15 +96,16 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({
-      api: network,
       ActionsStore,
+      Subgraph: subgraph,
+      config,
       LocalStore,
       filter: memoizedFilter,
       allowedTypes: memoizedAllowedTypes,
     });
     // Typically we wouldn't want to stringify a dependency array value, but since
     // we know that the FilterState object is small we know it won't create a performance issue.
-  }, [network, ActionsStore, memoizedAllowedTypes, memoizedFilter, LocalStore]);
+  }, [ActionsStore, memoizedAllowedTypes, memoizedFilter, LocalStore, subgraph, config]);
 
   const results = useSelector(autocomplete.results$);
   const query = useSelector(autocomplete.query$);

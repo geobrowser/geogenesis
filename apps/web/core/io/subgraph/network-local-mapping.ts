@@ -1,4 +1,17 @@
-import { Action, Entity, OmitStrict, Profile, Space, Triple, Value, Version } from '~/core/types';
+import { Account, Action, Entity, OmitStrict, Profile, ProposedVersion, Space, Triple, Value } from '~/core/types';
+
+export type NetworkSpace = {
+  id: string;
+  isRootSpace: boolean;
+  admins: Account[];
+  editors: Account[];
+  editorControllers: Account[];
+  entity?: {
+    id: string;
+    entityOf: { id: string; stringValue: string; attribute: { id: string } }[];
+  };
+  createdAtBlock: string;
+};
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -39,7 +52,7 @@ export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
-export type NetworkVersion = OmitStrict<Version, 'createdBy'> & {
+export type NetworkProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
   actions: NetworkAction[];
 
   // The NetworkVersion does not have a name or avatar associated
@@ -60,7 +73,7 @@ export type NetworkProposal = {
   description: string | null;
   space: string;
   status: 'APPROVED';
-  proposedVersions: NetworkVersion[];
+  proposedVersions: NetworkProposedVersion[];
 };
 
 export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {
