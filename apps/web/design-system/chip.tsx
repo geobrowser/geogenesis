@@ -1,7 +1,6 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
-import cx from 'classnames';
 import Link from 'next/link';
 
 import * as React from 'react';
@@ -14,16 +13,26 @@ interface LinkableChipProps {
   children: React.ReactNode;
 }
 
-export function LinkableChip({ href, children }: LinkableChipProps) {
-  const linkableChipStyles = cva(
-    cx(
-      'text-metadataMedium rounded-sm shadow-inner shadow-text min-h-[1.5rem] px-2 py-1 inline-flex items-center bg-white text-left hover:cursor-pointer hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary break-words !font-normal !leading-[1.125rem]',
-      typeof children === 'string' && children.length >= 42 && 'line-clamp-1'
-    )
-  );
+const linkableChipStyles = cva(
+  'text-metadataMedium rounded-sm shadow-inner shadow-text min-h-[1.5rem] px-2 py-1 inline-flex items-center bg-white text-left hover:cursor-pointer hover:text-ctaPrimary hover:bg-ctaTertiary hover:shadow-ctaPrimary focus:cursor-pointer focus:text-ctaPrimary focus:shadow-inner-lg focus:bg-ctaTertiary focus:shadow-ctaPrimary break-words !font-normal !leading-[1.125rem]',
+  {
+    variants: {
+      shouldClamp: {
+        true: 'line-clamp-2',
+      },
+    },
+    defaultVariants: {
+      shouldClamp: false,
+    },
+  }
+);
 
+export function LinkableChip({ href, children }: LinkableChipProps) {
   return (
-    <Link href={href} className={linkableChipStyles()}>
+    <Link
+      href={href}
+      className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
+    >
       <span>{children}</span>
     </Link>
   );
