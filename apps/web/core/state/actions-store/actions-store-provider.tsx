@@ -14,11 +14,11 @@ interface Props {
 }
 
 export function ActionsStoreProvider({ children }: Props) {
-  const { network } = Services.useServices();
+  const { storageClient } = Services.useServices();
 
   const store = useMemo(() => {
-    return new ActionsStore({ api: network });
-  }, [network]);
+    return new ActionsStore({ storageClient });
+  }, [storageClient]);
 
   return <ActionsStoreContext.Provider value={store}>{children}</ActionsStoreContext.Provider>;
 }

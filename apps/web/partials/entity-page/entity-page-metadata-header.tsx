@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useDiff } from '~/core/state/diff-store';
 import { EntityType } from '~/core/types';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -30,7 +30,7 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetadataHeaderProps) {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const {
     data: versions,
     isFetching,
@@ -38,7 +38,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: async ({ pageParam = 0 }) => network.fetchProposedVersions(id, spaceId, undefined, pageParam),
+    queryFn: async ({ pageParam = 0 }) =>
+      subgraph.fetchProposedVersions({ entityId: id, spaceId, page: pageParam, endpoint: config.subgraph }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
@@ -112,7 +113,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
   const [open, onOpenChange] = React.useState(false);
   const pathname = usePathname();
 
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
 
   const {
     data: proposals,
@@ -121,7 +122,8 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async ({ pageParam = 0 }) => network.fetchProposals(spaceId, undefined, pageParam),
+    queryFn: async ({ pageParam = 0 }) =>
+      subgraph.fetchProposals({ spaceId, endpoint: config.subgraph, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 

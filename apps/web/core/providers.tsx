@@ -9,6 +9,7 @@ import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
+import { SpaceStoreProvider } from './state/spaces-store';
 import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();
@@ -16,15 +17,17 @@ const queryClient = new QueryClient();
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Services.Provider>
-        <ActionsStoreProvider>
-          <LocalStoreProvider>
-            <DiffProvider>
-              <WalletProvider>{children}</WalletProvider>
-            </DiffProvider>
-          </LocalStoreProvider>
-        </ActionsStoreProvider>
-      </Services.Provider>
+      <WalletProvider>
+        <Services.Provider>
+          <ActionsStoreProvider>
+            <SpaceStoreProvider>
+              <LocalStoreProvider>
+                <DiffProvider>{children}</DiffProvider>
+              </LocalStoreProvider>
+            </SpaceStoreProvider>
+          </ActionsStoreProvider>
+        </Services.Provider>
+      </WalletProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

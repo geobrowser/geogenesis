@@ -1,26 +1,44 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 
-import { Network } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row, Version } from '~/core/types';
+import { Column, OmitStrict, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
+import { fetchColumns } from '../io/fetch-columns';
+import { fetchRows } from '../io/fetch-rows';
+
 interface MergedDataSourceOptions {
-  api: Network.INetwork;
   store: ActionsStore;
   localStore: LocalStore;
+  subgraph: Subgraph.ISubgraph;
 }
 
 interface IMergedDataSource
-  extends OmitStrict<Network.INetwork, 'publish' | 'uploadFile' | 'rows' | 'fetchProposedVersion' | 'fetchProposal'> {
+  extends OmitStrict<
+    Subgraph.ISubgraph,
+    // These data models don't have local equivalents, so we don't need merging logic for them.
+    | 'fetchProposedVersion'
+    | 'fetchProposal'
+    | 'fetchProposals'
+    | 'fetchTableRowEntities'
+    | 'fetchProposedVersions'
+    | 'fetchSpace'
+    | 'fetchSpaces'
+    | 'fetchProfile'
+  > {
+  // Rows and columns aren't part of the subgraph API and instead are higher-order functions that
+  // call the subgraph APIs themselves. This is because rows and columns are not entities in the
+  // subgraph. We include them here so have a unified API for merging data in the app.
   rows: (
-    options: Parameters<Network.INetwork['rows']>[0],
+    options: Parameters<typeof fetchRows>[0],
     columns: Column[],
     selectedTypeEntityId?: string
   ) => Promise<{ rows: Row[] }>;
+  columns: (options: Parameters<typeof fetchColumns>[0]) => Promise<Column[]>;
 }
 
 /**
@@ -28,20 +46,20 @@ interface IMergedDataSource
  * on the Merged class should be the same as the Network class.
  */
 export class Merged implements IMergedDataSource {
-  private api: Network.INetwork;
   private store: ActionsStore;
   private localStore: LocalStore;
+  private subgraph: Subgraph.ISubgraph;
 
-  constructor({ api, store, localStore }: MergedDataSourceOptions) {
-    this.api = api;
+  constructor({ store, localStore, subgraph }: MergedDataSourceOptions) {
     this.store = store;
     this.localStore = localStore;
+    this.subgraph = subgraph;
   }
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
   // triples that do not match the passed in query + filter.
-  fetchTriples = async (options: Parameters<Network.INetwork['fetchTriples']>[0]) => {
-    const networkTriples = await this.api.fetchTriples(options);
+  fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]) => {
+    const networkTriples = await this.subgraph.fetchTriples(options);
 
     if (!options.space) return networkTriples;
 
@@ -51,16 +69,14 @@ export class Merged implements IMergedDataSource {
     // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
     // this in our app code for local triples. This might mean that we render local triples that
     // don't map to the selected filter.
-    const updatedTriples = Triple.fromActions(actions, networkTriples.triples);
+    const updatedTriples = Triple.fromActions(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
-    return {
-      triples: mergedTriplesWithName,
-    };
+    return mergedTriplesWithName;
   };
 
-  fetchEntities = async (options: Parameters<Network.INetwork['fetchEntities']>[0]) => {
-    const networkEntities = await this.api.fetchEntities(options);
+  fetchEntities = async (options: Parameters<Subgraph.ISubgraph['fetchEntities']>[0]) => {
+    const networkEntities = await this.subgraph.fetchEntities(options);
 
     // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
     // this in our app code for local entities. This might mean that we render local entities that
@@ -104,20 +120,20 @@ export class Merged implements IMergedDataSource {
    * * Local entity doesn't exist, network entity doesn't exist: Return null
    *
    */
-  fetchEntity = async (id: Parameters<Network.INetwork['fetchEntity']>[0]) => {
+  fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
-      const maybeNetworkEntity = await this.api.fetchEntity(id);
+      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id, endpoint: options.endpoint });
 
       const globalActions = Triple.fromActions(this.store.allActions$.get(), []);
 
-      if (!globalActions.some(a => a.entityId === id)) return maybeNetworkEntity;
+      if (!globalActions.some(a => a.entityId === options.id)) return maybeNetworkEntity;
 
       // Need to find the local version of this entity if it exists and merge it with the network entity
       // if it exists. If the network entity doesn't exist, we search the local store for the entity.
       const entity = pipe(
         this.store.actions$.get(),
         actions => Entity.mergeActionsWithEntities(actions, maybeNetworkEntity ? [maybeNetworkEntity] : []),
-        A.find(e => e.id === id)
+        A.find(e => e.id === options.id)
       );
 
       if (!entity) {
@@ -131,20 +147,18 @@ export class Merged implements IMergedDataSource {
     }
   };
 
-  columns = async (options: Parameters<Network.INetwork['columns']>[0]) => {
-    const { columns: serverColumns } = await this.api.columns(options);
+  columns = async (options: Parameters<typeof fetchColumns>[0]) => {
+    const serverColumns = await fetchColumns(options);
 
-    const columns = EntityTable.columnsFromLocalChanges(
+    return EntityTable.columnsFromLocalChanges(
       this.localStore.triples$.get(),
       serverColumns,
       options.params.typeIds?.[0]
     );
-
-    return { columns };
   };
 
-  rows = async (options: Parameters<Network.INetwork['rows']>[0], columns: Column[], selectedTypeEntityId?: string) => {
-    const { rows: serverRows } = await this.api.rows(options);
+  rows = async (options: Parameters<typeof fetchRows>[0], columns: Column[], selectedTypeEntityId?: string) => {
+    const serverRows = await fetchRows(options);
 
     /**
      * Aggregate data for the rows from local and server entities.
@@ -180,7 +194,7 @@ export class Merged implements IMergedDataSource {
     // This will return null if the entity we're fetching does not exist remotely.
     // i.e., the entity was created locally and has not been published to the server.
     const maybeServerEntitiesChangedLocally = await Promise.all(
-      changedEntitiesIdsFromAnotherType.map(id => this.api.fetchEntity(id))
+      changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id, endpoint: options.params.endpoint }))
     );
 
     const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
@@ -220,22 +234,4 @@ export class Merged implements IMergedDataSource {
 
     return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
   };
-
-  // Right now we can't create local spaces, so we just return the network spaces.
-  fetchSpaces = async () => this.api.fetchSpaces();
-
-  fetchProfile = async () => null;
-
-  // Proposed versions are server only
-  fetchProposedVersions = async (
-    entityId: string,
-    spaceId: string,
-    abortController?: AbortController
-  ): Promise<Version[]> => {
-    return this.api.fetchProposedVersions(entityId, spaceId, abortController);
-  };
-
-  // Proposals are server only
-  fetchProposals = async (spaceId: string, abortController?: AbortController) =>
-    this.api.fetchProposals(spaceId, abortController);
 }

@@ -17,12 +17,12 @@ interface Props {
 }
 
 export function TripleStoreProvider({ space, children, initialParams }: Props) {
-  const { network } = Services.useServices();
+  const { subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
 
   const store = useMemo(() => {
-    return new TripleStore({ api: network, space, initialParams, ActionsStore });
-  }, [network, space, ActionsStore, initialParams]);
+    return new TripleStore({ subgraph, config, space, initialParams, ActionsStore });
+  }, [subgraph, config, space, ActionsStore, initialParams]);
 
   return <TripleStoreContext.Provider value={store}>{children}</TripleStoreContext.Provider>;
 }

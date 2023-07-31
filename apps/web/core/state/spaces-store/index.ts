@@ -1,1 +1,1 @@
-export { SpaceStore, useSpaceStoreInstance } from './space-store';
+export { SpaceStore, useSpaceStoreInstance, SpaceStoreProvider } from './space-store';

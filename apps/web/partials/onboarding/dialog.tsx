@@ -202,12 +202,12 @@ type StepAvatarProps = {
 };
 
 function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProps) {
-  const { network } = Services.useServices();
+  const { storageClient } = Services.useServices();
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await network.uploadFile(file);
+      const ipfsUri = await storageClient.uploadFile(file);
       const imageValue = Value.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }
