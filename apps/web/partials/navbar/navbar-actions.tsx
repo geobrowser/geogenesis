@@ -177,15 +177,19 @@ function ModeToggle({ spaceId }: Props) {
     <button onClick={onToggle} className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1">
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {!isUserEditing && <AnimatedTogglePill controls={controls} />}
-        <motion.div className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}>
+        <motion.div
+          animate={controls}
+          variants={variants}
+          className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}
+        >
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {isUserEditing && <AnimatedTogglePill controls={controls} />}
-        <motion.div className={`z-10 transition-colors duration-300 ${isUserEditing ? 'text-text' : 'text-grey-03'}`}>
+        <div className={`z-10 transition-colors duration-300 ${isUserEditing ? 'text-text' : 'text-grey-03'}`}>
           <BulkEdit />
-        </motion.div>
+        </div>
       </div>
 
       <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
