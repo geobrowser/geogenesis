@@ -14,7 +14,7 @@ import * as React from 'react';
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { columns } from '~/core/io/fetch-columns';
+import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
@@ -885,7 +885,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, confi
     rawFilter,
     async id => await subgraph.fetchEntity({ id, endpoint: config.subgraph })
   );
-  const serverColumns = await columns({
+  const serverColumns = await fetchColumns({
     params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
     api: {
       fetchEntity: subgraph.fetchEntity,

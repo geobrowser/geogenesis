@@ -4,8 +4,8 @@ import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Subgraph } from '~/core/io';
-import { columns } from '~/core/io/fetch-columns';
-import { FetchRowsOptions, rows } from '~/core/io/fetch-rows';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -97,7 +97,7 @@ const getData = async ({ params, searchParams }: Props) => {
     ),
   };
 
-  const serverColumns = await columns({
+  const serverColumns = await fetchColumns({
     params: fetchParams,
     api: {
       fetchTriples: Subgraph.fetchTriples,
@@ -105,7 +105,7 @@ const getData = async ({ params, searchParams }: Props) => {
     },
   });
 
-  const serverRows = await rows({
+  const serverRows = await fetchRows({
     api: {
       fetchTableRowEntities: Subgraph.fetchTableRowEntities,
     },

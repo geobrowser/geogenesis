@@ -8,8 +8,8 @@ import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
-import { columns } from '../io/fetch-columns';
-import { rows } from '../io/fetch-rows';
+import { fetchColumns } from '../io/fetch-columns';
+import { fetchRows } from '../io/fetch-rows';
 
 interface MergedDataSourceOptions {
   store: ActionsStore;
@@ -34,11 +34,11 @@ interface IMergedDataSource
   // call the subgraph APIs themselves. This is because rows and columns are not entities in the
   // subgraph. We include them here so have a unified API for merging data in the app.
   rows: (
-    options: Parameters<typeof rows>[0],
+    options: Parameters<typeof fetchRows>[0],
     columns: Column[],
     selectedTypeEntityId?: string
   ) => Promise<{ rows: Row[] }>;
-  columns: (options: Parameters<typeof columns>[0]) => Promise<Column[]>;
+  columns: (options: Parameters<typeof fetchColumns>[0]) => Promise<Column[]>;
 }
 
 /**
@@ -147,8 +147,8 @@ export class Merged implements IMergedDataSource {
     }
   };
 
-  columns = async (options: Parameters<typeof columns>[0]) => {
-    const serverColumns = await columns(options);
+  columns = async (options: Parameters<typeof fetchColumns>[0]) => {
+    const serverColumns = await fetchColumns(options);
 
     return EntityTable.columnsFromLocalChanges(
       this.localStore.triples$.get(),
@@ -157,8 +157,8 @@ export class Merged implements IMergedDataSource {
     );
   };
 
-  rows = async (options: Parameters<typeof rows>[0], columns: Column[], selectedTypeEntityId?: string) => {
-    const serverRows = await rows(options);
+  rows = async (options: Parameters<typeof fetchRows>[0], columns: Column[], selectedTypeEntityId?: string) => {
+    const serverRows = await fetchRows(options);
 
     /**
      * Aggregate data for the rows from local and server entities.

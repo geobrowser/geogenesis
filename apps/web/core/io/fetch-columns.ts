@@ -16,7 +16,7 @@ interface FetchColumnsOptions {
   abortController?: AbortController;
 }
 
-export async function columns({ params, api, abortController }: FetchColumnsOptions) {
+export async function fetchColumns({ params, api, abortController }: FetchColumnsOptions) {
   if (params.typeIds?.length === 0) {
     return [];
   }

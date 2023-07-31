@@ -5,8 +5,8 @@ import { A, pipe } from '@mobily/ts-belt';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { columns } from '~/core/io/fetch-columns';
-import { FetchRowsOptions, rows } from '~/core/io/fetch-rows';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
 import { SpaceStore } from '~/core/state/spaces-store';
@@ -150,7 +150,7 @@ export class EntityTableStore implements IEntityTableStore {
             skip: pageNumber * pageSize,
           };
 
-          const serverColumns = await columns({
+          const serverColumns = await fetchColumns({
             api: {
               fetchEntity: subgraph.fetchEntity,
               fetchTriples: subgraph.fetchTriples,
@@ -159,7 +159,7 @@ export class EntityTableStore implements IEntityTableStore {
             abortController: this.abortController,
           });
 
-          const serverRows = await rows({
+          const serverRows = await fetchRows({
             api: {
               fetchTableRowEntities: subgraph.fetchTableRowEntities,
             },

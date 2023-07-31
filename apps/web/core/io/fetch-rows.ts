@@ -11,7 +11,7 @@ export interface FetchRowsOptions {
   abortController?: AbortController;
 }
 
-export async function rows({ params, abortController, api }: FetchRowsOptions) {
+export async function fetchRows({ params, abortController, api }: FetchRowsOptions) {
   if (params.typeIds?.length === 0) {
     return [];
   }
