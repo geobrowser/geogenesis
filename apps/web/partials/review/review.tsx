@@ -880,6 +880,15 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
             transition={transition}
             className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
           >
+            {reviewState === 'publish-complete' && (
+              <motion.span
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', duration: 0.15 }}
+              >
+                🎉
+              </motion.span>
+            )}
             {publishingStates.includes(reviewState) && <Spinner />}
             <span>{message[reviewState]}</span>
           </motion.div>
@@ -908,7 +917,12 @@ const message: Record<ReviewState, string> = {
   'publish-complete': 'Changes published!',
 };
 
-const publishingStates: Array<ReviewState> = ['publishing-ipfs', 'signing-wallet', 'publishing-contract'];
+const publishingStates: Array<ReviewState> = [
+  'publishing-ipfs',
+  'signing-wallet',
+  'publishing-contract',
+  'publish-complete',
+];
 
 type ChipProps = {
   status?: 'added' | 'removed' | 'unchanged';
