@@ -116,7 +116,7 @@ const ReviewChanges = () => {
     clearProposalName();
   }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges]);
 
-  if (isLoading || typeof data !== 'object') {
+  if (isLoading || !data) {
     return null;
   }
 
