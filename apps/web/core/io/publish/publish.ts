@@ -5,8 +5,8 @@ import { parseGwei } from 'viem';
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { Action, ReviewState } from '../types';
-import { Storage } from './storage';
+import { Action, ReviewState } from '../../types';
+import { Storage } from '../storage';
 
 const UPLOAD_CHUNK_SIZE = 2000;
 

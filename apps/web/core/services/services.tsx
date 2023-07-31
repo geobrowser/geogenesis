@@ -6,12 +6,13 @@ import { ReactNode, createContext, useContext, useMemo } from 'react';
 import { useNetwork } from 'wagmi';
 
 import { Environment } from '~/core/environment';
-import { Storage, Subgraph } from '~/core/io';
+import { Publish, Storage, Subgraph } from '~/core/io';
 
 type Services = {
   storageClient: Storage.IStorageClient;
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
+  publish: Publish.IPublish;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -34,6 +35,7 @@ export function ServicesProvider({ children }: Props) {
       config,
       storageClient,
       subgraph: Subgraph,
+      publish: Publish,
     };
   }, [chainId]);
 
