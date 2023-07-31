@@ -188,11 +188,6 @@ function ModeToggle({ spaceId }: Props) {
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {isUserEditing && <AnimatedTogglePill controls={controls} />}
         <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-          {/* 
-            Set an empty trigger so the Popover has a place to render itself. Without the trigger the popoover
-            won't render even though we're controlling it imperatively.
-        */}
-          <Popover.Trigger />
           <Popover.Anchor asChild>
             <div
               className={`z-10 transition-colors duration-300 ${
@@ -207,7 +202,7 @@ function ModeToggle({ spaceId }: Props) {
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
                 <MotionPopoverContent
-                  className="z-10 origin-top-right rounded bg-text text-white px-3 py-2 shadow-button focus:outline-none w-[160px]"
+                  className="z-10 origin-top-right rounded bg-text text-white p-2 shadow-button focus:outline-none max-w-[164px]"
                   side="bottom"
                   align="end"
                   alignOffset={-8}
@@ -221,7 +216,7 @@ function ModeToggle({ spaceId }: Props) {
                     bounce: 0,
                   }}
                 >
-                  <h1 className="mb-1 text-button">You don’t have edit access in this space</h1>
+                  <h1 className="text-breadcrumb text-center">You don’t have edit access in this space</h1>
                   <Popover.Arrow />
                 </MotionPopoverContent>
               )}
