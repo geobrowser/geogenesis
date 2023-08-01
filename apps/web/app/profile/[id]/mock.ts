@@ -1,4 +1,7 @@
-import { makeStubTriple } from '~/core/io/mocks/mock-network';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
+import { ID } from '~/core/id';
+import { makeStubTriple, makeStubTripleWithAttributeAndValue } from '~/core/io/mocks/mock-network';
 
 const AVATARS = [
   'https://images.unsplash.com/photo-1615266895738-11f1371cd7e5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=3269&q=80',
@@ -26,5 +29,22 @@ export const MOCK_PROFILE = {
   coverUrl: RANDOM_COVER,
   spaceId: '0x123',
   referencedByEntities: [],
-  triples: [makeStubTriple(RANDOM_NAME)],
+  triples: [
+    // Name triple
+    makeStubTriple(RANDOM_NAME),
+    // Avatar Triple
+    makeStubTripleWithAttributeAndValue(
+      RANDOM_NAME,
+      '0x123',
+      { id: SYSTEM_IDS.AVATAR_ATTRIBUTE, name: 'Avatar' },
+      { id: ID.createValueId(), type: 'image', value: RANDOM_AVATAR }
+    ),
+    // Cover Triple
+    makeStubTripleWithAttributeAndValue(
+      RANDOM_NAME,
+      '0x123',
+      { id: SYSTEM_IDS.COVER_ATTRIBUTE, name: 'Cover' },
+      { id: ID.createValueId(), type: 'image', value: RANDOM_COVER }
+    ),
+  ],
 };
