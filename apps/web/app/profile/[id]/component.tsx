@@ -23,13 +23,7 @@ export function ProfilePageComponent(props: Props) {
   return (
     <>
       <Editor editable={renderEditablePage} />
-      <Page
-        id={props.id}
-        name="John Doe"
-        referencedByEntities={props.referencedByEntities}
-        spaceId={props.id}
-        triples={props.triples}
-      />
+      <Page id={props.id} spaceId={props.id} triples={props.triples} />
     </>
   );
 }

@@ -15,6 +15,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageReferencedBy } from '~/partials/entity-page/entity-page-referenced-by';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
@@ -66,6 +67,8 @@ export function Component(props: Props) {
           <Spacer height={40} />
           <Editor editable={renderEditablePage} />
           <Page {...props} />
+          <Spacer height={40} />
+          <EntityPageReferencedBy referencedByEntities={props.referencedByEntities} name={props.name} />
         </EntityPageContentContainer>
       </EntityStoreProvider>
     </TypesStoreProvider>
