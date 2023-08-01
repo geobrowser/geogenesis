@@ -13,15 +13,17 @@ const COVERS = [
   'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2748&q=80',
 ];
 
-const NAMES = ['Yaniv Tal', 'Byron Guina', 'Nathaniel Walpole', 'Shaps Benkau', 'Sophia Andren'];
+const NAMES = ['John Snow'];
 
 const RANDOM_NAME = NAMES[Math.floor(Math.random() * NAMES.length)];
+const RANDOM_AVATAR = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+const RANDOM_COVER = COVERS[Math.floor(Math.random() * COVERS.length)];
 
 export const MOCK_PROFILE = {
   id: '0x123',
   name: RANDOM_NAME,
-  avatarUrl: AVATARS[Math.floor(Math.random() * AVATARS.length)],
-  coverUrl: COVERS[Math.floor(Math.random() * COVERS.length)],
+  avatarUrl: RANDOM_AVATAR,
+  coverUrl: RANDOM_COVER,
   spaceId: '0x123',
   referencedByEntities: [],
   triples: [makeStubTriple(RANDOM_NAME)],
