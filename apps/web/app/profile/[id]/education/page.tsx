@@ -1,5 +1,5 @@
 export const runtime = 'edge';
 
 export default async function EducationPage() {
-  return <p>Hello world</p>;
+  return <p>Hello Ecucation Page</p>;
 }

@@ -24,9 +24,12 @@ interface TabProps {
   label: string;
 }
 
-const tabStyles = cva('relative text-quoteMedium text-grey-04', {
+const tabStyles = cva('relative text-quote transition-colors duration-100', {
   variants: {
-    active: 'text-text',
+    active: {
+      true: 'text-text',
+      false: 'text-grey-04 hover:text-text',
+    },
   },
   defaultVariants: {
     active: false,
@@ -34,7 +37,8 @@ const tabStyles = cva('relative text-quoteMedium text-grey-04', {
 });
 
 function Tab({ href, label }: TabProps) {
-  const active = usePathname() === href;
+  const path = usePathname();
+  const active = path === href;
 
   return (
     <Link className={tabStyles({ active })} href={href}>

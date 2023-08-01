@@ -168,7 +168,7 @@ module.exports = {
           '0.9375rem',
           {
             lineHeight: '1.375rem',
-            fontWeight: '700',
+            fontWeight: '600',
           },
         ],
         quoteMedium: [
