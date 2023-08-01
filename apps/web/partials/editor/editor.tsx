@@ -83,7 +83,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
     {
       extensions: [...tiptapExtensions, createIdExtension(spaceId)],
       editable: true,
-      content: editorJson,
+      content: hasHydrated ? editorJson : undefined,
       onBlur({ editor }) {
         // Responsible for converting all editor blocks to triples
         // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
