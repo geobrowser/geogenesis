@@ -191,33 +191,27 @@ export class ActionsStore implements IActionsStore {
 
     if (actionsToPublish.length < 1) return;
 
-    try {
-      await Publish.publish({
-        storageClient: this.storageClient,
-        actions: Action.prepareActionsForPublishing(actionsToPublish),
-        wallet,
-        onChangePublishState,
-        space: spaceId,
-        name,
-      });
+    await Publish.publish({
+      storageClient: this.storageClient,
+      actions: Action.prepareActionsForPublishing(actionsToPublish),
+      wallet,
+      onChangePublishState,
+      space: spaceId,
+      name,
+    });
 
-      const publishedActions = actionsToPublish.map(action => ({
-        ...action,
-        hasBeenPublished: true,
-      }));
+    const publishedActions = actionsToPublish.map(action => ({
+      ...action,
+      hasBeenPublished: true,
+    }));
 
-      this.actions$.set({
-        ...this.actions$.get(),
-        [spaceId]: [...publishedActions, ...actionsToPersist],
-      });
+    this.actions$.set({
+      ...this.actions$.get(),
+      [spaceId]: [...publishedActions, ...actionsToPersist],
+    });
 
-      onChangePublishState('publish-complete');
-      await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
-    } catch (e) {
-      console.error('Error during publishing', e);
-      onChangePublishState('idle');
-      throw e;
-    }
+    onChangePublishState('publish-complete');
+    await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
   };
 }
 

@@ -124,7 +124,10 @@ const ReviewChanges = () => {
       clearProposalName();
     } catch (e: unknown) {
       if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) return;
+        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          setReviewState('idle');
+          return;
+        }
 
         setReviewState('publish-error');
         setError((e as Error).message);
