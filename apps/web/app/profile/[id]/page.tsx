@@ -1,6 +1,5 @@
-import { makeStubTriple } from '~/core/io/mocks/mock-network';
-
 import { ProfilePageComponent } from './component';
+import { MOCK_PROFILE } from './mock';
 
 export const runtime = 'edge';
 
@@ -17,9 +16,9 @@ export default async function ProfilePage({ params }: Props) {
 async function getProfilePage({ params }: Props) {
   return {
     id: params.id,
-    name: 'John Doe',
+    name: MOCK_PROFILE.name,
     spaceId: params.id,
     referencedByEntities: [],
-    triples: [makeStubTriple('John Doe')],
+    triples: MOCK_PROFILE.triples,
   };
 }
