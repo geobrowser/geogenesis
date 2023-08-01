@@ -111,12 +111,6 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
           <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
-      {/*
-        Right now this component adds its own space below it. It's only used on the
-        entity page so this styling is universal. Eventually we want the callsite
-        to provide layout styling and not the component itself.
-       */}
-      <Spacer height={60} />
     </div>
   );
 });

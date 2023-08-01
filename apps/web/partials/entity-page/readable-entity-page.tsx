@@ -1,4 +1,7 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { motion } from 'framer-motion';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Triple } from '~/core/types';
@@ -23,9 +26,9 @@ export function ReadableEntityPage({ triples, id }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
   return (
-    <div className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">
+    <motion.div layout="position" className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">
       <EntityAttributes entityId={id} triples={sortedTriples} />
-    </div>
+    </motion.div>
   );
 }
 

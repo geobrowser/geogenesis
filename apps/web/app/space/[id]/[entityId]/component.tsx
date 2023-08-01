@@ -70,6 +70,7 @@ export function Component(props: Props) {
           <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
           <Spacer height={40} />
           <Editor editable={renderEditablePage} />
+          <Spacer height={60} />
           <Page {...props} />
           <Spacer height={40} />
           <EntityPageReferencedBy referencedByEntities={props.referencedByEntities} name={props.name} />

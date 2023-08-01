@@ -24,7 +24,7 @@ interface TabProps {
   label: string;
 }
 
-const tabStyles = cva('relative text-quote transition-colors duration-100', {
+const tabStyles = cva('relative text-quoteMedium transition-colors duration-100', {
   variants: {
     active: {
       true: 'text-text',
