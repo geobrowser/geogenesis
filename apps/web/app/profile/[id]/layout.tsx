@@ -91,9 +91,5 @@ export default async function ProfileLayout({ children, params }: Props) {
 }
 
 async function fetchProfile() {
-  return {
-    ...MOCK_PROFILE,
-    avatarUrl: AVATARS[Math.floor(Math.random() * AVATARS.length)],
-    coverUrl: COVERS[Math.floor(Math.random() * COVERS.length)],
-  };
+  return MOCK_PROFILE;
 }
