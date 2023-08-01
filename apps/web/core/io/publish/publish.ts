@@ -20,8 +20,12 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
-class TransactionFailedError extends Error {
+export class TransactionFailedError extends Error {
   readonly _tag = 'TransactionFailedError';
+}
+
+export class PublishFailedError extends Error {
+  _tag = 'PublishFailedError';
 }
 
 export type PublishOptions = {
@@ -84,41 +88,46 @@ export async function publish({
   const maxFeeAsGWei = parseGwei(maxFee.toString());
   const maxPriorityFeeAsGWei = parseGwei(maxPriorityFee.toString());
 
-  const contractConfig = await prepareWriteContract({
-    abi: SpaceAbi,
-    address: space as unknown as `0x${string}`,
-    functionName: 'addEntries',
-    walletClient: wallet,
-    args: [cids],
-    maxFeePerGas: maxFeeAsGWei,
-    maxPriorityFeePerGas: maxPriorityFeeAsGWei,
-  });
+  try {
+    const contractConfig = await prepareWriteContract({
+      abi: SpaceAbi,
+      address: space as unknown as `0x${string}`,
+      functionName: 'addEntries',
+      walletClient: wallet,
+      args: [cids],
+      maxFeePerGas: maxFeeAsGWei,
+      maxPriorityFeePerGas: maxPriorityFeeAsGWei,
+    });
 
-  onChangePublishState('signing-wallet');
-  const tx = await writeContract(contractConfig);
-  console.log('Transaction hash: ', tx.hash);
+    onChangePublishState('signing-wallet');
+    const tx = await writeContract(contractConfig);
+    console.log('Transaction hash: ', tx.hash);
 
-  onChangePublishState('publishing-contract');
-  const transaction = await waitForTransaction({
-    hash: tx.hash,
-  });
+    onChangePublishState('publishing-contract');
+    const transaction = await waitForTransaction({
+      hash: tx.hash,
+    });
 
-  if (transaction.status !== 'success') {
-    throw new TransactionFailedError(`Transaction failed: 
+    if (transaction.status !== 'success') {
+      throw new TransactionFailedError(`Transaction failed: 
     hash: ${transaction.transactionHash}
     status: ${transaction.status}
     blockNumber: ${transaction.blockNumber}
     blockHash: ${transaction.blockHash}
     ${JSON.stringify(transaction)}
     `);
-  }
+    }
 
-  console.log(`Transaction receipt: 
+    console.log(`Transaction receipt: 
   hash: ${transaction.transactionHash}
   status: ${transaction.status}
   blockNumber: ${transaction.blockNumber}
   blockHash: ${transaction.blockHash}
   `);
+  } catch (e) {
+    console.error(`Publish failed: ${e}`);
+    throw new PublishFailedError(`Publish failed: ${e}`);
+  }
 }
 
 export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {

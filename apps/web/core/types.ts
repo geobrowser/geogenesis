@@ -79,7 +79,8 @@ export type ReviewState =
   | 'publishing-ipfs'
   | 'signing-wallet'
   | 'publishing-contract'
-  | 'publish-complete';
+  | 'publish-complete'
+  | 'publish-error';
 
 export type FilterField =
   | 'entity-id'

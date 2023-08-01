@@ -216,7 +216,7 @@ export class ActionsStore implements IActionsStore {
     } catch (e) {
       console.error('Error during publishing', e);
       onChangePublishState('idle');
-      return;
+      throw e;
     }
   };
 }
