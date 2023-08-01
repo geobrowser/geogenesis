@@ -8,6 +8,9 @@ import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { Space, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { Spacer } from '~/design-system/spacer';
+
+import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
@@ -61,6 +64,8 @@ export function Component(props: Props) {
             triples={props.triples}
             space={true}
           />
+          <Spacer height={40} />
+          <Editor editable={renderEditablePage} />
           <Page {...props} />
         </EntityPageContentContainer>
       </EntityStoreProvider>

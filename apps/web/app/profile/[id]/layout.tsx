@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 
+import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
@@ -42,6 +43,8 @@ export default async function ProfileLayout({ children, params }: Props) {
       <EntityPageContentContainer>
         <EditableHeading spaceId={profile.spaceId} entityId={profile.id} name={profile.name} triples={[]} space />
 
+        <Spacer height={40} />
+
         <TabGroup
           tabs={TABS.map(label => {
             const href =
@@ -52,6 +55,8 @@ export default async function ProfileLayout({ children, params }: Props) {
             };
           })}
         />
+
+        <Spacer height={20} />
 
         {children}
       </EntityPageContentContainer>

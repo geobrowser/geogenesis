@@ -117,8 +117,6 @@ export function EditableHeading({
       ) : (
         <SpacePageMetadataHeader spaceId={spaceId} />
       )}
-      <Spacer height={40} />
-      <Editor editable={isEditing} />
     </div>
   );
 }
