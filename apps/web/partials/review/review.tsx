@@ -33,7 +33,10 @@ import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
+import { Close } from '~/design-system/icons/close';
 import { Minus } from '~/design-system/icons/minus';
+import { TickSmall } from '~/design-system/icons/tick-small';
+import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spacer } from '~/design-system/spacer';
 import { Spinner } from '~/design-system/spinner';
@@ -95,6 +98,7 @@ const ReviewChanges = () => {
   }));
 
   // Proposal state
+  const [error, setError] = useState<string | null>(null);
   const [reviewState, setReviewState] = useState<ReviewState>('idle');
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
@@ -109,11 +113,26 @@ const ReviewChanges = () => {
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace || !wallet) return;
+
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
-    await publish(activeSpace, wallet, setReviewState, unstagedChanges, proposalName);
-    clearProposalName();
+
+    try {
+      await publish(activeSpace, wallet, setReviewState, unstagedChanges, proposalName);
+      setError(null);
+      clearProposalName();
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          setReviewState('idle');
+          return;
+        }
+
+        setReviewState('publish-error');
+        setError((e as Error).message);
+      }
+    }
   }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges]);
 
   if (isLoading || !data) {
@@ -227,7 +246,7 @@ const ReviewChanges = () => {
           </div>
         </div>
       </div>
-      <StatusBar reviewState={reviewState} />
+      <StatusBar reviewState={reviewState} error={error} onClose={() => setReviewState('idle')} />
     </>
   );
 };
@@ -865,9 +884,71 @@ const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 type StatusBarProps = {
   reviewState: ReviewState;
+  onClose: () => void;
+  error: string | null;
 };
 
-const StatusBar = ({ reviewState }: StatusBarProps) => {
+const StatusBar = ({ reviewState, error, onClose }: StatusBarProps) => {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const onCopyError = async () => {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(error || '');
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+  let content = (
+    <>
+      {reviewState === 'publish-complete' && (
+        <motion.span initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.15 }}>
+          🎉
+        </motion.span>
+      )}
+      {publishingStates.includes(reviewState) && <Spinner />}
+      <span>{message[reviewState]}</span>
+    </>
+  );
+
+  if (reviewState === 'publish-error' && error) {
+    content = (
+      <>
+        <Warning color="orange" />
+        <span>{message[reviewState]}</span>
+        <button
+          className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
+          onClick={onCopyError}
+        >
+          <AnimatePresence mode="popLayout">
+            {isCopied ? (
+              <motion.div
+                key="status-bar-error"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+              >
+                <TickSmall />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="status-bar-error"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+              >
+                Copy error
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </button>
+        <button onClick={onClose}>
+          <Close />
+        </button>
+      </>
+    );
+  }
+
   return (
     <AnimatePresence>
       {reviewState !== 'idle' && (
@@ -880,17 +961,7 @@ const StatusBar = ({ reviewState }: StatusBarProps) => {
             transition={transition}
             className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
           >
-            {reviewState === 'publish-complete' && (
-              <motion.span
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', duration: 0.15 }}
-              >
-                🎉
-              </motion.span>
-            )}
-            {publishingStates.includes(reviewState) && <Spinner />}
-            <span>{message[reviewState]}</span>
+            {content}
           </motion.div>
         </div>
       )}
@@ -915,6 +986,7 @@ const message: Record<ReviewState, string> = {
   'signing-wallet': 'Sign your transaction',
   'publishing-contract': 'Adding your changes to The Graph',
   'publish-complete': 'Changes published!',
+  'publish-error': 'An error has occurred',
 };
 
 const publishingStates: Array<ReviewState> = [
@@ -977,9 +1049,9 @@ function parseMarkdown(markdownString: string) {
 }
 
 function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return (
+  return getImagePath(
     spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-    'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
+      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
   );
 }
 
