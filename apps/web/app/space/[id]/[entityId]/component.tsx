@@ -15,6 +15,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityPageReferencedBy } from '~/partials/entity-page/entity-page-referenced-by';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
@@ -49,6 +50,7 @@ export function Component(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const types = Entity.types(props.triples);
 
   return (
     <TypesStoreProvider initialTypes={props.spaceTypes} space={props.space}>
@@ -64,6 +66,8 @@ export function Component(props: Props) {
 
         <EntityPageContentContainer>
           <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+          <Spacer height={12} />
+          <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
           <Spacer height={40} />
           <Editor editable={renderEditablePage} />
           <Page {...props} />

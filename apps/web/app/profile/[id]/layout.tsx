@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { makeStubTriple } from '~/core/io/mocks/mock-network';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 
 import { Spacer } from '~/design-system/spacer';
@@ -8,6 +9,7 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 
 export const runtime = 'edge';
 
@@ -17,6 +19,8 @@ const MOCK_PROFILE = {
   avatarUrl: 'https://avatars.githubusercontent.com/u/10001?v=4',
   coverUrl: 'https://avatars.githubusercontent.com/u/10002?v=4',
   spaceId: '0x123',
+  referencedByEntities: [],
+  triples: [makeStubTriple('John Doe')],
 };
 
 const TABS = ['Overview', 'Work', 'Education', 'Activity'] as const;
@@ -41,7 +45,16 @@ export default async function ProfileLayout({ children, params }: Props) {
       <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
 
       <EntityPageContentContainer>
-        <EditableHeading spaceId={profile.spaceId} entityId={profile.id} name={profile.name} triples={[]} space />
+        <EditableHeading
+          spaceId={profile.spaceId}
+          entityId={profile.id}
+          name={profile.name}
+          triples={profile.triples}
+          space
+        />
+        <Spacer height={12} />
+
+        <SpacePageMetadataHeader spaceId={profile.spaceId} />
 
         <Spacer height={40} />
 

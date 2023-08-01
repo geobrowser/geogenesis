@@ -20,10 +20,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { Editor } from '~/partials/editor/editor';
-
-import { EntityPageMetadataHeader, SpacePageMetadataHeader } from './entity-page-metadata-header';
-
 export function EditableHeading({
   spaceId,
   entityId,
@@ -49,7 +45,6 @@ export function EditableHeading({
   // Default to the server name if there is no local name only when in browse mode.
   // Otherwise leave it empty when in edit mode.
   const name = isEditing ? Entity.name(triples) ?? '' : serverName;
-  const types = Entity.types(triples) ?? [];
 
   const send = useEditEvents({
     context: {
@@ -109,13 +104,7 @@ export function EditableHeading({
               </div>
             )}
           </div>
-          <Spacer height={12} />
         </div>
-      )}
-      {!space ? (
-        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
-      ) : (
-        <SpacePageMetadataHeader spaceId={spaceId} />
       )}
     </div>
   );
