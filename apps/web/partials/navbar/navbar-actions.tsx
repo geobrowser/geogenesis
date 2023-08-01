@@ -62,7 +62,7 @@ export function NavbarActions({ spaceId }: Props) {
         }
         open={open}
         onOpenChange={onOpenChange}
-        className="w-[10rem]"
+        className="max-w-[165px]"
       >
         <AvatarMenuItem disabled>
           <div className="flex items-center gap-2 grayscale">
@@ -153,7 +153,7 @@ function ModeToggle({ spaceId }: Props) {
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
-      if (attemptCount > 1) {
+      if (attemptCount > 0) {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
@@ -177,47 +177,53 @@ function ModeToggle({ spaceId }: Props) {
     <button onClick={onToggle} className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1">
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {!isUserEditing && <AnimatedTogglePill controls={controls} />}
-        <motion.div className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}>
+        <motion.div
+          animate={controls}
+          variants={variants}
+          className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}
+        >
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {isUserEditing && <AnimatedTogglePill controls={controls} />}
-        <motion.div className={`z-10 transition-colors duration-300 ${isUserEditing ? 'text-text' : 'text-grey-03'}`}>
-          <BulkEdit />
-        </motion.div>
-      </div>
+        <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+          <Popover.Anchor asChild>
+            <div
+              className={`z-10 transition-colors duration-300 ${
+                showEditAccessTooltip ? 'text-red-01' : isUserEditing ? 'text-text' : 'text-grey-03'
+              }`}
+            >
+              <BulkEdit />
+            </div>
+          </Popover.Anchor>
 
-      <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-        {/* 
-            Set an empty trigger so the Popover has a place to render itself. Without the trigger the popoover
-            won't render even though we're controlling it imperatively.
-        */}
-        <Popover.Trigger />
-        <Popover.Portal>
-          <AnimatePresence mode="popLayout">
-            {showEditAccessTooltip && (
-              <MotionPopoverContent
-                className="z-100 origin-top-right rounded border border-grey-02 bg-white px-3 py-2 shadow-button focus:outline-none"
-                side="bottom"
-                align="end"
-                sideOffset={20}
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                transition={{
-                  type: 'spring',
-                  duration: 0.15,
-                  bounce: 0,
-                }}
-              >
-                <h1 className="mb-1 text-button">You do not have edit access in this space</h1>
-                <p>Coming soon you will be able to request edit access in any space.</p>
-              </MotionPopoverContent>
-            )}
-          </AnimatePresence>
-        </Popover.Portal>
-      </Popover.Root>
+          <Popover.Portal>
+            <AnimatePresence mode="popLayout">
+              {showEditAccessTooltip && (
+                <MotionPopoverContent
+                  className="z-10 origin-top-right rounded bg-text text-white p-2 shadow-button focus:outline-none max-w-[164px]"
+                  side="bottom"
+                  align="end"
+                  alignOffset={-8}
+                  sideOffset={16}
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{
+                    type: 'spring',
+                    duration: 0.15,
+                    bounce: 0,
+                  }}
+                >
+                  <h1 className="text-breadcrumb text-center">You don’t have edit access in this space</h1>
+                  <Popover.Arrow />
+                </MotionPopoverContent>
+              )}
+            </AnimatePresence>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
     </button>
   );
 }
