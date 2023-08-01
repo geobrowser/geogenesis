@@ -15,7 +15,6 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 
 import { SquareButton } from '~/design-system/button';
-import { Spacer } from '~/design-system/spacer';
 
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
@@ -26,6 +25,7 @@ import { TableNode } from './table-node';
 
 interface Props {
   editable?: boolean;
+  placeholder?: string;
 }
 
 export const tiptapExtensions = [
@@ -68,7 +68,7 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ editable = true }: Props) {
+export const Editor = React.memo(function Editor({ placeholder, editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
 
   // @HACK: Janky but works for now.
@@ -97,7 +97,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
   );
 
   // We are in edit mode and there is no content.
-  if (!editable && blockIds.length === 0) return null;
+  if (!editable && blockIds.length === 0) return <p className="text-grey-04">{placeholder}</p>;
 
   if (!editor) return null;
 

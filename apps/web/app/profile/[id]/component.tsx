@@ -1,5 +1,9 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
+import * as React from 'react';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Triple } from '~/core/types';
 
@@ -19,16 +23,25 @@ interface Props {
 }
 
 export function ProfilePageComponent(props: Props) {
+  // @TODO: Use cookie for this
+  const [isOnboardingOpen, setIsOnboardingOpen] = React.useState(true);
   const renderEditablePage = useUserIsEditing(props.id);
 
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   return (
     <>
-      <Editor editable={renderEditablePage} />
-      <PersonalSpaceOnboarding />
+      <Editor editable={renderEditablePage} placeholder="There is no overview here yet." />
+      {isOnboardingOpen && (
+        <>
+          <Spacer height={40} />
+          <PersonalSpaceOnboarding onDismiss={() => setIsOnboardingOpen(false)} />
+        </>
+      )}
       <Spacer height={40} />
-      <Page id={props.id} spaceId={props.id} triples={props.triples} />
+      <motion.div key="entity-page-entity-attributes" layout>
+        <Page id={props.id} spaceId={props.id} triples={props.triples} />
+      </motion.div>
     </>
   );
 }
