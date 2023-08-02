@@ -40,14 +40,14 @@ export function ProfilePageComponent(props: Props) {
 
   return (
     <>
-      <Editor editable={renderEditablePage} placeholder="There is no overview here yet." />
       {/* @TODO: Only show onboarding if this space is the active user's personal space */}
       {isOnboardingOpen && (
         <>
-          <Spacer height={40} />
           <PersonalSpaceOnboarding onDismiss={() => setIsOnboardingOpen(false)} onDismissForever={onDismissForever} />
+          <Spacer height={40} />
         </>
       )}
+      <Editor editable={renderEditablePage} placeholder="There is no overview here yet." />
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
         <Page id={props.id} spaceId={props.id} triples={props.triples} />
