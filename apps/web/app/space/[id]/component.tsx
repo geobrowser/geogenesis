@@ -66,7 +66,6 @@ export function Component(props: Props) {
             triples={props.triples}
             showAccessControl
           />
-          <Spacer height={12} />
           <SpacePageMetadataHeader spaceId={props.spaceId} />
           <Spacer height={40} />
           <Editor editable={renderEditablePage} shouldHandleOwnSpacing />

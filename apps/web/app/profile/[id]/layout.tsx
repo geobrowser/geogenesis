@@ -43,7 +43,6 @@ export default async function ProfileLayout({ children, params }: Props) {
           triples={profile.triples}
           showAccessControl
         />
-        <Spacer height={12} />
 
         <SpacePageMetadataHeader spaceId={profile.spaceId} />
 

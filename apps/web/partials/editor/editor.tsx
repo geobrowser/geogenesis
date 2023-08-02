@@ -26,7 +26,7 @@ import { TableNode } from './table-node';
 
 interface Props {
   editable?: boolean;
-  placeholder?: string;
+  placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
 }
 
@@ -70,7 +70,11 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ placeholder, shouldHandleOwnSpacing, editable = true }: Props) {
+export const Editor = React.memo(function Editor({
+  placeholder = null,
+  shouldHandleOwnSpacing,
+  editable = true,
+}: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
 
   // @HACK: Janky but works for now.
@@ -99,7 +103,7 @@ export const Editor = React.memo(function Editor({ placeholder, shouldHandleOwnS
   );
 
   // We are in edit mode and there is no content.
-  if (!editable && blockIds.length === 0) return <p className="text-grey-04">{placeholder}</p>;
+  if (!editable && blockIds.length === 0) return placeholder;
 
   if (!editor) return null;
 

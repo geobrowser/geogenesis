@@ -104,6 +104,7 @@ export function EditableHeading({
               </div>
             )}
           </div>
+          <Spacer height={12} />
         </div>
       )}
     </div>
