@@ -25,13 +25,13 @@ export function EditableHeading({
   entityId,
   name: serverName,
   triples: serverTriples,
-  space = false,
+  showAccessControl = false,
 }: {
   spaceId: string;
   entityId: string;
   name: string;
   triples: Triple[];
-  space?: boolean;
+  showAccessControl?: boolean;
 }) {
   const { triples: localTriples, update, create, remove } = useEntityPageStore();
   const { editable } = useEditable();
@@ -71,7 +71,7 @@ export function EditableHeading({
 
   return (
     <div className="relative">
-      {!space && isEditing ? (
+      {!showAccessControl && isEditing ? (
         <div>
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
           {/*
