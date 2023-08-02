@@ -20,22 +20,32 @@ interface Props {
   spaceId: string;
   referencedByEntities: ReferencedByEntity[];
   triples: Triple[];
+  onDismissForever: () => Promise<void>;
+  hasDismissedOnboarding: boolean;
 }
 
 export function ProfilePageComponent(props: Props) {
-  // @TODO: Use cookie for this
-  const [isOnboardingOpen, setIsOnboardingOpen] = React.useState(true);
+  const [isOnboardingOpen, setIsOnboardingOpen] = React.useState(props.hasDismissedOnboarding);
   const renderEditablePage = useUserIsEditing(props.id);
 
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
+  const onDismissForever = () => {
+    // @TODO: Disabling cookie interactions for now until we get later on in the social
+    // work. This is so we can test onboarding feedback more frequently.
+    // props.onDismissForever();
+
+    setIsOnboardingOpen(false);
+  };
+
   return (
     <>
       <Editor editable={renderEditablePage} placeholder="There is no overview here yet." />
+      {/* @TODO: Only show onboarding if this space is the active user's personal space */}
       {isOnboardingOpen && (
         <>
           <Spacer height={40} />
-          <PersonalSpaceOnboarding onDismiss={() => setIsOnboardingOpen(false)} />
+          <PersonalSpaceOnboarding onDismiss={() => setIsOnboardingOpen(false)} onDismissForever={onDismissForever} />
         </>
       )}
       <Spacer height={40} />

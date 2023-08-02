@@ -9,9 +9,9 @@ const withBundleAnalyzer = analyzer({
 const nextConfig = {
   // reactStrictMode: true,
   swcMinify: true,
-  // experimental: {
-  //   runtime: 'experimental-edge',
-  // },
+  experimental: {
+    serverActions: true,
+  },
   images: {
     remotePatterns: [
       {

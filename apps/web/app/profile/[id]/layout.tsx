@@ -41,7 +41,7 @@ export default async function ProfileLayout({ children, params }: Props) {
           entityId={profile.id}
           name={profile.name}
           triples={profile.triples}
-          space
+          showAccessControl
         />
         <Spacer height={12} />
 

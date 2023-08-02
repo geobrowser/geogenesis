@@ -1,3 +1,9 @@
+import { cookies } from 'next/headers';
+
+import { Cookie } from '~/core/cookie';
+
+import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
+
 import { ProfilePageComponent } from './component';
 import { MOCK_PROFILE } from './mock';
 
@@ -9,8 +15,15 @@ interface Props {
 
 export default async function ProfilePage({ params }: Props) {
   const profile = await getProfilePage({ params });
+  const hasDismissedOnboarding = cookies().get(Cookie.HAS_DISMISSED_PERSONAL_SPACE_ONBOARDING_KEY)?.value === 'true';
 
-  return <ProfilePageComponent {...profile} />;
+  return (
+    <ProfilePageComponent
+      {...profile}
+      onDismissForever={setOnboardingDismissedCookie}
+      hasDismissedOnboarding={hasDismissedOnboarding}
+    />
+  );
 }
 
 async function getProfilePage({ params }: Props) {
