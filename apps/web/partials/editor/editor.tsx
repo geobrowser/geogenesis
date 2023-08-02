@@ -103,7 +103,7 @@ export const Editor = React.memo(function Editor({
   );
 
   // We are in edit mode and there is no content.
-  if (!editable && blockIds.length === 0) return placeholder;
+  if (!editable && blockIds.length === 0) return <>{placeholder}</>;
 
   if (!editor) return null;
 
