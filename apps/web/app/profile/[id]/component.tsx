@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function ProfilePageComponent(props: Props) {
-  const [isOnboardingOpen, setIsOnboardingOpen] = React.useState(props.hasDismissedOnboarding);
+  const [isOnboardingOpen, setIsOnboardingOpen] = React.useState(!props.hasDismissedOnboarding);
   const renderEditablePage = useUserIsEditing(props.id);
 
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
