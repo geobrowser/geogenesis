@@ -49,7 +49,11 @@ export function ProfilePageComponent(props: Props) {
       )}
       <Editor
         editable={renderEditablePage}
-        placeholder={<motion.p layout="position">There is no overview here yet.</motion.p>}
+        placeholder={
+          <motion.p layout="position" className="text-grey-04 text-body">
+            There is no overview here yet.
+          </motion.p>
+        }
       />
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">

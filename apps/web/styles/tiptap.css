@@ -1,3 +1,11 @@
+.ProseMirror {
+  padding-bottom: 0;
+}
+
+.ProseMirror > * {
+  margin-bottom: 0px !important;
+}
+
 .ProseMirror .tiptap-block {
   position: relative;
 }
@@ -37,6 +45,7 @@
   float: left;
   height: 0;
   pointer-events: none;
+  margin-bottom: 0;
 }
 
 .ProseMirror:focus {
