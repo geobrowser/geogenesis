@@ -15,6 +15,7 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 
 import { SquareButton } from '~/design-system/button';
+import { Spacer } from '~/design-system/spacer';
 
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
@@ -26,6 +27,7 @@ import { TableNode } from './table-node';
 interface Props {
   editable?: boolean;
   placeholder?: string;
+  shouldHandleOwnSpacing?: boolean;
 }
 
 export const tiptapExtensions = [
@@ -68,7 +70,7 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ placeholder, editable = true }: Props) {
+export const Editor = React.memo(function Editor({ placeholder, shouldHandleOwnSpacing, editable = true }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
 
   // @HACK: Janky but works for now.
@@ -111,6 +113,7 @@ export const Editor = React.memo(function Editor({ placeholder, editable = true 
           <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
+      {shouldHandleOwnSpacing && <Spacer height={60} />}
     </div>
   );
 });

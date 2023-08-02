@@ -39,7 +39,7 @@ export function ProfilePageComponent(props: Props) {
         </>
       )}
       <Spacer height={40} />
-      <motion.div key="entity-page-entity-attributes" layout>
+      <motion.div key="entity-page-entity-attributes" layout="position">
         <Page id={props.id} spaceId={props.id} triples={props.triples} />
       </motion.div>
     </>
