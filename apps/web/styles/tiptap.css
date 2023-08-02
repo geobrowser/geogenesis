@@ -3,7 +3,7 @@
 }
 
 .ProseMirror > * {
-  margin-bottom: 0px !important;
+  margin-bottom: 0 !important; /* Override Tiptap's margin-bottom */
 }
 
 .ProseMirror .tiptap-block {
