@@ -66,7 +66,9 @@ export function NavbarActions({ spaceId }: Props) {
       >
         <AvatarMenuItem disabled>
           <div className="flex items-center gap-2 grayscale">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+            <div className="relative rounded-full overflow-hidden w-[16px] h-[16px]">
+              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+            </div>
             <p className="text-button">Personal Space</p>
           </div>
         </AvatarMenuItem>
