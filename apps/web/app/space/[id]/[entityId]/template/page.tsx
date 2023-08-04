@@ -19,8 +19,6 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     id: params.entityId,
   });
 
-  console.log(types);
-
   if (types.includes(SYSTEM_IDS.PERSON_TYPE)) return <div>Hello Person</div>;
 
   return <div>Hello world</div>;
