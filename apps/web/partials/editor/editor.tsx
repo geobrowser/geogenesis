@@ -26,6 +26,8 @@ import { TableNode } from './table-node';
 
 interface Props {
   editable?: boolean;
+  placeholder?: React.ReactNode;
+  shouldHandleOwnSpacing?: boolean;
 }
 
 export const tiptapExtensions = [
@@ -68,7 +70,11 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ editable = true }: Props) {
+export const Editor = React.memo(function Editor({
+  placeholder = null,
+  shouldHandleOwnSpacing,
+  editable = true,
+}: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
 
   // @HACK: Janky but works for now.
@@ -83,7 +89,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
     {
       extensions: [...tiptapExtensions, createIdExtension(spaceId)],
       editable: true,
-      content: editorJson,
+      content: hasHydrated ? editorJson : undefined,
       onBlur({ editor }) {
         // Responsible for converting all editor blocks to triples
         // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
@@ -97,7 +103,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
   );
 
   // We are in edit mode and there is no content.
-  if (!editable && blockIds.length === 0) return null;
+  if (!editable && blockIds.length === 0) return <>{placeholder}</>;
 
   if (!editor) return null;
 
@@ -111,12 +117,7 @@ export const Editor = React.memo(function Editor({ editable = true }: Props) {
           <SquareButton onClick={openCommandMenu} icon="plus" />
         </div>
       </FloatingMenu>
-      {/*
-        Right now this component adds its own space below it. It's only used on the
-        entity page so this styling is universal. Eventually we want the callsite
-        to provide layout styling and not the component itself.
-       */}
-      <Spacer height={60} />
+      {shouldHandleOwnSpacing && <Spacer height={60} />}
     </div>
   );
 });

@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 
-import { Space, Triple } from '~/core/types';
+import { Space, Triple, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { Subgraph } from '..';
@@ -19,6 +19,23 @@ export const makeStubTriple = (name: string, entityId?: string): Triple => {
       value: name,
       id: `s~${name}`,
     },
+    space: 's',
+  };
+};
+
+export const makeStubTripleWithAttributeAndValue = (
+  entityName: string,
+  entityId: string,
+  attribute: { id: string; name: string },
+  value: Value
+): Triple => {
+  return {
+    id: entityId,
+    entityId: entityId,
+    entityName,
+    attributeId: attribute.id,
+    attributeName: attribute.name,
+    value,
     space: 's',
   };
 };

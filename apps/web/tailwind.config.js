@@ -165,17 +165,17 @@ module.exports = {
           },
         ],
         quote: [
-          '0.9375rem',
+          '1.0625rem',
           {
             lineHeight: '1.375rem',
-            fontWeight: '700',
+            fontWeight: '400',
           },
         ],
         quoteMedium: [
-          '0.9375rem',
+          '1.0625rem',
           {
             lineHeight: '1.375rem',
-            fontWeight: '500',
+            fontWeight: '600',
           },
         ],
         listItem: [

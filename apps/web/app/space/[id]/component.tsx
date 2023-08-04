@@ -8,10 +8,15 @@ import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { Space, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { Spacer } from '~/design-system/spacer';
+
+import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { EntityPageReferencedBy } from '~/partials/entity-page/entity-page-referenced-by';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
@@ -59,9 +64,14 @@ export function Component(props: Props) {
             entityId={props.id}
             name={props.name}
             triples={props.triples}
-            space={true}
+            showAccessControl
           />
+          <SpacePageMetadataHeader spaceId={props.spaceId} />
+          <Spacer height={40} />
+          <Editor editable={renderEditablePage} shouldHandleOwnSpacing />
           <Page {...props} />
+          <Spacer height={40} />
+          <EntityPageReferencedBy referencedByEntities={props.referencedByEntities} name={props.name} />
         </EntityPageContentContainer>
       </EntityStoreProvider>
     </TypesStoreProvider>
