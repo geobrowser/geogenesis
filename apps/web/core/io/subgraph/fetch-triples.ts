@@ -98,7 +98,7 @@ export async function fetchTriples(options: FetchTriplesOptions) {
               options.filter
             }
             
-            queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}1
+            queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}
             `,
             error.message
           );
