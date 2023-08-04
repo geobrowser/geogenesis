@@ -131,6 +131,9 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
 
   const maybePerson = await fetchEntity({ id: personEntityId, endpoint: options.endpoint });
 
+  const coverTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
+  const coverUrl = coverTriple?.value.type === 'image' ? coverTriple.value.value : null;
+
   const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
   const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
 
@@ -139,7 +142,8 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
     {
       id: maybePerson?.id ?? '',
       name: maybePerson?.name ?? null,
-      avatarUrl: avatarUrl,
+      avatarUrl,
+      coverUrl,
     },
   ];
 }

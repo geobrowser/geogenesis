@@ -20,22 +20,18 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { Editor } from '~/partials/editor/editor';
-
-import { EntityPageMetadataHeader, SpacePageMetadataHeader } from './entity-page-metadata-header';
-
 export function EditableHeading({
   spaceId,
   entityId,
   name: serverName,
   triples: serverTriples,
-  space = false,
+  showAccessControl = false,
 }: {
   spaceId: string;
   entityId: string;
   name: string;
   triples: Triple[];
-  space?: boolean;
+  showAccessControl?: boolean;
 }) {
   const { triples: localTriples, update, create, remove } = useEntityPageStore();
   const { editable } = useEditable();
@@ -49,7 +45,6 @@ export function EditableHeading({
   // Default to the server name if there is no local name only when in browse mode.
   // Otherwise leave it empty when in edit mode.
   const name = isEditing ? Entity.name(triples) ?? '' : serverName;
-  const types = Entity.types(triples) ?? [];
 
   const send = useEditEvents({
     context: {
@@ -76,7 +71,7 @@ export function EditableHeading({
 
   return (
     <div className="relative">
-      {!space && isEditing ? (
+      {!showAccessControl && isEditing ? (
         <div>
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
           {/*
@@ -112,13 +107,6 @@ export function EditableHeading({
           <Spacer height={12} />
         </div>
       )}
-      {!space ? (
-        <EntityPageMetadataHeader id={entityId} spaceId={spaceId} types={types} />
-      ) : (
-        <SpacePageMetadataHeader spaceId={spaceId} />
-      )}
-      <Spacer height={40} />
-      <Editor editable={isEditing} />
     </div>
   );
 }

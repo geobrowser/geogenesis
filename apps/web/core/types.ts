@@ -179,6 +179,7 @@ export type Profile = {
   id: string;
   name: string | null;
   avatarUrl: string | null;
+  coverUrl: string | null;
 };
 
 export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';

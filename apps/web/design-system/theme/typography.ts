@@ -68,7 +68,7 @@ const baseTypography = {
     },
     quote: {
       color: colors.light.text,
-      fontSize: '0.9375rem',
+      fontSize: '1.0625rem',
       lineHeight: '1.375rem',
       fontWeight: WEIGHTS.bold,
     },
