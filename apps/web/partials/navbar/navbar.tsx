@@ -15,7 +15,7 @@ import { Spacer } from '~/design-system/spacer';
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
-import { MOCK_PROFILE } from '~/app/profile/[id]/mock';
+import { MOCK_PROFILE } from '~/app/space/[id]/[entityId]/template/mock';
 
 interface Props {
   onSearchClick: () => void;

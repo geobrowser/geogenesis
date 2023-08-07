@@ -5,6 +5,9 @@ import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
 
+import EntityServerPage from '../page';
+import { ProfileServerPage } from './profile-server-page';
+
 interface Props {
   params: { id: string; entityId: string };
   searchParams: ServerSideEnvParams;
@@ -19,7 +22,9 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     id: params.entityId,
   });
 
-  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) return <div>Hello Person</div>;
+  // @ts-expect-error async JSX function
+  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) return <ProfileServerPage params={params} />;
 
-  return <div>Hello world</div>;
+  // @ts-expect-error async JSX function
+  return <EntityServerPage params={params} searchParams={searchParams} />;
 }

@@ -17,7 +17,10 @@ import { PersonalSpaceOnboarding } from '~/partials/profile/personal-space-onboa
 
 interface Props {
   id: string;
+  name: string | null;
   spaceId: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
   referencedByEntities: ReferencedByEntity[];
   triples: Triple[];
   onDismissForever: () => Promise<void>;
