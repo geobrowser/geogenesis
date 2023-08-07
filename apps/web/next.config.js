@@ -11,6 +11,7 @@ const nextConfig = {
   swcMinify: true,
   experimental: {
     serverActions: true,
+    webpackBuildWorker: true,
   },
   images: {
     remotePatterns: [
