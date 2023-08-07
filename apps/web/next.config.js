@@ -10,7 +10,7 @@ const nextConfig = {
   // reactStrictMode: true,
   swcMinify: true,
   experimental: {
-    // serverActions: true,
+    serverActions: true,
     webpackBuildWorker: true,
   },
   images: {
