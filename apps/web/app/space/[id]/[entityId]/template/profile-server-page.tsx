@@ -9,7 +9,6 @@ import { Entity } from '~/core/utils/entity';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
 
-import { MOCK_PROFILE } from './mock';
 import { ProfilePageComponent } from './profile-client-page';
 
 export const runtime = 'edge';
@@ -19,7 +18,7 @@ interface Props {
   searchParams: ServerSideEnvParams;
 }
 
-export async function ProfileServerPage({ params, searchParams }: Props) {
+export async function ProfileServerPage({ params }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams({}, env);
 

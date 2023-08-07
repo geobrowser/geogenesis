@@ -19,8 +19,6 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 
-import { MOCK_PROFILE } from './mock';
-
 export const runtime = 'edge';
 
 const TABS = ['Overview', 'Work', 'Education', 'Activity'] as const;
