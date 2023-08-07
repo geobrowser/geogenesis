@@ -7,8 +7,8 @@ import { Entity as IEntity, ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { ReferencedByEntity } from '~/partials/entity-page/types';
-import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
 
+// import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
 import { ProfilePageComponent } from './profile-client-page';
 
 export const runtime = 'edge';
@@ -27,14 +27,7 @@ export async function ProfileServerPage({ params }: Props) {
   // work. This is so we can test onboarding feedback more frequently.
   // const hasDismissedOnboarding = cookies().get(Cookie.HAS_DISMISSED_PERSONAL_SPACE_ONBOARDING_KEY)?.value === 'true';
 
-  return (
-    <ProfilePageComponent
-      {...profile}
-      spaceId={params.id}
-      onDismissForever={setOnboardingDismissedCookie}
-      hasDismissedOnboarding={false}
-    />
-  );
+  return <ProfilePageComponent {...profile} spaceId={params.id} hasDismissedOnboarding={false} />;
 }
 
 async function getProfilePage(

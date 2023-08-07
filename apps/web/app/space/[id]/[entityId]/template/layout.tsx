@@ -7,9 +7,11 @@ import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Params } from '~/core/params';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
-import { Entity as IEntity } from '~/core/types';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
+import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
@@ -18,6 +20,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 export const runtime = 'edge';
 
@@ -39,62 +42,73 @@ export default async function ProfileLayout({ children, params }: Props) {
     id: params.entityId,
   });
 
-  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    const profile = await fetchProfile(params.entityId, config.subgraph);
-
-    return (
-      <EntityStoreProvider
-        id={profile.id}
-        spaceId={params.id}
-        initialTriples={[]}
-        initialSchemaTriples={[]}
-        initialBlockIdsTriple={null}
-        initialBlockTriples={[]}
-      >
-        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-        <EntityPageContentContainer>
-          <EditableHeading
-            spaceId={params.id}
-            entityId={profile.id}
-            name={profile.name ?? profile.id}
-            triples={profile.triples}
-            showAccessControl
-          />
-          <SpacePageMetadataHeader spaceId={params.id} />
-          <Spacer height={40} />
-          <TabGroup
-            tabs={TABS.map(label => {
-              const href =
-                label === 'Overview'
-                  ? // @TODO: These links should be updated when we integrate templates in production for everyone
-                    `${NavUtils.toEntity(params.id, params.entityId)}/template`
-                  : `${NavUtils.toEntity(params.id, params.entityId)}/template/${label.toLowerCase()}`;
-              return {
-                href,
-                label,
-              };
-            })}
-          />
-          <Spacer height={20} />
-          {children}
-        </EntityPageContentContainer>
-      </EntityStoreProvider>
-    );
+  if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    return <div>{children}</div>;
   }
 
-  return <div>{children}</div>;
+  const profile = await getProfilePage(params.entityId, config.subgraph);
+
+  return (
+    <EntityStoreProvider
+      id={profile.id}
+      spaceId={params.id}
+      initialTriples={profile.triples}
+      initialSchemaTriples={[]}
+      initialBlockIdsTriple={profile.blockIdsTriple}
+      initialBlockTriples={profile.blockTriples}
+    >
+      <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+      <EntityPageContentContainer>
+        <EditableHeading
+          spaceId={params.id}
+          entityId={profile.id}
+          name={profile.name ?? profile.id}
+          triples={profile.triples}
+          showAccessControl
+        />
+        <SpacePageMetadataHeader spaceId={params.id} />
+        <Spacer height={40} />
+        <TabGroup
+          tabs={TABS.map(label => {
+            const href =
+              label === 'Overview'
+                ? // @TODO: These links should be updated when we integrate templates in production for everyone
+                  `${NavUtils.toEntity(params.id, params.entityId)}/template`
+                : `${NavUtils.toEntity(params.id, params.entityId)}/template/${label.toLowerCase()}`;
+            return {
+              href,
+              label,
+            };
+          })}
+        />
+        <Spacer height={20} />
+        {children}
+      </EntityPageContentContainer>
+    </EntityStoreProvider>
+  );
 }
 
-async function fetchProfile(
+async function getProfilePage(
   entityId: string,
   endpoint: string
 ): Promise<
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;
+    referencedByEntities: ReferencedByEntity[];
+    blockTriples: Triple[];
+    blockIdsTriple: Triple | null;
   }
 > {
-  const person = await Subgraph.fetchEntity({ id: entityId, endpoint });
+  const [person, referencesPerson, spaces] = await Promise.all([
+    Subgraph.fetchEntity({ id: entityId, endpoint }),
+    Subgraph.fetchEntities({
+      endpoint,
+      query: '',
+      filter: [{ field: 'linked-to', value: entityId }],
+    }),
+    Subgraph.fetchSpaces({ endpoint }),
+  ]);
 
   // @TODO: Real error handling
   if (!person) {
@@ -106,12 +120,53 @@ async function fetchProfile(
       triples: [],
       types: [],
       description: null,
+      referencedByEntities: [],
+      blockTriples: [],
+      blockIdsTriple: null,
     };
   }
+
+  const referencedByEntities: ReferencedByEntity[] = referencesPerson.map(e => {
+    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
+    const space = spaces.find(s => s.id === spaceId);
+    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+
+    return {
+      id: e.id,
+      name: e.name,
+      types: e.types,
+      space: {
+        id: spaceId,
+        name: spaceName,
+        image: spaceImage,
+      },
+    };
+  });
+
+  const blockIdsTriple = person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
+  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+
+  const blockTriples = (
+    await Promise.all(
+      blockIds.map(blockId => {
+        return Subgraph.fetchTriples({
+          endpoint,
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [{ field: 'entity-id', value: blockId }],
+        });
+      })
+    )
+  ).flatMap(triples => triples);
 
   return {
     ...person,
     avatarUrl: Entity.avatar(person.triples),
     coverUrl: Entity.cover(person.triples),
+    referencedByEntities,
+    blockTriples,
+    blockIdsTriple,
   };
 }
