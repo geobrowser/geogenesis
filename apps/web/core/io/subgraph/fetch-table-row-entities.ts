@@ -51,7 +51,7 @@ export interface FetchTableRowEntitiesOptions {
   first?: number;
   skip?: number;
   filter: string; // this is a graphql query string
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -64,7 +64,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -74,6 +74,11 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
       const error = resultOrError.left;
 
       switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${

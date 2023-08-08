@@ -3,6 +3,7 @@
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, S } from '@mobily/ts-belt';
+import { Effect, Either } from 'effect';
 
 import { useMemo } from 'react';
 
@@ -20,7 +21,7 @@ interface EntityAutocompleteOptions {
   spaceId?: string;
   ActionsStore: ActionsStore;
   LocalStore: LocalStore;
-  Subgraph: Subgraph.ISubgraph;
+  subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
   filter?: FilterState;
   allowedTypes?: string[];
@@ -33,11 +34,11 @@ class EntityAutocomplete {
   abortController: AbortController = new AbortController();
   mergedDataSource: Merged;
 
-  constructor({ ActionsStore, LocalStore, allowedTypes, Subgraph, config, filter = [] }: EntityAutocompleteOptions) {
+  constructor({ ActionsStore, LocalStore, allowedTypes, subgraph, config, filter = [] }: EntityAutocompleteOptions) {
     this.mergedDataSource = new Merged({
       store: ActionsStore,
       localStore: LocalStore,
-      subgraph: Subgraph,
+      subgraph,
     });
 
     this.results$ = makeOptionalComputed(
@@ -46,31 +47,43 @@ class EntityAutocomplete {
         this.abortController.abort();
         this.abortController = new AbortController();
 
-        try {
-          const query = this.query$.get();
+        const query = this.query$.get();
 
-          if (query.length === 0) return [];
+        if (query.length === 0) return [];
 
-          this.loading$.set(true);
-          const entities = await this.mergedDataSource.fetchEntities({
-            endpoint: config.subgraph,
-            query,
-            abortController: this.abortController,
-            filter,
-            typeIds: allowedTypes,
-          });
+        this.loading$.set(true);
 
-          this.loading$.set(false);
-          return entities;
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') {
-            // eslint-disable-next-line @typescript-eslint/no-empty-function
-            return new Promise(() => {});
+        const merged = this.mergedDataSource;
+
+        const fetchEntitiesEffect = Effect.either(
+          Effect.tryPromiseInterrupt({
+            try: () =>
+              merged.fetchEntities({
+                endpoint: config.subgraph,
+                query,
+                signal: this.abortController.signal,
+                filter,
+                typeIds: allowedTypes,
+              }),
+            catch: () => new Subgraph.Errors.AbortError(),
+          })
+        );
+
+        const resultOrError = await Effect.runPromise(fetchEntitiesEffect);
+
+        if (Either.isLeft(resultOrError)) {
+          const error = resultOrError.left;
+
+          switch (error._tag) {
+            case 'AbortError':
+              return [];
+            default:
+              throw error;
           }
-
-          console.log("Couldn't fetch entities", e);
-          return [];
         }
+
+        this.loading$.set(false);
+        return resultOrError.right;
       })
     );
   }
@@ -97,7 +110,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({
       ActionsStore,
-      Subgraph: subgraph,
+      subgraph,
       config,
       LocalStore,
       filter: memoizedFilter,

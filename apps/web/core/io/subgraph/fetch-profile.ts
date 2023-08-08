@@ -11,7 +11,7 @@ import { NetworkEntity } from './network-local-mapping';
 export interface FetchProfileOptions {
   endpoint: string;
   address: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -64,7 +64,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchProfileQuery(options.address),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -74,6 +74,11 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
       const error = resultOrError.left;
 
       switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${

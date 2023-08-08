@@ -65,7 +65,9 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
           </div>
           <ResizableContainer duration={0.15}>
             <ResultsList>
-              {autocomplete.isEmpty && <Command.Empty>No results found for {autocomplete.query}</Command.Empty>}
+              {autocomplete.isEmpty && (
+                <Command.Empty className="px-2 pb-2">No results found for {autocomplete.query}</Command.Empty>
+              )}
               {autocomplete.results.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}

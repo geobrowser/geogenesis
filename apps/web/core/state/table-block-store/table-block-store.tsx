@@ -238,7 +238,7 @@ export class TableBlockStore {
                 fetchTriples: subgraph.fetchTriples,
               },
               params,
-              abortController: this.abortController,
+              signal: this.abortController.signal,
             }),
         });
 
@@ -266,7 +266,7 @@ export class TableBlockStore {
             this.Merged.rows(
               {
                 params,
-                abortController: this.abortController,
+                signal: this.abortController.signal,
                 api: {
                   fetchTableRowEntities: subgraph.fetchTableRowEntities,
                 },

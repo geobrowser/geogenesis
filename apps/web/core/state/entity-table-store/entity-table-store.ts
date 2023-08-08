@@ -156,7 +156,7 @@ export class EntityTableStore implements IEntityTableStore {
               fetchTriples: subgraph.fetchTriples,
             },
             params,
-            abortController: this.abortController,
+            signal: this.abortController.signal,
           });
 
           const serverRows = await fetchRows({
@@ -164,7 +164,7 @@ export class EntityTableStore implements IEntityTableStore {
               fetchTableRowEntities: subgraph.fetchTableRowEntities,
             },
             params,
-            abortController: this.abortController,
+            signal: this.abortController.signal,
           });
 
           this.hydrated$.set(true);

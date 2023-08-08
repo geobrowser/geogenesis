@@ -45,7 +45,7 @@ export interface FetchTriplesOptions {
   skip: number;
   first: number;
   filter: FilterState;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -80,7 +80,7 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchTriplesQuery({ where, skip: options.skip, first: options.first }),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -90,6 +90,11 @@ export async function fetchTriples(options: FetchTriplesOptions) {
       const error = resultOrError.left;
 
       switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${

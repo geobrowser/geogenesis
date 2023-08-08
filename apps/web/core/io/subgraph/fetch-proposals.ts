@@ -55,7 +55,7 @@ const getFetchProposalsQuery = (spaceId: string, skip: number) => `query {
 export interface FetchProposalsOptions {
   endpoint: string;
   spaceId: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
   page?: number;
 }
 
@@ -66,7 +66,7 @@ interface NetworkResult {
 export async function fetchProposals({
   endpoint,
   spaceId,
-  abortController,
+  signal,
   page = 0,
 }: FetchProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
@@ -74,7 +74,7 @@ export async function fetchProposals({
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
     query: getFetchProposalsQuery(spaceId, page * 10),
-    abortController: abortController,
+    signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -84,6 +84,11 @@ export async function fetchProposals({
       const error = resultOrError.left;
 
       switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}

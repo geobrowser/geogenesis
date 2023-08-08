@@ -13,10 +13,10 @@ interface FetchColumnsOptions {
     skip: number;
     first: number;
   };
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
-export async function fetchColumns({ params, api, abortController }: FetchColumnsOptions) {
+export async function fetchColumns({ params, api, signal }: FetchColumnsOptions) {
   if (params.typeIds?.length === 0) {
     return [];
   }
@@ -24,7 +24,7 @@ export async function fetchColumns({ params, api, abortController }: FetchColumn
   const columnsTriples = await api.fetchTriples({
     endpoint: params.endpoint,
     query: '',
-    abortController,
+    signal,
     first: DEFAULT_PAGE_SIZE,
     skip: 0,
     filter: [

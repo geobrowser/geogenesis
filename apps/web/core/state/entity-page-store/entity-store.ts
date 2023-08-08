@@ -372,7 +372,7 @@ export class EntityStore implements IEntityStore {
             endpoint: this.config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
-            abortController: this.abortController,
+            signal: this.abortController.signal,
             skip: 0,
             filter: [
               {
@@ -397,7 +397,7 @@ export class EntityStore implements IEntityStore {
             query: '',
             first: DEFAULT_PAGE_SIZE,
             skip: 0,
-            abortController: this.abortController,
+            signal: this.abortController.signal,
             filter: [
               {
                 field: 'entity-id',
