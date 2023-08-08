@@ -1,63 +1,31 @@
-'use client';
-
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import Image from 'next/legacy/image';
-import Link from 'next/link';
-
-import * as React from 'react';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Triple } from '~/core/types';
-import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
+import { NavUtils, groupBy } from '~/core/utils/utils';
 
-import { SmallButton } from '~/design-system/button';
 import { LinkableChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
-import { Spacer } from '~/design-system/spacer';
-import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 import { sortEntityPageTriples } from './entity-page-utils';
-import { ReferencedByEntity } from './types';
 
 interface Props {
   triples: Triple[];
   id: string;
-  name: string;
-  referencedByEntities: ReferencedByEntity[];
 }
 
-export function ReadableEntityPage({ triples, id, name, referencedByEntities }: Props) {
+export function ReadableEntityPage({ triples, id }: Props) {
   const { schemaTriples } = useEntityPageStore();
 
   const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
 
   return (
-    <>
-      <div className="rounded border border-grey-02 shadow-button">
-        <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes entityId={id} triples={sortedTriples} />
-        </div>
-      </div>
-      <Spacer height={40} />
-      <Text as="h2" variant="mediumTitle">
-        Referenced by
-      </Text>
-      <div className="flex flex-col flex-wrap">
-        {referencedByEntities.length === 0 ? (
-          <>
-            <Spacer height={12} />
-            <Text color="grey-04">There are no entities referencing {name}.</Text>
-          </>
-        ) : (
-          <ReferencedByEntities referencedByEntities={referencedByEntities} />
-        )}
-      </div>
-    </>
+    <div className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">
+      <EntityAttributes entityId={id} triples={sortedTriples} />
+    </div>
   );
 }
 
@@ -112,100 +80,5 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
         );
       })}
     </>
-  );
-}
-
-type ReferencedByEntitiesProps = {
-  referencedByEntities: Array<ReferencedByEntity>;
-};
-
-function ReferencedByEntities({ referencedByEntities }: ReferencedByEntitiesProps) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const count = referencedByEntities.length;
-
-  if (count <= 3)
-    return (
-      <>
-        <Spacer height={20} />
-        <div className="flex flex-col gap-6">
-          {referencedByEntities.map(referencedByEntity => (
-            <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-          ))}
-        </div>
-      </>
-    );
-
-  const firstReferencedByEntities = referencedByEntities.slice(0, 3);
-  const lastReferencedByEntities = referencedByEntities.slice(3);
-
-  return (
-    <>
-      <Spacer height={20} />
-      <div className="flex flex-col gap-6">
-        {firstReferencedByEntities.map(referencedByEntity => (
-          <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-        ))}
-        {!isExpanded ? (
-          <div>
-            <SmallButton variant="secondary" onClick={() => setIsExpanded(true)}>
-              Show more
-            </SmallButton>
-          </div>
-        ) : (
-          <>
-            {lastReferencedByEntities.map(referencedByEntity => (
-              <ReferencedByEntityItem key={referencedByEntity.id} referencedByEntity={referencedByEntity} />
-            ))}
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
-function ReferencedByEntityItem({ referencedByEntity }: { referencedByEntity: ReferencedByEntity }) {
-  const [isHovered, hover] = React.useState(false);
-
-  return (
-    <Link
-      href={NavUtils.toEntity(referencedByEntity.space.id, referencedByEntity.id)}
-      onMouseEnter={() => hover(true)}
-      onMouseLeave={() => hover(false)}
-      className="relative"
-    >
-      <div className="flex items-center justify-between">
-        <Text as="h3" variant="metadataMedium">
-          {referencedByEntity.name}
-        </Text>
-        {isHovered && (
-          <div className="absolute right-0 animate-fade-in transition-opacity duration-100">
-            <RightArrowDiagonal color="grey-04" />
-          </div>
-        )}
-      </div>
-      <Spacer height={8} />
-      <div className="flex items-center">
-        <div className="flex items-center gap-1">
-          {referencedByEntity.space.image && (
-            <span className="relative h-3 w-3 overflow-hidden rounded-xs">
-              <Image layout="fill" objectFit="cover" src={getImagePath(referencedByEntity.space.image)} alt="" />
-            </span>
-          )}
-          <Text as="p" variant="footnoteMedium">
-            {referencedByEntity.space.name}
-          </Text>
-        </div>
-        <Spacer width={8} />
-        <span className="-rotate-90">
-          <ChevronDownSmall />
-        </span>
-        <Spacer width={8} />
-        <div className="flex items-center gap-1">
-          {referencedByEntity.types.map(type => (
-            <Tag key={type.id}>{type.name}</Tag>
-          ))}
-        </div>
-      </div>
-    </Link>
   );
 }

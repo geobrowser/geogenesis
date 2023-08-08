@@ -64,8 +64,8 @@ export async function publish({
     cids.push(`ipfs://${cidString}`);
   }
 
-  let maxFee = 400;
-  let maxPriorityFee = 80;
+  let maxFee = 70;
+  let maxPriorityFee = 30;
 
   // Sometimes responses from the gas station fail or the API values/endpoint changes. We provide
   // fallback values in case there are issues fetching the realtime estimates.

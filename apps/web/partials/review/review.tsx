@@ -1049,9 +1049,9 @@ function parseMarkdown(markdownString: string) {
 }
 
 function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return (
+  return getImagePath(
     spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-    'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
+      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
   );
 }
 

@@ -147,7 +147,7 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
       </div>
       <div className="inline-flex items-center gap-4">
         <HistoryPanel>
-          {proposals?.pages?.length === 0 && <HistoryEmpty />}
+          {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
               {group.map((p, index) => (

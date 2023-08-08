@@ -17,6 +17,8 @@ import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 import { Component } from './component';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
   searchParams: ServerSideEnvParams;
