@@ -1,25 +1,11 @@
 import { Effect } from 'effect';
 
+import { AbortError, GraphqlRuntimeError, HttpError, JsonParseError } from './errors';
+
 interface GraphqlConfig {
   endpoint: string;
   query: string;
-  abortController?: AbortController;
-}
-
-class HttpError {
-  readonly _tag = 'HttpError';
-}
-
-class JsonParseError {
-  readonly _tag = 'JsonParseError';
-}
-
-class GraphqlRuntimeError extends Error {
-  readonly _tag = 'GraphqlRuntimeError';
-}
-
-export class AbortError {
-  readonly _tag = 'AbortError';
+  signal?: AbortController['signal'];
 }
 
 interface GraphqlResponse<T> {
@@ -27,7 +13,7 @@ interface GraphqlResponse<T> {
   errors: unknown[];
 }
 
-export function graphql<T>({ endpoint, query, abortController }: GraphqlConfig) {
+export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
   const graphqlFetchEffect = Effect.tryPromise({
     try: () =>
       fetch(endpoint, {
@@ -36,7 +22,7 @@ export function graphql<T>({ endpoint, query, abortController }: GraphqlConfig) 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query }),
-        signal: abortController?.signal,
+        signal,
       }),
     catch: e => {
       if (e instanceof Error && e.name === 'AbortError') {

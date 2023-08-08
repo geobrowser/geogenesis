@@ -38,7 +38,7 @@ const getFetchSpacesQuery = () => `query {
 
 export interface FetchSpacesOptions {
   endpoint: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -62,7 +62,7 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchSpacesQuery(),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

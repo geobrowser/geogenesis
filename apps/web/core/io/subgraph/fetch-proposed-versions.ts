@@ -48,7 +48,7 @@ export interface FetchProposedVersionsOptions {
   entityId: string;
   spaceId: string;
   page?: number;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -59,7 +59,7 @@ export async function fetchProposedVersions({
   endpoint,
   entityId,
   spaceId,
-  abortController,
+  signal,
   page = 0,
 }: FetchProposedVersionsOptions) {
   const queryId = uuid();
@@ -67,7 +67,7 @@ export async function fetchProposedVersions({
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
     query: getProposedVersionsQuery(entityId, page * 10),
-    abortController: abortController,
+    signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

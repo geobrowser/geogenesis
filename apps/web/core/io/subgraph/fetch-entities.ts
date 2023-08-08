@@ -115,7 +115,7 @@ export interface FetchEntitiesOptions {
   first?: number;
   skip?: number;
   filter: FilterState;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -147,7 +147,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   // @TODO: Catch by known tag and unexpected errors

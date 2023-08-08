@@ -44,7 +44,7 @@ export interface FetchEntityOptions {
   endpoint: string;
   id: string;
   blockNumber?: number;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -57,7 +57,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchEntityQuery(options.id, options.blockNumber),
-    abortController: options.abortController,
+    signal: options.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

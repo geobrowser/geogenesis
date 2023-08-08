@@ -45,7 +45,7 @@ export interface FetchTriplesOptions {
   skip: number;
   first: number;
   filter: FilterState;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -80,7 +80,7 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchTriplesQuery({ where, skip: options.skip, first: options.first }),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

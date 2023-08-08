@@ -18,7 +18,7 @@ export async function fetchRows({ params, abortController, api }: FetchRowsOptio
 
   return await api.fetchTableRowEntities({
     endpoint: params.endpoint,
-    abortController,
+    signal: abortController?.signal,
     first: params.first,
     skip: params.skip,
     typeIds: params.typeIds,

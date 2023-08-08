@@ -46,7 +46,7 @@ export const getProposedVersionQuery = (id: string) => `query {
 export interface FetchProposedVersionOptions {
   endpoint: string;
   id: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -56,14 +56,14 @@ interface NetworkResult {
 export async function fetchProposedVersion({
   endpoint,
   id,
-  abortController,
+  signal,
 }: FetchProposedVersionOptions): Promise<ProposedVersion | null> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
     query: getProposedVersionQuery(id),
-    abortController: abortController,
+    signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

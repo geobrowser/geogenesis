@@ -51,7 +51,7 @@ export interface FetchTableRowEntitiesOptions {
   first?: number;
   skip?: number;
   filter: string; // this is a graphql query string
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -64,7 +64,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

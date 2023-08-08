@@ -11,7 +11,7 @@ import { NetworkEntity } from './network-local-mapping';
 export interface FetchProfileOptions {
   endpoint: string;
   address: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -64,7 +64,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchProfileQuery(options.address),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {

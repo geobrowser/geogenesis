@@ -52,7 +52,7 @@ export const getFetchProposalQuery = (id: string) => `query {
 export interface FetchProposalOptions {
   endpoint: string;
   id: string;
-  abortController?: AbortController;
+  signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
@@ -65,7 +65,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
     query: getFetchProposalQuery(options.id),
-    abortController: options.abortController,
+    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
