@@ -18,6 +18,10 @@ class GraphqlRuntimeError extends Error {
   readonly _tag = 'GraphqlRuntimeError';
 }
 
+export class AbortError {
+  readonly _tag = 'AbortError';
+}
+
 interface GraphqlResponse<T> {
   data: T;
   errors: unknown[];
@@ -34,8 +38,13 @@ export function graphql<T>({ endpoint, query, abortController }: GraphqlConfig) 
         body: JSON.stringify({ query }),
         signal: abortController?.signal,
       }),
-    // @TODO: Specific HttpErrors
-    catch: () => new HttpError(),
+    catch: e => {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return new AbortError();
+      }
+
+      return new HttpError();
+    },
   });
 
   return Effect.gen(function* (awaited) {

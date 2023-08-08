@@ -46,11 +46,11 @@ class EntityAutocomplete {
         this.abortController.abort();
         this.abortController = new AbortController();
 
+        const query = this.query$.get();
+
+        if (query.length === 0) return [];
+
         try {
-          const query = this.query$.get();
-
-          if (query.length === 0) return [];
-
           this.loading$.set(true);
           const entities = await this.mergedDataSource.fetchEntities({
             endpoint: config.subgraph,
@@ -63,12 +63,7 @@ class EntityAutocomplete {
           this.loading$.set(false);
           return entities;
         } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') {
-            // eslint-disable-next-line @typescript-eslint/no-empty-function
-            return new Promise(() => {});
-          }
-
-          console.log("Couldn't fetch entities", e);
+          console.error("Couldn't fetch entities in useAutocomplete", e);
           return [];
         }
       })
