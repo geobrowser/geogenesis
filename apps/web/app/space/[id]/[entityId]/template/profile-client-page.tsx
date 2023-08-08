@@ -17,10 +17,13 @@ import { PersonalSpaceOnboarding } from '~/partials/profile/personal-space-onboa
 
 interface Props {
   id: string;
+  name: string | null;
   spaceId: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
   referencedByEntities: ReferencedByEntity[];
   triples: Triple[];
-  onDismissForever: () => Promise<void>;
+  onDismissForever?: () => Promise<void>;
   hasDismissedOnboarding: boolean;
 }
 
@@ -47,14 +50,17 @@ export function ProfilePageComponent(props: Props) {
           <Spacer height={40} />
         </>
       )}
-      <Editor
-        editable={renderEditablePage}
-        placeholder={
-          <motion.p layout="position" className="text-grey-04 text-body">
-            There is no overview here yet.
-          </motion.p>
-        }
-      />
+      <motion.div key="entity-page-entity-editor" layout="position">
+        <Editor
+          editable={renderEditablePage}
+          placeholder={
+            <motion.p layout="position" className="text-grey-04 text-body">
+              There is no overview here yet.
+            </motion.p>
+          }
+        />
+      </motion.div>
+
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
         <Page id={props.id} spaceId={props.id} triples={props.triples} />

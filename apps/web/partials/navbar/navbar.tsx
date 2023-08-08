@@ -15,7 +15,6 @@ import { Spacer } from '~/design-system/spacer';
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
-import { MOCK_PROFILE } from '~/app/profile/[id]/mock';
 
 interface Props {
   onSearchClick: () => void;
@@ -29,16 +28,13 @@ export function Navbar({ onSearchClick }: Props) {
   const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
 
   const isHomePage = urlComponents.length === 1 && urlComponents[0] === 'spaces';
-  const isProfilePage = urlComponents.length === 2 && urlComponents[0] === 'profile';
 
   // We always want to return the Space as the active breadcrumb on the /[entityId]
   // and /[id] pages.
   const getActiveImage = () => {
-    if (isProfilePage) return MOCK_PROFILE.avatarUrl;
     return spaceImages[urlComponents[1]] ?? '';
   };
   const getActiveName = () => {
-    if (isProfilePage) return MOCK_PROFILE.name;
     return spaceNames[urlComponents[1]] ?? '';
   };
   const getActiveLink = () => `/space/${urlComponents[1] ?? ''}`;

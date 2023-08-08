@@ -40,7 +40,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
   return (
     <Menu
-      className="w-[160px]"
+      className="max-w-[160px]"
       open={isMenuOpen}
       onOpenChange={onMenuOpenChange}
       trigger={<Icon icon="context" color="grey-04" />}
