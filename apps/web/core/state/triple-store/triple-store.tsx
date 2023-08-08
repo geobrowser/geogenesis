@@ -87,7 +87,7 @@ export class TripleStore implements ITripleStore {
             skip: this.pageNumber$.get() * pageSize,
             first: pageSize + 1,
             filter: this.filterState$.get(),
-            abortController: this.abortController,
+            signal: this.abortController.signal,
           });
 
           this.hydrated$.set(true);
