@@ -19,7 +19,7 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 export const runtime = 'edge';
