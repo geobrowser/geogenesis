@@ -19,7 +19,7 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { EntityPageMetadataHeader, SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 export const runtime = 'edge';
@@ -43,7 +43,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    return <div>{children}</div>;
+    return <>{children}</>;
   }
 
   const profile = await getProfilePage(params.entityId, config.subgraph);
@@ -66,7 +66,7 @@ export default async function ProfileLayout({ children, params }: Props) {
           triples={profile.triples}
           showAccessControl
         />
-        <SpacePageMetadataHeader spaceId={params.id} />
+        <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
         <Spacer height={40} />
         <TabGroup
           tabs={TABS.map(label => {
