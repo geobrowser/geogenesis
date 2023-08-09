@@ -174,10 +174,6 @@ export class Merged implements IMergedDataSource {
      * version of the name triple, so we need to fetch it along with any other triples the table
      * needs to render the columnSchema.
      */
-
-    // @TODO: We can probably just check the action store for any entity that has the selected type.
-    // if it does, we can do `this.fetchEntity` to get the entire entity, regardless of whether it
-    // is local-only or not.
     const changedEntitiesIdsFromAnotherType = pipe(
       this.localStore.entities$.get(),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
