@@ -241,6 +241,9 @@ export class Merged implements IMergedDataSource {
     const entitiesWithAppliedGraphqlFilters = entitiesWithSelectedType.filter(entity => {
       for (const filter of filterState) {
         return entity.triples.some(triple => {
+          // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+          // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+          // this filter likely won't make sense anymore.
           if (filter.columnId === 'space') {
             return entity.nameTripleSpace === filter.value;
           }
