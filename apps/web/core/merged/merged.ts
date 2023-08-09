@@ -3,11 +3,12 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row } from '~/core/types';
+import { Column, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
+import { TableBlockSdk } from '../blocks-sdk';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
 
@@ -232,6 +233,36 @@ export class Merged implements IMergedDataSource {
     // Make sure we only generate rows for entities that have the selected type
     const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
 
-    return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
+    const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
+      options.params.filter ?? '',
+      async id => await this.fetchEntity({ id, endpoint: options.params.endpoint })
+    );
+
+    const entitiesWithAppliedGraphqlFilters = entitiesWithSelectedType.filter(entity => {
+      for (const filter of filterState) {
+        return entity.triples.some(triple => {
+          if (filter.columnId === 'space') {
+            return entity.nameTripleSpace === filter.value;
+          }
+
+          return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+        });
+      }
+
+      return true;
+    });
+
+    return EntityTable.fromColumnsAndRows(entitiesWithAppliedGraphqlFilters, columns);
   };
+}
+
+function filterValue(value: Value, valueToFilter: string) {
+  switch (value.type) {
+    case 'string':
+      return value.value === valueToFilter;
+    case 'entity':
+      return value.id === valueToFilter;
+    default:
+      return false;
+  }
 }
