@@ -3,11 +3,12 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row } from '~/core/types';
+import { Column, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
+import { TableBlockSdk } from '../blocks-sdk';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
 
@@ -160,6 +161,11 @@ export class Merged implements IMergedDataSource {
   rows = async (options: Parameters<typeof fetchRows>[0], columns: Column[], selectedTypeEntityId?: string) => {
     const serverRows = await fetchRows(options);
 
+    const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
+      options.params.filter ?? '',
+      async id => await this.fetchEntity({ id, endpoint: options.params.endpoint })
+    );
+
     /**
      * Aggregate data for the rows from local and server entities.
      *
@@ -193,41 +199,102 @@ export class Merged implements IMergedDataSource {
       changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id, endpoint: options.params.endpoint }))
     );
 
-    const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally.flatMap(e => (e ? [e] : []));
+    const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally
+      .flatMap(e => (e ? [e] : []))
+      .filter(entity => {
+        for (const filter of filterState) {
+          return entity.triples.some(triple => {
+            // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+            // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+            // this filter likely won't make sense anymore.
+            if (filter.columnId === 'space') {
+              return entity.nameTripleSpace === filter.value;
+            }
+
+            return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+          });
+        }
+
+        return true;
+      });
 
     const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
     const entitiesCreatedOrChangedLocally = pipe(
       this.store.actions$.get(),
       actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
-      A.filter(e => e.types.some(t => t.id === selectedTypeEntityId))
+      A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
+      A.filter(entity => {
+        for (const filter of filterState) {
+          return entity.triples.some(triple => {
+            // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+            // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+            // this filter likely won't make sense anymore.
+            if (filter.columnId === 'space') {
+              return entity.nameTripleSpace === filter.value;
+            }
+
+            return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+          });
+        }
+
+        return true;
+      })
     );
 
     const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
     const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
 
     // Filter out any server rows that have been changed locally
-    const filteredServerRows = serverEntityTriples.filter(
-      sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
+    const filteredServerRows = serverRows.filter(
+      sr => !localEntitiesIds.has(sr.id) && !serverEntitiesChangedLocallyIds.has(sr.id)
     );
 
-    const entities = Entity.entitiesFromTriples([
+    const entities = [
       // These are entities that were created locally and have the selected type
-      ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
+      ...entitiesCreatedOrChangedLocally,
 
       // These are entities that have a new type locally and may exist on the server.
       // We need to fetch all triples associated with this entity in order to correctly
       // populate the table.
-      ...serverEntitiesChangedLocally.flatMap(e => e.triples),
+      ...serverEntitiesChangedLocally,
 
       // These are entities that have been fetched from the server and have the selected type.
       // They are deduped from the local changes above.
       ...filteredServerRows,
-    ]);
+    ];
 
     // Make sure we only generate rows for entities that have the selected type
     const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
 
+    // const entitiesWithAppliedGraphqlFilters = entitiesWithSelectedType.filter(entity => {
+    //   for (const filter of filterState) {
+    //     return entity.triples.some(triple => {
+    //       // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+    //       // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+    //       // this filter likely won't make sense anymore.
+    //       if (filter.columnId === 'space') {
+    //         return entity.nameTripleSpace === filter.value;
+    //       }
+
+    //       return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
+    //     });
+    //   }
+
+    //   return true;
+    // });
+
     return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
   };
+}
+
+function filterValue(value: Value, valueToFilter: string) {
+  switch (value.type) {
+    case 'string':
+      return value.value === valueToFilter;
+    case 'entity':
+      return value.id === valueToFilter;
+    default:
+      return false;
+  }
 }
