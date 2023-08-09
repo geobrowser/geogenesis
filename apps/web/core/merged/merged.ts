@@ -264,10 +264,7 @@ export class Merged implements IMergedDataSource {
       ...filteredServerRows,
     ];
 
-    // Make sure we only generate rows for entities that have the selected type
-    const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
-
-    return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
+    return EntityTable.fromColumnsAndRows(entities, columns);
   };
 }
 
