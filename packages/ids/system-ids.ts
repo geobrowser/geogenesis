@@ -88,6 +88,8 @@ export const ROW_TYPE = '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac'
 
 export const FILTER = 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103'
 
+export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
+
 /**
  * Addresses for important contracts on Polygon mainnet.
  *

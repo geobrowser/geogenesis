@@ -3,13 +3,13 @@ import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
 
-import { fetchProfile } from './fetch-profile';
-import { graphql } from './graphql';
-import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
+import { fetchProfile } from './subgraph';
+import { graphql } from './subgraph/graphql';
+import { NetworkProposal, fromNetworkActions } from './subgraph/network-local-mapping';
 
-const getFetchSpaceProposalsQuery = (spaceId: string, skip: number) => `query {
-  proposals(first: 10, where: {space: ${JSON.stringify(
-    spaceId
+const getFetchUserProposalsQuery = (createdBy: string, skip: number) => `query {
+  proposals(first: 10, where: {createdBy_starts_with_nocase: ${JSON.stringify(
+    createdBy
   )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
     id
     name
@@ -52,29 +52,31 @@ const getFetchSpaceProposalsQuery = (spaceId: string, skip: number) => `query {
   }
 }`;
 
-export interface FetchProposalsOptions {
+export interface FetchUserProposalsOptions {
   endpoint: string;
-  spaceId: string;
-  user: string;
+  userId: string; // For now we use the address
   signal?: AbortController['signal'];
   page?: number;
+  api: {
+    fetchProfile: typeof fetchProfile;
+  };
 }
 
 interface NetworkResult {
   proposals: NetworkProposal[];
 }
 
-export async function fetchProposals({
+export async function fetchProposalsByUser({
   endpoint,
-  spaceId,
+  userId,
   signal,
   page = 0,
-}: FetchProposalsOptions): Promise<Proposal[]> {
+}: FetchUserProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
-    query: getFetchSpaceProposalsQuery(spaceId, page * 10),
+    query: getFetchUserProposalsQuery(userId, page * 10),
     signal,
   });
 
@@ -92,9 +94,9 @@ export async function fetchProposals({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} userId: ${userId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getFetchSpaceProposalsQuery(spaceId, page * 10)}
+            queryString: ${getFetchUserProposalsQuery(userId, page * 10)}
             `,
             error.message
           );
@@ -103,7 +105,7 @@ export async function fetchProposals({
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} userId: ${userId} endpoint: ${endpoint} page: ${page}`
           );
           return {
             proposals: [],
@@ -118,14 +120,10 @@ export async function fetchProposals({
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(
-    result.proposals.map(v => fetchProfile({ address: v.createdBy?.id, endpoint: endpoint }))
-  );
-
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
+  const profile = await fetchProfile({
+    endpoint,
+    address: userId,
+  });
 
   return result.proposals.map(p => {
     return {
@@ -133,12 +131,12 @@ export async function fetchProposals({
       name: p.name,
       description: p.description,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[p.createdBy.id] ?? p.createdBy,
+      createdBy: profile?.[1] ?? p.createdBy,
       proposedVersions: p.proposedVersions.map(v => {
         return {
           ...v,
-          createdBy: profiles[v.createdBy.id] ?? v.createdBy,
-          actions: fromNetworkActions(v.actions, spaceId),
+          createdBy: profile?.[1] ?? p.createdBy,
+          actions: fromNetworkActions(v.actions, userId),
         };
       }),
     };
