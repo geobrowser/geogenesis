@@ -14,6 +14,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number) => `query {
     id
     name
     description
+    space
     createdAt
     createdAtBlock
     createdBy {

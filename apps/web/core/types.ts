@@ -159,6 +159,7 @@ export type Proposal = {
   createdAt: number;
   createdAtBlock: string;
   proposedVersions: ProposedVersion[];
+  space: string;
 };
 
 export type ProposedVersion = {

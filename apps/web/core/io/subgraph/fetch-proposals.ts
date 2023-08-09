@@ -55,7 +55,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, skip: number) => `query {
 export interface FetchProposalsOptions {
   endpoint: string;
   spaceId: string;
-  user: string;
   signal?: AbortController['signal'];
   page?: number;
 }
