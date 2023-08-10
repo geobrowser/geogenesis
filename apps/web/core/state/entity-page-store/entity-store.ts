@@ -348,7 +348,7 @@ export class EntityStore implements IEntityStore {
       const typeTriples = this.typeTriples$.get();
       const previous = e.previous || [];
 
-      // TODO: This isn't working
+      // @TODO: This isn't working
       if (!A.eq(previous, typeTriples, (a, b) => a.value.id === b.value.id)) {
         this.setSchemaTriples(typeTriples);
       }
@@ -366,7 +366,7 @@ export class EntityStore implements IEntityStore {
         this.schemaTriples$.set([]);
       }
 
-      const attributes = await Promise.all(
+      const attributesOnType = await Promise.all(
         typeTriples.map(triple => {
           return this.subgraph.fetchTriples({
             endpoint: this.config.subgraph,
@@ -388,9 +388,9 @@ export class EntityStore implements IEntityStore {
         })
       );
 
-      const attributeTriples = attributes.flatMap(triples => triples);
+      const attributeTriples = attributesOnType.flatMap(triples => triples);
 
-      const valueTypes = await Promise.all(
+      const valueTypesForAttributes = await Promise.all(
         attributeTriples.map(attribute => {
           return this.subgraph.fetchTriples({
             endpoint: this.config.subgraph,
@@ -412,10 +412,18 @@ export class EntityStore implements IEntityStore {
         })
       );
 
-      const valueTypeTriples = valueTypes.flatMap(triples => triples);
+      const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
 
-      const schemaTriples = attributeTriples.map((attribute, index) => {
-        const valueType = valueTypeTriples[index]?.value.id;
+      const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, string | undefined>>(
+        (acc, attribute) => {
+          acc[attribute.value.id] = valueTypeTriples.find(t => t.entityId === attribute.value.id)?.value.id;
+          return acc;
+        },
+        {}
+      );
+
+      const schemaTriples = attributeTriples.map(attribute => {
+        const valueType = valueTypesToAttributesMap[attribute.value.id];
 
         return {
           ...Triple.emptyPlaceholder(this.spaceId, this.id, valueType),
