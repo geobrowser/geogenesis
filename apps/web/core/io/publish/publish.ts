@@ -1,6 +1,5 @@
 import { Root } from '@geogenesis/action-schema';
 import { SpaceAbi } from '@geogenesis/contracts';
-import { parseGwei } from 'viem';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
@@ -64,30 +63,6 @@ export async function publish({
     cids.push(`ipfs://${cidString}`);
   }
 
-  let maxFee = 70;
-  let maxPriorityFee = 30;
-
-  // Sometimes responses from the gas station fail or the API values/endpoint changes. We provide
-  // fallback values in case there are issues fetching the realtime estimates.
-  try {
-    const gasResponse = await fetch('https://gasstation.polygon.technology/v2');
-
-    const gasSuggestion: {
-      fast: {
-        maxPriorityFee: number;
-        maxFee: number;
-      };
-    } = await gasResponse.json();
-
-    maxFee = gasSuggestion.fast.maxFee;
-    maxPriorityFee = gasSuggestion.fast.maxPriorityFee;
-  } catch (e) {
-    console.log(`Unable to fetch gas suggestions. Using defaults maxFee of ${400} and maxPriorityFee of ${80}. ${e}`);
-  }
-
-  const maxFeeAsGWei = parseGwei(maxFee.toString());
-  const maxPriorityFeeAsGWei = parseGwei(maxPriorityFee.toString());
-
   try {
     const contractConfig = await prepareWriteContract({
       abi: SpaceAbi,
@@ -95,8 +70,6 @@ export async function publish({
       functionName: 'addEntries',
       walletClient: wallet,
       args: [cids],
-      maxFeePerGas: maxFeeAsGWei,
-      maxPriorityFeePerGas: maxPriorityFeeAsGWei,
     });
 
     onChangePublishState('signing-wallet');
