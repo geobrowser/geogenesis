@@ -6,8 +6,10 @@ import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
+
+import { SmallButton } from '~/design-system/button';
 
 export const runtime = 'edge';
 
@@ -49,20 +51,53 @@ export default async function ActivityPage({ params, searchParams }: Props) {
   if (proposals.length === 0) return <p className="text-grey-04 text-body">There is no information here yet.</p>;
 
   return (
-    <div className="divide-y divide-divider">
-      {proposals.map(p => {
-        const space = spaces.find(s => s.id === p.space);
-        const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+    <div>
+      <div className="flex items-center gap-2 w-full pb-3 border-b border-divider">
+        <SmallButton variant="secondary" icon="chevronDownSmall">
+          Proposals
+        </SmallButton>
+        <p>in</p>
+        <SmallButton variant="secondary" icon="chevronDownSmall">
+          All
+        </SmallButton>
+      </div>
 
-        return (
-          <div key={p.id} className="flex items-center gap-2">
-            <div className="relative rounded-sm overflow-hidden h-4 w-4">
-              <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
+      <div className="divide-y divide-divider">
+        {proposals.map(p => {
+          const space = spaces.find(s => s.id === p.space);
+          const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+
+          const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
+
+          // e.g. Mar 12, 2023
+          const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          });
+
+          // e.g. 13:41
+          const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          });
+
+          return (
+            <div key={p.id} className="flex w-full justify-between items-center">
+              <div className="flex items-center gap-2">
+                <div className="relative rounded-sm overflow-hidden h-4 w-4">
+                  <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
+                </div>
+                <p className="text-metadataMedium py-3">{p.name}</p>
+              </div>
+              <p className="text-metadataMedium tabular-nums text-grey-04">
+                {formattedLastEditedDate} · {lastEditedTime}
+              </p>
             </div>
-            <p className="text-metadataMedium py-3">{p.name}</p>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
