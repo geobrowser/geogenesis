@@ -34,33 +34,9 @@ const LOCAL_CHAIN: Chain = {
   },
 };
 
-const TESTNET_CHAIN: Chain = {
-  ...polygonMumbai,
-  rpcUrls: {
-    default: {
-      http: [Environment.options.testnet.rpc],
-    },
-    public: {
-      http: [Environment.options.testnet.rpc],
-    },
-  },
-};
-
-const DEFAULT_CHAIN: Chain = {
-  ...polygon,
-  rpcUrls: {
-    default: {
-      http: [Environment.options.production.rpc],
-    },
-    public: {
-      http: [Environment.options.production.rpc],
-    },
-  },
-};
-
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   // Only make the dev chains available in development
-  [DEFAULT_CHAIN, ...(process.env.NODE_ENV === 'development' ? [TESTNET_CHAIN, LOCAL_CHAIN] : [])],
+  [polygon, ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : [])],
   [publicProvider()]
 );
 
