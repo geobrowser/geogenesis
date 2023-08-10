@@ -6,7 +6,7 @@ import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
-import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { SmallButton } from '~/design-system/button';
@@ -15,7 +15,9 @@ export const runtime = 'edge';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: ServerSideEnvParams;
+  searchParams: ServerSideEnvParams & {
+    spaceId?: string;
+  };
 }
 
 export default async function ActivityPage({ params, searchParams }: Props) {
@@ -43,6 +45,7 @@ export default async function ActivityPage({ params, searchParams }: Props) {
   const proposals = await fetchProposalsByUser({
     endpoint: config.subgraph,
     userId,
+    spaceId: searchParams.spaceId,
     api: {
       fetchProfile: Subgraph.fetchProfile,
     },
@@ -76,13 +79,6 @@ export default async function ActivityPage({ params, searchParams }: Props) {
             year: 'numeric',
           });
 
-          // e.g. 13:41
-          const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          });
-
           return (
             <div key={p.id} className="flex w-full justify-between items-center">
               <div className="flex items-center gap-2">
@@ -91,9 +87,7 @@ export default async function ActivityPage({ params, searchParams }: Props) {
                 </div>
                 <p className="text-metadataMedium py-3">{p.name}</p>
               </div>
-              <p className="text-metadataMedium tabular-nums text-grey-04">
-                {formattedLastEditedDate} · {lastEditedTime}
-              </p>
+              <p className="text-metadataMedium tabular-nums text-grey-04">{formattedLastEditedDate}</p>
             </div>
           );
         })}

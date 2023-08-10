@@ -7,56 +7,61 @@ import { fetchProfile } from './subgraph';
 import { graphql } from './subgraph/graphql';
 import { NetworkProposal, fromNetworkActions } from './subgraph/network-local-mapping';
 
-const getFetchUserProposalsQuery = (createdBy: string, skip: number) => `query {
-  proposals(first: 10, where: {createdBy_starts_with_nocase: ${JSON.stringify(
-    createdBy
-  )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
-    id
-    name
-    description
-    space
-    createdAt
-    createdAtBlock
-    createdBy {
-      id
-    }
-    status
-    proposedVersions {
+const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
+  const where = [`createdBy_starts_with_nocase: ${JSON.stringify(createdBy)}`, spaceId && `space: "${spaceId}"`]
+    .filter(Boolean)
+    .join(' ');
+
+  return `query {
+    proposals(first: 10, where: {${where}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
       id
       name
+      description
+      space
       createdAt
       createdAtBlock
       createdBy {
         id
       }
-      actions {
-        actionType
+      status
+      proposedVersions {
         id
-        attribute {
+        name
+        createdAt
+        createdAtBlock
+        createdBy {
           id
-          name
         }
-        entity {
+        actions {
+          actionType
           id
-          name
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
+          entityValue {
+            id
+            name
+          }
+          numberValue
+          stringValue
+          valueType
+          valueId
         }
-        entityValue {
-          id
-          name
-        }
-        numberValue
-        stringValue
-        valueType
-        valueId
       }
     }
-  }
-}`;
+  }`;
+};
 
 export interface FetchUserProposalsOptions {
   endpoint: string;
   userId: string; // For now we use the address
   signal?: AbortController['signal'];
+  spaceId?: string;
   page?: number;
   api: {
     fetchProfile: typeof fetchProfile;
