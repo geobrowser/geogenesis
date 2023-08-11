@@ -75,6 +75,7 @@ interface NetworkResult {
 export async function fetchProposalsByUser({
   endpoint,
   userId,
+  spaceId,
   signal,
   page = 0,
 }: FetchUserProposalsOptions): Promise<Proposal[]> {
@@ -82,7 +83,7 @@ export async function fetchProposalsByUser({
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
-    query: getFetchUserProposalsQuery(userId, page * 10),
+    query: getFetchUserProposalsQuery(userId, page * 10, spaceId),
     signal,
   });
 
