@@ -44,6 +44,9 @@ function Tab({ href, label }: TabProps) {
 
   return (
     <Link className={tabStyles({ active })} href={href}>
+      {/* @HACK: This is a workaround to prevent the bar from animating from a different position
+          when the page loads. One way this might happen is reloading an RSC due to searchParams.
+      */}
       <ClientOnly>
         {active && (
           <motion.div
