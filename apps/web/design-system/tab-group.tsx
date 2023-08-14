@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { ClientOnly } from './client-only';
+
 interface TabGroupProps {
   tabs: Array<{ href: string; label: string }>;
 }
@@ -42,12 +44,14 @@ function Tab({ href, label }: TabProps) {
 
   return (
     <Link className={tabStyles({ active })} href={href}>
-      {active && (
-        <motion.div
-          layoutId="tab-group-active-border"
-          className="absolute left-0 -bottom-[9px] border-b border-text w-full"
-        />
-      )}
+      <ClientOnly>
+        {active && (
+          <motion.div
+            layoutId="tab-group-active-border"
+            className="absolute left-0 -bottom-[9px] border-b border-text w-full"
+          />
+        )}
+      </ClientOnly>
       {label}
     </Link>
   );

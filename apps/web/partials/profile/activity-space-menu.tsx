@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
@@ -13,7 +12,7 @@ import { SmallButton } from '~/design-system/button';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
-  spaceId: string;
+  spaceId?: string;
   entityId: string;
 }
 
@@ -21,7 +20,6 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
 
   const initialSpace = spaces.find(space => space.id === spaceId);
-  console.log('initialSpace', { initialSpace, spaceId });
 
   const router = useRouter();
   const [open, onOpenChange] = React.useState(false);
@@ -49,15 +47,16 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
     <Menu
       open={open}
       onOpenChange={onOpenChange}
+      align="start"
       trigger={
         <SmallButton variant="secondary" icon="chevronDownSmall">
           {name}
         </SmallButton>
       }
-      className="flex flex-col gap-2 max-h-[300px] overflow-y-auto bg-white"
+      className="flex flex-col max-h-[300px] max-w-[260px] overflow-y-auto bg-white"
     >
       {spacesWithAll.map(space => (
-        <button onClick={() => onSelect(space.id)} key={space.id}>
+        <button onClick={() => onSelect(space.id)} key={space.id} className="text-button px-2 py-3">
           {space.attributes[SYSTEM_IDS.NAME]}
         </button>
       ))}

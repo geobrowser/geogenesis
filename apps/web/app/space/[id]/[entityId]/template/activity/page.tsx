@@ -5,7 +5,8 @@ import Image from 'next/legacy/image';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Params } from '~/core/params';
-import { ServerSideEnvParams } from '~/core/types';
+import { Action as IAction, ServerSideEnvParams } from '~/core/types';
+import { Action } from '~/core/utils/action';
 import { GeoDate, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
@@ -53,6 +54,8 @@ export default async function ActivityPage({ params, searchParams }: Props) {
     },
   });
 
+  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.NAME]]));
+
   return (
     <div>
       <div className="flex items-center gap-2 w-full pb-3 border-b border-divider">
@@ -72,6 +75,11 @@ export default async function ActivityPage({ params, searchParams }: Props) {
             const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
 
             const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
+            const proposalChangeCount = Action.getChangeCount(
+              p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
+            );
+
+            const proposedEntitiesCount = p.proposedVersions.length;
 
             // e.g. Mar 12, 2023
             const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
@@ -81,14 +89,20 @@ export default async function ActivityPage({ params, searchParams }: Props) {
             });
 
             return (
-              <div key={p.id} className="flex w-full justify-between items-center">
-                <div className="flex items-center gap-2 py-3">
-                  <div className="relative rounded-sm overflow-hidden h-4 w-4">
-                    <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
+              <div key={p.id} className="flex flex-col gap-2 py-3">
+                <div className="flex w-full justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="relative rounded-sm overflow-hidden h-4 w-4">
+                      <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
+                    </div>
+                    <p className="text-metadataMedium">{p.name}</p>
                   </div>
-                  <p className="text-metadataMedium">{p.name}</p>
+                  <p className="text-metadataMedium tabular-nums text-grey-04">{formattedLastEditedDate}</p>
                 </div>
-                <p className="text-metadataMedium tabular-nums text-grey-04">{formattedLastEditedDate}</p>
+
+                <p className="pl-6 text-breadcrumb">
+                  {proposalChangeCount} edits on {proposedEntitiesCount} pages in {spaceNames[p.space]}
+                </p>
               </div>
             );
           })
