@@ -2,6 +2,7 @@ export const IMAGE_ATTRIBUTE = '457a27af-7b0b-485c-ac07-aa37756adafa'
 export const DESCRIPTION = 'Description'
 export const NAME = 'name'
 export const SPACE = 'space'
+export const INDEXED_SPACE = '30659852-2df5-42f6-9ad7-2921c33ad84b'
 export const ATTRIBUTE = 'attribute'
 
 /*

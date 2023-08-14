@@ -225,10 +225,12 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   // We could also do this filter at the top of the algorithm so we don't apply the extra
   // transformations onto entities that we are going to filter out.
   return sortedResultsWithTypesAndDescription.filter(result => {
-    return !(
-      result.types.some(t => t.id === SYSTEM_IDS.TEXT_BLOCK) ||
-      result.types.some(t => t.id === SYSTEM_IDS.TABLE_BLOCK) ||
-      result.types.some(t => t.id === SYSTEM_IDS.IMAGE_BLOCK)
+    return !result.types.some(
+      t =>
+        t.id === SYSTEM_IDS.TEXT_BLOCK ||
+        t.id === SYSTEM_IDS.TABLE_BLOCK ||
+        t.id === SYSTEM_IDS.IMAGE_BLOCK ||
+        t.id === SYSTEM_IDS.INDEXED_SPACE
     );
   });
 }
