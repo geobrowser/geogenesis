@@ -20,10 +20,17 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
 
   const initialSpace = spaces.find(space => space.id === spaceId);
+  const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
 
   const router = useRouter();
   const [open, onOpenChange] = React.useState(false);
-  const [name, setName] = React.useState(initialSpace?.attributes[SYSTEM_IDS.NAME] ?? 'All');
+  const [name, setName] = React.useState('All');
+
+  React.useEffect(() => {
+    if (initialName) {
+      setName(initialName);
+    }
+  }, [initialName]);
 
   const spacesWithAll = [
     {
