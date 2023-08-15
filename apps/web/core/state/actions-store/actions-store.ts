@@ -15,6 +15,9 @@ import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
+import { store } from '../wip-local-store/wip-local-store';
+import { remove, upsert } from '../wip-local-store/wip-local-store-slice';
+
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
   create(triple: ITriple): void;
@@ -135,6 +138,8 @@ export class ActionsStore implements IActionsStore {
       type: 'createTriple',
     };
 
+    store.dispatch(upsert({ newTriple: triple }));
+
     this.addActions(triple.space, [action]);
   };
 
@@ -146,10 +151,14 @@ export class ActionsStore implements IActionsStore {
       type: 'deleteTriple',
     };
 
+    store.dispatch(remove(triple));
+
     this.addActions(spaceId, [actions]);
   };
 
   update = (triple: ITriple, oldTriple: ITriple) => {
+    store.dispatch(upsert({ newTriple: triple, oldTriple }));
+
     const action: EditTripleAction = {
       type: 'editTriple',
       before: {

@@ -57,6 +57,13 @@ export type Triple = {
   placeholder?: boolean;
 };
 
+export type LocalTriple = Triple &
+  Publishable & {
+    hasBeenDeleted?: boolean;
+    updatedAt?: string; // ISO-8601
+    originalTriple?: Triple;
+  };
+
 export type Space = {
   id: string;
   isRootSpace: boolean;
