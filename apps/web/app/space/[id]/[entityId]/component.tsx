@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useEditor } from '~/core/hooks/use-editor';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { TypesStoreProvider } from '~/core/state/types-store';

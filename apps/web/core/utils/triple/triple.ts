@@ -5,6 +5,7 @@ import { ID } from '~/core/id';
 import {
   Action as ActionType,
   EntityValue,
+  LocalTriple,
   NumberValue,
   OmitStrict,
   StringValue,
@@ -13,6 +14,8 @@ import {
   Value,
 } from '~/core/types';
 import { valueTypes } from '~/core/value-types';
+
+import { groupBy } from '../utils';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -208,3 +211,34 @@ export const getValue = (triple: Triple): string | null => {
       return triple.value.value;
   }
 };
+
+export function merge(localTriples: LocalTriple[], remoteTriples: Triple[]): LocalTriple[] {
+  // Set updatedAt to 0 for remote triples to always take local triples
+  const remoteTriplesWithUpdatedAt = remoteTriples.map(
+    (t): LocalTriple => ({
+      ...t,
+      updatedAt: new Date(0).toISOString(),
+      hasBeenDeleted: false,
+    })
+  );
+
+  /**
+   * 1. groupBy tripleId
+   * 2. Take the latest triple for each tripleId
+   * 3. If hasBeenDeleted then remove the triple from the array
+   */
+
+  const triplesById = pipe([...localTriples, ...remoteTriplesWithUpdatedAt], triples => groupBy(triples, t => t.id));
+
+  const newTriples: LocalTriple[] = [];
+
+  for (const [, triples] of Object.entries(triplesById)) {
+    const sorted = A.sortBy(triples, t => t.updatedAt);
+
+    if (sorted.length > 0) {
+      newTriples.push(sorted[sorted.length - 1]);
+    }
+  }
+
+  return newTriples.filter(t => !t.hasBeenDeleted);
+}

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
+import { useEditor } from '~/core/hooks/use-editor';
 import { Services } from '~/core/services';
 import { Triple } from '~/core/types';
 
@@ -34,6 +35,13 @@ export function EntityStoreProvider({
   const { subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
+
+  useEditor({
+    spaceId,
+    entityId: id,
+    initialBlockIdsTriple,
+    initialBlockTriples,
+  });
 
   const store = useMemo(() => {
     return new EntityStore({

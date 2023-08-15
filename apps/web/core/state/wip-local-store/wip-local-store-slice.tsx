@@ -25,7 +25,11 @@ export const triplesSlice = createSlice({
       const index = state.triples.findIndex(t => t.id === action.payload.newTriple.id);
 
       if (index === -1) {
-        state.triples.push(action.payload.newTriple);
+        state.triples.push({
+          ...action.payload.newTriple,
+          updatedAt: new Date().toISOString(),
+          hasBeenDeleted: false,
+        });
         return;
       }
 
