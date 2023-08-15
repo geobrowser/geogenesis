@@ -31,9 +31,6 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: 📥 Install Playwright Browsers
-        run: npm run test:e2e:install
-
       - name: 🏗 Build
         run: pnpm build
 
