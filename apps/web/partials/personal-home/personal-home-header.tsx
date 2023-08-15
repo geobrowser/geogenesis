@@ -33,7 +33,7 @@ export function PersonalHomeHeader() {
         <h1 className="text-largeTitle">{profile?.name}</h1>
       </div>
       <div>
-        <SmallButton variant="tertiary">View personal space</SmallButton>
+        <SmallButton className="text-text bg-grey-01">View personal space</SmallButton>
       </div>
     </div>
   );

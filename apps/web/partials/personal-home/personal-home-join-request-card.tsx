@@ -1,9 +1,22 @@
 import Avatar from 'boring-avatars';
 
-import { Button } from '~/design-system/button';
+import { Icon } from '~/design-system/icon';
 
 import { PersonalHomeRequestActionBar } from './personal-home-request-action-bar';
 import { Request } from './types';
+
+// component for the icon + status - badge maybe?
+
+const RequestBadge = ({ requestType }: Pick<Request, 'requestType'>) => {
+  const iconType = requestType === 'member' ? 'publish' : 'create';
+  const joinRequestType = requestType === 'member' ? 'Member join request' : 'Editor join request';
+  return (
+    <div className="flex flex-row items-center rounded-sm bg-grey-01 text-text gap-1 p-2">
+      <Icon icon={iconType} />
+      <span className="text-text text-sm font-medium text-weight-500">{joinRequestType}</span>
+    </div>
+  );
+};
 
 export function PersonalHomeJoinRequestCard({
   requestType,
@@ -22,8 +35,7 @@ export function PersonalHomeJoinRequestCard({
           <span className="text-smallTitle text-text">{requesterName}</span>
         </div>
         <div>
-          {requestType === 'member' ? <Button variant="tertiary">Member join request</Button> : null}
-          {requestType === 'editor' ? <Button variant="tertiary">Editor join request</Button> : null}
+          <RequestBadge requestType={requestType} />
         </div>
       </div>
       <PersonalHomeRequestActionBar spaceName={spaceName} />
