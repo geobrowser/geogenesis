@@ -5,7 +5,8 @@ import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
-import { editable$ } from '~/core/state/editable-store';
+import { EditableStoreActions } from '~/core/state/editable-store';
+import { store as rootStore } from '~/core/state/root-store';
 
 import { FlowBar } from './flow-bar';
 
@@ -62,7 +63,7 @@ describe('Flow Bar', () => {
 
     act(() => {
       store.create(MockNetworkData.makeStubTriple('Alice'));
-      editable$.set(true);
+      rootStore.dispatch(EditableStoreActions.setEditable(true));
     });
 
     expect(screen.queryByRole('button')).toBeInTheDocument();
@@ -90,7 +91,7 @@ describe('Flow Bar', () => {
 
     act(() => {
       store.create(MockNetworkData.makeStubTriple('Alice'));
-      editable$.set(true);
+      rootStore.dispatch(EditableStoreActions.setEditable(true));
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();

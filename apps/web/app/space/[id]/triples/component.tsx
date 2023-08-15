@@ -1,6 +1,5 @@
 'use client';
 
-import { InitialTripleStoreParams, TripleStoreProvider } from '~/core/state/triple-store';
 import { Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
@@ -14,10 +13,9 @@ interface Props {
   spaceName?: string;
   spaceImage: string | null;
   initialTriples: Triple[];
-  initialParams: InitialTripleStoreParams;
 }
 
-export function Component({ spaceId, spaceImage, spaceName, initialTriples, initialParams }: Props) {
+export function Component({ spaceId, spaceImage, spaceName, initialTriples }: Props) {
   return (
     <div>
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />

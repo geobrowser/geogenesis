@@ -12,7 +12,7 @@ export interface TripleStoreState {
   hydrated: boolean;
 }
 
-const initialState: TripleStoreState = {
+export const initialState: TripleStoreState = {
   query: '',
   filterState: [],
   pageNumber: 0,
@@ -54,6 +54,6 @@ export const triplesStoreSlice = createSlice({
 // Action creators are generated for each case reducer function
 export const { setQuery, setFilterState, setPage } = triplesStoreSlice.actions;
 
-function initialFilterState(): FilterState {
+export function initialFilterState(): FilterState {
   return [];
 }

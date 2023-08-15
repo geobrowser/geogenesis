@@ -8,7 +8,7 @@ import produce from 'immer';
 import { useState } from 'react';
 
 import { useWindowSize } from '~/core/hooks/use-window-size';
-import { initialFilterState } from '~/core/state/triple-store';
+import { TriplesStoreSlice } from '~/core/state/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/core/types';
 import { intersperse } from '~/core/utils/utils';
 
@@ -136,7 +136,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                   icon="trash"
                   variant="secondary"
                   onClick={() => {
-                    setFilterState(initialFilterState());
+                    setFilterState(TriplesStoreSlice.initialFilterState());
                   }}
                 >
                   Clear all

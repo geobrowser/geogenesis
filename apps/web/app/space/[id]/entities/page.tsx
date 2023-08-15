@@ -3,12 +3,12 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { DEFAULT_TRIPLES_PAGE_SIZE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
@@ -52,7 +52,7 @@ const getData = async ({ params, searchParams }: Props) => {
       endpoint: config.subgraph,
       query: '',
       skip: 0,
-      first: DEFAULT_PAGE_SIZE,
+      first: DEFAULT_TRIPLES_PAGE_SIZE,
       filter: [
         { field: 'entity-id', value: space.entityId ?? '' },
         {
@@ -77,8 +77,8 @@ const getData = async ({ params, searchParams }: Props) => {
   const fetchParams: FetchRowsOptions['params'] = {
     ...initialParams,
     endpoint: config.subgraph,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
+    first: DEFAULT_TRIPLES_PAGE_SIZE,
+    skip: initialParams.pageNumber * DEFAULT_TRIPLES_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],
     filter: TableBlockSdk.createGraphQLStringFromFilters(
       [

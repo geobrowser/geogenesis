@@ -3,9 +3,9 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { DEFAULT_TRIPLES_PAGE_SIZE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
 
 import { Component } from './component';
@@ -27,7 +27,6 @@ export default async function TriplesPage({ params, searchParams }: Props) {
 const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const config = Params.getConfigFromParams(searchParams, env);
 
   const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
@@ -35,11 +34,11 @@ const getData = async ({ params, searchParams }: Props) => {
   const spaceName = space?.attributes[SYSTEM_IDS.NAME];
   const triples = await Subgraph.fetchTriples({
     endpoint: config.subgraph,
-    query: initialParams.query,
+    query: '',
     space: spaceId,
-    first: DEFAULT_PAGE_SIZE,
-    skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    filter: initialParams.filterState,
+    first: DEFAULT_TRIPLES_PAGE_SIZE,
+    skip: 0,
+    filter: [],
   });
 
   return {
@@ -47,6 +46,5 @@ const getData = async ({ params, searchParams }: Props) => {
     spaceName,
     spaceImage,
     initialTriples: triples,
-    initialParams,
   };
 };

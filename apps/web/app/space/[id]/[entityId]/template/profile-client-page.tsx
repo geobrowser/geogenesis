@@ -9,7 +9,7 @@ import { Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 
-import { Editor } from '~/partials/editor/editor';
+// import { Editor } from '~/partials/editor/editor';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
@@ -51,14 +51,14 @@ export function ProfilePageComponent(props: Props) {
         </>
       )}
       <motion.div key="entity-page-entity-editor" layout="position">
-        <Editor
+        {/* <Editor
           editable={renderEditablePage}
           placeholder={
             <motion.p layout="position" className="text-grey-04 text-body">
               There is no overview here yet.
             </motion.p>
           }
-        />
+        /> */}
       </motion.div>
 
       <Spacer height={40} />
