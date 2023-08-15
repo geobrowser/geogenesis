@@ -17,13 +17,18 @@ interface Props {
 }
 
 export function Triples({ spaceId, initialTriples }: Props) {
-  const tripleStore = useTriples();
+  const tripleStore = useTriples({ spaceId });
 
   return (
     <PageContainer>
       <Spacer height={20} />
 
-      <TripleInput />
+      <TripleInput
+        query={tripleStore.query}
+        setQuery={tripleStore.setQuery}
+        filterState={tripleStore.filterState}
+        setFilterState={tripleStore.setFilterState}
+      />
 
       <Spacer height={12} />
 
@@ -34,7 +39,7 @@ export function Triples({ spaceId, initialTriples }: Props) {
       <PageNumberContainer>
         {tripleStore.pageNumber > 1 && (
           <>
-            <PageNumber number={1} onClick={() => tripleStore.setPageNumber(0)} />
+            <PageNumber number={1} onClick={() => tripleStore.setPage(0)} />
             {tripleStore.pageNumber > 2 ? (
               <>
                 <Spacer width={16} />
@@ -50,7 +55,10 @@ export function Triples({ spaceId, initialTriples }: Props) {
         )}
         {tripleStore.hasPreviousPage && (
           <>
-            <PageNumber number={tripleStore.pageNumber} onClick={tripleStore.setPreviousPage} />
+            <PageNumber
+              number={tripleStore.pageNumber}
+              onClick={() => tripleStore.setPage(tripleStore.pageNumber - 1)}
+            />
             <Spacer width={4} />
           </>
         )}
@@ -58,13 +66,22 @@ export function Triples({ spaceId, initialTriples }: Props) {
         {tripleStore.hasNextPage && (
           <>
             <Spacer width={4} />
-            <PageNumber number={tripleStore.pageNumber + 2} onClick={tripleStore.setNextPage} />
+            <PageNumber
+              number={tripleStore.pageNumber + 2}
+              onClick={() => tripleStore.setPage(tripleStore.pageNumber + 1)}
+            />
           </>
         )}
         <Spacer width={32} />
-        <PreviousButton isDisabled={!tripleStore.hasPreviousPage} onClick={tripleStore.setPreviousPage} />
+        <PreviousButton
+          isDisabled={!tripleStore.hasPreviousPage}
+          onClick={() => tripleStore.setPage(tripleStore.pageNumber - 1)}
+        />
         <Spacer width={12} />
-        <NextButton isDisabled={!tripleStore.hasNextPage} onClick={tripleStore.setNextPage} />
+        <NextButton
+          isDisabled={!tripleStore.hasNextPage}
+          onClick={() => tripleStore.setPage((tripleStore.pageNumber = 1))}
+        />
       </PageNumberContainer>
     </PageContainer>
   );

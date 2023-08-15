@@ -359,7 +359,12 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   createForeignType = (foreignType: TripleType) => {
-    CreateType.createForeignType(foreignType, this.spaceId, this.space?.spaceConfigEntityId, this.ActionsStore.create);
+    CreateType.createForeignType(
+      foreignType,
+      this.spaceId,
+      this.space?.spaceConfigEntityId ?? null,
+      this.ActionsStore.create
+    );
   };
 
   createType = (entityName: string) => {

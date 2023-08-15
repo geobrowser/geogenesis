@@ -22,22 +22,28 @@ const defaultFilterState: FilterState = [
   },
 ];
 
-export function TripleInput() {
-  const tripleStore = useTriples();
+interface Props {
+  filterState: FilterState;
+  setFilterState: (filterState: FilterState) => void;
+  query: string;
+  setQuery: (query: string) => void;
+}
+
+export function TripleInput({ filterState, setFilterState, query, setQuery }: Props) {
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const inputRect = useRect(inputContainerRef.current);
-  const showBasicFilter = tripleStore.filterState.length === 0;
+  const showBasicFilter = filterState.length === 0;
 
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    tripleStore.setQuery(event.target.value);
+    setQuery(event.target.value);
   };
 
   const onAdvancedFilterClick = (field: FilterClause['field']) => {
-    const filteredFilters = tripleStore.filterState.filter(filter => filter.field !== field);
-    tripleStore.setFilterState(filteredFilters);
+    const filteredFilters = filterState.filter(filter => filter.field !== field);
+    setFilterState(filteredFilters);
   };
 
-  const filters = tripleStore.filterState.length > 0 ? tripleStore.filterState : defaultFilterState;
+  const filters = filterState.length > 0 ? filterState : defaultFilterState;
 
   return (
     <div className="relative flex overflow-hidden" ref={inputContainerRef}>
@@ -45,13 +51,7 @@ export function TripleInput() {
         <Search />
       </div>
       {showBasicFilter ? (
-        <Input
-          withExternalSearchIcon
-          withFilterIcon
-          placeholder="Search facts..."
-          value={tripleStore.query}
-          onChange={onChange}
-        />
+        <Input withExternalSearchIcon withFilterIcon placeholder="Search facts..." value={query} onChange={onChange} />
       ) : (
         <div className="flex w-full items-center gap-1 overflow-hidden rounded-l bg-white pl-10 shadow-inner-grey-02">
           {filters.map(filter => (
@@ -67,7 +67,7 @@ export function TripleInput() {
         <FilterDialog
           inputContainerWidth={inputRect?.width || 578}
           filterState={filters}
-          setFilterState={tripleStore.setFilterState}
+          setFilterState={setFilterState}
         />
       </div>
     </div>

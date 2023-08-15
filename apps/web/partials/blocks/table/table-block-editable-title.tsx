@@ -9,6 +9,7 @@ import { Entity } from '~/core/utils/entity';
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const { update, create } = useActionsStore();
   const userCanEdit = useUserIsEditing(spaceId);
+  // const { nameTriple, entityId, spaceId: entitySpaceId } = useTableBlock();
   const { nameTriple, entityId, spaceId: entitySpaceId } = useTableBlock();
 
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

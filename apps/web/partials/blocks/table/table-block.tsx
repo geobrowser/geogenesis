@@ -12,7 +12,7 @@ import * as React from 'react';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useTableBlock } from '~/core/state/table-block-store/table-block-store';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -96,7 +96,7 @@ export function TableBlock({ spaceId }: Props) {
     };
   });
 
-  const typeId = type.entityId;
+  const typeId = type?.entityId ?? '';
   const filterId = filterState?.[0]?.columnId ?? null;
   const filterValue = filterState?.[0]?.value ?? null;
 

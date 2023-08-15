@@ -1,45 +1,44 @@
 'use client';
 
-import { useSelector } from '@legendapp/state/react';
+import { useQuery } from '@tanstack/react-query';
 
-import { useTripleStoreInstance } from '../state/triple-store/triple-store-provider';
+import { Services } from '../services';
+import { setFilterState, setPage, setQuery } from '../state/triple-store/triple-store-slice';
 import { FilterState } from '../types';
+import { useGeoDispatch } from './use-dispatch';
+import { useGeoSelector } from './use-selector';
 
-export const useTriples = () => {
-  const {
-    triples$,
-    query$,
-    setQuery,
-    setPageNumber,
-    setNextPage,
-    setPreviousPage,
-    pageNumber$,
-    hasPreviousPage$,
-    hasNextPage$,
-    filterState$,
-    hydrated$,
-    setFilterState,
-  } = useTripleStoreInstance();
-  const triples = useSelector(triples$);
-  const pageNumber = useSelector(pageNumber$);
-  const hasPreviousPage = useSelector(hasPreviousPage$);
-  const hasNextPage = useSelector(hasNextPage$);
-  const query = useSelector(query$);
-  const hydrated = useSelector(hydrated$);
-  const filterState = useSelector<FilterState>(filterState$);
+const DEFAULT_PAGE_SIZE = 100;
+
+export function useTriples({ spaceId }: { spaceId: string }) {
+  const { subgraph, config } = Services.useServices();
+  const state = useGeoSelector(state => state.triplesStore);
+  const dispatch = useGeoDispatch();
+
+  const { data: triples, isLoading } = useQuery({
+    queryKey: ['triples-store', state.query, state.pageNumber, JSON.stringify(state.filterState)],
+    queryFn: ({ signal }) =>
+      subgraph.fetchTriples({
+        query: state.query,
+        endpoint: config.subgraph,
+        filter: state.filterState,
+        first: DEFAULT_PAGE_SIZE + 1,
+        skip: state.pageNumber * DEFAULT_PAGE_SIZE,
+        space: spaceId,
+        signal,
+      }),
+  });
 
   return {
-    triples,
-    query,
-    setQuery,
-    setPageNumber,
-    setNextPage,
-    setPreviousPage,
-    hydrated,
-    pageNumber,
-    hasPreviousPage,
-    hasNextPage,
-    filterState,
-    setFilterState,
+    triples: triples?.slice(0, DEFAULT_PAGE_SIZE) ?? [],
+    pageNumber: state.pageNumber,
+    query: state.query,
+    filterState: state.filterState,
+    hasNextPage: triples ? triples.length > DEFAULT_PAGE_SIZE : false,
+    hasPreviousPage: state.pageNumber > 0,
+    setFilterState: (filterState: FilterState) => dispatch(setFilterState(filterState)),
+    setQuery: (query: string) => dispatch(setQuery(query)),
+    setPage: (pageNumber: number) => dispatch(setPage(pageNumber)),
+    hydrated: !isLoading,
   };
-};
+}

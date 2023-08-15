@@ -1,6 +1,7 @@
 import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit';
 
 import { EditableStoreActions } from './editable-store';
+import { triplesStoreSlice } from './triple-store/triple-store-slice';
 import { WipLocalStoreActions } from './wip-local-store';
 
 const listenerMiddleware = createListenerMiddleware();
@@ -16,6 +17,7 @@ export const store = configureStore({
   reducer: {
     changes: WipLocalStoreActions.triplesSlice.reducer,
     isEditing: EditableStoreActions.editableSlice.reducer,
+    triplesStore: triplesStoreSlice.reducer,
   },
   devTools: process.env.NODE_ENV === 'development',
   // Add the listener middleware to the store.

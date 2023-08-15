@@ -69,15 +69,17 @@ export function upsertName({
  * ```
  */
 export function createGraphQLStringFromFilters(
-  filters: {
-    columnId: string;
-    valueType: TripleValueType;
-    value: string;
-  }[],
+  filters:
+    | {
+        columnId: string;
+        valueType: TripleValueType;
+        value: string;
+      }[]
+    | null,
   typeId: string | null
 ): string {
   if (!typeId) return '';
-  if (filters.length === 0) return `{typeIds_contains_nocase: ["${typeId}"]}`;
+  if (!filters || filters.length === 0) return `{typeIds_contains_nocase: ["${typeId}"]}`;
 
   const filtersAsStrings = filters
     .map(filter => {

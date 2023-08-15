@@ -25,9 +25,7 @@ export function Component({ spaceId, spaceImage, spaceName, initialTriples, init
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />
 
-      <TripleStoreProvider space={spaceId} initialParams={initialParams}>
-        <Triples spaceId={spaceId} initialTriples={initialTriples} />
-      </TripleStoreProvider>
+      <Triples spaceId={spaceId} initialTriples={initialTriples} />
     </div>
   );
 }
