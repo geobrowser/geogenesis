@@ -21,7 +21,7 @@ function useUserProfile(address?: string) {
   return data ? data[1] : null;
 }
 
-export function PersonalHomeUserBanner() {
+export function PersonalHomeHeader() {
   const { address } = useAccount();
   const profile = useUserProfile(address);
   return (
