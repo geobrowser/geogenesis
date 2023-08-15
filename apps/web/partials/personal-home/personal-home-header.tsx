@@ -25,7 +25,7 @@ export function PersonalHomeHeader() {
   const { address } = useAccount();
   const profile = useUserProfile(address);
   return (
-    <div className="flex flex-row items-center justify-between w-full">
+    <div className="flex flex-row items-center justify-between w-full mb-10">
       <div className="flex flex-row items-center gap-4 ">
         <div className="relative rounded-sm overflow-hidden w-14 h-14">
           <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />

@@ -1,7 +1,4 @@
-import { PersonalHomeHeader } from '~/partials/personal-home/personal-home-header';
-import { PersonalHomeSidebar } from '~/partials/personal-home/personal-home-sidebar';
-
-import { PersonalHomeRequestsFeed } from '../../partials/personal-home/personal-home-requests-feed';
+import { Component } from './component';
 
 // currently the route is /dashboard while scaffolding
 // originally had it as /dashboard/[userAddress] but thinking we'd use that for public profiles
@@ -57,18 +54,6 @@ const mockJoinProps = [
   },
 ];
 
-export default function PersonalSpace() {
-  return (
-    <div className="flex flex-col mx-28 h-screen mb-8">
-      <PersonalHomeHeader />
-      <div className="grid grid-cols-4 w-full gap-8 overflow-hidden">
-        <div className="col-span-3 flex-1 overflow-y-scroll">
-          <PersonalHomeRequestsFeed requests={mockJoinProps} />
-        </div>
-        <div className="col-span-1">
-          <PersonalHomeSidebar />
-        </div>
-      </div>
-    </div>
-  );
+export default function PersonalHomePage() {
+  return <Component requests={mockJoinProps} />;
 }
