@@ -8,10 +8,10 @@ import { Request } from './types';
 // component for the icon + status - badge maybe?
 
 const RequestBadge = ({ requestType }: Pick<Request, 'requestType'>) => {
-  const iconType = requestType === 'member' ? 'publish' : 'create';
+  const iconType = requestType === 'member' ? 'member' : 'bulkEdit';
   const joinRequestType = requestType === 'member' ? 'Member join request' : 'Editor join request';
   return (
-    <div className="flex flex-row items-center rounded-sm bg-grey-01 text-text gap-1 p-2">
+    <div className="flex flex-row items-center rounded-sm bg-grey-01 text-text gap-2 p-2">
       <Icon icon={iconType} />
       <span className="text-text text-sm font-medium text-weight-500">{joinRequestType}</span>
     </div>
