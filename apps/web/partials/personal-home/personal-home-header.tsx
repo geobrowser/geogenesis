@@ -1,15 +1,18 @@
 'use client';
 
-import { useAccount, useQuery } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
+
+import { useAccount } from 'wagmi';
 
 import { Services } from '~/core/services';
 
 import { Avatar } from '~/design-system/avatar';
-import { Button, SmallButton } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
 
 function useUserProfile(address?: string) {
   const { subgraph, config } = Services.useServices();
 
+  // @TODO: Merge with local data
   const { data } = useQuery({
     queryKey: ['user-profile', address],
     queryFn: async () => {
