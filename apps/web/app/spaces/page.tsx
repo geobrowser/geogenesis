@@ -63,6 +63,7 @@ const HIDDEN_SPACES: Array<string> = [
   '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in San Francisco
   '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street outreach in San Francisco
   '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
+  '0x2C423d74eEC59867b16693Ec2870292b302729ec', // Web3 economics
 ];
 
 export default async function Spaces({ searchParams }: { searchParams: ServerSideEnvParams }) {
