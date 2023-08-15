@@ -7,6 +7,7 @@ import * as React from 'react';
 import { Chain, WagmiConfig, configureChains, createConfig, useDisconnect } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
+import { publicProvider } from 'wagmi/providers/public';
 
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
@@ -37,7 +38,7 @@ const LOCAL_CHAIN: Chain = {
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   // Only make the dev chains available in development
   [polygon, ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : [])],
-  [alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! })]
+  [alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }), publicProvider()]
 );
 
 const wagmiConfig = createConfig(
