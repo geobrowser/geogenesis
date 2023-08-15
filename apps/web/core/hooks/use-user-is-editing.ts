@@ -1,7 +1,7 @@
 'use client';
 
-import { useEditable } from '../state/editable-store';
 import { useAccessControl } from './use-access-control';
+import { useEditable } from './use-editable';
 
 export function useUserIsEditing(spaceId?: string) {
   const { editable } = useEditable();

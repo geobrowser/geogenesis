@@ -1,4 +1,4 @@
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/hooks/use-editable';
 import { TableBlockFilter } from '~/core/state/table-block-store/table-block-store';
 
 import { IconButton } from '~/design-system/button';

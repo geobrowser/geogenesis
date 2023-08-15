@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useEditable } from '~/core/hooks/use-editable';
 import { ID } from '~/core/id';
-import { useEditable } from '~/core/state/editable-store/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';

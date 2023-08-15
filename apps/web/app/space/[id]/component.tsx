@@ -41,6 +41,8 @@ interface Props {
 export function Component(props: Props) {
   const renderEditablePage = useUserIsEditing(props.spaceId);
 
+  console.log('renderEditablePage', renderEditablePage);
+
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;

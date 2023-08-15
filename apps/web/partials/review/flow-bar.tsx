@@ -9,7 +9,7 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store/diff-store';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/hooks/use-editable';
 import { Action } from '~/core/utils/action';
 
 import { Button } from '~/design-system/button';

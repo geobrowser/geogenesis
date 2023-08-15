@@ -5,10 +5,10 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { memo } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useEditable } from '~/core/hooks/use-editable';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 import { SpacePresenceProvider } from '~/core/presence/presence-provider';
-import { useEditable } from '~/core/state/editable-store';
 import { Column, Row } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
