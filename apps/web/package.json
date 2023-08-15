@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "pnpm exec playwright test"
   },
   "dependencies": {
     "@geogenesis/action-schema": "workspace:*",
@@ -76,6 +77,7 @@
   "devDependencies": {
     "@babel/core": "^7.19.0",
     "@next/bundle-analyzer": "^12.3.0",
+    "@playwright/test": "^1.37.0",
     "@tailwindcss/line-clamp": "^0.4.2",
     "@testing-library/dom": "^8.19.1",
     "@testing-library/jest-dom": "^5.16.5",
