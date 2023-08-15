@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import { DEFAULT_TRIPLES_PAGE_SIZE } from '~/core/constants';
+
 import { Subgraph } from '.';
-import { DEFAULT_PAGE_SIZE } from '../state/triple-store';
 import { Column } from '../types';
 
 interface FetchColumnsOptions {
@@ -25,7 +26,7 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
     endpoint: params.endpoint,
     query: '',
     signal,
-    first: DEFAULT_PAGE_SIZE,
+    first: DEFAULT_TRIPLES_PAGE_SIZE,
     skip: 0,
     filter: [
       { field: 'entity-id', value: params.typeIds?.[0] ?? '' },

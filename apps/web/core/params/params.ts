@@ -1,25 +1,8 @@
 import { AppConfig, Environment } from '~/core/environment';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
-import { InitialTripleStoreParams } from '~/core/state/triple-store';
 import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/core/types';
 
 export const ENV_PARAM_NAME = 'env';
-
-export function parseTripleQueryFilterFromParams(params: { query?: string; page?: string }): InitialTripleStoreParams {
-  const filterStateResult = Object.entries(params)
-    .map(([key, value]) => {
-      if (key === 'query' || key === 'page' || key === 'typeId') return null; // filter out additional params
-      if (!value) return null;
-      return { field: key as FilterField, value };
-    })
-    .flatMap(x => (x ? [x] : [])); // filter out null values
-
-  return {
-    query: params.query ?? '',
-    pageNumber: Number(params.page ?? 0),
-    filterState: filterStateResult,
-  };
-}
 
 export function parseEntityTableQueryFilterFromUrl(url: string): InitialEntityTableStoreParams {
   const params = new URLSearchParams(url.split('?')[1]);
@@ -74,16 +57,6 @@ export function stringifyEntityTableParameters({
   const params = new URLSearchParams({
     ...(query !== '' && { query }),
     ...(typeId && { typeId }),
-    ...(pageNumber !== 0 && { page: pageNumber.toString() }),
-    ...getAdvancedQueryParams(filterState),
-  });
-
-  return params.toString();
-}
-
-export function stringifyQueryParameters({ query, pageNumber, filterState }: InitialTripleStoreParams): string {
-  const params = new URLSearchParams({
-    ...(query !== '' && { query }),
     ...(pageNumber !== 0 && { page: pageNumber.toString() }),
     ...getAdvancedQueryParams(filterState),
   });

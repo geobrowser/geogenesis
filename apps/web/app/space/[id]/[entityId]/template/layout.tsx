@@ -3,11 +3,11 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { DEFAULT_TRIPLES_PAGE_SIZE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Params } from '~/core/params';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -154,7 +154,7 @@ async function getProfilePage(
           endpoint,
           query: '',
           skip: 0,
-          first: DEFAULT_PAGE_SIZE,
+          first: DEFAULT_TRIPLES_PAGE_SIZE,
           filter: [{ field: 'entity-id', value: blockId }],
         });
       })

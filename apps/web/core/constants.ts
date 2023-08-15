@@ -13,3 +13,5 @@ export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-soc
 
 export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
+
+export const DEFAULT_TRIPLES_PAGE_SIZE = 100;

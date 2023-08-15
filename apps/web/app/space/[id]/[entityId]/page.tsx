@@ -4,10 +4,10 @@ import { redirect } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
+import { DEFAULT_TRIPLES_PAGE_SIZE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -137,7 +137,7 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
           endpoint: config.subgraph,
           query: '',
           skip: 0,
-          first: DEFAULT_PAGE_SIZE,
+          first: DEFAULT_TRIPLES_PAGE_SIZE,
           filter: [{ field: 'entity-id', value: blockId }],
         });
       })
