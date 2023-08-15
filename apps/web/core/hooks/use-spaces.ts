@@ -1,20 +1,26 @@
 'use client';
 
-import { useSelector } from '@legendapp/state/react';
+import { useQuery } from '@tanstack/react-query';
 
-import { useSpaceStoreInstance } from '../state/spaces-store';
+import { Services } from '~/core/services';
 
-export const useSpaces = () => {
-  const { spaces$, admins$, editors$, editorControllers$ } = useSpaceStoreInstance();
-  const spaces = useSelector(spaces$);
-  const admins = useSelector(admins$);
-  const editorControllers = useSelector(editorControllers$);
-  const editors = useSelector(editors$);
+export function useSpaces() {
+  const { config, subgraph } = Services.useServices();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['spaces-store'],
+    queryFn: async () => subgraph.fetchSpaces({ endpoint: config.subgraph }),
+  });
+
+  const spaces = !data || isLoading ? [] : data;
+  const admins = Object.fromEntries(spaces.map(space => [space.id, space.admins]));
+  const editorControllers = Object.fromEntries(spaces.map(space => [space.id, space.editorControllers]));
+  const editors = Object.fromEntries(spaces.map(space => [space.id, space.editors]));
 
   return {
     spaces,
     admins,
-    editors,
     editorControllers,
+    editors,
   };
-};
+}

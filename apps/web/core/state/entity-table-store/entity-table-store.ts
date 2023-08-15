@@ -9,7 +9,6 @@ import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
-import { SpaceStore } from '~/core/state/spaces-store';
 import { CreateType } from '~/core/type';
 import { Column, EntityValue, Row, Space, Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -32,7 +31,7 @@ interface IEntityTableStore {
   hydrated$: Observable<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   ActionsStore: ActionsStore;
-  SpaceStore: SpaceStore;
+  space?: Space;
   setQuery(query: string): void;
   setPageNumber(page: number): void;
 }
@@ -45,7 +44,7 @@ interface IEntityTableStoreConfig {
   pageSize?: number;
   initialSelectedType: TripleType | null;
   ActionsStore: ActionsStore;
-  SpaceStore: SpaceStore;
+  space?: Space;
   LocalStore: LocalStore;
   initialColumns: Column[];
   initialRows: Row[];
@@ -80,12 +79,11 @@ export class EntityTableStore implements IEntityTableStore {
   >;
 
   query$: Observable<string>;
-  space$: ObservableComputed<Space | undefined>;
+  space: Space | undefined;
   hasPreviousPage$: ObservableComputed<boolean>;
   hasNextPage$: ObservableComputed<boolean>;
   spaceId: string;
   ActionsStore: ActionsStore;
-  SpaceStore: SpaceStore;
   LocalStore: LocalStore;
   abortController: AbortController = new AbortController();
 
@@ -96,18 +94,18 @@ export class EntityTableStore implements IEntityTableStore {
     initialRows,
     initialColumns,
     LocalStore,
-    SpaceStore,
     subgraph,
     config,
+    space,
     initialParams = DEFAULT_INITIAL_PARAMS,
     pageSize = DEFAULT_PAGE_SIZE,
   }: IEntityTableStoreConfig) {
     this.ActionsStore = ActionsStore;
-    this.SpaceStore = SpaceStore;
     this.LocalStore = LocalStore;
     this.hydrated$ = observable(false);
     this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
+    this.space = space;
 
     this.spaceId = spaceId;
     this.query$ = observable(initialParams.query);
@@ -204,11 +202,6 @@ export class EntityTableStore implements IEntityTableStore {
         columns,
         this.selectedType$.get()?.entityId
       );
-    });
-
-    this.space$ = computed(() => {
-      const spaces = this.SpaceStore.spaces$.get();
-      return spaces.find(s => s.id === spaceId);
     });
 
     this.rows$ = makeOptionalComputed(
@@ -366,12 +359,7 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   createForeignType = (foreignType: TripleType) => {
-    CreateType.createForeignType(
-      foreignType,
-      this.spaceId,
-      this.space$.spaceConfigEntityId.get(),
-      this.ActionsStore.create
-    );
+    CreateType.createForeignType(foreignType, this.spaceId, this.space?.spaceConfigEntityId, this.ActionsStore.create);
   };
 
   createType = (entityName: string) => {

@@ -3,9 +3,9 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
+import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { useActionsStoreInstance } from '~/core/state/actions-store';
-import { useSpaceStoreInstance } from '~/core/state/spaces-store';
 import { Column, Row, Triple } from '~/core/types';
 
 import { useLocalStoreInstance } from '../local-store';
@@ -32,9 +32,11 @@ export function EntityTableStoreProvider({
   initialRows,
 }: Props) {
   const { subgraph, config } = Services.useServices();
-  const SpaceStore = useSpaceStoreInstance();
   const ActionsStore = useActionsStoreInstance();
   const LocalStore = useLocalStoreInstance();
+  const { spaces } = useSpaces();
+
+  const space = spaces.find(s => s.id === spaceId);
 
   const store = useMemo(() => {
     return new EntityTableStore({
@@ -42,7 +44,7 @@ export function EntityTableStoreProvider({
       initialParams,
       initialSelectedType,
       ActionsStore,
-      SpaceStore,
+      space,
       LocalStore,
       initialColumns,
       initialRows,
@@ -53,7 +55,7 @@ export function EntityTableStoreProvider({
     spaceId,
     initialSelectedType,
     ActionsStore,
-    SpaceStore,
+    space,
     LocalStore,
     initialParams,
     initialColumns,

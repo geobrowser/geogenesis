@@ -11,7 +11,6 @@ import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
 import { store } from './state/root-store';
-import { SpaceStoreProvider } from './state/spaces-store';
 import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();
@@ -22,13 +21,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <WalletProvider>
         <Services.Provider>
           <ActionsStoreProvider>
-            <SpaceStoreProvider>
-              <LocalStoreProvider>
-                <Provider store={store}>
-                  <DiffProvider>{children}</DiffProvider>
-                </Provider>
-              </LocalStoreProvider>
-            </SpaceStoreProvider>
+            <LocalStoreProvider>
+              <Provider store={store}>
+                <DiffProvider>{children}</DiffProvider>
+              </Provider>
+            </LocalStoreProvider>
           </ActionsStoreProvider>
         </Services.Provider>
       </WalletProvider>
