@@ -230,7 +230,7 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
               }}
             />
           ) : (
-            <BoringAvatar size={154} name={address} variant="pixel" />
+            <BoringAvatar size={154} name={address} variant="beam" />
           )}
         </div>
         <div className="flex justify-center">

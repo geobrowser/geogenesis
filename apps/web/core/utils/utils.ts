@@ -50,6 +50,13 @@ export const NavUtils = {
 
     return `/space/${spaceId}/${newEntityId}`;
   },
+  toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
+    if (spaceIdParam) {
+      return `/space/${spaceId}/${entityId}/template/activity?spaceId=${spaceIdParam}`;
+    }
+
+    return `/space/${spaceId}/${entityId}/template/activity`;
+  },
 };
 
 export function getFilesFromFileList(fileList: FileList): File[] {

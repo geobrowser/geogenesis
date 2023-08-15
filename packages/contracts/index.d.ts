@@ -1,1 +1,2 @@
-export * as SpaceAbi from './build/abis/Space.json'
+import SpaceAbi from './build/abis/Space.json'
+export { SpaceAbi }

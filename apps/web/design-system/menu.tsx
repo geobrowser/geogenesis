@@ -41,7 +41,7 @@ export function Menu({
   // @TODO: accessibility for button focus states
   return (
     <Root onOpenChange={onOpenChange} open={open}>
-      <Trigger>{trigger}</Trigger>
+      <Trigger asChild>{trigger}</Trigger>
       <AnimatePresence>
         {open && (
           <MotionContent

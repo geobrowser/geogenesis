@@ -8,7 +8,6 @@ const withBundleAnalyzer = analyzer({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // reactStrictMode: true,
-  swcMinify: true,
   experimental: {
     // serverActions: true,
     webpackBuildWorker: true,
