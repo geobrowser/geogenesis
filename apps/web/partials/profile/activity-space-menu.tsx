@@ -60,10 +60,14 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
           {name}
         </SmallButton>
       }
-      className="flex flex-col max-h-[300px] max-w-[260px] overflow-y-auto bg-white"
+      className="flex flex-col max-h-[300px] max-w-[260px] overflow-y-auto"
     >
       {spacesWithAll.map(space => (
-        <button onClick={() => onSelect(space.id)} key={space.id} className="text-button px-2 py-3">
+        <button
+          onClick={() => onSelect(space.id)}
+          key={space.id}
+          className="text-button px-2 py-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75"
+        >
           {space.attributes[SYSTEM_IDS.NAME]}
         </button>
       ))}

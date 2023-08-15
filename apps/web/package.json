@@ -53,7 +53,7 @@
     "connectkit": "1.5.1",
     "diff": "^5.1.0",
     "effect": "2.0.0-next.21",
-    "framer-motion": "^10.3.2",
+    "framer-motion": "^10.15.2",
     "immer": "^9.0.16",
     "js-confetti": "^0.11.0",
     "lokijs": "^1.5.12",

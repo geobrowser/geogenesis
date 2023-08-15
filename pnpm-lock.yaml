@@ -89,7 +89,7 @@ importers:
       eslint-plugin-prettier: ^4.0.0
       eslint-plugin-react: ^7.31.11
       eslint-plugin-react-hooks: ^4.6.0
-      framer-motion: ^10.3.2
+      framer-motion: ^10.15.2
       immer: ^9.0.16
       js-confetti: ^0.11.0
       jsdom: ^20.0.0
@@ -159,7 +159,7 @@ importers:
       connectkit: 1.5.1_cmm52l5usp4p32k7ozxntkoy5q
       diff: 5.1.0
       effect: 2.0.0-next.21
-      framer-motion: 10.3.2_biqbaboplfbrettd7655fr4n2y
+      framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
       js-confetti: 0.11.0
       lokijs: 1.5.12
@@ -11049,8 +11049,8 @@ packages:
       map-cache: 0.2.2
     dev: true
 
-  /framer-motion/10.3.2_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-8GrK3X2vXG/9LJCNJuU5gKxDwSN0VTf7tD6MFP3S9F7rgsUavx+8ZNwhfZfak6maCBBHZ1m86K7TIXpbdfML2w==}
+  /framer-motion/10.15.2_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-z14GYH4WQXnuTgggwf0qyX0vo98PDE+dw21F7aLzUqEcrsmfLovy4jPiA82Cp/X0juWuEHte7rJGOjds9GAQFA==}
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
@@ -11062,7 +11062,7 @@ packages:
     dependencies:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      tslib: 2.4.0
+      tslib: 2.6.1
     optionalDependencies:
       '@emotion/is-prop-valid': 0.8.8
     dev: false
@@ -18268,10 +18268,6 @@ packages:
 
   /tslib/1.14.1:
     resolution: {integrity: sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==}
-
-  /tslib/2.4.0:
-    resolution: {integrity: sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==}
-    dev: false
 
   /tslib/2.6.1:
     resolution: {integrity: sha512-t0hLfiEKfMUoqhG+U1oid7Pva4bbDPHYfJNiB7BiIjRkj1pyC++4N3huJfqY6aRH6VTB0rvtzQwjM4K6qpfOig==}
