@@ -10,6 +10,6 @@ test('has title', async ({ page }) => {
 test('connect button', async ({ page }) => {
   await page.goto('/spaces');
 
-  // Click the get started link.
+  // Check that the Connect button is visible.
   await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible();
 });
