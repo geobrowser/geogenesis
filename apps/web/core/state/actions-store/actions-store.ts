@@ -3,6 +3,7 @@ import { Observable, computed, observable } from '@legendapp/state';
 import { WalletClient } from 'wagmi';
 
 import { Publish, Storage } from '~/core/io';
+import { store } from '~/core/state/root-store';
 import {
   Action as ActionType,
   CreateTripleAction,
@@ -15,8 +16,7 @@ import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
-import { store } from '../wip-local-store/wip-local-store';
-import { remove, upsert } from '../wip-local-store/wip-local-store-slice';
+import { WipLocalStoreActions } from '../wip-local-store';
 
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
@@ -138,7 +138,7 @@ export class ActionsStore implements IActionsStore {
       type: 'createTriple',
     };
 
-    store.dispatch(upsert({ newTriple: triple }));
+    store.dispatch(WipLocalStoreActions.upsert({ newTriple: triple }));
 
     this.addActions(triple.space, [action]);
   };
@@ -151,13 +151,13 @@ export class ActionsStore implements IActionsStore {
       type: 'deleteTriple',
     };
 
-    store.dispatch(remove(triple));
+    store.dispatch(WipLocalStoreActions.remove(triple));
 
     this.addActions(spaceId, [actions]);
   };
 
   update = (triple: ITriple, oldTriple: ITriple) => {
-    store.dispatch(upsert({ newTriple: triple, oldTriple }));
+    store.dispatch(WipLocalStoreActions.upsert({ newTriple: triple, oldTriple }));
 
     const action: EditTripleAction = {
       type: 'editTriple',

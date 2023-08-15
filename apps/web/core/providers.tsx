@@ -10,8 +10,8 @@ import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
+import { store } from './state/root-store';
 import { SpaceStoreProvider } from './state/spaces-store';
-import { store } from './state/wip-local-store/wip-local-store';
 import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();

@@ -10,9 +10,9 @@ import * as React from 'react';
 import { useAccount } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useEditable } from '~/core/hooks/use-editable';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Services } from '~/core/services';
-import { useEditable } from '~/core/state/editable-store/editable-store';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';

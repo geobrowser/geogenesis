@@ -1,16 +1,10 @@
 'use client';
 
-import { createSelector } from '@reduxjs/toolkit';
-
 import { useGeoDispatch } from '~/core/hooks/use-dispatch';
 import { useGeoSelector } from '~/core/hooks/use-selector';
-import { RootState } from '~/core/state/wip-local-store/wip-local-store';
-import { remove, upsert } from '~/core/state/wip-local-store/wip-local-store-slice';
+import { visibleTriplesSelector } from '~/core/state/utils';
+import { WipLocalStoreActions } from '~/core/state/wip-local-store';
 import { Triple } from '~/core/utils/triple';
-
-const selectVisibleTriples = (state: RootState) => state.changes.triples.filter(t => !t.hasBeenDeleted);
-
-const visibleTriplesSelector = createSelector([selectVisibleTriples], triples => triples);
 
 export default function LocalPage() {
   const triples = useGeoSelector(state => visibleTriplesSelector(state));
@@ -19,7 +13,7 @@ export default function LocalPage() {
   return (
     <div className="flex flex-col gap-2">
       {triples.map(t => (
-        <button onClick={() => dispatch(remove(t))} key={t.id}>
+        <button onClick={() => dispatch(WipLocalStoreActions.remove(t))} key={t.id}>
           {t.id}
         </button>
       ))}
@@ -27,7 +21,7 @@ export default function LocalPage() {
       <button
         onClick={() =>
           dispatch(
-            upsert({
+            WipLocalStoreActions.upsert({
               newTriple: Triple.withId({
                 attributeId: 'name',
                 attributeName: 'Name',

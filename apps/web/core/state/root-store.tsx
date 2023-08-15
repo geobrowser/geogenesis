@@ -1,11 +1,12 @@
 import { configureStore, createListenerMiddleware } from '@reduxjs/toolkit';
 
-import { triplesSlice, upsert } from './wip-local-store-slice';
+import { EditableStoreActions } from './editable-store';
+import { WipLocalStoreActions } from './wip-local-store';
 
 const listenerMiddleware = createListenerMiddleware();
 
 listenerMiddleware.startListening({
-  actionCreator: upsert,
+  actionCreator: WipLocalStoreActions.upsert,
   effect: action => {
     console.log('triple added', action.payload.newTriple);
   },
@@ -13,8 +14,10 @@ listenerMiddleware.startListening({
 
 export const store = configureStore({
   reducer: {
-    changes: triplesSlice.reducer,
+    changes: WipLocalStoreActions.triplesSlice.reducer,
+    isEditing: EditableStoreActions.editableSlice.reducer,
   },
+  devTools: process.env.NODE_ENV === 'development',
   // Add the listener middleware to the store.
   // NOTE: Since this can receive actions with functions inside,
   // it should go before the serializability check middleware
