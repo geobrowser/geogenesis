@@ -1,14 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test('has title', async ({ page }) => {
-  await page.goto('https://geobrowser.io/spaces');
+  await page.goto('/spaces');
 
   // Expect a title "to contain" a substring.
   await expect(page).toHaveTitle(/Geo Genesis/);
 });
 
 test('connect button', async ({ page }) => {
-  await page.goto('https://geobrowser.io/spaces');
+  await page.goto('/spaces');
 
   // Click the get started link.
   await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible();
