@@ -35,7 +35,7 @@ jobs:
         run: pnpm --filter web test:e2e:install
 
       - name: 🏗 Build
-        run: pnpm build
+        run: NODE_ENV=test pnpm build
 
       - name: 🎭 Playwright tests
         run: pnpm --filter web test:e2e

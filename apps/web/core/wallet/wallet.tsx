@@ -96,7 +96,9 @@ const createMockWalletConfig = () => {
   );
 };
 
-const wagmiConfig = createMockWalletConfig();
+const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
+
+const wagmiConfig = isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -119,11 +121,17 @@ export function GeoConnectButton() {
         if (!isConnected) {
           return (
             <Button
-              onClick={() =>
-                connect({
-                  connector: mockConnector,
-                  chainId: polygon.id,
-                })
+              onClick={
+                isTestEnv
+                  ? () => {
+                      console.log('Test environment detected: using mock wallet');
+
+                      connect({
+                        connector: mockConnector,
+                        chainId: polygon.id,
+                      });
+                    }
+                  : show
               }
               variant="secondary"
             >
