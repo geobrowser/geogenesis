@@ -10,7 +10,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "pnpm exec playwright test",
+    "test:e2e": "NODE_ENV=test pnpm exec playwright test",
     "test:e2e:install": "pnpm exec playwright install --with-deps"
   },
   "dependencies": {
