@@ -111,10 +111,7 @@ export function GeoConnectButton() {
   // without going through the modal. It uses wagmi internally so we can escape-hatch
   // into wagmi-land to disconnect.
   const { disconnect } = useDisconnect();
-  const { connect } = useConnect({
-    connector: mockConnector,
-    chainId: polygon.id,
-  });
+  const { connect } = useConnect();
 
   return (
     <ConnectKitButton.Custom>
