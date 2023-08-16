@@ -1,12 +1,13 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Menu } from '~/design-system/menu';
@@ -16,7 +17,7 @@ interface Props {
   entityId: string;
 }
 
-export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
+export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
 
   const initialSpace = spaces.find(space => space.id === spaceId);
@@ -37,6 +38,7 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
       id: 'all',
       attributes: {
         name: 'All',
+        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: '',
       },
     },
     ...spaces,
@@ -66,8 +68,13 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
         <button
           onClick={() => onSelect(space.id)}
           key={space.id}
-          className="text-button px-2 py-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75"
+          className="text-button px-2 py-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75 flex items-center gap-2 w-full"
         >
+          {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
+            <div className="relative w-3 h-3 rounded-xs overflow-hidden">
+              <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
+            </div>
+          )}
           {space.attributes[SYSTEM_IDS.NAME]}
         </button>
       ))}

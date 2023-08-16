@@ -12,7 +12,7 @@ import { Value } from '~/core/utils/value';
 
 import { SmallButton } from '~/design-system/button';
 
-import { ActivitySpaceMenu } from '~/partials/profile/activity-space-menu';
+import { ActivitySpaceFilter } from '~/partials/profile/activity-space-filter';
 
 export const runtime = 'edge';
 
@@ -63,7 +63,7 @@ export default async function ActivityPage({ params, searchParams }: Props) {
           Proposals
         </SmallButton>
         <p>in</p>
-        <ActivitySpaceMenu spaceId={searchParams.spaceId} entityId={params.entityId} />
+        <ActivitySpaceFilter spaceId={searchParams.spaceId} entityId={params.entityId} />
       </div>
 
       <div className="divide-y divide-divider">
