@@ -18,6 +18,8 @@ const RequestBadge = ({ requestType }: Pick<Request, 'requestType'>) => {
   );
 };
 
+// rounded-[12px] -> rounded-xl (matche the figma) but rounded-xl token not working
+
 export function PersonalHomeJoinRequestCard({
   requestType,
   requesterName,
@@ -26,7 +28,7 @@ export function PersonalHomeJoinRequestCard({
   spaceName,
 }: Request) {
   return (
-    <div className="flex flex-col border border-grey-02 rounded grey-02 p-4">
+    <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
       <div className="flex flex-row items-center w-full justify-between">
         <div className="flex flex-row items-center gap-4">
           <div className="relative rounded-sm overflow-hidden">

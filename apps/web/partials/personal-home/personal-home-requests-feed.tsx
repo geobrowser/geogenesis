@@ -7,7 +7,7 @@ interface Props {
 
 export function PersonalHomeRequestsFeed({ requests }: Props) {
   return (
-    <div className="flex flex-col my-4 gap-3">
+    <div className="flex flex-col my-4 gap-3 h-screen overflow-y-auto overscroll-contain">
       {requests?.map((request, idx) => (
         <PersonalHomeJoinRequestCard
           key={idx}
