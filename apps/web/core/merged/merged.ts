@@ -246,25 +246,28 @@ export class Merged implements IMergedDataSource {
     const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
 
     // Filter out any server rows that have been changed locally
-    const filteredServerRows = serverRows.filter(
-      sr => !localEntitiesIds.has(sr.id) && !serverEntitiesChangedLocallyIds.has(sr.id)
+    const filteredServerRows = serverEntityTriples.filter(
+      sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
     );
 
-    const entities = [
+    const entities = Entity.entitiesFromTriples([
       // These are entities that were created locally and have the selected type
-      ...entitiesCreatedOrChangedLocally,
+      ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
 
       // These are entities that have a new type locally and may exist on the server.
       // We need to fetch all triples associated with this entity in order to correctly
       // populate the table.
-      ...serverEntitiesChangedLocally,
+      ...serverEntitiesChangedLocally.flatMap(e => e.triples),
 
       // These are entities that have been fetched from the server and have the selected type.
       // They are deduped from the local changes above.
       ...filteredServerRows,
-    ];
+    ]);
 
-    return EntityTable.fromColumnsAndRows(entities, columns);
+    // Make sure we only generate rows for entities that have the selected type
+    const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
+
+    return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
   };
 }
 
