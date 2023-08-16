@@ -1,11 +1,13 @@
 'use client';
 
 import { ConnectKitButton, ConnectKitProvider, getDefaultConfig } from 'connectkit';
+import { createPublicClient, createWalletClient, http } from 'viem';
 
 import * as React from 'react';
 
-import { Chain, WagmiConfig, configureChains, createConfig, useDisconnect } from 'wagmi';
+import { Chain, WagmiConfig, configureChains, createConfig, useConnect, useDisconnect } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
+import { MockConnector } from 'wagmi/connectors/mock';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -45,16 +47,58 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   ]
 );
 
-const wagmiConfig = createConfig(
-  getDefaultConfig({
-    appName: 'Geo Genesis',
-    chains,
-    webSocketPublicClient,
-    publicClient,
-    autoConnect: true,
-    walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
-  })
-);
+const getMockWalletClient = () =>
+  createWalletClient({
+    transport: http(polygon.rpcUrls.default.http[0]),
+    chain: polygon,
+    account: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    key: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    pollingInterval: 100,
+  });
+
+const getMockPublicClient = () => {
+  return createPublicClient({
+    transport: http(polygon.rpcUrls.default.http[0]),
+    chain: polygon,
+    pollingInterval: 100,
+  });
+};
+
+const createRealWalletConfig = () => {
+  return createConfig(
+    getDefaultConfig({
+      appName: 'Geo Genesis',
+      chains,
+      webSocketPublicClient,
+      publicClient,
+      autoConnect: true,
+      walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+    })
+  );
+};
+
+const mockConnector = new MockConnector({
+  chains,
+  options: { chainId: polygon.id, walletClient: getMockWalletClient() },
+});
+
+const createMockWalletConfig = () => {
+  return createConfig(
+    getDefaultConfig({
+      connectors: [mockConnector],
+      appName: 'Geo Genesis',
+      chains,
+      // webSocketPublicClient,
+      publicClient: getMockPublicClient(),
+      autoConnect: false,
+      walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+    })
+  );
+};
+
+const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
+
+const wagmiConfig = isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -69,13 +113,28 @@ export function GeoConnectButton() {
   // without going through the modal. It uses wagmi internally so we can escape-hatch
   // into wagmi-land to disconnect.
   const { disconnect } = useDisconnect();
+  const { connect } = useConnect();
 
   return (
     <ConnectKitButton.Custom>
       {({ show, isConnected }) => {
         if (!isConnected) {
           return (
-            <Button onClick={show} variant="secondary">
+            <Button
+              onClick={
+                isTestEnv
+                  ? () => {
+                      console.log('Test environment detected: using mock wallet');
+
+                      connect({
+                        connector: mockConnector,
+                        chainId: polygon.id,
+                      });
+                    }
+                  : show
+              }
+              variant="secondary"
+            >
               <Wallet />
               Connect
             </Button>
