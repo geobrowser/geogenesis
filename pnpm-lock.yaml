@@ -28,6 +28,7 @@ importers:
       '@mailchimp/mailchimp_marketing': ^3.0.80
       '@mobily/ts-belt': ^4.0.0-rc.2
       '@next/bundle-analyzer': ^12.3.0
+      '@playwright/test': ^1.37.0
       '@radix-ui/react-dialog': ^1.0.2
       '@radix-ui/react-dropdown-menu': ^2.0.1
       '@radix-ui/react-popover': ^1.0.2
@@ -185,6 +186,7 @@ importers:
     devDependencies:
       '@babel/core': 7.19.6
       '@next/bundle-analyzer': 12.3.1
+      '@playwright/test': 1.37.0
       '@tailwindcss/line-clamp': 0.4.2_tailwindcss@3.2.4
       '@testing-library/dom': 8.19.1
       '@testing-library/jest-dom': 5.16.5
@@ -2982,6 +2984,17 @@ packages:
       picocolors: 1.0.0
       tiny-glob: 0.2.9
       tslib: 2.6.1
+    dev: true
+
+  /@playwright/test/1.37.0:
+    resolution: {integrity: sha512-181WBLk4SRUyH1Q96VZl7BP6HcK0b7lbdeKisn3N/vnjitk+9HbdlFz/L5fey05vxaAhldIDnzo8KUoy8S3mmQ==}
+    engines: {node: '>=16'}
+    hasBin: true
+    dependencies:
+      '@types/node': 17.0.45
+      playwright-core: 1.37.0
+    optionalDependencies:
+      fsevents: 2.3.2
     dev: true
 
   /@polka/url/1.0.0-next.21:
@@ -15271,6 +15284,12 @@ packages:
   /pkginfo/0.4.1:
     resolution: {integrity: sha1-tUGO8EOd5UJfxJlQQtztFPsqhP8=}
     engines: {node: '>= 0.4.0'}
+    dev: true
+
+  /playwright-core/1.37.0:
+    resolution: {integrity: sha512-1c46jhTH/myQw6sesrcuHVtLoSNfJv8Pfy9t3rs6subY7kARv0HRw5PpyfPYPpPtQvBOmgbE6K+qgYUpj81LAA==}
+    engines: {node: '>=16'}
+    hasBin: true
     dev: true
 
   /pluralize/8.0.0:
