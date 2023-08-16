@@ -13,9 +13,11 @@ export function Component({ requests }: Props) {
     <div className="flex flex-col mx-28  mb-8">
       <PersonalHomeHeader />
       <div className="grid grid-cols-4 w-full gap-8">
-        <div className="col-span-3 flex-1 h-screen overflow-hidden">
-          <PersonalHomeProposalCard />
-          <PersonalHomeRequestsFeed requests={requests} />
+        <div className="col-span-3 flex-1">
+          <div className="h-screen overflow-y-auto overscroll-contain">
+            <PersonalHomeProposalCard />
+            <PersonalHomeRequestsFeed requests={requests} />
+          </div>
         </div>
         <div className="col-span-1">
           <PersonalHomeSidebar />

@@ -1,13 +1,13 @@
-import Avatar from 'boring-avatars';
-
+import { Avatar } from '~/design-system/avatar';
 import { Icon } from '~/design-system/icon';
+import { Text } from '~/design-system/text';
 
 import { PersonalHomeRequestActionBar } from './personal-home-request-action-bar';
-import { Request } from './types';
+import { PersonalHomeRequest } from './types';
 
 // component for the icon + status - badge maybe?
 
-const RequestBadge = ({ requestType }: Pick<Request, 'requestType'>) => {
+const RequestBadge = ({ requestType }: Pick<PersonalHomeRequest, 'requestType'>) => {
   const iconType = requestType === 'member' ? 'member' : 'bulkEdit';
   const joinRequestType = requestType === 'member' ? 'Member join request' : 'Editor join request';
   return (
@@ -26,7 +26,7 @@ export function PersonalHomeJoinRequestCard({
   requesterAvatarUrl,
   spaceId,
   spaceName,
-}: Request) {
+}: PersonalHomeRequest) {
   return (
     <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
       <div className="flex flex-row items-center w-full justify-between">
@@ -34,7 +34,7 @@ export function PersonalHomeJoinRequestCard({
           <div className="relative rounded-sm overflow-hidden">
             <Avatar size={24} />
           </div>
-          <span className="text-smallTitle text-text">{requesterName}</span>
+          <Text variant="smallTitle">{requesterName}</Text>
         </div>
         <div>
           <RequestBadge requestType={requestType} />

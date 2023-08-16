@@ -1,4 +1,5 @@
 import { IconButton } from '~/design-system/button';
+import { Text } from '~/design-system/text';
 
 interface Props {
   spaceId?: string;
@@ -11,7 +12,9 @@ export function PersonalHomeRequestActionBar({ spaceId, spaceName, spaceAvatar }
     <div className="flex flex-row w-full mt-4 items-center justify-between">
       <div className="flex flex-row items-center gap-2">
         <div className="w-3 h-3 bg-purple rounded-sm" />
-        <span className="text-breadcrumb text-grey-04">{spaceName}</span>
+        <Text variant="breadcrumb" color="grey-04">
+          {spaceName}
+        </Text>
       </div>
       <div className="flex flex-row gap-2">
         <IconButton icon="close" className="border border-grey-02 rounded-sm p-2" />
