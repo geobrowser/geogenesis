@@ -27,7 +27,7 @@ props:
  - type for the createdBy will also change since it is a Person, but i'm passing in a string for mocking the UI
 */
 
-export function PersonalHomeProposalCard({ name, createdBy, status, time, votes }: VoteProposal) {
+export function PersonalHomeProposalCard({ name, createdBy, spaceName, status, time, votes }: VoteProposal) {
   return (
     <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
       <Text variant="smallTitle">{name}</Text>
@@ -42,7 +42,7 @@ export function PersonalHomeProposalCard({ name, createdBy, status, time, votes 
         <div className="flex flex-row items-center gap-2">
           <div className="w-3 h-3 bg-purple rounded-sm" />
           <Text variant="breadcrumb" color="grey-04">
-            Space Name
+            {spaceName}
           </Text>
         </div>
       </div>
