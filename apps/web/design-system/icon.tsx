@@ -21,6 +21,7 @@ import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import type { ColorName } from '~/design-system/theme/colors';
 
+import { BulkEdit } from './icons/bulk-edit';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Cog } from './icons/cog';
@@ -40,6 +41,7 @@ import { FilterTable } from './icons/filter-table';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { History } from './icons/history';
 import { Image } from './icons/image';
+import { Member } from './icons/member';
 import { Minus } from './icons/minus';
 import { NewTab } from './icons/new-tab';
 import { Plus } from './icons/plus';
@@ -92,7 +94,9 @@ export type IconName =
   | 'minus'
   | 'url'
   | 'wallet'
-  | 'disconnectWallet';
+  | 'disconnectWallet'
+  | 'bulkEdit'
+  | 'member';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -109,6 +113,7 @@ const Blank = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" 
 
 const icons: Record<IconName, React.ElementType> = {
   blank: Blank,
+  bulkEdit: BulkEdit,
   create: Create,
   createSmall: CreateSmall,
   close: Close,
@@ -154,4 +159,5 @@ const icons: Record<IconName, React.ElementType> = {
   url: Url,
   wallet: Wallet,
   disconnectWallet: DisconnectWallet,
+  member: Member,
 };
