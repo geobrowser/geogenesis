@@ -23,9 +23,11 @@ props:
     - each vote likely object with person id, proposal id, vote type
     - votesYes
     - votesNo
+
+ - type for the createdBy will also change since it is a Person, but i'm passing in a string for mocking the UI
 */
 
-export function PersonalHomeProposalCard({ name, description, createdBy, createdAt, status, time }: VoteProposal) {
+export function PersonalHomeProposalCard({ name, createdBy, status, time, votes }: VoteProposal) {
   return (
     <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
       <Text variant="smallTitle">Proposal Title</Text>

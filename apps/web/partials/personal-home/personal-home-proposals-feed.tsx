@@ -5,7 +5,7 @@ interface Props {
   voteProposals: VoteProposal[];
 }
 
-export function PersonalHomeRequestsFeed({ voteProposals }: Props) {
+export function PersonalHomeProposalsFeed({ voteProposals }: Props) {
   return (
     <div className="flex flex-col my-4 gap-3">
       {voteProposals?.map((voteProposal, idx) => (
