@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
+import { ALL_SPACES_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -38,7 +39,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
       id: 'all',
       attributes: {
         name: 'All',
-        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: '',
+        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: ALL_SPACES_IMAGE,
       },
     },
     ...spaces,
@@ -57,6 +58,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       align="start"
+      asChild
       trigger={
         <SmallButton variant="secondary" icon="chevronDownSmall">
           {name}

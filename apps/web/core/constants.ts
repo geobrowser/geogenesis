@@ -6,6 +6,8 @@ export const PLACEHOLDER_IMAGES = {
   Values: 'https://images.unsplash.com/photo-1637008336770-b95d637fd5fa',
 };
 
+export const ALL_SPACES_IMAGE = 'ipfs://QmQXJYrbJJZcukgkzk8C71nQL1V8ND9TQjrtP4sKWjYPFH';
+
 export const ROOT_SPACE_IMAGE =
   'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmU3TRxyXGKbgCFPFVddJmRnxHQ6ojnppumU3zpPUjJ4WK';
 
