@@ -23,7 +23,9 @@ function SkeletonContainer() {
         </div>
       </div>
 
-      <Skeleton className="pl-6 w-52 h-4" />
+      <div className="pl-6">
+        <Skeleton className="w-52 h-4" />
+      </div>
     </div>
   );
 }
