@@ -39,6 +39,8 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
 function Tab({ href, label }: TabProps) {
   const path = usePathname();
   const active = path === href;
+  console.log('path', path);
+  console.log('active', active);
 
   return (
     <Link className={tabStyles({ active })} href={href}>

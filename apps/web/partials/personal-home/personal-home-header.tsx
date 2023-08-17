@@ -8,6 +8,7 @@ import { Services } from '~/core/services';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
+import { TabGroup } from '~/design-system/tab-group';
 
 function useUserProfile(address?: string) {
   const { subgraph, config } = Services.useServices();
