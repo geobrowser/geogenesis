@@ -48,7 +48,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const onSelect = (spaceIdToFilter: string) => {
     onOpenChange(false);
     setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.attributes[SYSTEM_IDS.NAME] ?? 'All');
-    router.push(
+    router.replace(
       NavUtils.toProfileActivity(spaceIdToFilter, entityId, spaceIdToFilter === 'all' ? undefined : spaceIdToFilter)
     );
   };
@@ -64,16 +64,16 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
           {name}
         </SmallButton>
       }
-      className="flex flex-col max-h-[300px] max-w-[260px] overflow-y-auto"
+      className="flex flex-col max-h-[300px] max-w-[250px] overflow-y-auto"
     >
       {spacesWithAll.map(space => (
         <button
           onClick={() => onSelect(space.id)}
           key={space.id}
-          className="text-button px-2 py-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75 flex items-center gap-2 w-full"
+          className="text-button p-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75 flex gap-2 w-full"
         >
           {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
-            <div className="relative w-3 h-3 rounded-xs overflow-hidden">
+            <div className="relative w-3 h-3 rounded-xs overflow-hidden mt-[4.5px]">
               <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
             </div>
           )}
