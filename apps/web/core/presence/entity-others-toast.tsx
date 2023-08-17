@@ -70,7 +70,7 @@ export function EntityOthersToast() {
             <AvatarGroup>
               {editorsAvatars.map(e => (
                 <AvatarGroup.Item key={e.id}>
-                  <BoringAvatar size={12} variant="pixel" name={e.presence.address ?? ''} />
+                  <BoringAvatar size={12} variant="beam" name={e.presence.address ?? ''} />
                 </AvatarGroup.Item>
               ))}
             </AvatarGroup>

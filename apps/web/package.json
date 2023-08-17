@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
-    "staging": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "NODE_ENV=test pnpm exec playwright test",
+    "test:e2e:install": "pnpm exec playwright install --with-deps"
   },
   "dependencies": {
     "@geogenesis/action-schema": "workspace:*",
@@ -51,14 +52,16 @@
     "class-variance-authority": "^0.4.0",
     "classnames": "^2.3.2",
     "cmdk": "^0.1.21",
-    "connectkit": "1.5.0",
+    "connectkit": "1.5.1",
     "diff": "^5.1.0",
     "effect": "2.0.0-next.21",
-    "framer-motion": "^10.3.2",
+    "framer-motion": "^10.15.2",
     "immer": "^9.0.16",
     "js-confetti": "^0.11.0",
+    "lokijs": "^1.5.12",
     "next": "13.4.13",
     "papaparse": "^5.3.2",
+    "pino-pretty": "^10.2.0",
     "pluralize": "^8.0.0",
     "raw-body": "^2.5.1",
     "react": "^18.1.0",
@@ -75,6 +78,7 @@
   "devDependencies": {
     "@babel/core": "^7.19.0",
     "@next/bundle-analyzer": "^12.3.0",
+    "@playwright/test": "^1.37.0",
     "@tailwindcss/line-clamp": "^0.4.2",
     "@testing-library/dom": "^8.19.1",
     "@testing-library/jest-dom": "^5.16.5",
