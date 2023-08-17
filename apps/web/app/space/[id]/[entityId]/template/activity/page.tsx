@@ -9,7 +9,7 @@ import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Params } from '~/core/params';
 import { Action as IAction, ServerSideEnvParams } from '~/core/types';
 import { Action } from '~/core/utils/action';
-import { GeoDate, getImagePath } from '~/core/utils/utils';
+import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import Loading from './loading';
@@ -91,6 +91,8 @@ async function ActivityList({ params, searchParams }: Props) {
             year: 'numeric',
           });
 
+          const proposalName = p.name ? p.name : `${formatShortAddress(p.createdBy.id)} – ${formattedLastEditedDate}`;
+
           return (
             <div key={p.id} className="flex flex-col gap-2 py-3">
               <div className="flex w-full justify-between items-center">
@@ -98,7 +100,7 @@ async function ActivityList({ params, searchParams }: Props) {
                   <div className="relative rounded-sm overflow-hidden h-4 w-4">
                     <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
                   </div>
-                  <p className="text-metadataMedium">{p.name}</p>
+                  <p className="text-metadataMedium">{proposalName}</p>
                 </div>
                 <p className="text-metadataMedium tabular-nums text-grey-04">{formattedLastEditedDate}</p>
               </div>
