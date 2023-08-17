@@ -2,7 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -14,14 +14,16 @@ import { SmallButton } from '~/design-system/button';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
-  spaceId?: string;
+  spaceId: string;
   entityId: string;
 }
 
 export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
+  const params = useSearchParams();
+  const selectedSpaceId = params?.get('spaceId');
 
-  const initialSpace = spaces.find(space => space.id === spaceId);
+  const initialSpace = spaces.find(space => space.id === selectedSpaceId);
   const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
 
   const router = useRouter();
@@ -49,7 +51,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
     onOpenChange(false);
     setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.attributes[SYSTEM_IDS.NAME] ?? 'All');
     router.replace(
-      NavUtils.toProfileActivity(spaceIdToFilter, entityId, spaceIdToFilter === 'all' ? undefined : spaceIdToFilter)
+      NavUtils.toProfileActivity(spaceId, entityId, spaceIdToFilter === 'all' ? undefined : spaceIdToFilter)
     );
   };
 

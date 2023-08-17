@@ -63,7 +63,7 @@ export default async function ActivityPage({ params, searchParams }: Props) {
           Proposals
         </SmallButton>
         <p>in</p>
-        <ActivitySpaceFilter spaceId={searchParams.spaceId} entityId={params.entityId} />
+        <ActivitySpaceFilter spaceId={params.id} entityId={params.entityId} />
       </div>
 
       <div className="divide-y divide-divider">
