@@ -102,7 +102,7 @@ async function ActivityList({ params, searchParams }: Props) {
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>
                 </div>
-                <p className="text-metadataMedium tabular-nums text-grey-04">{formattedLastEditedDate}</p>
+                <p className="text-breadcrumb tabular-nums text-grey-04">{formattedLastEditedDate}</p>
               </div>
 
               <p className="pl-6 text-breadcrumb">
