@@ -8,7 +8,7 @@ export type PersonalHomeRequest = {
   spaceId?: string;
 };
 
-type Vote = {
+export type Vote = {
   value: 'yes' | 'no';
 };
 

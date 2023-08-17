@@ -2,8 +2,16 @@ import { PersonalHomeRequest, VoteProposal } from '~/partials/personal-home/type
 
 import { Component } from './component';
 
-// currently the route is /dashboard while scaffolding
-// originally had it as /dashboard/[userAddress] but thinking we'd use that for public profiles
+/* considerations & notes:
+data:
+  - fetch data (per tab) in page.tsx -> pass to component.tsx -> pass to each partial component as needed
+  - mocked the data for now and will update when the backend is in place -- appropximated the data flow/props
+  - need to move the user profile data (address -> name/avatarUrl) to the server to remove load time
+    - will need to do this for all data being fetched since the data will be scoped to the connected user
+routes:
+  - currently the route is /dashboard while scaffolding
+    - originally had it as /dashboard/[userAddress] but thinking we'd use that for public profiles
+*/
 
 const mockVoteProposals: VoteProposal[] = [
   {
