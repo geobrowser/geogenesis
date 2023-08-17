@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
+// import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
@@ -32,10 +32,10 @@ interface Props {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  // const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
 
   // Layouts do not receive search params (hmm)
-  const config = Params.getConfigFromParams({}, env);
+  const config = Params.getConfigFromParams({}, undefined);
 
   const types = await fetchEntityType({
     endpoint: config.subgraph,

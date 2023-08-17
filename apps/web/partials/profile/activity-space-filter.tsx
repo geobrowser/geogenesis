@@ -1,7 +1,9 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { revalidatePath } from 'next/cache';
 import Image from 'next/legacy/image';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -50,9 +52,6 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const onSelect = (spaceIdToFilter: string) => {
     onOpenChange(false);
     setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.attributes[SYSTEM_IDS.NAME] ?? 'All');
-    router.replace(
-      NavUtils.toProfileActivity(spaceId, entityId, spaceIdToFilter === 'all' ? undefined : spaceIdToFilter)
-    );
   };
 
   return (
@@ -69,7 +68,8 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
       className="flex flex-col max-h-[300px] max-w-[250px] overflow-y-auto"
     >
       {spacesWithAll.map(space => (
-        <button
+        <Link
+          href={NavUtils.toProfileActivity(spaceId, entityId, space.id === 'all' ? undefined : space.id)}
           onClick={() => onSelect(space.id)}
           key={space.id}
           className="text-button p-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75 flex gap-2 w-full"
@@ -80,7 +80,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
             </div>
           )}
           {space.attributes[SYSTEM_IDS.NAME]}
-        </button>
+        </Link>
       ))}
     </Menu>
   );
