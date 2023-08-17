@@ -12,7 +12,6 @@ export function PersonalHomeProposalsFeed({ voteProposals }: Props) {
         <PersonalHomeProposalCard
           key={idx}
           name={voteProposal.name}
-          description={voteProposal.description}
           createdBy={voteProposal.createdBy}
           status={voteProposal.status}
           time={voteProposal.time}

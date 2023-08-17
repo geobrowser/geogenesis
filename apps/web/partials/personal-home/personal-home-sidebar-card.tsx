@@ -1,6 +1,6 @@
 interface Props {
   title: string;
-  amount: string;
+  amount: number;
 }
 
 export function PersonalHomeSidebarCard({ title, amount }: Props) {

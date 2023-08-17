@@ -11,7 +11,21 @@ const mockVoteProposals: VoteProposal[] = [
     status: 'pending',
     createdBy: 'Jonathan Prozzi',
     time: '24:00:00',
-    votes: [{ value: 'yes' }, { value: 'no' }],
+    votes: [{ value: 'yes' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
+  },
+  {
+    name: 'Deleted entities over multiple pages',
+    status: 'approved',
+    createdBy: 'Jonathan Prozzi',
+    time: '24:00:00',
+    votes: [{ value: 'yes' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
+  },
+  {
+    name: 'Deleted entities over multiple pages',
+    status: 'rejected',
+    createdBy: 'Jonathan Prozzi',
+    time: '24:00:00',
+    votes: [{ value: 'no' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
   },
 ];
 

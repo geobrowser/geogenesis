@@ -19,8 +19,6 @@ export type VoteProposal = Omit<
 > & {
   status: 'pending' | 'approved' | 'rejected' | 'canceled';
   createdBy: string; // this'll use the createdBy (Person) but simplifying for mocking
-  votes: Vote[]; // this'll be subject to the API but will likely be an object
-  time: string; // unsure how we'll want to represent the time remaining
+  votes: Vote[]; // this'll be subject to the API but will likely be an object with vote and id
+  time: string; // mocking with string for UI, but will likely be an end date and the distance to it
 };
-
-// likely will want time to be distance to the end date of the voting period

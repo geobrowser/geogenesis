@@ -13,6 +13,8 @@ interface Props {
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Acitivity'] as const;
 
+// @TODO: pass in mocked proposal data to the sidebar instead of hardcoding
+
 export function Component({ requests, voteProposals }: Props) {
   return (
     <div className="flex flex-col mx-28  mb-8">
@@ -36,7 +38,7 @@ export function Component({ requests, voteProposals }: Props) {
           </div>
         </div>
         <div className="col-span-1">
-          <PersonalHomeSidebar />
+          <PersonalHomeSidebar voteProposals={voteProposals} requests={requests} />
         </div>
       </div>
     </div>

@@ -30,12 +30,12 @@ props:
 export function PersonalHomeProposalCard({ name, createdBy, status, time, votes }: VoteProposal) {
   return (
     <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
-      <Text variant="smallTitle">Proposal Title</Text>
+      <Text variant="smallTitle">{name}</Text>
       <div className="flex flex-row items-center gap-4 mt-2">
         <div className="relative rounded-sm overflow-hidden">
           <Avatar size={12} />
         </div>
-        <Text variant="breadcrumb">Jonathan Prozzi</Text>
+        <Text variant="breadcrumb">{createdBy}</Text>
       </div>
       <div className="flex flex-row  justify-between w-full ">
         <div />
