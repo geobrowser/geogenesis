@@ -87,13 +87,11 @@ export async function publish({
   const writeTxEffect = Effect.gen(function* (awaited) {
     const contractConfig = yield* awaited(prepareTxEffect);
 
+    onChangePublishState('signing-wallet');
+
     return yield* awaited(
       Effect.tryPromise({
-        try: async () => {
-          onChangePublishState('signing-wallet');
-
-          return await writeContract(contractConfig);
-        },
+        try: () => writeContract(contractConfig),
         catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
       })
     );
