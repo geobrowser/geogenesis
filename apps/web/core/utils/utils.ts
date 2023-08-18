@@ -166,11 +166,13 @@ export const getOpenGraphImageUrl = (value: string) => {
     return `https://www.geobrowser.io/preview/${hash}.png`;
   } else if (value.startsWith('http')) {
     return value;
+  } else if (value.startsWith('ipfs://')) {
+    return `https://www.geobrowser.io/preview/${getImageHash(value)}.png`;
   } else if (value) {
     return `https://www.geobrowser.io/preview/${value}.png`;
-  } else {
-    return DEFAULT_OPENGRAPH_IMAGE;
   }
+
+  return DEFAULT_OPENGRAPH_IMAGE;
 };
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
@@ -180,6 +182,9 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
   const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+
+  console.log('imageUrl', imageUrl);
+  console.log('openGraphImageUrl', openGraphImageUrl);
 
   return {
     entityName,
