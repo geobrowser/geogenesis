@@ -1,5 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
 import { SpaceAbi } from '@geogenesis/contracts';
+import { Effect } from 'effect';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
@@ -19,12 +20,20 @@ function getActionFromChangeStatus(action: Action) {
   }
 }
 
-export class TransactionFailedError extends Error {
-  readonly _tag = 'TransactionFailedError';
+export class TransactionRevertedError extends Error {
+  readonly _tag = 'TransactionRevertedError';
 }
 
-export class PublishFailedError extends Error {
-  _tag = 'PublishFailedError';
+export class WaitForTransactionBlockError extends Error {
+  readonly _tag = 'WaitForTransactionBlockError';
+}
+
+export class TransactionPrepareFailedError extends Error {
+  _tag = 'TransactionPrepareFailedError';
+}
+
+export class TransactionWriteFailedError extends Error {
+  _tag = 'TransactionWriteFailedError';
 }
 
 export type PublishOptions = {
@@ -63,44 +72,72 @@ export async function publish({
     cids.push(`ipfs://${cidString}`);
   }
 
-  try {
-    const contractConfig = await prepareWriteContract({
-      abi: SpaceAbi,
-      address: space as unknown as `0x${string}`,
-      functionName: 'addEntries',
-      walletClient: wallet,
-      args: [cids],
-    });
+  const prepareTxEffect = Effect.tryPromise({
+    try: () =>
+      prepareWriteContract({
+        abi: SpaceAbi,
+        address: space as unknown as `0x${string}`,
+        functionName: 'addEntries',
+        walletClient: wallet,
+        args: [cids],
+      }),
+    catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+  });
 
-    onChangePublishState('signing-wallet');
-    const tx = await writeContract(contractConfig);
-    console.log('Transaction hash: ', tx.hash);
+  const writeTxEffect = Effect.gen(function* (awaited) {
+    const contractConfig = yield* awaited(prepareTxEffect);
 
+    return yield* awaited(
+      Effect.tryPromise({
+        try: async () => {
+          onChangePublishState('signing-wallet');
+
+          return await writeContract(contractConfig);
+        },
+        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+      })
+    );
+  });
+
+  const effect = Effect.gen(function* (awaited) {
+    const writeTxResult = yield* awaited(writeTxEffect);
+
+    console.log('Transaction hash: ', writeTxResult.hash);
     onChangePublishState('publishing-contract');
-    const transaction = await waitForTransaction({
-      hash: tx.hash,
-    });
 
-    if (transaction.status !== 'success') {
-      throw new TransactionFailedError(`Transaction failed: 
-    hash: ${transaction.transactionHash}
-    status: ${transaction.status}
-    blockNumber: ${transaction.blockNumber}
-    blockHash: ${transaction.blockHash}
-    ${JSON.stringify(transaction)}
-    `);
+    const waitForTransactionEffect = yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          waitForTransaction({
+            hash: writeTxResult.hash,
+          }),
+        catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+      })
+    );
+
+    if (waitForTransactionEffect.status !== 'success') {
+      return yield* awaited(
+        Effect.fail(
+          new TransactionRevertedError(`Transaction reverted: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      ${JSON.stringify(waitForTransactionEffect)}
+      `)
+        )
+      );
     }
 
-    console.log(`Transaction receipt: 
-  hash: ${transaction.transactionHash}
-  status: ${transaction.status}
-  blockNumber: ${transaction.blockNumber}
-  blockHash: ${transaction.blockHash}
-  `);
-  } catch (e) {
-    console.error(`Publish failed: ${e}`);
-    throw new PublishFailedError(`Publish failed: ${e}`);
-  }
+    console.log(`Transaction successful. Receipt: 
+    hash: ${waitForTransactionEffect.transactionHash}
+    status: ${waitForTransactionEffect.status}
+    blockNumber: ${waitForTransactionEffect.blockNumber}
+    blockHash: ${waitForTransactionEffect.blockHash}
+    `);
+  });
+
+  await Effect.runPromise(effect);
 }
 
 export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
