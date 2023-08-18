@@ -116,20 +116,6 @@ const createRealWalletConfig = () => {
   });
 };
 
-// getDefaultConfig({
-//   appName: 'Geo Genesis',
-//   appIcon: '/static/favicon.png',
-//   appDescription: "Browse and organize the world's public knowledge and information in a decentralized way.",
-//   appUrl: 'https://geobrowser.io',
-//   chains,
-//   webSocketPublicClient,
-//   publicClient,
-//   autoConnect: true,
-//   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
-//   enableWebSocketPublicClient: true,
-//   alchemyId: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!,
-// })
-
 const mockConnector = new MockConnector({
   chains,
   options: { chainId: polygon.id, walletClient: getMockWalletClient() },
@@ -154,6 +140,7 @@ const wagmiConfig = isTestEnv ? createMockWalletConfig() : createRealWalletConfi
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
+    // @ts-expect-error not sure why wagmi isn't happy. It works at runtime as expected.
     <WagmiConfig config={wagmiConfig}>
       <ConnectKitProvider>{children}</ConnectKitProvider>
     </WagmiConfig>
