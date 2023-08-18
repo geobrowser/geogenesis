@@ -76,6 +76,9 @@ const createRealWalletConfig = () => {
     publicClient,
     webSocketPublicClient,
     autoConnect: true,
+    // These connectors are based on how `connectkit` configures them internally when using
+    // their default configuration.
+    // https://github.com/family/connectkit/blob/47984040867a15ff8cbfdcdea534ad662c2d405e/packages/connectkit/src/defaultConfig.ts#L173
     connectors: [
       new MetaMaskConnector({
         chains,
