@@ -42,8 +42,6 @@ function Tab({ href, label }: TabProps) {
   const isHydrated = useHydrated();
   const path = usePathname();
   const active = path === href;
-  console.log('path', path);
-  console.log('active', active);
 
   return (
     <Link className={tabStyles({ active })} href={href}>

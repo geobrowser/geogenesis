@@ -45,6 +45,7 @@ import { Member } from './icons/member';
 import { Minus } from './icons/minus';
 import { NewTab } from './icons/new-tab';
 import { Plus } from './icons/plus';
+import { Time } from './icons/time';
 import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
 
@@ -96,7 +97,8 @@ export type IconName =
   | 'wallet'
   | 'disconnectWallet'
   | 'bulkEdit'
-  | 'member';
+  | 'member'
+  | 'time';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -160,4 +162,5 @@ const icons: Record<IconName, React.ElementType> = {
   wallet: Wallet,
   disconnectWallet: DisconnectWallet,
   member: Member,
+  time: Time,
 };
