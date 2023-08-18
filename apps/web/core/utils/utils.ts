@@ -183,6 +183,9 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
   const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
 
+  console.log('imageUrl', imageUrl);
+  console.log('openGraphImageUrl', openGraphImageUrl);
+
   return {
     entityName,
     openGraphImageUrl,
