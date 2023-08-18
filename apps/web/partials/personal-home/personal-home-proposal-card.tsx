@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 import { VoteProposal } from './types';
 
 /* adding this in to mock the time -- likely unneeded since we have other date time conversion utils
-  but included to match the design and to anticipate the value format 
+  but included to match the design and to anticipate the value format
 */
 
 function getTimeToVoteEnd(endDate: string): string {
@@ -49,13 +49,13 @@ function VoteStatus({ status, endDate }: { status: VoteProposal['status']; endDa
       status: {
         approved: 'bg-green',
         rejected: 'bg-red-01',
-        pending: '', // satisfies TS issue -- temporary, will troubleshoot why Pick didn't work
-        canceled: '', // satisfies TS issue -- temporary, will troubleshoot why Pick didn't work
+        pending: '', // satisfies TS issue for missing types -- temporary, will troubleshoot why Pick didn't work
+        canceled: '', // satisfies TS issue for missing types -- temporary, will troubleshoot why Pick didn't work
       },
     },
   });
 
-  // the endDate.value conversion is verbose and likely unnecessary, but adding to match the design while anticipating the value format
+  // the endDate.value conversion is verbose and likely ultimately unnecessary, but adding to match the design while anticipating the value format
   return (
     <div className={voteStatusStyles({ status })}>
       <Text variant="smallButton" className="text-white">
@@ -77,7 +77,7 @@ function VoteStatus({ status, endDate }: { status: VoteProposal['status']; endDa
   );
 }
 
-export function PersonalHomeProposalCard({ name, createdBy, space, status, time, endDate, votes }: VoteProposal) {
+export function PersonalHomeProposalCard({ name, createdBy, space, status, endDate, votes }: VoteProposal) {
   return (
     <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
       <Text variant="smallTitle">{name}</Text>
@@ -88,11 +88,7 @@ export function PersonalHomeProposalCard({ name, createdBy, space, status, time,
         <Text variant="breadcrumb">{createdBy}</Text>
       </div>
       <div className="flex flex-row  justify-between w-full mt-4 ">
-        {status === 'pending' ? (
-          <VoteTime endDate={endDate} time={time} />
-        ) : (
-          <VoteStatus status={status} endDate={endDate} />
-        )}
+        {status === 'pending' ? <VoteTime endDate={endDate} /> : <VoteStatus status={status} endDate={endDate} />}
         <div className="flex flex-row items-center gap-2">
           <div className="w-3 h-3 bg-purple rounded-sm" />
           <Text variant="breadcrumb" color="grey-04">

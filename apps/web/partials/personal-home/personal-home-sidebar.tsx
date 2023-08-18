@@ -8,8 +8,6 @@ interface Props {
 }
 
 export function PersonalHomeSidebar({ voteProposals, requests }: Props) {
-  console.log('vote proposals', voteProposals);
-
   const activeProposalsAmount = voteProposals.filter(proposal => proposal.status === 'pending').length;
   const completedProposalsAmount = voteProposals.filter(
     proposal => proposal.status === 'approved' || proposal.status === 'rejected'
