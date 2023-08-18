@@ -170,9 +170,9 @@ export const getOpenGraphImageUrl = (value: string) => {
     `https://www.geobrowser.io/preview/${getImageHash(value)}.png`;
   } else if (value) {
     return `https://www.geobrowser.io/preview/${value}.png`;
-  } else {
-    return DEFAULT_OPENGRAPH_IMAGE;
   }
+
+  return DEFAULT_OPENGRAPH_IMAGE;
 };
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
