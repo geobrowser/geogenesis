@@ -1,25 +1,31 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { useRouter } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import Image from 'next/legacy/image';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
+import { ALL_SPACES_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
-  spaceId?: string;
+  spaceId: string;
   entityId: string;
 }
 
-export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
+export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
+  const params = useSearchParams();
+  const selectedSpaceId = params?.get('spaceId');
 
-  const initialSpace = spaces.find(space => space.id === spaceId);
+  const initialSpace = spaces.find(space => space.id === selectedSpaceId);
   const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
 
   const router = useRouter();
@@ -37,6 +43,7 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
       id: 'all',
       attributes: {
         name: 'All',
+        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: ALL_SPACES_IMAGE,
       },
     },
     ...spaces,
@@ -45,9 +52,6 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
   const onSelect = (spaceIdToFilter: string) => {
     onOpenChange(false);
     setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.attributes[SYSTEM_IDS.NAME] ?? 'All');
-    router.push(
-      NavUtils.toProfileActivity(spaceIdToFilter, entityId, spaceIdToFilter === 'all' ? undefined : spaceIdToFilter)
-    );
   };
 
   return (
@@ -55,21 +59,28 @@ export function ActivitySpaceMenu({ entityId, spaceId }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       align="start"
+      asChild
       trigger={
         <SmallButton variant="secondary" icon="chevronDownSmall">
           {name}
         </SmallButton>
       }
-      className="flex flex-col max-h-[300px] max-w-[260px] overflow-y-auto"
+      className="flex flex-col max-h-[300px] max-w-[250px] overflow-y-auto"
     >
       {spacesWithAll.map(space => (
-        <button
+        <Link
+          href={NavUtils.toProfileActivity(spaceId, entityId, space.id === 'all' ? undefined : space.id)}
           onClick={() => onSelect(space.id)}
           key={space.id}
-          className="text-button px-2 py-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75"
+          className="text-button p-3 bg-white text-grey-04 hover:text-text hover:bg-bg transition-colors duration-75 flex gap-2 w-full"
         >
+          {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
+            <div className="relative w-3 h-3 rounded-xs overflow-hidden mt-[4.5px]">
+              <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
+            </div>
+          )}
           {space.attributes[SYSTEM_IDS.NAME]}
-        </button>
+        </Link>
       ))}
     </Menu>
   );
