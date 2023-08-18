@@ -1,6 +1,7 @@
 import { cva } from 'class-variance-authority';
 
 import { Avatar } from '~/design-system/avatar';
+import { IconButton } from '~/design-system/button';
 import { Icon } from '~/design-system/icon';
 import { Text } from '~/design-system/text';
 
@@ -95,7 +96,7 @@ function VoteProgressBar({ votes, voteType }: { votes: VoteProposal['votes']; vo
   );
 }
 
-function VoteActionbar({ votes, voteType }: { votes: VoteProposal['votes']; voteType: 'yes' | 'no' }) {
+function VoteActionBar({ votes, voteType }: { votes: VoteProposal['votes']; voteType: 'yes' | 'no' }) {
   const votePercentage =
     votes.length !== 0 ? (votes.filter(vote => vote.value === voteType).length / votes.length) * 100 : 0; // check for NaN here and if votes are 0 return 0
   return (
@@ -103,8 +104,8 @@ function VoteActionbar({ votes, voteType }: { votes: VoteProposal['votes']; vote
       <Text variant="metadata">{voteType === 'yes' ? 'Accepted' : 'Rejected'}</Text>
       <div className="flex flex-row items-center gap-4">
         <Text variant="metadata">{votes.filter(vote => vote.value === voteType).length} votes</Text>
-
         <Text variant="metadata">{votePercentage}%</Text>
+        <IconButton icon={voteType === 'yes' ? 'tick' : 'close'} className="border border-grey-02 rounded-sm p-1.5" />
       </div>
     </div>
   );
@@ -132,11 +133,11 @@ export function PersonalHomeProposalCard({ name, createdBy, space, status, endDa
         {status === 'pending' ? <VoteTime endDate={endDate} /> : <VoteStatus status={status} endDate={endDate} />}
       </div>
       <div className="flex flex-col mt-5 mb-4">
-        <VoteActionbar votes={votes} voteType="yes" />
+        <VoteActionBar votes={votes} voteType="yes" />
         <VoteProgressBar votes={votes} voteType="yes" />
       </div>
       <div className="flex flex-col">
-        <VoteActionbar votes={votes} voteType="no" />
+        <VoteActionBar votes={votes} voteType="no" />
         <VoteProgressBar votes={votes} voteType="no" />
       </div>
     </div>

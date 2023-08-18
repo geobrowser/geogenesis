@@ -11,7 +11,7 @@ interface Props {
   voteProposals: VoteProposal[];
 }
 
-const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Acitivity'] as const;
+const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 /*
 considerations & notes:
