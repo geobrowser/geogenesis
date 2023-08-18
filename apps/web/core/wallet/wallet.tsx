@@ -103,7 +103,7 @@ const createRealWalletConfig = () => {
             name: 'Geo Genesis',
             description: "Browse and organize the world's public knowledge and information in a decentralized way.",
             url: 'https://geobrowser.io',
-            icons: ['/static/favicon.png'],
+            icons: ['https://geobrowser.io/static/favicon-32x32.png'],
           },
         },
       }),
