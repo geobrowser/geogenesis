@@ -1,4 +1,4 @@
-import { Proposal } from '~/core/types';
+import { DateValue, Proposal } from '~/core/types';
 
 export type PersonalHomeRequest = {
   requestType: string;
@@ -20,5 +20,6 @@ export type VoteProposal = Omit<
   status: 'pending' | 'approved' | 'rejected' | 'canceled';
   createdBy: string; // this'll use the createdBy (Person) but simplifying for mocking
   votes: Vote[]; // this'll be subject to the API but will likely be an object with vote and id
-  time: string; // mocking with string for UI, but will likely be an end date and the distance to it
+  time?: string; // mocking with string for UI, but will likely be an end date and the distance to it
+  endDate: DateValue; // this'll be the end date of the vote, using our DateValue for mocking purposes
 };

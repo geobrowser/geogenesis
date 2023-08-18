@@ -8,6 +8,7 @@ data:
   - mocked the data for now and will update when the backend is in place -- appropximated the data flow/props
   - need to move the user profile data (address -> name/avatarUrl) to the server to remove load time
     - will need to do this for all data being fetched since the data will be scoped to the connected user
+  - switching my mocked "time" to be more accurate and use an endDate instead of a specified duration
 routes:
   - currently the route is /dashboard while scaffolding
     - originally had it as /dashboard/[userAddress] but thinking we'd use that for public profiles
@@ -18,7 +19,12 @@ const mockVoteProposals: VoteProposal[] = [
     name: 'Deleted entities over multiple pages',
     status: 'pending',
     createdBy: 'Jonathan Prozzi',
-    time: '24:00:00',
+    endDate: {
+      id: 'test',
+      value: '2023-08-20',
+      type: 'date',
+    },
+
     space: 'Philosophy',
     votes: [{ value: 'yes' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
   },
@@ -26,7 +32,12 @@ const mockVoteProposals: VoteProposal[] = [
     name: 'Updated the description of the space',
     status: 'approved',
     createdBy: 'Jonathan Prozzi',
-    time: '24:00:00',
+    endDate: {
+      id: 'test',
+      value: '2023-08-14',
+      type: 'date',
+    },
+
     space: 'Philosophy',
     votes: [{ value: 'yes' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
   },
@@ -34,7 +45,12 @@ const mockVoteProposals: VoteProposal[] = [
     name: 'Changed the space name',
     status: 'rejected',
     createdBy: 'Jonathan Prozzi',
-    time: '24:00:00',
+    endDate: {
+      id: 'test',
+      value: '2023-08-13',
+      type: 'date',
+    },
+
     space: 'Philosophy',
     votes: [{ value: 'no' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
   },

@@ -14,9 +14,9 @@ export function PersonalHomeProposalsFeed({ voteProposals }: Props) {
           name={voteProposal.name}
           createdBy={voteProposal.createdBy}
           status={voteProposal.status}
-          time={voteProposal.time}
           votes={voteProposal.votes}
           space={voteProposal.space}
+          endDate={voteProposal.endDate}
         />
       ))}
     </div>
