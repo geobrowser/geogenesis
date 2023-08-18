@@ -97,7 +97,7 @@ export async function publish({
     );
   });
 
-  const effect = Effect.gen(function* (awaited) {
+  const publishProgram = Effect.gen(function* (awaited) {
     const writeTxResult = yield* awaited(writeTxEffect);
 
     console.log('Transaction hash: ', writeTxResult.hash);
@@ -135,7 +135,7 @@ export async function publish({
     `);
   });
 
-  await Effect.runPromise(effect);
+  await Effect.runPromise(publishProgram);
 }
 
 export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
