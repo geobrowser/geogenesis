@@ -1,4 +1,4 @@
-import { DateValue, Proposal } from '~/core/types';
+import { DateValue, OmitStrict, Proposal } from '~/core/types';
 
 export type PersonalHomeRequest = {
   requestType: string;
@@ -13,7 +13,7 @@ export type Vote = {
 };
 
 // will remove the Omits once backend is in and can see what overlap there is
-export type VoteProposal = Omit<
+export type VoteProposal = OmitStrict<
   Proposal,
   'id' | 'description' | 'createdAt' | 'createdBy' | 'createdAtBlock' | 'proposedVersions'
 > & {

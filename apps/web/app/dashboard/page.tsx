@@ -5,6 +5,7 @@ import { Component } from './component';
 /* considerations & notes:
 data:
   - fetch data (per tab) in page.tsx -> pass to component.tsx -> pass to each partial component as needed
+    - each feed (proposals, requests) should fetch its own data and leverage Suspense instead -- will refactor to this pattern
   - mocked the data for now and will update when the backend is in place -- appropximated the data flow/props
   - need to move the user profile data (address -> name/avatarUrl) to the server to remove load time
     - will need to do this for all data being fetched since the data will be scoped to the connected user
