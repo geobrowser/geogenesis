@@ -29,6 +29,19 @@ const mockVoteProposals: VoteProposal[] = [
     votes: [{ value: 'yes' }, { value: 'no' }, { value: 'yes' }, { value: 'no' }, { value: 'yes' }],
   },
   {
+    name: 'Deleted entire space',
+    status: 'pending',
+    createdBy: 'Dade Murphy',
+    endDate: {
+      id: 'test',
+      value: '2023-08-20',
+      type: 'date',
+    },
+
+    space: 'Philosophy',
+    votes: [],
+  },
+  {
     name: 'Updated the description of the space',
     status: 'approved',
     createdBy: 'Jonathan Prozzi',
