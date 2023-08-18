@@ -7,7 +7,11 @@ import * as React from 'react';
 
 import { Chain, WagmiConfig, configureChains, createConfig, useConnect, useDisconnect } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
+import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
+import { InjectedConnector } from 'wagmi/connectors/injected';
+import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { MockConnector } from 'wagmi/connectors/mock';
+import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -38,8 +42,11 @@ const LOCAL_CHAIN: Chain = {
 };
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
-  // Only make the dev chains available in development
-  [polygon, ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : [])],
+  [
+    polygon,
+    // Only make the dev chains available in development
+    ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : []),
+  ],
   [
     alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
     // We need to use another provider if using a local chain
@@ -65,17 +72,63 @@ const getMockPublicClient = () => {
 };
 
 const createRealWalletConfig = () => {
-  return createConfig(
-    getDefaultConfig({
-      appName: 'Geo Genesis',
-      chains,
-      webSocketPublicClient,
-      publicClient,
-      autoConnect: true,
-      walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
-    })
-  );
+  return createConfig({
+    publicClient,
+    webSocketPublicClient,
+    autoConnect: true,
+    connectors: [
+      new MetaMaskConnector({
+        chains,
+        options: {
+          shimDisconnect: true,
+          UNSTABLE_shimOnConnectSelectAccount: true,
+        },
+      }),
+      new CoinbaseWalletConnector({
+        chains,
+        options: {
+          appName: 'Geo Genesis',
+          headlessMode: true,
+        },
+      }),
+      new WalletConnectConnector({
+        chains,
+        options: {
+          showQrModal: false,
+          projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+          metadata: {
+            name: 'Geo Genesis',
+            description: "Browse and organize the world's public knowledge and information in a decentralized way.",
+            url: 'https://geobrowser.io',
+            icons: ['/static/favicon.png'],
+          },
+        },
+      }),
+      new InjectedConnector({
+        chains,
+        options: {
+          shimDisconnect: true,
+          name: detectedName =>
+            `Injected (${typeof detectedName === 'string' ? detectedName : detectedName.join(', ')})`,
+        },
+      }),
+    ],
+  });
 };
+
+// getDefaultConfig({
+//   appName: 'Geo Genesis',
+//   appIcon: '/static/favicon.png',
+//   appDescription: "Browse and organize the world's public knowledge and information in a decentralized way.",
+//   appUrl: 'https://geobrowser.io',
+//   chains,
+//   webSocketPublicClient,
+//   publicClient,
+//   autoConnect: true,
+//   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+//   enableWebSocketPublicClient: true,
+//   alchemyId: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!,
+// })
 
 const mockConnector = new MockConnector({
   chains,
@@ -88,7 +141,6 @@ const createMockWalletConfig = () => {
       connectors: [mockConnector],
       appName: 'Geo Genesis',
       chains,
-      // webSocketPublicClient,
       publicClient: getMockPublicClient(),
       autoConnect: false,
       walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
