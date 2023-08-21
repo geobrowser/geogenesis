@@ -27,7 +27,7 @@ considerations & notes:
 
 export function Component({ requests, voteProposals }: Props) {
   return (
-    <div className="flex flex-col mx-28  mb-8">
+    <div className="h-screen flex flex-col mx-28  mb-8 ">
       <PersonalHomeHeader />
       <TabGroup
         tabs={TABS.map(label => {
@@ -41,14 +41,12 @@ export function Component({ requests, voteProposals }: Props) {
       <div className="my-4">
         <PersonalHomeFilter />
       </div>
-      <div className="grid grid-cols-4 w-full gap-8">
-        <div className="col-span-3 flex-1 ">
-          <div className="h-screen  overflow-y-auto overscroll-contain">
-            <PersonalHomeProposalsFeed voteProposals={voteProposals} />
-            <PersonalHomeRequestsFeed requests={requests} />
-          </div>
+      <div className="flex-1 grid grid-cols-4 w-full gap-8 overflow-y-auto ">
+        <div className="col-span-3 flex-1 overflow-y-scroll pr-8">
+          <PersonalHomeProposalsFeed voteProposals={voteProposals} />
+          <PersonalHomeRequestsFeed requests={requests} />
         </div>
-        <div className="col-span-1">
+        <div className="col-span-1 flex-1">
           <PersonalHomeSidebar voteProposals={voteProposals} requests={requests} />
         </div>
       </div>
