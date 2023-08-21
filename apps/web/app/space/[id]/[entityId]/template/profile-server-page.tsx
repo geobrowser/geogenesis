@@ -37,10 +37,9 @@ async function getProfilePage(
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;
-    referencedByEntities: ReferencedByEntity[];
   }
 > {
-  const [person, referencesPerson, spaces] = await Promise.all([
+  const [person] = await Promise.all([
     Subgraph.fetchEntity({ id: entityId, endpoint }),
     Subgraph.fetchEntities({
       endpoint,
@@ -60,32 +59,12 @@ async function getProfilePage(
       triples: [],
       types: [],
       description: null,
-      referencedByEntities: [],
     };
   }
-
-  const referencedByEntities: ReferencedByEntity[] = referencesPerson.map(e => {
-    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
-    const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-
-    return {
-      id: e.id,
-      name: e.name,
-      types: e.types,
-      space: {
-        id: spaceId,
-        name: spaceName,
-        image: spaceImage,
-      },
-    };
-  });
 
   return {
     ...person,
     avatarUrl: Entity.avatar(person.triples),
     coverUrl: Entity.cover(person.triples),
-    referencedByEntities,
   };
 }

@@ -6,7 +6,6 @@ import type { Metadata } from 'next';
 
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
