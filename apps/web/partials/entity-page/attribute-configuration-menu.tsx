@@ -41,7 +41,10 @@ export function AttributeConfigurationMenu({ attributeId, attributeName, configu
 function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props) {
   const { create, remove } = useActionsStore();
 
-  const autocomplete = useAutocomplete();
+  const autocomplete = useAutocomplete({
+    allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
+  });
+
   const { spaces } = useSpaces();
 
   const alreadySelectedTypes = configuredTypes.map(st => st.typeId);
