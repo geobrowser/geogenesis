@@ -57,7 +57,13 @@ export function Component(props: Props) {
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
 
       <EntityPageContentContainer>
-        <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+        <EditableHeading
+          spaceId={props.spaceId}
+          entityId={props.id}
+          name={props.name}
+          triples={props.triples}
+          showAccessControl
+        />
         <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
         <Spacer height={40} />
         <Editor editable={renderEditablePage} shouldHandleOwnSpacing />
