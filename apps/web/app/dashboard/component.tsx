@@ -1,5 +1,6 @@
 import { TabGroup } from '~/design-system/tab-group';
 
+import { PersonalHomeFilter } from '~/partials/personal-home/personal-home-filter';
 import { PersonalHomeHeader } from '~/partials/personal-home/personal-home-header';
 import { PersonalHomeProposalsFeed } from '~/partials/personal-home/personal-home-proposals-feed';
 import { PersonalHomeRequestsFeed } from '~/partials/personal-home/personal-home-requests-feed';
@@ -28,20 +29,21 @@ export function Component({ requests, voteProposals }: Props) {
   return (
     <div className="flex flex-col mx-28  mb-8">
       <PersonalHomeHeader />
-      <div className="mb-4">
-        <TabGroup
-          tabs={TABS.map(label => {
-            const href = label === 'For You' ? `/dashboard` : `/dashboard/${label.toLowerCase()}`;
-            return {
-              href,
-              label,
-            };
-          })}
-        />
+      <TabGroup
+        tabs={TABS.map(label => {
+          const href = label === 'For You' ? `/dashboard` : `/dashboard/${label.toLowerCase()}`;
+          return {
+            href,
+            label,
+          };
+        })}
+      />
+      <div className="my-4">
+        <PersonalHomeFilter />
       </div>
       <div className="grid grid-cols-4 w-full gap-8">
-        <div className="col-span-3 flex-1">
-          <div className="h-screen overflow-y-auto overscroll-contain">
+        <div className="col-span-3 flex-1 ">
+          <div className="h-screen  overflow-y-auto overscroll-contain">
             <PersonalHomeProposalsFeed voteProposals={voteProposals} />
             <PersonalHomeRequestsFeed requests={requests} />
           </div>

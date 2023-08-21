@@ -7,7 +7,7 @@ interface Props {
 
 export function PersonalHomeProposalsFeed({ voteProposals }: Props) {
   return (
-    <div className="flex flex-col my-4 gap-3">
+    <div className="flex flex-col gap-3">
       {voteProposals?.map((voteProposal, idx) => (
         <PersonalHomeProposalCard
           key={idx}

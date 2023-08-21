@@ -22,7 +22,7 @@ const mockVoteProposals: VoteProposal[] = [
     createdBy: 'Jonathan Prozzi',
     endDate: {
       id: 'test',
-      value: '2023-08-20',
+      value: '2023-08-23',
       type: 'date',
     },
 
@@ -35,7 +35,7 @@ const mockVoteProposals: VoteProposal[] = [
     createdBy: 'Dade Murphy',
     endDate: {
       id: 'test',
-      value: '2023-08-21',
+      value: '2023-08-24',
       type: 'date',
     },
 
