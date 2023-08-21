@@ -76,6 +76,9 @@ const createRealWalletConfig = () => {
     publicClient,
     webSocketPublicClient,
     autoConnect: true,
+    // These connectors are based on how `connectkit` configures them internally when using
+    // their default configuration.
+    // https://github.com/family/connectkit/blob/47984040867a15ff8cbfdcdea534ad662c2d405e/packages/connectkit/src/defaultConfig.ts#L173
     connectors: [
       new MetaMaskConnector({
         chains,
@@ -88,6 +91,7 @@ const createRealWalletConfig = () => {
         chains,
         options: {
           appName: 'Geo Genesis',
+          appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
           headlessMode: true,
         },
       }),
@@ -100,7 +104,7 @@ const createRealWalletConfig = () => {
             name: 'Geo Genesis',
             description: "Browse and organize the world's public knowledge and information in a decentralized way.",
             url: 'https://geobrowser.io',
-            icons: ['/static/favicon.png'],
+            icons: ['https://geobrowser.io/static/favicon-64x64.png'],
           },
         },
       }),
