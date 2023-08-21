@@ -99,7 +99,9 @@ export function EditableHeading({
                   </Link>
                 )}
                 <Link href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
-                  <Button icon="create">New entity</Button>
+                  <Button icon="create" data-testid="create-entity-button">
+                    New entity
+                  </Button>
                 </Link>
               </div>
             )}
