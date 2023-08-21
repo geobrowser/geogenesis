@@ -91,6 +91,7 @@ const createRealWalletConfig = () => {
         chains,
         options: {
           appName: 'Geo Genesis',
+          appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
           headlessMode: true,
         },
       }),
