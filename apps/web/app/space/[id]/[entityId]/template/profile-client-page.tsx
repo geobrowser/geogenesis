@@ -12,7 +12,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
-import { ReferencedByEntity } from '~/partials/entity-page/types';
 import { PersonalSpaceOnboarding } from '~/partials/profile/personal-space-onboarding';
 
 interface Props {
@@ -21,7 +20,6 @@ interface Props {
   spaceId: string;
   avatarUrl: string | null;
   coverUrl: string | null;
-  referencedByEntities: ReferencedByEntity[];
   triples: Triple[];
   onDismissForever?: () => Promise<void>;
   hasDismissedOnboarding: boolean;

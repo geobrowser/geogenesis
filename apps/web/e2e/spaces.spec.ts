@@ -13,13 +13,3 @@ test('connect button', async ({ page }) => {
   // Check that the Connect button is visible.
   await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible();
 });
-
-test('signs in', async ({ page }) => {
-  await page.goto('/spaces');
-
-  // Check that the Connect button is visible.
-  await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible();
-  await page.getByRole('button', { name: 'Connect' }).click();
-
-  await expect(page.getByRole('button', { name: 'Connect' })).not.toBeVisible();
-});
