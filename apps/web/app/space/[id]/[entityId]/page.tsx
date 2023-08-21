@@ -4,16 +4,17 @@ import { redirect } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
+import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
-import { ReferencedByEntity } from '~/partials/entity-page/types';
+import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-referenced-by-container';
 
 import { Component } from './component';
 
@@ -61,33 +62,35 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 }
 
 export default async function EntityPage({ params, searchParams }: Props) {
-  const props = await getData(params.id, params.entityId, searchParams);
+  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  const config = Params.getConfigFromParams(searchParams, env);
+
+  const props = await getData(params.id, params.entityId, config);
   const filterId = searchParams.filterId ?? null;
   const filterValue = searchParams.filterValue ?? null;
   const typeId = searchParams.typeId ?? null;
 
-  return <Component {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />;
+  return (
+    // @ts-expect-error async JSX function
+    <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
+      <Component
+        {...props}
+        filterId={filterId}
+        filterValue={filterValue}
+        typeId={typeId}
+        ReferencedByComponent={
+          // @ts-expect-error async JSX function
+          <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+        }
+      />
+    </TypesStoreServerContainer>
+  );
 }
 
-const getData = async (spaceId: string, entityId: string, searchParams: ServerSideEnvParams) => {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
+  const space = await Subgraph.fetchSpace({ id: spaceId, endpoint: config.subgraph });
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
-
-  const [entity, related, spaceTypes, foreignSpaceTypes] = await Promise.all([
-    Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId }),
-
-    Subgraph.fetchEntities({
-      endpoint: config.subgraph,
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-
-    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
-  ]);
+  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
@@ -108,24 +111,6 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
 
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
-
-  const referencedByEntities: ReferencedByEntity[] = related.map(e => {
-    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
-    const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-
-    return {
-      id: e.id,
-      name: e.name,
-      types: e.types,
-      space: {
-        id: spaceId,
-        name: spaceName,
-        image: spaceImage,
-      },
-    };
-  });
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
@@ -150,7 +135,6 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
     name: entity?.name ?? entityId,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
-    referencedByEntities,
     serverAvatarUrl,
     serverCoverUrl,
 
@@ -159,6 +143,5 @@ const getData = async (spaceId: string, entityId: string, searchParams: ServerSi
     blockTriples,
 
     space,
-    spaceTypes: [...spaceTypes, ...foreignSpaceTypes],
   };
 };
