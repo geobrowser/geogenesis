@@ -23,7 +23,7 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
   });
 
   // @ts-expect-error async JSX function
-  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) return <ProfileServerPage params={params} />;
+  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) return <ProfileServerPage params={params} searchParams={searchParams} />;
 
   // @ts-expect-error async JSX function
   return <EntityServerPage params={params} searchParams={searchParams} />;

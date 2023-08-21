@@ -1,12 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { Entity as IEntity, ServerSideEnvParams } from '~/core/types';
+import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-
-import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 // import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
 import { ProfilePageComponent } from './profile-client-page';
@@ -18,41 +15,20 @@ interface Props {
   searchParams: ServerSideEnvParams;
 }
 
-export async function ProfileServerPage({ params }: Props) {
+export async function ProfileServerPage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams({}, env);
+  const config = Params.getConfigFromParams(searchParams, env);
 
-  const profile = await getProfilePage(params.entityId, config.subgraph);
   // @TODO: Disabling cookie interactions for now until we get later on in the social
   // work. This is so we can test onboarding feedback more frequently.
   // const hasDismissedOnboarding = cookies().get(Cookie.HAS_DISMISSED_PERSONAL_SPACE_ONBOARDING_KEY)?.value === 'true';
 
-  return <ProfilePageComponent {...profile} spaceId={params.id} hasDismissedOnboarding={false} />;
-}
-
-async function getProfilePage(
-  entityId: string,
-  endpoint: string
-): Promise<
-  IEntity & {
-    avatarUrl: string | null;
-    coverUrl: string | null;
-  }
-> {
-  const [person] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId, endpoint }),
-    Subgraph.fetchEntities({
-      endpoint,
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-    Subgraph.fetchSpaces({ endpoint }),
-  ]);
+  const person = await Subgraph.fetchEntity({ id: params.entityId, endpoint: config.subgraph });
 
   // @TODO: Real error handling
   if (!person) {
     return {
-      id: entityId,
+      id: params.entityId,
       name: null,
       avatarUrl: null,
       coverUrl: null,
@@ -62,9 +38,11 @@ async function getProfilePage(
     };
   }
 
-  return {
+  const profile = {
     ...person,
     avatarUrl: Entity.avatar(person.triples),
     coverUrl: Entity.cover(person.triples),
   };
+
+  return <ProfilePageComponent {...profile} spaceId={params.id} hasDismissedOnboarding={false} />;
 }
