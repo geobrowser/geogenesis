@@ -176,7 +176,11 @@ function ModeToggle({ spaceId }: Props) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <button onClick={onToggle} className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1">
+    <button
+      onClick={onToggle}
+      data-testid="edit-toggle"
+      className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+    >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
         {!isUserEditing && <AnimatedTogglePill controls={controls} />}
         <motion.div
