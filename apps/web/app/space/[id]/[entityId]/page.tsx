@@ -2,6 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import { Suspense } from 'react';
+
 import type { Metadata } from 'next';
 
 import { AppConfig } from '~/core/environment';
@@ -14,7 +16,10 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-referenced-by-container';
+import {
+  EntityReferencedByLoading,
+  EntityReferencedByServerContainer,
+} from '~/partials/entity-page/entity-page-referenced-by-server-container';
 
 import { Component } from './component';
 
@@ -79,8 +84,10 @@ export default async function EntityPage({ params, searchParams }: Props) {
         filterValue={filterValue}
         typeId={typeId}
         ReferencedByComponent={
-          // @ts-expect-error async JSX function
-          <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+          <Suspense fallback={<EntityReferencedByLoading />}>
+            {/* @ts-expect-error async JSX function */}
+            <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+          </Suspense>
         }
       />
     </TypesStoreServerContainer>

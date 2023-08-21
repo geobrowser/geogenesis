@@ -221,3 +221,8 @@ export const getImagePath = (value: string) => {
     return '';
   }
 };
+
+export function getRandomArrayItem(array: string[]) {
+  const randomIndex = Math.floor(Math.random() * array.length);
+  return array[randomIndex];
+}
