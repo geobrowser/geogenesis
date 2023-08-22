@@ -7,6 +7,8 @@ interface Props {
   requests: PersonalHomeRequest[];
 }
 
+// @TODO: need to rework the mock data to match the updated design
+
 export function PersonalHomeSidebar({ voteProposals, requests }: Props) {
   const activeProposalsAmount = voteProposals.filter(proposal => proposal.status === 'pending').length;
   const completedProposalsAmount = voteProposals.filter(
@@ -17,10 +19,13 @@ export function PersonalHomeSidebar({ voteProposals, requests }: Props) {
 
   return (
     <div className="flex flex-col gap-3 max-w-[300px]">
-      <PersonalHomeSidebarCard title="Active proposals" amount={activeProposalsAmount} />
-      <PersonalHomeSidebarCard title="Completed proposals" amount={completedProposalsAmount} />
-      <PersonalHomeSidebarCard title="Member requests" amount={memberRequestsAmount} />
-      <PersonalHomeSidebarCard title="Editor requests" amount={editRequestsAmount} />
+      <PersonalHomeSidebarCard title="My Proposals" amount={activeProposalsAmount} proposalStatus="In Progress" />
+      <PersonalHomeSidebarCard
+        title="Proposals I've voted on"
+        amount={completedProposalsAmount}
+        proposalStatus="In Progress"
+      />
+      <PersonalHomeSidebarCard title="I have accepted" amount={memberRequestsAmount} proposalStatus="In Progress" />
     </div>
   );
 }

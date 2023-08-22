@@ -22,6 +22,7 @@ import { Upload } from '~/design-system/icons/upload';
 import type { ColorName } from '~/design-system/theme/colors';
 
 import { BulkEdit } from './icons/bulk-edit';
+import { CheckCircleSmall } from './icons/check-circle-small';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Cog } from './icons/cog';
@@ -98,7 +99,8 @@ export type IconName =
   | 'disconnectWallet'
   | 'bulkEdit'
   | 'member'
-  | 'time';
+  | 'time'
+  | 'checkCircleSmall';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -116,6 +118,7 @@ const Blank = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" 
 const icons: Record<IconName, React.ElementType> = {
   blank: Blank,
   bulkEdit: BulkEdit,
+  checkCircleSmall: CheckCircleSmall,
   create: Create,
   createSmall: CreateSmall,
   close: Close,

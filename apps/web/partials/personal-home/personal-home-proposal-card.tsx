@@ -113,7 +113,7 @@ function VoteActionBar({ votes, voteType }: { votes: VoteProposal['votes']; vote
 
 export function PersonalHomeProposalCard({ name, createdBy, space, status, endDate, votes }: VoteProposal) {
   return (
-    <div className="flex flex-col border border-grey-02 rounded-[12px] grey-02 p-4 shadow-light">
+    <div className="flex flex-col border border-grey-02 rounded grey-02 p-4 shadow-light">
       <Text variant="smallTitle">{name}</Text>
       <div className="flex flex-row items-center gap-4 mt-2">
         <div className="flex flex-row items-center gap-1.5">
