@@ -69,13 +69,14 @@ export function Navbar({ onSearchClick }: Props) {
           we don't get any layout shift when the navbar actions appear.
       */}
       <ClientOnly>
-        <div className="flex items-center">
-          <button className="flex items-center gap-2 text-grey-04 hover:text-text" onClick={onSearchClick}>
+        <div className="flex items-center gap-4">
+          <button
+            className="text-grey-04 p-2 hover:bg-grey-01 active:bg-divider focus:bg-grey-01 rounded-full transition-colors duration-200"
+            onClick={onSearchClick}
+          >
             <Icon icon="search" />
-            <p className="text-input">Search</p>
           </button>
           <div className="flex items-center sm:hidden">
-            <Spacer width={16} />
             <NavbarActions spaceId={urlComponents?.[1]} />
           </div>
         </div>
