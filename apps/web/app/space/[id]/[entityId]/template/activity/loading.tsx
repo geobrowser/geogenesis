@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { getRandomArrayItem } from '~/core/utils/utils';
+
 import { Skeleton } from '~/design-system/skeleton';
 
 const POSITIONS = {
@@ -7,33 +9,28 @@ const POSITIONS = {
   bottom: ['w-52', 'w-32', 'w-12', 'w-20', 'w-52', 'w-64'],
 };
 
-function getRandomWidth(array: string[]) {
-  const randomIndex = Math.floor(Math.random() * array.length);
-  return array[randomIndex];
-}
-
 export default function Loading() {
   return (
     <div className="divide-y divide-divider">
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomWidth(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomWidth(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
+        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomWidth(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomWidth(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
+        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomWidth(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomWidth(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
+        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomWidth(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomWidth(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
+        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomWidth(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomWidth(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
+        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
       />
     </div>
   );
