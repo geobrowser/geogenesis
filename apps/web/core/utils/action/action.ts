@@ -105,10 +105,7 @@ function getFirstAndLastChanges(actions: ActionType[]) {
  * to update the triple.
  */
 export function squashChanges(actions: Action[]) {
-  const firstAndLastChanges = getFirstAndLastChanges(actions);
-  console.log('firstAndLastChanges', firstAndLastChanges);
-
-  return Object.values(firstAndLastChanges)
+  return Object.values(getFirstAndLastChanges(actions))
     .map(changeTuple => {
       // In this case we're fine just returning the after action since it will include
       // the final state of the triple.
