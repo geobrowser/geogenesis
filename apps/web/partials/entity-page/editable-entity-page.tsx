@@ -154,7 +154,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
     // Next doesn't have great ways of listening to navigation events in a granular component. It expects that you
     // will be listening to changes in URLs higher in your application. If we listen to changes in the URL here the
-    // component will be unmounted before we can remove the stale entity.
+    // way Next suggest's, the component will be unmounted before we can remove the stale entity.
     // https://nextjs.org/docs/app/api-reference/functions/use-router#router-events
     //
     // Instead we can listen to the popstate event which is fired when the user navigates back to the previous page.
