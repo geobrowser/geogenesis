@@ -41,8 +41,8 @@ export function Component({ requests, voteProposals }: Props) {
       <div className="my-4">
         <PersonalHomeFilter />
       </div>
-      <div className="flex-1 grid grid-cols-4 w-full gap-8 overflow-y-auto ">
-        <div className="col-span-3 flex-1 overflow-y-scroll pr-8">
+      <div className="flex-1 grid grid-cols-3 w-full gap-8 overflow-y-auto">
+        <div className="col-span-2 flex-1 overflow-y-scroll scrollbar-hide">
           <PersonalHomeProposalsFeed voteProposals={voteProposals} />
           <PersonalHomeRequestsFeed requests={requests} />
         </div>
