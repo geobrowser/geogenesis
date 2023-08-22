@@ -105,7 +105,10 @@ function getFirstAndLastChanges(actions: ActionType[]) {
  * to update the triple.
  */
 export function squashChanges(actions: Action[]) {
-  return Object.values(getFirstAndLastChanges(actions))
+  const firstAndLastChanges = getFirstAndLastChanges(actions);
+  console.log('firstAndLastChanges', firstAndLastChanges);
+
+  return Object.values(firstAndLastChanges)
     .map(changeTuple => {
       // In this case we're fine just returning the after action since it will include
       // the final state of the triple.
@@ -116,6 +119,17 @@ export function squashChanges(actions: Action[]) {
       // This doesn't need to go to the subgraph at all.
       if (changeTuple[0].type === 'createTriple' && changeTuple[1].type === 'deleteTriple') {
         return null;
+      }
+
+      // Edit -> Edit where the value types are the same and the before/after values are the same.
+      // We don't need to send this to the subgraph.
+      if (changeTuple[0].type === 'editTriple' && changeTuple[1].type === 'editTriple') {
+        if (
+          changeTuple[0].before.value.type === changeTuple[1].after.value.type &&
+          getValue(changeTuple[0].before) === getValue(changeTuple[1].after)
+        ) {
+          return null;
+        }
       }
 
       return changeTuple[1];
