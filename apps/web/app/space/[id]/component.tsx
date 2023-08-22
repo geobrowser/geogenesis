@@ -14,7 +14,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
 
 interface Props {
@@ -43,7 +43,6 @@ export function Component(props: Props) {
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entity.types(props.triples);
 
   return (
     <EntityStoreProvider
@@ -64,7 +63,8 @@ export function Component(props: Props) {
           triples={props.triples}
           showAccessControl
         />
-        <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
+        <SpacePageMetadataHeader spaceId={props.spaceId} />
+
         <Spacer height={40} />
         <Editor editable={renderEditablePage} shouldHandleOwnSpacing />
         <Page {...props} />
