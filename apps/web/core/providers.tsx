@@ -5,6 +5,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import * as React from 'react';
 
+import { StatusBarContextProvider } from '~/partials/review/flow-bar';
+
 import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
@@ -22,7 +24,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ActionsStoreProvider>
             <SpaceStoreProvider>
               <LocalStoreProvider>
-                <DiffProvider>{children}</DiffProvider>
+                <StatusBarContextProvider>
+                  <DiffProvider>{children}</DiffProvider>
+                </StatusBarContextProvider>
               </LocalStoreProvider>
             </SpaceStoreProvider>
           </ActionsStoreProvider>

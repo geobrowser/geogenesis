@@ -10,11 +10,17 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store/diff-store';
 import { useEditable } from '~/core/state/editable-store/editable-store';
+import { ReviewState } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
 import { Button } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
+import { TickSmall } from '~/design-system/icons/tick-small';
+import { Warning } from '~/design-system/icons/warning';
+import { Spinner } from '~/design-system/spinner';
 
 export const FlowBar = () => {
+  const { state } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
@@ -64,8 +70,166 @@ export const FlowBar = () => {
           </motion.div>
         </div>
       )}
+      {/* @TODO: Manage flowbar and review states globally.
+          1. Idle
+          2. Publishing
+          3. Reviewing
+          4. Error
+      */}
+      {state.reviewState !== 'idle' && state.reviewState !== 'reviewing' && <StatusBar />}
     </AnimatePresence>
   );
+};
+
+interface StatusBarState {
+  reviewState: ReviewState;
+  error: string | null;
+}
+
+type StatusBarActions =
+  | {
+      type: 'SET_REVIEW_STATE';
+      payload: ReviewState;
+    }
+  | { type: 'ERROR'; payload: string | null };
+
+const statusBarReducer = (state: StatusBarState, action: StatusBarActions): StatusBarState => {
+  switch (action.type) {
+    case 'SET_REVIEW_STATE':
+      return { reviewState: action.payload, error: null };
+    case 'ERROR':
+      return { reviewState: 'publish-error', error: action.payload };
+  }
+};
+
+const StatusBarContext = React.createContext<{
+  state: StatusBarState;
+  dispatch: React.Dispatch<StatusBarActions>;
+} | null>(null);
+
+export const StatusBarContextProvider = ({ children }: { children: React.ReactNode }) => {
+  const [state, dispatch] = React.useReducer(statusBarReducer, {
+    reviewState: 'idle',
+    error: null,
+  });
+
+  return <StatusBarContext.Provider value={{ state, dispatch }}>{children}</StatusBarContext.Provider>;
+};
+
+export function useStatusBar() {
+  const context = React.useContext(StatusBarContext);
+
+  if (!context) {
+    throw new Error('useStatusBar must be used within a StatusBarContextProvider');
+  }
+
+  return context;
+}
+
+const StatusBar = () => {
+  const { state, dispatch } = useStatusBar();
+
+  const [isCopied, setIsCopied] = React.useState(false);
+
+  const onCopyError = async () => {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(state.error || '');
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+  let content = (
+    <>
+      {state.reviewState === 'publish-complete' && (
+        <motion.span initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.15 }}>
+          🎉
+        </motion.span>
+      )}
+      {/* Only show spinner if not the complete state */}
+      {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && <Spinner />}
+      <span>{message[state.reviewState]}</span>
+    </>
+  );
+
+  if (state.reviewState === 'publish-error' && state.error) {
+    content = (
+      <>
+        <Warning color="orange" />
+        <span>{message[state.reviewState]}</span>
+        <button
+          className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
+          onClick={onCopyError}
+        >
+          <AnimatePresence mode="popLayout">
+            {isCopied ? (
+              <motion.div
+                key="status-bar-error"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+              >
+                <TickSmall />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="status-bar-error"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+              >
+                Copy error
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </button>
+        <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
+          <Close />
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {state.reviewState !== 'idle' && (
+        <div className="fixed bottom-0 right-0 left-0 flex w-full justify-center">
+          <motion.div
+            variants={statusVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={transition}
+            className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
+          >
+            {content}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const message: Record<ReviewState, string> = {
+  idle: '',
+  reviewing: '',
+  'publishing-ipfs': 'Uploading changes to IPFS',
+  'signing-wallet': 'Sign your transaction',
+  'publishing-contract': 'Adding your changes to The Graph',
+  'publish-complete': 'Changes published!',
+  'publish-error': 'An error has occurred',
+};
+
+const publishingStates: Array<ReviewState> = [
+  'publishing-ipfs',
+  'signing-wallet',
+  'publishing-contract',
+  'publish-complete',
+];
+
+const statusVariants = {
+  hidden: { opacity: 0, y: '4px' },
+  visible: { opacity: 1, y: '0px' },
 };
 
 const flowVariants = {
