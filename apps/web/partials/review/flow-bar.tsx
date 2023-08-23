@@ -119,7 +119,7 @@ const StatusBar = () => {
     content = (
       <div className="flex items-center justify-center gap-2">
         <Warning color="orange" />
-        <span className="text-button">{message[state.reviewState]}</span>
+        <span className="-mt-[2px]">{message[state.reviewState]}</span>
         <button
           className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
           onClick={onCopyError}
