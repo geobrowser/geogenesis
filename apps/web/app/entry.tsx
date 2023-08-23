@@ -15,6 +15,7 @@ import { ClientOnly } from '~/design-system/client-only';
 
 import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
+import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 import { Navbar } from '~/partials/navbar/navbar';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { FlowBar, Review } from '~/partials/review';
@@ -65,6 +66,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <Review />
         <Compare />
         <Persistence />
+        <MoveEntityReview />
       </ClientOnly>
       <Analytics />
     </>

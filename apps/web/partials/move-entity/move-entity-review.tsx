@@ -1,17 +1,15 @@
+import { useMoveEntity } from '~/core/state/move-entity-store';
+
 import { SlideUp } from '~/design-system/slide-up';
 
 // these will come from the context in a store
 
-interface Props {
-  isMoveReviewOpen: boolean;
-  setIsMoveReviewOpen: (isMoveReviewOpen: boolean) => void;
-}
-
-export const MoveEntityReview = ({ isMoveReviewOpen, setIsMoveReviewOpen }: Props) => {
+export const MoveEntityReview = () => {
+  const { isMoveReviewOpen, setIsMoveReviewOpen } = useMoveEntity();
   return (
     <SlideUp isOpen={isMoveReviewOpen} setIsOpen={setIsMoveReviewOpen}>
       <div>
-        <p>test</p>
+        <p>test, opening from context store</p>
       </div>
     </SlideUp>
   );

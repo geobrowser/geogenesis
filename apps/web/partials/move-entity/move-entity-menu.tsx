@@ -11,6 +11,7 @@ import { ALL_SPACES_IMAGE } from '~/core/constants';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { useMoveEntity } from '~/core/state/move-entity-store';
 import { Space } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -35,9 +36,10 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const [name, setName] = React.useState('');
   const [query, onQueryChange] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 100);
+  const { isMoveReviewOpen, setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
 
   // @TODO: determine if this needs to live in context or not -- only really used in this context so doing locally for now
-  const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
+  // const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
 
   // filter out the current space and Root space
   const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
@@ -60,20 +62,20 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   );
 
   return (
-    <>
-      <div className="flex flex-col gap-2 bg-white p-2">
-        <Text variant="smallButton">Move to space</Text>
-        <SpaceSearch onQueryChange={onQueryChange} />
-        <SpacesList
-          spaces={filteredSpacesForMoveResults}
-          spaceId={spaceId}
-          entityId={entityId}
-          debouncedQuery={debouncedQuery}
-          setIsMoveReviewOpen={setIsMoveReviewOpen}
-        />
-      </div>
-      <MoveEntityReview isMoveReviewOpen={isMoveReviewOpen} setIsMoveReviewOpen={setIsMoveReviewOpen} />
-    </>
+    <div className="flex flex-col gap-2 bg-white p-2">
+      <Text variant="smallButton">Move to space</Text>
+      <SpaceSearch onQueryChange={onQueryChange} />
+      <SpacesList
+        spaces={filteredSpacesForMoveResults}
+        spaceId={spaceId}
+        entityId={entityId}
+        debouncedQuery={debouncedQuery}
+        setIsMoveReviewOpen={setIsMoveReviewOpen}
+        setEntityId={setEntityId}
+        setSpaceIdFrom={setSpaceIdFrom}
+        setSpaceIdTo={setSpaceIdTo}
+      />
+    </div>
   );
 }
 
@@ -93,12 +95,18 @@ function SpacesList({
   spaceId,
   entityId,
   setIsMoveReviewOpen,
+  setSpaceIdFrom,
+  setSpaceIdTo,
+  setEntityId,
 }: {
   spaces: Space[];
   debouncedQuery: string;
   spaceId: string;
   entityId: string;
   setIsMoveReviewOpen: (isMoveReviewOpen: boolean) => void;
+  setEntityId: (value: string) => void;
+  setSpaceIdTo: (value: string) => void;
+  setSpaceIdFrom: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full">
@@ -108,6 +116,9 @@ function SpacesList({
           className="flex flex-row items-center gap-3 my-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
           onClick={() => {
             console.log(`space (FROM): ${spaceId} | selected space (TO): ${space.id}) | entityId: ${entityId}`);
+            setSpaceIdFrom(spaceId);
+            setSpaceIdTo(space.id);
+            setEntityId(entityId);
             setIsMoveReviewOpen(true);
           }}
         >
