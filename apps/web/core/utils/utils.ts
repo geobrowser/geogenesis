@@ -195,10 +195,11 @@ export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
     return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
-    // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
+    // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
+    // The image is likely a static, bundled path
     return value;
   }
 };
