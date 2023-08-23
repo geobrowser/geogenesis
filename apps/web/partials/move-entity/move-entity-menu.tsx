@@ -60,7 +60,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
       <div className="flex flex-col gap-2 bg-white p-2">
         <Text variant="smallButton">Move to space</Text>
         <SpaceSearch onQueryChange={onQueryChange} />
-        <SpacesList spaces={filteredSpacesForMoveResults} />
+        <SpacesList spaces={filteredSpacesForMoveResults} debouncedQuery={debouncedQuery} />
       </div>
     </Menu>
   );
@@ -74,7 +74,7 @@ function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void
   );
 }
 
-function SpacesList({ spaces }: { spaces: Space[] }) {
+function SpacesList({ spaces, debouncedQuery }: { spaces: Space[]; debouncedQuery: string }) {
   return (
     <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full">
       {spaces.map(space => (
@@ -91,6 +91,14 @@ function SpacesList({ spaces }: { spaces: Space[] }) {
           <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
         </div>
       ))}
+      {spaces.length === 0 && debouncedQuery !== '' && (
+        <div className="flex flex-row items-center gap-1">
+          <Text variant="metadata">No results found for search term </Text>
+          <Text variant="metadataMedium" color="green">
+            {debouncedQuery}
+          </Text>
+        </div>
+      )}
     </div>
   );
 }
