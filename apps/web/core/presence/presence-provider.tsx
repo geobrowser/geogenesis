@@ -47,7 +47,7 @@ export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
   // contexts and providers with Liveblocks, so this janky hack is easier
   // for now.
   // @ts-expect-error import.meta.env is not typed
-  if (import.meta?.env) return null;
+  if (import.meta?.env || !account) return null;
 
   return (
     <ErrorBoundary
@@ -79,14 +79,13 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   // contexts and providers with Liveblocks, so this janky hack is easier
   // for now.
   // @ts-expect-error import.meta.env is not typed
-  if (import.meta?.env) return null;
+  if (import.meta?.env || !account) return null;
 
   return (
     <ErrorBoundary
       fallback={null}
       onError={e => console.error(`Error in EntityPresenceProvider, entityId: ${entityId} spaceId: ${spaceId} ` + e)}
     >
-      {' '}
       <EntityPresenceContext.RoomProvider
         id={entityId}
         initialPresence={{ address: account.address, hasChangesToEntity: false }}
