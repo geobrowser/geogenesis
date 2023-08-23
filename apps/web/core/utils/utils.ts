@@ -218,7 +218,7 @@ export const getImagePath = (value: string) => {
   } else if (value.startsWith('http')) {
     return value;
   } else {
-    return '';
+    return value;
   }
 };
 
