@@ -1,11 +1,20 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import React from 'react';
+
 import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
 import { editable$ } from '~/core/state/editable-store';
+import {
+  StatusBarActions,
+  StatusBarContext,
+  StatusBarState,
+  statusBarReducer,
+} from '~/core/state/status-bar-store/status-bar-store';
+import { ReviewState } from '~/core/types';
 
 import { FlowBar } from './flow-bar';
 
@@ -43,6 +52,38 @@ describe('Flow Bar', () => {
     );
 
     act(() => store.create(MockNetworkData.makeStubTriple('Alice')));
+
+    expect(screen.queryByText('Review')).not.toBeInTheDocument();
+  });
+
+  it('Should not render the flowbar when the status bar is open', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publish-complete',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    screen.debug();
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
 
     expect(screen.queryByText('Review')).not.toBeInTheDocument();
   });

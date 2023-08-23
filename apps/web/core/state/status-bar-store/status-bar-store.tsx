@@ -2,19 +2,19 @@ import * as React from 'react';
 
 import { ReviewState } from '~/core/types';
 
-interface StatusBarState {
+export interface StatusBarState {
   reviewState: ReviewState;
   error: string | null;
 }
 
-type StatusBarActions =
+export type StatusBarActions =
   | {
       type: 'SET_REVIEW_STATE';
       payload: ReviewState;
     }
   | { type: 'ERROR'; payload: string | null };
 
-const statusBarReducer = (state: StatusBarState, action: StatusBarActions): StatusBarState => {
+export const statusBarReducer = (state: StatusBarState, action: StatusBarActions): StatusBarState => {
   switch (action.type) {
     case 'SET_REVIEW_STATE':
       return { reviewState: action.payload, error: null };
@@ -23,7 +23,7 @@ const statusBarReducer = (state: StatusBarState, action: StatusBarActions): Stat
   }
 };
 
-const StatusBarContext = React.createContext<{
+export const StatusBarContext = React.createContext<{
   state: StatusBarState;
   dispatch: React.Dispatch<StatusBarActions>;
 } | null>(null);
