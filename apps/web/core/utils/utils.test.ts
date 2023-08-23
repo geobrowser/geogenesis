@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { GeoDate, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
+import { GeoDate, formatShortAddress, getImageHash, getImagePath, getOpenGraphImageUrl } from './utils';
 
 describe('GeoDate', () => {
   it('converts day, month, year, hour, minute to ISO string at UTC time', () => {
@@ -107,5 +107,11 @@ describe('getOpenGraphImageUrl', () => {
 
   it('an empty string returns the default OG image', () => {
     expect(getOpenGraphImageUrl('')).toBe('https://www.geobrowser.io/static/geo-social-image-v2.png');
+  });
+});
+
+describe('formatShortAddress', () => {
+  it('returns a truncated address', () => {
+    expect(formatShortAddress('0x1234567890123456789012345678901234567890')).toBe('0x123456...567890');
   });
 });
