@@ -1,6 +1,6 @@
 import { ObservableComputed, computed } from '@legendapp/state';
 
-import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -17,17 +17,6 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
   return elements.flatMap((element, index) =>
     index === 0 ? [element] : [separator instanceof Function ? separator({ index }) : separator, element]
   );
-}
-
-export function upperFirst(string: string): string {
-  return string.slice(0, 1).toUpperCase() + string.slice(1);
-}
-
-export function titleCase(string: string): string {
-  return string
-    .split(' ')
-    .map(word => upperFirst(word))
-    .join(' ');
 }
 
 export const NavUtils = {
@@ -58,14 +47,6 @@ export const NavUtils = {
     return `/space/${spaceId}/${entityId}/template/activity`;
   },
 };
-
-export function getFilesFromFileList(fileList: FileList): File[] {
-  const files: File[] = [];
-  for (let i = 0; i < fileList.length; i++) {
-    files.push(fileList[i]);
-  }
-  return files;
-}
 
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
   const result: { [key in PropertyKey]: T[] } = {};
@@ -197,10 +178,10 @@ export const getImageHash = (value: string) => {
   // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
   if (value.includes('?arg=')) {
     const [, hash] = value.split('?arg=');
-    return hash as string;
+    return hash;
   } else if (value.includes('://')) {
     const [, hash] = value.split('://');
-    return hash as string;
+    return hash;
     // If the value does not contain an arg query parameter or protocol prefix, it already is a hash
   } else {
     return value;
@@ -213,11 +194,12 @@ export const getImageHash = (value: string) => {
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
-    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH}${getImageHash(value)}`;
-    // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
+    return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
   } else {
+    // The image is likely a static, bundled path
     return value;
   }
 };
