@@ -19,17 +19,6 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
   );
 }
 
-export function upperFirst(string: string): string {
-  return string.slice(0, 1).toUpperCase() + string.slice(1);
-}
-
-export function titleCase(string: string): string {
-  return string
-    .split(' ')
-    .map(word => upperFirst(word))
-    .join(' ');
-}
-
 export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
@@ -58,14 +47,6 @@ export const NavUtils = {
     return `/space/${spaceId}/${entityId}/template/activity`;
   },
 };
-
-export function getFilesFromFileList(fileList: FileList): File[] {
-  const files: File[] = [];
-  for (let i = 0; i < fileList.length; i++) {
-    files.push(fileList[i]);
-  }
-  return files;
-}
 
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
   const result: { [key in PropertyKey]: T[] } = {};
