@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Triple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';
@@ -17,10 +18,15 @@ interface Props {
   id: string;
 }
 
-export function ReadableEntityPage({ triples, id }: Props) {
-  const { schemaTriples } = useEntityPageStore();
+export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
+  const { actionsFromSpace } = useActionsStore();
+  const { triples: localTriples } = useEntityPageStore();
 
-  const sortedTriples = sortEntityPageTriples(triples, schemaTriples);
+  // We hydrate the local editable store with the triples from the server. While it's hydrating
+  // we can fallback to the server triples so we render real data and there's no layout shift.
+  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
+
+  const sortedTriples = sortEntityPageTriples(triples, []);
 
   return (
     <div className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">

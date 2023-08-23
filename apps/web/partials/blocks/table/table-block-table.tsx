@@ -127,7 +127,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     } else if (cellData && !isPlaceholderCell) {
       return (
         <EntityTableCell
-          key={Entity.name(cellData.triples)}
+          key={Entity.name(cellTriples)}
           cell={cellData}
           triples={cellTriples}
           space={space}
