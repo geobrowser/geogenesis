@@ -136,8 +136,6 @@ export function useStatusBar() {
 const StatusBar = () => {
   const { state, dispatch } = useStatusBar();
 
-  console.log('rendering status bar');
-
   const [isCopied, setIsCopied] = React.useState(false);
 
   const onCopyError = async () => {
