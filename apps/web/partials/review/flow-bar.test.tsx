@@ -72,8 +72,6 @@ describe('Flow Bar', () => {
       </ActionsStoreContext.Provider>
     );
 
-    screen.debug();
-
     act(() => {
       editable$.set(true);
       store.create(MockNetworkData.makeStubTriple('Alice'));
@@ -206,7 +204,7 @@ describe('Status bar', () => {
     expect(screen.queryByText('Review edit')).toBeInTheDocument();
   });
 
-  it.only('should render ipfs uploading state', () => {
+  it('should render ipfs uploading state', () => {
     const store = new ActionsStore({
       storageClient: new Storage.StorageClient(options.production.ipfs),
     });
@@ -324,5 +322,35 @@ describe('Status bar', () => {
     });
 
     expect(screen.queryByText('Changes published!')).toBeInTheDocument();
+  });
+
+  it('should render publish error state', async () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publish-error',
+      error: 'Banana is brown.',
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('An error has occurred')).toBeInTheDocument();
   });
 });
