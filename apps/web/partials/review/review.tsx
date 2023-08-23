@@ -103,7 +103,7 @@ const ReviewChanges = () => {
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
-  const [unstagedChanges, setUnstagedChanges] = useState<Record<string, unknown>>({});
+  const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, publish, clear } = useActionsStore(activeSpace);
   const actions = Action.unpublishedChanges(actionsFromSpace);
   const [data, isLoading] = useChanges(actions, activeSpace);
@@ -141,10 +141,7 @@ const ReviewChanges = () => {
 
   const { changes, entities } = data;
   const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
-  const totalEdits = getTotalEdits(
-    changes as Record<string, Change.Changeset>,
-    unstagedChanges as Record<string, Record<string, boolean>>
-  );
+  const totalEdits = getTotalEdits(changes, unstagedChanges);
 
   const changedEntityIds = Object.keys(changes);
 
@@ -300,8 +297,8 @@ type ChangedEntityProps = {
   change: Changeset;
   entityId: EntityId;
   entity: EntityType;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
+  unstagedChanges: Record<string, Record<string, boolean>>;
+  setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
 const ChangedEntity = ({
@@ -554,8 +551,8 @@ type ChangedAttributeProps = {
   attribute: AttributeChange;
   entityId: EntityId;
   entity: EntityType;
-  unstagedChanges: Record<string, unknown>;
-  setUnstagedChanges: (value: Record<string, unknown>) => void;
+  unstagedChanges: Record<string, Record<string, boolean>>;
+  setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
 const ChangedAttribute = ({
@@ -592,7 +589,7 @@ const ChangedAttribute = ({
         },
       });
     } else {
-      const newUnstagedChanges: any = { ...unstagedChanges };
+      const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
       if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
         delete newUnstagedChanges?.[entityId]?.[attributeId];
       }
@@ -906,7 +903,8 @@ const StatusBar = ({ reviewState, error, onClose }: StatusBarProps) => {
           🎉
         </motion.span>
       )}
-      {publishingStates.includes(reviewState) && <Spinner />}
+      {/* Only show spinner if not the complete state */}
+      {reviewState !== 'publish-complete' && publishingStates.includes(reviewState) && <Spinner />}
       <span>{message[reviewState]}</span>
     </>
   );

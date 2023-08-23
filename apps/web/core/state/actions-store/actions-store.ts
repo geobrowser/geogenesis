@@ -183,7 +183,7 @@ export class ActionsStore implements IActionsStore {
     spaceId: string,
     wallet: WalletClient,
     onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Record<string, unknown>,
+    unstagedChanges: Record<string, Record<string, boolean>>,
     name: string
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
@@ -215,7 +215,7 @@ export class ActionsStore implements IActionsStore {
   };
 }
 
-const splitActions = (actions: ActionType[], unstagedChanges: any) => {
+const splitActions = (actions: ActionType[], unstagedChanges: Record<string, Record<string, boolean>>) => {
   const actionsToPublish: ActionType[] = [];
   const actionsToPersist: ActionType[] = [];
 
