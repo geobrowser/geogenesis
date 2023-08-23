@@ -119,7 +119,7 @@ const StatusBar = () => {
     content = (
       <div className="flex items-center justify-center gap-2">
         <Warning color="orange" />
-        <span>{message[state.reviewState]}</span>
+        <span className="text-button">{message[state.reviewState]}</span>
         <button
           className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
           onClick={onCopyError}
@@ -155,7 +155,7 @@ const StatusBar = () => {
 
   return (
     <div className="z-[1000] fixed bottom-0 right-0 left-0 flex flex-col items-center origin-center">
-      <motion.div layout transition={{ type: 'spring', bounce: 0.3, duration: 0.15 }}>
+      <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.15 }}>
         <div className="m-8 px-3 py-2.5 rounded bg-text text-button text-white overflow-hidden h-10">{content}</div>
       </motion.div>
     </div>
@@ -179,11 +179,6 @@ const publishingStates: Array<ReviewState> = [
   'publish-complete',
   'publish-error',
 ];
-
-const statusVariants = {
-  hidden: { opacity: 0, y: '4px' },
-  visible: { opacity: 1, y: '0px' },
-};
 
 const flowVariants = {
   hidden: { opacity: 0, y: '4px' },
