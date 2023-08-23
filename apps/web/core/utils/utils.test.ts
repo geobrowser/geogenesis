@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { GeoDate } from './utils';
+import { GeoDate, getImageHash, getImagePath } from './utils';
 
 describe('GeoDate', () => {
   it('converts day, month, year, hour, minute to ISO string at UTC time', () => {
@@ -51,5 +51,35 @@ describe('GeoDate', () => {
     expect(GeoDate.isMonth30Days(8)).toBe(false);
     expect(GeoDate.isMonth30Days(10)).toBe(false);
     expect(GeoDate.isMonth30Days(12)).toBe(false);
+  });
+});
+
+describe('getImagePath', () => {
+  it('an IPFS pre-fixed string returns the Geo IPFS resolved path', () => {
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(
+      'https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich'
+    );
+  });
+
+  it('an HTTP pre-fixed string returns the same string', () => {
+    expect(getImagePath('https://banana.sandwich')).toBe('https://banana.sandwich');
+  });
+
+  it('a non-HTTP and non-IPFS string returns the same string', () => {
+    expect(getImagePath('/banana/sandwich')).toBe('/banana/sandwich');
+  });
+});
+
+describe('getImageHash', () => {
+  it('an IPFS-prefixed path returns the IPFS hash', () => {
+    expect(getImageHash('ipfs://QmBananaSandwich')).toBe('QmBananaSandwich');
+  });
+
+  it('an HTTP path returns the IPFS hash', () => {
+    expect(getImageHash('https://api.thegraph.com/ipfs/api/v0/cat?arg=QmBananaSandwich')).toBe('QmBananaSandwich');
+  });
+
+  it('a non-HTTP and non-IPFS path returns the same string', () => {
+    expect(getImageHash('QmBananaSandwich')).toBe('QmBananaSandwich');
   });
 });

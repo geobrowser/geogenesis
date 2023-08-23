@@ -1,6 +1,6 @@
 import { ObservableComputed, computed } from '@legendapp/state';
 
-import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -197,10 +197,10 @@ export const getImageHash = (value: string) => {
   // If the value includes a query parameter, it's thhe legacy hard coded IPFS gateway path
   if (value.includes('?arg=')) {
     const [, hash] = value.split('?arg=');
-    return hash as string;
+    return hash;
   } else if (value.includes('://')) {
     const [, hash] = value.split('://');
-    return hash as string;
+    return hash;
     // If the value does not contain an arg query parameter or protocol prefix, it already is a hash
   } else {
     return value;
@@ -213,7 +213,7 @@ export const getImageHash = (value: string) => {
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
-    return `${process.env.NEXT_PUBLIC_IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
     // If the value starts with `http`, it already includes the legacy hard coded IPFS gateway path
   } else if (value.startsWith('http')) {
     return value;
