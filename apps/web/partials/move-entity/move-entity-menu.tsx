@@ -30,22 +30,10 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
 
   const params = useSearchParams();
-  const selectedSpaceId = params?.get('spaceId');
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState('');
-  const [searchQuery, setSearchQueryChange] = React.useState('');
-  const debouncedSearchQuery = useDebouncedValue(searchQuery, 100);
-
-  const spacesWithAll = [
-    {
-      id: 'all',
-      attributes: {
-        name: 'All',
-        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: ALL_SPACES_IMAGE,
-      },
-    },
-    ...spaces,
-  ];
+  const [query, onQueryChange] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query, 100);
 
   // filter out the current space and Root space
   const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
@@ -63,25 +51,25 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
 
   // @TODO: Make search work with autocomplete and actually filter the results
 
-  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space => {
-    space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(debouncedSearchQuery.toLowerCase());
-  });
+  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space =>
+    space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
+  );
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white p-2">
         <Text variant="smallButton">Move to space</Text>
-        <SpaceSearch />
-        <SpacesList spaces={sortedSpacesForMove} />
+        <SpaceSearch onQueryChange={onQueryChange} />
+        <SpacesList spaces={filteredSpacesForMoveResults} />
       </div>
     </Menu>
   );
 }
 
-function SpaceSearch() {
+function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void }) {
   return (
     <div className="mb-2">
-      <Input onChange={e => console.log(e.target.value)} placeholder="Search for a space" />
+      <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a space" />
     </div>
   );
 }
@@ -92,7 +80,7 @@ function SpacesList({ spaces }: { spaces: Space[] }) {
       {spaces.map(space => (
         <div
           key={space.id}
-          className="flex flex-row items-center gap-3 py-2 hover:bg-grey-01 hover:bg-opacity-10 transition-colors duration-75 cursor-pointer"
+          className="flex flex-row items-center gap-3 py-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
           onClick={() => console.log('selected space id', space.id)}
         >
           {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
