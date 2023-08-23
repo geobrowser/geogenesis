@@ -19,6 +19,7 @@ import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
+import { MoveEntityReview } from './move-entity-review';
 import Spaces from '~/app/spaces/page';
 
 interface Props {
@@ -34,6 +35,9 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const [name, setName] = React.useState('');
   const [query, onQueryChange] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 100);
+
+  // @TODO: determine if this needs to live in context or not -- only really used in this context so doing locally for now
+  const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
 
   // filter out the current space and Root space
   const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
@@ -56,16 +60,20 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-2 bg-white p-2">
-      <Text variant="smallButton">Move to space</Text>
-      <SpaceSearch onQueryChange={onQueryChange} />
-      <SpacesList
-        spaces={filteredSpacesForMoveResults}
-        spaceId={spaceId}
-        entityId={entityId}
-        debouncedQuery={debouncedQuery}
-      />
-    </div>
+    <>
+      <div className="flex flex-col gap-2 bg-white p-2">
+        <Text variant="smallButton">Move to space</Text>
+        <SpaceSearch onQueryChange={onQueryChange} />
+        <SpacesList
+          spaces={filteredSpacesForMoveResults}
+          spaceId={spaceId}
+          entityId={entityId}
+          debouncedQuery={debouncedQuery}
+          setIsMoveReviewOpen={setIsMoveReviewOpen}
+        />
+      </div>
+      <MoveEntityReview isMoveReviewOpen={isMoveReviewOpen} setIsMoveReviewOpen={setIsMoveReviewOpen} />
+    </>
   );
 }
 
@@ -84,11 +92,13 @@ function SpacesList({
   debouncedQuery,
   spaceId,
   entityId,
+  setIsMoveReviewOpen,
 }: {
   spaces: Space[];
   debouncedQuery: string;
   spaceId: string;
   entityId: string;
+  setIsMoveReviewOpen: (isMoveReviewOpen: boolean) => void;
 }) {
   return (
     <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full">
@@ -96,9 +106,10 @@ function SpacesList({
         <div
           key={space.id}
           className="flex flex-row items-center gap-3 my-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
-          onClick={() =>
-            console.log(`space (FROM): ${spaceId} | selected TO space: ${space.id}) | entity: ${entityId}`)
-          }
+          onClick={() => {
+            console.log(`space (FROM): ${spaceId} | selected space (TO): ${space.id}) | entityId: ${entityId}`);
+            setIsMoveReviewOpen(true);
+          }}
         >
           {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
             <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
