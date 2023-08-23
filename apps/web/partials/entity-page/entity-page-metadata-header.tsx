@@ -20,6 +20,7 @@ import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
+import { MoveEntityMenu } from '../move-entity/move-entity-menu';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 
@@ -100,6 +101,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
           )}
         </HistoryPanel>
         <EntityPageContextMenu entityId={id} spaceId={spaceId} />
+        <MoveEntityMenu entityId={id} spaceId={spaceId} />
       </div>
     </div>
   );
