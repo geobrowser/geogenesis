@@ -906,7 +906,8 @@ const StatusBar = ({ reviewState, error, onClose }: StatusBarProps) => {
           🎉
         </motion.span>
       )}
-      {publishingStates.includes(reviewState) && <Spinner />}
+      {/* Only show spinner if not the complete state */}
+      {reviewState !== 'publish-complete' && publishingStates.includes(reviewState) && <Spinner />}
       <span>{message[reviewState]}</span>
     </>
   );
