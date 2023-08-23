@@ -28,6 +28,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const initialSpace = spaces.find(space => space.id === selectedSpaceId);
   const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
 
+  const router = useRouter();
   const [open, onOpenChange] = React.useState(false);
   const [name, setName] = React.useState('All');
 
