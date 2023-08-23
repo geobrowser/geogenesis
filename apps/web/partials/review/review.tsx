@@ -7,7 +7,6 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
-import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -23,8 +22,9 @@ import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, ReviewState, Space } from '~/core/types';
+import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
@@ -33,13 +33,9 @@ import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
-import { Close } from '~/design-system/icons/close';
 import { Minus } from '~/design-system/icons/minus';
-import { TickSmall } from '~/design-system/icons/tick-small';
-import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spacer } from '~/design-system/spacer';
-import { Spinner } from '~/design-system/spinner';
 import { colors } from '~/design-system/theme/colors';
 
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
@@ -98,8 +94,7 @@ const ReviewChanges = () => {
   }));
 
   // Proposal state
-  const [error, setError] = useState<string | null>(null);
-  const [reviewState, setReviewState] = useState<ReviewState>('idle');
+  const { dispatch } = useStatusBar();
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
@@ -119,21 +114,25 @@ const ReviewChanges = () => {
     };
 
     try {
-      await publish(activeSpace, wallet, setReviewState, unstagedChanges, proposalName);
-      setError(null);
+      await publish(
+        activeSpace,
+        wallet,
+        reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
+        unstagedChanges,
+        proposalName
+      );
       clearProposalName();
     } catch (e: unknown) {
       if (e instanceof Error) {
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          setReviewState('idle');
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           return;
         }
 
-        setReviewState('publish-error');
-        setError((e as Error).message);
+        dispatch({ type: 'ERROR', payload: e.message });
       }
     }
-  }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges]);
+  }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges, dispatch]);
 
   if (isLoading || !data) {
     return null;
@@ -243,7 +242,6 @@ const ReviewChanges = () => {
           </div>
         </div>
       </div>
-      <StatusBar reviewState={reviewState} error={error} onClose={() => setReviewState('idle')} />
     </>
   );
 };
@@ -879,94 +877,6 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-type StatusBarProps = {
-  reviewState: ReviewState;
-  onClose: () => void;
-  error: string | null;
-};
-
-const StatusBar = ({ reviewState, error, onClose }: StatusBarProps) => {
-  const [isCopied, setIsCopied] = useState(false);
-
-  const onCopyError = async () => {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(error || '');
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    }
-  };
-
-  let content = (
-    <>
-      {reviewState === 'publish-complete' && (
-        <motion.span initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.15 }}>
-          🎉
-        </motion.span>
-      )}
-      {/* Only show spinner if not the complete state */}
-      {reviewState !== 'publish-complete' && publishingStates.includes(reviewState) && <Spinner />}
-      <span>{message[reviewState]}</span>
-    </>
-  );
-
-  if (reviewState === 'publish-error' && error) {
-    content = (
-      <>
-        <Warning color="orange" />
-        <span>{message[reviewState]}</span>
-        <button
-          className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
-          onClick={onCopyError}
-        >
-          <AnimatePresence mode="popLayout">
-            {isCopied ? (
-              <motion.div
-                key="status-bar-error"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-              >
-                <TickSmall />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="status-bar-error"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-              >
-                Copy error
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </button>
-        <button onClick={onClose}>
-          <Close />
-        </button>
-      </>
-    );
-  }
-
-  return (
-    <AnimatePresence>
-      {reviewState !== 'idle' && (
-        <div className="fixed bottom-0 right-0 left-0 flex w-full justify-center">
-          <motion.div
-            variants={statusVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={transition}
-            className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
-          >
-            {content}
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-};
-
 const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
@@ -976,23 +886,6 @@ const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
 
   return [data, isLoading] as const;
 };
-
-const message: Record<ReviewState, string> = {
-  idle: '',
-  reviewing: '',
-  'publishing-ipfs': 'Uploading changes to IPFS',
-  'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to The Graph',
-  'publish-complete': 'Changes published!',
-  'publish-error': 'An error has occurred',
-};
-
-const publishingStates: Array<ReviewState> = [
-  'publishing-ipfs',
-  'signing-wallet',
-  'publishing-contract',
-  'publish-complete',
-];
 
 type ChipProps = {
   status?: 'added' | 'removed' | 'unchanged';
@@ -1052,13 +945,6 @@ function getSpaceImage(spaces: Space[], spaceId: string): string {
       'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
   );
 }
-
-const statusVariants = {
-  hidden: { opacity: 0, y: '4px' },
-  visible: { opacity: 1, y: '0px' },
-};
-
-const transition = { type: 'spring', duration: 0.5, bounce: 0 };
 
 type TableFiltersProps = {
   rawFilter: string;
