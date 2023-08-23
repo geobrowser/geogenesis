@@ -5,13 +5,12 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import * as React from 'react';
 
-import { StatusBarContextProvider } from '~/partials/review/flow-bar';
-
 import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
 import { SpaceStoreProvider } from './state/spaces-store';
+import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();

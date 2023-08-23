@@ -22,6 +22,7 @@ import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -38,8 +39,6 @@ import { Spacer } from '~/design-system/spacer';
 import { colors } from '~/design-system/theme/colors';
 
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
-
-import { useStatusBar } from './flow-bar';
 
 export const Review = () => {
   const { isReviewOpen, setIsReviewOpen } = useDiff();
