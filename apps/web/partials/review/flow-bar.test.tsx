@@ -296,7 +296,7 @@ describe('Status bar', () => {
     expect(screen.queryByText('Adding your changes to The Graph')).toBeInTheDocument();
   });
 
-  it.only('should render publish success state', () => {
+  it('should render publish success state', () => {
     const store = new ActionsStore({
       storageClient: new Storage.StorageClient(options.production.ipfs),
     });
@@ -323,6 +323,6 @@ describe('Status bar', () => {
       store.create(MockNetworkData.makeStubTriple('Alice'));
     });
 
-    expect(screen.queryByText('Adding your changes to The Graph')).toBeInTheDocument();
+    expect(screen.queryByText('Changes published!')).toBeInTheDocument();
   });
 });
