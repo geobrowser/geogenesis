@@ -1,7 +1,7 @@
 'use client';
 
 import { batch } from '@legendapp/state';
-import { children } from 'effect/Fiber';
+import { children, id } from 'effect/Fiber';
 import { p } from 'vitest/dist/global-fe52f84b';
 
 import * as React from 'react';
@@ -12,7 +12,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Icon } from '~/design-system/icon';
 import { Menu } from '~/design-system/menu';
 
-import { MoveEntitySearch } from '../move-entity/move-entity-menu';
+import { MoveEntityMenu } from '../move-entity/move-entity-menu';
 
 interface Props {
   entityId: string;
@@ -60,13 +60,22 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       {isEditing && (
         <>
           <EntityPageContextMenuItem>
-            <button
-              className="flex h-full w-full items-center gap-2 px-2 py-2"
-              onClick={() => onMoveEntityMenuOpenChange(true)}
+            <Menu
+              open={isMoveEntityMenuOpen}
+              onOpenChange={onMoveEntityMenuOpenChange}
+              trigger={
+                <button
+                  className="flex h-full w-full items-center gap-2 px-2 py-2"
+                  onClick={() => onMoveEntityMenuOpenChange(true)}
+                >
+                  <Icon icon="moveSpace" />
+                  Move to space
+                </button>
+              }
+              side="bottom"
             >
-              <Icon icon="moveSpace" />
-              Move to space
-            </button>
+              <MoveEntityMenu entityId={entityId} spaceId={spaceId} />
+            </Menu>
           </EntityPageContextMenuItem>
           <EntityPageContextMenuItem>
             <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>

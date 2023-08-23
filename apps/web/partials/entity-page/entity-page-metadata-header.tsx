@@ -101,7 +101,6 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
           )}
         </HistoryPanel>
         <EntityPageContextMenu entityId={id} spaceId={spaceId} />
-        <MoveEntityMenu entityId={id} spaceId={spaceId} />
       </div>
     </div>
   );

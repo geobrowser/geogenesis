@@ -56,32 +56,49 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   );
 
   return (
-    <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
-      <div className="flex flex-col gap-2 bg-white p-2">
-        <Text variant="smallButton">Move to space</Text>
-        <SpaceSearch onQueryChange={onQueryChange} />
-        <SpacesList spaces={filteredSpacesForMoveResults} debouncedQuery={debouncedQuery} />
-      </div>
-    </Menu>
+    <div className="flex flex-col gap-2 bg-white p-2">
+      <Text variant="smallButton">Move to space</Text>
+      <SpaceSearch onQueryChange={onQueryChange} />
+      <SpacesList
+        spaces={filteredSpacesForMoveResults}
+        spaceId={spaceId}
+        entityId={entityId}
+        debouncedQuery={debouncedQuery}
+      />
+    </div>
   );
 }
 
 function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void }) {
   return (
     <div className="mb-2">
-      <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a space" />
+      <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
     </div>
   );
 }
 
-function SpacesList({ spaces, debouncedQuery }: { spaces: Space[]; debouncedQuery: string }) {
+// @TODO: determine if its needed to pass the spaceId/entityId here, or if we should just get from the params
+
+function SpacesList({
+  spaces,
+  debouncedQuery,
+  spaceId,
+  entityId,
+}: {
+  spaces: Space[];
+  debouncedQuery: string;
+  spaceId: string;
+  entityId: string;
+}) {
   return (
     <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full">
       {spaces.map(space => (
         <div
           key={space.id}
-          className="flex flex-row items-center gap-3 py-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
-          onClick={() => console.log('selected space id', space.id)}
+          className="flex flex-row items-center gap-3 my-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
+          onClick={() =>
+            console.log(`space (FROM): ${spaceId} | selected TO space: ${space.id}) | entity: ${entityId}`)
+          }
         >
           {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
             <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
