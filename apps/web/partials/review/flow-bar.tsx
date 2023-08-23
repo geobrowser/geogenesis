@@ -20,7 +20,7 @@ import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
 
 export const FlowBar = () => {
-  const { state } = useStatusBar();
+  const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
@@ -41,42 +41,49 @@ export const FlowBar = () => {
 
   const spacesCount = allSpacesWithActions.length;
 
-  // Don't show the flow bar if there are no actions, if the user is not in edit mode, or if there is a toast
-  const hideFlowbar = actionsCount === 0 || !editable || toast;
+  // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
+  // or if the status bar is rendering in place.
+  const hideFlowbar = actionsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
     <AnimatePresence>
-      {!hideFlowbar && (
-        <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
-          <motion.div
-            variants={flowVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={transition}
-            custom={!isReviewOpen}
-            className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
-          >
-            <div className="inline-flex items-center font-medium">
-              <span>{pluralize('edit', actionsCount, true)}</span>
-              <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
-              <span>
-                {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
-              </span>
-            </div>
-            <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-              Review {pluralize('edit', actionsCount, false)}
-            </Button>
-          </motion.div>
-        </div>
-      )}
-      {/* @TODO: Manage flowbar and review states globally.
-          1. Idle
-          2. Publishing
-          3. Reviewing
-          4. Error
+      <div className="z-[1000]">
+        {!hideFlowbar && (
+          <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
+            <motion.div
+              variants={flowVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              transition={transition}
+              custom={!isReviewOpen}
+              className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
+            >
+              <div className="inline-flex items-center font-medium">
+                <span>{pluralize('edit', actionsCount, true)}</span>
+                <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
+                <span>
+                  {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
+                </span>
+              </div>
+              <Button onClick={() => setIsReviewOpen(true)} variant="primary">
+                Review {pluralize('edit', actionsCount, false)}
+              </Button>
+            </motion.div>
+          </div>
+        )}
+        {/* @TODO: Manage flowbar and review states globally.
+          1. Idle (don't show status bar)
+          2. Reviewing (don't show status bar)
+          3. Publishing (show status bar)
+          4. Error (show status bar)
+
+          - In any of the states where we show the status bar we need to hide the flowbar.
+
+          - Additionally we don't show the flowbar when reviewing.
       */}
-      {state.reviewState !== 'idle' && state.reviewState !== 'reviewing' && <StatusBar />}
+        {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
+      </div>
     </AnimatePresence>
   );
 };
@@ -128,6 +135,8 @@ export function useStatusBar() {
 
 const StatusBar = () => {
   const { state, dispatch } = useStatusBar();
+
+  console.log('rendering status bar');
 
   const [isCopied, setIsCopied] = React.useState(false);
 
@@ -192,20 +201,18 @@ const StatusBar = () => {
 
   return (
     <AnimatePresence>
-      {state.reviewState !== 'idle' && (
-        <div className="fixed bottom-0 right-0 left-0 flex w-full justify-center">
-          <motion.div
-            variants={statusVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={transition}
-            className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
-          >
-            {content}
-          </motion.div>
-        </div>
-      )}
+      <div className="z-[1000] fixed bottom-0 right-0 left-0 flex w-full justify-center">
+        <motion.div
+          variants={statusVariants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          transition={transition}
+          className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
+        >
+          {content}
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };
@@ -225,6 +232,7 @@ const publishingStates: Array<ReviewState> = [
   'signing-wallet',
   'publishing-contract',
   'publish-complete',
+  'publish-error',
 ];
 
 const statusVariants = {

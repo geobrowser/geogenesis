@@ -122,7 +122,6 @@ const ReviewChanges = () => {
         unstagedChanges,
         proposalName
       );
-      dispatch({ type: 'ERROR', payload: null });
       clearProposalName();
     } catch (e: unknown) {
       if (e instanceof Error) {
