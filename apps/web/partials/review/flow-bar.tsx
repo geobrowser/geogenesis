@@ -103,7 +103,7 @@ const StatusBar = () => {
   };
 
   let content = (
-    <>
+    <div className="flex items-center justify-center gap-2">
       {state.reviewState === 'publish-complete' && (
         <motion.span initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.15 }}>
           🎉
@@ -112,12 +112,12 @@ const StatusBar = () => {
       {/* Only show spinner if not the complete state */}
       {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && <Spinner />}
       <span>{message[state.reviewState]}</span>
-    </>
+    </div>
   );
 
   if (state.reviewState === 'publish-error' && state.error) {
     content = (
-      <>
+      <div className="flex items-center justify-center gap-2">
         <Warning color="orange" />
         <span>{message[state.reviewState]}</span>
         <button
@@ -149,25 +149,16 @@ const StatusBar = () => {
         <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
           <Close />
         </button>
-      </>
+      </div>
     );
   }
 
   return (
-    <AnimatePresence>
-      <div className="z-[1000] fixed bottom-0 right-0 left-0 flex w-full justify-center">
-        <motion.div
-          variants={statusVariants}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
-          transition={transition}
-          className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
-        >
-          {content}
-        </motion.div>
-      </div>
-    </AnimatePresence>
+    <div className="z-[1000] fixed bottom-0 right-0 left-0 flex flex-col items-center origin-center">
+      <motion.div layout transition={{ type: 'spring', bounce: 0.3, duration: 0.15 }}>
+        <div className="m-8 px-3 py-2.5 rounded bg-text text-button text-white overflow-hidden h-10">{content}</div>
+      </motion.div>
+    </div>
   );
 };
 
