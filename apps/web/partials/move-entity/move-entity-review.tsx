@@ -1,4 +1,9 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import Image from 'next/legacy/image';
+
+import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
+import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Icon } from '~/design-system/icon';
@@ -16,6 +21,10 @@ export function MoveEntityReview() {
 
 function MoveEntityReviewChanges() {
   const { spaceIdFrom, spaceIdTo, entityId, setIsMoveReviewOpen } = useMoveEntity();
+  const { spaces } = useSpaces();
+  const spaceFrom = spaces.find(space => space.id === spaceIdFrom);
+  const spaceTo = spaces.find(space => space.id === spaceIdTo);
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -30,9 +39,13 @@ function MoveEntityReviewChanges() {
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="flex flex-row items-center justify-between gap-4 w-full ">
-            <SpaceMoveCard spaceName="Space Name" spaceImage="" actionType="delete" />
+            <SpaceMoveCard
+              spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
+              spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              actionType="delete"
+            />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
-            <SpaceMoveCard spaceName="Space Name" spaceImage="" actionType="create" />
+            <SpaceMoveCard spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}   spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]} actionType="create" />
           </div>
         </div>
       </div>
@@ -45,14 +58,18 @@ function SpaceMoveCard({
   spaceImage,
   actionType,
 }: {
-  spaceName: string;
-  spaceImage: string;
+  spaceName: string | undefined; // to satisfiy potentially undefined
+  spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
 }) {
   return (
     <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full max-h-[90px]">
       <div className="flex flex-row items-center gap-2">
-        <div className="bg-purple w-4 h-4 rounded-sm"></div>
+        {spaceImage !== undefined && (
+          <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
+            <Image src={getImagePath(spaceImage)} layout="fill" objectFit="cover" />
+          </div>
+        )}
         <Text variant="metadata">{spaceName}</Text>
       </div>
       <div className="flex flex-row items-center py-4 gap-2">

@@ -115,7 +115,6 @@ function SpacesList({
           key={space.id}
           className="flex flex-row items-center gap-3 my-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
           onClick={() => {
-            console.log(`space (FROM): ${spaceId} | selected space (TO): ${space.id}) | entityId: ${entityId}`);
             setSpaceIdFrom(spaceId);
             setSpaceIdTo(space.id);
             setEntityId(entityId);
