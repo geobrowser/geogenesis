@@ -15,3 +15,5 @@ export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-soc
 
 export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
+
+export const IPFS_GATEWAY_PATH = 'https://api.thegraph.com/ipfs/api/v0/cat?arg=';

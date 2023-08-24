@@ -80,6 +80,33 @@ const createEditDeleteSameTriple: ActionType[] = [
   },
 ];
 
+const editEditSameTripleToOriginalValue: ActionType[] = [
+  {
+    type: 'editTriple',
+    before: {
+      type: 'deleteTriple',
+      ...MockNetworkData.makeStubTriple('Devin'),
+    },
+    after: {
+      type: 'createTriple',
+      ...MockNetworkData.makeStubTriple('Devin'),
+      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
+    },
+  },
+  {
+    type: 'editTriple',
+    before: {
+      type: 'deleteTriple',
+      ...MockNetworkData.makeStubTriple('Devin'),
+      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
+    },
+    after: {
+      type: 'createTriple',
+      ...MockNetworkData.makeStubTriple('Devin'),
+    },
+  },
+];
+
 describe('Action counts', () => {
   it('Generates correct change counts from base create/edit/delete actions', () => {
     const changes = getChangeCount(basicActions);
@@ -93,6 +120,11 @@ describe('Action counts', () => {
 
   it('Generates correct change counts for creating, editing, then deleting the same triple', () => {
     const changes = getChangeCount(createEditDeleteSameTriple);
+    expect(changes).toEqual(0);
+  });
+
+  it('Generates correct change counts for editing then editing the same triple back to the original value', () => {
+    const changes = getChangeCount(editEditSameTripleToOriginalValue);
     expect(changes).toEqual(0);
   });
 });
