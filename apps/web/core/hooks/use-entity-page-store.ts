@@ -18,39 +18,35 @@ type RelationValueType = {
   spaceId: string;
 };
 
-type EntityValueTriple = ITriple & { value: EntityValue };
-
-type MergeRelationValueTypesFn = (
-  actions: Array<Action>,
-  relationTypeTriples: Array<ITriple>
-) => Array<EntityValueTriple>;
-
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
- * created/deleted relation value types.
- *
- * It returns an object that maps entity ids to an array of relation value types.
+ * created/deleted relation value types before mapping them to the RelationValueType data structure that the UI
+ * expects to consume.
  */
-export const mergeLocalAndRemoteRelationValueTypes: MergeRelationValueTypesFn = (actions, relationTypeTriples) => {
+export const mergeTriplesToRelationValueTypes = (
+  actions: Array<Action>,
+  relationTypeTriples: Array<ITriple>
+): Record<string, Array<RelationValueType>> => {
   const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
 
-  return pipe(mergedTriples, triples => triples.filter(Value.isRelationValueType));
-};
-
-export function triplesToRelationValueTypes(triples: ReturnType<typeof mergeLocalAndRemoteRelationValueTypes>) {
-  return triples.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
-    (acc, relationType) => {
-      if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-      acc[relationType.entityId].push({
-        typeId: relationType.value.id,
-        typeName: relationType.value.name,
-        spaceId: relationType.space,
-      });
-      return acc;
-    },
-    {}
+  return pipe(
+    mergedTriples,
+    triples => triples.filter(Value.isRelationValueType),
+    triples =>
+      triples.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
+        (acc, relationType) => {
+          if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
+          acc[relationType.entityId].push({
+            typeId: relationType.value.id,
+            typeName: relationType.value.name,
+            spaceId: relationType.space,
+          });
+          return acc;
+        },
+        {}
+      )
   );
-}
+};
 
 /**
  * This function is responsible for fetching the attribute relation value types for the triples
@@ -94,15 +90,10 @@ function useConfiguredAttributeRelationTypes({
 
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
-  return pipe(
-    mergeLocalAndRemoteRelationValueTypes(
-      allActions,
-      // Filter out any non-existent entities
-      serverAttributeRelationTypes
-        .flatMap(e => (e ? [e] : []))
-        .flatMap(e => e.triples.filter(Value.isRelationValueType))
-    ),
-    triplesToRelationValueTypes
+  return mergeTriplesToRelationValueTypes(
+    allActions,
+    // Filter out any non-existent entities
+    serverAttributeRelationTypes.flatMap(e => (e ? [e] : [])).flatMap(e => e.triples.filter(Value.isRelationValueType))
   );
 }
 
