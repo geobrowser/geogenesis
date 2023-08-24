@@ -61,18 +61,24 @@ type Proposal = {
 type EntityId = string;
 
 const ReviewChanges = () => {
+  const { state } = useStatusBar();
+
   const { spaces } = useSpaces();
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   // Set a new default active space when active spaces change
   useEffect(() => {
-    if (allSpacesWithActions.length === 0) {
+    if (
+      allSpacesWithActions.length === 0 &&
+      state.reviewState !== 'publish-complete' &&
+      state.reviewState !== 'publishing-contract'
+    ) {
       setIsReviewOpen(false);
       return;
     }
     setActiveSpace(allSpacesWithActions[0] ?? '');
-  }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen]);
+  }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
 
   // Options for space selector dropdown
   const options = allSpacesWithActions.map(spaceId => ({
