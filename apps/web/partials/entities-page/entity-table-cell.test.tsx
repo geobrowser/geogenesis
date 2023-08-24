@@ -102,4 +102,139 @@ describe('EntityTableCell', () => {
 
     expect(screen.getByText('some string value')).toBeInTheDocument();
   });
+
+  it('renders a web url cell if the triple value type is web url', () => {
+    render(
+      <EntityTableCell
+        isExpanded={false}
+        space="sandwich"
+        cell={{
+          columnId: 'string column type',
+          entityId: 'banana',
+          triples: [
+            makeStubTripleWithAttributeAndValue(
+              'entity name',
+              'banana',
+              {
+                id: 'some attribute id',
+                name: 'some attribute name',
+              },
+              {
+                id: 'some url id',
+                type: 'url',
+                value: 'some url value',
+              }
+            ),
+          ],
+        }}
+        triples={[
+          makeStubTripleWithAttributeAndValue(
+            'entity name',
+            'banana',
+            {
+              id: 'some attribute id',
+              name: 'some attribute name',
+            },
+            {
+              id: 'some url id',
+              type: 'url',
+              value: 'some url value',
+            }
+          ),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'some url value' })).toBeInTheDocument();
+  });
+
+  it('renders an entity cell if the triple value type is entity', () => {
+    render(
+      <EntityTableCell
+        isExpanded={false}
+        space="sandwich"
+        cell={{
+          columnId: 'string column type',
+          entityId: 'banana',
+          triples: [
+            makeStubTripleWithAttributeAndValue(
+              'entity name',
+              'banana',
+              {
+                id: 'some attribute id',
+                name: 'some attribute name',
+              },
+              {
+                id: 'some url id',
+                type: 'url',
+                value: 'some url value',
+              }
+            ),
+          ],
+        }}
+        triples={[
+          makeStubTripleWithAttributeAndValue(
+            'entity name',
+            'banana',
+            {
+              id: 'some attribute id',
+              name: 'some attribute name',
+            },
+            {
+              id: 'some entity id',
+              type: 'entity',
+              name: 'some entity name',
+            }
+          ),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'some entity name' })).toBeInTheDocument();
+  });
+
+  it('renders an image cell if the triple value type is image', () => {
+    render(
+      <EntityTableCell
+        isExpanded={false}
+        space="sandwich"
+        cell={{
+          columnId: 'string column type',
+          entityId: 'banana',
+          triples: [
+            makeStubTripleWithAttributeAndValue(
+              'entity name',
+              'banana',
+              {
+                id: 'some attribute id',
+                name: 'some attribute name',
+              },
+              {
+                id: 'some image id',
+                type: 'image',
+                value: 'some image value',
+              }
+            ),
+          ],
+        }}
+        triples={[
+          makeStubTripleWithAttributeAndValue(
+            'entity name',
+            'banana',
+            {
+              id: 'some attribute id',
+              name: 'some attribute name',
+            },
+            {
+              id: 'some image id',
+              type: 'image',
+              value: 'some image value',
+            }
+          ),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('img').getAttribute('src')).toBe('some image value');
+  });
 });
