@@ -22,6 +22,8 @@ import { Upload } from '~/design-system/icons/upload';
 import type { ColorName } from '~/design-system/theme/colors';
 
 import { BulkEdit } from './icons/bulk-edit';
+import { CheckCircle } from './icons/check-circle';
+import { CheckCircleSmall } from './icons/check-circle-small';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Cog } from './icons/cog';
@@ -98,7 +100,9 @@ export type IconName =
   | 'disconnectWallet'
   | 'bulkEdit'
   | 'member'
-  | 'moveSpace';
+  | 'moveSpace'
+  | 'checkCircleSmall'
+  | 'checkCircle';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -163,4 +167,6 @@ const icons: Record<IconName, React.ElementType> = {
   disconnectWallet: DisconnectWallet,
   member: Member,
   moveSpace: MoveSpace,
+  checkCircleSmall: CheckCircleSmall,
+  checkCircle: CheckCircle,
 };
