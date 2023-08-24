@@ -139,32 +139,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     setHasSetFilter(true);
   }, [hasSetType, hasSetFilter, subgraph, config, send, filterId, filterValue]);
 
-  // If we navigate away from an entity we just created whose only triple is the typeId derived from the URL,
-  // we should remove it.
-  React.useEffect(() => {
-    function removeTypeTriple() {
-      if (triples.length === 1) {
-        const isTypeTripleOnlyTriple = triples[0].attributeId === SYSTEM_IDS.TYPES && triples[0].value.id === typeId;
-
-        if (isTypeTripleOnlyTriple) {
-          remove(triples[0]);
-        }
-      }
-    }
-
-    // Next doesn't have great ways of listening to navigation events in a granular component. It expects that you
-    // will be listening to changes in URLs higher in your application. If we listen to changes in the URL here the
-    // way Next suggest's, the component will be unmounted before we can remove the stale entity.
-    // https://nextjs.org/docs/app/api-reference/functions/use-router#router-events
-    //
-    // Instead we can listen to the popstate event which is fired when the user navigates back to the previous page.
-    window.addEventListener('popstate', removeTypeTriple);
-    return () => {
-      removeTypeTriple();
-      window.removeEventListener('popstate', removeTypeTriple);
-    };
-  }, [triples, typeId, remove]);
-
   return (
     <>
       <div className="rounded border border-grey-02 shadow-button">
