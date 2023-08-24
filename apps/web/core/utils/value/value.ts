@@ -1,4 +1,6 @@
-import type { Triple } from '~/core/types';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
+import type { EntityValue, Triple } from '~/core/types';
 
 import { getImageHash } from '../utils';
 
@@ -40,4 +42,8 @@ export function toImageValue(rawValue: string) {
   } else {
     return '';
   }
+}
+
+export function isRelationValueType(t: Triple): t is Triple & { value: EntityValue } {
+  return t.value.type === 'entity' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }
