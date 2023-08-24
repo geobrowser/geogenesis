@@ -566,11 +566,7 @@ function EntityAttributes({
               )}
               <div className="absolute top-6 right-0 flex items-center gap-1">
                 {isEntityGroup ? (
-                  <AttributeConfigurationMenu
-                    attributeId={attributeId}
-                    attributeName={attributeName}
-                    configuredTypes={relationTypes}
-                  />
+                  <AttributeConfigurationMenu attributeId={attributeId} attributeName={attributeName} />
                 ) : null}
                 {!isPlaceholder && (
                   <>

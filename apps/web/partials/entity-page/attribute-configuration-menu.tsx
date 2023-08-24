@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
@@ -22,23 +23,24 @@ interface Props {
   // This is the entityId of the attribute being configured with a relation type.
   attributeId: string;
   attributeName: string | null;
-  configuredTypes: { typeId: string; typeName: string | null; spaceId: string }[];
 }
 
-export function AttributeConfigurationMenu({ attributeId, attributeName, configuredTypes }: Props) {
+export function AttributeConfigurationMenu({ attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch attributeId={attributeId} attributeName={attributeName} configuredTypes={configuredTypes} />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} />
       </div>
     </Menu>
   );
 }
 
-function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props) {
+function AttributeSearch({ attributeId, attributeName }: Props) {
+  const { attributeRelationTypes } = useEntityPageStore();
+
   const { create, remove } = useActionsStore();
 
   const autocomplete = useAutocomplete({
@@ -47,7 +49,11 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
 
   const { spaces } = useSpaces();
 
-  const alreadySelectedTypes = configuredTypes.map(st => st.typeId);
+  const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
+
+  console.log('mergedTypes', relationValueTypesForAttribute);
+
+  const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
 
   const onSelect = (result: Entity) => {
     autocomplete.onQueryChange('');
@@ -91,7 +97,7 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-2 px-2">
-        {configuredTypes.map(st => (
+        {relationValueTypesForAttribute.map(st => (
           <DeletableChipButton
             href={NavUtils.toEntity(st.spaceId, st.typeId)}
             onClick={() => onRemove(st)}
