@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { makeStubTriple } from '~/core/io/mocks/mock-network';
+import { makeStubTripleWithAttributeAndValue } from '~/core/io/mocks/mock-network';
 
 import { EntityTableCell } from './entity-table-cell';
 
@@ -55,5 +56,50 @@ describe('EntityTableCell', () => {
     );
 
     expect(screen.getByText('apple')).toBeInTheDocument();
+  });
+
+  it('renders a string cell if the triple value type is string', () => {
+    render(
+      <EntityTableCell
+        isExpanded={false}
+        space="sandwich"
+        cell={{
+          columnId: 'string column type',
+          entityId: 'banana',
+          triples: [
+            makeStubTripleWithAttributeAndValue(
+              'entity name',
+              'banana',
+              {
+                id: 'some attribute id',
+                name: 'some attribute name',
+              },
+              {
+                id: 'some string value',
+                type: 'string',
+                value: 'apple',
+              }
+            ),
+          ],
+        }}
+        triples={[
+          makeStubTripleWithAttributeAndValue(
+            'entity name',
+            'banana',
+            {
+              id: 'some attribute id',
+              name: 'some attribute name',
+            },
+            {
+              id: 'some string id',
+              type: 'string',
+              value: 'some string value',
+            }
+          ),
+        ]}
+      />
+    );
+
+    expect(screen.getByText('some string value')).toBeInTheDocument();
   });
 });
