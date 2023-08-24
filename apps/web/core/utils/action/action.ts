@@ -118,17 +118,6 @@ export function squashChanges(actions: Action[]) {
         return null;
       }
 
-      // Edit -> Edit where the value types are the same and the before/after values are the same.
-      // We don't need to send this to the subgraph.
-      if (changeTuple[0].type === 'editTriple' && changeTuple[1].type === 'editTriple') {
-        if (
-          changeTuple[0].before.value.type === changeTuple[1].after.value.type &&
-          getValue(changeTuple[0].before) === getValue(changeTuple[1].after)
-        ) {
-          return null;
-        }
-      }
-
       return changeTuple[1];
     })
     .flatMap(changeTuple => (changeTuple ? changeTuple : []));
