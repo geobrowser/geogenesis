@@ -45,7 +45,11 @@ function MoveEntityReviewChanges() {
               actionType="delete"
             />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
-            <SpaceMoveCard spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}   spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]} actionType="create" />
+            <SpaceMoveCard
+              spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
+              spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              actionType="create"
+            />
           </div>
         </div>
       </div>
