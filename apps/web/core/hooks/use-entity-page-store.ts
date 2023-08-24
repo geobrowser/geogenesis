@@ -4,7 +4,7 @@ import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import { Action, EntityValue, Triple as ITriple } from '~/core/types';
+import { Action, Triple as ITriple } from '~/core/types';
 
 import { Services } from '../services';
 import { useEntityStoreInstance } from '../state/entity-page-store';
@@ -18,6 +18,8 @@ type RelationValueType = {
   spaceId: string;
 };
 
+type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
+
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
  * created/deleted relation value types before mapping them to the RelationValueType data structure that the UI
@@ -26,25 +28,24 @@ type RelationValueType = {
 export const mergeTriplesToRelationValueTypes = (
   actions: Array<Action>,
   relationTypeTriples: Array<ITriple>
-): Record<string, Array<RelationValueType>> => {
+): RelationValueTypesByAttributeId => {
   const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
 
   return pipe(
     mergedTriples,
     triples => triples.filter(Value.isRelationValueType),
     triples =>
-      triples.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
-        (acc, relationType) => {
-          if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-          acc[relationType.entityId].push({
-            typeId: relationType.value.id,
-            typeName: relationType.value.name,
-            spaceId: relationType.space,
-          });
-          return acc;
-        },
-        {}
-      )
+      triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
+        if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
+
+        acc[relationType.entityId].push({
+          typeId: relationType.value.id,
+          typeName: relationType.value.name,
+          spaceId: relationType.space,
+        });
+
+        return acc;
+      }, {})
   );
 };
 
