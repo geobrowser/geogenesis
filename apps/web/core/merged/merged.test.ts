@@ -51,7 +51,7 @@ describe('MergeDataSource merges local triples with network triples', () => {
     expect(triples).toEqual([changedLocalTripleAsAction]);
   });
 
-  it.only('merges local triples with filters', async () => {
+  it('merges local triples with filters', async () => {
     const stubTriple = makeStubTriple('Alice', 'alice-id');
 
     const store = new ActionsStore({ storageClient });
