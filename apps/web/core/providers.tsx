@@ -10,6 +10,7 @@ import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
 import { SpaceStoreProvider } from './state/spaces-store';
+import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();
@@ -22,7 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ActionsStoreProvider>
             <SpaceStoreProvider>
               <LocalStoreProvider>
-                <DiffProvider>{children}</DiffProvider>
+                <StatusBarContextProvider>
+                  <DiffProvider>{children}</DiffProvider>
+                </StatusBarContextProvider>
               </LocalStoreProvider>
             </SpaceStoreProvider>
           </ActionsStoreProvider>

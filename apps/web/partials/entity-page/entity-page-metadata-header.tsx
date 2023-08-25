@@ -6,11 +6,14 @@ import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { EntityType } from '~/core/types';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
+import { Entity } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -29,7 +32,7 @@ interface EntityPageMetadataHeaderProps {
   types: Array<EntityType>;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
   const { subgraph, config } = Services.useServices();
   const {
     data: versions,
@@ -43,6 +46,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
+  const { actionsFromSpace } = useActionsStore();
+  const { triples } = useEntityPageStore();
   const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
   const isOnePage = versions?.pages && versions.pages[0].length < 10;
@@ -55,6 +60,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types }: EntityPageMetad
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
 
   const showMore = !isOnePage && !isLastPage;
+  const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
 
   return (
     <div className="flex items-center justify-between text-text">

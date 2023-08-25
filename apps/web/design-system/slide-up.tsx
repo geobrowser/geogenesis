@@ -1,9 +1,7 @@
-import * as Dialog from '@radix-ui/react-dialog';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
-import { useCallback } from 'react';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -12,31 +10,30 @@ type SlideUpProps = {
 };
 
 export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
-  const onClose = useCallback(() => {
-    setIsOpen(false);
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setIsOpen]);
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={onClose} modal={true}>
-      <Dialog.Portal forceMount>
-        <AnimatePresence>
-          {isOpen && (
-            <Dialog.Content forceMount>
-              <motion.div
-                variants={variants}
-                initial="hidden"
-                animate="visible"
-                exit="hidden"
-                transition={transition}
-                className={cx('fixed inset-0 z-100 h-full w-full bg-grey-02', !isOpen && 'pointer-events-none')}
-              >
-                {children}
-              </motion.div>
-            </Dialog.Content>
-          )}
-        </AnimatePresence>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          variants={variants}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          transition={transition}
+          className={cx('fixed inset-0 z-100 h-full w-full bg-grey-02', !isOpen && 'pointer-events-none')}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

@@ -251,7 +251,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       {isImageValueType && (
         <TableImageField
           imageSrc={Value.imageValue(firstTriple) || ''}
-          variant="avatar"
+          variant="table-cell"
           onImageChange={imageSrc => {
             isEmptyCell ? createImageWithValue(imageSrc) : uploadImage(firstTriple, imageSrc);
           }}

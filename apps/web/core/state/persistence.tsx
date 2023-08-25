@@ -26,7 +26,13 @@ export const Persistence = () => {
       // will grow infinitely. Additionally, we don't want to store the intermediate steps
       // taken on triples. We only care about the first state and the last state.
       const unpublishedActions = Object.entries(actions).reduce((acc, [spaceId, spaceActions]) => {
-        acc[spaceId] = Action.prepareActionsForPublishing(spaceActions);
+        const squashedActionsForSpace = Action.prepareActionsForPublishing(spaceActions);
+
+        // Only add spaces that have unpublished changes
+        if (squashedActionsForSpace.length > 0) {
+          acc[spaceId] = squashedActionsForSpace;
+        }
+
         return acc;
       }, {} as SpaceActions);
 

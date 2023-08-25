@@ -1,11 +1,14 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import React from 'react';
+
 import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
 import { editable$ } from '~/core/state/editable-store';
+import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store/status-bar-store';
 
 import { FlowBar } from './flow-bar';
 
@@ -26,7 +29,7 @@ describe('Flow Bar', () => {
       </Providers>
     );
 
-    expect(screen.queryByText('Review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
   });
 
   it('Should not render the flow bar when there are changes but not in edit mode', () => {
@@ -44,7 +47,37 @@ describe('Flow Bar', () => {
 
     act(() => store.create(MockNetworkData.makeStubTriple('Alice')));
 
-    expect(screen.queryByText('Review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
+  });
+
+  it('Should not render the flowbar when the status bar is open', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publish-complete',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
   });
 
   it('Should render the flow bar when there are changes and in edit mode', () => {
@@ -107,7 +140,7 @@ describe('Flow Bar', () => {
       store.remove(MockNetworkData.makeStubTriple('Alice'));
     });
 
-    expect(screen.queryByText('Review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
 
     // create -> edit should only be one change
     act(() => {
@@ -137,5 +170,187 @@ describe('Flow Bar', () => {
 
     expect(screen.queryByText('3 edits')).toBeInTheDocument();
     expect(screen.queryByText('2 entities in 1 space')).toBeInTheDocument();
+  });
+});
+
+describe('Status bar', () => {
+  it('should not render the status bar when status is idle or reviewing and we are in edit mode with actions', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'idle',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Review edit')).toBeInTheDocument();
+  });
+
+  it('should render ipfs uploading state', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publishing-ipfs',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Uploading changes to IPFS')).toBeInTheDocument();
+  });
+
+  it('should render wallet signing state', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'signing-wallet',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Sign your transaction')).toBeInTheDocument();
+  });
+
+  it('should render publishing contract state', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publishing-contract',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Adding your changes to The Graph')).toBeInTheDocument();
+  });
+
+  it('should render publish success state', () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publish-complete',
+      error: null,
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('Changes published!')).toBeInTheDocument();
+  });
+
+  it('should render publish error state', async () => {
+    const store = new ActionsStore({
+      storageClient: new Storage.StorageClient(options.production.ipfs),
+    });
+
+    const initialState: StatusBarState = {
+      reviewState: 'publish-error',
+      error: 'Banana is brown.',
+    };
+
+    const initialDispatch = () => {
+      //
+    };
+
+    render(
+      <ActionsStoreContext.Provider value={store}>
+        <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
+          <FlowBar />
+        </StatusBarContext.Provider>
+      </ActionsStoreContext.Provider>
+    );
+
+    act(() => {
+      editable$.set(true);
+      store.create(MockNetworkData.makeStubTriple('Alice'));
+    });
+
+    expect(screen.queryByText('An error has occurred')).toBeInTheDocument();
   });
 });
