@@ -62,9 +62,7 @@ export class Merged implements IMergedDataSource {
   fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]) => {
     const networkTriples = await this.subgraph.fetchTriples(options);
 
-    if (!options.space) return networkTriples;
-
-    const actions = this.store.actions$.get()[options.space] ?? [];
+    const actions = options.space ? this.store.actions$.get()[options.space] : this.store.allActions$.get() ?? [];
 
     // Merge any local actions with the network triples
     const updatedTriples = Triple.fromActions(actions, networkTriples);

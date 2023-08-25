@@ -50,6 +50,51 @@ describe('MergeDataSource merges local triples with network triples', () => {
 
     expect(triples).toEqual([changedLocalTripleAsAction]);
   });
+
+  it.only('merges local triples with filters', async () => {
+    const stubTriple = makeStubTriple('Alice', 'alice-id');
+
+    const store = new ActionsStore({ storageClient });
+    const localStore = new LocalStore({ store: store });
+
+    store.create(stubTriple);
+
+    const mergedNetwork = new MergeDataSource({
+      subgraph: new MockNetwork(),
+      store,
+      localStore,
+    });
+
+    const tripleForAlice = await mergedNetwork.fetchTriples({
+      query: '',
+      endpoint: options.development.subgraph,
+      first: 1,
+      skip: 0,
+      filter: [
+        {
+          field: 'entity-id',
+          value: 'alice-id',
+        },
+      ],
+    });
+
+    expect(tripleForAlice).toEqual([{ ...stubTriple, type: 'createTriple' }]);
+
+    const triplesForBob = await mergedNetwork.fetchTriples({
+      query: '',
+      endpoint: options.development.subgraph,
+      first: 1,
+      skip: 0,
+      filter: [
+        {
+          field: 'entity-id',
+          value: 'bob-id',
+        },
+      ],
+    });
+
+    expect(triplesForBob).not.toEqual([{ ...stubTriple, type: 'createTriple' }]);
+  });
 });
 
 describe('MergeDataSource merges local entities with network entities', () => {
