@@ -16,6 +16,7 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { data } from '../../../../packages/data-uri/test/assembly';
+import { MoveEntityReviewPage } from './move-entity-review-page';
 
 export function MoveEntityReview() {
   const { isMoveReviewOpen, setIsMoveReviewOpen } = useMoveEntity();
@@ -86,6 +87,7 @@ function MoveEntityReviewChanges() {
               {entityData.name}
             </Text>
           </div>
+          <MoveEntityReviewPage entityId={entityId} triples={entityData.triples} />
         </div>
       </div>
     </>
