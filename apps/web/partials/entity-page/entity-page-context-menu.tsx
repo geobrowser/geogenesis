@@ -1,8 +1,6 @@
 'use client';
 
 import { batch } from '@legendapp/state';
-import { children, id } from 'effect/Fiber';
-import { p } from 'vitest/dist/global-fe52f84b';
 
 import * as React from 'react';
 

@@ -52,6 +52,8 @@ function MoveEntityReviewChanges() {
     return null;
   }
 
+  console.log('entityData', entityData);
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">

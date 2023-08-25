@@ -2,26 +2,17 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { e } from 'vitest/dist/global-fe52f84b';
 
 import * as React from 'react';
 
-import { ALL_SPACES_IMAGE } from '~/core/constants';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { Space } from '~/core/types';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
-import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
-
-import { MoveEntityReview } from './move-entity-review';
-import Spaces from '~/app/spaces/page';
 
 interface Props {
   spaceId: string;
@@ -31,12 +22,9 @@ interface Props {
 export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const { spaces } = useSpaces();
 
-  const params = useSearchParams();
-  const [open, setOpen] = React.useState(false);
-  const [name, setName] = React.useState('');
   const [query, onQueryChange] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 100);
-  const { isMoveReviewOpen, setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
+  const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
 
   // @TODO: determine if this needs to live in context or not -- only really used in this context so doing locally for now
   // const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
@@ -129,11 +117,11 @@ function SpacesList({
           <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
         </div>
       ))}
-      {spaces.length === 0 && debouncedQuery !== '' && (
-        <div className="flex flex-row items-center gap-1">
-          <Text variant="metadata">No results found for search term </Text>
-          <Text variant="metadataMedium" color="green">
-            {debouncedQuery}
+      {spaces.length === 0 && (
+        <div className="flex flex-col gap-1">
+          <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
+          <Text variant="footnote">
+            You will need to become an editor of the space you want to move the entities to.
           </Text>
         </div>
       )}
