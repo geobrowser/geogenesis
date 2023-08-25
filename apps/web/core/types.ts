@@ -188,3 +188,11 @@ export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';
 export type ServerSideEnvParams = {
   env?: AppEnv;
 };
+
+export type RelationValueType = {
+  typeId: string;
+  typeName: string | null;
+  spaceIdOfAttribute: string;
+};
+
+export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
