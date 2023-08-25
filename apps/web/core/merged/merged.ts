@@ -66,44 +66,39 @@ export class Merged implements IMergedDataSource {
 
     const actions = this.store.actions$.get()[options.space] ?? [];
 
-    // We want to merge any local actions with the network triples
-    // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
-    // this in our app code for local triples. This might mean that we render local triples that
-    // don't map to the selected filter.
+    // Merge any local actions with the network triples
     const updatedTriples = Triple.fromActions(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
-    // We need to apply any server filters to locally created data.
-    const locallyFilteredTriples = [];
+    // Apply any server filters to locally created data.
+    let locallyFilteredTriples = mergedTriplesWithName;
 
     for (const filter of options.filter ?? []) {
-      locallyFilteredTriples.push(
-        ...mergedTriplesWithName.filter(t => {
-          if (filter.field === 'attribute-id') {
-            return t.attributeId === filter.value;
-          }
+      locallyFilteredTriples = locallyFilteredTriples.filter(t => {
+        if (filter.field === 'attribute-id') {
+          return t.attributeId === filter.value;
+        }
 
-          if (filter.field === 'entity-id') {
-            return t.entityId === filter.value;
-          }
+        if (filter.field === 'entity-id') {
+          return t.entityId === filter.value;
+        }
 
-          if (filter.field === 'attribute-name') {
-            return t.attributeName === filter.value;
-          }
+        if (filter.field === 'attribute-name') {
+          return t.attributeName === filter.value;
+        }
 
-          if (filter.field === 'entity-name') {
-            return t.entityName === filter.value;
-          }
+        if (filter.field === 'entity-name') {
+          return t.entityName === filter.value;
+        }
 
-          if (filter.field === 'linked-to') {
-            return t.value.type === 'entity' && t.value.id === filter.value;
-          }
+        if (filter.field === 'linked-to') {
+          return t.value.type === 'entity' && t.value.id === filter.value;
+        }
 
-          if (filter.field === 'value') {
-            return t.value.type === 'entity' && t.value.name === filter.value;
-          }
-        })
-      );
+        if (filter.field === 'value') {
+          return t.value.type === 'entity' && t.value.name === filter.value;
+        }
+      });
     }
 
     return locallyFilteredTriples;
