@@ -8,13 +8,13 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { RelationValueType, useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
 import { useActionsStoreInstance } from '~/core/state/actions-store';
 import { useLocalStoreInstance } from '~/core/state/local-store';
-import { Entity } from '~/core/types';
+import { Entity, RelationValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
 

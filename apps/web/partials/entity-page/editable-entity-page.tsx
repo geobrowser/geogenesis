@@ -10,7 +10,7 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 import { EntityPresenceProvider } from '~/core/presence/presence-provider';
 import { Services } from '~/core/services';
-import { Triple as ITriple, TripleValueType } from '~/core/types';
+import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -186,7 +186,7 @@ function EntityAttributes({
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
-  allowedTypes: Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>;
+  allowedTypes: RelationValueTypesByAttributeId;
   spaceId: string;
 }) {
   const tripleAttributeIds = triples.map(triple => triple.attributeId);

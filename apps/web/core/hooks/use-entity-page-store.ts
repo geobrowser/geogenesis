@@ -5,7 +5,7 @@ import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import { Action, Triple as ITriple } from '~/core/types';
+import { Action, Triple as ITriple, RelationValueTypesByAttributeId } from '~/core/types';
 
 import { Merged } from '../merged';
 import { Services } from '../services';
@@ -15,14 +15,6 @@ import { useLocalStoreInstance } from '../state/local-store';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
-
-export type RelationValueType = {
-  typeId: string;
-  typeName: string | null;
-  spaceIdOfAttribute: string;
-};
-
-type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
 
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
@@ -67,7 +59,7 @@ function useConfiguredAttributeRelationTypes({
 }: {
   triples: Array<ITriple>;
   schemaTriples: Array<ITriple>;
-}): Record<string, Array<RelationValueType>> {
+}): RelationValueTypesByAttributeId {
   // Here triples includes both local and remote triples
   const attributesWithRelationValues = [
     ...new Set([...triples, ...schemaTriples].filter(t => t.value.type === 'entity').map(t => t.attributeId)),
