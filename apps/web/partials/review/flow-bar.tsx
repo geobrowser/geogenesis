@@ -102,72 +102,91 @@ const StatusBar = () => {
     }
   };
 
-  let content = (
-    <>
-      {state.reviewState === 'publish-complete' && (
-        <motion.span initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ type: 'spring', duration: 0.15 }}>
-          🎉
-        </motion.span>
-      )}
-      {/* Only show spinner if not the complete state */}
-      {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && <Spinner />}
-      <span>{message[state.reviewState]}</span>
-    </>
-  );
-
-  if (state.reviewState === 'publish-error' && state.error) {
-    content = (
-      <>
-        <Warning color="orange" />
-        <span>{message[state.reviewState]}</span>
-        <button
-          className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
-          onClick={onCopyError}
-        >
-          <AnimatePresence mode="popLayout">
-            {isCopied ? (
-              <motion.div
-                key="status-bar-error"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-              >
-                <TickSmall />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="status-bar-error"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-              >
-                Copy error
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </button>
-        <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
-          <Close />
-        </button>
-      </>
-    );
-  }
-
   return (
-    <AnimatePresence>
-      <div className="z-[1000] fixed bottom-0 right-0 left-0 flex w-full justify-center">
-        <motion.div
-          variants={statusVariants}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
-          transition={transition}
-          className="m-8 inline-flex items-center gap-2 rounded bg-text px-3 py-2.5 text-metadataMedium text-white"
-        >
-          {content}
-        </motion.div>
-      </div>
-    </AnimatePresence>
+    <div className="z-[1000] fixed bottom-0 right-0 left-0 flex flex-col items-center origin-center">
+      <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.2 }}>
+        <div className="m-8 px-3 py-2.5 rounded bg-text text-button text-white overflow-hidden h-10">
+          <AnimatePresence mode="wait">
+            <div className="flex items-center justify-center gap-2">
+              {state.reviewState === 'publish-error' && state.error ? (
+                <>
+                  <Warning color="orange" />
+                  {/* Negative top margin visually aligns the text. Programatically aligning it feels a bit off visually. */}
+                  <motion.span
+                    key={message[state.reviewState]}
+                    initial={{ opacity: 0, filter: 'blur(2px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(2px)' }}
+                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
+                    className="-mt-[2px]"
+                  >
+                    {message[state.reviewState]}
+                  </motion.span>
+                  <motion.button
+                    initial={{ opacity: 0, filter: 'blur(2px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(2px)' }}
+                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
+                    className="flex w-[70px] items-center justify-center rounded border border-white bg-transparent p-1 text-smallButton"
+                    onClick={onCopyError}
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {isCopied ? (
+                        <motion.div
+                          key="status-bar-error"
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.95, opacity: 0 }}
+                        >
+                          <TickSmall />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="status-bar-error"
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.95, opacity: 0 }}
+                        >
+                          Copy error
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                  <button onClick={() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' })}>
+                    <Close />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {state.reviewState === 'publish-complete' && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', bounce: 0.5, duration: 0.5, delay: 0.15 }}
+                    >
+                      🎉
+                    </motion.span>
+                  )}
+                  {/* Only show spinner if not the complete state */}
+                  {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && (
+                    <Spinner />
+                  )}
+                  <motion.span
+                    key={message[state.reviewState]}
+                    initial={{ opacity: 0, filter: 'blur(2px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(2px)' }}
+                    transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
+                  >
+                    {message[state.reviewState]}
+                  </motion.span>
+                </>
+              )}
+            </div>
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    </div>
   );
 };
 
@@ -188,11 +207,6 @@ const publishingStates: Array<ReviewState> = [
   'publish-complete',
   'publish-error',
 ];
-
-const statusVariants = {
-  hidden: { opacity: 0, y: '4px' },
-  visible: { opacity: 1, y: '0px' },
-};
 
 const flowVariants = {
   hidden: { opacity: 0, y: '4px' },
