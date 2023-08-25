@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { isLoading } from '@mobily/ts-belt/dist/types/AsyncData';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
 
@@ -8,14 +7,15 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { useMoveEntity } from '~/core/state/move-entity-store';
+import { useStatusBar } from '~/core/state/status-bar-store';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
+import { Divider } from '~/design-system/divider';
 import { Icon } from '~/design-system/icon';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
-import { data } from '../../../../packages/data-uri/test/assembly';
 import { MoveEntityReviewPage } from './move-entity-review-page';
 
 export function MoveEntityReview() {
@@ -42,6 +42,7 @@ function MoveEntityReviewChanges() {
     return { entityData, entityIsLoading } as const;
   };
 
+  // this comes from the subgraph, need also to reconcile with local entity in the entity store
   const getEntityById = async (entityId: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
     const entity = await subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph });
     return entity;
@@ -52,8 +53,6 @@ function MoveEntityReviewChanges() {
   if (!entityData || entityIsLoading) {
     return null;
   }
-
-  console.log('entityData', entityData);
 
   return (
     <>
@@ -103,24 +102,25 @@ function SpaceMoveCard({
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
 }) {
+  // use the useStatusBar review states in the card to show the status of the move
+  // @TODO: rethinking the component structure with the new states
+  const { state } = useStatusBar();
   return (
-    <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full">
-      <div className="flex flex-row items-center gap-2">
+    <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full bg-red-02 gap-3">
+      <div className="flex flex-row items-center justify-between gap-2">
+        <Text variant="metadata">Step 1 - Create Triples</Text>
         {spaceImage !== undefined && (
           <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
             <Image src={getImagePath(spaceImage)} layout="fill" objectFit="cover" />
           </div>
         )}
+
         <Text variant="metadata">{spaceName}</Text>
       </div>
-      <div className="flex flex-row items-center pt-4 gap-2">
-        <Icon icon="checkCircle" color="grey-04" />
-        <Text variant="metadata">{actionType === 'delete' ? 'Delete triples' : 'Create triples'}</Text>
+      <Divider type="horizontal" />
+      <div className="flex flex-row items-center gap-2">
+        <Icon icon="checkClose" color="grey-04" />
       </div>
     </div>
   );
 }
-
-/* <p>space from: {spaceIdFrom}</p>
-<p>space to: {spaceIdTo}</p>
-<p>entity id: {entityId}</p> */

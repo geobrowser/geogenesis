@@ -24,6 +24,7 @@ import type { ColorName } from '~/design-system/theme/colors';
 import { BulkEdit } from './icons/bulk-edit';
 import { CheckCircle } from './icons/check-circle';
 import { CheckCircleSmall } from './icons/check-circle-small';
+import { CheckClose } from './icons/check-close';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Cog } from './icons/cog';
@@ -102,7 +103,8 @@ export type IconName =
   | 'member'
   | 'moveSpace'
   | 'checkCircleSmall'
-  | 'checkCircle';
+  | 'checkCircle'
+  | 'checkClose';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -169,4 +171,5 @@ const icons: Record<IconName, React.ElementType> = {
   moveSpace: MoveSpace,
   checkCircleSmall: CheckCircleSmall,
   checkCircle: CheckCircle,
+  checkClose: CheckClose,
 };
