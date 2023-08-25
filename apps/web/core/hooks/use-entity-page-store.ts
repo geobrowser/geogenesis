@@ -1,21 +1,25 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
 import { Action, Triple as ITriple } from '~/core/types';
 
+import { Merged } from '../merged';
 import { Services } from '../services';
+import { useActionsStoreInstance } from '../state/actions-store';
 import { useEntityStoreInstance } from '../state/entity-page-store';
+import { useLocalStoreInstance } from '../state/local-store';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
 
-type RelationValueType = {
+export type RelationValueType = {
   typeId: string;
   typeName: string | null;
-  spaceId: string;
+  spaceIdOfAttribute: string;
 };
 
 type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
@@ -41,7 +45,7 @@ export const mergeTriplesToRelationValueTypes = (
         acc[relationType.entityId].push({
           typeId: relationType.value.id,
           typeName: relationType.value.name,
-          spaceId: relationType.space,
+          spaceIdOfAttribute: relationType.space,
         });
 
         return acc;
@@ -64,12 +68,21 @@ function useConfiguredAttributeRelationTypes({
   triples: Array<ITriple>;
   schemaTriples: Array<ITriple>;
 }): Record<string, Array<RelationValueType>> {
+  // Here triples includes both local and remote triples
   const attributesWithRelationValues = [
     ...new Set([...triples, ...schemaTriples].filter(t => t.value.type === 'entity').map(t => t.attributeId)),
   ];
 
   const { subgraph, config } = Services.useServices();
+  const store = useActionsStoreInstance();
+  const localStore = useLocalStoreInstance();
   const { allActions } = useActionsStore();
+
+  const merged = new Merged({
+    store,
+    localStore,
+    subgraph,
+  });
 
   const {
     data: serverAttributeRelationTypes,
@@ -77,10 +90,28 @@ function useConfiguredAttributeRelationTypes({
     error,
   } = useQuery({
     queryKey: ['serverAttributeRelationTypes', attributesWithRelationValues],
-    queryFn: async () =>
+    queryFn: () =>
+      // Fetch the relation value type triples for each attributeId contained on the entity.
+      // There might be locally created entities that have not been published, so we need to read
+      // from both the remote and local stores.
       Promise.all(
         attributesWithRelationValues.map(attributeId =>
-          subgraph.fetchEntity({ id: attributeId, endpoint: config.subgraph })
+          merged.fetchTriples({
+            query: '',
+            skip: 0,
+            first: 100,
+            filter: [
+              {
+                field: 'entity-id',
+                value: attributeId,
+              },
+              {
+                field: 'attribute-id',
+                value: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+              },
+            ],
+            endpoint: config.subgraph,
+          })
         )
       ),
   });
@@ -91,11 +122,14 @@ function useConfiguredAttributeRelationTypes({
 
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
-  return mergeTriplesToRelationValueTypes(
+  const thing = mergeTriplesToRelationValueTypes(
     allActions,
-    // Filter out any non-existent entities
-    serverAttributeRelationTypes.flatMap(e => (e ? [e] : [])).flatMap(e => e.triples.filter(Value.isRelationValueType))
+    // Flatten all the triples for each entity into a single array (there shouldn't be duplicates)
+    serverAttributeRelationTypes.flatMap(t => t)
   );
+
+  console.log('thing', thing);
+  return thing;
 }
 
 export function useEntityPageStore() {

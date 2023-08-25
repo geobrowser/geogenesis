@@ -73,7 +73,40 @@ export class Merged implements IMergedDataSource {
     const updatedTriples = Triple.fromActions(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
-    return mergedTriplesWithName;
+    // We need to apply any server filters to locally created data.
+    const locallyFilteredTriples = [];
+
+    for (const filter of options.filter ?? []) {
+      locallyFilteredTriples.push(
+        ...mergedTriplesWithName.filter(t => {
+          if (filter.field === 'attribute-id') {
+            return t.attributeId === filter.value;
+          }
+
+          if (filter.field === 'entity-id') {
+            return t.entityId === filter.value;
+          }
+
+          if (filter.field === 'attribute-name') {
+            return t.attributeName === filter.value;
+          }
+
+          if (filter.field === 'entity-name') {
+            return t.entityName === filter.value;
+          }
+
+          if (filter.field === 'linked-to') {
+            return t.value.type === 'entity' && t.value.id === filter.value;
+          }
+
+          if (filter.field === 'value') {
+            return t.value.type === 'entity' && t.value.name === filter.value;
+          }
+        })
+      );
+    }
+
+    return locallyFilteredTriples;
   };
 
   fetchEntities = async (options: Parameters<Subgraph.ISubgraph['fetchEntities']>[0]) => {

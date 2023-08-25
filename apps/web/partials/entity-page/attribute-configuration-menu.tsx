@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { RelationValueType, useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
@@ -51,8 +51,6 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
 
   const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
 
-  console.log('mergedTypes', relationValueTypesForAttribute);
-
   const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
 
   const onSelect = (result: Entity) => {
@@ -74,14 +72,14 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
     );
   };
 
-  const onRemove = ({ typeId, spaceId, typeName }: { typeId: string; spaceId: string; typeName: string | null }) => {
+  const onRemove = ({ typeId, spaceIdOfAttribute, typeName }: RelationValueType) => {
     remove(
       Triple.withId({
         entityId: attributeId,
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
         attributeName: 'Relation Value Types',
         entityName: attributeName,
-        space: spaceId,
+        space: spaceIdOfAttribute, // @TODO: This should the spaceId of the attribute, not the type.
         value: {
           type: 'entity',
           id: typeId,
@@ -99,7 +97,7 @@ function AttributeSearch({ attributeId, attributeName }: Props) {
       <div className="mb-2 flex flex-wrap items-center gap-2 px-2">
         {relationValueTypesForAttribute.map(st => (
           <DeletableChipButton
-            href={NavUtils.toEntity(st.spaceId, st.typeId)}
+            href={NavUtils.toEntity(st.spaceIdOfAttribute, st.typeId)}
             onClick={() => onRemove(st)}
             key={st.typeId}
           >
