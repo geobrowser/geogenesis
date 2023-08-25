@@ -122,14 +122,11 @@ function useConfiguredAttributeRelationTypes({
 
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
-  const thing = mergeTriplesToRelationValueTypes(
+  return mergeTriplesToRelationValueTypes(
     allActions,
     // Flatten all the triples for each entity into a single array (there shouldn't be duplicates)
     serverAttributeRelationTypes.flatMap(t => t)
   );
-
-  console.log('thing', thing);
-  return thing;
 }
 
 export function useEntityPageStore() {
