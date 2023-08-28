@@ -66,7 +66,6 @@ export function App({ children }: { children: React.ReactNode }) {
         <Review />
         <Compare />
         <Persistence />
-        <MoveEntityReview />
       </ClientOnly>
       <Analytics />
     </>

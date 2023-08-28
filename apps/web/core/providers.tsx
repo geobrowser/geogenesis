@@ -9,7 +9,6 @@ import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
-import { MoveEntityProvider } from './state/move-entity-store';
 import { SpaceStoreProvider } from './state/spaces-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
@@ -25,9 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <SpaceStoreProvider>
               <LocalStoreProvider>
                 <StatusBarContextProvider>
-                  <MoveEntityProvider>
-                    <DiffProvider>{children}</DiffProvider>
-                  </MoveEntityProvider>
+                  <DiffProvider>{children}</DiffProvider>
                 </StatusBarContextProvider>
               </LocalStoreProvider>
             </SpaceStoreProvider>

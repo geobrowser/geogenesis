@@ -24,8 +24,16 @@ interface Props {
 export function MoveEntityReviewPage({ entityId, triples }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
   return (
-    <div className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">
-      <EntityReviewAttributes entityId={entityId} triples={sortedTriples} />
+    <div className="rounded border border-grey-02 shadow-button p-5">
+      <div className="pb-6">
+        <Text as="p" variant="bodySemibold">
+          Entity ID
+        </Text>
+        {entityId}
+      </div>
+      <div className="flex flex-col gap-6">
+        <EntityReviewAttributes entityId={entityId} triples={sortedTriples} />
+      </div>
     </div>
   );
 }
