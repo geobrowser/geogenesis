@@ -100,7 +100,7 @@ export function ensureStableId(triple: Triple): Triple {
   return triple;
 }
 
-export function fromActions(actions: ActionType[] | undefined, triples: Triple[]) {
+export function fromActions(actions: ActionType[] | undefined, triples: Triple[]): Triple[] {
   if (!actions) return triples;
 
   const newTriples: Triple[] = [...triples].reverse();
@@ -144,13 +144,20 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
     }
   });
 
-  return newTriples.reverse();
+  // We might be merging actions into a set of triples that have already been merged. In this
+  // case we need to replace the existing triple instead of adding a new one. Failing to do
+  // this will result in duplicate triples in the store since we have added the `createTriple`
+  // action multiple times.
+  //
+  // One option to solve this is to handle this edge-case in the `createTriple` part of the above
+  // switch. For now, though, the simplest way is to remove duplicate triples here.
+  return A.uniqBy(newTriples, t => t.id).reverse();
 }
 
 /**
  * This function applies locally changed entity names to all triples being rendered.
  */
-export function withLocalNames(actions: ActionType[], triples: Triple[]) {
+export function withLocalNames(actions: ActionType[], triples: Triple[]): Triple[] {
   const newEntityNames = pipe(
     actions,
     A.map(a => {
