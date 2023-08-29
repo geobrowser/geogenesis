@@ -5,16 +5,10 @@ import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import * as React from 'react';
-
 import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '~/core/types';
 
-import { Merged } from '../merged';
 import { Services } from '../services';
-import { useActionsStoreInstance } from '../state/actions-store';
 import { useEntityStoreInstance } from '../state/entity-page-store';
-import { useLocalStoreInstance } from '../state/local-store';
-import { Action } from '../utils/action';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
@@ -73,19 +67,7 @@ function useConfiguredAttributeRelationTypes({
   ];
 
   const { subgraph, config } = Services.useServices();
-  const store = useActionsStoreInstance();
-  const localStore = useLocalStoreInstance();
   const { allActions } = useActionsStore();
-
-  const merged = React.useMemo(
-    () =>
-      new Merged({
-        store,
-        localStore,
-        subgraph,
-      }),
-    [store, localStore, subgraph]
-  );
 
   const {
     data: serverAttributeRelationTypes,
