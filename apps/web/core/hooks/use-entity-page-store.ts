@@ -26,8 +26,6 @@ export const mapMergedTriplesToRelationValueTypes = (
   // when actions change.
   const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
 
-  // if we merge->merge there is a bug in fromActions somewhere.
-
   return pipe(
     mergedTriples,
     triples => triples.filter(Value.isRelationValueType),
