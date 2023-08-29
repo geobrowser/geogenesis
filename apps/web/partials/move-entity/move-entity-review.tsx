@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
+import { publish } from 'effect/Hub';
 import Image from 'next/legacy/image';
 
 import { useCallback } from 'react';
@@ -41,44 +42,49 @@ function MoveEntityReviewChanges() {
   const spaceFrom = spaces.find(space => space.id === spaceIdFrom);
   const spaceTo = spaces.find(space => space.id === spaceIdTo);
   const { triples } = useEntityPageStore();
-  const { publish, create, remove, actionsFromSpace } = useActionsStore();
+  const { publish, create, remove } = useActionsStore();
 
   const { dispatch } = useStatusBar();
 
   const { data: wallet } = useWalletClient(); // user wallet session
 
-  console.log('existing triples', triples);
   const handlePublish = useCallback(async () => {
-    console.log('existing triples', triples);
-    if (!wallet || !spaceIdFrom || !spaceIdTo) return;
+    console.log('handlePublish called');
+
+    if (!wallet || !spaceIdFrom || !spaceIdTo) {
+      console.log('Early return due to missing required values');
+      return;
+    }
+
     const onDeleteTriples = () => {
+      console.log('Inside onDeleteTriples');
+      console.log('deleting the triples');
       const deleteActions: DeleteTripleAction[] = triples.map(t => ({
         ...t,
         type: 'deleteTriple',
       }));
-      // add the remove actions to the action store
       deleteActions.map(action => remove(action));
-      console.log('delete', actionsFromSpace);
     };
 
     const onCreateNewTriples = () => {
+      console.log('Inside onCreateNewTriples');
+      console.log('creating the triples');
       const createActions: Triple[] = triples.map(t => ({
         ...t,
         type: 'createTriple',
-        space: spaceIdTo, // the space that the triples are going to
+        space: spaceIdTo,
       }));
-
-      // add the create actions to the action store
       createActions.map(action => create(action));
-      console.log('create', actionsFromSpace);
     };
-    // set the proposal name for the delete step
-    const createProposalName = `Create ${entityId} from ${spaceIdFrom}`;
 
-    // set the proposal name for the delete step
+    const createProposalName = `Create ${entityId} from ${spaceIdFrom}`;
     const deleteProposalName = `Delete ${entityId} from ${spaceIdFrom}`;
 
-    const createPublish = async () =>
+    try {
+      console.log('Attempting to run onCreateNewTriples');
+      onCreateNewTriples();
+
+      console.log('Attempting first publish');
       await publish(
         spaceIdTo,
         wallet,
@@ -86,8 +92,20 @@ function MoveEntityReviewChanges() {
         {},
         createProposalName
       );
+      console.log('First publish successful');
+    } catch (e: unknown) {
+      console.log('An error occurred in the first publish', e);
+      if (e instanceof Error) {
+        dispatch({ type: 'ERROR', payload: e.message });
+      }
+      return; // Early return because the first operation failed
+    }
 
-    const deletePublish = async () =>
+    try {
+      console.log('Attempting to run onDeleteTriples');
+      onDeleteTriples();
+
+      console.log('Attempting second publish');
       await publish(
         spaceIdFrom,
         wallet,
@@ -95,38 +113,14 @@ function MoveEntityReviewChanges() {
         {},
         deleteProposalName
       );
-
-    /*
-  steps:
-    1) create the new triples in the new space
-    2) publish the new triples (handle any errors)
-    3) on successful publish
-    4) delete the old triples
-    5) on successful publish (handle any errors here)
-    - iterate through both sets of new triples and do the create and delete from the action store (syncs the local data and updates the bus)
-   */
-    // 1) create the new triples in the new space
-    // 2) publish the new triples (handle any errors)
-    try {
-      // create the new triples in new space
-      onCreateNewTriples();
-      // publish the changes
-      createPublish();
-      // delete the old triples
-      onDeleteTriples();
-      // publish the changes
-      deletePublish();
+      console.log('Second publish successful');
     } catch (e: unknown) {
+      console.log('An error occurred in the second publish', e);
       if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-
         dispatch({ type: 'ERROR', payload: e.message });
       }
     }
-  }, [triples, wallet, spaceIdFrom, spaceIdTo, entityId, actionsFromSpace, remove, create, publish, dispatch]);
+  }, [triples, wallet, spaceIdFrom, spaceIdTo, entityId, remove, create, publish, dispatch]);
 
   const useEntity = (entityId: string) => {
     const { subgraph, config } = Services.useServices();

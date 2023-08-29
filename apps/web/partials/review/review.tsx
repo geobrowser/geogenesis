@@ -120,6 +120,7 @@ const ReviewChanges = () => {
     };
 
     try {
+      console.log('awaiting the publish');
       await publish(
         activeSpace,
         wallet,
@@ -127,6 +128,7 @@ const ReviewChanges = () => {
         unstagedChanges,
         proposalName
       );
+      console.log('the publish has now finished');
       clearProposalName();
     } catch (e: unknown) {
       if (e instanceof Error) {
