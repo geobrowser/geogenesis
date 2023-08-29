@@ -5,13 +5,16 @@ import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { pipe } from 'effect';
 
-import { Action, Triple as ITriple, RelationValueTypesByAttributeId } from '~/core/types';
+import * as React from 'react';
+
+import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '~/core/types';
 
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { useActionsStoreInstance } from '../state/actions-store';
 import { useEntityStoreInstance } from '../state/entity-page-store';
 import { useLocalStoreInstance } from '../state/local-store';
+import { Action } from '../utils/action';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
@@ -21,11 +24,15 @@ import { useActionsStore } from './use-actions-store';
  * created/deleted relation value types before mapping them to the RelationValueType data structure that the UI
  * expects to consume.
  */
-export const mergeTriplesToRelationValueTypes = (
-  actions: Array<Action>,
+export const mapMergedTriplesToRelationValueTypes = (
+  actions: Array<IAction>,
   relationTypeTriples: Array<ITriple>
 ): RelationValueTypesByAttributeId => {
+  // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
+  // when actions change.
   const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
+
+  // if we merge->merge there is a bug in fromActions somewhere.
 
   return pipe(
     mergedTriples,
@@ -70,11 +77,15 @@ function useConfiguredAttributeRelationTypes({
   const localStore = useLocalStoreInstance();
   const { allActions } = useActionsStore();
 
-  const merged = new Merged({
-    store,
-    localStore,
-    subgraph,
-  });
+  const merged = React.useMemo(
+    () =>
+      new Merged({
+        store,
+        localStore,
+        subgraph,
+      }),
+    [store, localStore, subgraph]
+  );
 
   const {
     data: serverAttributeRelationTypes,
@@ -88,7 +99,7 @@ function useConfiguredAttributeRelationTypes({
       // from both the remote and local stores.
       Promise.all(
         attributesWithRelationValues.map(attributeId =>
-          merged.fetchTriples({
+          subgraph.fetchTriples({
             query: '',
             skip: 0,
             first: 100,
@@ -114,7 +125,7 @@ function useConfiguredAttributeRelationTypes({
 
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
-  return mergeTriplesToRelationValueTypes(
+  return mapMergedTriplesToRelationValueTypes(
     allActions,
     // Flatten all the triples for each entity into a single array (there shouldn't be duplicates)
     serverAttributeRelationTypes.flatMap(t => t)
