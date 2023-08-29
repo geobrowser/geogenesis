@@ -11,7 +11,6 @@ import { Triple } from '~/core/utils/triple';
 import { TableBlockSdk } from '../blocks-sdk';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
-import { Action } from '../utils/action';
 
 interface MergedDataSourceOptions {
   store: ActionsStore;
@@ -66,8 +65,8 @@ export class Merged implements IMergedDataSource {
     const actions = options.space ? this.store.actions$.get()[options.space] : this.store.allActions$.get() ?? [];
 
     // Merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(Action.squashChanges(actions), networkTriples);
-    const mergedTriplesWithName = Triple.withLocalNames(Action.squashChanges(actions), updatedTriples);
+    const updatedTriples = Triple.fromActions(actions, networkTriples);
+    const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
     // Apply any server filters to locally created data.
     let locallyFilteredTriples = mergedTriplesWithName;
