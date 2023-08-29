@@ -145,11 +145,7 @@ export class EntityStore implements IEntityStore {
           Triple.withLocalNames(
             Object.values(ActionsStore.actions$.get()).flatMap(a => a),
             triples
-          ),
-        // This is a hack to render a single triple even if there are multiple in the store the
-        // issue happens in triple.fromActions() not deduplicating when deleting and recreating a
-        // triple of the same id
-        A.uniqBy(t => t.id)
+          )
       );
     });
 
