@@ -69,23 +69,19 @@ export function AttributeConfigurationMenu({ attributeId, attributeName }: Props
       }),
   });
 
-  const spaceIdForAttribute = tripleForAttributeId?.[0].space ?? '';
+  const attributeSpaceId = tripleForAttributeId?.[0].space;
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch
-          attributeId={attributeId}
-          attributeName={attributeName}
-          attributeSpaceId={spaceIdForAttribute}
-        />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={attributeSpaceId} />
       </div>
     </Menu>
   );
 }
 
-function AttributeSearch({ attributeId, attributeName, attributeSpaceId }: Props & { attributeSpaceId: string }) {
+function AttributeSearch({ attributeId, attributeName, attributeSpaceId }: Props & { attributeSpaceId?: string }) {
   const { attributeRelationTypes } = useEntityPageStore();
   const { create, remove } = useActionsStore();
 
@@ -100,6 +96,8 @@ function AttributeSearch({ attributeId, attributeName, attributeSpaceId }: Props
   const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
 
   const onSelect = async (result: Entity) => {
+    if (!attributeSpaceId) return;
+
     create(
       Triple.withId({
         entityId: attributeId,
