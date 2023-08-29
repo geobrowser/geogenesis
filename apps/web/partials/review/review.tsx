@@ -886,8 +886,8 @@ const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: [`${spaceId}-changes-${actions.length}`],
-    queryFn: async () => Change.fromActions(actions, subgraph, config),
+    queryKey: ['changes', spaceId, actions],
+    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph, config),
   });
 
   return [data, isLoading] as const;

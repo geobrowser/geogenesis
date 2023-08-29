@@ -6,13 +6,12 @@ import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Content, EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
+import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
 import * as React from 'react';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { useHydrated } from '~/core/hooks/use-hydrated';
 
 import { SquareButton } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';

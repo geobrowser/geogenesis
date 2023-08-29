@@ -18,15 +18,13 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton, SmallButton } from '~/design-system/button';
 import { Icon } from '~/design-system/icon';
-import { Close } from '~/design-system/icons/close';
-import { Context } from '~/design-system/icons/context';
-import { Menu } from '~/design-system/menu';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 import { colors } from '~/design-system/theme/colors';
 
+import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
@@ -51,7 +49,6 @@ export function TableBlock({ spaceId }: Props) {
     type,
   } = useTableBlock();
 
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
@@ -156,22 +153,9 @@ export function TableBlock({ spaceId }: Props) {
               </motion.div>
             )}
           </AnimatePresence>
-          <Menu
-            open={isMenuOpen}
-            onOpenChange={setIsMenuOpen}
-            align="end"
-            trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-            className="max-w-[5.8rem] whitespace-nowrap"
-          >
-            <Link
-              href={NavUtils.toEntity(spaceId, blockEntity?.id ?? '')}
-              className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-            >
-              <Text variant="button" className="hover:!text-text">
-                View data
-              </Text>
-            </Link>
-          </Menu>
+
+          <TableBlockContextMenu />
+
           <span>
             {isEditing && (
               <>

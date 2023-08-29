@@ -13,6 +13,7 @@ interface Props {
   side?: 'bottom' | 'left' | 'right' | 'top';
   className?: string;
   asChild?: boolean;
+  modal?: boolean
 }
 
 const MotionContent = motion(PopoverContent);
@@ -39,10 +40,11 @@ export function Menu({
   side = undefined,
   asChild = false,
   className = '',
+  modal = false
 }: Props) {
   // @TODO: accessibility for button focus states
   return (
-    <Root onOpenChange={onOpenChange} open={open}>
+    <Root onOpenChange={onOpenChange} open={open} modal={modal}>
       <Trigger asChild={asChild}>{trigger}</Trigger>
       <AnimatePresence>
         {open && (

@@ -3,7 +3,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row, Value } from '~/core/types';
+import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -59,7 +59,7 @@ export class Merged implements IMergedDataSource {
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
   // triples that do not match the passed in query + filter.
-  fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]) => {
+  fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]): Promise<ITriple[]> => {
     const networkTriples = await this.subgraph.fetchTriples(options);
 
     const actions = options.space ? this.store.actions$.get()[options.space] : this.store.allActions$.get() ?? [];
