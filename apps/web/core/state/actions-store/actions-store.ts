@@ -187,7 +187,6 @@ export class ActionsStore implements IActionsStore {
     name: string
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    console.log(`space actions in ${spaceId}`, spaceActions);
 
     const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
 
@@ -213,14 +212,6 @@ export class ActionsStore implements IActionsStore {
     });
 
     onChangePublishState('publish-complete');
-    console.log('publish complete');
-
-    await new Promise(resolve =>
-      setTimeout(() => {
-        onChangePublishState('idle');
-        resolve(null);
-      }, 3000)
-    );
   };
 }
 
