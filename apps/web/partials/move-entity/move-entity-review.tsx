@@ -1,21 +1,17 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
 
 import { useCallback, useEffect } from 'react';
 
 import { useWalletClient } from 'wagmi';
 
-import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useReviewState } from '~/core/hooks/use-review-state';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Subgraph } from '~/core/io';
-import { Services } from '~/core/services';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 // import { useStatusBar } from '~/core/state/status-bar-store';
-import { DeleteTripleAction, OmitStrict, ReviewState } from '~/core/types';
+import { DeleteTripleAction, ReviewState } from '~/core/types';
 import { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -157,15 +153,15 @@ function MoveEntityReviewChanges() {
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="flex flex-row items-center justify-between gap-4 w-full ">
             <SpaceMoveCard
-              spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
-              spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
+              spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="create"
               txState={createState.reviewState}
             />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
             <SpaceMoveCard
-              spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
-              spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
+              spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="delete"
               txState={deleteState.reviewState}
             />
@@ -200,13 +196,14 @@ function SpaceMoveCard({
         <Text variant="metadata">
           Step {actionType === 'create' ? 1 : 2} &middot; {actionType === 'create' ? 'Create' : 'Delete'} triples
         </Text>
-        {spaceImage !== undefined && (
-          <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
-            <Image src={getImagePath(spaceImage)} layout="fill" objectFit="cover" />
-          </div>
-        )}
-
-        <Text variant="metadata">{spaceName}</Text>
+        <div className="flex flex-row items-center gap-2">
+          {spaceImage !== undefined && (
+            <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+              <Image src={getImagePath(spaceImage)} layout="fill" objectFit="cover" />
+            </div>
+          )}
+          <Text variant="metadata">{spaceName}</Text>
+        </div>
       </div>
       <Divider type="horizontal" />
       <div className="flex flex-row items-center gap-2 justify-between">

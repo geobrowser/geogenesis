@@ -97,11 +97,11 @@ function SpacesList({
   setSpaceIdFrom: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full">
+    <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full  hover:bg-grey-01 transition-colors duration-75 cursor-pointer">
       {spaces.map(space => (
         <div
           key={space.id}
-          className="flex flex-row items-center gap-3 my-2  hover:bg-grey-01 transition-colors duration-75 cursor-pointer "
+          className="flex flex-row items-center gap-3 my-2  "
           onClick={() => {
             setSpaceIdFrom(spaceId);
             setSpaceIdTo(space.id);
@@ -110,7 +110,7 @@ function SpacesList({
           }}
         >
           {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
-            <div className="relative w-[32px] h-[32px] rounded-xs overflow-hidden">
+            <div className="relative w-[32px] h-[32px] rounded overflow-hidden">
               <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
             </div>
           )}
