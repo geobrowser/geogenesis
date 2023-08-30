@@ -10,7 +10,6 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useReviewState } from '~/core/hooks/use-review-state';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
-// import { useStatusBar } from '~/core/state/status-bar-store';
 import { DeleteTripleAction, ReviewState } from '~/core/types';
 import { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
@@ -243,7 +242,7 @@ function StatusMessage({ txState }: { txState: ReviewState }) {
         <Spinner />
       ) : null}
       {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
-      {txState === 'publish-error' ? <Warning color="orange" /> : null}
+      {txState === 'publish-error' ? <Warning color="red-01" /> : null}
       <Text variant="metadata">{reviewStateText[txState]}</Text>
     </div>
   );
