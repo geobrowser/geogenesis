@@ -72,7 +72,7 @@ export function AttributeConfigurationMenu({ attributeId, attributeName }: Props
   const attributeSpaceId = tripleForAttributeId?.[0].space;
 
   return (
-    <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
+    <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cogSmall" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
         <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={attributeSpaceId} />

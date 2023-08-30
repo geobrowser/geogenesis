@@ -34,7 +34,7 @@ export function TableBlockSchemaConfigurationDialog(props: Props) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.1 } }}
-          className="fixed inset-0 top-[25%] z-100 mx-auto h-[484px] max-w-[580px] overflow-hidden rounded bg-white focus:outline-none"
+          className="fixed inset-0 top-[25%] z-100 mx-auto h-[484px] max-w-[376px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none"
         >
           {props.content}
         </MotionContent>

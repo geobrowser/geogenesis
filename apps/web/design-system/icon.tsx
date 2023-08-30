@@ -24,7 +24,7 @@ import type { ColorName } from '~/design-system/theme/colors';
 import { BulkEdit } from './icons/bulk-edit';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
-import { Cog } from './icons/cog';
+import { CogSmall } from './icons/cog-small';
 import { Context } from './icons/context';
 import { Dash } from './icons/dash';
 import { Date } from './icons/date';
@@ -89,7 +89,7 @@ export type IconName =
   | 'filterTableWithFilters'
   | 'checkCloseSmall'
   | 'dash'
-  | 'cog'
+  | 'cogSmall'
   | 'newTab'
   | 'minus'
   | 'url'
@@ -153,7 +153,7 @@ const icons: Record<IconName, React.ElementType> = {
   chevronDownSmall: ChevronDownSmall,
   checkCloseSmall: CheckCloseSmall,
   dash: Dash,
-  cog: Cog,
+  cogSmall: CogSmall,
   newTab: NewTab,
   minus: Minus,
   url: Url,

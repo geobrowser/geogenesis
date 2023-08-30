@@ -4,6 +4,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Image from 'next/legacy/image';
+import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -13,20 +14,26 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useTableBlock } from '~/core/state/table-block-store';
+import { Entity as IEntity } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { ValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
-import { Button } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
+import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
+import { Date } from '~/design-system/icons/date';
+import { Image as ImageIcon } from '~/design-system/icons/image';
+import { Relation } from '~/design-system/icons/relation';
+import { Text } from '~/design-system/icons/text';
+import { Url } from '~/design-system/icons/url';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
-import { Entity } from '~/core/utils/entity';
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -70,9 +77,11 @@ export function TableBlockContextMenu() {
               <AddAttribute type={type} />
             </React.Suspense>
 
-            <React.Suspense fallback={<AddAttributeLoading />}>
-              <SchemaAttributes type={type} />
-            </React.Suspense>
+            <ErrorBoundary fallback={<p>Something went wrong...</p>}>
+              <React.Suspense fallback={<AddAttributeLoading />}>
+                <SchemaAttributes type={type} />
+              </React.Suspense>
+            </ErrorBoundary>
           </div>
         }
       />
@@ -205,14 +214,58 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
         attributeTriples.map(t => subgraph.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
       );
 
-      return maybeAttributeEntities.filter(Entity.isNonNull)
+      return maybeAttributeEntities.filter(Entity.isNonNull);
     },
   });
 
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
-      <div className="flex flex-col gap-2">{attributeEntitiesForType?.map(e => <p key={e.id}>{e.name}</p>)}</div>
+      <div className="flex flex-col gap-2">
+        {attributeEntitiesForType?.map(e => <AttributeRow key={e.id} attribute={e} />)}
+      </div>
     </div>
   );
+}
+
+function AttributeRow({ attribute }: { attribute: IEntity }) {
+  const valueTypeId: ValueType | undefined = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)?.value
+    .id;
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="rounded bg-grey-01 px-5 py-2.5">
+        <AttributeValueTypeDropdown valueTypeId={valueTypeId} />
+      </div>
+      <Input value={attribute.name ?? ''} />
+      {valueTypeId === SYSTEM_IDS.RELATION && (
+        <div>
+          <Cog color="grey-04" />
+        </div>
+      )}
+      <div>
+        <Context color="grey-04" />
+      </div>
+    </div>
+  );
+}
+
+function AttributeValueTypeDropdown({ valueTypeId }: { valueTypeId?: ValueType }) {
+  switch (valueTypeId) {
+    case SYSTEM_IDS.TEXT:
+      return <Text color="grey-04" />;
+    case SYSTEM_IDS.RELATION:
+      return <Relation color="grey-04" />;
+    case SYSTEM_IDS.DATE:
+      return <Date color="grey-04" />;
+    case SYSTEM_IDS.IMAGE:
+      return <ImageIcon color="grey-04" />;
+    case SYSTEM_IDS.WEB_URL:
+      return <Url color="grey-04" />;
+    default:
+      // We default to the Text type if an attribute has not set an explicit relation value
+      // type. Ideally we force users to explicitly set a type when creating an attribute,
+      // but for now we do not.
+      return <Text color="grey-04" />;
+  }
 }
