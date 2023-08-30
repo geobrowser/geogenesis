@@ -21,7 +21,7 @@ import { Entity } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 import { ValueType } from '~/core/value-types';
 
-import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
+import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
@@ -170,9 +170,9 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
           // without overlapping results.
           <div className="absolute top-10 z-100 flex max-h-[188px] w-full flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
             <ResizableContainer duration={0.125}>
-              <ResultsList>
+              <ul className="flex max-h-40 list-none flex-col justify-start overflow-y-auto overflow-x-hidden">
                 {autocomplete.results.map((result, i) => (
-                  <motion.div
+                  <motion.li
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.02 * i }}
@@ -187,9 +187,9 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
                       result={result}
                       spaces={spaces}
                     />
-                  </motion.div>
+                  </motion.li>
                 ))}
-              </ResultsList>
+              </ul>
 
               <div
                 className={resultsListActionBarStyles({
