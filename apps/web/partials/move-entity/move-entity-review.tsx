@@ -18,6 +18,7 @@ import { getImagePath } from '~/core/utils/utils';
 import { Button, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
 import { Icon } from '~/design-system/icon';
+import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
@@ -220,11 +221,11 @@ function StatusMessage({ txState }: { txState: ReviewState }) {
   const reviewStateText: Record<ReviewState, string> = {
     idle: 'Not Started',
     reviewing: '', // added to satisfy the type -- @TODO can omit with a string enum version of ReviewState
-    'publishing-ipfs': 'Publishing to IPFS',
-    'signing-wallet': 'Signing with wallet',
-    'publishing-contract': 'Publishing to contract',
-    'publish-complete': 'Publish complete',
-    'publish-error': 'Publish error',
+    'publishing-ipfs': 'Uploading changes to IPFS',
+    'signing-wallet': 'Sign your transaction',
+    'publishing-contract': 'Adding changes to the blockchain',
+    'publish-complete': 'Changes published!',
+    'publish-error': 'An error has occurred',
   };
 
   const mappedPublishStates: Array<ReviewState> = [
@@ -242,6 +243,7 @@ function StatusMessage({ txState }: { txState: ReviewState }) {
         <Spinner />
       ) : null}
       {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
+      {txState === 'publish-error' ? <Warning color="orange" /> : null}
       <Text variant="metadata">{reviewStateText[txState]}</Text>
     </div>
   );
