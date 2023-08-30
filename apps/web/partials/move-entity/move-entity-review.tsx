@@ -23,6 +23,7 @@ import { Button, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
 import { Icon } from '~/design-system/icon';
 import { SlideUp } from '~/design-system/slide-up';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { MoveEntityReviewPage } from './move-entity-review-page';
@@ -219,20 +220,32 @@ function SpaceMoveCard({
 }
 
 function StatusMessage({ txState }: { txState: ReviewState }) {
-  const reviewStateStatusMap: Record<ReviewState, { reviewStateText: string; reviewStateEmoji?: string }> = {
-    idle: { reviewStateText: 'Not Started' },
-    reviewing: { reviewStateText: 'Reviewing' }, // added to satisfy the type -- @TODO can omit with a string enum version of ReviewState
-    'publishing-ipfs': { reviewStateText: 'Publishing to IPFS' },
-    'signing-wallet': { reviewStateText: 'Signing with wallet' },
-    'publishing-contract': { reviewStateText: 'Publishing to contract' },
-    'publish-complete': { reviewStateText: 'Publish complete' },
-    'publish-error': { reviewStateText: 'Publish error' },
+  const reviewStateText: Record<ReviewState, string> = {
+    idle: 'Not Started',
+    reviewing: '', // added to satisfy the type -- @TODO can omit with a string enum version of ReviewState
+    'publishing-ipfs': 'Publishing to IPFS',
+    'signing-wallet': 'Signing with wallet',
+    'publishing-contract': 'Publishing to contract',
+    'publish-complete': 'Publish complete',
+    'publish-error': 'Publish error',
   };
 
-  const { reviewStateText } = reviewStateStatusMap[txState];
+  const mappedPublishStates: Array<ReviewState> = [
+    'publishing-ipfs',
+    'signing-wallet',
+    'publishing-contract',
+    'publish-complete',
+    'publish-error',
+  ];
+
   return (
     <div className="flex flex-row items-center gap-3">
-      <Text variant="metadata">{reviewStateText}</Text>
+      {txState === 'idle' ? <IdleCircle /> : null}
+      {txState === 'publishing-ipfs' || txState === 'signing-wallet' || txState === 'publishing-contract' ? (
+        <Spinner />
+      ) : null}
+      {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
+      <Text variant="metadata">{reviewStateText[txState]}</Text>
     </div>
   );
 }
@@ -268,5 +281,13 @@ function ProgressBar({ txState }: { txState: ReviewState }) {
         <div key={index} className={`w-[30px] h-[6px] rounded-[30px] ${getBgClassByState(index, txState)}`} />
       ))}
     </div>
+  );
+}
+
+function IdleCircle() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="7.5" stroke="#FFA134" />
+    </svg>
   );
 }
