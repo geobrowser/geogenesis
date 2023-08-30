@@ -120,7 +120,6 @@ const ReviewChanges = () => {
     };
 
     try {
-      console.log('awaiting the publish');
       await publish(
         activeSpace,
         wallet,
@@ -135,7 +134,6 @@ const ReviewChanges = () => {
         }, 3000)
       ); // set the status bar state to idle after 3 seconds
       clearProposalName();
-      console.log('publish is now fully resolved!');
     } catch (e: unknown) {
       if (e instanceof Error) {
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {

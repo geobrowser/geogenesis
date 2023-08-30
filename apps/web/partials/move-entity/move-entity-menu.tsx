@@ -29,9 +29,6 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
   const { address } = useAccount();
 
-  // @TODO: determine if this needs to live in context or not -- only really used in this context so doing locally for now
-  // const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
-
   // filter out the current space and Root space
   const spacesForMove = spaces.filter(
     space => space.id !== spaceId && space.isRootSpace !== true && space.editors.includes(address ?? '')
@@ -48,7 +45,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
     return 0;
   });
 
-  // @TODO: Make search work with autocomplete and actually filter the results
+  // @TODO: Make search work with autocomplete
 
   const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space =>
     space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
@@ -79,8 +76,6 @@ function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void
     </div>
   );
 }
-
-// @TODO: determine if its needed to pass the spaceId/entityId here, or if we should just get from the params
 
 function SpacesList({
   spaces,

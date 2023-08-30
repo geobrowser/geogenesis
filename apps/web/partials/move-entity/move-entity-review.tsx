@@ -15,7 +15,7 @@ import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 // import { useStatusBar } from '~/core/state/status-bar-store';
-import { DeleteTripleAction } from '~/core/types';
+import { DeleteTripleAction, OmitStrict, ReviewState } from '~/core/types';
 import { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -154,27 +154,25 @@ function MoveEntityReviewChanges() {
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <p>create state: {createState.reviewState}</p>
-          <p>delete state: {deleteState.reviewState}</p>
           <div className="flex flex-row items-center justify-between gap-4 w-full ">
             <SpaceMoveCard
               spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
               spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="create"
+              txState={createState.reviewState}
             />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
             <SpaceMoveCard
               spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
               spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="delete"
+              txState={deleteState.reviewState}
             />
           </div>
           <div className="flex flex-col gap-1 py-6">
             <Text variant="body">Entity to move</Text>
             <Text variant="mediumTitle" className="text-bold">
               {triples[0]?.entityName ?? entityId}
-              {/* {entityData.name} */}
-              {/* {triples.find(t => t.)} */}
             </Text>
           </div>
           <MoveEntityReviewPage entityId={entityId} triples={triples} />
@@ -188,15 +186,13 @@ function SpaceMoveCard({
   spaceName,
   spaceImage,
   actionType,
+  txState,
 }: {
   spaceName: string | undefined; // to satisfiy potentially undefined
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
+  txState: ReviewState;
 }) {
-  // use the useStatusBar review states in the card to show the status of the move
-  // @TODO: rethinking the component structure with the new states
-  const { state: createState } = useReviewState();
-  const { state: deleteState } = useReviewState();
   return (
     <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full gap-3">
       <div className="flex flex-row items-center justify-between gap-2">
@@ -212,17 +208,65 @@ function SpaceMoveCard({
         <Text variant="metadata">{spaceName}</Text>
       </div>
       <Divider type="horizontal" />
-      <div className="flex flex-row items-center gap-2">
-        <p>state: {actionType === 'create' ? createState.reviewState : deleteState.reviewState}</p>
-        {/* {state.reviewState === 'idle' ? (
-          <div className="flex flex-row gap-3">
-            <Icon icon="checkClose" color="grey-04" />
-            <Text variant="metadata" color="grey-04">
-              Not started
-            </Text>
-          </div>
-        ) : null} */}
+      <div className="flex flex-row items-center gap-2 justify-between">
+        <StatusMessage txState={txState} />
+        <div className="flex flex-row items-center gap-1.5">
+          <ProgressBar txState={txState} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function StatusMessage({ txState }: { txState: ReviewState }) {
+  const reviewStateStatusMap: Record<ReviewState, { reviewStateText: string; reviewStateEmoji?: string }> = {
+    idle: { reviewStateText: 'Not Started' },
+    reviewing: { reviewStateText: 'Reviewing' }, // added to satisfy the type -- @TODO can omit with a string enum version of ReviewState
+    'publishing-ipfs': { reviewStateText: 'Publishing to IPFS' },
+    'signing-wallet': { reviewStateText: 'Signing with wallet' },
+    'publishing-contract': { reviewStateText: 'Publishing to contract' },
+    'publish-complete': { reviewStateText: 'Publish complete' },
+    'publish-error': { reviewStateText: 'Publish error' },
+  };
+
+  const { reviewStateText } = reviewStateStatusMap[txState];
+  return (
+    <div className="flex flex-row items-center gap-3">
+      <Text variant="metadata">{reviewStateText}</Text>
+    </div>
+  );
+}
+
+function ProgressBar({ txState }: { txState: ReviewState }) {
+  const getBgClassByState = (index: number, state: ReviewState) => {
+    let stateValue = 0;
+    switch (state) {
+      case 'idle':
+        stateValue = 0;
+        break;
+      case 'publishing-ipfs':
+        stateValue = 1;
+        break;
+      case 'signing-wallet':
+        stateValue = 2;
+        break;
+      case 'publishing-contract':
+        stateValue = 3;
+        break;
+      case 'publish-complete':
+        stateValue = 4;
+        break;
+      default:
+        stateValue = 0;
+        break;
+    }
+    return index <= stateValue ? 'bg-green-01' : 'bg-grey-02';
+  };
+  return (
+    <div className="flex flex-row items-center gap-1.5">
+      {[0, 1, 2, 3, 4].map(index => (
+        <div key={index} className={`w-[30px] h-[6px] rounded-[30px] ${getBgClassByState(index, txState)}`} />
+      ))}
     </div>
   );
 }
