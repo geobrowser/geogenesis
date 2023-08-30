@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 
-import { useCallback, useEffect } from 'react';
+import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
@@ -45,17 +45,12 @@ function MoveEntityReviewChanges() {
 
   const { data: wallet } = useWalletClient(); // user wallet session
 
-  const handlePublish = useCallback(async () => {
-    console.log('handlePublish called');
-
+  const handlePublish = React.useCallback(async () => {
     if (!wallet || !spaceIdFrom || !spaceIdTo) {
-      console.log('Early return due to missing required values');
       return;
     }
 
     const onDeleteTriples = () => {
-      console.log('Inside onDeleteTriples');
-      console.log('deleting the triples');
       const deleteActions: DeleteTripleAction[] = triples.map(t => ({
         ...t,
         type: 'deleteTriple',
@@ -64,8 +59,6 @@ function MoveEntityReviewChanges() {
     };
 
     const onCreateNewTriples = () => {
-      console.log('Inside onCreateNewTriples');
-      console.log('creating the triples');
       const createActions: Triple[] = triples.map(t => ({
         ...t,
         type: 'createTriple',
@@ -78,10 +71,8 @@ function MoveEntityReviewChanges() {
     const deleteProposalName = `Delete ${entityId} from ${spaceIdFrom}`;
 
     try {
-      console.log('Attempting to run onCreateNewTriples');
       onCreateNewTriples();
 
-      console.log('Attempting first publish');
       await publish(
         spaceIdTo,
         wallet,
@@ -89,9 +80,7 @@ function MoveEntityReviewChanges() {
         {},
         createProposalName
       );
-      console.log('First publish successful:', createState.reviewState);
     } catch (e: unknown) {
-      console.log('An error occurred in the first publish', e);
       if (e instanceof Error) {
         createDispatch({ type: 'ERROR', payload: e.message });
       }
@@ -99,10 +88,8 @@ function MoveEntityReviewChanges() {
     }
 
     try {
-      console.log('Attempting to run onDeleteTriples');
       onDeleteTriples();
 
-      console.log('Attempting second publish');
       await publish(
         spaceIdFrom,
         wallet,
@@ -111,30 +98,37 @@ function MoveEntityReviewChanges() {
         deleteProposalName
       );
       deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-
-      if (createState.reviewState === 'publish-complete' && deleteState.reviewState === 'publish-complete') {
-        console.log('both are successful, closing the review modal');
-        setIsMoveReviewOpen(false);
-      }
     } catch (e: unknown) {
-      console.log('An error occurred in the second publish', e);
       if (e instanceof Error) {
         deleteDispatch({ type: 'ERROR', payload: e.message });
       }
     }
+    await new Promise(resolve =>
+      setTimeout(() => {
+        if (
+          createState.reviewState !== 'publish-complete' &&
+          createState.reviewState !== 'publishing-contract' &&
+          deleteState.reviewState !== 'publish-complete' &&
+          deleteState.reviewState !== 'publishing-contract'
+        ) {
+          setIsMoveReviewOpen(false);
+        }
+        resolve(null);
+      }, 2000)
+    ); // close the review UI after displaying the state messages for 3 seconds
   }, [
     wallet,
     spaceIdFrom,
     spaceIdTo,
     entityId,
+    createState.reviewState,
+    deleteState.reviewState,
     triples,
     remove,
     create,
     publish,
-    createState.reviewState,
     createDispatch,
     deleteDispatch,
-    deleteState.reviewState,
     setIsMoveReviewOpen,
   ]);
 
@@ -157,6 +151,7 @@ function MoveEntityReviewChanges() {
               spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="create"
               txState={createState.reviewState}
+              handlePublish={handlePublish}
             />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
             <SpaceMoveCard
@@ -164,6 +159,7 @@ function MoveEntityReviewChanges() {
               spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
               actionType="delete"
               txState={deleteState.reviewState}
+              handlePublish={handlePublish}
             />
           </div>
           <div className="flex flex-col gap-1 py-6">
@@ -184,11 +180,13 @@ function SpaceMoveCard({
   spaceImage,
   actionType,
   txState,
+  handlePublish,
 }: {
   spaceName: string | undefined; // to satisfiy potentially undefined
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
   txState: ReviewState;
+  handlePublish: () => void;
 }) {
   return (
     <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full gap-3">
@@ -207,7 +205,7 @@ function SpaceMoveCard({
       </div>
       <Divider type="horizontal" />
       <div className="flex flex-row items-center gap-2 justify-between">
-        <StatusMessage txState={txState} />
+        <StatusMessage txState={txState} handlePublish={handlePublish} />
         <div className="flex flex-row items-center gap-1.5">
           <ProgressBar txState={txState} />
         </div>
@@ -216,7 +214,7 @@ function SpaceMoveCard({
   );
 }
 
-function StatusMessage({ txState }: { txState: ReviewState }) {
+function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handlePublish: () => void }) {
   const reviewStateText: Record<ReviewState, string> = {
     idle: 'Not Started',
     reviewing: '', // added to satisfy the type -- @TODO can omit with a string enum version of ReviewState
@@ -242,7 +240,12 @@ function StatusMessage({ txState }: { txState: ReviewState }) {
         <Spinner />
       ) : null}
       {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
-      {txState === 'publish-error' ? <Warning color="red-01" /> : null}
+      {txState === 'publish-error' ? (
+        <div className="flex flex-row">
+          <button onClick={handlePublish}>again</button>
+          <Warning color="red-01" />
+        </div>
+      ) : null}
       <Text variant="metadata">{reviewStateText[txState]}</Text>
     </div>
   );
