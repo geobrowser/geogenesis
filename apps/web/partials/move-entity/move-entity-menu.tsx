@@ -5,6 +5,8 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
+import { useAccount, useWalletClient } from 'wagmi';
+
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
@@ -25,12 +27,15 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const [query, onQueryChange] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 100);
   const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
+  const { address } = useAccount();
 
   // @TODO: determine if this needs to live in context or not -- only really used in this context so doing locally for now
   // const [isMoveReviewOpen, setIsMoveReviewOpen] = React.useState(false);
 
   // filter out the current space and Root space
-  const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
+  const spacesForMove = spaces.filter(
+    space => space.id !== spaceId && space.isRootSpace !== true && space.editors.includes(address ?? '')
+  );
 
   // check if the spaces name is not undefined and then sort alphabetically:
   const sortedSpacesForMove = spacesForMove.sort((spaceA: Space, spaceB: Space) => {
