@@ -33,10 +33,12 @@ export function TableBlockSchemaConfigurationDialog(props: Props) {
         <MotionContent
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.1 } }}
+          transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
           className="fixed inset-0 top-[25%] z-100 mx-auto h-[484px] max-w-[376px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none"
         >
-          {props.content}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
+            {props.content}
+          </motion.div>
         </MotionContent>
       </Portal>
     </Root>
