@@ -1,21 +1,32 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
+import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Services } from '~/core/services';
+import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { getImagePath } from '~/core/utils/utils';
+import { Value } from '~/core/utils/value';
 
+import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Button } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
+import { ResizableContainer } from '~/design-system/resizable-container';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
+import { Entity } from '~/core/utils/entity';
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -55,7 +66,13 @@ export function TableBlockContextMenu() {
               </h2>
             </div>
 
-            <AddAttribute />
+            <React.Suspense fallback={<AddAttributeLoading />}>
+              <AddAttribute type={type} />
+            </React.Suspense>
+
+            <React.Suspense fallback={<AddAttributeLoading />}>
+              <SchemaAttributes type={type} />
+            </React.Suspense>
           </div>
         }
       />
@@ -63,14 +80,139 @@ export function TableBlockContextMenu() {
   );
 }
 
-function AddAttribute() {
+function AddAttribute({ type }: { type: SelectedEntityType }) {
+  const autocomplete = useAutocomplete({
+    allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
+  });
+
+  const { config } = Services.useServices();
+  const merged = useMergedData();
+  const { spaces } = useSpaces();
+
+  const { data: attributeTriple } = useQuery({
+    suspense: true,
+    queryKey: ['table-block-type-schema-configuration-add-attribute', type.id],
+    queryFn: () =>
+      merged.fetchTriples({
+        endpoint: config.subgraph,
+        query: '',
+        first: 100,
+        skip: 0,
+        filter: [
+          {
+            field: 'entity-id',
+            value: type.entityId,
+          },
+        ],
+      }),
+  });
+
+  const onSelect = (result: { id: string; name: string | null }) => {
+    // Should be find-or-create (?)
+    // 1.If result exists
+    //    1a. Set selected result in some state as "SelectedAttribute"
+    // 2. If result does not exist
+    //    2a. Create it with name and type: Attribute in existing space
+    //    2b. Set created entity in some state as "SelectedAttribute"
+    //    2c. Set the Relation Value Type triple as whatever is selected
+    // 3. When "+ Add" is clicked, read from state and add a new triple
+    //    to the type with attribute: Attributes and value.id: SelectedAttribute.id
+    //
+    // Q: What do we do with the type selector?
+    // A: If we're using an existing attribute it should be pre-filled with the
+    //    Relation Value Type triple if it exists.
+    //        If not allow the user to select a type (?) (this will add the RVT triple)
+    //          How will migrations work if users can change the type?
+    //            Should it only be changeable if it's a local attribute?
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Add attribute</h3>
+      <Input
+        placeholder="Attribute name..."
+        onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
+        value={autocomplete.query}
+      />
+      <ResizableContainer duration={0.125}>
+        <ResultsList>
+          {autocomplete.results.map((result, i) => (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.02 * i }}
+              key={result.id}
+            >
+              <ResultContent
+                key={result.id}
+                onClick={() => {
+                  //
+                }}
+                // alreadySelected={entityItemIdsSet.has(result.id)}
+                result={result}
+                spaces={spaces}
+              />
+            </motion.div>
+          ))}
+        </ResultsList>
+      </ResizableContainer>
+    </div>
+  );
+}
+
+function AddAttributeLoading() {
+  return (
+    <div className="flex flex-col gap-1">
+      <Skeleton className="h-7 w-24" />
+
       <div className="flex items-center gap-2">
-        <Input />
-        <Button icon="plus">Add</Button>
+        <Skeleton className="h-9 w-14" />
+        <Skeleton className="h-9 w-[400px]" />
+        <Skeleton className="h-9 w-[76px]" />
       </div>
+    </div>
+  );
+}
+
+function SchemaAttributes({ type }: { type: SelectedEntityType }) {
+  const { config, subgraph } = Services.useServices();
+  const merged = useMergedData();
+
+  const { data: attributeEntitiesForType } = useQuery({
+    suspense: true,
+    queryKey: ['table-block-type-schema-configuration-attributes-list', type.entityId],
+    queryFn: async () => {
+      // Fetch the triples representing the Attributes for the type
+      const attributeTriples = await merged.fetchTriples({
+        endpoint: config.subgraph,
+        query: '',
+        first: 100,
+        skip: 0,
+        filter: [
+          {
+            field: 'entity-id',
+            value: type.entityId,
+          },
+          {
+            field: 'attribute-id',
+            value: SYSTEM_IDS.ATTRIBUTES,
+          },
+        ],
+      });
+
+      // Fetch the the entities for each of the Attribute in the type
+      const maybeAttributeEntities = await Promise.all(
+        attributeTriples.map(t => subgraph.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
+      );
+
+      return maybeAttributeEntities.filter(Entity.isNonNull)
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-bodySemibold">Attributes</h3>
+      <div className="flex flex-col gap-2">{attributeEntitiesForType?.map(e => <p key={e.id}>{e.name}</p>)}</div>
     </div>
   );
 }
