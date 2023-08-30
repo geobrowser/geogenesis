@@ -191,12 +191,6 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
                 ))}
               </ResultsList>
 
-              {/* {!autocomplete.isEmpty && !autocomplete.isLoading && (
-                <div className="pb-2">
-                  <Divider type="horizontal" />
-                </div>
-              )} */}
-
               <div
                 className={resultsListActionBarStyles({
                   withFullBorder: !autocomplete.isEmpty && !autocomplete.isLoading,
