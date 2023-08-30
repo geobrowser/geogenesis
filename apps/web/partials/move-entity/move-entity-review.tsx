@@ -209,7 +209,6 @@ function SpaceMoveCard({
         <Text variant="metadata">{spaceName}</Text>
       </div>
       <Divider type="horizontal" />
-      <p>state: {txState}</p>
       <div className="flex flex-row items-center gap-2 justify-between">
         <StatusMessage txState={txState} />
         <div className="flex flex-row items-center gap-1.5">
