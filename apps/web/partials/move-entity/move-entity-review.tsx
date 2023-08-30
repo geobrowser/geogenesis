@@ -209,6 +209,7 @@ function SpaceMoveCard({
         <Text variant="metadata">{spaceName}</Text>
       </div>
       <Divider type="horizontal" />
+      <p>state: {txState}</p>
       <div className="flex flex-row items-center gap-2 justify-between">
         <StatusMessage txState={txState} />
         <div className="flex flex-row items-center gap-1.5">
@@ -236,7 +237,7 @@ function StatusMessage({ txState }: { txState: ReviewState }) {
     'publishing-contract',
     'publish-complete',
     'publish-error',
-  ];
+  ]; // unsure if needed, will test
 
   return (
     <div className="flex flex-row items-center gap-3">
@@ -273,11 +274,11 @@ function ProgressBar({ txState }: { txState: ReviewState }) {
         stateValue = 0;
         break;
     }
-    return index <= stateValue ? 'bg-green-01' : 'bg-grey-02';
+    return state === 'idle' ? 'bg-grey-02' : index <= stateValue ? 'bg-text' : 'bg-grey-02'; // handle the idle case and then the rest
   };
   return (
     <div className="flex flex-row items-center gap-1.5">
-      {[0, 1, 2, 3, 4].map(index => (
+      {[0, 1, 2, 3].map(index => (
         <div key={index} className={`w-[30px] h-[6px] rounded-[30px] ${getBgClassByState(index, txState)}`} />
       ))}
     </div>
