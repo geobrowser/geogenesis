@@ -2,8 +2,10 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { cva } from 'class-variance-authority';
+import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/legacy/image';
+import pluralize from 'pluralize';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
@@ -20,6 +22,7 @@ import { getImagePath } from '~/core/utils/utils';
 import { ValueType } from '~/core/value-types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
+import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
@@ -32,6 +35,7 @@ import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
+import { TextButton } from '~/design-system/text-button';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
@@ -78,7 +82,7 @@ export function TableBlockContextMenu() {
             </React.Suspense>
 
             <ErrorBoundary fallback={<p>Something went wrong...</p>}>
-              <React.Suspense fallback={<AddAttributeLoading />}>
+              <React.Suspense fallback={<p>TODO loading spinner...</p>}>
                 <SchemaAttributes type={type} />
               </React.Suspense>
             </ErrorBoundary>
@@ -88,6 +92,23 @@ export function TableBlockContextMenu() {
     </Menu>
   );
 }
+
+const resultsListActionBarStyles = cva(
+  'sticky bottom-0 flex items-center justify-between gap-2 overflow-hidden bg-white p-2 text-smallButton',
+  {
+    variants: {
+      // We add some styling if the aciton bar is being rendered when results are present vs when results
+      // are not present.
+      withFullBorder: {
+        false: 'rounded shadow-inner-grey-02',
+        true: 'rounded rounded-tl-none rounded-tr-none shadow-inner-grey-02',
+      },
+    },
+    defaultVariants: {
+      withFullBorder: true,
+    },
+  }
+);
 
 function AddAttribute({ type }: { type: SelectedEntityType }) {
   const autocomplete = useAutocomplete({
@@ -138,33 +159,86 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Add attribute</h3>
-      <Input
-        placeholder="Attribute name..."
-        onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
-        value={autocomplete.query}
-      />
-      <ResizableContainer duration={0.125}>
-        <ResultsList>
-          {autocomplete.results.map((result, i) => (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.02 * i }}
-              key={result.id}
-            >
-              <ResultContent
-                key={result.id}
-                onClick={() => {
-                  //
-                }}
-                // alreadySelected={entityItemIdsSet.has(result.id)}
-                result={result}
-                spaces={spaces}
-              />
-            </motion.div>
-          ))}
-        </ResultsList>
-      </ResizableContainer>
+      <div className="relative">
+        <Input
+          placeholder="Attribute name..."
+          onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
+          value={autocomplete.query}
+        />
+        {autocomplete.query && (
+          // The max-height includes extra padding for the action bar to be stuck at the bottom of the list
+          // without overlapping results.
+          <div className="absolute top-10 z-100 flex max-h-[188px] w-full flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+            <ResizableContainer duration={0.125}>
+              <ResultsList>
+                {autocomplete.results.map((result, i) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.02 * i }}
+                    key={result.id}
+                  >
+                    <ResultContent
+                      key={result.id}
+                      onClick={() => {
+                        //
+                      }}
+                      // alreadySelected={entityItemIdsSet.has(result.id)}
+                      result={result}
+                      spaces={spaces}
+                    />
+                  </motion.div>
+                ))}
+              </ResultsList>
+
+              {/* {!autocomplete.isEmpty && !autocomplete.isLoading && (
+                <div className="pb-2">
+                  <Divider type="horizontal" />
+                </div>
+              )} */}
+
+              <div
+                className={resultsListActionBarStyles({
+                  withFullBorder: !autocomplete.isEmpty && !autocomplete.isLoading,
+                })}
+              >
+                <AnimatePresence mode="popLayout">
+                  {autocomplete.isLoading ? (
+                    <motion.span
+                      key="dots"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <Dots />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="attributes-found"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      {autocomplete.results.length} {pluralize('attribute', autocomplete.results.length)} found
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+                <div className="flex items-baseline gap-3">
+                  <TextButton
+                    onClick={() => {
+                      //
+                    }}
+                  >
+                    Create new attribute
+                  </TextButton>
+                </div>
+              </div>
+            </ResizableContainer>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -184,7 +258,7 @@ function AddAttributeLoading() {
 }
 
 function SchemaAttributes({ type }: { type: SelectedEntityType }) {
-  const { config, subgraph } = Services.useServices();
+  const { config } = Services.useServices();
   const merged = useMergedData();
 
   const { data: attributeEntitiesForType } = useQuery({
@@ -211,7 +285,7 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
 
       // Fetch the the entities for each of the Attribute in the type
       const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => subgraph.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
       );
 
       return maybeAttributeEntities.filter(Entity.isNonNull);
