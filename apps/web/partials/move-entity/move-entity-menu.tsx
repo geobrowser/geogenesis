@@ -55,6 +55,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
         <Text variant="smallButton">Move to space</Text>
         <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
       </div>
+
       <div className="flex flex-col max-h-[300px] overflow-y-auto justify-between w-full">
         {filteredSpacesForMoveResults.map(space => (
           <button
@@ -79,15 +80,16 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
             <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
           </button>
         ))}
-        {spaces.length === 0 && (
-          <div className="flex flex-col gap-1">
-            <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
-            <Text variant="footnote">
-              You will need to become an editor of the space you want to move the entities to.
-            </Text>
-          </div>
-        )}
       </div>
+
+      {filteredSpacesForMoveResults.length === 0 && (
+        <div className="flex flex-col gap-1 p-2 pt-0">
+          <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
+          <Text variant="footnote">
+            You will need to become an editor of the space you want to move the entities to.
+          </Text>
+        </div>
+      )}
     </div>
   );
 }
