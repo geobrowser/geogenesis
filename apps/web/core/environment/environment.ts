@@ -15,8 +15,7 @@ export const options: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
     rpc: 'http://localhost:8545',
-    // ipfs: 'https://api.staging.thegraph.com/ipfs',
-    ipfs: 'https://api.thegraph.com/ipfs',
+    ipfs: 'https://api.staging.thegraph.com/ipfs',
     subgraph: 'http://localhost:8000/subgraphs/name/example',
   },
   staging: {
