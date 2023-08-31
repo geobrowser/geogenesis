@@ -134,6 +134,7 @@ export async function publish({
     blockHash: ${waitForTransactionEffect.blockHash}
     `);
   });
+
   await Effect.runPromise(publishProgram);
 }
 
