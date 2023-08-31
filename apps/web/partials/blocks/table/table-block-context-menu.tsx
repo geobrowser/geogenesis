@@ -279,12 +279,22 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
   const { entities } = useLocalStore();
   const { create, update } = useActionsStore();
 
-  // We want to rerun the query below whenever we change the local data.
-  const localEntity = entities.find(e => e.id === type.entityId);
+  // We want to rerun the query below whenever we change the type id to add or remove attributes
+  // from the schema.
+  const localAttributeTriplesForEntityId = entities
+    .find(e => e.id === type.entityId)
+    ?.triples.filter(t => t.attributeId === SYSTEM_IDS.ATTRIBUTES)
+    // We only want to re-fetch when the actual value id changes. The value.value will be
+    // optimistically updated in the UI so we don't need to re-render to get the latest name.
+    .map(t => t.value.id);
 
   const { data: attributeEntitiesForType } = useQuery({
     suspense: true,
-    queryKey: ['table-block-type-schema-configuration-attributes-list', type.entityId, localEntity],
+    queryKey: [
+      'table-block-type-schema-configuration-attributes-list',
+      type.entityId,
+      localAttributeTriplesForEntityId,
+    ],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
       const attributeTriples = await merged.fetchTriples({
@@ -362,8 +372,7 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {/* We reverse the array so any locally added attributes appear on the top */}
-        {attributeEntitiesForType?.reverse().map(entity => {
+        {attributeEntitiesForType?.map(entity => {
           const valueTypeId: ValueType | undefined = entity.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)
             ?.value.id;
 
