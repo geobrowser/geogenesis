@@ -13,7 +13,7 @@
     "deploy:production": "graph deploy --product hosted-service --network matic baiirun/geo",
     "deploy:staging": "graph deploy --product hosted-service --network matic baiirun/geo-staging",
     "cat": "cat subgraph.yaml",
-    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.staging.thegraph.com/ipfs npm run",
+    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.thegraph.com/ipfs npm run",
     "local:create": "npm run local create",
     "local:deploy": "npm run local deploy",
     "update-contract-address:local": "yq -i \".mainnet.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" networks.json",
