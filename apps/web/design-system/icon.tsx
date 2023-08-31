@@ -49,6 +49,7 @@ import { Minus } from './icons/minus';
 import { MoveSpace } from './icons/move-space';
 import { NewTab } from './icons/new-tab';
 import { Plus } from './icons/plus';
+import { RetrySmall } from './icons/retry-small';
 import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
 
@@ -104,7 +105,8 @@ export type IconName =
   | 'moveSpace'
   | 'checkCircleSmall'
   | 'checkCircle'
-  | 'checkClose';
+  | 'checkClose'
+  | 'retrySmall';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -172,4 +174,5 @@ const icons: Record<IconName, React.ElementType> = {
   checkCircleSmall: CheckCircleSmall,
   checkCircle: CheckCircle,
   checkClose: CheckClose,
+  retrySmall: RetrySmall,
 };

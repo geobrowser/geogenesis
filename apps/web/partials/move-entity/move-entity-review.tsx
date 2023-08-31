@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { batch } from '@legendapp/state';
 import Image from 'next/legacy/image';
 
 import * as React from 'react';
@@ -10,11 +11,10 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
-import { DeleteTripleAction, ReviewState } from '~/core/types';
-import { Triple } from '~/core/types';
+import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
 import { Icon } from '~/design-system/icon';
 import { Warning } from '~/design-system/icons/warning';
@@ -53,28 +53,29 @@ function MoveEntityReviewChanges() {
       return;
     }
 
-    const onDeleteTriples = () => {
-      const deleteActions: DeleteTripleAction[] = triples.map(t => ({
+    const onDeleteTriples = (): DeleteTripleAction[] => {
+      return triples.map(t => ({
         ...t,
         type: 'deleteTriple',
       }));
-      deleteActions.map(action => remove(action));
     };
 
-    const onCreateNewTriples = () => {
-      const createActions: Triple[] = triples.map(t => ({
+    const onCreateNewTriples = (): CreateTripleAction[] => {
+      return triples.map(t => ({
         ...t,
         type: 'createTriple',
         space: spaceIdTo,
       }));
-      createActions.map(action => create(action));
     };
 
+    // surface these so they are in scope for the await call below
+    let createActions: CreateTripleAction[] = [];
+    let deleteActions: DeleteTripleAction[] = [];
     const createProposalName = `Create ${entityId} from ${spaceIdFrom}`;
     const deleteProposalName = `Delete ${entityId} from ${spaceIdFrom}`;
 
     try {
-      onCreateNewTriples();
+      createActions = onCreateNewTriples();
 
       await publish(
         spaceIdTo,
@@ -85,13 +86,17 @@ function MoveEntityReviewChanges() {
       );
     } catch (e: unknown) {
       if (e instanceof Error) {
+        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
         createDispatch({ type: 'ERROR', payload: e.message });
       }
       return; // Return because the first publish failed -- user will see error state in the UI
     }
 
     try {
-      onDeleteTriples();
+      deleteActions = onDeleteTriples();
 
       await publish(
         spaceIdFrom,
@@ -103,6 +108,10 @@ function MoveEntityReviewChanges() {
       deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
     } catch (e: unknown) {
       if (e instanceof Error) {
+        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+          return;
+        }
         deleteDispatch({ type: 'ERROR', payload: e.message });
       }
       return; // Return because the second publish failed -- user will see error state in the UI
@@ -115,6 +124,10 @@ function MoveEntityReviewChanges() {
           deleteState.reviewState !== 'publish-complete' &&
           deleteState.reviewState !== 'publishing-contract'
         ) {
+          batch(() => {
+            createActions.forEach(action => create(action));
+            deleteActions.forEach(action => remove(action));
+          });
           setIsMoveReviewOpen(false);
         }
         resolve(null);
@@ -265,12 +278,18 @@ function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handl
       ) : null}
       {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
       {txState === 'publish-error' ? (
-        <div className="flex flex-row">
-          <button onClick={handlePublish}>again</button>
+        <div className="flex flex-row items-center">
           <Warning color="red-01" />
         </div>
       ) : null}
       <Text variant="metadata">{reviewStateText[txState]}</Text>
+      {txState === 'publish-error' ? (
+        <div className="flex flex-row items-center gap-1.5">
+          <SmallButton icon="retrySmall" color="white" className="bg-white text-grey-04" onClick={handlePublish}>
+            Re-try
+          </SmallButton>
+        </div>
+      ) : null}
     </div>
   );
 }
