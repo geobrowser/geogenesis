@@ -5,7 +5,7 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount } from 'wagmi';
 
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -29,7 +29,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
   const { address } = useAccount();
 
-  // filter out the current space and Root space
+  // filter out the current space, Root space, and ones user is not an editor in
   const spacesForMove = spaces.filter(
     space => space.id !== spaceId && space.isRootSpace !== true && space.editors.includes(address ?? '')
   );
@@ -45,8 +45,6 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
     return 0;
   });
 
-  // @TODO: Make search work with autocomplete
-
   const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space =>
     space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
   );
@@ -59,7 +57,6 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
         spaces={filteredSpacesForMoveResults}
         spaceId={spaceId}
         entityId={entityId}
-        debouncedQuery={debouncedQuery}
         setIsMoveReviewOpen={setIsMoveReviewOpen}
         setEntityId={setEntityId}
         setSpaceIdFrom={setSpaceIdFrom}
@@ -79,7 +76,6 @@ function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void
 
 function SpacesList({
   spaces,
-  debouncedQuery,
   spaceId,
   entityId,
   setIsMoveReviewOpen,
@@ -88,7 +84,6 @@ function SpacesList({
   setEntityId,
 }: {
   spaces: Space[];
-  debouncedQuery: string;
   spaceId: string;
   entityId: string;
   setIsMoveReviewOpen: (isMoveReviewOpen: boolean) => void;

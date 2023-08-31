@@ -17,10 +17,6 @@ interface Props {
   triples: Triple[];
 }
 
-/* these are only triples fetched from The Graph, may need to use the Entity provider instead, but the Review component is outside of that context for now
-  this UI uses the same approach as in the entity page components
-*/
-
 export function MoveEntityReviewPage({ entityId, triples }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
   return (
@@ -38,6 +34,7 @@ export function MoveEntityReviewPage({ entityId, triples }: Props) {
   );
 }
 
+// this is the same Entity UI as in the other entity pages
 function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entityId']; triples: Props['triples'] }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 

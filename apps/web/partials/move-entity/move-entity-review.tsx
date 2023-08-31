@@ -84,7 +84,7 @@ function MoveEntityReviewChanges() {
       if (e instanceof Error) {
         createDispatch({ type: 'ERROR', payload: e.message });
       }
-      return; // Early return because the first operation failed
+      return; // Return because the first publish failed -- user will see error state in the UI
     }
 
     try {
@@ -102,6 +102,7 @@ function MoveEntityReviewChanges() {
       if (e instanceof Error) {
         deleteDispatch({ type: 'ERROR', payload: e.message });
       }
+      return; // Return because the second publish failed -- user will see error state in the UI
     }
     await new Promise(resolve =>
       setTimeout(() => {
@@ -115,7 +116,7 @@ function MoveEntityReviewChanges() {
         }
         resolve(null);
       }, 2000)
-    ); // close the review UI after displaying the state messages for 3 seconds
+    ); // close the review UI after displaying the state messages for 2 seconds
   }, [
     wallet,
     spaceIdFrom,
@@ -224,14 +225,6 @@ function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handl
     'publish-complete': 'Changes published!',
     'publish-error': 'An error has occurred',
   };
-
-  const mappedPublishStates: Array<ReviewState> = [
-    'publishing-ipfs',
-    'signing-wallet',
-    'publishing-contract',
-    'publish-complete',
-    'publish-error',
-  ]; // unsure if needed, will test
 
   return (
     <div className="flex flex-row items-center gap-3">
