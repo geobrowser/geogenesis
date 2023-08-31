@@ -24,11 +24,14 @@ import { Text } from '~/design-system/text';
 
 import { MoveEntityReviewPage } from './move-entity-review-page';
 
+// added the overflow classes up here to make sure mobile devices can scroll for longer content in the Entity Review UI
 export function MoveEntityReview() {
   const { isMoveReviewOpen, setIsMoveReviewOpen } = useMoveEntity();
   return (
     <SlideUp isOpen={isMoveReviewOpen} setIsOpen={setIsMoveReviewOpen}>
-      <MoveEntityReviewChanges />
+      <div className="h-full overflow-y-auto overscroll-contain">
+        <MoveEntityReviewChanges />
+      </div>
     </SlideUp>
   );
 }
@@ -144,9 +147,9 @@ function MoveEntityReviewChanges() {
           <Button onClick={handlePublish}>Publish and move</Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <div className="flex flex-row items-center justify-between gap-4 w-full ">
+      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big">
+        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch] ">
+          <div className="flex flex-row sm:flex-col items-center justify-between gap-4 w-full">
             <SpaceMoveCard
               spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
               spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
@@ -165,9 +168,7 @@ function MoveEntityReviewChanges() {
           </div>
           <div className="flex flex-col gap-1 py-6">
             <Text variant="body">Entity to move</Text>
-            <Text variant="mediumTitle" className="text-bold">
-              {triples[0]?.entityName ?? entityId}
-            </Text>
+            <Text className="text-bold text-mediumTitle sm:text-smallTitle">{triples[0]?.entityName ?? entityId}</Text>
           </div>
           <MoveEntityReviewPage entityId={entityId} triples={triples} />
         </div>
