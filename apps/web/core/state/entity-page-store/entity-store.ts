@@ -9,12 +9,11 @@ import { TableBlockSdk } from '~/core/blocks-sdk';
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { Merged } from '~/core/merged';
 import { EntityValue, Triple as ITriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
-import { getImagePath, makeOptionalComputed } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { tiptapExtensions } from '~/partials/editor/editor';
@@ -109,9 +108,6 @@ export class EntityStore implements IEntityStore {
   ActionsStore: ActionsStore;
   abortController: AbortController = new AbortController();
   name$: ObservableComputed<string>;
-  attributeRelationTypes$: ObservableComputed<
-    Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>
-  >;
 
   constructor({
     initialTriples,
@@ -149,11 +145,7 @@ export class EntityStore implements IEntityStore {
           Triple.withLocalNames(
             Object.values(ActionsStore.actions$.get()).flatMap(a => a),
             triples
-          ),
-        // This is a hack to render a single triple even if there are multiple in the store the
-        // issue happens in triple.fromActions() not deduplicating when deleting and recreating a
-        // triple of the same id
-        A.uniqBy(t => t.id)
+          )
       );
     });
 
@@ -279,65 +271,6 @@ export class EntityStore implements IEntityStore {
     this.typeTriples$ = computed(() => {
       return this.triples$.get().filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
     });
-
-    this.attributeRelationTypes$ = makeOptionalComputed(
-      {},
-      computed(async () => {
-        const triples = this.triples$.get();
-        const schemaTriples = this.schemaTriples$.get();
-
-        // 1. Fetch all attributes that are entity values
-        // 2. Filter attributes that have the relation type attribute
-        // 3. Return the type id and name of the relation type
-
-        // Filter out any duplicate attributes across triples + schemaTriples.
-        // Also ensure they are entity values.
-        const attributesWithRelationValues = [
-          ...new Set([...triples, ...schemaTriples].filter(t => t.value.type === 'entity').map(t => t.attributeId)),
-        ];
-
-        // Make sure we merge any unpublished entities
-        const mergedStore = new Merged({
-          store: this.ActionsStore,
-          localStore: this.LocalStore,
-          subgraph,
-        });
-        const maybeRelationAttributeTypes = await Promise.all(
-          attributesWithRelationValues.map(attributeId =>
-            mergedStore.fetchEntity({ id: attributeId, endpoint: config.subgraph })
-          )
-        );
-
-        const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
-
-        // Merge all local and server triples
-        const mergedTriples = A.uniqBy(
-          Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
-          t => t.id
-        );
-
-        const relationTypes = mergedTriples.filter(
-          t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
-        );
-
-        return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
-          (acc, relationType) => {
-            if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-
-            acc[relationType.entityId].push({
-              typeId: relationType.value.id,
-
-              // We can safely cast here because we filter for entity type values above.
-              typeName: (relationType.value as EntityValue).name,
-              spaceId: relationType.space,
-            });
-
-            return acc;
-          },
-          {}
-        );
-      })
-    );
 
     /*
     Computed values in @legendapp/state will rerun for every change recursively up the tree.

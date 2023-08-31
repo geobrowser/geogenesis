@@ -43,8 +43,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   const localTriples = pipe(
     Triple.fromActions(actionsFromSpace, column.triples),
-    A.filter(t => t.entityId === column.id),
-    A.uniqBy(t => t.id)
+    A.filter(t => t.entityId === column.id)
   );
 
   const localCellTriples = pipe(

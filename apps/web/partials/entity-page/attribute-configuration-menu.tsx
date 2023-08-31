@@ -1,14 +1,20 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
 
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/types';
+import { Merged } from '~/core/merged';
+import { Services } from '~/core/services';
+import { useActionsStoreInstance } from '~/core/state/actions-store';
+import { useLocalStoreInstance } from '~/core/state/local-store';
+import { Entity, RelationValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -22,23 +28,61 @@ interface Props {
   // This is the entityId of the attribute being configured with a relation type.
   attributeId: string;
   attributeName: string | null;
-  configuredTypes: { typeId: string; typeName: string | null; spaceId: string }[];
 }
 
-export function AttributeConfigurationMenu({ attributeId, attributeName, configuredTypes }: Props) {
+export function AttributeConfigurationMenu({ attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
+  const localStore = useLocalStoreInstance();
+  const store = useActionsStoreInstance();
+
+  const { subgraph, config } = Services.useServices();
+
+  const merged = React.useMemo(
+    () =>
+      new Merged({
+        store,
+        localStore,
+        subgraph,
+      }),
+    [store, localStore, subgraph]
+  );
+
+  // To add the relation value type triple to the correct space we need to fetch
+  // the attribute and read the space off one of the triples.
+  //
+  // The attribute being fetched might only exist locally so we need to use the merged
+  // API to fetch both local and remote data.
+  const { data: tripleForAttributeId } = useQuery({
+    queryKey: ['attribute-search', attributeId],
+    queryFn: () =>
+      merged.fetchTriples({
+        query: '',
+        first: 1,
+        skip: 0,
+        endpoint: config.subgraph,
+        filter: [
+          {
+            field: 'entity-id',
+            value: attributeId,
+          },
+        ],
+      }),
+  });
+
+  const attributeSpaceId = tripleForAttributeId?.[0].space;
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cog" />}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch attributeId={attributeId} attributeName={attributeName} configuredTypes={configuredTypes} />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={attributeSpaceId} />
       </div>
     </Menu>
   );
 }
 
-function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props) {
+function AttributeSearch({ attributeId, attributeName, attributeSpaceId }: Props & { attributeSpaceId?: string }) {
+  const { attributeRelationTypes } = useEntityPageStore();
   const { create, remove } = useActionsStore();
 
   const autocomplete = useAutocomplete({
@@ -47,10 +91,12 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
 
   const { spaces } = useSpaces();
 
-  const alreadySelectedTypes = configuredTypes.map(st => st.typeId);
+  const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
 
-  const onSelect = (result: Entity) => {
-    autocomplete.onQueryChange('');
+  const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
+
+  const onSelect = async (result: Entity) => {
+    if (!attributeSpaceId) return;
 
     create(
       Triple.withId({
@@ -58,7 +104,11 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
         attributeName: 'Relation Value Types',
         entityName: attributeName,
-        space: result.nameTripleSpace ?? '',
+
+        // Ensure that we create the triple for the relation value type in the same space
+        // as the attribute itself. Eventually we might want space-scoped triples for data
+        // in which case we would want to set triple in the current space instead.
+        space: attributeSpaceId,
         value: {
           type: 'entity',
           id: result.id,
@@ -68,14 +118,14 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
     );
   };
 
-  const onRemove = ({ typeId, spaceId, typeName }: { typeId: string; spaceId: string; typeName: string | null }) => {
+  const onRemove = ({ typeId, spaceIdOfAttribute, typeName }: RelationValueType) => {
     remove(
       Triple.withId({
         entityId: attributeId,
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
         attributeName: 'Relation Value Types',
         entityName: attributeName,
-        space: spaceId,
+        space: spaceIdOfAttribute,
         value: {
           type: 'entity',
           id: typeId,
@@ -91,9 +141,9 @@ function AttributeSearch({ attributeId, attributeName, configuredTypes }: Props)
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-2 px-2">
-        {configuredTypes.map(st => (
+        {relationValueTypesForAttribute.map(st => (
           <DeletableChipButton
-            href={NavUtils.toEntity(st.spaceId, st.typeId)}
+            href={NavUtils.toEntity(st.spaceIdOfAttribute, st.typeId)}
             onClick={() => onRemove(st)}
             key={st.typeId}
           >

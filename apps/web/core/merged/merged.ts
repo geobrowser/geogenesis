@@ -3,7 +3,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store';
 import { LocalStore } from '~/core/state/local-store';
-import { Column, OmitStrict, Row, Value } from '~/core/types';
+import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -59,21 +59,47 @@ export class Merged implements IMergedDataSource {
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
   // triples that do not match the passed in query + filter.
-  fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]) => {
+  fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]): Promise<ITriple[]> => {
     const networkTriples = await this.subgraph.fetchTriples(options);
 
-    if (!options.space) return networkTriples;
+    const actions = options.space ? this.store.actions$.get()[options.space] : this.store.allActions$.get() ?? [];
 
-    const actions = this.store.actions$.get()[options.space] ?? [];
-
-    // We want to merge any local actions with the network triples
-    // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
-    // this in our app code for local triples. This might mean that we render local triples that
-    // don't map to the selected filter.
+    // Merge any local actions with the network triples
     const updatedTriples = Triple.fromActions(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
-    return mergedTriplesWithName;
+    // Apply any server filters to locally created data.
+    let locallyFilteredTriples = mergedTriplesWithName;
+
+    for (const filter of options.filter ?? []) {
+      locallyFilteredTriples = locallyFilteredTriples.filter(t => {
+        if (filter.field === 'attribute-id') {
+          return t.attributeId === filter.value;
+        }
+
+        if (filter.field === 'entity-id') {
+          return t.entityId === filter.value;
+        }
+
+        if (filter.field === 'attribute-name') {
+          return t.attributeName === filter.value;
+        }
+
+        if (filter.field === 'entity-name') {
+          return t.entityName === filter.value;
+        }
+
+        if (filter.field === 'linked-to') {
+          return t.value.type === 'entity' && t.value.id === filter.value;
+        }
+
+        if (filter.field === 'value') {
+          return t.value.type === 'entity' && t.value.name === filter.value;
+        }
+      });
+    }
+
+    return locallyFilteredTriples;
   };
 
   fetchEntities = async (options: Parameters<Subgraph.ISubgraph['fetchEntities']>[0]) => {

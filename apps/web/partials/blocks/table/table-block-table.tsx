@@ -100,8 +100,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
 
         return isRowCell && isColCell && isCurrentValueType;
-      }),
-      A.uniqBy(triple => triple.id)
+      })
     );
 
     if (isEditMode) {

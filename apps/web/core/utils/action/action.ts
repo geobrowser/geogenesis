@@ -118,6 +118,16 @@ export function squashChanges(actions: Action[]) {
         return null;
       }
 
+      // Delete->Create where the previous triple is the same as the new triple
+      if (changeTuple[0].type === 'deleteTriple' && changeTuple[1].type === 'createTriple') {
+        if (
+          changeTuple[0].value.type === changeTuple[1].value.type &&
+          getValue(changeTuple[0]) === getValue(changeTuple[1])
+        ) {
+          return null;
+        }
+      }
+
       // Edit -> Edit where the value types are the same and the before/after values are the same.
       // We don't need to send this to the subgraph.
       if (changeTuple[0].type === 'editTriple' && changeTuple[1].type === 'editTriple') {
