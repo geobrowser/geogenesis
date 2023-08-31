@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { A } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -10,14 +11,18 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { useLocalStore } from '~/core/state/local-store';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as IEntity } from '~/core/types';
+import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
 import { getImagePath } from '~/core/utils/utils';
 import { ValueType } from '~/core/value-types';
 
@@ -110,7 +115,7 @@ const resultsListActionBarStyles = cva(
   }
 );
 
-function AddAttribute({ type }: { type: SelectedEntityType }) {
+function AddAttribute({ type }: { type: ITriple }) {
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
   });
@@ -118,10 +123,11 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
   const { config } = Services.useServices();
   const merged = useMergedData();
   const { spaces } = useSpaces();
+  const { create } = useActionsStore();
 
   const { data: attributeTriple } = useQuery({
     suspense: true,
-    queryKey: ['table-block-type-schema-configuration-add-attribute', type.id],
+    queryKey: ['table-block-type-schema-configuration-add-attribute', type.entityId],
     queryFn: () =>
       merged.fetchTriples({
         endpoint: config.subgraph,
@@ -154,6 +160,23 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
     //        If not allow the user to select a type (?) (this will add the RVT triple)
     //          How will migrations work if users can change the type?
     //            Should it only be changeable if it's a local attribute?
+
+    create(
+      Triple.withId({
+        entityId: type.entityId,
+        entityName: result.name,
+        attributeId: SYSTEM_IDS.ATTRIBUTES,
+        attributeName: 'Attributes',
+        space: type.space,
+        value: {
+          type: 'entity',
+          id: result.id,
+          name: result.name,
+        },
+      })
+    );
+
+    autocomplete.onQueryChange('');
   };
 
   return (
@@ -180,9 +203,8 @@ function AddAttribute({ type }: { type: SelectedEntityType }) {
                   >
                     <ResultContent
                       key={result.id}
-                      onClick={() => {
-                        //
-                      }}
+                      onClick={() => onSelect(result)}
+                      // @TODO: Need to pull in all attributes with local data to check if they're already selected
                       // alreadySelected={entityItemIdsSet.has(result.id)}
                       result={result}
                       spaces={spaces}
@@ -254,10 +276,15 @@ function AddAttributeLoading() {
 function SchemaAttributes({ type }: { type: SelectedEntityType }) {
   const { config } = Services.useServices();
   const merged = useMergedData();
+  const { entities } = useLocalStore();
+  const { create, update } = useActionsStore();
+
+  // We want to rerun the query below whenever we change the local data.
+  const localEntity = entities.find(e => e.id === type.entityId);
 
   const { data: attributeEntitiesForType } = useQuery({
     suspense: true,
-    queryKey: ['table-block-type-schema-configuration-attributes-list', type.entityId],
+    queryKey: ['table-block-type-schema-configuration-attributes-list', type.entityId, localEntity],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
       const attributeTriples = await merged.fetchTriples({
@@ -286,33 +313,82 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
     },
   });
 
+  // TODO: How we do we get the locally added attributes?
+  // Couple options:
+  // 1. Somehow re-run the above useQuery whenever we get new local data
+  // 2. Only run the above query on mount, then merge it with any local attributes
+  //    whenever we get new local data
+  //
+  // #1 is probably the most correct way, but it will result in a loading state briefly.
+
+  const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
+    if (!entity.nameTripleSpace) {
+      console.error("The entity doesn't have a name triple space");
+      return;
+    }
+
+    if (!oldNameTriple) {
+      return create(
+        Triple.withId({
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          entityId: entity.id,
+          entityName: entity.name,
+          space: entity.nameTripleSpace,
+          value: {
+            type: 'string',
+            id: ID.createValueId(),
+            value: newName,
+          },
+        })
+      );
+    }
+
+    update(
+      {
+        ...oldNameTriple,
+        entityName: newName,
+        value: {
+          type: 'string',
+          id: oldNameTriple.value.id,
+          value: newName,
+        },
+      },
+      oldNameTriple
+    );
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {attributeEntitiesForType?.map(e => <AttributeRow key={e.id} attribute={e} />)}
-      </div>
-    </div>
-  );
-}
+        {/* We reverse the array so any locally added attributes appear on the top */}
+        {attributeEntitiesForType?.reverse().map(entity => {
+          const valueTypeId: ValueType | undefined = entity.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)
+            ?.value.id;
 
-function AttributeRow({ attribute }: { attribute: IEntity }) {
-  const valueTypeId: ValueType | undefined = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)?.value
-    .id;
+          const nameTripleForAttribute = entity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
-  return (
-    <div className="flex items-center gap-4">
-      <div className="rounded bg-grey-01 px-5 py-2.5">
-        <AttributeValueTypeDropdown valueTypeId={valueTypeId} />
-      </div>
-      <Input value={attribute.name ?? ''} />
-      {valueTypeId === SYSTEM_IDS.RELATION && (
-        <div>
-          <Cog color="grey-04" />
-        </div>
-      )}
-      <div>
-        <Context color="grey-04" />
+          return (
+            <div key={entity.id} className="flex items-center gap-4">
+              <div className="rounded bg-grey-01 px-5 py-2.5">
+                <AttributeValueTypeDropdown valueTypeId={valueTypeId} />
+              </div>
+              <Input
+                defaultValue={entity.name ?? ''}
+                onBlur={e => onChangeAttributeName(e.currentTarget.value, entity, nameTripleForAttribute)}
+              />
+              {valueTypeId === SYSTEM_IDS.RELATION && (
+                <div>
+                  <Cog color="grey-04" />
+                </div>
+              )}
+              <div>
+                <Context color="grey-04" />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
