@@ -1,5 +1,3 @@
-import { A } from '@mobily/ts-belt';
-
 import * as React from 'react';
 
 import { WalletClient, useWalletClient } from 'wagmi';
