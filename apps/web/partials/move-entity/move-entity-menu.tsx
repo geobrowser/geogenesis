@@ -50,76 +50,44 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-2 bg-white p-2">
-      <Text variant="smallButton">Move to space</Text>
-      <SpaceSearch onQueryChange={onQueryChange} />
-      <SpacesList
-        spaces={filteredSpacesForMoveResults}
-        spaceId={spaceId}
-        entityId={entityId}
-        setIsMoveReviewOpen={setIsMoveReviewOpen}
-        setEntityId={setEntityId}
-        setSpaceIdFrom={setSpaceIdFrom}
-        setSpaceIdTo={setSpaceIdTo}
-      />
-    </div>
-  );
-}
-
-function SpaceSearch({ onQueryChange }: { onQueryChange: (query: string) => void }) {
-  return (
-    <div className="mb-2">
-      <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
-    </div>
-  );
-}
-
-function SpacesList({
-  spaces,
-  spaceId,
-  entityId,
-  setIsMoveReviewOpen,
-  setSpaceIdFrom,
-  setSpaceIdTo,
-  setEntityId,
-}: {
-  spaces: Space[];
-  spaceId: string;
-  entityId: string;
-  setIsMoveReviewOpen: (isMoveReviewOpen: boolean) => void;
-  setEntityId: (value: string) => void;
-  setSpaceIdTo: (value: string) => void;
-  setSpaceIdFrom: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col max-h-[300px]  overflow-y-auto justify-between w-full  hover:bg-grey-01 transition-colors duration-75 cursor-pointer">
-      {spaces.map(space => (
-        <div
-          key={space.id}
-          className="flex flex-row items-center gap-3 my-2  "
-          onClick={() => {
-            setSpaceIdFrom(spaceId);
-            setSpaceIdTo(space.id);
-            setEntityId(entityId);
-            setIsMoveReviewOpen(true);
-          }}
-        >
-          {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
-            <div className="relative w-[32px] h-[32px] rounded overflow-hidden">
-              <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
-            </div>
-          )}
-          <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
-        </div>
-      ))}
-      {spaces.length === 0 && (
-        <div className="flex flex-col gap-1">
-          <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
-          <Text variant="footnote">
-            You will need to become an editor of the space you want to move the entities to.
-          </Text>
-        </div>
-      )}
+    <div className="flex flex-col gap-2 bg-white">
+      <div className="flex flex-col gap-2 px-2 pt-2">
+        <Text variant="smallButton">Move to space</Text>
+        <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
+      </div>
+      <div className="flex flex-col max-h-[300px] overflow-y-auto justify-between w-full">
+        {filteredSpacesForMoveResults.map(space => (
+          <button
+            key={space.id}
+            className="flex items-center gap-3 p-2 hover:bg-grey-01 focus:bg-grey-01 transition-colors duration-75 cursor-pointer"
+            onClick={() => {
+              setSpaceIdFrom(spaceId);
+              setSpaceIdTo(space.id);
+              setEntityId(entityId);
+              setIsMoveReviewOpen(true);
+            }}
+          >
+            {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
+              <div className="relative w-8 h-8 rounded overflow-hidden">
+                <Image
+                  src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
+                  layout="fill"
+                  objectFit="cover"
+                />
+              </div>
+            )}
+            <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
+          </button>
+        ))}
+        {spaces.length === 0 && (
+          <div className="flex flex-col gap-1">
+            <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
+            <Text variant="footnote">
+              You will need to become an editor of the space you want to move the entities to.
+            </Text>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
