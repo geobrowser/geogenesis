@@ -1,17 +1,14 @@
 import * as React from 'react';
 
-import { WalletClient, useWalletClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 
-import { Storage } from '../io';
 import { Services } from '../services';
-import { Action as IAction, OmitStrict, ReviewState } from '../types';
+import { Action as IAction, ReviewState } from '../types';
 import { Action } from '../utils/action';
 import { useActionsStore } from './use-actions-store';
 
-interface IPublishOptions {
-  storageClient: Storage.IStorageClient;
+interface MakeProposalOptions {
   actions: IAction[];
-  wallet: WalletClient;
   onChangePublishState: (newState: ReviewState) => void;
   spaceId: string;
   name: string;
@@ -31,12 +28,7 @@ export function usePublish() {
    * side effects.
    */
   const makeProposal = React.useCallback(
-    async ({
-      actions: actionsToPublish,
-      name,
-      onChangePublishState,
-      spaceId,
-    }: OmitStrict<IPublishOptions, 'wallet' | 'storageClient'>) => {
+    async ({ actions: actionsToPublish, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
       if (!wallet) return;
       if (actionsToPublish.length < 1) return;
 
