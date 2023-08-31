@@ -18,7 +18,6 @@ interface IActionsStore {
   update(triple: ITriple, oldTriple: ITriple): void;
   remove(triple: ITriple): void;
   deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
-  unstagedChanges?: Record<string, unknown>;
 }
 
 interface IActionsStoreConfig {
