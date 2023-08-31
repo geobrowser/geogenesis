@@ -12,11 +12,13 @@ import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
+import { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
 import { Icon } from '~/design-system/icon';
+import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spinner } from '~/design-system/spinner';
@@ -68,11 +70,11 @@ function MoveEntityReviewChanges() {
       }));
     };
 
-    // surface these so they are in scope for the await call below
-    let createActions: CreateTripleAction[] = [];
-    let deleteActions: DeleteTripleAction[] = [];
     const createProposalName = `Create ${entityId} from ${spaceIdFrom}`;
     const deleteProposalName = `Delete ${entityId} from ${spaceIdFrom}`;
+
+    let createActions: CreateTripleAction[] = [];
+    let deleteActions: DeleteTripleAction[] = [];
 
     try {
       createActions = onCreateNewTriples();
@@ -125,8 +127,8 @@ function MoveEntityReviewChanges() {
           deleteState.reviewState !== 'publishing-contract'
         ) {
           batch(() => {
-            createActions.forEach(action => create(action));
             deleteActions.forEach(action => remove(action));
+            createActions.forEach(action => create(action));
           });
           setIsMoveReviewOpen(false);
         }
