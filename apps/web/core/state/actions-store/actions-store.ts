@@ -1,15 +1,12 @@
 import { Observable, computed, observable } from '@legendapp/state';
 
-import { WalletClient } from 'wagmi';
-
-import { Publish, Storage } from '~/core/io';
+import { Storage } from '~/core/io';
 import {
   Action as ActionType,
   CreateTripleAction,
   DeleteTripleAction,
   EditTripleAction,
   Triple as ITriple,
-  ReviewState,
 } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
@@ -21,15 +18,6 @@ interface IActionsStore {
   update(triple: ITriple, oldTriple: ITriple): void;
   remove(triple: ITriple): void;
   deleteActions(spaceId: string, actionIdsToDelete: Array<string>): void;
-  publish(
-    spaceId: string,
-    wallet: WalletClient,
-    onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Record<string, unknown>,
-    name: string,
-    description?: string
-  ): void;
-  unstagedChanges?: Record<string, unknown>;
 }
 
 interface IActionsStoreConfig {
@@ -101,7 +89,7 @@ export class ActionsStore implements IActionsStore {
     });
   }
 
-  private addActions = (spaceId: string, actions: ActionType[]) => {
+  addActions = (spaceId: string, actions: ActionType[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
 
     const newActions: SpaceActions = {
@@ -178,66 +166,4 @@ export class ActionsStore implements IActionsStore {
       [spaceId]: [],
     });
   };
-
-  publish = async (
-    spaceId: string,
-    wallet: WalletClient,
-    onChangePublishState: (newState: ReviewState) => void,
-    unstagedChanges: Record<string, Record<string, boolean>>,
-    name: string
-  ) => {
-    const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-    const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
-
-    if (actionsToPublish.length < 1) return;
-
-    await Publish.publish({
-      storageClient: this.storageClient,
-      actions: Action.prepareActionsForPublishing(actionsToPublish),
-      wallet,
-      onChangePublishState,
-      space: spaceId,
-      name,
-    });
-
-    const publishedActions = actionsToPublish.map(action => ({
-      ...action,
-      hasBeenPublished: true,
-    }));
-
-    this.actions$.set({
-      ...this.actions$.get(),
-      [spaceId]: [...publishedActions, ...actionsToPersist],
-    });
-
-    onChangePublishState('publish-complete');
-    await new Promise(() => setTimeout(() => onChangePublishState('idle'), 3000)); // want to show the "complete" state for 3s
-  };
 }
-
-const splitActions = (actions: ActionType[], unstagedChanges: Record<string, Record<string, boolean>>) => {
-  const actionsToPublish: ActionType[] = [];
-  const actionsToPersist: ActionType[] = [];
-
-  actions.forEach(action => {
-    switch (action.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        if (Object.hasOwn(unstagedChanges?.[action.entityId] ?? {}, action.attributeId)) {
-          actionsToPersist.push(action);
-        } else {
-          actionsToPublish.push(action);
-        }
-        break;
-      case 'editTriple':
-        if (Object.hasOwn(unstagedChanges?.[action.before.entityId] ?? {}, action.before.attributeId)) {
-          actionsToPersist.push(action);
-        } else {
-          actionsToPublish.push(action);
-        }
-        break;
-    }
-  });
-
-  return [actionsToPublish, actionsToPersist];
-};
