@@ -217,3 +217,30 @@ export const getBlockType = (action: Action) => {
       return null;
   }
 };
+
+export const splitActions = (actions: ActionType[], unstagedChanges: Record<string, Record<string, boolean>>) => {
+  const actionsToPublish: ActionType[] = [];
+  const actionsToPersist: ActionType[] = [];
+
+  actions.forEach(action => {
+    switch (action.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.entityId] ?? {}, action.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+      case 'editTriple':
+        if (Object.hasOwn(unstagedChanges?.[action.before.entityId] ?? {}, action.before.attributeId)) {
+          actionsToPersist.push(action);
+        } else {
+          actionsToPublish.push(action);
+        }
+        break;
+    }
+  });
+
+  return [actionsToPublish, actionsToPersist];
+};

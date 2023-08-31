@@ -208,3 +208,10 @@ export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);
   return array[randomIndex];
 }
+
+export const sleepWithCallback = async (callback: () => void, ms: number) => {
+  await new Promise(resolve => {
+    setTimeout(callback, ms);
+    resolve(null);
+  });
+};

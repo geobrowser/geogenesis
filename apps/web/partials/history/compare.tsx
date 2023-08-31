@@ -51,7 +51,7 @@ const CompareChanges = () => {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">Compare {compareMode}</div>
         <div>
           <Button variant="secondary" onClick={() => setIsCompareOpen(false)}>
@@ -60,7 +60,7 @@ const CompareChanges = () => {
         </div>
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           {compareMode === 'versions' && <Versions />}
           {compareMode === 'proposals' && <Proposals />}
         </div>
