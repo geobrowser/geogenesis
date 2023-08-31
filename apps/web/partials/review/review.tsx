@@ -146,7 +146,7 @@ const ReviewChanges = () => {
         dispatch({ type: 'ERROR', payload: e.message });
       }
     }
-  }, [activeSpace, proposalName, proposals, publish, wallet, unstagedChanges, dispatch, actionsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
 
   if (isLoading || !data) {
     return null;
