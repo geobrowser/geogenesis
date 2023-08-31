@@ -1,3 +1,5 @@
+import { A } from '@mobily/ts-belt';
+
 import * as React from 'react';
 
 import { WalletClient, useWalletClient } from 'wagmi';
@@ -6,17 +8,7 @@ import { Publish, Storage } from '../io';
 import { Services } from '../services';
 import { Action as IAction, OmitStrict, ReviewState } from '../types';
 import { Action } from '../utils/action';
-
-/**
- * actionsStore.publish is primarily called from react components
- * 1. We want to be able to pass in the actions that we want to publish
- * 2. We want to be able to expose the actionsStore.publish in a way where react
- *    components can use them and be able to mock for testing
- * 3. We want to be able to mock the `Publish.publish` call for testing, which means
- *    we probably need to pass this in as well.
- *
- * 4. We need to update all the publish callsites to use the new implementation
- */
+import { useActionsStore } from './use-actions-store';
 
 interface IPublishOptions {
   storageClient: Storage.IStorageClient;
@@ -28,33 +20,69 @@ interface IPublishOptions {
   onPublish: typeof Publish['publish'];
 }
 
-// 1. Figure out how to correctly persist the actions after publishing with hasBeenPublished
 // 2. Write tests for splitActions and publish
 
 export function usePublish() {
   const { storageClient, publish: publishService } = Services.useServices();
+  const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
 
   const publishFn = React.useCallback(
     async ({
-      actions,
+      actions: actionsToPublish,
       name,
       onChangePublishState,
       spaceId,
     }: OmitStrict<IPublishOptions, 'onPublish' | 'wallet' | 'storageClient'>) => {
       if (!wallet) return;
-      if (actions.length < 1) return;
+      if (actionsToPublish.length < 1) return;
 
       await publishService.publish({
         storageClient,
-        actions: Action.prepareActionsForPublishing(actions),
+        actions: Action.prepareActionsForPublishing(actionsToPublish),
         name,
         onChangePublishState,
         space: spaceId,
         wallet,
       });
+
+      const actionsBeingPublished = new Set(
+        actionsToPublish.map(a => {
+          switch (a.type) {
+            case 'createTriple':
+            case 'deleteTriple':
+              return a.id;
+            case 'editTriple':
+              return a.after.id; // after and before should the same id
+          }
+        })
+      );
+
+      // We want to look at the actionsFromSpace and filter out any actions that we just published
+      // we want to set the new actions to the actions we just filtered
+      const nonPublishedActions = actionsBySpace[spaceId].filter(a => {
+        switch (a.type) {
+          case 'createTriple':
+          case 'deleteTriple':
+            return !actionsBeingPublished.has(a.id); // after and before should the same id
+          case 'editTriple':
+            return !actionsBeingPublished.has(a.after.id); // after and before should the same id
+        }
+      });
+
+      const publishedActions = actionsToPublish.map(action => ({
+        ...action,
+        hasBeenPublished: true,
+      }));
+
+      // Update the actionsBySpace for the current space to set the published actions
+      // as hasBeenPublished and merge with the existing actions in the space.
+      restore({
+        ...actionsBySpace,
+        [spaceId]: [...publishedActions, ...nonPublishedActions],
+      });
     },
-    [storageClient, wallet, publishService]
+    [storageClient, wallet, publishService, restore, actionsBySpace]
   );
 
   return {

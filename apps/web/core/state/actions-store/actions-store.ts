@@ -90,12 +90,23 @@ export class ActionsStore implements IActionsStore {
     });
   }
 
-  private addActions = (spaceId: string, actions: ActionType[]) => {
+  addActions = (spaceId: string, actions: ActionType[]) => {
     const prevActions: SpaceActions = this.actions$.get() ?? {};
 
     const newActions: SpaceActions = {
       ...prevActions,
       [spaceId]: [...(prevActions[spaceId] ?? []), ...actions],
+    };
+
+    this.actions$.set(newActions);
+  };
+
+  replaceActionsForSpace = (spaceId: string, actions: ActionType[]) => {
+    const prevActions: SpaceActions = this.actions$.get() ?? {};
+
+    const newActions: SpaceActions = {
+      ...prevActions,
+      [spaceId]: actions,
     };
 
     this.actions$.set(newActions);

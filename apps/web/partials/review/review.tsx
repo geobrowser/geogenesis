@@ -122,7 +122,7 @@ const ReviewChanges = () => {
     };
 
     try {
-      const [actionsToPublish, actionsToPersist] = Action.splitActions(actionsFromSpace, unstagedChanges);
+      const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
       await publish({
         actions: actionsToPublish,
