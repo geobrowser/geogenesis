@@ -187,7 +187,6 @@ export class ActionsStore implements IActionsStore {
     name: string
   ) => {
     const spaceActions: ActionType[] = this.actions$.get()[spaceId];
-
     const [actionsToPublish, actionsToPersist] = splitActions(spaceActions, unstagedChanges);
 
     if (actionsToPublish.length < 1) return;
