@@ -15,13 +15,13 @@ export const options: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
     rpc: 'http://localhost:8545',
-    ipfs: 'https://api.staging.thegraph.com/ipfs',
+    ipfs: 'https://api.thegraph.com/ipfs',
     subgraph: 'http://localhost:8000/subgraphs/name/example',
   },
   staging: {
     chainId: '1337',
     rpc: 'https://devnet-dabbott.cloud.okteto.net',
-    ipfs: 'https://api.staging.thegraph.com/ipfs',
+    ipfs: 'https://api.thegraph.com/ipfs',
     subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
   },
   testnet: {
