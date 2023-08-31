@@ -18,13 +18,19 @@ interface IPublishOptions {
   onPublish: typeof Publish['publish'];
 }
 
-// 2. Write tests for splitActions and publish
-
 export function usePublish() {
   const { storageClient, publish: publishService } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
 
+  /**
+   * Take the actions for a specific space the user wants to write to Geo and publish them
+   * to IPFS + transact the IPFS hash onto Polygon.
+   *
+   * After the publish flow finishes update the state of the user's actions for the given
+   * space with the published actions being flagged as `hasBeenPublished` and run any additional
+   * side effects.
+   */
   const publishFn = React.useCallback(
     async ({
       actions: actionsToPublish,
@@ -56,20 +62,25 @@ export function usePublish() {
         })
       );
 
-      // We want to look at the actionsFromSpace and filter out any actions that we just published
-      // we want to set the new actions to the actions we just filtered
+      // We filter out the actions that are being published from the actionsBySpace. We do this
+      // since we need to update the entire state of the space with the published actions and the
+      // unpublished actions being merged together.
       const nonPublishedActions = actionsBySpace[spaceId].filter(a => {
         switch (a.type) {
           case 'createTriple':
           case 'deleteTriple':
-            return !actionsBeingPublished.has(a.id); // after and before should the same id
+            return !actionsBeingPublished.has(a.id);
           case 'editTriple':
-            return !actionsBeingPublished.has(a.after.id); // after and before should the same id
+            return !actionsBeingPublished.has(a.after.id);
         }
       });
 
       const publishedActions = actionsToPublish.map(action => ({
         ...action,
+        // We keep published actions in memory to keep the UI optimistic. This is mostly done
+        // because there is a period between publishing actions and the subgraph finishing indexing
+        // where the UI would be in a state where the published actions are not showing up in the UI.
+        // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
         hasBeenPublished: true,
       }));
 
