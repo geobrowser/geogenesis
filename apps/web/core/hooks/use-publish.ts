@@ -28,30 +28,8 @@ interface IPublishOptions {
   onPublish: typeof Publish['publish'];
 }
 
-const publish = async (options: IPublishOptions) => {
-  if (options.actions.length < 1) return;
-
-  await options.onPublish({
-    storageClient: options.storageClient,
-    actions: Action.prepareActionsForPublishing(options.actions),
-    wallet: options.wallet,
-    onChangePublishState: options.onChangePublishState,
-    space: options.spaceId,
-    name: options.name,
-  });
-
-  // How do we execute stuff after publishing???
-  // const publishedActions = options.actions.map(action => ({
-  //   ...action,
-  //   hasBeenPublished: true,
-  // }));
-
-  // this.actions$.set({
-  //   ...this.actions$.get(),
-  //   // [spaceId]: [...publishedActions, ...actionsToPersist],
-  //   [spaceId]: publishedActions, // This will break because anything we didn't publish will get removed from the store
-  // });
-};
+// 1. Figure out how to correctly persist the actions after publishing with hasBeenPublished
+// 2. Write tests for splitActions and publish
 
 export function usePublish() {
   const { storageClient, publish: publishService } = Services.useServices();
@@ -65,14 +43,14 @@ export function usePublish() {
       spaceId,
     }: OmitStrict<IPublishOptions, 'onPublish' | 'wallet' | 'storageClient'>) => {
       if (!wallet) return;
+      if (actions.length < 1) return;
 
-      await publish({
+      await publishService.publish({
         storageClient,
-        actions,
+        actions: Action.prepareActionsForPublishing(actions),
         name,
         onChangePublishState,
-        spaceId,
-        onPublish: publishService.publish,
+        space: spaceId,
         wallet,
       });
     },
