@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ReviewState } from '~/core/types';
 
-export interface MoveReviewState {
+export interface MoveTriplesState {
   reviewState: ReviewState;
   error: string | null;
 }
@@ -14,7 +14,7 @@ export type ReviewActions =
     }
   | { type: 'ERROR'; payload: string | null };
 
-const statusBarReducer = (state: MoveReviewState, action: ReviewActions): MoveReviewState => {
+const moveTriplesReducer = (state: MoveTriplesState, action: ReviewActions): MoveTriplesState => {
   switch (action.type) {
     case 'SET_REVIEW_STATE':
       return { ...state, reviewState: action.payload, error: null };
@@ -26,8 +26,8 @@ const statusBarReducer = (state: MoveReviewState, action: ReviewActions): MoveRe
 };
 
 // Custom hook for review state management
-export function useReviewState(initialState: ReviewState = 'idle') {
-  const [state, dispatch] = React.useReducer(statusBarReducer, {
+export function useMoveTriplesState(initialState: ReviewState = 'idle') {
+  const [state, dispatch] = React.useReducer(moveTriplesReducer, {
     reviewState: initialState,
     error: null,
   });

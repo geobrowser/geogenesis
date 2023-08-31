@@ -7,7 +7,7 @@ import { useWalletClient } from 'wagmi';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { useReviewState } from '~/core/hooks/use-review-state';
+import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { DeleteTripleAction, ReviewState } from '~/core/types';
@@ -24,11 +24,11 @@ import { Text } from '~/design-system/text';
 
 import { MoveEntityReviewPage } from './move-entity-review-page';
 
-// added the overflow classes up here to make sure mobile devices can scroll for longer content in the Entity Review UI
 export function MoveEntityReview() {
   const { isMoveReviewOpen, setIsMoveReviewOpen } = useMoveEntity();
   return (
     <SlideUp isOpen={isMoveReviewOpen} setIsOpen={setIsMoveReviewOpen}>
+      {/* added the overflow classes up here to make sure mobile devices can scroll for longer content in the Entity Review UI */}
       <div className="h-full overflow-y-auto overscroll-contain">
         <MoveEntityReviewChanges />
       </div>
@@ -43,8 +43,8 @@ function MoveEntityReviewChanges() {
   const spaceTo = spaces.find(space => space.id === spaceIdTo);
   const { triples } = useEntityPageStore();
   const { publish, create, remove } = useActionsStore();
-  const { state: createState, dispatch: createDispatch } = useReviewState();
-  const { state: deleteState, dispatch: deleteDispatch } = useReviewState();
+  const { state: createState, dispatch: createDispatch } = useMoveTriplesState();
+  const { state: deleteState, dispatch: deleteDispatch } = useMoveTriplesState();
 
   const { data: wallet } = useWalletClient(); // user wallet session
 
@@ -136,6 +136,32 @@ function MoveEntityReviewChanges() {
     setIsMoveReviewOpen,
   ]);
 
+  // maps the review state to a background color class (used in the ProgressBar component)
+  const getBgClassByState = (index: number, state: ReviewState) => {
+    let stateValue = 0;
+    switch (state) {
+      case 'idle':
+        stateValue = 0;
+        break;
+      case 'publishing-ipfs':
+        stateValue = 1;
+        break;
+      case 'signing-wallet':
+        stateValue = 2;
+        break;
+      case 'publishing-contract':
+        stateValue = 3;
+        break;
+      case 'publish-complete':
+        stateValue = 4;
+        break;
+      default:
+        stateValue = 0;
+        break;
+    }
+    return state === 'idle' ? 'bg-grey-02' : index <= stateValue ? 'bg-text' : 'bg-grey-02'; // handle the idle case and then the rest
+  };
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -156,6 +182,7 @@ function MoveEntityReviewChanges() {
               actionType="create"
               txState={createState.reviewState}
               handlePublish={handlePublish}
+              getBgClassByState={getBgClassByState}
             />
             <Icon icon="rightArrowLongSmall" color="grey-04" />
             <SpaceMoveCard
@@ -164,6 +191,7 @@ function MoveEntityReviewChanges() {
               actionType="delete"
               txState={deleteState.reviewState}
               handlePublish={handlePublish}
+              getBgClassByState={getBgClassByState}
             />
           </div>
           <div className="flex flex-col gap-1 py-6">
@@ -183,12 +211,14 @@ function SpaceMoveCard({
   actionType,
   txState,
   handlePublish,
+  getBgClassByState,
 }: {
   spaceName: string | undefined; // to satisfiy potentially undefined
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
   txState: ReviewState;
   handlePublish: () => void;
+  getBgClassByState: (index: number, state: ReviewState) => string;
 }) {
   return (
     <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full gap-3">
@@ -209,7 +239,7 @@ function SpaceMoveCard({
       <div className="flex flex-row items-center gap-2 justify-between">
         <StatusMessage txState={txState} handlePublish={handlePublish} />
         <div className="flex flex-row items-center gap-1.5">
-          <ProgressBar txState={txState} />
+          <ProgressBar txState={txState} getBgClassByState={getBgClassByState} />
         </div>
       </div>
     </div>
@@ -245,31 +275,13 @@ function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handl
   );
 }
 
-function ProgressBar({ txState }: { txState: ReviewState }) {
-  const getBgClassByState = (index: number, state: ReviewState) => {
-    let stateValue = 0;
-    switch (state) {
-      case 'idle':
-        stateValue = 0;
-        break;
-      case 'publishing-ipfs':
-        stateValue = 1;
-        break;
-      case 'signing-wallet':
-        stateValue = 2;
-        break;
-      case 'publishing-contract':
-        stateValue = 3;
-        break;
-      case 'publish-complete':
-        stateValue = 4;
-        break;
-      default:
-        stateValue = 0;
-        break;
-    }
-    return state === 'idle' ? 'bg-grey-02' : index <= stateValue ? 'bg-text' : 'bg-grey-02'; // handle the idle case and then the rest
-  };
+function ProgressBar({
+  txState,
+  getBgClassByState,
+}: {
+  txState: ReviewState;
+  getBgClassByState: (index: number, state: ReviewState) => string;
+}) {
   return (
     <div className="flex flex-row items-center gap-1.5">
       {[0, 1, 2, 3].map(index => (
