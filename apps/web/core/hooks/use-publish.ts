@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { WalletClient, useWalletClient } from 'wagmi';
 
-import { Publish, Storage } from '../io';
+import { Storage } from '../io';
 import { Services } from '../services';
 import { Action as IAction, OmitStrict, ReviewState } from '../types';
 import { Action } from '../utils/action';
@@ -15,7 +15,6 @@ interface IPublishOptions {
   onChangePublishState: (newState: ReviewState) => void;
   spaceId: string;
   name: string;
-  onPublish: typeof Publish['publish'];
 }
 
 export function usePublish() {
@@ -31,17 +30,17 @@ export function usePublish() {
    * space with the published actions being flagged as `hasBeenPublished` and run any additional
    * side effects.
    */
-  const publishFn = React.useCallback(
+  const makeProposal = React.useCallback(
     async ({
       actions: actionsToPublish,
       name,
       onChangePublishState,
       spaceId,
-    }: OmitStrict<IPublishOptions, 'onPublish' | 'wallet' | 'storageClient'>) => {
+    }: OmitStrict<IPublishOptions, 'wallet' | 'storageClient'>) => {
       if (!wallet) return;
       if (actionsToPublish.length < 1) return;
 
-      await publishService.publish({
+      await publishService.makeProposal({
         storageClient,
         actions: Action.prepareActionsForPublishing(actionsToPublish),
         name,
@@ -95,6 +94,7 @@ export function usePublish() {
   );
 
   return {
-    publish: publishFn,
+    makeProposal,
+    // @TODO: This should also include APIs for granting and revoking roles
   };
 }

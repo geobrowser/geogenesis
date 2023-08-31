@@ -107,7 +107,7 @@ const ReviewChanges = () => {
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
-  const { publish } = usePublish();
+  const { makeProposal } = usePublish();
   const actions = Action.unpublishedChanges(actionsFromSpace);
   const [data, isLoading] = useChanges(actions, activeSpace);
 
@@ -124,7 +124,7 @@ const ReviewChanges = () => {
     try {
       const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
-      await publish({
+      await makeProposal({
         actions: actionsToPublish,
         spaceId: activeSpace,
         name: proposalName,

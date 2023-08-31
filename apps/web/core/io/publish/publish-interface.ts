@@ -1,10 +1,10 @@
 import { WalletClient } from 'wagmi';
 
 import { Storage } from '../storage';
-import { PublishOptions } from './publish';
+import { MakeProposalOptions } from './publish';
 
 export interface IPublish {
-  publish: (options: PublishOptions) => Promise<void>;
+  makeProposal: (options: MakeProposalOptions) => Promise<void>;
   uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string>;
   getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE'): Promise<string>;
   grantRole(options: { spaceId: string; wallet: WalletClient; role: string; userAddress: string }): Promise<string>;
