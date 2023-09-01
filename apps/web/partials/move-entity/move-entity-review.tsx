@@ -1,19 +1,16 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { batch } from '@legendapp/state';
-import { create } from 'domain';
-import { remove } from 'effect/ReadonlyArray';
 import Image from 'next/legacy/image';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { makeProposal } from '~/core/io/publish';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
 import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
@@ -46,11 +43,11 @@ function MoveEntityReviewChanges() {
   const spaceFrom = spaces.find(space => space.id === spaceIdFrom);
   const spaceTo = spaces.find(space => space.id === spaceIdTo);
   const { triples } = useEntityPageStore();
-  const { create, remove } = useActionsStore();
   const { makeProposal } = usePublish();
   const { state: createState, dispatch: createDispatch } = useMoveTriplesState();
   const { state: deleteState, dispatch: deleteDispatch } = useMoveTriplesState();
   const [firstPublishComplete, setFirstPublishComplete] = React.useState(false); // to allow the user to reenter only the second publish
+  const router = useRouter();
 
   const { data: wallet } = useWalletClient(); // user wallet session
 
@@ -74,8 +71,12 @@ function MoveEntityReviewChanges() {
       }));
     };
 
-    const createProposalName = `Create ${entityId} from ${spaceIdFrom}`;
-    const deleteProposalName = `Delete ${entityId} from ${spaceIdFrom}`;
+    const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${
+      spaceTo?.attributes[SYSTEM_IDS.NAME]
+    }`;
+    const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${
+      spaceFrom?.attributes[SYSTEM_IDS.NAME]
+    }`;
 
     let createActions: CreateTripleAction[] = [];
     let deleteActions: DeleteTripleAction[] = [];
@@ -83,7 +84,7 @@ function MoveEntityReviewChanges() {
     try {
       if (!firstPublishComplete) {
         createActions = onCreateNewTriples();
-
+        console.log('create publish has not run yet. actions:', createActions);
         await makeProposal({
           actions: createActions,
           spaceId: spaceIdTo,
@@ -97,6 +98,7 @@ function MoveEntityReviewChanges() {
       if (e instanceof Error) {
         console.log('error', e.message);
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          createActions = []; // reset the create actions so there aren't duplicates
           createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           return;
         }
@@ -104,10 +106,10 @@ function MoveEntityReviewChanges() {
       }
       return; // Return because the first publish failed -- user will see error state in the UI
     }
-    console.log('create state', createState.reviewState);
+
     try {
       deleteActions = onDeleteTriples();
-      console.log('delete actions', deleteActions);
+      console.log('delete publish flow with actions:', deleteActions);
       await makeProposal({
         actions: deleteActions,
         spaceId: spaceIdFrom,
@@ -119,6 +121,7 @@ function MoveEntityReviewChanges() {
       if (e instanceof Error) {
         console.log('error', e.message);
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+          deleteActions = []; // reset the delete actions so there aren't duplicates when user retries
           deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           return;
         }
@@ -128,34 +131,22 @@ function MoveEntityReviewChanges() {
     }
     // close the review UI after displaying the state messages for 2 seconds
     await sleepWithCallback(() => {
-      if (
-        createState.reviewState !== 'publish-complete' &&
-        createState.reviewState !== 'publishing-contract' &&
-        deleteState.reviewState !== 'publish-complete' &&
-        deleteState.reviewState !== 'publishing-contract'
-      ) {
-        batch(() => {
-          deleteActions.forEach(action => remove(action));
-          createActions.forEach(action => create(action));
-        });
-        setIsMoveReviewOpen(false);
-      }
+      setIsMoveReviewOpen(false);
+      // router.push(`/spaces/${spaceIdTo}/${entityId}`);
     }, 2000);
   }, [
     wallet,
     spaceIdFrom,
     spaceIdTo,
-    entityId,
-    createState.reviewState,
     triples,
+    entityId,
+    spaceTo?.attributes,
+    spaceFrom?.attributes,
     firstPublishComplete,
     makeProposal,
     createDispatch,
     deleteDispatch,
-    deleteState.reviewState,
     setIsMoveReviewOpen,
-    remove,
-    create,
   ]);
 
   // maps the review state to a background color class (used in the ProgressBar component)
