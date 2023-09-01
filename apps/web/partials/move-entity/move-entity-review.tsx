@@ -83,10 +83,9 @@ function MoveEntityReviewChanges() {
     let deleteActions: DeleteTripleAction[] = [];
 
     try {
-      console.log('triples', triples);
       if (!firstPublishComplete) {
         createActions = onCreateNewTriples();
-        console.log('create publish has not run yet. actions:', createActions);
+
         await makeProposal({
           actions: createActions,
           spaceId: spaceIdTo,
@@ -98,7 +97,6 @@ function MoveEntityReviewChanges() {
       }
     } catch (e: unknown) {
       if (e instanceof Error) {
-        console.log('error', e.message);
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
           createActions = []; // reset the create actions so there aren't duplicates
           createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
@@ -111,7 +109,7 @@ function MoveEntityReviewChanges() {
 
     try {
       deleteActions = onDeleteTriples();
-      console.log('delete publish flow with actions:', deleteActions);
+
       await makeProposal({
         actions: deleteActions,
         spaceId: spaceIdFrom,
@@ -121,7 +119,6 @@ function MoveEntityReviewChanges() {
       deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
     } catch (e: unknown) {
       if (e instanceof Error) {
-        console.log('error', e.message);
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
           deleteActions = []; // reset the delete actions so there aren't duplicates when user retries
           deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
