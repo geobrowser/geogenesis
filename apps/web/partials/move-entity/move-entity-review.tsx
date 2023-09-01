@@ -176,7 +176,6 @@ function MoveEntityReviewChanges() {
     return state === 'idle' ? 'bg-grey-02' : index <= stateValue ? 'bg-text' : 'bg-grey-02'; // handle the idle case and then the rest
   };
 
-  console.log('triples', triples);
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
