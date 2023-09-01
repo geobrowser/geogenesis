@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { batch } from '@legendapp/state';
 import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
@@ -6,6 +7,7 @@ import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -47,9 +49,9 @@ function MoveEntityReviewChanges() {
   const { state: deleteState, dispatch: deleteDispatch } = useMoveTriplesState();
   const [firstPublishComplete, setFirstPublishComplete] = React.useState(false); // to allow the user to reenter only the second publish
   const router = useRouter();
+  const { create, remove } = useActionsStore();
 
   const { data: wallet } = useWalletClient(); // user wallet session
-  const entityNameFromTriples = triples[0]?.entityName;
 
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !spaceIdFrom || !spaceIdTo) {
@@ -66,7 +68,7 @@ function MoveEntityReviewChanges() {
     const onCreateNewTriples = (): CreateTripleAction[] => {
       return triples.map(t => ({
         ...t,
-        entityName: entityNameFromTriples,
+
         type: 'createTriple',
         space: spaceIdTo,
       }));
@@ -130,8 +132,8 @@ function MoveEntityReviewChanges() {
     }
     // close the review UI after displaying the state messages for 2 seconds
     await sleepWithCallback(() => {
-      router.push(`/space/${spaceIdTo}`);
       setIsMoveReviewOpen(false);
+      router.push(`/space/${spaceIdTo}/${entityId}`);
     }, 2000);
   }, [
     wallet,
@@ -141,7 +143,6 @@ function MoveEntityReviewChanges() {
     entityId,
     spaceTo?.attributes,
     spaceFrom?.attributes,
-    entityNameFromTriples,
     firstPublishComplete,
     makeProposal,
     createDispatch,
