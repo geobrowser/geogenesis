@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
@@ -50,6 +49,7 @@ function MoveEntityReviewChanges() {
   const router = useRouter();
 
   const { data: wallet } = useWalletClient(); // user wallet session
+  const entityNameFromTriples = triples[0]?.entityName;
 
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !spaceIdFrom || !spaceIdTo) {
@@ -66,6 +66,7 @@ function MoveEntityReviewChanges() {
     const onCreateNewTriples = (): CreateTripleAction[] => {
       return triples.map(t => ({
         ...t,
+        entityName: entityNameFromTriples,
         type: 'createTriple',
         space: spaceIdTo,
       }));
@@ -82,6 +83,7 @@ function MoveEntityReviewChanges() {
     let deleteActions: DeleteTripleAction[] = [];
 
     try {
+      console.log('triples', triples);
       if (!firstPublishComplete) {
         createActions = onCreateNewTriples();
         console.log('create publish has not run yet. actions:', createActions);
@@ -131,8 +133,8 @@ function MoveEntityReviewChanges() {
     }
     // close the review UI after displaying the state messages for 2 seconds
     await sleepWithCallback(() => {
+      router.push(`/space/${spaceIdTo}`);
       setIsMoveReviewOpen(false);
-      // router.push(`/spaces/${spaceIdTo}/${entityId}`);
     }, 2000);
   }, [
     wallet,
@@ -142,10 +144,12 @@ function MoveEntityReviewChanges() {
     entityId,
     spaceTo?.attributes,
     spaceFrom?.attributes,
+    entityNameFromTriples,
     firstPublishComplete,
     makeProposal,
     createDispatch,
     deleteDispatch,
+    router,
     setIsMoveReviewOpen,
   ]);
 
@@ -175,6 +179,7 @@ function MoveEntityReviewChanges() {
     return state === 'idle' ? 'bg-grey-02' : index <= stateValue ? 'bg-text' : 'bg-grey-02'; // handle the idle case and then the rest
   };
 
+  console.log('triples', triples);
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -186,7 +191,7 @@ function MoveEntityReviewChanges() {
           <Button onClick={handlePublish}>Publish and move</Button>
         </div>
       </div>
-      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big">
+      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full ">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch] ">
           <div className="flex flex-row sm:flex-col items-center justify-between gap-4 w-full">
             <SpaceMoveCard
