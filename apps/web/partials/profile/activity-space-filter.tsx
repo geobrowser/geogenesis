@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { revalidatePath } from 'next/cache';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';

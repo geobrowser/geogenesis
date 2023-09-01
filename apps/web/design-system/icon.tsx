@@ -22,6 +22,9 @@ import { Upload } from '~/design-system/icons/upload';
 import type { ColorName } from '~/design-system/theme/colors';
 
 import { BulkEdit } from './icons/bulk-edit';
+import { CheckCircle } from './icons/check-circle';
+import { CheckCircleSmall } from './icons/check-circle-small';
+import { CheckClose } from './icons/check-close';
 import { CheckCloseSmall } from './icons/check-close-small';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { Cog } from './icons/cog';
@@ -43,8 +46,10 @@ import { History } from './icons/history';
 import { Image } from './icons/image';
 import { Member } from './icons/member';
 import { Minus } from './icons/minus';
+import { MoveSpace } from './icons/move-space';
 import { NewTab } from './icons/new-tab';
 import { Plus } from './icons/plus';
+import { RetrySmall } from './icons/retry-small';
 import { Url } from './icons/url';
 import { Wallet } from './icons/wallet';
 
@@ -96,7 +101,12 @@ export type IconName =
   | 'wallet'
   | 'disconnectWallet'
   | 'bulkEdit'
-  | 'member';
+  | 'member'
+  | 'moveSpace'
+  | 'checkCircleSmall'
+  | 'checkCircle'
+  | 'checkClose'
+  | 'retrySmall';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -160,4 +170,9 @@ const icons: Record<IconName, React.ElementType> = {
   wallet: Wallet,
   disconnectWallet: DisconnectWallet,
   member: Member,
+  moveSpace: MoveSpace,
+  checkCircleSmall: CheckCircleSmall,
+  checkCircle: CheckCircle,
+  checkClose: CheckClose,
+  retrySmall: RetrySmall,
 };

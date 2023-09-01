@@ -56,15 +56,20 @@ export function usePublish() {
       // We filter out the actions that are being published from the actionsBySpace. We do this
       // since we need to update the entire state of the space with the published actions and the
       // unpublished actions being merged together.
-      const nonPublishedActions = actionsBySpace[spaceId].filter(a => {
-        switch (a.type) {
-          case 'createTriple':
-          case 'deleteTriple':
-            return !actionsBeingPublished.has(a.id);
-          case 'editTriple':
-            return !actionsBeingPublished.has(a.after.id);
-        }
-      });
+      // If the actionsBySpace[spaceId] is empty, then we return an empty array
+      const nonPublishedActions = actionsBySpace[spaceId]
+        ? actionsBySpace[spaceId].filter(a => {
+            switch (a.type) {
+              case 'createTriple':
+              case 'deleteTriple':
+                return !actionsBeingPublished.has(a.id);
+              case 'editTriple':
+                return !actionsBeingPublished.has(a.after.id);
+              default:
+                return false;
+            }
+          })
+        : [];
 
       const publishedActions = actionsToPublish.map(action => ({
         ...action,
