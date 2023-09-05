@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
@@ -7,7 +6,6 @@ import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -49,8 +47,6 @@ function MoveEntityReviewChanges() {
   const { state: deleteState, dispatch: deleteDispatch } = useMoveTriplesState();
   const [firstPublishComplete, setFirstPublishComplete] = React.useState(false); // to allow the user to reenter only the second publish
   const router = useRouter();
-  const { create, remove } = useActionsStore();
-
   const { data: wallet } = useWalletClient(); // user wallet session
 
   const handlePublish = React.useCallback(async () => {
