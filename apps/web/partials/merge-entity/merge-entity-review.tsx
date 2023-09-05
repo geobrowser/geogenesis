@@ -16,7 +16,8 @@ export function MergeEntityReview() {
 }
 
 function MergeEntityReviewChanges() {
-  const { setIsMergeReviewOpen } = useMergeEntity();
+  const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
+  console.log(`entityIdOne: ${entityIdOne} - entityIdTwo: ${entityIdTwo}`);
   return (
     <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
       <div className="inline-flex items-center gap-4">
