@@ -30,7 +30,7 @@ function MergeEntityReviewChanges() {
   const { subgraph, config } = Services.useServices();
 
   function useEntityById(entityId: string) {
-    const { data: entityTwoData, isLoading: entityTwoDataLoading } = useQuery({
+    const { data: entityTwoData } = useQuery({
       queryKey: ['entity-merge-review', entityIdTwo],
       queryFn: async () => {
         if (!entityIdTwo) return null;
@@ -42,7 +42,9 @@ function MergeEntityReviewChanges() {
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
 
-  const entityTwoTriples = useEntityById(entityIdTwo); // triples from subgraph for second entity @TODO merge with local data since there could be changes
+  //  triples from subgraph for second entity
+  //  @TODO merge with local data since there could be changes
+  const entityTwoTriples = useEntityById(entityIdTwo);
   const { spaces } = useSpaces();
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
   const spaceEntityTwo = spaces.find(space => space.id === entityTwoTriples?.nameTripleSpace);
@@ -64,7 +66,7 @@ function MergeEntityReviewChanges() {
       </div>
       <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full ">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch] ">
-          <div className="flex flex-row sm:flex-col items-center justify-between gap-4 w-full">
+          <div className="grid grid-cols-2 gap-4 w-full">
             <div className="flex flex-col gap-3">
               <Text className="text-bold text-mediumTitle sm:text-smallTitle">
                 {entityOneTriples[0]?.entityName ?? entityIdOne}
@@ -105,3 +107,12 @@ function MergeEntityReviewChanges() {
     </>
   );
 }
+
+/*
+  Next steps:
+    1. build out the triples UI for entityOne and entityTwo
+      - dependent on each other -- if one is selected, the other is deselected
+      - new triples based on this combination -- deep merge if we have arrays of objects
+    2. build out the UI for the new, combined triples
+    3. add the tabs for the editor and review UI
+*/
