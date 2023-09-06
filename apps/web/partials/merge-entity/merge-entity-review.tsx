@@ -1,5 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { isLoading } from '@mobily/ts-belt/dist/types/AsyncData';
 import { useQuery } from '@tanstack/react-query';
+import error from 'next/error';
 import Image from 'next/legacy/image';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
@@ -11,6 +13,8 @@ import { getImagePath } from '~/core/utils/utils';
 import { Button, SquareButton } from '~/design-system/button';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
+
+import { MergeEntityReviewPage } from './merge-entity-review-page';
 
 export function MergeEntityReview() {
   const { isMergeReviewOpen, setIsMergeReviewOpen } = useMergeEntity();
@@ -30,14 +34,21 @@ function MergeEntityReviewChanges() {
   const { subgraph, config } = Services.useServices();
 
   function useEntityById(entityId: string) {
-    const { data: entityTwoData } = useQuery({
+    const {
+      data: entityTwoData,
+      isLoading,
+      error,
+    } = useQuery({
       queryKey: ['entity-merge-review', entityIdTwo],
       queryFn: async () => {
-        if (!entityIdTwo) return null;
-        return await subgraph.fetchEntity({ endpoint: config.subgraph, id: entityIdTwo });
+        if (!entityId) return null;
+        return await subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
       },
     });
-    return entityTwoData;
+    if (!entityTwoData || isLoading || error) {
+      return [];
+    }
+    return [entityTwoData].flatMap((entity => entity?.triples) ?? []);
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
@@ -45,9 +56,10 @@ function MergeEntityReviewChanges() {
   //  triples from subgraph for second entity
   //  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
+
   const { spaces } = useSpaces();
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
-  const spaceEntityTwo = spaces.find(space => space.id === entityTwoTriples?.nameTripleSpace);
+  const spaceEntityTwo = spaces.find(space => space.id === entityTwoTriples[0]?.space);
 
   if (!entityTwoTriples) return <div>Loading...</div>;
   console.log('entity one triples: ', entityOneTriples);
@@ -83,10 +95,11 @@ function MergeEntityReviewChanges() {
                 )}
                 <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
               </div>
+              <MergeEntityReviewPage entityId={entityIdOne} triples={entityOneTriples} />
             </div>
             <div className="flex flex-col gap-3">
               <Text className="text-bold text-mediumTitle sm:text-smallTitle">
-                {entityTwoTriples?.name ?? entityIdTwo}
+                {entityTwoTriples[0]?.entityName ?? entityIdTwo}
               </Text>
               <div className="flex flex-row items-center gap-2">
                 {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
@@ -100,6 +113,7 @@ function MergeEntityReviewChanges() {
                 )}
                 <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
               </div>
+              <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />)
             </div>
           </div>
         </div>
