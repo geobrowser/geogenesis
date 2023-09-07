@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
+import config from 'next/config';
 import Image from 'next/legacy/image';
 
 import * as React from 'react';
@@ -9,6 +10,7 @@ import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
+import { Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -33,13 +35,22 @@ function MergeEntityReviewChanges() {
 
   console.log(`entityIdOne: ${entityIdOne} - entityIdTwo: ${entityIdTwo}`);
   const { subgraph, config } = Services.useServices();
-  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState({});
+  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<Record<string, Triple>>({});
   const [mergedEntityObject, setMergedEntityObject] = React.useState({});
 
-  // @TODO: properly type this to match the data structure
-  const handleCheckboxSelect = (key, value, objectIndex) => {
-    setSelectedEntityKeys({ ...selectedEntityKeys, [key]: value });
-  };
+  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: Triple }) {
+    if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
+      // Deselecting the current selection
+      const newSelectedKeys = { ...selectedEntityKeys };
+      delete newSelectedKeys[attributeId];
+      setSelectedEntityKeys(newSelectedKeys);
+    } else {
+      setSelectedEntityKeys({
+        ...selectedEntityKeys,
+        [attributeId]: selectedTriple,
+      });
+    }
+  }
 
   function useEntityById(entityId: string) {
     const {
@@ -72,6 +83,9 @@ function MergeEntityReviewChanges() {
   if (!entityTwoTriples) return <div>Loading...</div>;
   console.log('entity one triples: ', entityOneTriples);
   console.log('entity two triples: ', entityTwoTriples);
+
+  // this component has a decent amount of repetition that can likely be abstracted after
+  // the functionality is in place
 
   return (
     <>
@@ -110,7 +124,7 @@ function MergeEntityReviewChanges() {
                   <Text className="text-bold text-mediumTitle sm:text-smallTitle">
                     {entityOneTriples[0]?.entityName ?? entityIdOne}
                   </Text>
-                  <div className="flex flex-row items-center gap-2">
+                  <div className="flex flex-row items-center gap-2 pb-6">
                     {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                       <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                         <Image
@@ -122,14 +136,18 @@ function MergeEntityReviewChanges() {
                     )}
                     <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                   </div>
-                  <MergeEntityReviewPage entityId={entityIdOne} triples={entityOneTriples} />
+                  <MergeEntityReviewPage
+                    entityId={entityIdOne}
+                    triples={entityOneTriples}
+                    selectedEntityKeys={selectedEntityKeys}
+                    onSelect={handleCheckboxSelect}
+                  />
                 </div>
                 <div className="flex flex-col gap-3">
                   <Text className="text-bold text-mediumTitle sm:text-smallTitle">
                     {entityTwoTriples[0]?.entityName ?? entityIdTwo}
                   </Text>
-
-                  <div className="flex flex-row items-center gap-2">
+                  <div className="flex flex-row items-center gap-2 pb-6">
                     {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                       <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                         <Image
@@ -141,7 +159,12 @@ function MergeEntityReviewChanges() {
                     )}
                     <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
                   </div>
-                  <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />
+                  <MergeEntityReviewPage
+                    entityId={entityIdTwo}
+                    triples={entityTwoTriples}
+                    selectedEntityKeys={selectedEntityKeys}
+                    onSelect={handleCheckboxSelect}
+                  />
                 </div>
               </div>
             </Tabs.Content>
@@ -151,12 +174,3 @@ function MergeEntityReviewChanges() {
     </>
   );
 }
-
-/*
-  Next steps:
-    1. build out the triples UI for entityOne and entityTwo
-      - dependent on each other -- if one is selected, the other is deselected
-      - new triples based on this combination -- deep merge if we have arrays of objects
-    2. build out the UI for the new, combined triples
-    3. add the tabs for the editor and review UI
-*/

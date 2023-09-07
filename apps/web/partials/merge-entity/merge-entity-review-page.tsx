@@ -1,5 +1,6 @@
 // this is the UI for the rendered Entity description in the Move Entity Review -- it is similar to the -entity-page.tsx comoponents
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import cx from 'classnames';
 
 import { Triple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';
@@ -12,16 +13,16 @@ import { Text } from '~/design-system/text';
 
 import { sortEntityPageTriples } from '../entity-page/entity-page-utils';
 
-// @TODO properly type selectedKeys and onSelect
 interface Props {
   entityId: string;
   triples: Triple[];
-  selectedKeys?: any;
-  onSelect?: any;
+  selectedEntityKeys: Record<string, Triple>;
+  onSelect: (args: { attributeId: string; selectedTriple: Triple }) => void;
 }
 
-// @TODO style the checkboxes / create Checkbox component for design system
-export function MergeEntityReviewPage({ entityId, triples, selectedKeys, onSelect }: Props) {
+//  @TODO style the checkboxes / create Checkbox component for design system
+//  and handle the id checkbox logic similarly to how the triples selection is being done
+export function MergeEntityReviewPage({ entityId, triples, selectedEntityKeys, onSelect }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
   console.log('sorted triples', sortedTriples);
   return (
@@ -40,14 +41,29 @@ export function MergeEntityReviewPage({ entityId, triples, selectedKeys, onSelec
         {entityId}
       </div>
       <div className="flex flex-col">
-        <EntityReviewAttributes entityId={entityId} triples={sortedTriples} />
+        <EntityReviewAttributes
+          entityId={entityId}
+          triples={sortedTriples}
+          selectedEntityKeys={selectedEntityKeys}
+          onSelect={onSelect}
+        />
       </div>
     </div>
   );
 }
 
 // this is the same Entity UI as in the other entity pages
-function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entityId']; triples: Props['triples'] }) {
+function EntityReviewAttributes({
+  entityId,
+  triples,
+  selectedEntityKeys,
+  onSelect,
+}: {
+  entityId: Props['entityId'];
+  triples: Props['triples'];
+  selectedEntityKeys: Props['selectedEntityKeys'];
+  onSelect: Props['onSelect'];
+}) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   const tripleToEditableField = (triple: Triple) => {
@@ -89,14 +105,31 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
         return (
-          <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
+          <div
+            key={`${entityId}-${attributeId}-${index}`}
+            className={cx(
+              selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === entityId
+                ? 'bg-white'
+                : 'bg-grey-01 opacity-70', // check if this is how this is being done in the design
+              'break-words'
+            )}
+          >
             <div className="p-5 border-b border-grey-02">
               <div className="flex flex-row items-center justify-between">
                 <Text as="p" variant="bodySemibold">
                   {triples[0].attributeName || attributeId}
                 </Text>
-                {/* @TODO style checkboxe to match the design */}
-                <input type="checkbox" className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02" />
+                {/* @TODO style checkboxes to match the design */}
+                <input
+                  type="checkbox"
+                  className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
+                  disabled={
+                    selectedEntityKeys[attributeId] &&
+                    (selectedEntityKeys[attributeId].entityId !== entityId ||
+                      selectedEntityKeys[attributeId].value.id !== triples[0].value.id)
+                  }
+                  onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples[0] })}
+                />
               </div>
               <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>
             </div>
