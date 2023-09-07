@@ -17,8 +17,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
-import { useLocalStore } from '~/core/state/local-store';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -293,17 +291,26 @@ function AddAttributeLoading() {
   );
 }
 
-function SchemaAttributes({ type }: { type: SelectedEntityType }) {
+function SchemaAttributes({ type }: { type: ITriple }) {
   const { config } = Services.useServices();
   const merged = useMergedData();
-  const { entities } = useLocalStore();
-  const { create, update } = useActionsStore();
+  const { create, update, allActions } = useActionsStore();
 
   // We want to rerun the query below whenever we change the type id to add or remove attributes
   // from the schema.
-  const localAttributeTriplesForEntityId = entities
-    .find(e => e.id === type.entityId)
-    ?.triples.filter(t => t.attributeId === SYSTEM_IDS.ATTRIBUTES)
+  //
+  // We need to track the deleted triples as well in order to re-render the list of attributes.
+  const locallyChangedAttributeTriplesForTypeEntityId = allActions
+    .map(a => {
+      switch (a.type) {
+        case 'createTriple':
+        case 'deleteTriple':
+          return a;
+        case 'editTriple':
+          return a.after;
+      }
+    })
+    .filter(t => t.attributeId === SYSTEM_IDS.ATTRIBUTES && t.entityId === type.entityId)
     // We only want to re-fetch when the actual value id changes. The value.value will be
     // optimistically updated in the UI so we don't need to re-render to get the latest name.
     .map(t => t.value.id);
@@ -313,7 +320,7 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
     queryKey: [
       'table-block-type-schema-configuration-attributes-list',
       type.entityId,
-      localAttributeTriplesForEntityId,
+      locallyChangedAttributeTriplesForTypeEntityId,
     ],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
@@ -342,14 +349,6 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
       return maybeAttributeEntities.filter(Entity.isNonNull);
     },
   });
-
-  // TODO: How we do we get the locally added attributes?
-  // Couple options:
-  // 1. Somehow re-run the above useQuery whenever we get new local data
-  // 2. Only run the above query on mount, then merge it with any local attributes
-  //    whenever we get new local data
-  //
-  // #1 is probably the most correct way, but it will result in a loading state briefly.
 
   const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
     if (!entity.nameTripleSpace) {
@@ -412,7 +411,7 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
                   <Cog color="grey-04" />
                 </div>
               )}
-              <AttributeRowContextMenu />
+              <AttributeRowContextMenu type={type} nameTriple={nameTripleForAttribute} />
             </div>
           );
         })}
@@ -421,8 +420,30 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
   );
 }
 
-function AttributeRowContextMenu() {
+function AttributeRowContextMenu({ nameTriple, type }: { nameTriple?: ITriple; type: ITriple }) {
+  const { remove } = useActionsStore();
   const [isOpen, setIsOpen] = React.useState(false);
+
+  const onRemoveAttribute = () => {
+    if (!nameTriple) {
+      return;
+    }
+
+    remove(
+      Triple.withId({
+        attributeId: SYSTEM_IDS.ATTRIBUTES,
+        attributeName: 'Attributes',
+        entityId: type.entityId,
+        entityName: type.entityName,
+        space: type.space,
+        value: {
+          type: 'entity',
+          id: nameTriple.entityId,
+          name: nameTriple.entityName,
+        },
+      })
+    );
+  };
 
   return (
     <Menu
@@ -432,7 +453,7 @@ function AttributeRowContextMenu() {
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onRemoveAttribute} className="inline-flex items-center gap-2 px-3 py-2">
           <Trash /> <span>Remove attribute</span>
         </button>
       </MenuItem>
