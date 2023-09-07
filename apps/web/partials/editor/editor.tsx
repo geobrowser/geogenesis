@@ -95,8 +95,8 @@ export const Editor = React.memo(function Editor({
   //
   // We only want to render the editor once the editorJson has been hydrated with local data.
   // We shouldn't re-render the editor every time the editorJson changes as that would result
-  // in a janky UX. We let the editor handle block state internally while each block handles
-  // it's own state.
+  // in a janky UX. We let the editor handle block ordering state while each block handles it's
+  // own state.
   //
   // We do content hydration here instead of in useEditor as re-running useEditor will result
   // in completely remounting the entire editor. This will cause all tables to re-fetch data
@@ -110,8 +110,12 @@ export const Editor = React.memo(function Editor({
       editor?.commands.setContent(editorJson);
     });
 
-    // commands is not memoized correctly by tiptap, so we need to disable the rule, else the
+    // Commands is not memoized correctly by tiptap, so we need to disable the rule, else the
     // effect will run infinitely.
+    //
+    // We shouldn't re-render the editor every time the editorJson changes as that would result
+    // in a janky UX. We let the editor handle block ordering state while each block handles it's
+    // own state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
