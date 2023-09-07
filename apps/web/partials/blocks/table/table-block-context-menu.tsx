@@ -69,13 +69,10 @@ function useOptimisticAttributes({
   const onAddAttribute = (attribute: IEntity) => {
     // Should be find-or-create (?)
     // 1.If result exists
-    //    1a. Set selected result in some state as "SelectedAttribute"
     // 2. If result does not exist
     //    2a. Create it with name and type: Attribute in existing space
     //    2b. Set created entity in some state as "SelectedAttribute"
     //    2c. Set the Relation Value Type triple as whatever is selected
-    // 3. When "+ Add" is clicked, read from state and add a new triple
-    //    to the type with attribute: Attributes and value.id: SelectedAttribute.id
     //
     // Q: What do we do with the type selector?
     // A: If we're using an existing attribute it should be pre-filled with the
@@ -156,6 +153,8 @@ function useOptimisticAttributes({
     },
   });
 
+  // Update the modal state with the initial data for the attributes. We update this modal state optimistically
+  // when users add or remove attributes.
   React.useEffect(() => {
     optimisticAttributes$.set(data ?? []);
   }, [data]);
