@@ -33,12 +33,14 @@ import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Date } from '~/design-system/icons/date';
+import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
 import { Image as ImageIcon } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
+import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
 import { Input } from '~/design-system/input';
-import { Menu } from '~/design-system/menu';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
 import { TextButton } from '~/design-system/text-button';
@@ -65,13 +67,21 @@ export function TableBlockContextMenu() {
       trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
       className="max-w-[180px] bg-white"
     >
-      <div>
-        <button className="inline-flex items-center gap-2 px-3 py-2 text-button text-grey-04 hover:bg-bg hover:text-text">
+      <MenuItem>
+        <button className="inline-flex items-center gap-2 px-3 py-2">
           <Copy /> <span>Copy view ID</span>
         </button>
-      </div>
+      </MenuItem>
       {isEditing && (
         <TableBlockSchemaConfigurationDialog
+          trigger={
+            <MenuItem>
+              <div className="inline-flex items-center gap-2 px-3 py-2">
+                <FilteredTableView />
+                <span className="text-button">Edit type schema</span>
+              </div>
+            </MenuItem>
+          }
           content={
             <div className="flex flex-col gap-6 p-4">
               <div className="flex flex-col gap-2">
@@ -402,14 +412,31 @@ function SchemaAttributes({ type }: { type: SelectedEntityType }) {
                   <Cog color="grey-04" />
                 </div>
               )}
-              <div>
-                <Context color="grey-04" />
-              </div>
+              <AttributeRowContextMenu />
             </div>
           );
         })}
       </div>
     </div>
+  );
+}
+
+function AttributeRowContextMenu() {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  return (
+    <Menu
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      trigger={<Context color="grey-04" />}
+      className="max-w-[180px] bg-white"
+    >
+      <MenuItem>
+        <button className="inline-flex items-center gap-2 px-3 py-2">
+          <Trash /> <span>Remove attribute</span>
+        </button>
+      </MenuItem>
+    </Menu>
   );
 }
 

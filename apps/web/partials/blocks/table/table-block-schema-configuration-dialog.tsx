@@ -3,24 +3,18 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
-
 const MotionContent = motion(Content);
 const MotionOverlay = motion(Overlay);
 
 interface Props {
+  trigger: React.ReactNode;
   content: React.ReactNode;
 }
 
 export function TableBlockSchemaConfigurationDialog(props: Props) {
   return (
     <Root>
-      <Trigger asChild>
-        <button className="inline-flex w-full items-center gap-2 px-3 py-2 text-grey-04 transition-colors duration-75 hover:bg-bg hover:text-text">
-          <FilteredTableView />
-          <span className="text-button">Edit type schema</span>
-        </button>
-      </Trigger>
+      <Trigger className="w-full">{props.trigger}</Trigger>
 
       <Portal>
         <MotionOverlay
