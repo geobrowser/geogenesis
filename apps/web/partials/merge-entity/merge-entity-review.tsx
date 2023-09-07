@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
 
@@ -85,44 +86,66 @@ function MergeEntityReviewChanges() {
       </div>
       <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
-          <div className="grid grid-cols-2 gap-4 w-full">
-            <div className="flex flex-col gap-3">
-              <Text className="text-bold text-mediumTitle sm:text-smallTitle">
-                {entityOneTriples[0]?.entityName ?? entityIdOne}
-              </Text>
-              <div className="flex flex-row items-center gap-2">
-                {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                  <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
-                    <Image
-                      src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                      layout="fill"
-                      objectFit="cover"
-                    />
+          <Tabs.Root defaultValue="entityMergeSelect">
+            <Tabs.List
+              className="flex flex-row gap-6 border-b border-grey-02 pb-2"
+              aria-label="Select entities to merge and preview changes"
+            >
+              <Tabs.Trigger
+                className="data-[state=active]:text-text text-grey-04 text-quoteMedium"
+                value="entityMergeSelect"
+              >
+                Select what to merge
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                className="data-[state=active]:text-text text-grey-04 text-quoteMedium"
+                value="entityMergePreview"
+              >
+                Preview entity
+              </Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content className="TabsContent" value="entityMergeSelect">
+              <div className="grid grid-cols-2 gap-4 w-full pt-10">
+                <div className="flex flex-col gap-3">
+                  <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    {entityOneTriples[0]?.entityName ?? entityIdOne}
+                  </Text>
+                  <div className="flex flex-row items-center gap-2">
+                    {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <Image
+                          src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
+                          layout="fill"
+                          objectFit="cover"
+                        />
+                      </div>
+                    )}
+                    <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                   </div>
-                )}
-                <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
-              </div>
-              <MergeEntityReviewPage entityId={entityIdOne} triples={entityOneTriples} />
-            </div>
-            <div className="flex flex-col gap-3">
-              <Text className="text-bold text-mediumTitle sm:text-smallTitle">
-                {entityTwoTriples[0]?.entityName ?? entityIdTwo}
-              </Text>
-              <div className="flex flex-row items-center gap-2">
-                {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                  <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
-                    <Image
-                      src={getImagePath(spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                      layout="fill"
-                      objectFit="cover"
-                    />
+                  <MergeEntityReviewPage entityId={entityIdOne} triples={entityOneTriples} />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    {entityTwoTriples[0]?.entityName ?? entityIdTwo}
+                  </Text>
+
+                  <div className="flex flex-row items-center gap-2">
+                    {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <Image
+                          src={getImagePath(spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
+                          layout="fill"
+                          objectFit="cover"
+                        />
+                      </div>
+                    )}
+                    <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
                   </div>
-                )}
-                <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
+                  <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />
+                </div>
               </div>
-              <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />
-            </div>
-          </div>
+            </Tabs.Content>
+          </Tabs.Root>
         </div>
       </div>
     </>
