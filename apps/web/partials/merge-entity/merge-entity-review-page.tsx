@@ -12,22 +12,34 @@ import { Text } from '~/design-system/text';
 
 import { sortEntityPageTriples } from '../entity-page/entity-page-utils';
 
+// @TODO properly type selectedKeys and onSelect
 interface Props {
   entityId: string;
   triples: Triple[];
+  selectedKeys?: any;
+  onSelect?: any;
 }
 
-export function MergeEntityReviewPage({ entityId, triples }: Props) {
+// @TODO style the checkboxes / create Checkbox component for design system
+export function MergeEntityReviewPage({ entityId, triples, selectedKeys, onSelect }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
+  console.log('sorted triples', sortedTriples);
   return (
-    <div className="rounded border border-grey-02 shadow-button p-5">
-      <div className="pb-6">
-        <Text as="p" variant="bodySemibold">
-          Entity ID
-        </Text>
+    <div className="rounded border border-grey-02 shadow-button">
+      <div className="p-5 pb-6 border-b border-grey-02">
+        <div className="flex flex-row items-center justify-between">
+          <Text as="p" variant="bodySemibold">
+            Entity ID
+          </Text>
+          <div className="flex flex-row items-center gap-2">
+            <Text variant="metadataMedium">Merge using this ID</Text>
+            {/* @TODO style checkboxe to match the design */}
+            <input type="checkbox" className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02" />
+          </div>
+        </div>
         {entityId}
       </div>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col">
         <EntityReviewAttributes entityId={entityId} triples={sortedTriples} />
       </div>
     </div>
@@ -78,10 +90,16 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {triples[0].attributeName || attributeId}
-            </Text>
-            <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
+            <div className="p-5 border-b border-grey-02">
+              <div className="flex flex-row items-center justify-between">
+                <Text as="p" variant="bodySemibold">
+                  {triples[0].attributeName || attributeId}
+                </Text>
+                {/* @TODO style checkboxe to match the design */}
+                <input type="checkbox" className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02" />
+              </div>
+              <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>
+            </div>
           </div>
         );
       })}

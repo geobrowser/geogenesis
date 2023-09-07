@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { isLoading } from '@mobily/ts-belt/dist/types/AsyncData';
 import { useQuery } from '@tanstack/react-query';
-import error from 'next/error';
 import Image from 'next/legacy/image';
+
+import * as React from 'react';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -32,6 +32,13 @@ function MergeEntityReviewChanges() {
 
   console.log(`entityIdOne: ${entityIdOne} - entityIdTwo: ${entityIdTwo}`);
   const { subgraph, config } = Services.useServices();
+  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState({});
+  const [mergedEntityObject, setMergedEntityObject] = React.useState({});
+
+  // @TODO: properly type this to match the data structure
+  const handleCheckboxSelect = (key, value, objectIndex) => {
+    setSelectedEntityKeys({ ...selectedEntityKeys, [key]: value });
+  };
 
   function useEntityById(entityId: string) {
     const {
@@ -76,8 +83,8 @@ function MergeEntityReviewChanges() {
           <Button onClick={() => console.log('review')}>Review</Button>
         </div>
       </div>
-      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full ">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch] ">
+      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full">
+        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           <div className="grid grid-cols-2 gap-4 w-full">
             <div className="flex flex-col gap-3">
               <Text className="text-bold text-mediumTitle sm:text-smallTitle">
@@ -113,7 +120,7 @@ function MergeEntityReviewChanges() {
                 )}
                 <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
               </div>
-              <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />)
+              <MergeEntityReviewPage entityId={entityIdTwo} triples={entityTwoTriples} />
             </div>
           </div>
         </div>
