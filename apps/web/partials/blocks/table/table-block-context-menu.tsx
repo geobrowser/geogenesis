@@ -45,6 +45,61 @@ import { TextButton } from '~/design-system/text-button';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
+function useOptimisticAttributes({ entityId }: { entityId: string }) {
+  const merged = useMergedData();
+  const { config } = Services.useServices();
+
+  // We keep track of the attributes in local state in order to quickly render
+  // the changes the user has made to the schema. Otherwise there will be loading
+  // states for several actions which will make the UI feel slow.
+  const [optimisticAttributes, setOptimisticAttributes] = React.useState<IEntity[]>([]);
+
+  const onAddAttribute = (attribute: IEntity) => {
+    setOptimisticAttributes([...optimisticAttributes, attribute]);
+  };
+
+  const onRemoveAttribute = (attribute: IEntity) => {
+    setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
+  };
+
+  useQuery({
+    // suspense: true,
+    queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
+    queryFn: async () => {
+      // Fetch the triples representing the Attributes for the type
+      const attributeTriples = await merged.fetchTriples({
+        endpoint: config.subgraph,
+        query: '',
+        first: 100,
+        skip: 0,
+        filter: [
+          {
+            field: 'entity-id',
+            value: entityId,
+          },
+          {
+            field: 'attribute-id',
+            value: SYSTEM_IDS.ATTRIBUTES,
+          },
+        ],
+      });
+
+      // Fetch the the entities for each of the Attribute in the type
+      const maybeAttributeEntities = await Promise.all(
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
+      );
+
+      setOptimisticAttributes(maybeAttributeEntities.filter(Entity.isNonNull));
+    },
+  });
+
+  return {
+    optimisticAttributes,
+    onAddAttribute,
+    onRemoveAttribute,
+  };
+}
+
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId } = useTableBlock();
@@ -53,6 +108,10 @@ export function TableBlockContextMenu() {
 
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === spaceId);
+
+  const { optimisticAttributes, onAddAttribute, onRemoveAttribute } = useOptimisticAttributes({
+    entityId: type.entityId,
+  });
 
   return (
     <Menu
@@ -100,12 +159,16 @@ export function TableBlockContextMenu() {
               </div>
 
               <React.Suspense fallback={<AddAttributeLoading />}>
-                <AddAttribute type={type} />
+                <AddAttribute type={type} onAddAttribute={onAddAttribute} />
               </React.Suspense>
 
               <ErrorBoundary fallback={<p>Something went wrong...</p>}>
                 <React.Suspense fallback={<p>TODO loading spinner...</p>}>
-                  <SchemaAttributes type={type} />
+                  <SchemaAttributes
+                    attributes={optimisticAttributes}
+                    type={type}
+                    onRemoveAttribute={onRemoveAttribute}
+                  />
                 </React.Suspense>
               </ErrorBoundary>
             </div>
@@ -133,7 +196,7 @@ const resultsListActionBarStyles = cva(
   }
 );
 
-function AddAttribute({ type }: { type: ITriple }) {
+function AddAttribute({ type, onAddAttribute }: { type: ITriple; onAddAttribute: (attribute: IEntity) => void }) {
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
   });
@@ -161,7 +224,7 @@ function AddAttribute({ type }: { type: ITriple }) {
       }),
   });
 
-  const onSelect = (result: { id: string; name: string | null }) => {
+  const onSelect = (result: IEntity) => {
     // Should be find-or-create (?)
     // 1.If result exists
     //    1a. Set selected result in some state as "SelectedAttribute"
@@ -195,6 +258,7 @@ function AddAttribute({ type }: { type: ITriple }) {
     );
 
     autocomplete.onQueryChange('');
+    onAddAttribute(result);
   };
 
   return (
@@ -291,64 +355,16 @@ function AddAttributeLoading() {
   );
 }
 
-function SchemaAttributes({ type }: { type: ITriple }) {
-  const { config } = Services.useServices();
-  const merged = useMergedData();
-  const { create, update, allActions } = useActionsStore();
-
-  // We want to rerun the query below whenever we change the type id to add or remove attributes
-  // from the schema.
-  //
-  // We need to track the deleted triples as well in order to re-render the list of attributes.
-  const locallyChangedAttributeTriplesForTypeEntityId = allActions
-    .map(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a;
-        case 'editTriple':
-          return a.after;
-      }
-    })
-    .filter(t => t.attributeId === SYSTEM_IDS.ATTRIBUTES && t.entityId === type.entityId)
-    // We only want to re-fetch when the actual value id changes. The value.value will be
-    // optimistically updated in the UI so we don't need to re-render to get the latest name.
-    .map(t => t.value.id);
-
-  const { data: attributeEntitiesForType } = useQuery({
-    suspense: true,
-    queryKey: [
-      'table-block-type-schema-configuration-attributes-list',
-      type.entityId,
-      locallyChangedAttributeTriplesForTypeEntityId,
-    ],
-    queryFn: async () => {
-      // Fetch the triples representing the Attributes for the type
-      const attributeTriples = await merged.fetchTriples({
-        endpoint: config.subgraph,
-        query: '',
-        first: 100,
-        skip: 0,
-        filter: [
-          {
-            field: 'entity-id',
-            value: type.entityId,
-          },
-          {
-            field: 'attribute-id',
-            value: SYSTEM_IDS.ATTRIBUTES,
-          },
-        ],
-      });
-
-      // Fetch the the entities for each of the Attribute in the type
-      const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
-      );
-
-      return maybeAttributeEntities.filter(Entity.isNonNull);
-    },
-  });
+function SchemaAttributes({
+  type,
+  onRemoveAttribute,
+  attributes,
+}: {
+  type: ITriple;
+  onRemoveAttribute: (attribute: IEntity) => void;
+  attributes: IEntity[];
+}) {
+  const { create, update } = useActionsStore();
 
   const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
     if (!entity.nameTripleSpace) {
@@ -391,7 +407,7 @@ function SchemaAttributes({ type }: { type: ITriple }) {
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {attributeEntitiesForType?.map(entity => {
+        {attributes?.map(entity => {
           const valueTypeId: ValueType | undefined = entity.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)
             ?.value.id;
 
@@ -411,7 +427,11 @@ function SchemaAttributes({ type }: { type: ITriple }) {
                   <Cog color="grey-04" />
                 </div>
               )}
-              <AttributeRowContextMenu type={type} nameTriple={nameTripleForAttribute} />
+              <AttributeRowContextMenu
+                type={type}
+                nameTriple={nameTripleForAttribute}
+                onRemoveAttribute={() => onRemoveAttribute(entity)}
+              />
             </div>
           );
         })}
@@ -420,11 +440,19 @@ function SchemaAttributes({ type }: { type: ITriple }) {
   );
 }
 
-function AttributeRowContextMenu({ nameTriple, type }: { nameTriple?: ITriple; type: ITriple }) {
+function AttributeRowContextMenu({
+  nameTriple,
+  type,
+  onRemoveAttribute,
+}: {
+  nameTriple?: ITriple;
+  type: ITriple;
+  onRemoveAttribute: () => void;
+}) {
   const { remove } = useActionsStore();
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const onRemoveAttribute = () => {
+  const onRemove = () => {
     if (!nameTriple) {
       return;
     }
@@ -443,6 +471,8 @@ function AttributeRowContextMenu({ nameTriple, type }: { nameTriple?: ITriple; t
         },
       })
     );
+
+    onRemoveAttribute();
   };
 
   return (
@@ -453,7 +483,7 @@ function AttributeRowContextMenu({ nameTriple, type }: { nameTriple?: ITriple; t
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button onClick={onRemoveAttribute} className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onRemove} className="inline-flex items-center gap-2 px-3 py-2">
           <Trash /> <span>Remove attribute</span>
         </button>
       </MenuItem>
