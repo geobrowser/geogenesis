@@ -1,12 +1,13 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { observable } from '@legendapp/state';
+import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/legacy/image';
 import pluralize from 'pluralize';
-import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
@@ -45,25 +46,87 @@ import { TextButton } from '~/design-system/text-button';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
-function useOptimisticAttributes({ entityId }: { entityId: string }) {
+const optimisticAttributes$ = observable<IEntity[]>([]);
+
+function useOptimisticAttributes({
+  entityId,
+  entityName,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  spaceId: string;
+}) {
   const merged = useMergedData();
   const { config } = Services.useServices();
+  const { create, remove } = useActionsStore();
 
   // We keep track of the attributes in local state in order to quickly render
   // the changes the user has made to the schema. Otherwise there will be loading
   // states for several actions which will make the UI feel slow.
-  const [optimisticAttributes, setOptimisticAttributes] = React.useState<IEntity[]>([]);
+  // const [optimisticAttributes, setOptimisticAttributes] = React.useState<IEntity[]>([]);
 
   const onAddAttribute = (attribute: IEntity) => {
-    setOptimisticAttributes([...optimisticAttributes, attribute]);
+    // Should be find-or-create (?)
+    // 1.If result exists
+    //    1a. Set selected result in some state as "SelectedAttribute"
+    // 2. If result does not exist
+    //    2a. Create it with name and type: Attribute in existing space
+    //    2b. Set created entity in some state as "SelectedAttribute"
+    //    2c. Set the Relation Value Type triple as whatever is selected
+    // 3. When "+ Add" is clicked, read from state and add a new triple
+    //    to the type with attribute: Attributes and value.id: SelectedAttribute.id
+    //
+    // Q: What do we do with the type selector?
+    // A: If we're using an existing attribute it should be pre-filled with the
+    //    Relation Value Type triple if it exists.
+    //        If not allow the user to select a type (?) (this will add the RVT triple)
+    //          How will migrations work if users can change the type?
+    //            Should it only be changeable if it's a local attribute?
+
+    create(
+      Triple.withId({
+        entityId: entityId,
+        entityName: attribute.name,
+        attributeId: SYSTEM_IDS.ATTRIBUTES,
+        attributeName: 'Attributes',
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: attribute.id,
+          name: attribute.name,
+        },
+      })
+    );
+
+    optimisticAttributes$.set([...optimisticAttributes$.get(), attribute]);
   };
 
-  const onRemoveAttribute = (attribute: IEntity) => {
-    setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
+  const onRemoveAttribute = (attribute: IEntity, nameTriple?: ITriple) => {
+    if (!nameTriple) {
+      return;
+    }
+
+    remove(
+      Triple.withId({
+        attributeId: SYSTEM_IDS.ATTRIBUTES,
+        attributeName: 'Attributes',
+        entityId: entityId,
+        entityName: entityName,
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: nameTriple.entityId,
+          name: nameTriple.entityName,
+        },
+      })
+    );
+
+    optimisticAttributes$.set(optimisticAttributes$.get().filter(a => a.id !== attribute.id));
   };
 
-  useQuery({
-    // suspense: true,
+  const { data } = useQuery({
+    suspense: true,
     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
@@ -89,9 +152,15 @@ function useOptimisticAttributes({ entityId }: { entityId: string }) {
         attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
       );
 
-      setOptimisticAttributes(maybeAttributeEntities.filter(Entity.isNonNull));
+      return maybeAttributeEntities.filter(Entity.isNonNull);
     },
   });
+
+  React.useEffect(() => {
+    optimisticAttributes$.set(data ?? []);
+  }, [data]);
+
+  const optimisticAttributes = useSelector<IEntity[]>(optimisticAttributes$);
 
   return {
     optimisticAttributes,
@@ -107,11 +176,7 @@ export function TableBlockContextMenu() {
   const isEditing = useUserIsEditing(spaceId);
 
   const { spaces } = useSpaces();
-  const space = spaces.find(s => s.id === spaceId);
-
-  const { optimisticAttributes, onAddAttribute, onRemoveAttribute } = useOptimisticAttributes({
-    entityId: type.entityId,
-  });
+  const space = spaces.find(s => s.id === type.space);
 
   return (
     <Menu
@@ -159,23 +224,27 @@ export function TableBlockContextMenu() {
               </div>
 
               <React.Suspense fallback={<AddAttributeLoading />}>
-                <AddAttribute type={type} onAddAttribute={onAddAttribute} />
+                <AddAttribute />
+                <SchemaAttributes />
               </React.Suspense>
-
-              <ErrorBoundary fallback={<p>Something went wrong...</p>}>
-                <React.Suspense fallback={<p>TODO loading spinner...</p>}>
-                  <SchemaAttributes
-                    attributes={optimisticAttributes}
-                    type={type}
-                    onRemoveAttribute={onRemoveAttribute}
-                  />
-                </React.Suspense>
-              </ErrorBoundary>
             </div>
           }
         />
       )}
     </Menu>
+  );
+}
+
+function AddAttributeLoading() {
+  return (
+    <div className="flex flex-col gap-1">
+      <Skeleton className="h-7 w-24" />
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-9 w-14" />
+        <Skeleton className="h-9 w-[400px]" />
+        <Skeleton className="h-9 w-[76px]" />
+      </div>
+    </div>
   );
 }
 
@@ -196,67 +265,22 @@ const resultsListActionBarStyles = cva(
   }
 );
 
-function AddAttribute({ type, onAddAttribute }: { type: ITriple; onAddAttribute: (attribute: IEntity) => void }) {
+function AddAttribute() {
+  const { type } = useTableBlock();
+
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
   });
 
-  const { config } = Services.useServices();
-  const merged = useMergedData();
   const { spaces } = useSpaces();
-  const { create } = useActionsStore();
 
-  const { data: attributeTriple } = useQuery({
-    suspense: true,
-    queryKey: ['table-block-type-schema-configuration-add-attribute', type.entityId],
-    queryFn: () =>
-      merged.fetchTriples({
-        endpoint: config.subgraph,
-        query: '',
-        first: 100,
-        skip: 0,
-        filter: [
-          {
-            field: 'entity-id',
-            value: type.entityId,
-          },
-        ],
-      }),
+  const { optimisticAttributes, onAddAttribute } = useOptimisticAttributes({
+    entityId: type.entityId,
+    entityName: type.entityName,
+    spaceId: type.space,
   });
 
   const onSelect = (result: IEntity) => {
-    // Should be find-or-create (?)
-    // 1.If result exists
-    //    1a. Set selected result in some state as "SelectedAttribute"
-    // 2. If result does not exist
-    //    2a. Create it with name and type: Attribute in existing space
-    //    2b. Set created entity in some state as "SelectedAttribute"
-    //    2c. Set the Relation Value Type triple as whatever is selected
-    // 3. When "+ Add" is clicked, read from state and add a new triple
-    //    to the type with attribute: Attributes and value.id: SelectedAttribute.id
-    //
-    // Q: What do we do with the type selector?
-    // A: If we're using an existing attribute it should be pre-filled with the
-    //    Relation Value Type triple if it exists.
-    //        If not allow the user to select a type (?) (this will add the RVT triple)
-    //          How will migrations work if users can change the type?
-    //            Should it only be changeable if it's a local attribute?
-
-    create(
-      Triple.withId({
-        entityId: type.entityId,
-        entityName: result.name,
-        attributeId: SYSTEM_IDS.ATTRIBUTES,
-        attributeName: 'Attributes',
-        space: type.space,
-        value: {
-          type: 'entity',
-          id: result.id,
-          name: result.name,
-        },
-      })
-    );
-
     autocomplete.onQueryChange('');
     onAddAttribute(result);
   };
@@ -286,8 +310,7 @@ function AddAttribute({ type, onAddAttribute }: { type: ITriple; onAddAttribute:
                     <ResultContent
                       key={result.id}
                       onClick={() => onSelect(result)}
-                      // @TODO: Need to pull in all attributes with local data to check if they're already selected
-                      // alreadySelected={entityItemIdsSet.has(result.id)}
+                      alreadySelected={optimisticAttributes.map(a => a.id).includes(result.id)}
                       result={result}
                       spaces={spaces}
                     />
@@ -324,13 +347,7 @@ function AddAttribute({ type, onAddAttribute }: { type: ITriple; onAddAttribute:
                   )}
                 </AnimatePresence>
                 <div className="flex items-baseline gap-3">
-                  <TextButton
-                    onClick={() => {
-                      //
-                    }}
-                  >
-                    Create new attribute
-                  </TextButton>
+                  <TextButton>Create new attribute</TextButton>
                 </div>
               </div>
             </ResizableContainer>
@@ -341,30 +358,15 @@ function AddAttribute({ type, onAddAttribute }: { type: ITriple; onAddAttribute:
   );
 }
 
-function AddAttributeLoading() {
-  return (
-    <div className="flex flex-col gap-1">
-      <Skeleton className="h-7 w-24" />
-
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-9 w-14" />
-        <Skeleton className="h-9 w-[400px]" />
-        <Skeleton className="h-9 w-[76px]" />
-      </div>
-    </div>
-  );
-}
-
-function SchemaAttributes({
-  type,
-  onRemoveAttribute,
-  attributes,
-}: {
-  type: ITriple;
-  onRemoveAttribute: (attribute: IEntity) => void;
-  attributes: IEntity[];
-}) {
+function SchemaAttributes() {
+  const { type } = useTableBlock();
   const { create, update } = useActionsStore();
+
+  const { optimisticAttributes: attributes, onRemoveAttribute } = useOptimisticAttributes({
+    entityId: type.entityId,
+    entityName: type.entityName,
+    spaceId: type.space,
+  });
 
   const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
     if (!entity.nameTripleSpace) {
@@ -427,11 +429,7 @@ function SchemaAttributes({
                   <Cog color="grey-04" />
                 </div>
               )}
-              <AttributeRowContextMenu
-                type={type}
-                nameTriple={nameTripleForAttribute}
-                onRemoveAttribute={() => onRemoveAttribute(entity)}
-              />
+              <AttributeRowContextMenu onRemoveAttribute={() => onRemoveAttribute(entity, nameTripleForAttribute)} />
             </div>
           );
         })}
@@ -440,40 +438,8 @@ function SchemaAttributes({
   );
 }
 
-function AttributeRowContextMenu({
-  nameTriple,
-  type,
-  onRemoveAttribute,
-}: {
-  nameTriple?: ITriple;
-  type: ITriple;
-  onRemoveAttribute: () => void;
-}) {
-  const { remove } = useActionsStore();
+function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
   const [isOpen, setIsOpen] = React.useState(false);
-
-  const onRemove = () => {
-    if (!nameTriple) {
-      return;
-    }
-
-    remove(
-      Triple.withId({
-        attributeId: SYSTEM_IDS.ATTRIBUTES,
-        attributeName: 'Attributes',
-        entityId: type.entityId,
-        entityName: type.entityName,
-        space: type.space,
-        value: {
-          type: 'entity',
-          id: nameTriple.entityId,
-          name: nameTriple.entityName,
-        },
-      })
-    );
-
-    onRemoveAttribute();
-  };
 
   return (
     <Menu
@@ -483,7 +449,7 @@ function AttributeRowContextMenu({
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button onClick={onRemove} className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onRemoveAttribute} className="inline-flex items-center gap-2 px-3 py-2">
           <Trash /> <span>Remove attribute</span>
         </button>
       </MenuItem>
