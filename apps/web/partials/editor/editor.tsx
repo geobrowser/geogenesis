@@ -94,18 +94,29 @@ export const Editor = React.memo(function Editor({
   //
   // We only want to render the editor once the editorJson has been hydrated with local data.
   // We shouldn't re-render the editor every time the editorJson changes as that would result
-  // in a janky UX. We let the editor handle block state internally while each block handles
-  // it's own state.
+  // in a janky UX. We let the editor handle block ordering state while each block handles it's
+  // own state.
+  //
+  // We do content hydration here instead of in useEditor as re-running useEditor will result
+  // in completely remounting the entire editor. This will cause all tables to re-fetch data
+  // and might result in some runtime DOM errors if the update happens out-of-sync with React.
+  const hydrated = useHydrated();
+
   React.useEffect(() => {
     // The timeout is needed to workaround a react error in tiptap
     // https://github.com/ueberdosis/tiptap/issues/3764#issuecomment-1546629928
     setTimeout(() => {
       editor?.commands.setContent(editorJson);
     });
-    // commands is not memoized correctly by tiptap, so we need to disable the rule, else the
+
+    // Commands is not memoized correctly by tiptap, so we need to disable the rule, else the
     // effect will run infinitely.
+    //
+    // We shouldn't re-render the editor every time the editorJson changes as that would result
+    // in a janky UX. We let the editor handle block ordering state while each block handles it's
+    // own state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorJson]);
+  }, [hydrated]);
 
   // We are in edit mode and there is no content.
   if (!editable && blockIds.length === 0) return <span>{placeholder}</span>;

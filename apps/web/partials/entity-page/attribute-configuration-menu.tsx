@@ -69,7 +69,7 @@ export function AttributeConfigurationMenu({ attributeId, attributeName }: Props
       }),
   });
 
-  const attributeSpaceId = tripleForAttributeId?.[0].space;
+  const attributeSpaceId = tripleForAttributeId?.[0]?.space;
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cogSmall" />}>

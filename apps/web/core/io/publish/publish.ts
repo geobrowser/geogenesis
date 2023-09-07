@@ -36,7 +36,7 @@ export class TransactionWriteFailedError extends Error {
   _tag = 'TransactionWriteFailedError';
 }
 
-export type PublishOptions = {
+export type MakeProposalOptions = {
   wallet: WalletClient;
   actions: Action[];
   space: string;
@@ -45,14 +45,14 @@ export type PublishOptions = {
   storageClient: Storage.IStorageClient;
 };
 
-export async function publish({
+export async function makeProposal({
   storageClient,
   actions,
   wallet,
   onChangePublishState,
   space,
   name,
-}: PublishOptions): Promise<void> {
+}: MakeProposalOptions): Promise<void> {
   onChangePublishState('publishing-ipfs');
   const cids: string[] = [];
 

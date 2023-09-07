@@ -110,7 +110,7 @@ const StatusBar = () => {
             <div className="flex items-center justify-center gap-2">
               {state.reviewState === 'publish-error' && state.error ? (
                 <>
-                  <Warning color="orange" />
+                  <Warning color="red-01" />
                   {/* Negative top margin visually aligns the text. Programatically aligning it feels a bit off visually. */}
                   <motion.span
                     key={message[state.reviewState]}

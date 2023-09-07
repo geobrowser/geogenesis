@@ -45,7 +45,7 @@ services:
       postgres_user: graph-node
       postgres_pass: let-me-in
       postgres_db: graph-node
-      ipfs: 'https://api.staging.thegraph.com/ipfs/'
+      ipfs: 'https://api.thegraph.com/ipfs/'
       ethereum: 'mainnet:http://devnet:8545'
       GRAPH_LOG: debug
       GRAPH_IPFS_TIMEOUT: 10
@@ -82,7 +82,7 @@ services:
       dockerfile: ./docker/Build.dockerfile
     environment:
       GRAPH_NODE_URL: http://graph-node:8020
-      IPFS_URL: https://api.staging.thegraph.com/ipfs/
+      IPFS_URL: https://api.thegraph.com/ipfs/
     command: >
       sh -c "pnpm --filter subgraph run update-contract-address:local &&
       pnpm --filter subgraph run cat &&
