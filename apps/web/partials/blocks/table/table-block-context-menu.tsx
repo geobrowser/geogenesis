@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { A } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -15,6 +14,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { SelectedEntityType } from '~/core/state/entity-table-store';
@@ -31,6 +31,7 @@ import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
+import { Copy } from '~/design-system/icons/copy';
 import { Date } from '~/design-system/icons/date';
 import { Image as ImageIcon } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
@@ -48,6 +49,8 @@ export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId } = useTableBlock();
 
+  const isEditing = useUserIsEditing(spaceId);
+
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === spaceId);
 
@@ -60,40 +63,47 @@ export function TableBlockContextMenu() {
       onOpenChange={setIsMenuOpen}
       align="end"
       trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-      className="max-w-[180px] divide-x divide-grey-02 whitespace-nowrap bg-white"
+      className="max-w-[180px] bg-white"
     >
-      <TableBlockSchemaConfigurationDialog
-        content={
-          <div className="flex flex-col gap-6 p-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                  <Image
-                    layout="fill"
-                    objectFit="cover"
-                    src={getImagePath(space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '')}
-                  />
+      <div>
+        <button className="inline-flex items-center gap-2 px-3 py-2 text-button text-grey-04 hover:bg-bg hover:text-text">
+          <Copy /> <span>Copy view ID</span>
+        </button>
+      </div>
+      {isEditing && (
+        <TableBlockSchemaConfigurationDialog
+          content={
+            <div className="flex flex-col gap-6 p-4">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                    <Image
+                      layout="fill"
+                      objectFit="cover"
+                      src={getImagePath(space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '')}
+                    />
+                  </div>
+                  <h1 className="text-mediumTitle">{type.entityName}</h1>
                 </div>
-                <h1 className="text-mediumTitle">{type.entityName}</h1>
+
+                <h2 className="text-metadata text-grey-04">
+                  Making changes to this type it will affect everywhere that this type is referenced.
+                </h2>
               </div>
 
-              <h2 className="text-metadata text-grey-04">
-                Making changes to this type it will affect everywhere that this type is referenced.
-              </h2>
-            </div>
-
-            <React.Suspense fallback={<AddAttributeLoading />}>
-              <AddAttribute type={type} />
-            </React.Suspense>
-
-            <ErrorBoundary fallback={<p>Something went wrong...</p>}>
-              <React.Suspense fallback={<p>TODO loading spinner...</p>}>
-                <SchemaAttributes type={type} />
+              <React.Suspense fallback={<AddAttributeLoading />}>
+                <AddAttribute type={type} />
               </React.Suspense>
-            </ErrorBoundary>
-          </div>
-        }
-      />
+
+              <ErrorBoundary fallback={<p>Something went wrong...</p>}>
+                <React.Suspense fallback={<p>TODO loading spinner...</p>}>
+                  <SchemaAttributes type={type} />
+                </React.Suspense>
+              </ErrorBoundary>
+            </div>
+          }
+        />
+      )}
     </Menu>
   );
 }
