@@ -77,36 +77,30 @@ export const Editor = React.memo(function Editor({
 }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
 
-  const editor = useEditor({
-    extensions: [...tiptapExtensions, createIdExtension(spaceId)],
-    editable: true,
-    content: editorJson,
-    onBlur({ editor }) {
-      // Responsible for converting all editor blocks to triples
-      // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-      updateEditorBlocks(editor);
-    },
-    editorProps: {
-      transformPastedHTML: html => removeIdAttributes(html),
-    },
-  });
-
   // @HACK: Janky but works for now.
   //
   // We only want to render the editor once the editorJson has been hydrated with local data.
   // We shouldn't re-render the editor every time the editorJson changes as that would result
   // in a janky UX. We let the editor handle block state internally while each block handles
   // it's own state.
-  React.useEffect(() => {
-    // The timeout is needed to workaround a react error in tiptap
-    // https://github.com/ueberdosis/tiptap/issues/3764#issuecomment-1546629928
-    setTimeout(() => {
-      editor?.commands.setContent(editorJson);
-    });
-    // commands is not memoized correctly by tiptap, so we need to disable the rule, else the
-    // effect will run infinitely.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorJson]);
+  const hydrated = useHydrated();
+
+  const editor = useEditor(
+    {
+      extensions: [...tiptapExtensions, createIdExtension(spaceId)],
+      editable: true,
+      content: editorJson,
+      onBlur({ editor }) {
+        // Responsible for converting all editor blocks to triples
+        // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
+        updateEditorBlocks(editor);
+      },
+      editorProps: {
+        transformPastedHTML: html => removeIdAttributes(html),
+      },
+    },
+    [hydrated]
+  );
 
   // We are in edit mode and there is no content.
   if (!editable && blockIds.length === 0) return <span>{placeholder}</span>;
