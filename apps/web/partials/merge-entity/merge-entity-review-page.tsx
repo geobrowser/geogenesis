@@ -48,14 +48,28 @@ export function MergeEntityReviewPage({
           </Text>
           <div className="flex flex-row items-center gap-2">
             <Text variant="metadataMedium">Merge using this ID</Text>
-            {/* @TODO style checkboxe to match the design */}
-            <input
-              type="checkbox"
-              className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
-              checked={mergedEntityId === entityId}
-              // disabled={mergedEntityId !== entityId}
-              onChange={() => setMergedEntityId(entityId)}
-            />
+
+            <div className="flex gap-2">
+              <input
+                type="checkbox"
+                className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
+                checked={mergedEntityId === entityId}
+                // disabled={mergedEntityId !== entityId}
+                onChange={() => setMergedEntityId(entityId)}
+              />
+              <svg
+                className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
           </div>
         </div>
         {entityId}
@@ -163,14 +177,27 @@ function EntityReviewAttributes({
                 <Text as="p" variant="bodySemibold">
                   {triples[0].attributeName || attributeId}
                 </Text>
-                {/* @TODO style checkboxes to match the design */}
-                <input
-                  type="checkbox"
-                  className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
-                  checked={isSelected}
-                  disabled={isDisabled()}
-                  onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
+                    checked={isSelected}
+                    disabled={isDisabled()}
+                    onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
+                  />
+                  <svg
+                    className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
               </div>
               <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>
             </div>

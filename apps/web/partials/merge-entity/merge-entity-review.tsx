@@ -241,8 +241,7 @@ function MergeEntityReviewChanges() {
               <div className="pt-10">
                 <div className="flex flex-col gap-3">
                   <Text className="text-bold text-mediumTitle sm:text-smallTitle">
-                    {/* {entityOneTriples[0]?.entityName ?? entityIdOne} */}
-                    New entity
+                    {mergedEntityTriples[0]?.entityName ?? mergedEntityId}
                   </Text>
                   <div className="flex flex-row items-center gap-2 pb-6">
                     {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
