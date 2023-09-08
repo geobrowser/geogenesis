@@ -64,7 +64,6 @@ function MoveEntityReviewChanges() {
     const onCreateNewTriples = (): CreateTripleAction[] => {
       return triples.map(t => ({
         ...t,
-
         type: 'createTriple',
         space: spaceIdTo,
       }));

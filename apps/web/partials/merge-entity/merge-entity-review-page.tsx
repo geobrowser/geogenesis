@@ -24,7 +24,6 @@ interface Props {
 //  and handle the id checkbox logic similarly to how the triples selection is being done
 export function MergeEntityReviewPage({ entityId, triples, selectedEntityKeys, onSelect }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
-  console.log('sorted triples', sortedTriples);
   return (
     <div className="rounded border border-grey-02 shadow-button">
       <div className="p-5 pb-6 border-b border-grey-02">
@@ -123,6 +122,7 @@ function EntityReviewAttributes({
                 <input
                   type="checkbox"
                   className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
+                  checked={selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === entityId}
                   disabled={
                     selectedEntityKeys[attributeId] &&
                     (selectedEntityKeys[attributeId].entityId !== entityId ||

@@ -17,6 +17,7 @@ import { Button, SquareButton } from '~/design-system/button';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
+import { MergeEntityPreviewPage } from './merge-entity-preview-page';
 import { MergeEntityReviewPage } from './merge-entity-review-page';
 
 export function MergeEntityReview() {
@@ -87,6 +88,11 @@ function MergeEntityReviewChanges() {
   // this component has a decent amount of repetition that can likely be abstracted after
   // the functionality is in place
 
+  console.log('selected entity keys', selectedEntityKeys);
+  const mergedEntityTriples = Object.values(selectedEntityKeys ?? {});
+
+  console.log('merged entity triples', mergedEntityTriples);
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -118,7 +124,7 @@ function MergeEntityReviewChanges() {
                 Preview entity
               </Tabs.Trigger>
             </Tabs.List>
-            <Tabs.Content className="TabsContent" value="entityMergeSelect">
+            <Tabs.Content value="entityMergeSelect">
               <div className="grid grid-cols-2 gap-4 w-full pt-10">
                 <div className="flex flex-col gap-3">
                   <Text className="text-bold text-mediumTitle sm:text-smallTitle">
@@ -164,6 +170,33 @@ function MergeEntityReviewChanges() {
                     triples={entityTwoTriples}
                     selectedEntityKeys={selectedEntityKeys}
                     onSelect={handleCheckboxSelect}
+                  />
+                </div>
+              </div>
+            </Tabs.Content>
+            <Tabs.Content value="entityMergePreview">
+              <div className="pt-10">
+                <div className="flex flex-col gap-3">
+                  <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    {/* {entityOneTriples[0]?.entityName ?? entityIdOne} */}
+                    New entity
+                  </Text>
+                  <div className="flex flex-row items-center gap-2 pb-6">
+                    {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <Image
+                          src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
+                          layout="fill"
+                          objectFit="cover"
+                        />
+                      </div>
+                    )}
+                    <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
+                  </div>
+                  <MergeEntityPreviewPage
+                    // entityId={entityIdOne}
+                    entityId="New Entity" // @TODO come from the chosen id
+                    triples={mergedEntityTriples}
                   />
                 </div>
               </div>
