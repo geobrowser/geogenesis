@@ -16,17 +16,32 @@ import { sortEntityPageTriples } from '../entity-page/entity-page-utils';
 interface Props {
   entityId: string;
   triples: Triple[];
-  selectedEntityKeys: Record<string, Triple>;
-  onSelect: (args: { attributeId: string; selectedTriple: Triple }) => void;
+  selectedEntityKeys: Record<string, Triple | Triple[]>;
+  onSelect: (args: { attributeId: string; selectedTriple: Triple | Triple[] }) => void;
+  mergedEntityId: string;
+  setMergedEntityId: (entityId: string) => void;
 }
 
 //  @TODO style the checkboxes / create Checkbox component for design system
 //  and handle the id checkbox logic similarly to how the triples selection is being done
-export function MergeEntityReviewPage({ entityId, triples, selectedEntityKeys, onSelect }: Props) {
+export function MergeEntityReviewPage({
+  entityId,
+  triples,
+  selectedEntityKeys,
+  onSelect,
+  mergedEntityId,
+  setMergedEntityId,
+}: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
+  console.log('sorted triples', sortedTriples);
   return (
     <div className="rounded border border-grey-02 shadow-button">
-      <div className="p-5 pb-6 border-b border-grey-02">
+      <div
+        className={cx(
+          mergedEntityId === entityId ? 'bg-white' : 'bg-grey-01 opacity-70',
+          'p-5 pb-6 border-b border-grey-02'
+        )}
+      >
         <div className="flex flex-row items-center justify-between">
           <Text as="p" variant="bodySemibold">
             Entity ID
@@ -34,7 +49,13 @@ export function MergeEntityReviewPage({ entityId, triples, selectedEntityKeys, o
           <div className="flex flex-row items-center gap-2">
             <Text variant="metadataMedium">Merge using this ID</Text>
             {/* @TODO style checkboxe to match the design */}
-            <input type="checkbox" className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02" />
+            <input
+              type="checkbox"
+              className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
+              checked={mergedEntityId === entityId}
+              // disabled={mergedEntityId !== entityId}
+              onChange={() => setMergedEntityId(entityId)}
+            />
           </div>
         </div>
         {entityId}
@@ -103,13 +124,37 @@ function EntityReviewAttributes({
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
+        // check if the current selection is an array
+        const currentSelection = selectedEntityKeys[attributeId];
+        console.log('current selection', currentSelection);
+
+        const isSelectedTriple = (triple: Triple) => triple?.entityId === entityId;
+
+        const isSelected = Array.isArray(currentSelection)
+          ? currentSelection.some(isSelectedTriple)
+          : isSelectedTriple(currentSelection);
+
+        // const isSelected = Array.isArray(currentSelection)
+        //   ? currentSelection.some(triple => triple.entityId === entityId && triple.value.id === triples[0].value.id)
+        //   : isSelectedTriple(currentSelection);
+        // check if the checkbox should be disabled
+        const isDisabled = () => {
+          if (Array.isArray(currentSelection)) {
+            return !currentSelection.some(
+              triple => triple.entityId === entityId && triple.value.id === triples[0].value.id
+            );
+          }
+          return (
+            currentSelection &&
+            (currentSelection.entityId !== entityId || currentSelection.value.id !== triples[0].value.id)
+          );
+        };
+
         return (
           <div
             key={`${entityId}-${attributeId}-${index}`}
             className={cx(
-              selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === entityId
-                ? 'bg-white'
-                : 'bg-grey-01 opacity-70', // check if this is how this is being done in the design
+              isSelected ? 'bg-white' : 'bg-grey-01 opacity-70', // check if this is how this is being done in the design
               'break-words'
             )}
           >
@@ -122,13 +167,9 @@ function EntityReviewAttributes({
                 <input
                   type="checkbox"
                   className="w-6 h-6 rounded border-grey-02 focus:ring-2 focus:ring-grey-02"
-                  checked={selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === entityId}
-                  disabled={
-                    selectedEntityKeys[attributeId] &&
-                    (selectedEntityKeys[attributeId].entityId !== entityId ||
-                      selectedEntityKeys[attributeId].value.id !== triples[0].value.id)
-                  }
-                  onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples[0] })}
+                  checked={isSelected}
+                  disabled={isDisabled()}
+                  onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
                 />
               </div>
               <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>

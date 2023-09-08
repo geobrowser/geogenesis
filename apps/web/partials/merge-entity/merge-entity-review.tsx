@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
-import config from 'next/config';
 import Image from 'next/legacy/image';
 
 import * as React from 'react';
@@ -36,21 +35,81 @@ function MergeEntityReviewChanges() {
 
   console.log(`entityIdOne: ${entityIdOne} - entityIdTwo: ${entityIdTwo}`);
   const { subgraph, config } = Services.useServices();
-  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<Record<string, Triple>>({});
+  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<Record<string, Triple | Triple[]>>({});
+  const [mergedEntityId, setMergedEntityId] = React.useState<string>(entityIdOne);
   const [mergedEntityObject, setMergedEntityObject] = React.useState({});
 
-  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: Triple }) {
-    if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
-      // Deselecting the current selection
-      const newSelectedKeys = { ...selectedEntityKeys };
-      delete newSelectedKeys[attributeId];
-      setSelectedEntityKeys(newSelectedKeys);
+  // function handleCheckboxSelect({
+  //   attributeId,
+  //   selectedTriple,
+  // }: {
+  //   attributeId: string;
+  //   selectedTriple: Triple | Triple[];
+  // }) {
+
+  //   if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
+  //     // Deselecting the current selection
+  //     const newSelectedKeys = { ...selectedEntityKeys };
+  //     delete newSelectedKeys[attributeId];
+  //     setSelectedEntityKeys(newSelectedKeys);
+  //   } else {
+  //     setSelectedEntityKeys({
+  //       ...selectedEntityKeys,
+  //       [attributeId]: selectedTriple,
+  //     });
+  //   }
+  // }
+
+  function handleCheckboxSelect({
+    attributeId,
+    selectedTriple,
+  }: {
+    attributeId: string;
+    selectedTriple: Triple | Triple[];
+  }) {
+    const newSelectedKeys = { ...selectedEntityKeys };
+    const currentSelection = selectedEntityKeys[attributeId];
+
+    // Handle array type for attributeId === 'type'
+    if (attributeId === 'type') {
+      // If currentSelection is already an array
+      if (Array.isArray(currentSelection)) {
+        if (Array.isArray(selectedTriple)) {
+          // If both current and new selections are arrays, merge and deduplicate them
+          const mergedTriples = [...new Set([...currentSelection, ...selectedTriple])];
+          newSelectedKeys[attributeId] = mergedTriples;
+        } else {
+          // If current is an array and new is a single Triple
+          const index = currentSelection.findIndex(triple => triple.entityId === selectedTriple.entityId);
+          if (index !== -1) {
+            // If already selected, deselect
+            currentSelection.splice(index, 1);
+          } else {
+            // If not selected, add to the list
+            currentSelection.push(selectedTriple);
+          }
+        }
+      } else {
+        // If currentSelection is not an array, directly set it as the new selection
+        newSelectedKeys[attributeId] = selectedTriple;
+      }
     } else {
-      setSelectedEntityKeys({
-        ...selectedEntityKeys,
-        [attributeId]: selectedTriple,
-      });
+      // For non-type attributes, handle as before
+      const extractEntityId = (selection: Triple | Triple[]): string => {
+        if (Array.isArray(selection)) {
+          return selection[0].entityId; // Assuming non-empty array
+        } else {
+          return selection.entityId;
+        }
+      };
+      if (currentSelection && extractEntityId(currentSelection) === extractEntityId(selectedTriple)) {
+        delete newSelectedKeys[attributeId];
+      } else {
+        newSelectedKeys[attributeId] = selectedTriple;
+      }
     }
+
+    setSelectedEntityKeys(newSelectedKeys);
   }
 
   function useEntityById(entityId: string) {
@@ -89,7 +148,7 @@ function MergeEntityReviewChanges() {
   // the functionality is in place
 
   console.log('selected entity keys', selectedEntityKeys);
-  const mergedEntityTriples = Object.values(selectedEntityKeys ?? {});
+  const mergedEntityTriples = Object.values(selectedEntityKeys ?? {}).flat();
 
   console.log('merged entity triples', mergedEntityTriples);
 
@@ -147,6 +206,8 @@ function MergeEntityReviewChanges() {
                     triples={entityOneTriples}
                     selectedEntityKeys={selectedEntityKeys}
                     onSelect={handleCheckboxSelect}
+                    mergedEntityId={mergedEntityId}
+                    setMergedEntityId={setMergedEntityId}
                   />
                 </div>
                 <div className="flex flex-col gap-3">
@@ -170,6 +231,8 @@ function MergeEntityReviewChanges() {
                     triples={entityTwoTriples}
                     selectedEntityKeys={selectedEntityKeys}
                     onSelect={handleCheckboxSelect}
+                    mergedEntityId={mergedEntityId}
+                    setMergedEntityId={setMergedEntityId}
                   />
                 </div>
               </div>
@@ -193,11 +256,7 @@ function MergeEntityReviewChanges() {
                     )}
                     <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                   </div>
-                  <MergeEntityPreviewPage
-                    // entityId={entityIdOne}
-                    entityId="New Entity" // @TODO come from the chosen id
-                    triples={mergedEntityTriples}
-                  />
+                  <MergeEntityPreviewPage entityId={mergedEntityId} triples={mergedEntityTriples} />
                 </div>
               </div>
             </Tabs.Content>
