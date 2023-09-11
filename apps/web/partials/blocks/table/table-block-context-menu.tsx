@@ -170,12 +170,21 @@ function useOptimisticAttributes({
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { type, spaceId } = useTableBlock();
+  const { type, spaceId, entityId } = useTableBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === type.space);
+
+  const onCopyViewId = async () => {
+    try {
+      await navigator.clipboard.writeText(entityId);
+      setIsMenuOpen(false);
+    } catch (err) {
+      console.error('Failed to copy table block entity ID for: ', entityId);
+    }
+  };
 
   return (
     <Menu
@@ -189,7 +198,7 @@ export function TableBlockContextMenu() {
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onCopyViewId} className="inline-flex items-center gap-2 px-3 py-2">
           <Copy /> <span>Copy view ID</span>
         </button>
       </MenuItem>
