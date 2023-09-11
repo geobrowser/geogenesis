@@ -49,7 +49,7 @@ export function MergeEntityReviewPage({
           <div className="flex flex-row items-center gap-2">
             <Text variant="metadataMedium">Merge using this ID</Text>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative">
               <input
                 type="checkbox"
                 className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
@@ -164,6 +164,8 @@ function EntityReviewAttributes({
           );
         };
 
+        // @TODO: Fix checkbox positioning on scroll
+
         return (
           <div
             key={`${entityId}-${attributeId}-${index}`}
@@ -177,7 +179,7 @@ function EntityReviewAttributes({
                 <Text as="p" variant="bodySemibold">
                   {triples[0].attributeName || attributeId}
                 </Text>
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
                   <input
                     type="checkbox"
                     className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
@@ -199,7 +201,7 @@ function EntityReviewAttributes({
                   </svg>
                 </div>
               </div>
-              <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>
+              <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
             </div>
           </div>
         );
