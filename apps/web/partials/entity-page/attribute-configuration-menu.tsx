@@ -8,18 +8,15 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
+import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
-import { useActionsStoreInstance } from '~/core/state/actions-store';
-import { useLocalStoreInstance } from '~/core/state/local-store';
-import { Entity, RelationValueType } from '~/core/types';
+import { Entity, OmitStrict, RelationValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
-import { SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
@@ -28,24 +25,14 @@ interface Props {
   // This is the entityId of the attribute being configured with a relation type.
   attributeId: string;
   attributeName: string | null;
+  trigger: React.ReactNode;
 }
 
-export function AttributeConfigurationMenu({ attributeId, attributeName }: Props) {
+export function AttributeConfigurationMenu({ trigger, attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
-  const localStore = useLocalStoreInstance();
-  const store = useActionsStoreInstance();
 
-  const { subgraph, config } = Services.useServices();
-
-  const merged = React.useMemo(
-    () =>
-      new Merged({
-        store,
-        localStore,
-        subgraph,
-      }),
-    [store, localStore, subgraph]
-  );
+  const { config } = Services.useServices();
+  const merged = useMergedData();
 
   // To add the relation value type triple to the correct space we need to fetch
   // the attribute and read the space off one of the triples.
@@ -72,7 +59,7 @@ export function AttributeConfigurationMenu({ attributeId, attributeName }: Props
   const attributeSpaceId = tripleForAttributeId?.[0]?.space;
 
   return (
-    <Menu open={open} onOpenChange={setOpen} trigger={<SquareButton icon="cogSmall" />}>
+    <Menu open={open} onOpenChange={setOpen} trigger={trigger}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
         <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={attributeSpaceId} />
@@ -81,18 +68,21 @@ export function AttributeConfigurationMenu({ attributeId, attributeName }: Props
   );
 }
 
-function AttributeSearch({ attributeId, attributeName, attributeSpaceId }: Props & { attributeSpaceId?: string }) {
-  const { attributeRelationTypes } = useEntityPageStore();
-  const { create, remove } = useActionsStore();
-
+function AttributeSearch({
+  attributeId,
+  attributeName,
+  attributeSpaceId,
+}: OmitStrict<Props, 'trigger'> & { attributeSpaceId?: string }) {
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
 
+  const { create, remove } = useActionsStore();
   const { spaces } = useSpaces();
 
-  const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
+  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId });
 
+  const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
   const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
 
   const onSelect = async (result: Entity) => {

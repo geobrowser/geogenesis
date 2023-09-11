@@ -44,6 +44,8 @@ import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
 import { TextButton } from '~/design-system/text-button';
 
+import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
+
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
 const optimisticAttributes$ = observable<IEntity[]>([]);
@@ -417,27 +419,32 @@ function SchemaAttributes() {
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {attributes?.map(entity => {
-          const valueTypeId: ValueType | undefined = entity.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE)
-            ?.value.id;
+        {attributes?.map(attributeEntity => {
+          const valueTypeId: ValueType | undefined = attributeEntity.triples.find(
+            t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
+          )?.value.id;
 
-          const nameTripleForAttribute = entity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+          const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
           return (
-            <div key={entity.id} className="flex items-center gap-4">
+            <div key={attributeEntity.id} className="flex items-center gap-4">
               <div className="rounded bg-grey-01 px-5 py-2.5">
                 <AttributeValueTypeDropdown valueTypeId={valueTypeId} />
               </div>
               <Input
-                defaultValue={entity.name ?? ''}
-                onBlur={e => onChangeAttributeName(e.currentTarget.value, entity, nameTripleForAttribute)}
+                defaultValue={attributeEntity.name ?? ''}
+                onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
               />
               {valueTypeId === SYSTEM_IDS.RELATION && (
-                <div>
-                  <Cog color="grey-04" />
-                </div>
+                <AttributeConfigurationMenu
+                  trigger={<Cog />}
+                  attributeId={attributeEntity.id}
+                  attributeName={attributeEntity.name}
+                />
               )}
-              <AttributeRowContextMenu onRemoveAttribute={() => onRemoveAttribute(entity, nameTripleForAttribute)} />
+              <AttributeRowContextMenu
+                onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
+              />
             </div>
           );
         })}

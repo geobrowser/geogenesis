@@ -566,7 +566,11 @@ function EntityAttributes({
               )}
               <div className="absolute top-6 right-0 flex items-center gap-1">
                 {isEntityGroup ? (
-                  <AttributeConfigurationMenu attributeId={attributeId} attributeName={attributeName} />
+                  <AttributeConfigurationMenu
+                    trigger={<SquareButton icon="cogSmall" />}
+                    attributeId={attributeId}
+                    attributeName={attributeName}
+                  />
                 ) : null}
                 {!isPlaceholder && (
                   <>
