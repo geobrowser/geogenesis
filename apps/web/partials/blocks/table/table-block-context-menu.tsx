@@ -199,7 +199,7 @@ export function TableBlockContextMenu() {
             <MenuItem>
               <div className="inline-flex items-center gap-2 px-3 py-2">
                 <FilteredTableView />
-                <span className="text-button">Edit type schema</span>
+                <span className="text-button">Edit type</span>
               </div>
             </MenuItem>
           }
