@@ -47,30 +47,22 @@ export function MergeEntityMenu({ entityId }: Props) {
         <Text variant="smallButton">Search for an entity to merge with</Text>
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} value={autocomplete.query} />
       </div>
-      <ResultsList>
-        {autocomplete.results.length === 0 ? (
-          <div className="flex flex-col gap-1 p-2 pt-0">
-            <Text variant="footnoteMedium"> No entities found in spaces where you are an editor. .</Text>
-            <Text variant="footnote">
-              You will need to become an editor of the space for an entity you want to merge with. Consider revising
-              your search term.
-            </Text>
-          </div>
-        ) : null}
-        {filteredResults.map(result => (
-          <ResultContent
-            onClick={() => {
-              setEntityIdOne(entityId);
-              setEntityIdTwo(result.id);
-              setIsMergeReviewOpen(true);
-            }}
-            key={result.id}
-            result={result}
-            spaces={spaces}
-          />
-        ))}
-      </ResultsList>
-      <div className="flex flex-col max-h-[300px] overflow-y-auto justify-between w-full"></div>
+      {filteredResults.length > 0 && (
+        <ResultsList>
+          {filteredResults.map(result => (
+            <ResultContent
+              onClick={() => {
+                setEntityIdOne(entityId);
+                setEntityIdTwo(result.id);
+                setIsMergeReviewOpen(true);
+              }}
+              key={result.id}
+              result={result}
+              spaces={spaces}
+            />
+          ))}
+        </ResultsList>
+      )}
     </div>
   );
 }
