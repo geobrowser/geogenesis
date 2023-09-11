@@ -82,7 +82,7 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
               <Text as="p" variant="bodySemibold">
                 {triples[0].attributeName || attributeId}
               </Text>
-              <div className="flex flex-wrap">{triples.map(tripleToEditableField)}</div>
+              <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
             </div>
           </div>
         );
