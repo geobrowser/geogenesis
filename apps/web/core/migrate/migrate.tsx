@@ -154,41 +154,43 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        * existing triples with the old type.
        */
       // @TODO: Batch update
-      for (const triple of triplesWithAttribute) {
-        const value = triple.value;
+      triplesWithAttribute.forEach(triple => {
+        config.actionsApi.remove(triple);
 
-        if (value.type !== oldValueType) {
-          // delete
-          continue;
-        }
+        // const value = triple.value;
 
-        switch (value.type) {
-          case 'string': {
-            // can migrate to date
-            // can migrate to url
-            // delete otherwise
-            break;
-          }
+        // @TODO: For now we just delete the old triple
+        // if (value.type !== oldValueType) {
+        //   // delete
+        //   continue;
+        // }
 
-          case 'date': {
-            // can migrate to string
-            // delete otherwise
-            break;
-          }
+        // switch (value.type) {
+        //   case 'string': {
 
-          case 'url': {
-            // can migrate to string
-            // delete otherwise
-            break;
-          }
+        //     // can migrate to date
+        //     // can migrate to url
+        //     // delete otherwise
+        //     break;
+        //   }
 
-          default:
-            // delete
-            break;
-        }
-      }
+        //   case 'date': {
+        //     // can migrate to string
+        //     // delete otherwise
+        //     break;
+        //   }
 
-      break;
+        //   case 'url': {
+        //     // can migrate to string
+        //     // delete otherwise
+        //     break;
+        //   }
+
+        //   default:
+        //     // delete
+        //     break;
+        // }
+      });
     }
   }
 }
