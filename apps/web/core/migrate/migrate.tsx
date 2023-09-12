@@ -72,7 +72,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
           }),
       });
 
-      batch(() => triplesReferencingEntity.map(t => config.actionsApi.remove(t)));
+      batch(() => {
+        triplesReferencingEntity.forEach(t => {
+          config.actionsApi.remove(t);
+        });
+      });
       break;
     }
     case 'CHANGE_VALUE_TYPE':
