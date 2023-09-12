@@ -8,6 +8,7 @@ import * as React from 'react';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store/diff-store';
+import { Persistence } from '~/core/state/persistence';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -63,6 +64,8 @@ export function App({ children }: { children: React.ReactNode }) {
         <FlowBar />
         <Review />
         <Compare />
+        {/* @TODO remove */}
+        <Persistence />
       </ClientOnly>
       <Analytics />
     </>
