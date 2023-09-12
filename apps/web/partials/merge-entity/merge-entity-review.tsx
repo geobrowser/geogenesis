@@ -330,7 +330,7 @@ function MergeEntityReviewChanges() {
                   <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="flex flex-row gap-3 items-center ">
+                  <div className="flex flex-row gap-3 items-center bg-bg">
                     <CheckCircleReview color="grey-04" />
                     <Text>Delete triples</Text>
                   </div>

@@ -22,8 +22,6 @@ interface Props {
   setMergedEntityId: (entityId: string) => void;
 }
 
-//  @TODO style the checkboxes / create Checkbox component for design system
-//  and handle the id checkbox logic similarly to how the triples selection is being done
 export function MergeEntityReviewPage({
   entityId,
   triples,
@@ -39,7 +37,7 @@ export function MergeEntityReviewPage({
       <div
         className={cx(
           mergedEntityId === entityId ? 'bg-white' : 'bg-grey-01 opacity-70',
-          'p-5 pb-6 border-b border-grey-02'
+          'p-5 pb-6 rounded-t border-b border-grey-02'
         )}
       >
         <div className="flex flex-row items-center justify-between">
@@ -57,6 +55,7 @@ export function MergeEntityReviewPage({
                 // disabled={mergedEntityId !== entityId}
                 onChange={() => setMergedEntityId(entityId)}
               />
+
               <svg
                 className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -151,18 +150,6 @@ function EntityReviewAttributes({
         // const isSelected = Array.isArray(currentSelection)
         //   ? currentSelection.some(triple => triple.entityId === entityId && triple.value.id === triples[0].value.id)
         //   : isSelectedTriple(currentSelection);
-        // check if the checkbox should be disabled
-        const isDisabled = () => {
-          if (Array.isArray(currentSelection)) {
-            return !currentSelection.some(
-              triple => triple.entityId === entityId && triple.value.id === triples[0].value.id
-            );
-          }
-          return (
-            currentSelection &&
-            (currentSelection.entityId !== entityId || currentSelection.value.id !== triples[0].value.id)
-          );
-        };
 
         // @TODO: Fix checkbox positioning on scroll
 
@@ -170,11 +157,11 @@ function EntityReviewAttributes({
           <div
             key={`${entityId}-${attributeId}-${index}`}
             className={cx(
-              isSelected ? 'bg-white' : 'bg-grey-01 opacity-70', // check if this is how this is being done in the design
-              'break-words'
+              isSelected ? 'bg-white' : 'bg-grey-01 opacity-70',
+              'break-words last:rounded-b border-b border-grey-02 last:border-b-0' // no duplicate bottom-borders for the last item
             )}
           >
-            <div className="p-5 border-b border-grey-02">
+            <div className="p-5">
               <div className="flex flex-row items-center justify-between">
                 <Text as="p" variant="bodySemibold">
                   {triples[0].attributeName || attributeId}
@@ -184,7 +171,6 @@ function EntityReviewAttributes({
                     type="checkbox"
                     className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
                     checked={isSelected}
-                    disabled={isDisabled()}
                     onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
                   />
                   <svg
