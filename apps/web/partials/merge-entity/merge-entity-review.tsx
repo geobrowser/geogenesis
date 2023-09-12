@@ -39,7 +39,6 @@ export function MergeEntityReview() {
 function MergeEntityReviewChanges() {
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
 
-  console.log(`entityIdOne: ${entityIdOne} - entityIdTwo: ${entityIdTwo}`);
   const { subgraph, config } = Services.useServices();
   function useEntityById(entityId: string) {
     const {
@@ -74,7 +73,6 @@ function MergeEntityReviewChanges() {
   const [selectedEntityKeys, setSelectedEntityKeys] = React.useState({
     ...(entityOneNameTriple ? { [entityOneNameTriple.attributeId]: entityOneNameTriple } : {}),
   }); // set the entityOneNameTriple as the default for the 'name' triple
-  const [mergedEntityObject, setMergedEntityObject] = React.useState({});
   const [mergeEntityStep, setMergeEntityStep] = React.useState<'mergeReview' | 'mergePublish'>('mergeReview');
   const { data: wallet } = useWalletClient(); // user wallet session
 
@@ -85,10 +83,7 @@ function MergeEntityReviewChanges() {
   // this component has a decent amount of repetition that can likely be abstracted after
   // the functionality is in place
 
-  console.log('selected entity keys', selectedEntityKeys);
   const mergedEntityTriples = Object.values(selectedEntityKeys ?? {}).flat();
-
-  console.log('merged entity triples', mergedEntityTriples);
 
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
@@ -114,77 +109,18 @@ function MergeEntityReviewChanges() {
     console.log('create actions', createActions);
   }, [wallet, mergedEntityId, mergedEntityTriples]);
 
-  // function handleCheckboxSelect({
-  //   attributeId,
-  //   selectedTriple,
-  // }: {
-  //   attributeId: string;
-  //   selectedTriple: Triple | Triple[];
-  // }) {
-
-  //   if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
-  //     // Deselecting the current selection
-  //     const newSelectedKeys = { ...selectedEntityKeys };
-  //     delete newSelectedKeys[attributeId];
-  //     setSelectedEntityKeys(newSelectedKeys);
-  //   } else {
-  //     setSelectedEntityKeys({
-  //       ...selectedEntityKeys,
-  //       [attributeId]: selectedTriple,
-  //     });
-  //   }
-  // }
-
-  function handleCheckboxSelect({
-    attributeId,
-    selectedTriple,
-  }: {
-    attributeId: string;
-    selectedTriple: Triple | Triple[];
-  }) {
-    const newSelectedKeys = { ...selectedEntityKeys };
-    const currentSelection = selectedEntityKeys[attributeId];
-
-    // Handle array type for attributeId === 'type'
-    if (attributeId === 'type') {
-      // If currentSelection is already an array
-      if (Array.isArray(currentSelection)) {
-        if (Array.isArray(selectedTriple)) {
-          // If both current and new selections are arrays, merge and deduplicate them
-          const mergedTriples = [...new Set([...currentSelection, ...selectedTriple])];
-          newSelectedKeys[attributeId] = mergedTriples;
-        } else {
-          // If current is an array and new is a single Triple
-          const index = currentSelection.findIndex(triple => triple.entityId === selectedTriple.entityId);
-          if (index !== -1) {
-            // If already selected, deselect
-            currentSelection.splice(index, 1);
-          } else {
-            // If not selected, add to the list
-            currentSelection.push(selectedTriple);
-          }
-        }
-      } else {
-        // If currentSelection is not an array, directly set it as the new selection
-        newSelectedKeys[attributeId] = selectedTriple;
-      }
+  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: Triple }) {
+    if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
+      // Deselect the current selection
+      const newSelectedKeys = { ...selectedEntityKeys };
+      delete newSelectedKeys[attributeId];
+      setSelectedEntityKeys(newSelectedKeys);
     } else {
-      // For non-type attributes, handle as before
-      const extractEntityId = (selection: Triple | Triple[]): string => {
-        if (Array.isArray(selection)) {
-          return selection[0].entityId; // Assuming non-empty array
-        } else {
-          return selection.entityId;
-        }
-      };
-      if (currentSelection && extractEntityId(currentSelection) === extractEntityId(selectedTriple)) {
-        delete newSelectedKeys[attributeId];
-      } else {
-        newSelectedKeys[attributeId] = selectedTriple;
-      }
+      setSelectedEntityKeys({
+        ...selectedEntityKeys,
+        [attributeId]: selectedTriple,
+      });
     }
-
-    setSelectedEntityKeys(newSelectedKeys);
   }
 
   // @TODO button icon color for the 'Back' button

@@ -19,6 +19,7 @@ interface Props {
 
 export function MergeEntityPreviewPage({ entityId, triples }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
+
   return (
     <div className="rounded border border-grey-02 shadow-button">
       <div className="p-5 pb-6 border-b border-grey-02">

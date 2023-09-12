@@ -31,7 +31,7 @@ export function MergeEntityReviewPage({
   setMergedEntityId,
 }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
-  console.log('sorted triples', sortedTriples);
+
   return (
     <div className="rounded border border-grey-02 shadow-button">
       <div
@@ -139,19 +139,12 @@ function EntityReviewAttributes({
 
         // check if the current selection is an array
         const currentSelection = selectedEntityKeys[attributeId];
-        console.log('current selection', currentSelection);
 
         const isSelectedTriple = (triple: Triple) => triple?.entityId === entityId;
 
         const isSelected = Array.isArray(currentSelection)
           ? currentSelection.some(isSelectedTriple)
           : isSelectedTriple(currentSelection);
-
-        // const isSelected = Array.isArray(currentSelection)
-        //   ? currentSelection.some(triple => triple.entityId === entityId && triple.value.id === triples[0].value.id)
-        //   : isSelectedTriple(currentSelection);
-
-        // @TODO: Fix checkbox positioning on scroll
 
         return (
           <div
