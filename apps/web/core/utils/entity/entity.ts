@@ -2,6 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
+import { ValueTypeId } from '~/core/value-types';
 
 import { Triple } from '../triple';
 import { groupBy } from '../utils';
@@ -89,10 +90,10 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
 
-export function valueTypeId(triples: ITriple[]): string | null {
+export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
   // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
   const triple = valueTypeTriple(triples);
-  return triple?.value.type === 'entity' ? triple?.value.id : null;
+  return triple?.value.type === 'entity' ? (triple?.value.id as ValueTypeId) : null;
 }
 
 /**

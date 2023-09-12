@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { TripleValueType } from './types';
 
-type ValueTypeId =
+export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
   | typeof SYSTEM_IDS.IMAGE
