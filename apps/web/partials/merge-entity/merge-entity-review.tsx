@@ -3,7 +3,6 @@ import { batch } from '@legendapp/state';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
-import { t } from 'vitest/dist/global-fe52f84b';
 
 import * as React from 'react';
 
@@ -60,11 +59,10 @@ function MergeEntityReviewChanges() {
     return [entityTwoData].flatMap((entity => entity?.triples) ?? []);
   }
 
-  const { triples: entityOneTriples, schemaTriples: entityOneSchemaTriples } = useEntityPageStore(); // triples from entity page
+  const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
   const { create, remove } = useActionsStore();
 
-  //  triples from subgraph for second entity
-  //  @TODO merge with local data since there could be changes
+  //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
   const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === 'name');
 
@@ -72,12 +70,11 @@ function MergeEntityReviewChanges() {
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
   const spaceEntityTwo = spaces.find(space => space.id === entityTwoTriples[0]?.space);
   const [mergedEntityId, setMergedEntityId] = React.useState<string>(entityIdOne); // set the entityOneId as the default 'id' for the merged entity
-  // const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<Record<string, Triple | Triple[]>>({});
   const [selectedEntityKeys, setSelectedEntityKeys] = React.useState({
     ...(entityOneNameTriple ? { [entityOneNameTriple.attributeId]: entityOneNameTriple } : {}),
   }); // set the entityOneNameTriple as the default for the 'name' triple
   const [mergeEntityStep, setMergeEntityStep] = React.useState<'mergeReview' | 'mergePublish'>('mergeReview');
-  const { data: wallet } = useWalletClient(); // user wallet session
+  const { data: wallet } = useWalletClient();
 
   const mergedEntityTriples = Object.values(selectedEntityKeys ?? {}).flat();
 
@@ -88,16 +85,15 @@ function MergeEntityReviewChanges() {
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
 
-    // delete the triples from the initial Entity A
+    // delete the triples from the initial entityOne
     const onDelete = () => {
-      console.log('entity one triples', entityOneTriples);
       batch(() => {
         entityOneTriples.forEach(t => remove(t));
         unmergedTriples.forEach(t => remove(t));
       });
     };
 
-    // add new triples with the selected triples and id to Entity B
+    // add new triples with the selected triples and id to entityTwo
     const onCreate = () => {
       batch(() => {
         mergedTriples.forEach(t => {
@@ -111,7 +107,7 @@ function MergeEntityReviewChanges() {
       });
     };
 
-    // update references: find all references to Entity A and update to Entity B
+    // update references: find all references to entityOne and update to entityTwo's id
 
     onDelete();
     onCreate();
@@ -132,7 +128,6 @@ function MergeEntityReviewChanges() {
     }
   }
 
-  // @TODO button icon color for the 'Back' button
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
@@ -155,7 +150,6 @@ function MergeEntityReviewChanges() {
               </Button>
               <Button
                 onClick={() => {
-                  console.log('publish flow');
                   handlePublish();
                 }}
               >
@@ -190,10 +184,10 @@ function MergeEntityReviewChanges() {
               <Tabs.Content value="entityMergeSelect">
                 <div className="grid grid-cols-2 gap-4 w-full pt-10">
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
                       {entityOneTriples[0]?.entityName ?? entityIdOne}
                     </Text>
-                    <div className="flex flex-row items-center gap-2 pb-6">
+                    <div className="flex flex-row items-center gap-2 pb-6 grow">
                       {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                         <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                           <Image
@@ -215,10 +209,10 @@ function MergeEntityReviewChanges() {
                     />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
                       {entityTwoTriples[0]?.entityName ?? entityIdTwo}
                     </Text>
-                    <div className="flex flex-row items-center gap-2 pb-6">
+                    <div className="flex flex-row items-center gap-2 pb-6 grow">
                       {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                         <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                           <Image
@@ -244,7 +238,7 @@ function MergeEntityReviewChanges() {
               <Tabs.Content value="entityMergePreview">
                 <div className="pt-10">
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
                       {mergedEntityTriples[0]?.entityName ?? mergedEntityId}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6">

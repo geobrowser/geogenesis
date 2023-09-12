@@ -16,8 +16,8 @@ import { sortEntityPageTriples } from '../entity-page/entity-page-utils';
 interface Props {
   entityId: string;
   triples: Triple[];
-  selectedEntityKeys: Record<string, Triple | Triple[]>;
-  onSelect: (args: { attributeId: string; selectedTriple: Triple | Triple[] }) => void;
+  selectedEntityKeys: Record<string, Triple>;
+  onSelect: (args: { attributeId: string; selectedTriple: Triple }) => void;
   mergedEntityId: string;
   setMergedEntityId: (entityId: string) => void;
 }
@@ -33,7 +33,7 @@ export function MergeEntityReviewPage({
   const sortedTriples = sortEntityPageTriples(triples, []);
 
   return (
-    <div className="rounded border border-grey-02 shadow-button">
+    <div className="rounded border border-grey-02 shadow-button grow">
       <div
         className={cx(
           mergedEntityId === entityId ? 'bg-white' : 'bg-grey-01 opacity-70',
