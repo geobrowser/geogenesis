@@ -12,7 +12,7 @@ import {
   TripleValueType,
   Value,
 } from '~/core/types';
-import { valueTypes } from '~/core/value-types';
+import { ValueTypeId, valueTypes } from '~/core/value-types';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -21,8 +21,12 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   };
 }
 
-export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId = SYSTEM_IDS.TEXT): Triple {
-  const type = (valueTypes[valueTypeId] || 'string') as TripleValueType;
+export function emptyPlaceholder(
+  spaceId: string,
+  entityId: string,
+  valueTypeId: ValueTypeId = SYSTEM_IDS.TEXT
+): Triple {
+  const type = valueTypes[valueTypeId] ?? 'string';
 
   return {
     ...empty(spaceId, entityId, type),

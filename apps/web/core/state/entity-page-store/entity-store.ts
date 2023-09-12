@@ -15,6 +15,7 @@ import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
+import { ValueTypeId } from '~/core/value-types';
 
 import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
@@ -347,9 +348,10 @@ export class EntityStore implements IEntityStore {
 
       const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
 
-      const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, string | undefined>>(
+      const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
         (acc, attribute) => {
-          acc[attribute.value.id] = valueTypeTriples.find(t => t.entityId === attribute.value.id)?.value.id;
+          acc[attribute.value.id] = valueTypeTriples.find(t => t.entityId === attribute.value.id)?.value
+            .id as ValueTypeId;
           return acc;
         },
         {}
