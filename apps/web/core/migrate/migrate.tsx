@@ -64,8 +64,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
           let page = 0;
           let isRemainingTriples = false;
 
-          console.time('fetching triples referencing entity');
-
           // We can only fetch 1000 entries at a time from graph-node. If there are
           // more than 1000 entries we need to paginate until the end. We don't know
           // the number of entries ahead of time with graph-node, unfortunately.
@@ -91,7 +89,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
             }
           }
 
-          console.timeEnd('fetching triples referencing entity');
           return triplesReferencingEntity;
         },
       });
@@ -103,8 +100,96 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       });
       break;
     }
-    case 'CHANGE_VALUE_TYPE':
-      throw new Error('CHANGE_VALUE_TYPE migration not yet supported.');
+    case 'CHANGE_VALUE_TYPE': {
+      const { attributeId, oldValueType, newValueType } = action.payload;
+
+      const triplesWithAttribute = await config.queryClient.fetchQuery({
+        queryKey: ['migrate-triples-with-attribute-id', attributeId],
+        queryFn: async () => {
+          const triplesReferencingEntity: Triple[] = [];
+
+          const FIRST = 1000;
+          let page = 0;
+          let isRemainingTriples = false;
+
+          // We can only fetch 1000 entries at a time from graph-node. If there are
+          // more than 1000 entries we need to paginate until the end. We don't know
+          // the number of entries ahead of time with graph-node, unfortunately.
+          while (!isRemainingTriples) {
+            const triplesChunk = await config.merged.fetchTriples({
+              query: '',
+              first: FIRST,
+              skip: page * FIRST,
+              endpoint: config.appConfig.subgraph,
+              filter: [
+                {
+                  field: 'attribute-id',
+                  value: attributeId,
+                },
+              ],
+            });
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
+
+            if (triplesChunk.length < FIRST) {
+              isRemainingTriples = true;
+            }
+          }
+
+          return triplesReferencingEntity;
+        },
+      });
+
+      /**
+       * Attempt to migrate existing triples from oldValueType to newValueType.
+       *
+       * Currently we only support migrating the following changes:
+       * string -> url
+       * string -> date
+       * date -> string
+       * url -> string
+       *
+       * If we are migrating between types that can't be migrated we delete all
+       * existing triples with the old type.
+       */
+      // @TODO: Batch update
+      for (const triple of triplesWithAttribute) {
+        const value = triple.value;
+
+        if (value.type !== oldValueType) {
+          // delete
+          continue;
+        }
+
+        switch (value.type) {
+          case 'string': {
+            // can migrate to date
+            // can migrate to url
+            // delete otherwise
+            break;
+          }
+
+          case 'date': {
+            // can migrate to string
+            // delete otherwise
+            break;
+          }
+
+          case 'url': {
+            // can migrate to string
+            // delete otherwise
+            break;
+          }
+
+          default:
+            // delete
+            break;
+        }
+      }
+
+      break;
+    }
   }
 }
 
@@ -219,7 +304,3 @@ export function useMigrateHub() {
 
   return hub;
 }
-
-/**
- * We are making an event-system that listens for events and then does something with it.
- */
