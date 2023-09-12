@@ -10,7 +10,7 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
-import { TripleValueType } from '../types';
+import { Triple, TripleValueType } from '../types';
 
 type MigrateAction =
   | {
@@ -57,19 +57,43 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       // Should this be an effect?
       const triplesReferencingEntity = await config.queryClient.fetchQuery({
         queryKey: ['migrate-triples-referencing-entity', entityId],
-        queryFn: () =>
-          config.merged.fetchTriples({
-            query: '',
-            first: 1000,
-            skip: 0,
-            endpoint: config.appConfig.subgraph,
-            filter: [
-              {
-                field: 'linked-to',
-                value: entityId,
-              },
-            ],
-          }),
+        queryFn: async () => {
+          const triplesReferencingEntity: Triple[] = [];
+
+          const FIRST = 1000;
+          let page = 0;
+          let isRemainingTriples = false;
+
+          console.time('fetching triples referencing entity');
+
+          // We can only fetch 1000 entries at a time from graph-node. If there are
+          // more than 1000 entries we need to paginate until the end. We don't know
+          // the number of entries ahead of time with graph-node, unfortunately.
+          while (!isRemainingTriples) {
+            const triplesChunk = await config.merged.fetchTriples({
+              query: '',
+              first: FIRST,
+              skip: page * FIRST,
+              endpoint: config.appConfig.subgraph,
+              filter: [
+                {
+                  field: 'linked-to',
+                  value: entityId,
+                },
+              ],
+            });
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
+
+            if (triplesChunk.length < FIRST) {
+              isRemainingTriples = true;
+            }
+          }
+
+          console.timeEnd('fetching triples referencing entity');
+          return triplesReferencingEntity;
+        },
       });
 
       batch(() => {
