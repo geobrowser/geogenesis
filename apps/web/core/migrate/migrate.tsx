@@ -40,7 +40,7 @@ interface MigrateHubConfig {
 }
 
 interface IMigrateHub {
-  migrate: (action: MigrateAction) => Promise<void>;
+  dispatch: (action: MigrateAction) => Promise<void>;
 }
 
 async function migrate(action: MigrateAction, config: MigrateHubConfig) {
@@ -51,10 +51,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       // @TODO: For now we only delete triples one-level deep, eventually we might
       // want cascading deletes when an entity is deleted. See the commented out
       // Graph class below for more details on the algo.
-      //
-      // We also should batch fetching paginated data.
-      //
-      // Should this be an effect?
       const triplesReferencingEntity = await config.queryClient.fetchQuery({
         queryKey: ['migrate-triples-referencing-entity', entityId],
         queryFn: async () => {
@@ -154,42 +150,45 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        * existing triples with the old type.
        */
       // @TODO: Batch update
-      triplesWithAttribute.forEach(triple => {
-        config.actionsApi.remove(triple);
 
-        // const value = triple.value;
+      batch(() => {
+        triplesWithAttribute.forEach(triple => {
+          config.actionsApi.remove(triple);
 
-        // @TODO: For now we just delete the old triple
-        // if (value.type !== oldValueType) {
-        //   // delete
-        //   continue;
-        // }
+          // const value = triple.value;
 
-        // switch (value.type) {
-        //   case 'string': {
+          // @TODO: For now we just delete the old triple
+          // if (value.type !== oldValueType) {
+          //   // delete
+          //   continue;
+          // }
 
-        //     // can migrate to date
-        //     // can migrate to url
-        //     // delete otherwise
-        //     break;
-        //   }
+          // switch (value.type) {
+          //   case 'string': {
 
-        //   case 'date': {
-        //     // can migrate to string
-        //     // delete otherwise
-        //     break;
-        //   }
+          //     // can migrate to date
+          //     // can migrate to url
+          //     // delete otherwise
+          //     break;
+          //   }
 
-        //   case 'url': {
-        //     // can migrate to string
-        //     // delete otherwise
-        //     break;
-        //   }
+          //   case 'date': {
+          //     // can migrate to string
+          //     // delete otherwise
+          //     break;
+          //   }
 
-        //   default:
-        //     // delete
-        //     break;
-        // }
+          //   case 'url': {
+          //     // can migrate to string
+          //     // delete otherwise
+          //     break;
+          //   }
+
+          //   default:
+          //     // delete
+          //     break;
+          // }
+        });
       });
     }
   }
@@ -197,7 +196,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
 
 function migrateHub(config: MigrateHubConfig): IMigrateHub {
   return {
-    migrate: async (action: MigrateAction) => await migrate(action, config),
+    dispatch: async (action: MigrateAction) => await migrate(action, config),
   };
 }
 
