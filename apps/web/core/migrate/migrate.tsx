@@ -1,3 +1,4 @@
+import { batch } from '@legendapp/state';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -13,19 +14,19 @@ import { TripleValueType } from '../types';
 
 type MigrateAction =
   | {
-    type: 'DELETE_ENTITY';
-    payload: {
-      entityId: string;
-    };
-  }
+      type: 'DELETE_ENTITY';
+      payload: {
+        entityId: string;
+      };
+    }
   | {
-    type: 'CHANGE_VALUE_TYPE';
-    payload: {
-      attributeId: string;
-      oldValueType: TripleValueType;
-      newValueType: TripleValueType;
+      type: 'CHANGE_VALUE_TYPE';
+      payload: {
+        attributeId: string;
+        oldValueType: TripleValueType;
+        newValueType: TripleValueType;
+      };
     };
-  };
 
 interface MigrateHubConfig {
   actionsApi: {
@@ -42,51 +43,132 @@ interface IMigrateHub {
   migrate: (action: MigrateAction) => Promise<void>;
 }
 
-class MigrateHub implements IMigrateHub {
-  private actionsApi: MigrateHubConfig['actionsApi'];
-  private queryClient: MigrateHubConfig['queryClient'];
-  private merged: MigrateHubConfig['merged'];
-  private appConfig: MigrateHubConfig['appConfig'];
+async function migrate(action: MigrateAction, config: MigrateHubConfig) {
+  switch (action.type) {
+    case 'DELETE_ENTITY': {
+      const { entityId } = action.payload;
 
-  constructor(migrateConfig: MigrateHubConfig) {
-    this.actionsApi = migrateConfig.actionsApi;
-    this.queryClient = migrateConfig.queryClient;
-    this.merged = migrateConfig.merged;
-    this.appConfig = migrateConfig.appConfig;
-  }
+      // @TODO: For now we only delete triples one-level deep, eventually we might
+      // want cascading deletes when an entity is deleted. See the commented out
+      // Graph class below for more details on the algo.
+      //
+      // We also should batch fetching paginated data.
+      //
+      // Should this be an effect?
+      const triplesReferencingEntity = await config.queryClient.fetchQuery({
+        queryKey: ['migrate-triples-referencing-entity', entityId],
+        queryFn: () =>
+          config.merged.fetchTriples({
+            query: '',
+            first: 1000,
+            skip: 0,
+            endpoint: config.appConfig.subgraph,
+            filter: [
+              {
+                field: 'linked-to',
+                value: entityId,
+              },
+            ],
+          }),
+      });
 
-  // This _might_ need to be a queue if the actions generated are causing performance
-  // problems. This would mean that the review UI would need to be blocking while
-  // the queue completes.
-  async migrate(action: MigrateAction) {
-    switch (action.type) {
-      case 'DELETE_ENTITY': {
-        const { entityId } = action.payload;
-
-        const triplesReferencingEntity = await this.queryClient.fetchQuery({
-          queryKey: ['migrate-triples-referencing-entity', entityId],
-          queryFn: () =>
-            this.merged.fetchTriples({
-              query: '',
-              first: 1000,
-              skip: 0,
-              endpoint: this.appConfig.subgraph,
-              filter: [
-                {
-                  field: 'linked-to',
-                  value: entityId,
-                },
-              ],
-            }),
-        });
-
-        return;
-      }
-      case 'CHANGE_VALUE_TYPE':
-        return;
+      batch(() => triplesReferencingEntity.map(t => config.actionsApi.remove(t)));
+      break;
     }
+    case 'CHANGE_VALUE_TYPE':
+      throw new Error('CHANGE_VALUE_TYPE migration not yet supported.');
   }
 }
+
+function migrateHub(config: MigrateHubConfig): IMigrateHub {
+  return {
+    migrate: async (action: MigrateAction) => await migrate(action, config),
+  };
+}
+
+// @TODO: For now we don't need a library for handling traversing the graph.
+// Eventually we will for more complex garbage-collecting of data in Geo, like
+// cascading deletes after deleting an entity.
+// class Graph {
+//   adjacencyList: Map<number, number[]>;
+//   visited: Set<number>;
+//   private queryClient: MigrateHubConfig['queryClient'];
+//   private merged: MigrateHubConfig['merged'];
+//   private appConfig: MigrateHubConfig['appConfig'];
+
+//   constructor(config: OmitStrict<MigrateHubConfig, 'actionsApi'>) {
+//     this.adjacencyList = new Map();
+//     this.visited = new Set();
+//     this.queryClient = config.queryClient;
+//     this.merged = config.merged;
+//     this.appConfig = config.appConfig;
+//   }
+
+/**
+ * We need to recursively delete all downstream triples (edges) for any entity (node)
+ * that as a result of being deleting the original node.
+ *
+ * Deleting an entity should delete all triples (edges) that reference this entity.
+ * If the delete triples are the last triple in the entity (node), we should also
+ * delete references to that entity.
+ */
+// async generateDownstreamReferencesToEntity(entityId: string): Promise<Triple[]> {
+// @TODO: For now we only delete triples one-level deep. Eventually we may want to
+// handle cascading deletes if the triples deleted are the last triples in the entity.
+//
+// In that model we will need to track visited entities to avoid cycles in the graph.
+// const descendants = new Set<Triple>();
+// const visited = new Set<string>();
+
+// const dfs = async (entityId: string) => {
+// visited.add(entityId);
+
+// for (const neighbor of neighbors) {
+// See @TODO above
+// if (visited.has(neighbor.id)) continue;
+
+// See @TODO above
+// if (!visited.has(neighbor.id)) {
+// descendants.add(neighbor);
+
+// See @TODO above
+// dfs(neighbor.entityId);
+// }
+// }
+// };
+
+// See @TODO above
+// await dfs(entityId);
+
+//   const neighbors = await this.fetchNeighbors(entityId);
+
+//   console.log('state', {
+//     neighbors,
+//   });
+
+//   return Array.from(neighbors);
+// }
+
+//   async fetchReferencedByTriples(entityId: string) {
+//     // Fetches edges for the given node at entityId
+//     return await this.queryClient.fetchQuery({
+//       queryKey: ['migrate-triples-referencing-entity', entityId],
+//       queryFn: () =>
+//         this.merged.fetchTriples({
+//           query: '',
+//           first: 1000,
+//           skip: 0,
+//           endpoint: this.appConfig.subgraph,
+//           filter: [
+//             {
+//               field: 'linked-to',
+//               value: entityId,
+//             },
+//           ],
+//         }),
+//     });
+//   }
+// }
 
 export function useMigrateHub() {
   const { create, update, remove } = useActionsStore();
@@ -95,7 +177,7 @@ export function useMigrateHub() {
   const { config: appConfig } = Services.useServices();
 
   const hub = React.useMemo(() => {
-    return new MigrateHub({
+    return migrateHub({
       actionsApi: {
         create,
         update,
