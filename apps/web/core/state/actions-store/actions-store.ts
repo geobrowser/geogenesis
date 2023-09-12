@@ -54,6 +54,10 @@ export class ActionsStore implements IActionsStore {
   constructor({ storageClient }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
 
+    // `persistObservable` can be used to automatically persist an observable, both locally and
+    // remotely; it will be saved whenever you change anything anywhere within the observable, and
+    // the observable will be filled with the local state right after calling persistObservable
+    // https://legendapp.com/open-source/state/persistence/#persistobservable
     persistObservable(actions, {
       local: 'actionsStore',
     });

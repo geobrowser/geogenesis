@@ -20,6 +20,8 @@ export const Persistence = () => {
         setStoredActions({});
       }
     }
+    // note: finely tuned dependency because `storedActions` is only used on initial render
+    // `storedActions` will only change once as a result of clearing them in this effect
   }, [isInitialRender]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
