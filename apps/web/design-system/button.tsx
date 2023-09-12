@@ -16,6 +16,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'done';
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
   icon?: IconName;
+  iconColor?: ColorName;
   small?: boolean;
 };
 
@@ -54,10 +55,20 @@ const buttonClassNames = (className = '') =>
   );
 
 export const Button = forwardRef(function Button(
-  { variant = 'primary', icon, small = false, className = '', disabled = false, children, ...rest }: ButtonProps,
+  {
+    variant = 'primary',
+    icon,
+    iconColor: iconColorProps,
+    small = false,
+    className = '',
+    disabled = false,
+    children,
+    ...rest
+  }: ButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-  const iconColor = !small && variant === 'secondary' ? 'ctaPrimary' : undefined;
+  const defaultIconColor = !small && variant === 'secondary' ? 'ctaPrimary' : undefined;
+  const finalIconColor = iconColorProps || defaultIconColor;
 
   return (
     <button
@@ -66,7 +77,7 @@ export const Button = forwardRef(function Button(
       disabled={disabled}
       {...rest}
     >
-      {icon && <Icon icon={icon} color={iconColor} />}
+      {icon && <Icon icon={icon} color={finalIconColor} />}
       {children ?? ZERO_WIDTH_SPACE}
     </button>
   );

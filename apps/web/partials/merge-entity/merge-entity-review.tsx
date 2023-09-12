@@ -12,11 +12,9 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { CreateTripleAction, DeleteTripleAction, Triple } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
-import { Icon } from '~/design-system/icon';
-import { CheckCircle } from '~/design-system/icons/check-circle';
 import { CheckCircleReview } from '~/design-system/icons/check-circle-review';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
@@ -76,27 +74,24 @@ function MergeEntityReviewChanges() {
   const [mergeEntityStep, setMergeEntityStep] = React.useState<'mergeReview' | 'mergePublish'>('mergeReview');
   const { data: wallet } = useWalletClient(); // user wallet session
 
-  // if (!entityTwoTriples) return <div>Loading...</div>;
-  console.log('entity one triples: ', entityOneTriples);
-  console.log('entity two triples: ', entityTwoTriples);
-
-  // this component has a decent amount of repetition that can likely be abstracted after
-  // the functionality is in place
-
   const mergedEntityTriples = Object.values(selectedEntityKeys ?? {}).flat();
+
+  const allTriplesFromEntities = [...entityOneTriples, ...entityTwoTriples];
+
+  const [unmergedTriples, mergedTriples] = partition(allTriplesFromEntities, t => !mergedEntityTriples.includes(t));
 
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
 
-    // const onDeleteTriples = (): DeleteTripleAction[] => {
-    //   return triples.map(t => ({
-    //     ...t,
-    //     type: 'deleteTriple',
-    //   }));
-    // };
+    const onDeleteTriples = (): DeleteTripleAction[] => {
+      return unmergedTriples.map(t => ({
+        ...t,
+        type: 'deleteTriple',
+      }));
+    };
 
     const onCreateNewTriples = (): CreateTripleAction[] => {
-      return mergedEntityTriples.map(t => ({
+      return mergedTriples.map(t => ({
         ...t,
         type: 'createTriple',
         entityId: mergedEntityId,
@@ -104,10 +99,13 @@ function MergeEntityReviewChanges() {
     };
 
     let createActions: CreateTripleAction[] = [];
+    let deleteActions: DeleteTripleAction[] = [];
     createActions = onCreateNewTriples();
+    deleteActions = onDeleteTriples();
 
     console.log('create actions', createActions);
-  }, [wallet, mergedEntityId, mergedEntityTriples]);
+    console.log('delete actions', deleteActions);
+  }, [wallet, mergedEntityId, unmergedTriples, mergedTriples]);
 
   function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: Triple }) {
     if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
@@ -136,7 +134,12 @@ function MergeEntityReviewChanges() {
             <Button onClick={() => setMergeEntityStep('mergePublish')}>Review</Button>
           ) : (
             <div className="flex flex-row gap-2">
-              <Button icon="leftArrowLong" variant="secondary" onClick={() => setMergeEntityStep('mergeReview')}>
+              <Button
+                icon="leftArrowLong"
+                iconColor="grey-04"
+                variant="secondary"
+                onClick={() => setMergeEntityStep('mergeReview')}
+              >
                 Back
               </Button>
               <Button
