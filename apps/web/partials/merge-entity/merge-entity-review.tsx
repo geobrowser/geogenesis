@@ -5,15 +5,19 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
+import { useWalletClient } from 'wagmi';
+
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
-import { Triple } from '~/core/types';
+import { CreateTripleAction, DeleteTripleAction, Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
-import { Button, IconButton, SquareButton } from '~/design-system/button';
+import { Button, SquareButton } from '~/design-system/button';
 import { Icon } from '~/design-system/icon';
+import { CheckCircle } from '~/design-system/icons/check-circle';
+import { CheckCircleReview } from '~/design-system/icons/check-circle-review';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
@@ -72,8 +76,9 @@ function MergeEntityReviewChanges() {
   }); // set the entityOneNameTriple as the default for the 'name' triple
   const [mergedEntityObject, setMergedEntityObject] = React.useState({});
   const [mergeEntityStep, setMergeEntityStep] = React.useState<'mergeReview' | 'mergePublish'>('mergeReview');
+  const { data: wallet } = useWalletClient(); // user wallet session
 
-  if (!entityTwoTriples) return <div>Loading...</div>;
+  // if (!entityTwoTriples) return <div>Loading...</div>;
   console.log('entity one triples: ', entityOneTriples);
   console.log('entity two triples: ', entityTwoTriples);
 
@@ -84,6 +89,30 @@ function MergeEntityReviewChanges() {
   const mergedEntityTriples = Object.values(selectedEntityKeys ?? {}).flat();
 
   console.log('merged entity triples', mergedEntityTriples);
+
+  const handlePublish = React.useCallback(async () => {
+    if (!wallet || !mergedEntityId) return;
+
+    // const onDeleteTriples = (): DeleteTripleAction[] => {
+    //   return triples.map(t => ({
+    //     ...t,
+    //     type: 'deleteTriple',
+    //   }));
+    // };
+
+    const onCreateNewTriples = (): CreateTripleAction[] => {
+      return mergedEntityTriples.map(t => ({
+        ...t,
+        type: 'createTriple',
+        entityId: mergedEntityId,
+      }));
+    };
+
+    let createActions: CreateTripleAction[] = [];
+    createActions = onCreateNewTriples();
+
+    console.log('create actions', createActions);
+  }, [wallet, mergedEntityId, mergedEntityTriples]);
 
   // function handleCheckboxSelect({
   //   attributeId,
@@ -174,7 +203,14 @@ function MergeEntityReviewChanges() {
               <Button icon="leftArrowLong" variant="secondary" onClick={() => setMergeEntityStep('mergeReview')}>
                 Back
               </Button>
-              <Button onClick={() => console.log('publish flow')}>Merge and Publish</Button>
+              <Button
+                onClick={() => {
+                  console.log('publish flow');
+                  handlePublish();
+                }}
+              >
+                Merge and Publish
+              </Button>
             </div>
           )}
         </div>
@@ -294,16 +330,16 @@ function MergeEntityReviewChanges() {
                   <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="flex flex-row gap-3 items-center">
-                    <Icon icon="checkCircle" color="grey-04" />
+                  <div className="flex flex-row gap-3 items-center ">
+                    <CheckCircleReview color="grey-04" />
                     <Text>Delete triples</Text>
                   </div>
                   <div className="flex flex-row gap-3 items-center">
-                    <Icon icon="checkCircle" color="grey-04" />
+                    <CheckCircleReview color="grey-04" />
                     <Text>Update triples</Text>
                   </div>
                   <div className="flex flex-row gap-3 items-center">
-                    <Icon icon="checkCircle" color="grey-04" />
+                    <CheckCircleReview color="grey-04" />
                     <Text>Find and replace all references</Text>
                   </div>
                 </div>
