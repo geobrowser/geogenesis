@@ -1,17 +1,21 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { batch } from '@legendapp/state';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
+import { t } from 'vitest/dist/global-fe52f84b';
 
 import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
-import { CreateTripleAction, DeleteTripleAction, Triple } from '~/core/types';
+import { Triple as TripleType } from '~/core/types';
+import { Triple } from '~/core/utils/triple';
 import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -56,7 +60,8 @@ function MergeEntityReviewChanges() {
     return [entityTwoData].flatMap((entity => entity?.triples) ?? []);
   }
 
-  const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
+  const { triples: entityOneTriples, schemaTriples: entityOneSchemaTriples } = useEntityPageStore(); // triples from entity page
+  const { create, remove } = useActionsStore();
 
   //  triples from subgraph for second entity
   //  @TODO merge with local data since there could be changes
@@ -83,31 +88,37 @@ function MergeEntityReviewChanges() {
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
 
-    const onDeleteTriples = (): DeleteTripleAction[] => {
-      return unmergedTriples.map(t => ({
-        ...t,
-        type: 'deleteTriple',
-      }));
+    // delete the triples from the initial Entity A
+    const onDelete = () => {
+      console.log('entity one triples', entityOneTriples);
+      batch(() => {
+        entityOneTriples.forEach(t => remove(t));
+        unmergedTriples.forEach(t => remove(t));
+      });
     };
 
-    const onCreateNewTriples = (): CreateTripleAction[] => {
-      return mergedTriples.map(t => ({
-        ...t,
-        type: 'createTriple',
-        entityId: mergedEntityId,
-      }));
+    // add new triples with the selected triples and id to Entity B
+    const onCreate = () => {
+      batch(() => {
+        mergedTriples.forEach(t => {
+          create(
+            Triple.withId({
+              ...t,
+              entityId: mergedEntityId,
+            })
+          );
+        });
+      });
     };
 
-    let createActions: CreateTripleAction[] = [];
-    let deleteActions: DeleteTripleAction[] = [];
-    createActions = onCreateNewTriples();
-    deleteActions = onDeleteTriples();
+    // update references: find all references to Entity A and update to Entity B
 
-    console.log('create actions', createActions);
-    console.log('delete actions', deleteActions);
-  }, [wallet, mergedEntityId, unmergedTriples, mergedTriples]);
+    onDelete();
+    onCreate();
+    setIsMergeReviewOpen(false);
+  }, [wallet, mergedEntityId, setIsMergeReviewOpen, entityOneTriples, unmergedTriples, remove, mergedTriples, create]);
 
-  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: Triple }) {
+  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: TripleType }) {
     if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
       // Deselect the current selection
       const newSelectedKeys = { ...selectedEntityKeys };
