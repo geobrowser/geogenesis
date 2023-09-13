@@ -59,7 +59,7 @@ interface IMigrateHub {
   dispatch: (action: MigrateAction) => Promise<Action[]>;
 }
 
-async function migrate(action: MigrateAction, config: MigrateHubConfig) {
+async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {
   switch (action.type) {
     case 'DELETE_ENTITY': {
       const { entityId } = action.payload;
@@ -165,8 +165,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
         },
       });
 
-      console.log('triplesWithAttribute', triplesWithAttribute.length);
-
       /**
        * Attempt to migrate existing triples from oldValueType to newValueType.
        *
@@ -179,7 +177,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        * If we are migrating between types that can't be migrated we delete all
        * existing triples with the old type.
        */
-
       const triplesToDelete: ITriple[] = [];
       const triplesToUpdate: ITriple[][] = [];
 
@@ -295,16 +292,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
         },
       }));
 
-      // batch(() => {
-      //   triplesToDelete.forEach(t => {
-      //     config.actionsApi.remove(t);
-      //   });
-
-      //   triplesToUpdate.forEach(([newTriple, oldTriple]) => {
-      //     config.actionsApi.update(newTriple, oldTriple);
-      //   });
-      // });
-
       return [...deleteActions, ...updateActions];
     }
   }
@@ -313,6 +300,55 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
 function migrateHub(config: MigrateHubConfig): IMigrateHub {
   return {
     dispatch: async (action: MigrateAction) => await migrate(action, config),
+  };
+}
+
+export function useMigrateHub() {
+  const { create, update, remove, allActions, restore } = useActionsStore();
+  const queryClient = useQueryClient();
+  const merged = useMergedData();
+  const { config: appConfig } = Services.useServices();
+  const [, startTransition] = useTransition();
+
+  const hub = React.useMemo(() => {
+    return migrateHub({
+      actionsApi: {
+        create,
+        update,
+        remove,
+      },
+      merged,
+      queryClient,
+      appConfig,
+    });
+  }, [create, update, remove, queryClient, merged, appConfig]);
+
+  const dispatch = React.useCallback(
+    async (action: MigrateAction) => {
+      const actions = await hub.dispatch(action);
+
+      const actionsToBatch = groupBy([...allActions, ...actions], action => {
+        switch (action.type) {
+          case 'createTriple':
+          case 'deleteTriple':
+            return action.space;
+          case 'editTriple':
+            return action.before.space;
+        }
+      });
+
+      startTransition(() => {
+        batch(() => {
+          restore(actionsToBatch);
+        });
+      });
+    },
+
+    [hub, allActions, restore]
+  );
+
+  return {
+    dispatch,
   };
 }
 
@@ -399,55 +435,3 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 //     });
 //   }
 // }
-
-export function useMigrateHub() {
-  const { create, update, remove, allActions, restore } = useActionsStore();
-  const queryClient = useQueryClient();
-  const merged = useMergedData();
-  const { config: appConfig } = Services.useServices();
-  const [, startTransition] = useTransition();
-
-  const hub = React.useMemo(() => {
-    return migrateHub({
-      actionsApi: {
-        create,
-        update,
-        remove,
-      },
-      merged,
-      queryClient,
-      appConfig,
-    });
-  }, [create, update, remove, queryClient, merged, appConfig]);
-
-  const dispatch = React.useCallback(
-    async (action: MigrateAction) => {
-      const actions = await hub.dispatch(action);
-      console.log('actions', actions);
-
-      const actionsToBatch = groupBy([...allActions, ...actions], action => {
-        switch (action.type) {
-          case 'createTriple':
-          case 'deleteTriple':
-            return action.space;
-          case 'editTriple':
-            return action.before.space;
-        }
-      });
-
-      console.log('actionsToBatch', actionsToBatch);
-
-      startTransition(() => {
-        batch(() => {
-          restore(actionsToBatch);
-        });
-      });
-    },
-
-    [hub, allActions, restore]
-  );
-
-  return {
-    dispatch,
-  };
-}
