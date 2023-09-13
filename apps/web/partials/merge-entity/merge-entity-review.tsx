@@ -126,7 +126,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
     const newSelectedKeys = { ...selectedEntityKeys };
 
     // check if current selection exists / any incoming triples are already selected
-    const isAnyTripleSelected = selectedTriples.some(triple => {
+    const isAnyTripleSelected = selectedTriples?.some(triple => {
       const selected = newSelectedKeys[attributeId];
       if (Array.isArray(selected)) {
         return selected.some(selTriple => selTriple.entityId === triple.entityId);

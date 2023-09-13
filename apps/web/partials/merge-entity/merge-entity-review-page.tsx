@@ -164,7 +164,7 @@ function EntityReviewAttributes({
                     type="checkbox"
                     className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
                     checked={isSelected}
-                    onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
+                    onChange={() => onSelect({ attributeId: attributeId, selectedTriples: triples })}
                   />
                   <svg
                     className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"

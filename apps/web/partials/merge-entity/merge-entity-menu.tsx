@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
-
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
@@ -21,13 +19,6 @@ export function MergeEntityMenu({ entityId }: Props) {
 
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
-  const { address } = useAccount();
-
-  // would we also want to potentially filter out entities that are in spaces where the user doesn't have editor permissions?
-  const spacesUserIsEditor = spaces.filter(space => space.editors.includes(address ?? '')).map(space => space.id);
-  const filteredResults = autocomplete.results.filter(
-    result => result.id !== entityId && spacesUserIsEditor.includes(result.nameTripleSpace ?? '')
-  );
 
   return (
     <div className="flex flex-col gap-2 bg-white">
@@ -35,9 +26,9 @@ export function MergeEntityMenu({ entityId }: Props) {
         <Text variant="smallButton">Search for an entity to merge with</Text>
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} value={autocomplete.query} />
       </div>
-      {filteredResults.length > 0 && (
+      {autocomplete.results.length > 0 && (
         <ResultsList>
-          {filteredResults.map(result => (
+          {autocomplete.results.map(result => (
             <ResultContent
               onClick={() => {
                 setEntityIdOne(entityId);
