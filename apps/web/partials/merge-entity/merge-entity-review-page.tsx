@@ -12,10 +12,13 @@ import { Text } from '~/design-system/text';
 
 import { sortEntityPageTriples } from '../entity-page/entity-page-utils';
 
+type SelectedEntityKeysType = {
+  [attributeId: string]: Triple | Triple[];
+};
 interface Props {
   entityId: string;
   triples: Triple[];
-  selectedEntityKeys: Record<string, Triple>;
+  selectedEntityKeys: SelectedEntityKeysType;
   onSelect: (args: { attributeId: string; selectedTriple: Triple[] }) => void;
   mergedEntityId: string;
   setMergedEntityId: (entityId: string) => void;

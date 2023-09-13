@@ -112,8 +112,7 @@ function MergeEntityReviewChanges() {
       });
     };
 
-    // update references: use the migration hub for the entity id that isn't selected
-
+    // use the migration hub for the entity id that isn't selected
     const onMigrate = () => {
       hub.migrate({
         type: 'DELETE_ENTITY',
@@ -223,10 +222,10 @@ function MergeEntityReviewChanges() {
               <Tabs.Content value="entityMergeSelect">
                 <div className="grid grid-cols-2 gap-4 w-full pt-10">
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle truncate">
                       {entityOneTriples[0]?.entityName ?? entityIdOne}
                     </Text>
-                    <div className="flex flex-row items-center gap-2 pb-6 grow">
+                    <div className="flex flex-row items-center gap-2 pb-6 ">
                       {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                         <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                           <Image
@@ -248,10 +247,10 @@ function MergeEntityReviewChanges() {
                     />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle  truncate">
                       {entityTwoTriples[0]?.entityName ?? entityIdTwo}
                     </Text>
-                    <div className="flex flex-row items-center gap-2 pb-6 grow">
+                    <div className="flex flex-row items-center gap-2 pb-6 ">
                       {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
                         <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
                           <Image
@@ -277,7 +276,7 @@ function MergeEntityReviewChanges() {
               <Tabs.Content value="entityMergePreview">
                 <div className="pt-10">
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle grow">
+                    <Text className="text-bold text-mediumTitle sm:text-smallTitle">
                       {mergedEntityTriples[0]?.entityName ?? mergedEntityId}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6">
