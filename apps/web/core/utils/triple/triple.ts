@@ -98,7 +98,8 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
  * track how triples have changed locally over time for use in change counts, diffing, and
  * squashing local actions before publishing them.
  *
- * Whenever the triple gets published to the network, the subgraph will generate a new ID for the triple.
+ * Whenever the triple gets published to the network, the subgraph will correctly handle updating
+ * the old triple with the new triple.
  */
 export function ensureStableId<T extends Triple>(triple: T): T {
   return triple;
