@@ -23,10 +23,12 @@ import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { getImagePath } from '~/core/utils/utils';
-import { ValueType } from '~/core/value-types';
+import { ValueTypeId } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
+import { Dropdown } from '~/design-system/dropdown';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
@@ -42,12 +44,16 @@ import { Input } from '~/design-system/input';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
+import { Spacer } from '~/design-system/spacer';
 import { TextButton } from '~/design-system/text-button';
 
 import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
+// We keep track of the attributes in local state in order to quickly render
+// the changes the user has made to the schema. Otherwise there will be loading
+// states for several actions which will make the UI feel slow.
 const optimisticAttributes$ = observable<IEntity[]>([]);
 
 function useOptimisticAttributes({
@@ -63,26 +69,7 @@ function useOptimisticAttributes({
   const { config } = Services.useServices();
   const { create, remove } = useActionsStore();
 
-  // We keep track of the attributes in local state in order to quickly render
-  // the changes the user has made to the schema. Otherwise there will be loading
-  // states for several actions which will make the UI feel slow.
-  // const [optimisticAttributes, setOptimisticAttributes] = React.useState<IEntity[]>([]);
-
   const onAddAttribute = (attribute: IEntity) => {
-    // Should be find-or-create (?)
-    // 1.If result exists
-    // 2. If result does not exist
-    //    2a. Create it with name and type: Attribute in existing space
-    //    2b. Set created entity in some state as "SelectedAttribute"
-    //    2c. Set the Relation Value Type triple as whatever is selected
-    //
-    // Q: What do we do with the type selector?
-    // A: If we're using an existing attribute it should be pre-filled with the
-    //    Relation Value Type triple if it exists.
-    //        If not allow the user to select a type (?) (this will add the RVT triple)
-    //          How will migrations work if users can change the type?
-    //            Should it only be changeable if it's a local attribute?
-
     create(
       Triple.withId({
         entityId: entityId,
@@ -415,22 +402,30 @@ function SchemaAttributes() {
     );
   };
 
+  const onChangeAttributeValueType = (valueTypeId: ValueTypeId, entity: IEntity) => {
+    // @TODO: That shit
+    console.log('changing shit tho');
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
         {attributes?.map(attributeEntity => {
-          const valueTypeId: ValueType | undefined = attributeEntity.triples.find(
+          const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
             t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          )?.value.id;
+          )?.value.id as ValueTypeId;
 
           const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
           return (
             <div key={attributeEntity.id} className="flex items-center gap-4">
-              <div className="rounded bg-grey-01 px-5 py-2.5">
-                <AttributeValueTypeDropdown valueTypeId={valueTypeId} />
-              </div>
+              {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
+              <AttributeValueTypeDropdown
+                valueTypeId={valueTypeId}
+                onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
+              />
+              {/* </div> */}
               <Input
                 defaultValue={attributeEntity.name ?? ''}
                 onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
@@ -472,7 +467,96 @@ function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () 
   );
 }
 
-function AttributeValueTypeDropdown({ valueTypeId }: { valueTypeId?: ValueType }) {
+function AttributeValueTypeDropdown({
+  valueTypeId,
+  onChange,
+}: {
+  valueTypeId?: ValueTypeId;
+  onChange: (valueTypeId: ValueTypeId) => void;
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  const options = [
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <Text color="grey-04" />
+          <p>Text</p>
+        </div>
+      ),
+      value: SYSTEM_IDS.TEXT,
+      onClick: () => onChange(SYSTEM_IDS.TEXT),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <Relation color="grey-04" />
+          <p>Relation</p>
+        </div>
+      ),
+      value: SYSTEM_IDS.RELATION,
+      onClick: () => onChange(SYSTEM_IDS.RELATION),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <ImageIcon color="grey-04" />
+          <p>Image</p>
+        </div>
+      ),
+      value: SYSTEM_IDS.IMAGE,
+      onClick: () => onChange(SYSTEM_IDS.IMAGE),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <Date color="grey-04" />
+          <p>Date</p>
+        </div>
+      ),
+      value: SYSTEM_IDS.DATE,
+      onClick: () => onChange(SYSTEM_IDS.DATE),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <Url color="grey-04" />
+          <p>Web URL</p>
+        </div>
+      ),
+      value: SYSTEM_IDS.WEB_URL,
+      onClick: () => onChange(SYSTEM_IDS.WEB_URL),
+    },
+  ];
+
+  return (
+    <Menu
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      trigger={
+        <button className="shadow-button">
+          <div className=" flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
+            <ActiveTypeIcon valueTypeId={valueTypeId} />
+            <Spacer width={8} />
+            <ChevronDownSmall color="ctaPrimary" />
+          </div>
+        </button>
+      }
+      align="start"
+      className="z-10 max-w-[160px] bg-white"
+    >
+      {options.map(option => (
+        <MenuItem key={option.value}>
+          <button onClick={option.onClick} className="inline-flex items-center gap-2 px-3 py-2">
+            {option.label}
+          </button>
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
+function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
   switch (valueTypeId) {
     case SYSTEM_IDS.TEXT:
       return <Text color="grey-04" />;

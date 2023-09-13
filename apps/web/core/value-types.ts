@@ -2,8 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { TripleValueType } from './types';
 
-export type ValueType = keyof typeof valueTypes;
-
 export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
