@@ -690,14 +690,16 @@ const ChangedAttribute = ({
             <div className="flex flex-wrap gap-2">
               {entity?.triples
                 .filter(
-                  (triple: any) =>
+                  (triple: Triple) =>
                     triple.attributeId === attributeId &&
+                    'name' in triple.value &&
+                    triple.value.name !== null &&
                     !before?.includes(triple.value.name) &&
                     !after?.includes(triple.value.name)
                 )
-                .map((triple: any) => (
+                .map((triple: Triple) => (
                   <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
+                    {'name' in triple.value && triple.value.name}
                   </Chip>
                 ))}
               {Array.isArray(after) && (
