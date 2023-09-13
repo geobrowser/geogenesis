@@ -1,8 +1,6 @@
 import { batch } from '@legendapp/state';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
 
 import React from 'react';
 
@@ -12,11 +10,19 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
-import { Triple as ITriple, TripleValueType } from '../types';
-import { Triple } from '../utils/triple';
-import { GeoDate } from '../utils/utils';
-
-dayjs.extend(utc);
+import {
+  Triple as ITriple,
+  TripleValueType,
+  TripleWithDateValue,
+  TripleWithStringValue,
+  TripleWithUrlValue,
+} from '../types';
+import {
+  migrateDateTripleToStringTriple,
+  migrateStringTripleToDateTriple,
+  migrateStringTripleToUrlTriple,
+  migrateUrlTripleToStringTriple,
+} from './utils';
 
 type MigrateAction =
   | {
@@ -169,8 +175,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        */
       batch(() => {
         for (const triple of triplesWithAttribute) {
-          // config.actionsApi.remove(triple);
-
           const value = triple.value;
 
           // We just delete the old triple if its value type does not match the value
@@ -187,43 +191,34 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
             case 'string': {
               switch (newValueType) {
                 case 'url': {
-                  if (value.value.startsWith('https://')) {
-                    const newTriple = Triple.ensureStableId({
-                      ...triple,
-                      value: {
-                        ...value,
-                        type: 'url',
-                        value: value.value,
-                      },
-                    });
+                  const maybeMigratedTriple = migrateStringTripleToUrlTriple(
+                    // Should be safe to cast here since we've type narrowed with the above
+                    // switch statements.
+                    triple as TripleWithStringValue
+                  );
 
-                    config.actionsApi.update(newTriple, triple);
-                  }
-                  break;
-                }
-
-                case 'date': {
-                  // We only attempt to convert dates that are in the format MM/DD/YYYY. There is
-                  // an infinite number of potential date formats (and formatting errors) with a
-                  // raw string. The simplest is to choose a single format and delete any triples
-                  // that don't match the correct format.
-                  const date = dayjs.utc(value.value, 'MM/DD/YYYY');
-
-                  if (!date.isValid()) {
+                  if (!maybeMigratedTriple) {
                     config.actionsApi.remove(triple);
                     break;
                   }
 
-                  const newTriple = Triple.ensureStableId({
-                    ...triple,
-                    value: {
-                      ...value,
-                      type: 'string',
-                      value: date.toISOString(),
-                    },
-                  });
+                  config.actionsApi.update(maybeMigratedTriple, triple);
+                  break;
+                }
 
-                  config.actionsApi.update(newTriple, triple);
+                case 'date': {
+                  const maybeMigratedTriple = migrateStringTripleToDateTriple(
+                    // Should be safe to cast here since we've type narrowed with the above
+                    // switch statements.
+                    triple as TripleWithStringValue
+                  );
+
+                  if (!maybeMigratedTriple) {
+                    config.actionsApi.remove(triple);
+                    break;
+                  }
+
+                  config.actionsApi.update(maybeMigratedTriple, triple);
                   break;
                 }
               }
@@ -236,16 +231,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
             // delete otherwise
             case 'date': {
               if (newValueType === 'string') {
-                const { day, month, year } = GeoDate.fromISOStringUTC(value.value);
-
-                const newTriple = Triple.ensureStableId({
-                  ...triple,
-                  value: {
-                    ...value,
-                    type: 'string',
-                    value: `${month}/${day}/${year}`,
-                  },
-                });
+                const newTriple = migrateDateTripleToStringTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithDateValue
+                );
 
                 config.actionsApi.update(newTriple, triple);
                 break;
@@ -259,14 +249,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
             // delete otherwise
             case 'url': {
               if (newValueType === 'string') {
-                const newTriple = Triple.ensureStableId({
-                  ...triple,
-                  value: {
-                    ...value,
-                    type: 'string',
-                    value: value.value,
-                  },
-                });
+                const newTriple = migrateUrlTripleToStringTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithUrlValue
+                );
 
                 config.actionsApi.update(newTriple, triple);
                 break;
