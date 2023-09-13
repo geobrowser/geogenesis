@@ -1,7 +1,8 @@
 import { batch } from '@legendapp/state';
-import { A } from '@mobily/ts-belt';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 
 import React from 'react';
 
@@ -13,6 +14,9 @@ import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
 import { Triple as ITriple, TripleValueType } from '../types';
 import { Triple } from '../utils/triple';
+import { GeoDate } from '../utils/utils';
+
+dayjs.extend(utc);
 
 type MigrateAction =
   | {
@@ -201,7 +205,28 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
                 }
 
                 case 'date': {
-                  throw new Error("Don't know how to migrate string -> date yet");
+                  // We only attempt to convert dates that are in the format MM/DD/YYYY. There is
+                  // an infinite number of potential date formats (and formatting errors) with a
+                  // raw string. The simplest is to choose a single format and delete any triples
+                  // that don't match the correct format.
+                  const date = dayjs.utc(value.value, 'MM/DD/YYYY');
+
+                  if (!date.isValid()) {
+                    config.actionsApi.remove(triple);
+                    break;
+                  }
+
+                  const newTriple = Triple.ensureStableId({
+                    ...triple,
+                    value: {
+                      ...value,
+                      type: 'string',
+                      value: date.toISOString(),
+                    },
+                  });
+
+                  config.actionsApi.update(newTriple, triple);
+                  break;
                 }
               }
 
@@ -213,7 +238,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
             // delete otherwise
             case 'date': {
               if (newValueType === 'string') {
-                throw new Error("Don't know how to migrate date -> string yet");
+                const { day, month, year } = GeoDate.fromISOStringUTC(value.value);
+
+                const newTriple = Triple.ensureStableId({
+                  ...triple,
+                  value: {
+                    ...value,
+                    type: 'string',
+                    value: `${month}/${day}/${year}`,
+                  },
+                });
+
+                config.actionsApi.update(newTriple, triple);
+                break;
               }
 
               config.actionsApi.remove(triple);
