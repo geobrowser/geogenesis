@@ -10,7 +10,8 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
-import { Triple, TripleValueType } from '../types';
+import { Triple as ITriple, TripleValueType } from '../types';
+import { Triple } from '../utils/triple';
 
 type MigrateAction =
   | {
@@ -54,7 +55,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       const triplesReferencingEntity = await config.queryClient.fetchQuery({
         queryKey: ['migrate-triples-referencing-entity', entityId],
         queryFn: async () => {
-          const triplesReferencingEntity: Triple[] = [];
+          const triplesReferencingEntity: ITriple[] = [];
 
           const FIRST = 1000;
           let page = 0;
@@ -102,7 +103,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       const triplesWithAttribute = await config.queryClient.fetchQuery({
         queryKey: ['migrate-triples-with-attribute-id', attributeId],
         queryFn: async () => {
-          const triplesReferencingEntity: Triple[] = [];
+          const triplesReferencingEntity: ITriple[] = [];
 
           const FIRST = 1000;
           let page = 0;
@@ -152,43 +153,86 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       // @TODO: Batch update
 
       batch(() => {
-        triplesWithAttribute.forEach(triple => {
-          config.actionsApi.remove(triple);
+        for (const triple of triplesWithAttribute) {
+          // config.actionsApi.remove(triple);
 
-          // const value = triple.value;
+          const value = triple.value;
 
           // @TODO: For now we just delete the old triple
-          // if (value.type !== oldValueType) {
-          //   // delete
-          //   continue;
-          // }
+          if (value.type !== oldValueType) {
+            // delete
+            config.actionsApi.remove(triple);
+            continue;
+          }
 
-          // switch (value.type) {
-          //   case 'string': {
+          switch (value.type) {
+            // can migrate to date
+            // can migrate to url
+            // delete otherwise
+            case 'string': {
+              switch (newValueType) {
+                case 'url': {
+                  if (value.value.startsWith('https://')) {
+                    const newTriple = Triple.ensureStableId({
+                      ...triple,
+                      value: {
+                        ...value,
+                        type: 'url',
+                        value: value.value,
+                      },
+                    });
 
-          //     // can migrate to date
-          //     // can migrate to url
-          //     // delete otherwise
-          //     break;
-          //   }
+                    config.actionsApi.update(newTriple, triple);
+                  }
+                  break;
+                }
 
-          //   case 'date': {
-          //     // can migrate to string
-          //     // delete otherwise
-          //     break;
-          //   }
+                case 'date': {
+                  throw new Error("Don't know how to migrate string -> date yet");
+                }
+              }
 
-          //   case 'url': {
-          //     // can migrate to string
-          //     // delete otherwise
-          //     break;
-          //   }
+              config.actionsApi.remove(triple);
+              break;
+            }
 
-          //   default:
-          //     // delete
-          //     break;
-          // }
-        });
+            // can migrate to string
+            // delete otherwise
+            case 'date': {
+              if (newValueType === 'string') {
+                throw new Error("Don't know how to migrate date -> string yet");
+              }
+
+              config.actionsApi.remove(triple);
+              break;
+            }
+
+            // can migrate to string
+            // delete otherwise
+            case 'url': {
+              if (newValueType === 'string') {
+                const newTriple = Triple.ensureStableId({
+                  ...triple,
+                  value: {
+                    ...value,
+                    type: 'string',
+                    value: value.value,
+                  },
+                });
+
+                config.actionsApi.update(newTriple, triple);
+                break;
+              }
+
+              config.actionsApi.remove(triple);
+              break;
+            }
+
+            default:
+              config.actionsApi.remove(triple);
+              break;
+          }
+        }
       });
     }
   }
