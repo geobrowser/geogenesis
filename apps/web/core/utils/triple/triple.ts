@@ -100,7 +100,7 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
  *
  * Whenever the triple gets published to the network, the subgraph will generate a new ID for the triple.
  */
-export function ensureStableId(triple: Triple): Triple {
+export function ensureStableId<T extends Triple>(triple: T): T {
   return triple;
 }
 
