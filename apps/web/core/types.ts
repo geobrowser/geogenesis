@@ -196,3 +196,9 @@ export type RelationValueType = {
 };
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
+
+export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: StringValue };
+export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: EntityValue };
+export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: ImageValue };
+export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: DateValue };
+export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: UrlValue };

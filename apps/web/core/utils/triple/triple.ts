@@ -12,7 +12,7 @@ import {
   TripleValueType,
   Value,
 } from '~/core/types';
-import { valueTypes } from '~/core/value-types';
+import { ValueTypeId, valueTypes } from '~/core/value-types';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -21,8 +21,12 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   };
 }
 
-export function emptyPlaceholder(spaceId: string, entityId: string, valueTypeId = SYSTEM_IDS.TEXT): Triple {
-  const type = (valueTypes[valueTypeId] || 'string') as TripleValueType;
+export function emptyPlaceholder(
+  spaceId: string,
+  entityId: string,
+  valueTypeId: ValueTypeId = SYSTEM_IDS.TEXT
+): Triple {
+  const type = valueTypes[valueTypeId] ?? 'string';
 
   return {
     ...empty(spaceId, entityId, type),
@@ -94,9 +98,10 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
  * track how triples have changed locally over time for use in change counts, diffing, and
  * squashing local actions before publishing them.
  *
- * Whenever the triple gets published to the network, the subgraph will generate a new ID for the triple.
+ * Whenever the triple gets published to the network, the subgraph will correctly handle updating
+ * the old triple with the new triple.
  */
-export function ensureStableId(triple: Triple): Triple {
+export function ensureStableId<T extends Triple>(triple: T): T {
   return triple;
 }
 

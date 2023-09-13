@@ -80,6 +80,7 @@ importers:
       classnames: ^2.3.2
       cmdk: ^0.1.21
       connectkit: 1.5.1
+      dayjs: ^1.11.9
       diff: ^5.1.0
       effect: 2.0.0-next.21
       eslint: ^8.21.0
@@ -157,6 +158,7 @@ importers:
       classnames: 2.3.2
       cmdk: 0.1.21_rj7ozvcq3uehdlnj3cbwzbi5ce
       connectkit: 1.5.1_cmm52l5usp4p32k7ozxntkoy5q
+      dayjs: 1.11.9
       diff: 5.1.0
       effect: 2.0.0-next.21
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
@@ -8492,6 +8494,10 @@ packages:
 
   /dateformat/4.6.3:
     resolution: {integrity: sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA==}
+    dev: false
+
+  /dayjs/1.11.9:
+    resolution: {integrity: sha512-QvzAURSbQ0pKdIye2txOzNaHmxtUBXerpY0FJsFXUMKbIZeFm5ht1LS/jFsrncjnmtv8HsG0W2g6c0zUjZWmpA==}
     dev: false
 
   /death/1.1.0:
