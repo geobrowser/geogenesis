@@ -19,7 +19,7 @@ interface Props {
   entityId: string;
   triples: Triple[];
   selectedEntityKeys: SelectedEntityKeysType;
-  onSelect: (args: { attributeId: string; selectedTriple: Triple[] }) => void;
+  onSelect: (args: { attributeId: string; selectedTriples: Triple[] }) => void;
   mergedEntityId: string;
   setMergedEntityId: (entityId: string) => void;
 }

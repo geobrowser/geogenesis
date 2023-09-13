@@ -11,7 +11,7 @@ import { useWalletClient } from 'wagmi';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { useMigrateHub } from '~/core/migrate/migrate';
+import { IMigrateHub, useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
@@ -32,35 +32,28 @@ type SelectedEntityKeysType = {
 
 export function MergeEntityReview() {
   const { isMergeReviewOpen, setIsMergeReviewOpen } = useMergeEntity();
+  const hub = useMigrateHub();
 
   return (
     <SlideUp isOpen={isMergeReviewOpen} setIsOpen={setIsMergeReviewOpen}>
-      <MergeEntityReviewChanges />
+      <MergeEntityReviewChanges hub={hub} />
     </SlideUp>
   );
 }
 
-function MergeEntityReviewChanges() {
+function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
-  const hub = useMigrateHub();
 
   const { subgraph, config } = Services.useServices();
   function useEntityById(entityId: string) {
-    const {
-      data: entityTwoData,
-      isLoading,
-      error,
-    } = useQuery({
+    const { data: entityTwoData } = useQuery({
       queryKey: ['entity-merge-review', entityIdTwo],
       queryFn: async () => {
         if (!entityId) return null;
         return await subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
       },
     });
-    if (!entityTwoData || isLoading || error) {
-      return [];
-    }
-    return [entityTwoData].flatMap((entity => entity?.triples) ?? []);
+    return entityTwoData?.triples ?? [];
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
@@ -90,41 +83,25 @@ function MergeEntityReviewChanges() {
     if (!wallet || !mergedEntityId) return;
 
     const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
+    batch(() => {
+      unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
+      mergedTriples.forEach(t => {
+        create(
+          Triple.withId({
+            ...t,
+            entityId: mergedEntityId,
+          })
+        );
+      }); // create the triples that are merged
+    });
 
-    // delete the unmerged triples
-    const onDelete = () => {
-      batch(() => {
-        unmergedTriples.forEach(t => remove(t));
-      });
-    };
+    hub.migrate({
+      type: 'DELETE_ENTITY',
+      payload: {
+        entityId: notMergedEntityId,
+      },
+    }); // migrate the data with the non-selected entity id
 
-    // add new triples with the selected triples and selected id
-    const onCreate = () => {
-      batch(() => {
-        mergedTriples.forEach(t => {
-          create(
-            Triple.withId({
-              ...t,
-              entityId: mergedEntityId,
-            })
-          );
-        });
-      });
-    };
-
-    // use the migration hub for the entity id that isn't selected
-    const onMigrate = () => {
-      hub.migrate({
-        type: 'DELETE_ENTITY',
-        payload: {
-          entityId: notMergedEntityId,
-        },
-      });
-    };
-
-    onDelete();
-    onCreate();
-    onMigrate();
     setIsMergeReviewOpen(false);
   }, [
     wallet,
@@ -141,15 +118,15 @@ function MergeEntityReviewChanges() {
 
   function handleCheckboxSelect({
     attributeId,
-    selectedTriple,
+    selectedTriples,
   }: {
     attributeId: string;
-    selectedTriple: TripleType[];
+    selectedTriples: TripleType[];
   }) {
     const newSelectedKeys = { ...selectedEntityKeys };
 
     // check if current selection exists / any incoming triples are already selected
-    const isAnyTripleSelected = selectedTriple.some(triple => {
+    const isAnyTripleSelected = selectedTriples.some(triple => {
       const selected = newSelectedKeys[attributeId];
       if (Array.isArray(selected)) {
         return selected.some(selTriple => selTriple.entityId === triple.entityId);
@@ -160,7 +137,7 @@ function MergeEntityReviewChanges() {
     if (isAnyTripleSelected) {
       delete newSelectedKeys[attributeId];
     } else {
-      newSelectedKeys[attributeId] = selectedTriple;
+      newSelectedKeys[attributeId] = selectedTriples;
     }
 
     setSelectedEntityKeys(newSelectedKeys);

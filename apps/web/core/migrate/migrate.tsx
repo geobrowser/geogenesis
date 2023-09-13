@@ -39,7 +39,7 @@ interface MigrateHubConfig {
   appConfig: Environment.AppConfig;
 }
 
-interface IMigrateHub {
+export interface IMigrateHub {
   migrate: (action: MigrateAction) => Promise<void>;
 }
 
