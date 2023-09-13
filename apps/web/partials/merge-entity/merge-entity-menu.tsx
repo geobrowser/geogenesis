@@ -20,15 +20,17 @@ export function MergeEntityMenu({ entityId }: Props) {
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
 
+  const filteredResults = autocomplete.results.filter(result => result.id !== entityId);
+
   return (
     <div className="flex flex-col gap-2 bg-white">
       <div className="flex flex-col gap-2 px-2 py-2">
         <Text variant="smallButton">Search for an entity to merge with</Text>
         <Input onChange={e => autocomplete.onQueryChange(e.currentTarget.value)} value={autocomplete.query} />
       </div>
-      {autocomplete.results.length > 0 && (
+      {filteredResults.length > 0 && (
         <ResultsList>
-          {autocomplete.results.map(result => (
+          {filteredResults.map(result => (
             <ResultContent
               onClick={() => {
                 setEntityIdOne(entityId);
