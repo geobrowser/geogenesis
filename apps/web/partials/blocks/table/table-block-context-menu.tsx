@@ -418,20 +418,20 @@ function SchemaAttributes() {
         attribute.triples.find(t => t.attributeId === SYSTEM_IDS.NAME)
       );
 
-      // const oldValueTypeId = attributeValueTypeTriple.value.id;
+      const oldValueTypeId = attributeValueTypeTriple.value.id;
 
-      // // We want to make sure that the ID is actually one of the value types
-      // // before we run any migrations.
-      // if (oldValueTypeId in valueTypes) {
-      //   migrateHub.dispatch({
-      //     type: 'CHANGE_VALUE_TYPE',
-      //     payload: {
-      //       attributeId: entity.id,
-      //       oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
-      //       newValueType: valueTypes[newValueTypeId],
-      //     },
-      //   });
-      // }
+      // We want to make sure that the ID is actually one of the value types
+      // before we run any migrations.
+      if (oldValueTypeId in valueTypes) {
+        migrateHub.dispatch({
+          type: 'CHANGE_VALUE_TYPE',
+          payload: {
+            attributeId: attribute.id,
+            oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
+            newValueType: valueTypes[newValueTypeId],
+          },
+        });
+      }
     }
 
     if (attribute.nameTripleSpace) {
