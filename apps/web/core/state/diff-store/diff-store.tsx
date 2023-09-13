@@ -28,30 +28,7 @@ type DiffState = {
 
 type CompareMode = 'versions' | 'proposals';
 
-const initialDiffState = {
-  isReviewOpen: false,
-  setIsReviewOpen: (value: boolean) => null,
-  activeSpace: '',
-  setActiveSpace: (value: string) => null,
-  isReadyToPublish: false,
-  setIsReadyToPublish: (value: boolean) => null,
-  isCompareOpen: false,
-  setIsCompareOpen: (value: boolean) => null,
-  compareMode: 'versions' as CompareMode,
-  setCompareMode: (value: CompareMode) => null,
-  activeEntity: '',
-  setActiveEntity: (value: string) => null,
-  selectedVersion: '',
-  setSelectedVersion: (value: string) => null,
-  previousVersion: '',
-  setPreviousVersion: (value: string) => null,
-  selectedProposal: '',
-  setSelectedProposal: (value: string) => null,
-  previousProposal: '',
-  setPreviousProposal: (value: string) => null,
-};
-
-const DiffContext = createContext<DiffState>(initialDiffState);
+const DiffContext = createContext<DiffState | null>(null);
 
 type DiffProviderProps = {
   children: React.ReactNode;
@@ -103,7 +80,7 @@ export const useDiff = () => {
   const value = useContext(DiffContext);
 
   if (!value) {
-    throw new Error(`Missing DiffProvider`);
+    throw new Error(`useDiff must be used within a  DiffProvider`);
   }
 
   return value;

@@ -10,7 +10,6 @@ import { ClientOnly } from '~/design-system/client-only';
 import { Icon } from '~/design-system/icon';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
-import { Spacer } from '~/design-system/spacer';
 
 import { NavbarActions } from './navbar-actions';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';

@@ -104,8 +104,10 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
   const LocalStore = useLocalStoreInstance();
 
   // @TODO(baiirun): fix this
-  const memoizedAllowedTypes = useMemo(() => allowedTypes, [JSON.stringify(allowedTypes)]);
-  const memoizedFilter = useMemo(() => filter, [JSON.stringify(filter)]);
+  const stringifiedAllowedTypes = JSON.stringify(allowedTypes);
+  const stringifiedFilter = JSON.stringify(filter);
+  const memoizedAllowedTypes = useMemo(() => allowedTypes, [stringifiedAllowedTypes]);
+  const memoizedFilter = useMemo(() => filter, [stringifiedFilter]);
 
   const autocomplete = useMemo(() => {
     return new EntityAutocomplete({

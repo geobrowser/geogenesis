@@ -3,7 +3,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -27,7 +27,6 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const initialSpace = spaces.find(space => space.id === selectedSpaceId);
   const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
 
-  const router = useRouter();
   const [open, onOpenChange] = React.useState(false);
   const [name, setName] = React.useState('All');
 

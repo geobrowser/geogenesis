@@ -14,18 +14,7 @@ type MoveEntityState = {
   setEntityId: (value: string) => void;
 };
 
-const initialMoveEntityState = {
-  isMoveReviewOpen: false,
-  setIsMoveReviewOpen: (value: boolean) => null,
-  spaceIdFrom: '',
-  setSpaceIdFrom: (value: string) => null,
-  spaceIdTo: '',
-  setSpaceIdTo: (value: string) => null,
-  entityId: '',
-  setEntityId: (value: string) => null,
-};
-
-const MoveEntityContext = createContext<MoveEntityState>(initialMoveEntityState);
+const MoveEntityContext = createContext<MoveEntityState | null>(null);
 
 type MoveEntityProviderProps = {
   children: React.ReactNode;

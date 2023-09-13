@@ -25,7 +25,7 @@ import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
+import type { Action as ActionType, Entity as EntityType, Space, Triple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
@@ -658,10 +658,16 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {entity?.triples
-                .filter((triple: any) => triple.attributeId === attributeId && !before?.includes(triple.value.name))
-                .map((triple: any) => (
+                .filter(
+                  (triple: Triple) =>
+                    triple.attributeId === attributeId &&
+                    'name' in triple.value &&
+                    triple.value.name !== null &&
+                    !before?.includes(triple.value.name)
+                )
+                .map((triple: Triple) => (
                   <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
+                    {'name' in triple.value && triple.value.name}
                   </Chip>
                 ))}
               {Array.isArray(before) && (
