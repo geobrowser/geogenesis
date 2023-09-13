@@ -17,17 +17,17 @@ import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { getImagePath } from '~/core/utils/utils';
-import { ValueTypeId } from '~/core/value-types';
+import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
-import { Dropdown } from '~/design-system/dropdown';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
@@ -357,9 +357,14 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { create, update } = useActionsStore();
+  const { create, update, remove } = useActionsStore();
+  const migrateHub = useMigrateHub();
 
-  const { optimisticAttributes: attributes, onRemoveAttribute } = useOptimisticAttributes({
+  const {
+    optimisticAttributes: attributes,
+    onRemoveAttribute,
+    onAddAttribute,
+  } = useOptimisticAttributes({
     entityId: type.entityId,
     entityName: type.entityName,
     spaceId: type.space,
@@ -402,9 +407,61 @@ function SchemaAttributes() {
     );
   };
 
-  const onChangeAttributeValueType = (valueTypeId: ValueTypeId, entity: IEntity) => {
-    // @TODO: That shit
-    console.log('changing shit tho');
+  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
+    const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
+
+    if (attributeValueTypeTriple) {
+      remove(attributeValueTypeTriple);
+
+      onRemoveAttribute(
+        attribute,
+        attribute.triples.find(t => t.attributeId === SYSTEM_IDS.NAME)
+      );
+
+      // const oldValueTypeId = attributeValueTypeTriple.value.id;
+
+      // // We want to make sure that the ID is actually one of the value types
+      // // before we run any migrations.
+      // if (oldValueTypeId in valueTypes) {
+      //   migrateHub.dispatch({
+      //     type: 'CHANGE_VALUE_TYPE',
+      //     payload: {
+      //       attributeId: entity.id,
+      //       oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
+      //       newValueType: valueTypes[newValueTypeId],
+      //     },
+      //   });
+      // }
+    }
+
+    if (attribute.nameTripleSpace) {
+      const newTriple = Triple.withId({
+        entityId: attribute.id,
+        entityName: attribute.name,
+        attributeId: SYSTEM_IDS.VALUE_TYPE,
+        attributeName: 'Value type',
+        space: attribute.nameTripleSpace,
+        value: {
+          type: 'entity',
+          id: newValueTypeId,
+          name: valueTypeNames[newValueTypeId],
+        },
+      });
+
+      const updatedTriples = [
+        ...attribute.triples.filter(t => {
+          return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
+        }),
+        newTriple,
+      ];
+
+      onAddAttribute({
+        ...attribute,
+        triples: updatedTriples,
+      });
+
+      create(newTriple);
+    }
   };
 
   return (
