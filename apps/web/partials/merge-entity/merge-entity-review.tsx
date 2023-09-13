@@ -95,7 +95,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
       }); // create the triples that are merged
     });
 
-    hub.migrate({
+    hub.dispatch({
       type: 'DELETE_ENTITY',
       payload: {
         entityId: notMergedEntityId,

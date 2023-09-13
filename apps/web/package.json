@@ -54,6 +54,7 @@
     "classnames": "^2.3.2",
     "cmdk": "^0.1.21",
     "connectkit": "1.5.1",
+    "dayjs": "^1.11.9",
     "diff": "^5.1.0",
     "effect": "2.0.0-next.21",
     "framer-motion": "^10.15.2",

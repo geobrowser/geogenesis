@@ -10,7 +10,19 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
-import { Triple, TripleValueType } from '../types';
+import {
+  Triple as ITriple,
+  TripleValueType,
+  TripleWithDateValue,
+  TripleWithStringValue,
+  TripleWithUrlValue,
+} from '../types';
+import {
+  migrateDateTripleToStringTriple,
+  migrateStringTripleToDateTriple,
+  migrateStringTripleToUrlTriple,
+  migrateUrlTripleToStringTriple,
+} from './utils';
 
 type MigrateAction =
   | {
@@ -40,7 +52,7 @@ interface MigrateHubConfig {
 }
 
 export interface IMigrateHub {
-  migrate: (action: MigrateAction) => Promise<void>;
+  dispatch: (action: MigrateAction) => Promise<void>;
 }
 
 async function migrate(action: MigrateAction, config: MigrateHubConfig) {
@@ -51,20 +63,14 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       // @TODO: For now we only delete triples one-level deep, eventually we might
       // want cascading deletes when an entity is deleted. See the commented out
       // Graph class below for more details on the algo.
-      //
-      // We also should batch fetching paginated data.
-      //
-      // Should this be an effect?
       const triplesReferencingEntity = await config.queryClient.fetchQuery({
         queryKey: ['migrate-triples-referencing-entity', entityId],
         queryFn: async () => {
-          const triplesReferencingEntity: Triple[] = [];
+          const triplesReferencingEntity: ITriple[] = [];
 
           const FIRST = 1000;
           let page = 0;
           let isRemainingTriples = false;
-
-          console.time('fetching triples referencing entity');
 
           // We can only fetch 1000 entries at a time from graph-node. If there are
           // more than 1000 entries we need to paginate until the end. We don't know
@@ -83,15 +89,20 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
               ],
             });
 
-            page = page + 1;
-            triplesReferencingEntity.push(...triplesChunk);
+            // graph-node allows you to page past the last entry. Doing so will return an empty array.
+            // We can use this to determine if we have reached the end of the triples. This will result
+            // in an extra network call, but that's not a big deal right now. Newer Geo APIs will allow
+            // us to know the number of entries ahead of time to avoid this.
+            const newHead: ITriple | undefined = triplesChunk[0];
 
-            if (triplesChunk.length < FIRST) {
+            if (!newHead) {
               isRemainingTriples = true;
             }
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
           }
 
-          console.timeEnd('fetching triples referencing entity');
           return triplesReferencingEntity;
         },
       });
@@ -103,14 +114,168 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
       });
       break;
     }
-    case 'CHANGE_VALUE_TYPE':
-      throw new Error('CHANGE_VALUE_TYPE migration not yet supported.');
+    case 'CHANGE_VALUE_TYPE': {
+      const { attributeId, oldValueType, newValueType } = action.payload;
+
+      const triplesWithAttribute = await config.queryClient.fetchQuery({
+        queryKey: ['migrate-triples-with-attribute-id', attributeId],
+        queryFn: async () => {
+          const triplesReferencingEntity: ITriple[] = [];
+
+          const FIRST = 1000;
+          let page = 0;
+          let isRemainingTriples = false;
+
+          // We can only fetch 1000 entries at a time from graph-node. If there are
+          // more than 1000 entries we need to paginate until the end. We don't know
+          // the number of entries ahead of time with graph-node, unfortunately.
+          while (!isRemainingTriples) {
+            const triplesChunk = await config.merged.fetchTriples({
+              query: '',
+              first: FIRST,
+              skip: page * FIRST,
+              endpoint: config.appConfig.subgraph,
+              filter: [
+                {
+                  field: 'attribute-id',
+                  value: attributeId,
+                },
+              ],
+            });
+
+            // graph-node allows you to page past the last entry. Doing so will return an empty array.
+            // We can use this to determine if we have reached the end of the triples. This will result
+            // in an extra network call, but that's not a big deal right now. Newer Geo APIs will allow
+            // us to know the number of entries ahead of time to avoid this.
+            const newHead: ITriple | undefined = triplesChunk[0];
+
+            if (!newHead) {
+              isRemainingTriples = true;
+            }
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
+          }
+
+          return triplesReferencingEntity;
+        },
+      });
+
+      /**
+       * Attempt to migrate existing triples from oldValueType to newValueType.
+       *
+       * Currently we only support migrating the following changes:
+       * string -> url
+       * string -> date
+       * date -> string
+       * url -> string
+       *
+       * If we are migrating between types that can't be migrated we delete all
+       * existing triples with the old type.
+       */
+      batch(() => {
+        for (const triple of triplesWithAttribute) {
+          const value = triple.value;
+
+          // We just delete the old triple if its value type does not match the value
+          // type of the attribute.
+          if (value.type !== oldValueType) {
+            config.actionsApi.remove(triple);
+            continue;
+          }
+
+          switch (value.type) {
+            // can migrate to date
+            // can migrate to url
+            // delete otherwise
+            case 'string': {
+              switch (newValueType) {
+                case 'url': {
+                  const maybeMigratedTriple = migrateStringTripleToUrlTriple(
+                    // Should be safe to cast here since we've type narrowed with the above
+                    // switch statements.
+                    triple as TripleWithStringValue
+                  );
+
+                  if (!maybeMigratedTriple) {
+                    config.actionsApi.remove(triple);
+                    break;
+                  }
+
+                  config.actionsApi.update(maybeMigratedTriple, triple);
+                  break;
+                }
+
+                case 'date': {
+                  const maybeMigratedTriple = migrateStringTripleToDateTriple(
+                    // Should be safe to cast here since we've type narrowed with the above
+                    // switch statements.
+                    triple as TripleWithStringValue
+                  );
+
+                  if (!maybeMigratedTriple) {
+                    config.actionsApi.remove(triple);
+                    break;
+                  }
+
+                  config.actionsApi.update(maybeMigratedTriple, triple);
+                  break;
+                }
+              }
+
+              config.actionsApi.remove(triple);
+              break;
+            }
+
+            // can migrate to string
+            // delete otherwise
+            case 'date': {
+              if (newValueType === 'string') {
+                const newTriple = migrateDateTripleToStringTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithDateValue
+                );
+
+                config.actionsApi.update(newTriple, triple);
+                break;
+              }
+
+              config.actionsApi.remove(triple);
+              break;
+            }
+
+            // can migrate to string
+            // delete otherwise
+            case 'url': {
+              if (newValueType === 'string') {
+                const newTriple = migrateUrlTripleToStringTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithUrlValue
+                );
+
+                config.actionsApi.update(newTriple, triple);
+                break;
+              }
+
+              config.actionsApi.remove(triple);
+              break;
+            }
+
+            default:
+              config.actionsApi.remove(triple);
+              break;
+          }
+        }
+      });
+    }
   }
 }
 
 function migrateHub(config: MigrateHubConfig): IMigrateHub {
   return {
-    migrate: async (action: MigrateAction) => await migrate(action, config),
+    dispatch: async (action: MigrateAction) => await migrate(action, config),
   };
 }
 
@@ -219,7 +384,3 @@ export function useMigrateHub() {
 
   return hub;
 }
-
-/**
- * We are making an event-system that listens for events and then does something with it.
- */
