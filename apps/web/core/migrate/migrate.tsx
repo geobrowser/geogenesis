@@ -1,4 +1,5 @@
 import { batch } from '@legendapp/state';
+import { A } from '@mobily/ts-belt';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -78,12 +79,18 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
               ],
             });
 
-            page = page + 1;
-            triplesReferencingEntity.push(...triplesChunk);
+            // graph-node allows you to page past the last entry. Doing so will return an empty array.
+            // We can use this to determine if we have reached the end of the triples. This will result
+            // in an extra network call, but that's not a big deal right now. Newer Geo APIs will allow
+            // us to know the number of entries ahead of time to avoid this.
+            const newHead: ITriple | undefined = triplesChunk[0];
 
-            if (triplesChunk.length < FIRST) {
+            if (!newHead) {
               isRemainingTriples = true;
             }
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
           }
 
           return triplesReferencingEntity;
@@ -126,12 +133,18 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
               ],
             });
 
-            page = page + 1;
-            triplesReferencingEntity.push(...triplesChunk);
+            // graph-node allows you to page past the last entry. Doing so will return an empty array.
+            // We can use this to determine if we have reached the end of the triples. This will result
+            // in an extra network call, but that's not a big deal right now. Newer Geo APIs will allow
+            // us to know the number of entries ahead of time to avoid this.
+            const newHead: ITriple | undefined = triplesChunk[0];
 
-            if (triplesChunk.length < FIRST) {
+            if (!newHead) {
               isRemainingTriples = true;
             }
+
+            page = page + 1;
+            triplesReferencingEntity.push(...triplesChunk);
           }
 
           return triplesReferencingEntity;
