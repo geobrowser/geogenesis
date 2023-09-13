@@ -11,6 +11,7 @@ import { useWalletClient } from 'wagmi';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
@@ -25,20 +26,23 @@ import { Text } from '~/design-system/text';
 import { MergeEntityPreviewPage } from './merge-entity-preview-page';
 import { MergeEntityReviewPage } from './merge-entity-review-page';
 
+type SelectedEntityKeysType = {
+  [attributeId: string]: TripleType | TripleType[];
+};
+
 export function MergeEntityReview() {
   const { isMergeReviewOpen, setIsMergeReviewOpen } = useMergeEntity();
 
   return (
     <SlideUp isOpen={isMergeReviewOpen} setIsOpen={setIsMergeReviewOpen}>
-      <div className="h-full overflow-y-auto overscroll-contain">
-        <MergeEntityReviewChanges />
-      </div>
+      <MergeEntityReviewChanges />
     </SlideUp>
   );
 }
 
 function MergeEntityReviewChanges() {
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
+  const hub = useMigrateHub();
 
   const { subgraph, config } = Services.useServices();
   function useEntityById(entityId: string) {
@@ -70,7 +74,7 @@ function MergeEntityReviewChanges() {
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
   const spaceEntityTwo = spaces.find(space => space.id === entityTwoTriples[0]?.space);
   const [mergedEntityId, setMergedEntityId] = React.useState<string>(entityIdOne); // set the entityOneId as the default 'id' for the merged entity
-  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState({
+  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<SelectedEntityKeysType>({
     ...(entityOneNameTriple ? { [entityOneNameTriple.attributeId]: entityOneNameTriple } : {}),
   }); // set the entityOneNameTriple as the default for the 'name' triple
   const [mergeEntityStep, setMergeEntityStep] = React.useState<'mergeReview' | 'mergePublish'>('mergeReview');
@@ -85,15 +89,16 @@ function MergeEntityReviewChanges() {
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
 
-    // delete the triples from the initial entityOne
+    const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
+
+    // delete the unmerged triples
     const onDelete = () => {
       batch(() => {
-        entityOneTriples.forEach(t => remove(t));
         unmergedTriples.forEach(t => remove(t));
       });
     };
 
-    // add new triples with the selected triples and id to entityTwo
+    // add new triples with the selected triples and selected id
     const onCreate = () => {
       batch(() => {
         mergedTriples.forEach(t => {
@@ -107,25 +112,59 @@ function MergeEntityReviewChanges() {
       });
     };
 
-    // update references: find all references to entityOne and update to entityTwo's id
+    // update references: use the migration hub for the entity id that isn't selected
+
+    const onMigrate = () => {
+      hub.migrate({
+        type: 'DELETE_ENTITY',
+        payload: {
+          entityId: notMergedEntityId,
+        },
+      });
+    };
 
     onDelete();
     onCreate();
+    onMigrate();
     setIsMergeReviewOpen(false);
-  }, [wallet, mergedEntityId, setIsMergeReviewOpen, entityOneTriples, unmergedTriples, remove, mergedTriples, create]);
+  }, [
+    wallet,
+    mergedEntityId,
+    entityIdOne,
+    entityIdTwo,
+    unmergedTriples,
+    setIsMergeReviewOpen,
+    remove,
+    mergedTriples,
+    create,
+    hub,
+  ]);
 
-  function handleCheckboxSelect({ attributeId, selectedTriple }: { attributeId: string; selectedTriple: TripleType }) {
-    if (selectedEntityKeys[attributeId] && selectedEntityKeys[attributeId].entityId === selectedTriple.entityId) {
-      // Deselect the current selection
-      const newSelectedKeys = { ...selectedEntityKeys };
+  function handleCheckboxSelect({
+    attributeId,
+    selectedTriple,
+  }: {
+    attributeId: string;
+    selectedTriple: TripleType[];
+  }) {
+    const newSelectedKeys = { ...selectedEntityKeys };
+
+    // check if current selection exists / any incoming triples are already selected
+    const isAnyTripleSelected = selectedTriple.some(triple => {
+      const selected = newSelectedKeys[attributeId];
+      if (Array.isArray(selected)) {
+        return selected.some(selTriple => selTriple.entityId === triple.entityId);
+      } else {
+        return selected && selected.entityId === triple.entityId;
+      }
+    });
+    if (isAnyTripleSelected) {
       delete newSelectedKeys[attributeId];
-      setSelectedEntityKeys(newSelectedKeys);
     } else {
-      setSelectedEntityKeys({
-        ...selectedEntityKeys,
-        [attributeId]: selectedTriple,
-      });
+      newSelectedKeys[attributeId] = selectedTriple;
     }
+
+    setSelectedEntityKeys(newSelectedKeys);
   }
 
   return (
@@ -160,7 +199,7 @@ function MergeEntityReviewChanges() {
         </div>
       </div>
 
-      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full">
+      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
           {mergeEntityStep === 'mergeReview' ? (
             <Tabs.Root defaultValue="entityMergeSelect">

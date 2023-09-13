@@ -1,4 +1,3 @@
-// this is the UI for the rendered Entity description in the Move Entity Review -- it is similar to the -entity-page.tsx comoponents
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import cx from 'classnames';
 
@@ -17,7 +16,7 @@ interface Props {
   entityId: string;
   triples: Triple[];
   selectedEntityKeys: Record<string, Triple>;
-  onSelect: (args: { attributeId: string; selectedTriple: Triple }) => void;
+  onSelect: (args: { attributeId: string; selectedTriple: Triple[] }) => void;
   mergedEntityId: string;
   setMergedEntityId: (entityId: string) => void;
 }
@@ -52,7 +51,6 @@ export function MergeEntityReviewPage({
                 type="checkbox"
                 className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
                 checked={mergedEntityId === entityId}
-                // disabled={mergedEntityId !== entityId}
                 onChange={() => setMergedEntityId(entityId)}
               />
 
@@ -137,7 +135,6 @@ function EntityReviewAttributes({
       {Object.entries(groupedTriples).map(([attributeId, triples], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
-        // check if the current selection is an array
         const currentSelection = selectedEntityKeys[attributeId];
 
         const isSelectedTriple = (triple: Triple) => triple?.entityId === entityId;
@@ -164,7 +161,11 @@ function EntityReviewAttributes({
                     type="checkbox"
                     className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
                     checked={isSelected}
-                    onChange={() => onSelect({ attributeId: attributeId, selectedTriple: triples })}
+                    onChange={() => {
+                      console.log('triples', triples);
+                      console.log('typeof triples', Array.isArray(triples));
+                      onSelect({ attributeId: attributeId, selectedTriple: triples });
+                    }}
                   />
                   <svg
                     className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"

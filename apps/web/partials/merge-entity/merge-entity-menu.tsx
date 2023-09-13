@@ -17,24 +17,12 @@ interface Props {
 }
 
 export function MergeEntityMenu({ entityId }: Props) {
-  /*
-  1. List possible entities:
-    - Pulling in from useAutocomplete
-      - Filter out the current entity
-      - Filter entities user has access to?
-  2. Show entity name + description
-  3. Select entity to merge with -- copy the entityId (entityIdTo)
-  4. Pass over the entityId that is the current selection from params (entityIdFrom)
-  5. Open the merge entity modal and pass in the two entityIds
-*/
   const { setIsMergeReviewOpen, setEntityIdOne, setEntityIdTwo } = useMergeEntity();
 
   const autocomplete = useAutocomplete();
   const { spaces } = useSpaces();
   const { address } = useAccount();
 
-  // filter out the current entity -- see if this can move to the autocomplete filters field
-  // see if it is reasonable to add a `not-entity-id` filter to the where clause filter
   // would we also want to potentially filter out entities that are in spaces where the user doesn't have editor permissions?
   const spacesUserIsEditor = spaces.filter(space => space.editors.includes(address ?? '')).map(space => space.id);
   const filteredResults = autocomplete.results.filter(

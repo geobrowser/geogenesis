@@ -1,4 +1,3 @@
-// this is the UI for the rendered Entity description in the Move Entity Review -- it is similar to the -entity-page.tsx comoponents
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Triple } from '~/core/types';
@@ -35,7 +34,6 @@ export function MergeEntityPreviewPage({ entityId, triples }: Props) {
   );
 }
 
-// this is the same Entity UI as in the other entity pages
 function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entityId']; triples: Props['triples'] }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
