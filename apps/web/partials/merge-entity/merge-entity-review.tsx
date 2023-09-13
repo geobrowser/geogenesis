@@ -20,6 +20,7 @@ import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { CheckCircleReview } from '~/design-system/icons/check-circle-review';
+import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
@@ -156,8 +157,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
           ) : (
             <div className="flex flex-row gap-2">
               <Button
-                icon="leftArrowLong"
-                iconColor="grey-04"
+                icon={<LeftArrowLong color="grey-04" />}
                 variant="secondary"
                 onClick={() => setMergeEntityStep('mergeReview')}
               >
