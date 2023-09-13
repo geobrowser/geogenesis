@@ -173,9 +173,9 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
 
           const value = triple.value;
 
-          // @TODO: For now we just delete the old triple
+          // We just delete the old triple if its value type does not match the value
+          // type of the attribute.
           if (value.type !== oldValueType) {
-            // delete
             config.actionsApi.remove(triple);
             continue;
           }
