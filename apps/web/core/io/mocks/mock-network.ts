@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { observable } from '@legendapp/state';
 
-import { Space, Triple, Value } from '~/core/types';
+import { Space, Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { Subgraph } from '..';
@@ -85,6 +85,54 @@ export const makeStubRelationAttribute = (name: string): Triple => {
       id: SYSTEM_IDS.RELATION,
     },
     space: 's',
+  };
+};
+
+export const makeStubTripleWithStringValue = (value: string): TripleWithStringValue => {
+  return {
+    id: `id~${value}`,
+    entityId: `entityId~${value}`,
+    entityName: `entityName~${value}`,
+    attributeId: `attributeId~${value}`,
+    attributeName: `attributeName~${value}`,
+    value: {
+      type: 'string',
+      value,
+      id: `s~${value}`,
+    },
+    space: `space~${value}`,
+  };
+};
+
+export const makeStubTripleWithDateValue = (value: string): TripleWithDateValue => {
+  return {
+    id: `id~${value}`,
+    entityId: `entityId~${value}`,
+    entityName: `entityName~${value}`,
+    attributeId: `attributeId~${value}`,
+    attributeName: `attributeName~${value}`,
+    value: {
+      type: 'date',
+      value,
+      id: `d~${value}`,
+    },
+    space: `space~${value}`,
+  };
+};
+
+export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue => {
+  return {
+    id: `id~${value}`,
+    entityId: `entityId~${value}`,
+    entityName: `entityName~${value}`,
+    attributeId: `attributeId~${value}`,
+    attributeName: `attributeName~${value}`,
+    value: {
+      type: 'url',
+      value,
+      id: `u~${value}`,
+    },
+    space: `space~${value}`,
   };
 };
 
