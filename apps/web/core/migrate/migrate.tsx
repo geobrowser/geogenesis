@@ -167,8 +167,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        * If we are migrating between types that can't be migrated we delete all
        * existing triples with the old type.
        */
-      // @TODO: Batch update
-
       batch(() => {
         for (const triple of triplesWithAttribute) {
           // config.actionsApi.remove(triple);
