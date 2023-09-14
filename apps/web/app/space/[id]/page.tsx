@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
+import * as React from 'react';
 
 import type { Metadata } from 'next';
 
@@ -10,29 +10,20 @@ import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { serverRuntime } from '~/core/runtime';
-import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
-import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import {
   EntityReferencedByLoading,
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { SpaceEditors } from '~/partials/space-page/space-editors';
-import { SpaceMembers } from '~/partials/space-page/space-members';
-import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
 export const runtime = serverRuntime.runtime;
 export const fetchCache = serverRuntime.fetchCache;
@@ -86,19 +77,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function SpacePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
-
   const props = await getData(params.id, config);
-
   return (
     <>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
-
-      <Suspense fallback={<EntityReferencedByLoading />}>
+      <React.Suspense fallback={<EntityReferencedByLoading />}>
         {/* @ts-expect-error async JSX function */}
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
-      </Suspense>
+      </React.Suspense>
     </>
   );
 }
