@@ -9,14 +9,13 @@ import { useHydrated } from '~/core/hooks/use-hydrated';
 
 interface TabGroupProps {
   tabs: Array<{ href: string; label: string }>;
-  delayAnimateOnMount?: boolean;
 }
 
-export function TabGroup({ tabs, delayAnimateOnMount }: TabGroupProps) {
+export function TabGroup({ tabs }: TabGroupProps) {
   return (
     <div className="flex items-center gap-6 border-b border-grey-02 pb-2">
       {tabs.map(t => (
-        <Tab key={t.href} href={t.href} label={t.label} delayAnimateOnMount={delayAnimateOnMount} />
+        <Tab key={t.href} href={t.href} label={t.label} />
       ))}
     </div>
   );
@@ -25,7 +24,6 @@ export function TabGroup({ tabs, delayAnimateOnMount }: TabGroupProps) {
 interface TabProps {
   href: string;
   label: string;
-  delayAnimateOnMount?: boolean;
 }
 
 const tabStyles = cva('relative text-quoteMedium transition-colors duration-100', {
@@ -40,7 +38,7 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
   },
 });
 
-function Tab({ href, label, delayAnimateOnMount }: TabProps) {
+function Tab({ href, label }: TabProps) {
   const isHydrated = useHydrated();
   const path = usePathname();
   const active = path === href;
@@ -53,7 +51,7 @@ function Tab({ href, label, delayAnimateOnMount }: TabProps) {
         // some of the layout to re-render, affecting the position of the active tab border.
         // When re-renders from the server happen the active tab border starts in the wrong position.
         <motion.div
-          {...(isHydrated || !delayAnimateOnMount
+          {...(isHydrated
             ? {
                 layoutId: 'tab-group-active-border',
                 layout: true,
