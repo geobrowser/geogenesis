@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { Action, Entity, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
+import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { ValueTypeId } from '~/core/value-types';
 
 import { Triple } from '../triple';
@@ -190,4 +190,4 @@ export const getParentEntityId = (triples: ITriple[] = []) => {
   return parentEntityId;
 };
 
-export const isNonNull = (entity: Entity | null): entity is Entity => entity !== null;
+export const isNonNull = (entity: IEntity | null): entity is IEntity => entity !== null;

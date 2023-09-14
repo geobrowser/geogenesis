@@ -130,7 +130,7 @@ function getFirstAndLastChanges(actions: ActionType[]) {
  * to update the triple.
  */
 export function squashChanges(actions: Action[]) {
-  const result = Object.values(getFirstAndLastChanges(actions))
+  return Object.values(getFirstAndLastChanges(actions))
     .map(changeTuple => {
       // In this case we're fine just returning the after action since it will include
       // the final state of the triple.
@@ -167,8 +167,6 @@ export function squashChanges(actions: Action[]) {
       return changeTuple.last;
     })
     .flatMap(changeTuple => (changeTuple ? changeTuple : []));
-
-  return result;
 }
 
 export function unpublishedChanges(actions: Action[]) {
