@@ -12,6 +12,8 @@ import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
+import { Spacer } from '~/design-system/spacer';
+
 import Loading from './loading';
 
 export const runtime = 'edge';
@@ -55,7 +57,7 @@ async function ActivityList({ params, searchParams }: Props) {
   // the wallet. Eventually this will get replaced by a proper Profile system.
   const userId = Value.nameOfEntityValue(firstWalletsTriple);
 
-  if (!userId) return <p className="text-grey-04 text-body">There is no information here yet.</p>;
+  if (!userId) return <p className="text-body text-grey-04">There is no information here yet.</p>;
 
   const proposals = await fetchProposalsByUser({
     endpoint: config.subgraph,
@@ -71,7 +73,10 @@ async function ActivityList({ params, searchParams }: Props) {
   return (
     <div className="divide-y divide-divider">
       {proposals.length === 0 ? (
-        <p className="text-grey-04 text-body py-3">There is no information here yet.</p>
+        <>
+          <Spacer height={20} />
+          <p className="py-3 text-body text-grey-04">There is no information here yet.</p>
+        </>
       ) : (
         proposals.map(p => {
           const space = spaces.find(s => s.id === p.space);
@@ -95,9 +100,9 @@ async function ActivityList({ params, searchParams }: Props) {
 
           return (
             <div key={p.id} className="flex flex-col gap-2 py-3">
-              <div className="flex w-full justify-between items-center">
+              <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="relative rounded-sm overflow-hidden h-4 w-4">
+                  <div className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>

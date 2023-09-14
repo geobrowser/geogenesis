@@ -24,7 +24,7 @@ import { ReferencedByEntity } from '~/partials/entity-page/types';
 
 export const runtime = 'edge';
 
-const TABS = ['Overview', 'Work', 'Education', 'Activity'] as const;
+const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
   params: { id: string; entityId: string };
@@ -67,21 +67,24 @@ export default async function ProfileLayout({ children, params }: Props) {
           showAccessControl
         />
         <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+
         <Spacer height={40} />
         <TabGroup
           tabs={TABS.map(label => {
             const href =
               label === 'Overview'
                 ? // @TODO: These links should be updated when we integrate templates in production for everyone
-                  `${NavUtils.toEntity(params.id, params.entityId)}/template`
-                : `${NavUtils.toEntity(params.id, params.entityId)}/template/${label.toLowerCase()}`;
+                  `${NavUtils.toEntity(params.id, params.entityId)}`
+                : `${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`;
             return {
               href,
               label,
             };
           })}
         />
+
         <Spacer height={20} />
+
         {children}
       </EntityPageContentContainer>
     </EntityStoreProvider>

@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -10,11 +9,8 @@ import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { serverRuntime } from '~/core/runtime';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { ServerSideEnvParams } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -116,40 +112,9 @@ const getData = async (spaceId: string, config: AppConfig) => {
     }
   }
 
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
-
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
-
-  const blockTriples = (
-    await Promise.all(
-      blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
-      })
-    )
-  ).flatMap(triples => triples);
-
   return {
     triples: entity?.triples ?? [],
     id: entityId,
-    name: entity?.name ?? spaceName ?? '',
-    description: Entity.description(entity?.triples ?? []),
     spaceId,
-    serverAvatarUrl,
-    serverCoverUrl,
-
-    // For entity page editor
-    blockIdsTriple,
-    blockTriples,
-
-    space,
   };
 };

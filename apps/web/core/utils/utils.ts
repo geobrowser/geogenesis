@@ -41,10 +41,10 @@ export const NavUtils = {
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return `/space/${spaceId}/${entityId}/template/activity?spaceId=${spaceIdParam}`;
+      return `/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return `/space/${spaceId}/${entityId}/template/activity`;
+    return `/space/${spaceId}/${entityId}/activity`;
   },
 };
 
