@@ -30,6 +30,7 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
+import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
 export const runtime = serverRuntime.runtime;
@@ -114,8 +115,12 @@ export default async function SpacePage({ params, searchParams }: Props) {
           <SpacePageMetadataHeader
             spaceId={props.spaceId}
             membersComponent={
-              // @ts-expect-error async JSX function
-              <SpaceEditors spaceId={params.id} />
+              <>
+                {/* @ts-expect-error async JSX function */}
+                <SpaceEditors spaceId={params.id} />
+                {/* @ts-expect-error async JSX function */}
+                <SpaceMembers spaceId={params.id} />
+              </>
             }
           />
 

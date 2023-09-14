@@ -11,8 +11,8 @@ interface Props {
   spaceId: string;
 }
 
-export async function SpaceEditors({ spaceId }: Props) {
-  const { firstThreeEditors, totalEditors } = await getEditorsForSpace(spaceId);
+export async function SpaceMembers({ spaceId }: Props) {
+  const { firstThreeEditors, totalMembers } = await getMembersForSpace(spaceId);
 
   return (
     <div className="flex h-6 items-center gap-1 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
@@ -25,18 +25,18 @@ export async function SpaceEditors({ spaceId }: Props) {
       </AvatarGroup>
 
       <p>
-        {totalEditors} {pluralize('editor', totalEditors)}
+        {totalMembers} {pluralize('member', totalMembers)}
       </p>
     </div>
   );
 }
 
-type EditorsForSpace = {
+type MembersForSpace = {
   firstThreeEditors: OmitStrict<Profile, 'name' | 'coverUrl'>[];
-  totalEditors: number;
+  totalMembers: number;
 };
 
-async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
+async function getMembersForSpace(spaceId: string): Promise<MembersForSpace> {
   const config = Params.getConfigFromParams({}, undefined);
   const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
 
@@ -60,8 +60,8 @@ async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
   return {
     firstThreeEditors,
 
-    // For now an editor might not have a profile, so we only show the count
-    // for editor with profiles.
-    totalEditors: profiles.length,
+    // For now a member might not have a profile, so we only show the count
+    // for members with profiles.
+    totalMembers: profiles.length,
   };
 }
