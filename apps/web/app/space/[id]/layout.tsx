@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
+import * as React from 'react';
 
 import type { Metadata } from 'next';
 
@@ -13,7 +13,6 @@ import { serverRuntime } from '~/core/runtime';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -21,15 +20,9 @@ import { Value } from '~/core/utils/value';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
-import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import {
-  EntityReferencedByLoading,
-  EntityReferencedByServerContainer,
-} from '~/partials/entity-page/entity-page-referenced-by-server-container';
-import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
@@ -39,13 +32,13 @@ export const fetchCache = serverRuntime.fetchCache;
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams;
+  children: React.ReactNode;
 }
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  const config = Params.getConfigFromParams({}, env);
 
   const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   const entityId = space?.spaceConfigEntityId;
@@ -83,23 +76,67 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function SpacePage({ params, searchParams }: Props) {
+export default async function SpaceLayout({ params, children }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  const config = Params.getConfigFromParams({}, env);
 
   const props = await getData(params.id, config);
 
-  return (
-    <>
-      <Editor shouldHandleOwnSpacing />
-      <ToggleEntityPage {...props} />
-      <Spacer height={40} />
+  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
 
-      <Suspense fallback={<EntityReferencedByLoading />}>
-        {/* @ts-expect-error async JSX function */}
-        <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
-      </Suspense>
-    </>
+  return (
+    // @ts-expect-error async JSX function
+    <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialTriples={props.triples}
+        initialSchemaTriples={[]}
+        initialBlockIdsTriple={props.blockIdsTriple}
+        initialBlockTriples={props.blockTriples}
+      >
+        <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+
+        <EntityPageContentContainer>
+          <EditableHeading
+            spaceId={props.spaceId}
+            entityId={props.id}
+            name={props.name}
+            triples={props.triples}
+            showAccessControl
+          />
+          <SpacePageMetadataHeader
+            spaceId={props.spaceId}
+            membersComponent={
+              <>
+                {/* @ts-expect-error async JSX function */}
+                <SpaceEditors spaceId={params.id} />
+                {/* @ts-expect-error async JSX function */}
+                <SpaceMembers spaceId={params.id} />
+              </>
+            }
+          />
+
+          <Spacer height={40} />
+          <TabGroup
+            tabs={[
+              {
+                label: 'Overview',
+                href: `${NavUtils.toSpace(params.id)}`,
+              },
+              {
+                label: 'Governance',
+                href: `${NavUtils.toSpace(params.id)}/governance`,
+              },
+            ]}
+          />
+          <Spacer height={20} />
+
+          {children}
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 
