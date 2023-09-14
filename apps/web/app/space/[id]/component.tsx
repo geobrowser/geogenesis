@@ -14,8 +14,8 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EditableEntityPage } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { SpacePageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
+import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
 interface Props {
   triples: Triple[];
