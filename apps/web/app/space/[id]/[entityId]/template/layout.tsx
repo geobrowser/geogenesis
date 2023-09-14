@@ -69,6 +69,7 @@ export default async function ProfileLayout({ children, params }: Props) {
         <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
         <Spacer height={40} />
         <TabGroup
+          delayAnimateOnMount
           tabs={TABS.map(label => {
             const href =
               label === 'Overview'
