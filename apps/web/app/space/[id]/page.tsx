@@ -19,6 +19,7 @@ import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
+import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
@@ -125,6 +126,21 @@ export default async function SpacePage({ params, searchParams }: Props) {
           />
 
           <Spacer height={40} />
+
+          <TabGroup
+            tabs={[
+              {
+                label: 'Overview',
+                href: `${NavUtils.toSpace(params.id)}`,
+              },
+              {
+                label: 'Governance',
+                href: `${NavUtils.toSpace(params.id)}/governance`,
+              },
+            ]}
+          />
+
+          <Spacer height={20} />
           <Editor shouldHandleOwnSpacing />
           <ToggleEntityPage {...props} />
           <Spacer height={40} />
