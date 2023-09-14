@@ -68,6 +68,7 @@ function useOptimisticAttributes({
   const merged = useMergedData();
   const { config } = Services.useServices();
   const { create, remove } = useActionsStore();
+  const migrateHub = useMigrateHub();
 
   const onAddAttribute = (attribute: IEntity) => {
     create(
@@ -86,6 +87,19 @@ function useOptimisticAttributes({
     );
 
     optimisticAttributes$.set([...optimisticAttributes$.get(), attribute]);
+  };
+
+  const onUpdateAttribute = (attribute: IEntity) => {
+    const optimisticAttributes = optimisticAttributes$.get();
+    const remappedOptimisticAttributes = optimisticAttributes.map(a => {
+      if (a.id === attribute.id) {
+        return attribute;
+      }
+
+      return a;
+    });
+
+    optimisticAttributes$.set(remappedOptimisticAttributes);
   };
 
   const onRemoveAttribute = (attribute: IEntity, nameTriple?: ITriple) => {
@@ -109,6 +123,63 @@ function useOptimisticAttributes({
     );
 
     optimisticAttributes$.set(optimisticAttributes$.get().filter(a => a.id !== attribute.id));
+  };
+
+  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
+    const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
+
+    if (attributeValueTypeTriple) {
+      remove(attributeValueTypeTriple);
+
+      const oldValueTypeId = attributeValueTypeTriple.value.id;
+
+      // We want to make sure that the ID is actually one of the value types
+      // before we run any migrations.
+      //
+      // @TODO: Is there a better way to have this encoded into the type system
+      // of `value.id`?
+      if (oldValueTypeId in valueTypes) {
+        migrateHub.dispatch({
+          type: 'CHANGE_VALUE_TYPE',
+          payload: {
+            attributeId: attribute.id,
+            oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
+            newValueType: valueTypes[newValueTypeId],
+          },
+        });
+      }
+    }
+
+    if (attribute.nameTripleSpace) {
+      const newTriple = Triple.withId({
+        entityId: attribute.id,
+        entityName: attribute.name,
+        attributeId: SYSTEM_IDS.VALUE_TYPE,
+        attributeName: 'Value type',
+        space: attribute.nameTripleSpace,
+        value: {
+          type: 'entity',
+          id: newValueTypeId,
+          name: valueTypeNames[newValueTypeId],
+        },
+      });
+
+      const updatedTriples = [
+        ...attribute.triples.filter(t => {
+          return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
+        }),
+        newTriple,
+      ];
+
+      // Update the attribute in-place in the optimistic state
+      onUpdateAttribute({
+        ...attribute,
+        triples: updatedTriples,
+      });
+
+      // Create a new Value Type triple with the new value type
+      create(newTriple);
+    }
   };
 
   const { data } = useQuery({
@@ -154,6 +225,7 @@ function useOptimisticAttributes({
     optimisticAttributes,
     onAddAttribute,
     onRemoveAttribute,
+    onChangeAttributeValueType,
   };
 }
 
@@ -357,13 +429,12 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { create, update, remove } = useActionsStore();
-  const migrateHub = useMigrateHub();
+  const { create, update } = useActionsStore();
 
   const {
     optimisticAttributes: attributes,
     onRemoveAttribute,
-    onAddAttribute,
+    onChangeAttributeValueType,
   } = useOptimisticAttributes({
     entityId: type.entityId,
     entityName: type.entityName,
@@ -405,63 +476,6 @@ function SchemaAttributes() {
       },
       oldNameTriple
     );
-  };
-
-  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
-    const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
-
-    if (attributeValueTypeTriple) {
-      remove(attributeValueTypeTriple);
-
-      onRemoveAttribute(
-        attribute,
-        attribute.triples.find(t => t.attributeId === SYSTEM_IDS.NAME)
-      );
-
-      const oldValueTypeId = attributeValueTypeTriple.value.id;
-
-      // We want to make sure that the ID is actually one of the value types
-      // before we run any migrations.
-      if (oldValueTypeId in valueTypes) {
-        migrateHub.dispatch({
-          type: 'CHANGE_VALUE_TYPE',
-          payload: {
-            attributeId: attribute.id,
-            oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
-            newValueType: valueTypes[newValueTypeId],
-          },
-        });
-      }
-    }
-
-    if (attribute.nameTripleSpace) {
-      const newTriple = Triple.withId({
-        entityId: attribute.id,
-        entityName: attribute.name,
-        attributeId: SYSTEM_IDS.VALUE_TYPE,
-        attributeName: 'Value type',
-        space: attribute.nameTripleSpace,
-        value: {
-          type: 'entity',
-          id: newValueTypeId,
-          name: valueTypeNames[newValueTypeId],
-        },
-      });
-
-      const updatedTriples = [
-        ...attribute.triples.filter(t => {
-          return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
-        }),
-        newTriple,
-      ];
-
-      onAddAttribute({
-        ...attribute,
-        triples: updatedTriples,
-      });
-
-      create(newTriple);
-    }
   };
 
   return (
