@@ -259,7 +259,7 @@ export function TableBlockContextMenu() {
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button onClick={onCopyViewId} className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
           <Copy /> <span>Copy view ID</span>
         </button>
       </MenuItem>
@@ -530,7 +530,7 @@ function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () 
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button onClick={onRemoveAttribute} className="inline-flex items-center gap-2 px-3 py-2">
+        <button onClick={onRemoveAttribute} className="inline-flex w-full items-center gap-2 px-3 py-2">
           <Trash /> <span>Remove attribute</span>
         </button>
       </MenuItem>
@@ -618,7 +618,7 @@ function AttributeValueTypeDropdown({
     >
       {options.map(option => (
         <MenuItem key={option.value}>
-          <button onClick={option.onClick} className="inline-flex items-center gap-2 px-3 py-2">
+          <button onClick={option.onClick} className="inline-flex w-full items-center gap-2 px-3 py-2">
             {option.label}
           </button>
         </MenuItem>
