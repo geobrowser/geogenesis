@@ -10,6 +10,8 @@ import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { serverRuntime } from '~/core/runtime';
+import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { ServerSideEnvParams } from '~/core/types';
@@ -17,12 +19,19 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
+import { Spacer } from '~/design-system/spacer';
+
+import { Editor } from '~/partials/editor/editor';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import {
   EntityReferencedByLoading,
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
-
-import { Component } from './component';
+import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
 export const runtime = serverRuntime.runtime;
 export const fetchCache = serverRuntime.fetchCache;
@@ -75,6 +84,11 @@ export default async function EntityPage({ params, searchParams }: Props) {
   const config = Params.getConfigFromParams(searchParams, env);
 
   const props = await getData(params.id, params.entityId, config);
+
+  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const types = Entity.types(props.triples);
+
   const filterId = searchParams.filterId ?? null;
   const filterValue = searchParams.filterValue ?? null;
   const typeId = searchParams.typeId ?? null;
@@ -82,18 +96,31 @@ export default async function EntityPage({ params, searchParams }: Props) {
   return (
     // @ts-expect-error async JSX function
     <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
-      <Component
-        {...props}
-        filterId={filterId}
-        filterValue={filterValue}
-        typeId={typeId}
-        ReferencedByComponent={
-          <Suspense fallback={<EntityReferencedByLoading />}>
-            {/* @ts-expect-error async JSX function */}
-            <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
-          </Suspense>
-        }
-      />
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialTriples={props.triples}
+        initialSchemaTriples={[]}
+        initialBlockIdsTriple={props.blockIdsTriple}
+        initialBlockTriples={props.blockTriples}
+      >
+        <MoveEntityProvider>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+          <EntityPageContentContainer>
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
+            <Spacer height={40} />
+            <Editor shouldHandleOwnSpacing />
+            <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
+            <Spacer height={40} />
+            <Suspense fallback={<EntityReferencedByLoading />}>
+              {/* @ts-expect-error async JSX function */}
+              <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+            </Suspense>
+          </EntityPageContentContainer>
+          <MoveEntityReview />
+        </MoveEntityProvider>
+      </EntityStoreProvider>
     </TypesStoreServerContainer>
   );
 }
