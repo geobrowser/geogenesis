@@ -25,6 +25,8 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import { SpaceLayout } from './space-layout';
+
 export const runtime = serverRuntime.runtime;
 export const fetchCache = serverRuntime.fetchCache;
 
@@ -78,8 +80,10 @@ export default async function SpacePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
   const props = await getData(params.id, config);
+
   return (
-    <>
+    // @ts-expect-error async JSX function
+    <SpaceLayout params={params} searchParams={searchParams}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
@@ -87,7 +91,7 @@ export default async function SpacePage({ params, searchParams }: Props) {
         {/* @ts-expect-error async JSX function */}
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
       </React.Suspense>
-    </>
+    </SpaceLayout>
   );
 }
 

@@ -4,8 +4,6 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import type { Metadata } from 'next';
-
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
@@ -13,8 +11,9 @@ import { serverRuntime } from '~/core/runtime';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
+import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -32,51 +31,13 @@ export const fetchCache = serverRuntime.fetchCache;
 
 interface Props {
   params: { id: string };
+  searchParams: ServerSideEnvParams;
   children: React.ReactNode;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const spaceId = params.id;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams({}, env);
-
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  const entityId = space?.spaceConfigEntityId;
-
-  if (!entityId) {
-    console.log(`Redirecting to /space/${spaceId}/entities`);
-    return redirect(`/space/${spaceId}/entities`);
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
-  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
-
-  return {
-    title: entityName ?? spaceId,
-    description,
-    openGraph: {
-      title: entityName ?? spaceId,
-      description,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      description,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
-  };
-}
-
-export default async function SpaceLayout({ params, children }: Props) {
+// We don't want this layout to nest within the space/ route component tree,
+// so we use it like normal React component instead of a Next.js route layout.
+export async function SpaceLayout({ params, children }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams({}, env);
 
