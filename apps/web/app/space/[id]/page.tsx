@@ -20,6 +20,7 @@ import {
   EntityReferencedByLoading,
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { SpaceEditors } from '~/partials/space-page/space-editors';
 
 import { Component } from './component';
 
@@ -87,6 +88,12 @@ export default async function SpacePage({ params, searchParams }: Props) {
             {/* @ts-expect-error async JSX function */}
             <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
           </Suspense>
+        }
+        MembersComponent={
+          // @ts-expect-error async JSX function
+          <SpaceEditors spaceId={params.id} />
+          // <Suspense fallback={<EntityReferencedByLoading />}>
+          // </Suspense>
         }
       />
     </TypesStoreServerContainer>

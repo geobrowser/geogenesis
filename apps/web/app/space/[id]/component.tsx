@@ -34,6 +34,7 @@ interface Props {
 
   // Render the Referenced by section. It controls its own data fetching states.
   ReferencedByComponent: React.ReactElement | null;
+  MembersComponent: React.ReactElement;
 }
 
 export function Component(props: Props) {
@@ -63,7 +64,7 @@ export function Component(props: Props) {
           triples={props.triples}
           showAccessControl
         />
-        <SpacePageMetadataHeader spaceId={props.spaceId} />
+        <SpacePageMetadataHeader spaceId={props.spaceId} membersComponent={props.MembersComponent} />
 
         <Spacer height={40} />
         <Editor editable={renderEditablePage} shouldHandleOwnSpacing />

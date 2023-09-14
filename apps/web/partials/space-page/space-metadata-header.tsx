@@ -20,9 +20,10 @@ import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
+  membersComponent: React.ReactElement;
 }
 
-export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProps) {
+export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
   const [open, onOpenChange] = React.useState(false);
   const pathname = usePathname();
 
@@ -55,8 +56,9 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
 
   return (
     <div className="flex items-center justify-between text-text">
-      <div className="flex">
-        <span className="mt-1 inline-block rounded bg-text px-[7px] py-px text-sm font-medium text-white">Space</span>
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
+        {membersComponent}
       </div>
       <div className="inline-flex items-center gap-4">
         <HistoryPanel>
