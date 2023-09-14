@@ -20,6 +20,10 @@ interface Props {
   blockIdsTriple: Triple | null;
 
   space: Space | null;
+
+  typeId?: string | null;
+  filterId?: string | null;
+  filterValue?: string | null;
 }
 
 export function ToggleEntityPage(props: Props) {
