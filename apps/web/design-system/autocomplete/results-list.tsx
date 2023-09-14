@@ -17,7 +17,7 @@ type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = (props: ResultsListProps) => (
   <ul
-    className="m-0 mb-2 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden"
+    className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-y-auto overflow-x-hidden"
     {...props}
   />
 );

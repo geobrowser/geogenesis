@@ -7,9 +7,7 @@ import { Search } from './icons/search';
 
 // appearance-none fixes iOS specific shadow issues.
 const inputStyles = cva(
-  `appearance-none text-input w-full rounded outline-none px-[10px] py-[9px] text-text shadow-inner shadow-grey-02 placeholder:text-grey-03
- hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02
-  disabled:cursor-not-allowed`,
+  "appearance-none text-input w-full rounded outline-none px-[10px] py-[9px] text-text shadow-inner shadow-grey-02 placeholder:text-grey-03 hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02 transition-all duration-150 disabled:cursor-not-allowed",
   {
     variants: {
       withSearchIcon: {

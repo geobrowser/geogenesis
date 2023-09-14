@@ -189,3 +189,5 @@ export const getParentEntityId = (triples: ITriple[] = []) => {
 
   return parentEntityId;
 };
+
+export const isNonNull = (entity: IEntity | null): entity is IEntity => entity !== null;

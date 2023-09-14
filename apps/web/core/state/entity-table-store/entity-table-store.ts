@@ -11,7 +11,7 @@ import { Merged } from '~/core/merged';
 import { ActionsStore } from '~/core/state/actions-store';
 import { SpaceStore } from '~/core/state/spaces-store';
 import { CreateType } from '~/core/type';
-import { Column, EntityValue, Row, Space, Triple as TripleType } from '~/core/types';
+import { Column, EntityValue, GeoType, Row, Space, Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -20,12 +20,10 @@ import { makeOptionalComputed } from '~/core/utils/utils';
 import { LocalStore } from '../local-store';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
-export type SelectedType = { id: string; entityId: string; entityName: string | null };
-
 interface IEntityTableStore {
   rows$: ObservableComputed<Row[]>;
   columns$: ObservableComputed<Column[]>;
-  selectedType$: Observable<SelectedType | null>;
+  selectedType$: Observable<GeoType | null>;
   pageNumber$: Observable<number>;
   query$: Observable<string>;
   hasPreviousPage$: ObservableComputed<boolean>;
@@ -43,7 +41,7 @@ interface IEntityTableStoreConfig {
   spaceId: string;
   initialParams?: InitialEntityTableStoreParams;
   pageSize?: number;
-  initialSelectedType: TripleType | null;
+  initialSelectedType: GeoType | null;
   ActionsStore: ActionsStore;
   SpaceStore: SpaceStore;
   LocalStore: LocalStore;
@@ -74,7 +72,7 @@ export class EntityTableStore implements IEntityTableStore {
   unpublishedColumns$: ObservableComputed<Column[]>;
   hydrated$: Observable<boolean> = observable(false);
   pageNumber$: Observable<number>;
-  selectedType$: Observable<SelectedType | null>;
+  selectedType$: Observable<GeoType | null>;
   columnRelationTypes$: ObservableComputed<
     Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>
   >;
@@ -106,7 +104,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.SpaceStore = SpaceStore;
     this.LocalStore = LocalStore;
     this.hydrated$ = observable(false);
-    this.selectedType$ = observable<SelectedType | null>(initialSelectedType);
+    this.selectedType$ = observable<GeoType | null>(initialSelectedType);
     this.pageNumber$ = observable(initialParams.pageNumber);
 
     this.spaceId = spaceId;
@@ -350,7 +348,7 @@ export class EntityTableStore implements IEntityTableStore {
     this.pageNumber$.set(pageNumber);
   };
 
-  setSelectedType = (type: SelectedType) => {
+  setSelectedType = (type: GeoType) => {
     this.selectedType$.set(type);
   };
 

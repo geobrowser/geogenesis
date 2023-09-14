@@ -33,7 +33,7 @@ export function getChangeCount(actions: ActionType[]) {
    * we need to check the before and after values of the _first_ edit for a triple against the _last_ edit
    * for the same triple to verify the value has changed.
    **/
-  const changeCount = Object.values(firstAndLastActions).reduce((acc, [first, last]) => {
+  const changeCount = firstAndLastActions.reduce((acc, { first, last }) => {
     if (first?.type === 'editTriple' && last?.type === 'editTriple') {
       if (first.before.value.type === 'entity' && last.after.value.type === 'entity') {
         return acc + (first.before.value.id !== last.after.value.id ? 1 : 0);
@@ -54,75 +54,107 @@ export function getChangeCount(actions: ActionType[]) {
   return changeCount;
 }
 
-function getFirstAndLastChanges(actions: ActionType[]) {
-  const allIds = new Set(
-    actions.flatMap(a => {
+type FirstLastAction = { first: ActionType; last: ActionType };
+
+function getFirstAndLastChanges(actions: ActionType[]): FirstLastAction[] {
+  // We need to track all of the ids so we can iterate through the first and last
+  // visited actions and combine/associate them with a specific id.
+  const ids = new Set(
+    actions.map(a => {
       switch (a.type) {
         case 'createTriple':
         case 'deleteTriple':
           return a.id;
         case 'editTriple':
-          return [a.before.id, a.after.id];
+          return a.before.id;
       }
     })
   );
 
-  const reverseActions = actions.slice().reverse();
+  const firstVisited = new Map<string, ActionType>();
+  const lastVisited = new Map<string, ActionType>();
 
-  // For each id, we need to find it's first instance and it's last instance. These might
-  // be the same action, which is okay.
-  return [...allIds].reduce<Record<string, [ActionType, ActionType]>>((acc, id) => {
-    const firstAction = actions.filter(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a.id === id;
-        case 'editTriple':
-          return a.before.id === id;
-      }
-    });
+  // Traverse the list of arrays forwards and backwards to find the first and last actions
+  // for each triple id.
+  //
+  // Any updated triples (type: editTriple) should have the same id in before and after.
+  // We might get the same action for the first and last action, but that's fine and we handle
+  // that later when aggregating the counts.
+  //
+  // Since we iterate forwards here, we always only get the first action for a given id.
+  for (let i = 0; i <= actions.length - 1; i++) {
+    const action = actions[i];
 
-    const lastAction = reverseActions.filter(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a.id === id;
-        case 'editTriple':
-          return a.after.id === id;
-      }
-    });
+    // If we haven't seen this id before, add the action to the map
+    switch (action.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        if (!firstVisited.has(action.id)) {
+          firstVisited.set(action.id, action);
+        }
+        break;
+      case 'editTriple':
+        if (!firstVisited.has(action.before.id)) {
+          firstVisited.set(action.before.id, action);
+        }
+        break;
+    }
+  }
 
-    acc[id] = [firstAction[0], lastAction[0]];
-    return acc;
-  }, {});
+  // Since we iterate backwards here, we always only get the last action for a given id.
+  for (let i = actions.length - 1; i >= 0; i--) {
+    const action = actions[i];
+
+    // If we haven't seen this id before, add the action to the map
+    switch (action.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        if (!lastVisited.has(action.id)) {
+          lastVisited.set(action.id, action);
+        }
+        break;
+      case 'editTriple':
+        if (!lastVisited.has(action.before.id)) {
+          lastVisited.set(action.after.id, action);
+        }
+        break;
+    }
+  }
+
+  // Now that we have the first and last actions for each id, we can combine them into a tuple
+  // that maps to the first and last Action for a given id.
+  //
+  // We know that every id in the list has been visited, so we can safely cast.
+  return [...ids].map(id => ({ first: firstVisited.get(id), last: lastVisited.get(id) })) as FirstLastAction[];
 }
 
 /**
  * Reduce the number of local actions only to the necessary before/after actions. This reduces
- * IPFS upload time for large edits and indexer time for the subgraph.
+ * IPFS upload time for large edits, indexer time for the subgraph, and reduces the number of
+ * actions associated with a change in history.
  *
  * For most actions we can just return the "After" action since that's all the subgraph needs
  * to update the triple.
  */
 export function squashChanges(actions: Action[]) {
-  return Object.values(getFirstAndLastChanges(actions))
-    .map(changeTuple => {
+  return getFirstAndLastChanges(actions)
+    .map((changeTuple): ActionType | null => {
       // In this case we're fine just returning the after action since it will include
       // the final state of the triple.
-      if (changeTuple[0].type === 'createTriple' && changeTuple[1].type === 'editTriple') {
-        return changeTuple[1].after;
+      if (changeTuple.first.type === 'createTriple' && changeTuple.last.type === 'editTriple') {
+        return changeTuple.last.after;
       }
 
       // This doesn't need to go to the subgraph at all.
-      if (changeTuple[0].type === 'createTriple' && changeTuple[1].type === 'deleteTriple') {
+      if (changeTuple.first.type === 'createTriple' && changeTuple.last.type === 'deleteTriple') {
         return null;
       }
 
-      // Delete->Create where the previous triple is the same as the new triple
-      if (changeTuple[0].type === 'deleteTriple' && changeTuple[1].type === 'createTriple') {
+      // Delete -> Create where the previous triple is the same as the new triple
+      if (changeTuple.first.type === 'deleteTriple' && changeTuple.last.type === 'createTriple') {
         if (
-          changeTuple[0].value.type === changeTuple[1].value.type &&
-          getValue(changeTuple[0]) === getValue(changeTuple[1])
+          changeTuple.first.value.type === changeTuple.last.value.type &&
+          getValue(changeTuple.first) === getValue(changeTuple.last)
         ) {
           return null;
         }
@@ -130,24 +162,33 @@ export function squashChanges(actions: Action[]) {
 
       // Edit -> Edit where the value types are the same and the before/after values are the same.
       // We don't need to send this to the subgraph.
-      if (changeTuple[0].type === 'editTriple' && changeTuple[1].type === 'editTriple') {
+      if (changeTuple.first.type === 'editTriple' && changeTuple.last.type === 'editTriple') {
         if (
-          changeTuple[0].before.value.type === changeTuple[1].after.value.type &&
-          getValue(changeTuple[0].before) === getValue(changeTuple[1].after)
+          changeTuple.first.before.value.type === changeTuple.last.after.value.type &&
+          getValue(changeTuple.first.before) === getValue(changeTuple.last.after)
         ) {
           return null;
         }
       }
 
-      return changeTuple[1];
+      return changeTuple.last;
     })
-    .flatMap(changeTuple => (changeTuple ? changeTuple : []));
+    .flatMap(action => (action ? action : []));
 }
 
+/**
+ * Filter out actions that have already been published.
+ */
 export function unpublishedChanges(actions: Action[]) {
   return actions.filter(a => !a.hasBeenPublished);
 }
 
+/**
+ * Filter out any local actions that aren't relevant for publishing.
+ * - already published actions
+ * - intermediate actions between the actions first and last state
+ * - any actions that don't perform meaningful changes
+ */
 export function prepareActionsForPublishing(actions: Action[]) {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
