@@ -1,3 +1,5 @@
+'use client';
+
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';

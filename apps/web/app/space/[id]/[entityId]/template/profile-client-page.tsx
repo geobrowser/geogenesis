@@ -50,9 +50,8 @@ export function ProfilePageComponent(props: Props) {
       )}
       <motion.div key="entity-page-entity-editor" layout="position">
         <Editor
-          editable={renderEditablePage}
           placeholder={
-            <motion.p layout="position" className="text-grey-04 text-body">
+            <motion.p layout="position" className="text-body text-grey-04">
               There is no overview here yet.
             </motion.p>
           }
