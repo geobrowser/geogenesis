@@ -1,4 +1,3 @@
-import { batch } from '@legendapp/state';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -338,9 +337,7 @@ export function useMigrateHub() {
       });
 
       startTransition(() => {
-        batch(() => {
-          restore(actionsToBatch);
-        });
+        restore(actionsToBatch);
       });
     },
 
