@@ -4,9 +4,9 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 import { useMemo } from 'react';
 
-import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { TableBlockStoreProvider } from '~/core/state/table-block-store';
 import { useTypesStore } from '~/core/state/types-store';
+import { GeoType } from '~/core/types';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
@@ -73,7 +73,7 @@ function TableNodeChildren({
   entityId,
 }: {
   spaceId: string;
-  selectedType?: SelectedEntityType;
+  selectedType?: GeoType;
   entityId: string;
 }) {
   return (

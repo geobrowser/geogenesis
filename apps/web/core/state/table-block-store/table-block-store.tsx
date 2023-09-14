@@ -18,7 +18,7 @@ import { FetchRowsOptions } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
 import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
-import { Column, EntityValue, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/core/types';
+import { Column, EntityValue, GeoType, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -57,7 +57,7 @@ interface ITableBlockStoreConfig {
 
   // This is the type of Entity we are rendering in the rows in the TableBlock
   // e.g., a Person or a Project
-  selectedType: ITriple;
+  selectedType: GeoType;
 
   spaceId: string;
 }
@@ -83,7 +83,7 @@ export class TableBlockStore {
   hasNextPage$: Observable<boolean>;
   columns$: Observable<Column[]>;
   rows$: Observable<Row[]>;
-  type: ITriple;
+  type: GeoType;
   blockEntity$: ObservableComputed<IEntity | null>;
   unpublishedColumns$: ObservableComputed<Column[]>;
   filterTriple$: ObservableComputed<ITriple | null>;
@@ -415,7 +415,7 @@ interface Props {
   children: React.ReactNode;
 
   // @TODO: This should be type Entity
-  selectedType?: ITriple;
+  selectedType?: GeoType;
   entityId: string;
 }
 
