@@ -173,13 +173,12 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     name: entity?.name ?? entityId,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
+    space,
     serverAvatarUrl,
     serverCoverUrl,
 
     // For entity page editor
     blockIdsTriple,
     blockTriples,
-
-    space,
   };
 };
