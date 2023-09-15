@@ -22,8 +22,10 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceEditorsChip } from '~/partials/space-page/space-editors-chip';
 import { SpaceEditorsContent } from '~/partials/space-page/space-editors-content';
+import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpaceMembersChip } from '~/partials/space-page/space-members-chip';
 import { SpaceMembersContent } from '~/partials/space-page/space-members-content';
 import { SpaceMembersPopover } from '~/partials/space-page/space-members-popover';
@@ -75,18 +77,10 @@ export async function SpaceLayout({ params, children }: Props) {
             spaceId={props.spaceId}
             membersComponent={
               <>
-                <SpaceMembersPopover
-                  // @ts-expect-error async JSX function
-                  trigger={<SpaceEditorsChip spaceId={params.id} />}
-                  // @ts-expect-error async JSX function
-                  content={<SpaceEditorsContent spaceId={params.id} />}
-                />
-                <SpaceMembersPopover
-                  // @ts-expect-error async JSX function
-                  trigger={<SpaceMembersChip spaceId={params.id} />}
-                  // @ts-expect-error async JSX function
-                  content={<SpaceMembersContent spaceId={params.id} />}
-                />
+                {/* @ts-expect-error async JSX function */}
+                <SpaceEditors spaceId={params.id} />
+                {/* @ts-expect-error async JSX function */}
+                <SpaceMembers spaceId={params.id} />
               </>
             }
           />
