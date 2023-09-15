@@ -9,7 +9,7 @@ const withBundleAnalyzer = analyzer({
 const nextConfig = {
   // reactStrictMode: true,
   experimental: {
-    // serverActions: true,
+    serverActions: true,
     webpackBuildWorker: true,
   },
   images: {

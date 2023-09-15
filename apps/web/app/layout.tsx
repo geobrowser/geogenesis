@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import * as React from 'react';
@@ -5,6 +6,7 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Cookie } from '~/core/cookie';
 import { Providers } from '~/core/providers';
 
 import '../styles/fonts.css';
@@ -79,6 +81,16 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
+async function onConnectionChange(type: 'connect' | 'disconnect', address: string) {
+  'use server';
+  console.log('onConnectionChange', { address, type });
+  if (type === 'disconnect') {
+    cookies().delete(Cookie.WALLET_ADDRESS);
+  } else if (type === 'connect') {
+    cookies().set(Cookie.WALLET_ADDRESS, address);
+  }
+}
+
 export default function RootLayout({
   // Layouts must accept a children prop.
   // This will be populated with nested layouts or pages
@@ -93,7 +105,7 @@ export default function RootLayout({
       </head>
       <body>
         <div className="relative">
-          <Providers>
+          <Providers onConnectionChange={onConnectionChange}>
             <App>{children}</App>
           </Providers>
         </div>

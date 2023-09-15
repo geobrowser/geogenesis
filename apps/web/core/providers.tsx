@@ -15,10 +15,15 @@ import { WalletProvider } from './wallet';
 
 const queryClient = new QueryClient();
 
-export function Providers({ children }: { children: React.ReactNode }) {
+interface Props {
+  onConnectionChange: (type: 'connect' | 'disconnect', address: string) => Promise<void>;
+  children: React.ReactNode;
+}
+
+export function Providers({ children, onConnectionChange }: Props) {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider>
+      <WalletProvider onConnectionChange={onConnectionChange}>
         <Services.Provider>
           <ActionsStoreProvider>
             <SpaceStoreProvider>
