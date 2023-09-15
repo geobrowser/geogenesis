@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
 
+import { Cookie } from '~/core/cookie';
 import { Profile } from '~/core/types';
 import { OmitStrict } from '~/core/types';
 
@@ -12,8 +14,10 @@ interface Props {
 }
 
 export async function SpaceMembersContent({ spaceId }: Props) {
+  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+
   // For now we use editors for both editors and members until we have the new membership
-  const { firstThreeEditors, totalEditors } = await getEditorsForSpace(spaceId);
+  const { firstThreeEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
@@ -27,9 +31,12 @@ export async function SpaceMembersContent({ spaceId }: Props) {
         <p className="text-smallButton text-text">
           {totalEditors} {pluralize('member', totalEditors)}
         </p>
-        <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-          Request to join
-        </button>
+
+        {!isEditor && (
+          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
+            Request to join
+          </button>
+        )}
       </div>
     </div>
   );

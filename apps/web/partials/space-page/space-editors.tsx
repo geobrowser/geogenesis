@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
 import { SpaceEditorsContent } from './space-editors-content';
@@ -17,16 +19,29 @@ export async function SpaceEditors({ spaceId }: Props) {
   const { isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
 
   if (isEditor) {
-    // @ts-expect-error async JSX function
-    return <SpaceEditorsMenu trigger={<SpaceEditorsChip spaceId={spaceId} />} />;
+    return (
+      <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
+        <SpaceMembersPopover
+          // @ts-expect-error async JSX function
+          trigger={<SpaceEditorsChip spaceId={spaceId} />}
+          // @ts-expect-error async JSX function
+          content={<SpaceEditorsContent spaceId={spaceId} />}
+        />
+        <div className="h-4 w-px bg-divider" />
+
+        <SpaceEditorsMenu trigger={<ChevronDownSmall color="grey-04" />} />
+      </div>
+    );
   }
 
   return (
-    <SpaceMembersPopover
-      // @ts-expect-error async JSX function
-      trigger={<SpaceEditorsChip spaceId={spaceId} />}
-      // @ts-expect-error async JSX function
-      content={<SpaceEditorsContent spaceId={spaceId} />}
-    />
+    <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
+      <SpaceMembersPopover
+        // @ts-expect-error async JSX function
+        trigger={<SpaceEditorsChip spaceId={spaceId} />}
+        // @ts-expect-error async JSX function
+        content={<SpaceEditorsContent spaceId={spaceId} />}
+      />
+    </div>
   );
 }

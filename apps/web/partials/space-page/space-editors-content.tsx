@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
 
+import { Cookie } from '~/core/cookie';
 import { Profile } from '~/core/types';
 import { OmitStrict } from '~/core/types';
 
@@ -12,7 +14,8 @@ interface Props {
 }
 
 export async function SpaceEditorsContent({ spaceId }: Props) {
-  const { firstThreeEditors, totalEditors } = await getEditorsForSpace(spaceId);
+  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const { firstThreeEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
@@ -26,9 +29,11 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
         <p className="text-smallButton text-text">
           {totalEditors} {pluralize('editor', totalEditors)}
         </p>
-        <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-          Request to be an editor
-        </button>
+        {!isEditor && (
+          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
+            Request to be an editor
+          </button>
+        )}
       </div>
     </div>
   );
