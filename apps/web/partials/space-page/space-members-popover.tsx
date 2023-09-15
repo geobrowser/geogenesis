@@ -12,7 +12,7 @@ interface Props {
 
 const MotionContent = motion(Content);
 
-export function SpaceMembersModal({ trigger, content }: Props) {
+export function SpaceMembersPopover({ trigger, content }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (

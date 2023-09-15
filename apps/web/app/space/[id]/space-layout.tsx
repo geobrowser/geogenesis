@@ -26,7 +26,7 @@ import { SpaceEditorsChip } from '~/partials/space-page/space-editors-chip';
 import { SpaceEditorsContent } from '~/partials/space-page/space-editors-content';
 import { SpaceMembersChip } from '~/partials/space-page/space-members-chip';
 import { SpaceMembersContent } from '~/partials/space-page/space-members-content';
-import { SpaceMembersModal } from '~/partials/space-page/space-members-modal';
+import { SpaceMembersPopover } from '~/partials/space-page/space-members-popover';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
 export const runtime = serverRuntime.runtime;
@@ -75,13 +75,13 @@ export async function SpaceLayout({ params, children }: Props) {
             spaceId={props.spaceId}
             membersComponent={
               <>
-                <SpaceMembersModal
+                <SpaceMembersPopover
                   // @ts-expect-error async JSX function
                   trigger={<SpaceEditorsChip spaceId={params.id} />}
                   // @ts-expect-error async JSX function
                   content={<SpaceEditorsContent spaceId={params.id} />}
                 />
-                <SpaceMembersModal
+                <SpaceMembersPopover
                   // @ts-expect-error async JSX function
                   trigger={<SpaceMembersChip spaceId={params.id} />}
                   // @ts-expect-error async JSX function
