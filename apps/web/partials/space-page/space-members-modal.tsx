@@ -12,7 +12,7 @@ interface Props {
 
 const MotionContent = motion(Content);
 
-export function SpaceEditorsModal({ trigger, content }: Props) {
+export function SpaceMembersModal({ trigger, content }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -28,7 +28,7 @@ export function SpaceEditorsModal({ trigger, content }: Props) {
             initial={{ opacity: 0, y: 15, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, y: 15, scale: 0.95 }}
-            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.1 }}
+            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.1 } }}
             className="origin-bottom"
           >
             {content}
