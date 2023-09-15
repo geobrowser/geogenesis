@@ -11,22 +11,28 @@ interface Props {
   spaceId: string;
 }
 
-export async function SpaceMembers({ spaceId }: Props) {
+export async function SpaceMembersChip({ spaceId }: Props) {
   const { firstThreeEditors, totalMembers } = await getMembersForSpace(spaceId);
 
   return (
-    <div className="flex h-6 items-center gap-1 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
-      <AvatarGroup>
-        {firstThreeEditors.map(editor => (
-          <AvatarGroup.Item key={editor.id}>
-            <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.id} />
-          </AvatarGroup.Item>
-        ))}
-      </AvatarGroup>
+    <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
+      <div className="flex items-center gap-1">
+        <AvatarGroup>
+          {firstThreeEditors.map(editor => (
+            <AvatarGroup.Item key={editor.id}>
+              <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.id} />
+            </AvatarGroup.Item>
+          ))}
+        </AvatarGroup>
 
-      <p>
-        {totalMembers} {pluralize('member', totalMembers)}
-      </p>
+        <p>
+          {totalMembers} {pluralize('member', totalMembers)}
+        </p>
+      </div>
+
+      <div className="h-[18px] w-px bg-divider" />
+
+      <p className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text">Join</p>
     </div>
   );
 }
