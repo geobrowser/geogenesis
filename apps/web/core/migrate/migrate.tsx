@@ -27,7 +27,7 @@ import {
   migrateUrlTripleToStringTriple,
 } from './utils';
 
-type MigrateAction =
+export type MigrateAction =
   | {
       type: 'DELETE_ENTITY';
       payload: {
@@ -54,9 +54,8 @@ interface MigrateHubConfig {
   appConfig: Environment.AppConfig;
 }
 
-
-export interface IMigrateHub {
-  dispatch: (action: MigrateAction) => Promise<void>;
+interface IMigrateHub {
+  dispatch: (action: MigrateAction) => Promise<Action[]>;
 }
 
 async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {

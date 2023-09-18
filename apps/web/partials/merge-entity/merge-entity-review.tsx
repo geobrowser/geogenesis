@@ -11,7 +11,7 @@ import { useWalletClient } from 'wagmi';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { IMigrateHub, useMigrateHub } from '~/core/migrate/migrate';
+import { MigrateAction, useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
@@ -33,16 +33,20 @@ type SelectedEntityKeysType = {
 
 export function MergeEntityReview() {
   const { isMergeReviewOpen, setIsMergeReviewOpen } = useMergeEntity();
-  const hub = useMigrateHub();
+  const migrateHub = useMigrateHub();
 
   return (
     <SlideUp isOpen={isMergeReviewOpen} setIsOpen={setIsMergeReviewOpen}>
-      <MergeEntityReviewChanges hub={hub} />
+      <MergeEntityReviewChanges migrateHub={migrateHub} />
     </SlideUp>
   );
 }
 
-function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
+type MigrateHubType = {
+  dispatch: (action: MigrateAction) => Promise<void>;
+};
+
+function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }) {
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
 
   const { subgraph, config } = Services.useServices();
@@ -96,7 +100,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
       }); // create the triples that are merged
     });
 
-    hub.dispatch({
+    migrateHub.dispatch({
       type: 'DELETE_ENTITY',
       payload: {
         entityId: notMergedEntityId,
@@ -114,7 +118,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
     remove,
     mergedTriples,
     create,
-    hub,
+    migrateHub,
   ]);
 
   function handleCheckboxSelect({
@@ -146,7 +150,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsMergeReviewOpen(false)} icon="close" />
           <Text variant="metadataMedium">Merge entities</Text>
@@ -175,8 +179,8 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
         </div>
       </div>
 
-      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full overflow-y-auto overscroll-contain">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
+        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           {mergeEntityStep === 'mergeReview' ? (
             <Tabs.Root defaultValue="entityMergeSelect">
               <Tabs.List
@@ -184,27 +188,27 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
                 aria-label="Select entities to merge and preview changes"
               >
                 <Tabs.Trigger
-                  className="data-[state=active]:text-text text-grey-04 text-quoteMedium"
+                  className="text-quoteMedium text-grey-04 data-[state=active]:text-text"
                   value="entityMergeSelect"
                 >
                   Select what to merge
                 </Tabs.Trigger>
                 <Tabs.Trigger
-                  className="data-[state=active]:text-text text-grey-04 text-quoteMedium"
+                  className="text-quoteMedium text-grey-04 data-[state=active]:text-text"
                   value="entityMergePreview"
                 >
                   Preview entity
                 </Tabs.Trigger>
               </Tabs.List>
               <Tabs.Content value="entityMergeSelect">
-                <div className="grid grid-cols-2 gap-4 w-full pt-10">
+                <div className="grid w-full grid-cols-2 gap-4 pt-10">
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle truncate">
+                    <Text className="text-bold truncate text-mediumTitle sm:text-smallTitle">
                       {entityOneTriples[0]?.entityName ?? entityIdOne}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6 ">
                       {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                        <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
                           <Image
                             src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                             layout="fill"
@@ -224,12 +228,12 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
                     />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Text className="text-bold text-mediumTitle sm:text-smallTitle  truncate">
+                    <Text className="text-bold truncate text-mediumTitle  sm:text-smallTitle">
                       {entityTwoTriples[0]?.entityName ?? entityIdTwo}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6 ">
                       {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                        <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
                           <Image
                             src={getImagePath(spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                             layout="fill"
@@ -258,7 +262,7 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6">
                       {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                        <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                        <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
                           <Image
                             src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                             layout="fill"
@@ -275,10 +279,10 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
             </Tabs.Root>
           ) : (
             <>
-              <div className="flex flex-col px-5 py-4 rounded border border-grey-02 mb-8">
+              <div className="mb-8 flex flex-col rounded border border-grey-02 px-5 py-4">
                 <div className="flex flex-row items-center gap-2 pb-3">
                   {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
-                    <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+                    <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
                       <Image
                         src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                         layout="fill"
@@ -289,22 +293,22 @@ function MergeEntityReviewChanges({ hub }: { hub: IMigrateHub }) {
                   <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="flex flex-row gap-3 items-center bg-bg">
+                  <div className="flex flex-row items-center gap-3 bg-bg">
                     <CheckCircleReview color="grey-04" />
                     <Text>Delete triples</Text>
                   </div>
-                  <div className="flex flex-row gap-3 items-center">
+                  <div className="flex flex-row items-center gap-3">
                     <CheckCircleReview color="grey-04" />
                     <Text>Update triples</Text>
                   </div>
-                  <div className="flex flex-row gap-3 items-center">
+                  <div className="flex flex-row items-center gap-3">
                     <CheckCircleReview color="grey-04" />
                     <Text>Find and replace all references</Text>
                   </div>
                 </div>
               </div>
               <div>
-                <div className="flex flex-col mb-5">
+                <div className="mb-5 flex flex-col">
                   <Text>Merged entity</Text>
                   <Text variant="mediumTitle" className="text-bold">
                     {mergedEntityTriples[0]?.entityName ?? mergedEntityId}
