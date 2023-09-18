@@ -3,12 +3,12 @@ import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { GeoType } from '~/core/types';
 
 import { Plus } from '~/design-system/icons/plus';
 
 interface Props {
-  selectedType: SelectedEntityType;
+  selectedType: GeoType;
   space: string;
 }
 
@@ -30,7 +30,7 @@ export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: 
 
   return (
     <button
-      className="absolute top-0 right-0 border-l border-b border-grey-02 bg-white p-[13.5px] transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:outline-ctaPrimary active:text-text active:outline-ctaPrimary"
+      className="absolute right-0 top-0 border-b border-l border-grey-02 bg-white p-[13.5px] transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:outline-ctaPrimary active:text-text active:outline-ctaPrimary"
       onClick={() => send({ type: 'ADD_NEW_COLUMN' })}
     >
       <Plus />

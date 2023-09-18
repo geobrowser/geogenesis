@@ -8,8 +8,7 @@ import { A, pipe } from '@mobily/ts-belt';
 import * as React from 'react';
 
 import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
-import { Space, Triple as TripleType } from '~/core/types';
+import { GeoType, Space, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
@@ -22,8 +21,8 @@ export class TypesStore {
   // uses the entityId and entityName, so we filter out the rest of the data when adding
   // a foreign type. This makes it so we don't have to query the network or check local
   // actions for the entity whose entityId === t.value.id
-  types$: ObservableComputed<SelectedEntityType[]>;
-  localForeignTypes$: ObservableComputed<{ id: string; entityId: string; entityName: string }[]>;
+  types$: ObservableComputed<GeoType[]>;
+  localForeignTypes$: ObservableComputed<GeoType[]>;
 
   constructor({
     actions,
@@ -65,6 +64,7 @@ export class TypesStore {
               id: t.id,
               entityId: t.value.type === 'entity' ? t.value.id : '',
               entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
+              space: t.space,
             }))
           );
 
@@ -83,6 +83,7 @@ export class TypesStore {
             id: t.id,
             entityId: t.value.type === 'entity' ? t.value.id : '',
             entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
+            space: t.space,
           }))
         );
 

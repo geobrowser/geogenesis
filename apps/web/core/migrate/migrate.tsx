@@ -1,8 +1,7 @@
-import { batch } from '@legendapp/state';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
-import React from 'react';
+import React, { useTransition } from 'react';
 
 import { Environment } from '../environment';
 import { useActionsStore } from '../hooks/use-actions-store';
@@ -11,12 +10,16 @@ import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store';
 import {
+  Action,
+  DeleteTripleAction,
+  EditTripleAction,
   Triple as ITriple,
   TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
   TripleWithUrlValue,
 } from '../types';
+import { groupBy } from '../utils/utils';
 import {
   migrateDateTripleToStringTriple,
   migrateStringTripleToDateTriple,
@@ -51,11 +54,16 @@ interface MigrateHubConfig {
   appConfig: Environment.AppConfig;
 }
 
+<<<<<<< HEAD
 export interface IMigrateHub {
   dispatch: (action: MigrateAction) => Promise<void>;
+=======
+interface IMigrateHub {
+  dispatch: (action: MigrateAction) => Promise<Action[]>;
+>>>>>>> master
 }
 
-async function migrate(action: MigrateAction, config: MigrateHubConfig) {
+async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {
   switch (action.type) {
     case 'DELETE_ENTITY': {
       const { entityId } = action.payload;
@@ -107,12 +115,12 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
         },
       });
 
-      batch(() => {
-        triplesReferencingEntity.forEach(t => {
-          config.actionsApi.remove(t);
-        });
-      });
-      break;
+      return triplesReferencingEntity.map(
+        (t): DeleteTripleAction => ({
+          ...t,
+          type: 'deleteTriple',
+        })
+      );
     }
     case 'CHANGE_VALUE_TYPE': {
       const { attributeId, oldValueType, newValueType } = action.payload;
@@ -173,102 +181,122 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
        * If we are migrating between types that can't be migrated we delete all
        * existing triples with the old type.
        */
-      batch(() => {
-        for (const triple of triplesWithAttribute) {
-          const value = triple.value;
+      const triplesToDelete: ITriple[] = [];
+      const triplesToUpdate: ITriple[][] = [];
 
-          // We just delete the old triple if its value type does not match the value
-          // type of the attribute.
-          if (value.type !== oldValueType) {
-            config.actionsApi.remove(triple);
-            continue;
-          }
+      for (const triple of triplesWithAttribute) {
+        const value = triple.value;
 
-          switch (value.type) {
-            // can migrate to date
-            // can migrate to url
-            // delete otherwise
-            case 'string': {
-              switch (newValueType) {
-                case 'url': {
-                  const maybeMigratedTriple = migrateStringTripleToUrlTriple(
-                    // Should be safe to cast here since we've type narrowed with the above
-                    // switch statements.
-                    triple as TripleWithStringValue
-                  );
-
-                  if (!maybeMigratedTriple) {
-                    config.actionsApi.remove(triple);
-                    break;
-                  }
-
-                  config.actionsApi.update(maybeMigratedTriple, triple);
-                  break;
-                }
-
-                case 'date': {
-                  const maybeMigratedTriple = migrateStringTripleToDateTriple(
-                    // Should be safe to cast here since we've type narrowed with the above
-                    // switch statements.
-                    triple as TripleWithStringValue
-                  );
-
-                  if (!maybeMigratedTriple) {
-                    config.actionsApi.remove(triple);
-                    break;
-                  }
-
-                  config.actionsApi.update(maybeMigratedTriple, triple);
-                  break;
-                }
-              }
-
-              config.actionsApi.remove(triple);
-              break;
-            }
-
-            // can migrate to string
-            // delete otherwise
-            case 'date': {
-              if (newValueType === 'string') {
-                const newTriple = migrateDateTripleToStringTriple(
-                  // Should be safe to cast here since we've type narrowed with the above
-                  // switch statements.
-                  triple as TripleWithDateValue
-                );
-
-                config.actionsApi.update(newTriple, triple);
-                break;
-              }
-
-              config.actionsApi.remove(triple);
-              break;
-            }
-
-            // can migrate to string
-            // delete otherwise
-            case 'url': {
-              if (newValueType === 'string') {
-                const newTriple = migrateUrlTripleToStringTriple(
-                  // Should be safe to cast here since we've type narrowed with the above
-                  // switch statements.
-                  triple as TripleWithUrlValue
-                );
-
-                config.actionsApi.update(newTriple, triple);
-                break;
-              }
-
-              config.actionsApi.remove(triple);
-              break;
-            }
-
-            default:
-              config.actionsApi.remove(triple);
-              break;
-          }
+        // We just delete the old triple if its value type does not match the value
+        // type of the attribute.
+        if (value.type !== oldValueType) {
+          triplesToDelete.push(triple);
+          continue;
         }
-      });
+
+        switch (value.type) {
+          // can migrate to date
+          // can migrate to url
+          // delete otherwise
+          case 'string': {
+            switch (newValueType) {
+              case 'url': {
+                const maybeMigratedTriple = migrateStringTripleToUrlTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithStringValue
+                );
+
+                if (!maybeMigratedTriple) {
+                  triplesToDelete.push(triple);
+                  break;
+                }
+
+                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                break;
+              }
+
+              case 'date': {
+                const maybeMigratedTriple = migrateStringTripleToDateTriple(
+                  // Should be safe to cast here since we've type narrowed with the above
+                  // switch statements.
+                  triple as TripleWithStringValue
+                );
+
+                if (!maybeMigratedTriple) {
+                  triplesToDelete.push(triple);
+                  break;
+                }
+
+                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                break;
+              }
+            }
+
+            triplesToDelete.push(triple);
+            break;
+          }
+
+          // can migrate to string
+          // delete otherwise
+          case 'date': {
+            if (newValueType === 'string') {
+              const newTriple = migrateDateTripleToStringTriple(
+                // Should be safe to cast here since we've type narrowed with the above
+                // switch statements.
+                triple as TripleWithDateValue
+              );
+
+              triplesToUpdate.push([newTriple, triple]);
+              break;
+            }
+
+            triplesToDelete.push(triple);
+            break;
+          }
+
+          // can migrate to string
+          // delete otherwise
+          case 'url': {
+            if (newValueType === 'string') {
+              const newTriple = migrateUrlTripleToStringTriple(
+                // Should be safe to cast here since we've type narrowed with the above
+                // switch statements.
+                triple as TripleWithUrlValue
+              );
+
+              triplesToUpdate.push([newTriple, triple]);
+              break;
+            }
+
+            triplesToDelete.push(triple);
+            break;
+          }
+
+          default:
+            triplesToDelete.push(triple);
+            break;
+        }
+      }
+
+      const deleteActions: DeleteTripleAction[] = triplesToDelete.map(t => ({
+        ...t,
+        type: 'deleteTriple',
+      }));
+
+      const updateActions: EditTripleAction[] = triplesToUpdate.map(([newTriple, oldTriple]) => ({
+        type: 'editTriple',
+        before: {
+          ...oldTriple,
+          type: 'deleteTriple',
+        },
+        after: {
+          ...newTriple,
+          type: 'createTriple',
+        },
+      }));
+
+      return [...deleteActions, ...updateActions];
     }
   }
 }
@@ -276,6 +304,53 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig) {
 function migrateHub(config: MigrateHubConfig): IMigrateHub {
   return {
     dispatch: async (action: MigrateAction) => await migrate(action, config),
+  };
+}
+
+export function useMigrateHub() {
+  const { create, update, remove, allActions, restore } = useActionsStore();
+  const queryClient = useQueryClient();
+  const merged = useMergedData();
+  const { config: appConfig } = Services.useServices();
+  const [, startTransition] = useTransition();
+
+  const hub = React.useMemo(() => {
+    return migrateHub({
+      actionsApi: {
+        create,
+        update,
+        remove,
+      },
+      merged,
+      queryClient,
+      appConfig,
+    });
+  }, [create, update, remove, queryClient, merged, appConfig]);
+
+  const dispatch = React.useCallback(
+    async (action: MigrateAction) => {
+      const actions = await hub.dispatch(action);
+
+      const actionsToBatch = groupBy([...allActions, ...actions], action => {
+        switch (action.type) {
+          case 'createTriple':
+          case 'deleteTriple':
+            return action.space;
+          case 'editTriple':
+            return action.before.space;
+        }
+      });
+
+      startTransition(() => {
+        restore(actionsToBatch);
+      });
+    },
+
+    [hub, allActions, restore]
+  );
+
+  return {
+    dispatch,
   };
 }
 
@@ -362,25 +437,3 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 //     });
 //   }
 // }
-
-export function useMigrateHub() {
-  const { create, update, remove } = useActionsStore();
-  const queryClient = useQueryClient();
-  const merged = useMergedData();
-  const { config: appConfig } = Services.useServices();
-
-  const hub = React.useMemo(() => {
-    return migrateHub({
-      actionsApi: {
-        create,
-        update,
-        remove,
-      },
-      merged,
-      queryClient,
-      appConfig,
-    });
-  }, [create, update, remove, queryClient, merged, appConfig]);
-
-  return hub;
-}

@@ -9,9 +9,8 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useEditable } from '~/core/state/editable-store/editable-store';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useTypesStore } from '~/core/state/types-store/types-store';
-import { Entity } from '~/core/types';
+import { Entity, GeoType } from '~/core/types';
 
 import { ResultContent, ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Input } from '~/design-system/input';
@@ -20,7 +19,7 @@ import { Text } from '~/design-system/text';
 import { TextButton } from '~/design-system/text-button';
 
 interface Props {
-  handleSelect: (type: SelectedEntityType) => void;
+  handleSelect: (type: GeoType) => void;
   spaceId: string;
 }
 
@@ -111,7 +110,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
       <ResultsList className="max-h-96 overflow-y-auto px-0">
         {mode === 'current-space'
           ? filteredTypes.map(type => (
-              <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+              <ResultItem onClick={() => handleSelect(type)} key={type.entityId}>
                 {type.entityName}
               </ResultItem>
             ))
@@ -121,14 +120,14 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
                 onClick={() => {
                   createForeignType(result);
                 }}
-                alreadySelected={filteredTypes.some(type => type.id === result.id)}
+                alreadySelected={filteredTypes.some(type => type.entityId === result.id)}
                 result={result}
                 spaces={spaces}
               />
             ))}
       </ResultsList>
       {noResultsFound && <Spacer height={8} />}
-      <div className="flex justify-between border-t border-grey-02 px-2 pt-2 pb-2">
+      <div className="flex justify-between border-t border-grey-02 px-2 pb-2 pt-2">
         <Text variant="smallButton" color="grey-04">
           {resultCount} Types
         </Text>

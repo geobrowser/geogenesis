@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { SelectedEntityType } from '~/core/state/entity-table-store';
 import { useTypesStore } from '~/core/state/types-store/types-store';
+import { GeoType } from '~/core/types';
 
 import { ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Input } from '~/design-system/input';
@@ -11,7 +11,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 interface Props {
-  handleSelect: (type: SelectedEntityType) => void;
+  handleSelect: (type: GeoType) => void;
 }
 
 export function TableBlockTypePicker({ handleSelect }: Props) {
@@ -31,13 +31,13 @@ export function TableBlockTypePicker({ handleSelect }: Props) {
       </div>
       <ResultsList className="max-h-96 overflow-y-auto">
         {filteredTypes.map(type => (
-          <ResultItem onClick={() => handleSelect(type)} key={type.id}>
+          <ResultItem onClick={() => handleSelect(type)} key={type.entityId}>
             {type.entityName}
           </ResultItem>
         ))}
       </ResultsList>
       {noResultsFound && <Spacer height={8} />}
-      <div className="flex justify-between border-t border-grey-02 px-2 pt-2 pb-2">
+      <div className="flex justify-between border-t border-grey-02 px-2 pb-2 pt-2">
         <Text variant="smallButton" color="grey-04">
           {resultCount} Types
         </Text>

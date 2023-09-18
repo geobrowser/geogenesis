@@ -7,8 +7,7 @@ import * as React from 'react';
 import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
-import { Triple } from '~/core/types';
+import { GeoType, Triple } from '~/core/types';
 
 import { Text } from '~/design-system/text';
 
@@ -35,7 +34,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<CommandListMode>('select-block');
 
-  const handleTableSelect = (selectedType: SelectedEntityType) => {
+  const handleTableSelect = (selectedType: GeoType) => {
     command({ ...tableCommandItem, selectedType: selectedType, spaceId: entityStore.spaceId });
   };
 

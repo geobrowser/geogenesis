@@ -131,6 +131,12 @@ export type Entity = {
   nameTripleSpace?: string;
 };
 
+export type GeoType = {
+  entityId: string;
+  entityName: string | null;
+  space: string;
+};
+
 export type EntityType = {
   id: string;
   name: string | null;

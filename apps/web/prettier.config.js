@@ -23,5 +23,5 @@ module.exports = {
     '^[./|~/]',
   ],
   tailwindConfig: './tailwind.config.js',
-  plugins: [require('prettier-plugin-tailwindcss'), require('@trivago/prettier-plugin-sort-imports')],
+  plugins: ['@trivago/prettier-plugin-sort-imports', 'prettier-plugin-tailwindcss'],
 };
