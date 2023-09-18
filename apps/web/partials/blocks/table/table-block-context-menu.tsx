@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
 import Image from 'next/legacy/image';
+import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -23,7 +24,7 @@ import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
-import { getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
@@ -262,6 +263,11 @@ export function TableBlockContextMenu() {
         <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
           <Copy /> <span>Copy view ID</span>
         </button>
+      </MenuItem>
+      <MenuItem>
+        <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
+          <Cog /> <span>View config</span>
+        </Link>
       </MenuItem>
       {isEditing && (
         <TableBlockSchemaConfigurationDialog
