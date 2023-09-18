@@ -7,7 +7,6 @@ import * as React from 'react';
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { serverRuntime } from '~/core/runtime';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -25,9 +24,6 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
-
-export const runtime = serverRuntime.runtime;
-export const fetchCache = serverRuntime.fetchCache;
 
 interface Props {
   params: { id: string };
