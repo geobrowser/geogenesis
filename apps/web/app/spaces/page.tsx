@@ -6,7 +6,6 @@ import { Metadata } from 'next';
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { serverRuntime } from '~/core/runtime';
 import { ServerSideEnvParams, Space } from '~/core/types';
 
 import { Card } from '~/design-system/card';
@@ -14,9 +13,6 @@ import { Spacer } from '~/design-system/spacer';
 
 import { OboardingCarousel } from '~/partials/spaces-page/carousel';
 import { Email } from '~/partials/spaces-page/email';
-
-export const runtime = serverRuntime.runtime;
-export const fetchCache = serverRuntime.fetchCache;
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',

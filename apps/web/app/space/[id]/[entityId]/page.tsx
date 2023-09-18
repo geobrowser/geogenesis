@@ -9,7 +9,6 @@ import type { Metadata } from 'next';
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { serverRuntime } from '~/core/runtime';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { ServerSideEnvParams } from '~/core/types';
@@ -23,9 +22,6 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 
 import { Component } from './component';
-
-export const runtime = serverRuntime.runtime;
-export const fetchCache = serverRuntime.fetchCache;
 
 interface Props {
   params: { id: string; entityId: string };
