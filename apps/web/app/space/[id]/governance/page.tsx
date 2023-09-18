@@ -3,7 +3,6 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
-import { Subgraph } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
@@ -36,11 +35,11 @@ export default async function GovernancePage({ params, searchParams }: Props) {
         </GovernanceMetadataBox>
         <GovernanceMetadataBox>
           <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
-          <p className="flex items-center gap-3 text-mediumTitle">
+          <div className="flex items-center gap-3 text-mediumTitle">
             <span>{proposalsCount}</span>
             <div className="h-4 w-px bg-grey-02" />
             <span>0</span>
-          </p>
+          </div>
         </GovernanceMetadataBox>
       </div>
     </SpaceLayout>
