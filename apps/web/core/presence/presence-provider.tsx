@@ -35,19 +35,7 @@ interface Props {
 export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
   const account = useAccount();
 
-  // @HACK (baiirun)
-  // We don't start the presence provider in our tests since we don't
-  // actually test them, and we don't want to waste MAU limits. Vitest
-  // uses import.meta.env for environment variables which differs from
-  // how nextjs loads them. Here we check if we're in the vitest context
-  // and avoid starting the presence provider if we are.
-  //
-  // An alternative would be to inject the client with context and use a
-  // mock version in tests. We end up with a fairly convoluted setup of
-  // contexts and providers with Liveblocks, so this janky hack is easier
-  // for now.
-  // @ts-expect-error import.meta.env is not typed
-  if (import.meta?.env || !account.address) return null;
+  if (!account.address) return null;
 
   return (
     <ErrorBoundary
@@ -67,7 +55,7 @@ export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
 export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   const account = useAccount();
 
-  // HACK (baiirun)
+  if (!account.address) return null; // HACK (baiirun)
   // We don't start the presence provider in our tests since we don't
   // actually test them, and we don't want to waste MAU limits. Vitest
   // uses import.meta.env for environment variables which differs from
@@ -79,7 +67,6 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
   // contexts and providers with Liveblocks, so this janky hack is easier
   // for now.
   // @ts-expect-error import.meta.env is not typed
-  if (import.meta?.env || !account.address) return null;
 
   return (
     <ErrorBoundary
