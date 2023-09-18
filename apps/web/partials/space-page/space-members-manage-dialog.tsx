@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
+import { SquareButton } from '~/design-system/button';
+
 const MotionContent = motion(Content);
 const MotionOverlay = motion(Overlay);
 
@@ -15,8 +17,10 @@ interface Props {
 }
 
 export function SpaceMembersManageDialog(props: Props) {
+  const [open, onOpenChange] = React.useState(false);
+
   return (
-    <Root>
+    <Root open={open} onOpenChange={onOpenChange}>
       <Trigger className="w-full">{props.trigger}</Trigger>
 
       <Portal>
@@ -35,7 +39,10 @@ export function SpaceMembersManageDialog(props: Props) {
         >
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <div className="flex flex-col gap-3 p-4">
-              {props.header}
+              <div className="flex items-center justify-between">
+                {props.header}
+                <SquareButton onClick={() => onOpenChange(false)} icon="close" />
+              </div>
 
               {props.content}
             </div>

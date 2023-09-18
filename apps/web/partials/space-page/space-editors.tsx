@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 
-import { SquareButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getEditorsForSpace } from './get-editors-for-space';
@@ -36,12 +35,7 @@ export async function SpaceEditors({ spaceId }: Props) {
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
             <SpaceMembersManageDialog
-              header={
-                <div className="flex items-center justify-between">
-                  <h1 className="text-smallTitle">{totalEditors} editors</h1>
-                  <SquareButton icon="close" />
-                </div>
-              }
+              header={<h1 className="text-smallTitle">{totalEditors} editors</h1>}
               trigger={<p className="px-3 py-2">Manage editors</p>}
               content={<SpaceMembersManageDialogContent members={allEditors} />}
             />

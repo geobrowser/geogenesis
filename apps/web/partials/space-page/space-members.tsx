@@ -2,12 +2,9 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Input } from '~/design-system/input';
 
 import { getEditorsForSpace } from './get-editors-for-space';
-import { MemberRow } from './space-member-row';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersContent } from './space-members-content';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
@@ -41,12 +38,7 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersMenu
           manageMembersComponent={
             <SpaceMembersManageDialog
-              header={
-                <div className="flex items-center justify-between">
-                  <h1 className="text-smallTitle">{totalMembers} members</h1>
-                  <SquareButton icon="close" />
-                </div>
-              }
+              header={<h1 className="text-smallTitle">{totalMembers} members</h1>}
               trigger={<p className="px-3 py-2">Manage members</p>}
               content={<SpaceMembersManageDialogContent members={allMembers} />}
             />

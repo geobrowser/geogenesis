@@ -23,12 +23,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
-import { SpaceEditorsChip } from '~/partials/space-page/space-editors-chip';
-import { SpaceEditorsContent } from '~/partials/space-page/space-editors-content';
 import { SpaceMembers } from '~/partials/space-page/space-members';
-import { SpaceMembersChip } from '~/partials/space-page/space-members-chip';
-import { SpaceMembersContent } from '~/partials/space-page/space-members-content';
-import { SpaceMembersPopover } from '~/partials/space-page/space-members-popover';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
 export const runtime = serverRuntime.runtime;
@@ -72,7 +67,6 @@ export async function SpaceLayout({ params, children }: Props) {
             triples={props.triples}
             showAccessControl
           />
-          {/* server->client(server(client)) */}
           <SpacePageMetadataHeader
             spaceId={props.spaceId}
             membersComponent={
