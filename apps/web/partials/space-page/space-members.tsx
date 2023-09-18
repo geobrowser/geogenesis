@@ -26,7 +26,7 @@ export async function SpaceMembers({ spaceId }: Props) {
 
   if (isEditor) {
     return (
-      <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
+      <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
         <SpaceMembersPopover
           // @ts-expect-error async JSX function
           trigger={<SpaceMembersChip spaceId={spaceId} />}
@@ -34,7 +34,6 @@ export async function SpaceMembers({ spaceId }: Props) {
           content={<SpaceMembersContent spaceId={spaceId} />}
         />
         <div className="h-4 w-px bg-divider" />
-
         <SpaceMembersMenu
           manageMembersComponent={
             <SpaceMembersManageDialog
