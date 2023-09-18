@@ -26,9 +26,13 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
         <p className="text-smallButton text-text">
           {totalEditors} {pluralize('editor', totalEditors)}
         </p>
-        {!isEditor && (
+        {isEditor ? (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            Request to be an editor
+            {connectedAddress ? 'Leave as editor' : 'Connect wallet'}
+          </button>
+        ) : (
+          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
+            {connectedAddress ? 'Request to be an editor' : 'Connect wallet'}
           </button>
         )}
       </div>

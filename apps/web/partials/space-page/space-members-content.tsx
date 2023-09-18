@@ -29,9 +29,13 @@ export async function SpaceMembersContent({ spaceId }: Props) {
           {totalEditors} {pluralize('member', totalEditors)}
         </p>
 
-        {!isEditor && (
+        {isEditor ? (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            Request to join
+            {connectedAddress ? 'Leave space' : 'Connect wallet'}
+          </button>
+        ) : (
+          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
+            {connectedAddress ? 'Request to join' : 'Connect wallet'}
           </button>
         )}
       </div>
