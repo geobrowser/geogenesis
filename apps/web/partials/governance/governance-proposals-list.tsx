@@ -8,7 +8,6 @@ import { Action } from '~/core/utils/action';
 import { Avatar } from '~/design-system/avatar';
 
 import { getEditorsForSpace } from '../space-page/get-editors-for-space';
-import { mockProposals } from './mock';
 
 interface Props {
   spaceId: string;
@@ -54,8 +53,4 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
       })}
     </div>
   );
-}
-
-async function getProposals({ spaceId }: Props) {
-  return mockProposals;
 }
