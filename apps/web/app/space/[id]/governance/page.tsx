@@ -1,5 +1,11 @@
+import { Effect, Either } from 'effect';
+import { cookies } from 'next/headers';
+
 import * as React from 'react';
 
+import { Subgraph } from '~/core/io';
+import { graphql } from '~/core/io/subgraph/graphql';
+import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
 
 import { SpaceLayout } from '../space-layout';
@@ -10,6 +16,8 @@ interface Props {
 }
 
 export default async function GovernancePage({ params, searchParams }: Props) {
+  const proposalsCount = await getProposalsCount({ params, searchParams });
+
   return (
     // @ts-expect-error async JSX function
     <SpaceLayout params={params} searchParams={searchParams}>
@@ -29,7 +37,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
         <GovernanceMetadataBox>
           <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
           <p className="flex items-center gap-3 text-mediumTitle">
-            <span>0</span>
+            <span>{proposalsCount}</span>
             <div className="h-4 w-px bg-grey-02" />
             <span>0</span>
           </p>
@@ -41,4 +49,57 @@ export default async function GovernancePage({ params, searchParams }: Props) {
 
 function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
   return <div className="flex w-full flex-col items-center gap-1 rounded border border-grey-02 py-3">{children}</div>;
+}
+
+interface NetworkResult {
+  proposals: {
+    id: string;
+  }[];
+}
+
+async function getProposalsCount({ params, searchParams }: Props) {
+  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  const config = Params.getConfigFromParams(searchParams, env);
+
+  const graphqlFetchEffect = graphql<NetworkResult>({
+    endpoint: config.subgraph,
+    query: `
+      query {
+        proposals(where: { space: "${params.id}" } first: 1000) {
+          id
+        }
+      }`,
+  });
+
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
+        case 'GraphqlRuntimeError':
+          console.error(`Encountered runtime graphql error in governance/page. spaceId: ${params.id}`, error.message);
+          return {
+            proposals: [],
+          };
+        default:
+          console.error(`${error._tag}: Unable to fetch proposals count, spaceId: ${params.id}`);
+          return {
+            proposals: [],
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  return result.proposals.length;
 }

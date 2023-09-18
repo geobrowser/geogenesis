@@ -7,8 +7,8 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
 
-const getFetchSpaceProposalsQuery = (spaceId: string, skip: number) => `query {
-  proposals(first: 10, where: {space: ${JSON.stringify(
+const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
+  proposals(first: ${first}, where: {space: ${JSON.stringify(
     spaceId
   )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
     id
@@ -57,6 +57,7 @@ export interface FetchProposalsOptions {
   spaceId: string;
   signal?: AbortController['signal'];
   page?: number;
+  first?: number;
 }
 
 interface NetworkResult {
@@ -68,12 +69,13 @@ export async function fetchProposals({
   spaceId,
   signal,
   page = 0,
+  first = 10,
 }: FetchProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
-    query: getFetchSpaceProposalsQuery(spaceId, page * 10),
+    query: getFetchSpaceProposalsQuery(spaceId, first, page * 10),
     signal,
   });
 
@@ -93,7 +95,7 @@ export async function fetchProposals({
           console.error(
             `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getFetchSpaceProposalsQuery(spaceId, page * 10)}
+            queryString: ${getFetchSpaceProposalsQuery(spaceId, first, page * 10)}
             `,
             error.message
           );

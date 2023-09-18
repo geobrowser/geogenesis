@@ -37,9 +37,9 @@ interface Props {
 
 // We don't want this layout to nest within the space/ route component tree,
 // so we use it like normal React component instead of a Next.js route layout.
-export async function SpaceLayout({ params, children }: Props) {
+export async function SpaceLayout({ params, searchParams, children }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams({}, env);
+  const config = Params.getConfigFromParams(searchParams, env);
 
   const props = await getData(params.id, config);
 
