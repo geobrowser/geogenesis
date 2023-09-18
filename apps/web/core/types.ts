@@ -171,15 +171,15 @@ export type Proposal = {
 export type ProposedVersion = {
   id: string;
   name: string | null;
-  description: string | null;
+  // description: string | null;
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
   actions: Action[];
-  entity: {
-    id: string;
-    name: string;
-  };
+  // entity: {
+  //   id: string;
+  //   name: string;
+  // };
 };
 
 export type Profile = {

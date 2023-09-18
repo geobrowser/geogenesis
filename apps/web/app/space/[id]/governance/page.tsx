@@ -7,6 +7,8 @@ import { graphql } from '~/core/io/subgraph/graphql';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
 
+import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
+
 import { SpaceLayout } from '../space-layout';
 
 interface Props {
@@ -20,27 +22,32 @@ export default async function GovernancePage({ params, searchParams }: Props) {
   return (
     // @ts-expect-error async JSX function
     <SpaceLayout params={params} searchParams={searchParams}>
-      <div className="flex items-center gap-5">
-        <GovernanceMetadataBox>
-          <h2 className="text-metadata text-grey-04">Voting period</h2>
-          <p className="text-mediumTitle">24h</p>
-        </GovernanceMetadataBox>
-        <GovernanceMetadataBox>
-          <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-          <p className="text-mediumTitle">51%</p>
-        </GovernanceMetadataBox>
-        <GovernanceMetadataBox>
-          <h2 className="text-metadata text-grey-04">Active proposals</h2>
-          <p className="text-mediumTitle">0</p>
-        </GovernanceMetadataBox>
-        <GovernanceMetadataBox>
-          <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
-          <div className="flex items-center gap-3 text-mediumTitle">
-            <span>{proposalsCount}</span>
-            <div className="h-4 w-px bg-grey-02" />
-            <span>0</span>
-          </div>
-        </GovernanceMetadataBox>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-5">
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Voting period</h2>
+            <p className="text-mediumTitle">24h</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
+            <p className="text-mediumTitle">51%</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Active proposals</h2>
+            <p className="text-mediumTitle">0</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
+            <div className="flex items-center gap-3 text-mediumTitle">
+              <span>{proposalsCount}</span>
+              <div className="h-4 w-px bg-grey-02" />
+              <span>0</span>
+            </div>
+          </GovernanceMetadataBox>
+        </div>
+
+        {/* @ts-expect-error async JSX function */}
+        <GovernanceProposalsList spaceId={params.id} />
       </div>
     </SpaceLayout>
   );
