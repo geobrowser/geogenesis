@@ -4,6 +4,7 @@ import { OmitStrict, Profile } from '~/core/types';
 
 type EditorsForSpace = {
   firstThreeEditors: OmitStrict<Profile, 'coverUrl'>[];
+  allEditors: OmitStrict<Profile, 'coverUrl'>[];
   totalEditors: number;
   isEditor: boolean;
 };
@@ -24,14 +25,17 @@ export async function getEditorsForSpace(spaceId: string, connectedAddress?: str
 
   const profiles = maybeEditorsProfiles.flatMap(p => (p ? [p] : []));
 
-  const firstThreeEditors = profiles.slice(0, 3).map(profile => ({
+  const allEditors = profiles.map(profile => ({
     id: profile[1].id,
     avatarUrl: profile[1].avatarUrl,
     name: profile[1].name,
   }));
 
+  const firstThreeEditors = allEditors.slice(0, 3);
+
   return {
     firstThreeEditors,
+    allEditors,
 
     // For now an editor might not have a profile, so we only show the count
     // for editor with profiles.

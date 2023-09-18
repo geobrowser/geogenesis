@@ -27,6 +27,7 @@ interface SpacePageMetadataHeaderProps {
 
 export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
   const [open, onOpenChange] = React.useState(false);
+
   const pathname = usePathname();
 
   const { subgraph, config } = Services.useServices();

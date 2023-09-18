@@ -2,12 +2,15 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 
+import { SquareButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
 import { SpaceEditorsContent } from './space-editors-content';
 import { SpaceEditorsMenu } from './space-editors-menu';
+import { SpaceMembersManageDialog } from './space-members-manage-dialog';
+import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersPopover } from './space-members-popover';
 
 interface Props {
@@ -16,7 +19,7 @@ interface Props {
 
 export async function SpaceEditors({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-  const { isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
+  const { isEditor, totalEditors, allEditors } = await getEditorsForSpace(spaceId, connectedAddress);
 
   if (isEditor) {
     return (
@@ -29,7 +32,21 @@ export async function SpaceEditors({ spaceId }: Props) {
         />
         <div className="h-4 w-px bg-divider" />
 
-        <SpaceEditorsMenu trigger={<ChevronDownSmall color="grey-04" />} />
+        <SpaceEditorsMenu
+          trigger={<ChevronDownSmall color="grey-04" />}
+          manageMembersComponent={
+            <SpaceMembersManageDialog
+              header={
+                <div className="flex items-center justify-between">
+                  <h1 className="text-smallTitle">{totalEditors} editors</h1>
+                  <SquareButton icon="close" />
+                </div>
+              }
+              trigger={<p className="px-3 py-2">Manage editors</p>}
+              content={<SpaceMembersManageDialogContent members={allEditors} />}
+            />
+          }
+        />
       </div>
     );
   }
