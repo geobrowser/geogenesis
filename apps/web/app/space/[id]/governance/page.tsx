@@ -7,6 +7,8 @@ import { graphql } from '~/core/io/subgraph/graphql';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
 
+import { SmallButton } from '~/design-system/button';
+
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
 import { SpaceLayout } from '../space-layout';
@@ -22,7 +24,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
   return (
     // @ts-expect-error async JSX function
     <SpaceLayout params={params} searchParams={searchParams}>
-      <div className="flex flex-col gap-4">
+      <div className="space-y-4">
         <div className="flex items-center gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Voting period</h2>
@@ -45,6 +47,10 @@ export default async function GovernancePage({ params, searchParams }: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
+
+        <SmallButton variant="secondary" icon="chevronDownSmall">
+          All Proposals
+        </SmallButton>
 
         {/* @ts-expect-error async JSX function */}
         <GovernanceProposalsList spaceId={params.id} />

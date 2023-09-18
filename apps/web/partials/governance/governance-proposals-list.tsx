@@ -1,5 +1,7 @@
 import pluralize from 'pluralize';
 
+import { options } from '~/core/environment/environment';
+import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
@@ -13,7 +15,10 @@ interface Props {
 }
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
-  const [proposals, editorsForSpace] = await Promise.all([getProposals({ spaceId }), getEditorsForSpace(spaceId)]);
+  const [proposals, editorsForSpace] = await Promise.all([
+    Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
+    getEditorsForSpace(spaceId),
+  ]);
 
   return (
     <div className="flex flex-col gap-3">
