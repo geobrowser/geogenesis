@@ -1,67 +1,58 @@
-import pluralize from 'pluralize';
+import { cookies } from 'next/headers';
 
-import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { OmitStrict, Profile } from '~/core/types';
+import { Cookie } from '~/core/cookie';
 
-import { Avatar } from '~/design-system/avatar';
-import { AvatarGroup } from '~/design-system/avatar-group';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+
+import { getEditorsForSpace } from './get-editors-for-space';
+import { SpaceEditorsChip } from './space-editors-chip';
+import { SpaceEditorsContent } from './space-editors-popover-content';
+import { SpaceMembersManageDialog } from './space-members-manage-dialog';
+import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
+import { SpaceMembersMenu } from './space-members-menu';
+import { SpaceMembersPopover } from './space-members-popover';
 
 interface Props {
   spaceId: string;
 }
 
 export async function SpaceEditors({ spaceId }: Props) {
-  const { firstThreeEditors, totalEditors } = await getEditorsForSpace(spaceId);
+  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const { isEditor, totalEditors, allEditors } = await getEditorsForSpace(spaceId, connectedAddress);
 
-  return (
-    <div className="flex h-6 items-center gap-1 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
-      <AvatarGroup>
-        {firstThreeEditors.map(editor => (
-          <AvatarGroup.Item key={editor.id}>
-            <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.id} />
-          </AvatarGroup.Item>
-        ))}
-      </AvatarGroup>
+  if (isEditor) {
+    return (
+      <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
+        <SpaceMembersPopover
+          // @ts-expect-error async JSX function
+          trigger={<SpaceEditorsChip spaceId={spaceId} />}
+          // @ts-expect-error async JSX function
+          content={<SpaceEditorsContent spaceId={spaceId} />}
+        />
+        <div className="h-4 w-px bg-divider" />
 
-      <p>
-        {totalEditors} {pluralize('editor', totalEditors)}
-      </p>
-    </div>
-  );
-}
-
-type EditorsForSpace = {
-  firstThreeEditors: OmitStrict<Profile, 'name' | 'coverUrl'>[];
-  totalEditors: number;
-};
-
-async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
-  const config = Params.getConfigFromParams({}, undefined);
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-
-  if (!space) {
-    throw new Error("Space doesn't exist");
+        <SpaceMembersMenu
+          trigger={<ChevronDownSmall color="grey-04" />}
+          manageMembersComponent={
+            <SpaceMembersManageDialog
+              header={<h1 className="text-smallTitle">{totalEditors} editors</h1>}
+              trigger={<p className="px-3 py-2">Manage editors</p>}
+              content={<SpaceMembersManageDialogContent members={allEditors} />}
+            />
+          }
+        />
+      </div>
+    );
   }
 
-  // For now we use editors for both editors and members until we have the new membership
-  // model in place.
-  const maybeEditorsProfiles = await Promise.all(
-    space.editors.map(editor => Subgraph.fetchProfile({ endpoint: config.subgraph, address: editor }))
+  return (
+    <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button">
+      <SpaceMembersPopover
+        // @ts-expect-error async JSX function
+        trigger={<SpaceEditorsChip spaceId={spaceId} />}
+        // @ts-expect-error async JSX function
+        content={<SpaceEditorsContent spaceId={spaceId} />}
+      />
+    </div>
   );
-
-  const profiles = maybeEditorsProfiles.flatMap(p => (p ? [p] : []));
-
-  const firstThreeEditors = profiles.slice(0, 3).map(profile => ({
-    id: profile[1].id,
-    avatarUrl: profile[1].avatarUrl,
-  }));
-
-  return {
-    firstThreeEditors,
-
-    // For now an editor might not have a profile, so we only show the count
-    // for editor with profiles.
-    totalEditors: profiles.length,
-  };
 }
