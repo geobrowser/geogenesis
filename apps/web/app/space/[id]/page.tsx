@@ -8,7 +8,6 @@ import type { Metadata } from 'next';
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { serverRuntime } from '~/core/runtime';
 import { ServerSideEnvParams } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -23,8 +22,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { SpaceLayout } from './space-layout';
 
-export const runtime = serverRuntime.runtime;
-export const fetchCache = serverRuntime.fetchCache;
+export const runtime = 'edge';
 
 interface Props {
   params: { id: string };
