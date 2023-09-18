@@ -9,7 +9,6 @@ import type { Metadata } from 'next';
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { serverRuntime } from '~/core/runtime';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -32,9 +31,6 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
-
-export const runtime = serverRuntime.runtime;
-export const fetchCache = serverRuntime.fetchCache;
 
 interface Props {
   params: { id: string; entityId: string };
