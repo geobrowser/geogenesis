@@ -13,7 +13,7 @@ interface TabGroupProps {
 
 export function TabGroup({ tabs }: TabGroupProps) {
   return (
-    <div className="flex items-center gap-6 pb-2 border-b border-grey-02">
+    <div className="flex items-center gap-6 border-b border-grey-02 pb-2">
       {tabs.map(t => (
         <Tab key={t.href} href={t.href} label={t.label} />
       ))}
@@ -57,7 +57,7 @@ function Tab({ href, label }: TabProps) {
                 layout: true,
               }
             : {})}
-          className="absolute left-0 -bottom-[9px] border-b border-text w-full"
+          className="absolute -bottom-[9px] left-0 w-full border-b border-text"
         />
       )}
       {label}

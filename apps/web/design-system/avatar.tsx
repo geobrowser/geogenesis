@@ -10,11 +10,12 @@ interface Props {
   value?: string;
   alt?: string;
   size?: number;
+  priority?: boolean;
 }
 
-export const Avatar = ({ value, avatarUrl, alt = '', size = 12 }: Props) => {
+export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12 }: Props) => {
   return avatarUrl ? (
-    <Image objectFit="cover" layout="fill" src={getImagePath(avatarUrl)} alt={alt} />
+    <Image objectFit="cover" priority={priority} layout="fill" src={getImagePath(avatarUrl)} alt={alt} />
   ) : (
     <BoringAvatar
       size={size}

@@ -1,0 +1,45 @@
+import { Subgraph } from '~/core/io';
+import { Params } from '~/core/params';
+import { OmitStrict, Profile } from '~/core/types';
+
+type EditorsForSpace = {
+  firstThreeEditors: OmitStrict<Profile, 'coverUrl'>[];
+  allEditors: OmitStrict<Profile, 'coverUrl'>[];
+  totalEditors: number;
+  isEditor: boolean;
+};
+
+export async function getEditorsForSpace(spaceId: string, connectedAddress?: string): Promise<EditorsForSpace> {
+  const config = Params.getConfigFromParams({}, undefined);
+  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+
+  if (!space) {
+    throw new Error("Space doesn't exist");
+  }
+
+  // For now we use editors for both editors and members until we have the new membership
+  // model in place.
+  const maybeEditorsProfiles = await Promise.all(
+    space.editors.map(editor => Subgraph.fetchProfile({ endpoint: config.subgraph, address: editor }))
+  );
+
+  const profiles = maybeEditorsProfiles.flatMap(p => (p ? [p] : []));
+
+  const allEditors = profiles.map(profile => ({
+    id: profile[1].id,
+    avatarUrl: profile[1].avatarUrl,
+    name: profile[1].name,
+  }));
+
+  const firstThreeEditors = allEditors.slice(0, 3);
+
+  return {
+    firstThreeEditors,
+    allEditors,
+
+    // For now an editor might not have a profile, so we only show the count
+    // for editor with profiles.
+    totalEditors: profiles.length,
+    isEditor: connectedAddress ? space.editors.includes(connectedAddress) : false,
+  };
+}
