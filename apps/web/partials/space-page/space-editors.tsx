@@ -6,7 +6,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
-import { SpaceEditorsContent } from './space-editors-content';
+import { SpaceEditorsContent } from './space-editors-popover-content';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersMenu } from './space-members-menu';

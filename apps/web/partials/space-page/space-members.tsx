@@ -6,11 +6,11 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceMembersChip } from './space-members-chip';
-import { SpaceMembersContent } from './space-members-content';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
+import { SpaceMembersContent } from './space-members-popover-content';
 
 interface Props {
   spaceId: string;
