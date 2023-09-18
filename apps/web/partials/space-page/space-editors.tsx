@@ -7,9 +7,9 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
 import { SpaceEditorsContent } from './space-editors-content';
-import { SpaceEditorsMenu } from './space-editors-menu';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
+import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
 
 interface Props {
@@ -31,7 +31,7 @@ export async function SpaceEditors({ spaceId }: Props) {
         />
         <div className="h-4 w-px bg-divider" />
 
-        <SpaceEditorsMenu
+        <SpaceMembersMenu
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
             <SpaceMembersManageDialog

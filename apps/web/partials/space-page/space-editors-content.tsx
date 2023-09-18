@@ -2,12 +2,9 @@ import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
-import { Profile } from '~/core/types';
-import { OmitStrict } from '~/core/types';
-
-import { Avatar } from '~/design-system/avatar';
 
 import { getEditorsForSpace } from './get-editors-for-space';
+import { MemberRow } from './space-member-row';
 
 interface Props {
   spaceId: string;
@@ -21,7 +18,7 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
       <div>
         {firstThreeEditors.map(e => (
-          <EditorRow key={e.id} editor={e} />
+          <MemberRow key={e.id} editor={e} />
         ))}
       </div>
 
@@ -35,21 +32,6 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-interface EditorRowProps {
-  editor: OmitStrict<Profile, 'coverUrl'>;
-}
-
-function EditorRow({ editor }: EditorRowProps) {
-  return (
-    <div className="flex items-center gap-2 p-2">
-      <div className="relative h-8 w-8 overflow-hidden rounded-full">
-        <Avatar size={32} avatarUrl={editor.avatarUrl} value={editor.name ?? ''} />
-      </div>
-      <p className="text-metadataMedium">{editor.name}</p>
     </div>
   );
 }
