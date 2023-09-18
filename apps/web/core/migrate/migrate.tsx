@@ -54,13 +54,9 @@ interface MigrateHubConfig {
   appConfig: Environment.AppConfig;
 }
 
-<<<<<<< HEAD
+
 export interface IMigrateHub {
   dispatch: (action: MigrateAction) => Promise<void>;
-=======
-interface IMigrateHub {
-  dispatch: (action: MigrateAction) => Promise<Action[]>;
->>>>>>> master
 }
 
 async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {
