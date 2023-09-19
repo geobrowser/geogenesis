@@ -14,12 +14,12 @@ export async function SpaceMembersContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
   // For now we use editors for both editors and members until we have the new membership
-  const { firstThreeEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
+  const { allEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
-      <div>
-        {firstThreeEditors.map(e => (
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto">
+        {allEditors.map(e => (
           <MemberRow key={e.id} editor={e} />
         ))}
       </div>

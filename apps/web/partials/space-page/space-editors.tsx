@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers';
 
+import * as React from 'react';
+
 import { Cookie } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -26,8 +28,12 @@ export async function SpaceEditors({ spaceId }: Props) {
         <SpaceMembersPopover
           // @ts-expect-error async JSX function
           trigger={<SpaceEditorsChip spaceId={spaceId} />}
-          // @ts-expect-error async JSX function
-          content={<SpaceEditorsContent spaceId={spaceId} />}
+          content={
+            <React.Suspense>
+              {/* @ts-expect-error async JSX function */}
+              <SpaceEditorsContent spaceId={spaceId} />
+            </React.Suspense>
+          }
         />
         <div className="h-4 w-px bg-divider" />
 
@@ -50,8 +56,12 @@ export async function SpaceEditors({ spaceId }: Props) {
       <SpaceMembersPopover
         // @ts-expect-error async JSX function
         trigger={<SpaceEditorsChip spaceId={spaceId} />}
-        // @ts-expect-error async JSX function
-        content={<SpaceEditorsContent spaceId={spaceId} />}
+        content={
+          <React.Suspense>
+            {/* @ts-expect-error async JSX function */}
+            <SpaceEditorsContent spaceId={spaceId} />
+          </React.Suspense>
+        }
       />
     </div>
   );
