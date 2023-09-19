@@ -12,12 +12,13 @@ interface Props {
 
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-  const { firstThreeEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
+
+  const { allEditors: allMembers, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
-      <div>
-        {firstThreeEditors.map(e => (
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto">
+        {allMembers.map(e => (
           <MemberRow key={e.id} editor={e} />
         ))}
       </div>
