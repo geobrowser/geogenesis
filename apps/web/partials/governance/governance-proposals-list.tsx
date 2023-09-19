@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
 
+import { Cookie } from '~/core/cookie';
 import { options } from '~/core/environment/environment';
 import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
@@ -16,9 +18,11 @@ interface Props {
 }
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
+  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+
   const [proposals, editorsForSpace] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
-    getEditorsForSpace(spaceId),
+    getEditorsForSpace(spaceId, connectedAddress),
   ]);
 
   return (
@@ -54,7 +58,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
               <div className="flex items-center justify-between">
                 <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
 
-                <GovernanceProposalVoteState />
+                <GovernanceProposalVoteState isEditor={editorsForSpace.isEditor} />
               </div>
             </div>
           </div>
