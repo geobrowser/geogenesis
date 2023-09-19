@@ -8,6 +8,7 @@ import { Action } from '~/core/utils/action';
 import { Avatar } from '~/design-system/avatar';
 
 import { getEditorsForSpace } from '../space-page/get-editors-for-space';
+import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
 
 interface Props {
@@ -53,19 +54,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
               <div className="flex items-center justify-between">
                 <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
 
-                <div className="flex items-center gap-8">
-                  <div className="flex items-center gap-2 text-metadataMedium">
-                    <p>Accepted</p>
-                    <div className="rounded-small rounded-lg h-1 w-[76px] bg-green" />
-                    <p>100%</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-metadataMedium">
-                    <p>Rejected</p>
-                    <div className="rounded-small rounded-lg h-1 w-[76px] bg-divider" />
-                    <p>0%</p>
-                  </div>
-                </div>
+                <GovernanceProposalVoteState />
               </div>
             </div>
           </div>
