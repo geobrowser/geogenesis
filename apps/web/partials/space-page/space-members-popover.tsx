@@ -29,7 +29,7 @@ export function SpaceMembersPopover({ trigger, content }: Props) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.125 } }}
-            className="origin-bottom"
+            className="z-100 origin-bottom"
           >
             {content}
           </MotionContent>
