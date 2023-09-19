@@ -54,7 +54,7 @@ interface MigrateHubConfig {
   appConfig: Environment.AppConfig;
 }
 
-interface IMigrateHub {
+export interface IMigrateHub {
   dispatch: (action: MigrateAction) => Promise<Action[]>;
 }
 
@@ -303,9 +303,10 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 }
 
 export function useMigrateHub() {
-  const { create, update, remove, allActions, restore } = useActionsStore();
+  const { create, update, remove, addActionsToSpaces } = useActionsStore();
   const queryClient = useQueryClient();
   const merged = useMergedData();
+
   const { config: appConfig } = Services.useServices();
   const [, startTransition] = useTransition();
 
@@ -326,7 +327,7 @@ export function useMigrateHub() {
     async (action: MigrateAction) => {
       const actions = await hub.dispatch(action);
 
-      const actionsToBatch = groupBy([...allActions, ...actions], action => {
+      const actionsToBatch = groupBy([...actions], action => {
         switch (action.type) {
           case 'createTriple':
           case 'deleteTriple':
@@ -335,13 +336,12 @@ export function useMigrateHub() {
             return action.before.space;
         }
       });
-
       startTransition(() => {
-        restore(actionsToBatch);
+        addActionsToSpaces(actionsToBatch);
       });
     },
 
-    [hub, allActions, restore]
+    [hub, addActionsToSpaces]
   );
 
   return {

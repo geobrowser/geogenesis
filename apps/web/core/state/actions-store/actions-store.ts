@@ -14,6 +14,7 @@ import { makeOptionalComputed } from '~/core/utils/utils';
 
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
+  addActionsToSpaces(spaceActionss: SpaceActions): void;
   create(triple: ITriple): void;
   update(triple: ITriple, oldTriple: ITriple): void;
   remove(triple: ITriple): void;
@@ -102,6 +103,18 @@ export class ActionsStore implements IActionsStore {
 
   restore = (spaceActions: SpaceActions) => {
     this.actions$.set(spaceActions);
+  };
+
+  addActionsToSpaces = (spaceActions: SpaceActions) => {
+    const prevActions: SpaceActions = this.actions$.get() ?? {};
+
+    const newActions: SpaceActions = {};
+
+    for (const [spaceId, actions] of Object.entries(spaceActions)) {
+      newActions[spaceId] = [...(prevActions[spaceId] ?? []), ...actions];
+    }
+
+    this.actions$.set(newActions);
   };
 
   deleteActions = (spaceId: string, actionIdsToDelete: Array<string>) => {

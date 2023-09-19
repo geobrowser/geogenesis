@@ -87,38 +87,43 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !mergedEntityId) return;
 
-    const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
-    batch(() => {
-      unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
-      mergedTriples.forEach(t => {
-        create(
-          Triple.withId({
-            ...t,
-            entityId: mergedEntityId,
-          })
-        );
-      }); // create the triples that are merged
-    });
+    try {
+      const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
 
-    migrateHub.dispatch({
-      type: 'DELETE_ENTITY',
-      payload: {
-        entityId: notMergedEntityId,
-      },
-    }); // migrate the data with the non-selected entity id
+      batch(() => {
+        unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
+        mergedTriples.forEach(t => {
+          create(
+            Triple.withId({
+              ...t,
+              entityId: mergedEntityId,
+            })
+          );
+        }); // create the triples that are merged
+      });
 
-    setIsMergeReviewOpen(false);
+      await migrateHub.dispatch({
+        type: 'DELETE_ENTITY',
+        payload: {
+          entityId: notMergedEntityId,
+        },
+      }); // migrate the data with the non-selected entity id
+
+      setIsMergeReviewOpen(false);
+    } catch (e) {
+      console.log('error', e);
+    }
   }, [
     wallet,
     mergedEntityId,
     entityIdOne,
     entityIdTwo,
-    unmergedTriples,
-    setIsMergeReviewOpen,
-    remove,
-    mergedTriples,
-    create,
     migrateHub,
+    setIsMergeReviewOpen,
+    unmergedTriples,
+    mergedTriples,
+    remove,
+    create,
   ]);
 
   function handleCheckboxSelect({
