@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 
 import { useEntityTable } from '~/core/hooks/use-entity-table';
-import { SelectedEntityType } from '~/core/state/entity-table-store';
+import { GeoType } from '~/core/types';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Spacer } from '~/design-system/spacer';
@@ -26,7 +26,7 @@ export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
-  const handleSelect = (type: SelectedEntityType) => {
+  const handleSelect = (type: GeoType) => {
     setOpen(false);
     entityTableStore.setSelectedType(type);
   };
@@ -35,7 +35,7 @@ export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <button
-          className="flex w-[230px] flex-none items-center justify-between whitespace-pre rounded bg-white py-2 px-3 text-button text-text shadow-inner-grey-02 placeholder-shown:text-text hover:cursor-pointer hover:shadow-inner-text focus:shadow-inner-lg-text focus:outline-none"
+          className="flex w-[230px] flex-none items-center justify-between whitespace-pre rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 placeholder-shown:text-text hover:cursor-pointer hover:shadow-inner-text focus:shadow-inner-lg-text focus:outline-none"
           aria-label="type-filter-dropdown"
         >
           {entityTableStore.selectedType?.entityName || 'No Types Found'}
