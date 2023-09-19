@@ -52,8 +52,10 @@ export default async function GovernancePage({ params, searchParams }: Props) {
           All Proposals
         </SmallButton>
 
-        {/* @ts-expect-error async JSX function */}
-        <GovernanceProposalsList spaceId={params.id} />
+        <React.Suspense fallback="Banana sandwich">
+          {/* @ts-expect-error async JSX function */}
+          <GovernanceProposalsList spaceId={params.id} />
+        </React.Suspense>
       </div>
     </SpaceLayout>
   );
