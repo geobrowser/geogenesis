@@ -40,8 +40,8 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
     return 0;
   });
 
-  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space =>
-    space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
+  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(
+    space => space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
   );
 
   return (
@@ -51,11 +51,11 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
         <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
       </div>
 
-      <div className="flex flex-col max-h-[300px] overflow-y-auto justify-between w-full">
+      <div className="flex max-h-[300px] w-full flex-col justify-between overflow-y-auto">
         {filteredSpacesForMoveResults.map(space => (
           <button
             key={space.id}
-            className="flex items-center gap-3 p-2 hover:bg-grey-01 focus:bg-grey-01 transition-colors duration-75 cursor-pointer"
+            className="flex cursor-pointer items-center gap-3 p-2 transition-colors duration-75 hover:bg-grey-01 focus:bg-grey-01"
             onClick={() => {
               setSpaceIdFrom(spaceId);
               setSpaceIdTo(space.id);
@@ -64,7 +64,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
             }}
           >
             {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
-              <div className="relative w-8 h-8 rounded overflow-hidden">
+              <div className="relative h-8 w-8 overflow-hidden rounded">
                 <Image
                   src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                   layout="fill"
@@ -79,7 +79,6 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
 
       {filteredSpacesForMoveResults.length === 0 && (
         <div className="flex flex-col gap-1 p-2 pt-0">
-          {/* <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text> */}
           <Text variant="footnoteMedium">No spaces found for your search results.</Text>
         </div>
       )}
