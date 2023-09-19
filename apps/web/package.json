@@ -107,6 +107,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "eslint-plugin-react": "^7.31.11",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "fake-indexeddb": "^4.0.2",
     "jsdom": "^20.0.0",
     "postcss": "^8.4.21",
     "prettier": "^2.7.1",
