@@ -16,8 +16,6 @@ interface Props {
 export function GovernanceViewProposalContentHeader({ spaceName, spaceImage }: Props) {
   const { setIsOpen } = useGovernanceProposal();
 
-  console.log('space image', getImagePath(spaceImage ?? ''));
-
   return (
     <div className="flex w-full items-center gap-3 bg-white px-4 py-2.5 text-button shadow-big">
       <SquareButton icon="close" onClick={() => setIsOpen(false)} />
