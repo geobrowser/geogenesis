@@ -8,6 +8,7 @@ import { Action } from '~/core/utils/action';
 import { Avatar } from '~/design-system/avatar';
 
 import { getEditorsForSpace } from '../space-page/get-editors-for-space';
+import { GovernanceStatusChip } from './governance-status-chip';
 
 interface Props {
   spaceId: string;
@@ -28,23 +29,42 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
 
         return (
           <div key={p.id} className="w-full rounded border border-grey-02 p-4 shadow-button">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-smallTitle">{p.name}</h3>
-              <div className="flex items-center gap-5 text-breadcrumb text-grey-04">
-                <div className="flex items-center gap-1.5">
-                  <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                    <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.id} />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-smallTitle">{p.name}</h3>
+                <div className="flex items-center gap-5 text-breadcrumb text-grey-04">
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.id} />
+                    </div>
+                    <p>{p.createdBy.name ?? p.createdBy.id}</p>
                   </div>
-                  <p>{p.createdBy.name ?? p.createdBy.id}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p>
+                      {changeCount} {pluralize('edit', changeCount)}
+                    </p>
+                    <p>·</p>
+                    <p>
+                      {p.proposedVersions.length} {pluralize('entity', p.proposedVersions.length)}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <p>
-                    {changeCount} {pluralize('edit', changeCount)}
-                  </p>
-                  <p>·</p>
-                  <p>
-                    {p.proposedVersions.length} {pluralize('entity', p.proposedVersions.length)}
-                  </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
+
+                <div className="flex items-center gap-8">
+                  <div className="flex items-center gap-2 text-metadataMedium">
+                    <p>Accepted</p>
+                    <div className="rounded-small rounded-lg h-1 w-[76px] bg-green" />
+                    <p>100%</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-metadataMedium">
+                    <p>Rejected</p>
+                    <div className="rounded-small rounded-lg h-1 w-[76px] bg-divider" />
+                    <p>0%</p>
+                  </div>
                 </div>
               </div>
             </div>
