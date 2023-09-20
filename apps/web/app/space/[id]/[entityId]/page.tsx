@@ -136,6 +136,9 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     )
   ).flatMap(triples => triples);
 
+  console.log('entity', entity);
+  console.log(entity?.triples);
+
   return {
     triples: entity?.triples ?? [],
     id: entityId,

@@ -89,6 +89,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
     try {
       const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
+      if (!spaceEntityTwo) throw new Error('SpaceID not found for the second Entity.');
       batch(() => {
         unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
         mergedTriples.forEach(t => {
@@ -96,7 +97,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
             Triple.withId({
               ...t,
               entityId: mergedEntityId,
-              space: '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9',
+              space: spaceEntityTwo.id,
             })
           );
         }); // create the triples that are merged
@@ -118,6 +119,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     mergedEntityId,
     entityIdOne,
     entityIdTwo,
+    spaceEntityTwo,
     migrateHub,
     setIsMergeReviewOpen,
     unmergedTriples,
