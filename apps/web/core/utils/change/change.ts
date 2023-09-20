@@ -5,6 +5,7 @@ import { Subgraph } from '~/core/io/';
 import type {
   Action as ActionType,
   Entity as EntityType,
+  Proposal,
   ProposedVersion,
   Triple as TripleType,
   TripleValueType,
@@ -625,12 +626,20 @@ export async function fromVersion(
   return { changes, versions };
 }
 
+export type ProposalChangeset = {
+  changes: Record<EntityId, Changeset>;
+  proposals: {
+    selected: Proposal | null;
+    previous: Proposal | null;
+  };
+};
+
 export async function fromProposal(
   proposalId: string,
   previousProposalId: string,
   subgraph: Subgraph.ISubgraph,
   config: Environment.AppConfig
-) {
+): Promise<ProposalChangeset> {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedProposal, previousProposal] = await Promise.all([

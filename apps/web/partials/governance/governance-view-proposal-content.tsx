@@ -2,7 +2,9 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { options } from '~/core/environment/environment';
 import { Subgraph } from '~/core/io';
+import { Change } from '~/core/utils/change';
 
+import { ProposalDiff } from '../history/proposal-diff';
 import { GovernanceViewProposalContentHeader } from './governance-view-proposal-content-header';
 
 interface Props {
@@ -21,6 +23,14 @@ export async function GovernanceViewProposalContent({ proposalId, spaceId }: Pro
     return <p>Proposal does not exist</p>;
   }
 
+  const previousProposal = await Subgraph.fetchProposal({
+    id: '',
+    blockStart: Number(proposal.createdAtBlock) - 1,
+    endpoint: options.production.subgraph,
+  });
+
+  const changeset = await Change.fromProposal(proposalId, previousProposal?.id ?? '', Subgraph, options.production);
+
   return (
     <div className="flex min-h-full flex-col gap-2">
       <GovernanceViewProposalContentHeader
@@ -30,7 +40,9 @@ export async function GovernanceViewProposalContent({ proposalId, spaceId }: Pro
       <div className="bg-white px-20 py-5">
         <h1 className="text-mediumTitle">{proposal.name}</h1>
       </div>
-      <div className="rounded-t-xl flex-1 bg-white">Heowdorlwloe</div>
+      <div className="flex-1 rounded-t-xl bg-white px-20 py-10">
+        <ProposalDiff proposalChangeset={changeset} />
+      </div>
     </div>
   );
 }

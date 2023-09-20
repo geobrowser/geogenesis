@@ -7,51 +7,98 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
 
-export const getFetchProposalQuery = (id: string) => `query {
-  proposal(id: ${JSON.stringify(id)}) {
-    id
-    name
-    description
-    createdAt
-    createdAtBlock
-    createdBy {
-      id
-    }
-    status
-    proposedVersions {
+export const getFetchProposalQuery = (id: string, blockStart?: number) => {
+  if (blockStart) {
+    return `query {
+      proposal(block: ${blockStart}) {
+        id
+        name
+        description
+        createdAt
+        createdAtBlock
+        createdBy {
+          id
+        }
+        status
+        proposedVersions {
+          id
+          name
+          createdAt
+          createdBy {
+            id
+          }
+          actions {
+            actionType
+            id
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+            entityValue {
+              id
+              name
+            }
+            numberValue
+            stringValue
+            valueType
+            valueId
+          }
+        }
+      }
+    }`;
+  }
+
+  return `query {
+    proposal(id: ${JSON.stringify(id)}) {
       id
       name
+      description
       createdAt
+      createdAtBlock
       createdBy {
         id
       }
-      actions {
-        actionType
+      status
+      proposedVersions {
         id
-        attribute {
+        name
+        createdAt
+        createdBy {
           id
-          name
         }
-        entity {
+        actions {
+          actionType
           id
-          name
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
+          entityValue {
+            id
+            name
+          }
+          numberValue
+          stringValue
+          valueType
+          valueId
         }
-        entityValue {
-          id
-          name
-        }
-        numberValue
-        stringValue
-        valueType
-        valueId
       }
     }
-  }
-}`;
+  }`;
+};
 
 export interface FetchProposalOptions {
   endpoint: string;
   id: string;
+  blockStart?: number;
   signal?: AbortController['signal'];
 }
 
