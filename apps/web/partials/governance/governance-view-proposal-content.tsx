@@ -22,11 +22,15 @@ export async function GovernanceViewProposalContent({ proposalId, spaceId }: Pro
   }
 
   return (
-    <div>
+    <div className="flex min-h-full flex-col gap-2">
       <GovernanceViewProposalContentHeader
         spaceName={space.attributes[SYSTEM_IDS.NAME] ?? null}
         spaceImage={space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null}
       />
+      <div className="bg-white px-20 py-5">
+        <h1 className="text-mediumTitle">{proposal.name}</h1>
+      </div>
+      <div className="rounded-t-xl flex-1 bg-white">Heowdorlwloe</div>
     </div>
   );
 }
