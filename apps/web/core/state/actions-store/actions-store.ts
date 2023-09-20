@@ -1,4 +1,6 @@
 import { Observable, computed, observable } from '@legendapp/state';
+import { configureObservablePersistence, persistObservable } from '@legendapp/state/persist';
+import { ObservablePersistIndexedDB } from '@legendapp/state/persist-plugins/indexeddb';
 
 import { Storage } from '~/core/io';
 import {
@@ -11,6 +13,17 @@ import {
 import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
+
+configureObservablePersistence({
+  persistLocal: ObservablePersistIndexedDB,
+  persistLocalOptions: {
+    indexedDB: {
+      databaseName: 'Legend',
+      version: 1,
+      tableNames: ['actionsStore'],
+    },
+  },
+});
 
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
@@ -41,6 +54,16 @@ export class ActionsStore implements IActionsStore {
 
   constructor({ storageClient }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
+
+    // `persistObservable` can be used to automatically persist an observable, both locally and
+    // remotely; it will be saved whenever you change anything anywhere within the observable, and
+    // the observable will be filled with the local state right after calling persistObservable
+    // https://legendapp.com/open-source/state/persistence/#persistobservable
+    if (typeof window !== 'undefined') {
+      persistObservable(actions, {
+        local: 'actionsStore',
+      });
+    }
 
     this.storageClient = storageClient;
     this.actions$ = actions;
