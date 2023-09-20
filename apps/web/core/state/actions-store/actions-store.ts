@@ -58,9 +58,11 @@ export class ActionsStore implements IActionsStore {
     // remotely; it will be saved whenever you change anything anywhere within the observable, and
     // the observable will be filled with the local state right after calling persistObservable
     // https://legendapp.com/open-source/state/persistence/#persistobservable
-    persistObservable(actions, {
-      local: 'actionsStore',
-    });
+    if (typeof window !== 'undefined') {
+      persistObservable(actions, {
+        local: 'actionsStore',
+      });
+    }
 
     this.storageClient = storageClient;
     this.actions$ = actions;
