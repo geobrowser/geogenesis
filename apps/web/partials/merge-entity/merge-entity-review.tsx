@@ -62,7 +62,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
-  const { create, remove, actions } = useActionsStore();
+  const { create, remove } = useActionsStore();
 
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
