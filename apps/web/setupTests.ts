@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/extend-expect';
 import matchers from '@testing-library/jest-dom/matchers';
 import { cleanup } from '@testing-library/react';
+import indexedDB from 'fake-indexeddb';
 import { afterEach, expect, vi } from 'vitest';
+
+// Add support for IndexedDB testing
+globalThis.indexedDB = indexedDB;
 
 // extends Vitest's expect method with methods from react-testing-library
 expect.extend(matchers);
