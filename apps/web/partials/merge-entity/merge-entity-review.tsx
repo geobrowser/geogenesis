@@ -66,6 +66,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
+
   const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === 'name');
 
   const { spaces } = useSpaces();
@@ -89,7 +90,9 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
     try {
       const notMergedEntityId = mergedEntityId === entityIdOne ? entityIdTwo : entityIdOne;
-      if (!spaceEntityTwo) throw new Error('SpaceID not found for the second Entity.');
+      const mergedEntitySpaceId = mergedEntityId === entityIdOne ? spaceEntityOne?.id : spaceEntityTwo?.id;
+
+      if (!mergedEntitySpaceId) throw new Error('SpaceID not found for merging entities.');
       batch(() => {
         unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
         mergedTriples.forEach(t => {
@@ -97,7 +100,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
             Triple.withId({
               ...t,
               entityId: mergedEntityId,
-              space: spaceEntityTwo.id,
+              space: mergedEntitySpaceId,
             })
           );
         }); // create the triples that are merged
@@ -119,7 +122,8 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     mergedEntityId,
     entityIdOne,
     entityIdTwo,
-    spaceEntityTwo,
+    spaceEntityOne?.id,
+    spaceEntityTwo?.id,
     migrateHub,
     setIsMergeReviewOpen,
     unmergedTriples,
