@@ -123,7 +123,7 @@ export class Merged implements IMergedDataSource {
 
         const lowerName = e.name.toLowerCase();
         const lowerQuery = options.query ? options.query.toLowerCase() : '';
-        return lowerName.startsWith(lowerQuery) || lowerName.includes(lowerQuery);
+        return lowerName.startsWith(lowerQuery);
       })
     );
 
