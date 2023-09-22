@@ -30,7 +30,16 @@ const accounts =
 const localChainId = Number(process.env.DEVNET_CHAIN_ID || '31337')
 
 const config: HardhatUserConfig = {
-  solidity: '0.8.14',
+  solidity: {
+    compilers: [
+      {
+        version: '0.8.14',
+      },
+      {
+        version: '0.8.17',
+      },
+    ],
+  },
   paths: {
     sources: './contracts',
     tests: './test',
