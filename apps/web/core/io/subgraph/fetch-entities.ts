@@ -91,7 +91,6 @@ export interface FetchEntitiesOptions {
 
 interface NetworkResult {
   startEntities: NetworkEntity[];
-  containEntities: NetworkEntity[];
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions) {
@@ -154,7 +153,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
 
           return {
             startEntities: [],
-            containEntities: [],
           };
 
         default:
@@ -163,7 +161,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
           );
           return {
             startEntities: [],
-            containEntities: [],
           };
       }
     }
