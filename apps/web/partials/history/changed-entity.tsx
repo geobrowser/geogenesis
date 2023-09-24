@@ -30,13 +30,8 @@ export const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
 
   return (
     <div className="relative -top-12 pt-12">
-      <div className="flex flex-col gap-5">
-        <h3 className="text-mediumTitle">{renderedName}</h3>
-        <div className="flex gap-8">
-          <div className="flex-1 text-body">Previous version</div>
-          <div className="relative flex-1 text-body">This version</div>
-        </div>
-      </div>
+      <h3 className="text-mediumTitle">{renderedName}</h3>
+
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (

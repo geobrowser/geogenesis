@@ -19,7 +19,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
   const [proposals, editorsForSpace] = await Promise.all([
-    // TODO: Get env from cookie
+    // @TODO: Get env from cookie
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),
   ]);
