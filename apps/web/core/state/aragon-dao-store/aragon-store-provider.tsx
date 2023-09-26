@@ -7,11 +7,13 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useNetwork } from 'wagmi';
 
+import { GeoPluginClient } from '~/core/governance-space-plugin/client';
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
 export interface AragonSDKContextValue {
   context?: Context;
   baseClient?: Client;
+  GeoPluginClient?: GeoPluginClient;
 }
 
 const AragonSDKContext = createContext({});
@@ -20,6 +22,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
   const [context, setContext] = useState<Context | undefined>(undefined);
   const { chain } = useNetwork();
   const ethersSigner = useEthersSigner({ chainId: chain?.id || 5 });
+  // const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
 
   // @TODO use our Environment.options here once we finalize -- don't want to add Goerli to Environment.options if we don't need to
   useEffect(() => {
@@ -45,11 +48,15 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     setContext(new Context(aragonSDKContextParams));
   }, [ethersSigner]);
 
+  console.log('aragon context', context);
+  console.log('geo plugin client', GeoPluginClient);
+
   return <AragonSDKContext.Provider value={{ context }}>{children}</AragonSDKContext.Provider>;
 };
 
 export const useAragonSDKContext = () => {
   const value = useContext(AragonSDKContext);
+
   if (!value) {
     throw new Error('useAragonSDKContext must be used within a AragonSDKProvider');
   }

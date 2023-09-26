@@ -2,13 +2,13 @@ import { ClientCore } from '@aragon/sdk-client-common';
 
 import { GeoPluginContext } from '../context';
 
-export class MyPluginClientCore extends ClientCore {
-  public geoPluginPluginAddress: string;
-  public geoPluginRepoAddress: string;
+export class GeoPluginClientCore extends ClientCore {
+  public geoSpacePluginAddress: string;
+  public geoSpacePluginRepoAddress: string;
 
   constructor(pluginContext: GeoPluginContext) {
     super(pluginContext);
-    this.geoPluginPluginAddress = pluginContext.geoPluginPluginAddress;
-    this.geoPluginRepoAddress = pluginContext.geoPluginRepoAddress;
+    this.geoSpacePluginAddress = pluginContext.geoSpacePluginAddress;
+    this.geoSpacePluginRepoAddress = pluginContext.geoSpacePluginRepoAddress;
   }
 }

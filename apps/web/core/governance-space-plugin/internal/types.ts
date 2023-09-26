@@ -1,17 +1,13 @@
-import { ContextParams, ContextState, OverriddenState } from '@aragon/sdk-client-common';
-
-export type GeoPluginContextParams = ContextParams & {
-  // optional so we can set default values for the parameter
-  geoPluginAddress?: string;
-  geoPluginRepoAddress?: string;
-  // add custom params
-};
+import { ContextState, OverriddenState } from '@aragon/sdk-client-common';
 
 export type GeoPluginContextState = ContextState & {
-  // extend the Context state with a new state for storing
-  // the new parameters
-  geoPluginPluginAddress: string;
-  geoPluginRepoAddress: string;
+  // include all but personal space, can be separate
+  geoSpacePluginAddress: string;
+  geoSpacePluginRepoAddress: string;
+  geoMainVotingPluginAddress: string;
+  geoMainVotingPluginRepoAddress: string;
+  geoMemberAccessPluginAddress: string;
+  geoMemberAccessPluginRepoAddress: string;
 };
 
 export type GeoPluginOverriddenState = OverriddenState & {
