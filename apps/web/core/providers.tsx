@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store';
+import { AragonProvider } from './state/aragon-dao-store/aragon-dao-store';
 import { DiffProvider } from './state/diff-store/diff-store';
 import { LocalStoreProvider } from './state/local-store';
 import { SpaceStoreProvider } from './state/spaces-store';
@@ -19,17 +20,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProvider>
-        <Services.Provider>
-          <ActionsStoreProvider>
-            <SpaceStoreProvider>
-              <LocalStoreProvider>
-                <StatusBarContextProvider>
-                  <DiffProvider>{children}</DiffProvider>
-                </StatusBarContextProvider>
-              </LocalStoreProvider>
-            </SpaceStoreProvider>
-          </ActionsStoreProvider>
-        </Services.Provider>
+        <AragonProvider>
+          <Services.Provider>
+            <ActionsStoreProvider>
+              <SpaceStoreProvider>
+                <LocalStoreProvider>
+                  <StatusBarContextProvider>
+                    <DiffProvider>{children}</DiffProvider>
+                  </StatusBarContextProvider>
+                </LocalStoreProvider>
+              </SpaceStoreProvider>
+            </ActionsStoreProvider>
+          </Services.Provider>
+        </AragonProvider>
       </WalletProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

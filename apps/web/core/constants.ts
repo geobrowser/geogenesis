@@ -17,3 +17,8 @@ export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
 
 export const IPFS_GATEWAY_PATH = 'https://api.thegraph.com/ipfs/api/v0/cat?arg=';
+
+// GOVERNANCE PLUGINS
+// we'll update these once deployed. these are local addresses
+export const MEMBER_ACCESS_PLUGIN_SETUP_ADDRESS = '0x7afc122b12e6a89b4d4488de34c09b56f86ef56e';
+export const MEMBER_ACCESS_PLUGIN_ADDRESS = '0x7afc122b12e6a89b4d4488de34c09b56f86ef56e';
