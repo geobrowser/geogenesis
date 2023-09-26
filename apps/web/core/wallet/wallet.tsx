@@ -6,7 +6,7 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import * as React from 'react';
 
 import { Chain, WagmiConfig, configureChains, createConfig, useConnect, useDisconnect } from 'wagmi';
-import { polygon, polygonMumbai } from 'wagmi/chains';
+import { goerli, polygon, polygonMumbai } from 'wagmi/chains';
 import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
 import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
@@ -45,7 +45,8 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   [
     polygon,
     // Only make the dev chains available in development
-    ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : []),
+    // can remove goerli after dao testing
+    ...(process.env.NODE_ENV === 'development' ? [polygonMumbai, goerli, LOCAL_CHAIN] : []),
   ],
   [
     alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),

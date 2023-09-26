@@ -1,4 +1,3 @@
-// src/context/AragonSDK.tsx
 'use client';
 
 import { Client, Context, ContextParams } from '@aragon/sdk-client';
@@ -6,33 +5,9 @@ import { Client, Context, ContextParams } from '@aragon/sdk-client';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
+import { useNetwork } from 'wagmi';
+
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
-
-// src/context/AragonSDK.tsx
 
 export interface AragonSDKContextValue {
   context?: Context;
@@ -43,8 +18,10 @@ const AragonSDKContext = createContext({});
 
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
   const [context, setContext] = useState<Context | undefined>(undefined);
-  const ethersSigner = useEthersSigner({ chainId: 5 });
+  const { chain } = useNetwork();
+  const ethersSigner = useEthersSigner({ chainId: chain?.id || 5 });
 
+  // @TODO use our Environment.options here once we finalize -- don't want to add Goerli to Environment.options if we don't need to
   useEffect(() => {
     const aragonSDKContextParams: ContextParams = {
       network: 'goerli', // mainnet, mumbai, etc
@@ -55,20 +32,18 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
         {
           url: 'https://testing-ipfs-0.aragon.network/api/v0',
           // headers: { 'X-API-KEY': process.env.NEXT_PUBLIC_IPFS_KEY || '' }, // make sure you have the key for your IPFS node within your .env file
-          headers: { 'X-API-KEY': 'b477RhECf8s8sdM7XrkLBs2wHc4kCMwpbcFC55Kt' },
+          headers: { 'X-API-KEY': 'b477RhECf8s8sdM7XrkLBs2wHc4kCMwpbcFC55Kt' }, // provided by aragon for testing
         },
       ],
       graphqlNodes: [
         {
-          url: 'https://subgraph.satsuma-prod.com/aragon/osx-goerli/api', // this will change based on the chain you're using (osx-mainnet alternatively)
+          url: 'https://subgraph.satsuma-prod.com/aragon/osx-goerli/api', // this'll be the subgraph for the dao
         },
       ],
     };
 
     setContext(new Context(aragonSDKContextParams));
   }, [ethersSigner]);
-
-  console.log('aragon context', context);
 
   return <AragonSDKContext.Provider value={{ context }}>{children}</AragonSDKContext.Provider>;
 };
