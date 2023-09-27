@@ -15,7 +15,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'done';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
-  icon?: IconName;
+  icon?: IconName | React.ReactNode;
   small?: boolean;
 };
 
@@ -66,7 +66,7 @@ export const Button = forwardRef(function Button(
       disabled={disabled}
       {...rest}
     >
-      {icon && <Icon icon={icon} color={iconColor} />}
+      {typeof icon === 'string' ? <Icon icon={icon as IconName} color={iconColor} /> : icon ?? null}
       {children ?? ZERO_WIDTH_SPACE}
     </button>
   );

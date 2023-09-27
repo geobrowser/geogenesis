@@ -5,8 +5,6 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
-
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
@@ -27,12 +25,9 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const [query, onQueryChange] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 100);
   const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
-  const { address } = useAccount();
 
   // filter out the current space, Root space, and ones user is not an editor in
-  const spacesForMove = spaces.filter(
-    space => space.id !== spaceId && space.isRootSpace !== true && space.editors.includes(address ?? '')
-  );
+  const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
 
   // check if the spaces name is not undefined and then sort alphabetically:
   const sortedSpacesForMove = spacesForMove.sort((spaceA: Space, spaceB: Space) => {
@@ -45,8 +40,8 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
     return 0;
   });
 
-  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(space =>
-    space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
+  const filteredSpacesForMoveResults = sortedSpacesForMove.filter(
+    space => space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
   );
 
   return (
@@ -56,11 +51,11 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
         <Input onChange={e => onQueryChange(e.target.value)} placeholder="Search for a Space by name" />
       </div>
 
-      <div className="flex flex-col max-h-[300px] overflow-y-auto justify-between w-full">
+      <div className="flex max-h-[300px] w-full flex-col justify-between overflow-y-auto">
         {filteredSpacesForMoveResults.map(space => (
           <button
             key={space.id}
-            className="flex items-center gap-3 p-2 hover:bg-grey-01 focus:bg-grey-01 transition-colors duration-75 cursor-pointer"
+            className="flex cursor-pointer items-center gap-3 p-2 transition-colors duration-75 hover:bg-grey-01 focus:bg-grey-01"
             onClick={() => {
               setSpaceIdFrom(spaceId);
               setSpaceIdTo(space.id);
@@ -69,7 +64,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
             }}
           >
             {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
-              <div className="relative w-8 h-8 rounded overflow-hidden">
+              <div className="relative h-8 w-8 overflow-hidden rounded">
                 <Image
                   src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
                   layout="fill"
@@ -84,10 +79,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
 
       {filteredSpacesForMoveResults.length === 0 && (
         <div className="flex flex-col gap-1 p-2 pt-0">
-          <Text variant="footnoteMedium">You don’t have editor access in any other spaces.</Text>
-          <Text variant="footnote">
-            You will need to become an editor of the space you want to move the entities to.
-          </Text>
+          <Text variant="footnoteMedium">No spaces found for your search results.</Text>
         </div>
       )}
     </div>

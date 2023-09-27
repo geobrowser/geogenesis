@@ -224,7 +224,7 @@ function SpaceMoveCard({
   handlePublish,
   getBgClassByState,
 }: {
-  spaceName: string | undefined; // to satisfiy potentially undefined
+  spaceName: string | undefined; // to satisfy potentially undefined
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
   txState: ReviewState;
