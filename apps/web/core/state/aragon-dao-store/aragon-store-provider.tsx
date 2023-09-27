@@ -48,13 +48,12 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
 
     const contextInstance = new Context(aragonSDKContextParams);
     const geoPluginContextInstance = new GeoPluginContext();
-    console.log('context instance', contextInstance);
+
     setContext(contextInstance);
     const tokenVotingClient = new TokenVotingClient(contextInstance);
     const geoPluginClient = new GeoPluginClient(geoPluginContextInstance);
     console.log('token voting', tokenVotingClient);
     console.log('geo plugin', geoPluginClient);
-    console.log('aragon context', context);
 
     // setBaseClient(new Client(contextInstance));
     // setTokenVotingClient(new TokenVotingClient(contextPlugin));

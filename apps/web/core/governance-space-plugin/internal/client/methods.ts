@@ -1,15 +1,33 @@
+import {
+  PrepareInstallationParams,
+  PrepareInstallationStepValue,
+  prepareGenericInstallation,
+} from '@aragon/sdk-client-common';
 import { createPublicClient, http } from 'viem';
 import { goerli } from 'viem/chains';
 
-import { MEMBER_ACCESS_PLUGIN_ADDRESS, MEMBER_ACCESS_PLUGIN_SETUP_ADDRESS, } from '~/core/constants';
+import { MEMBER_ACCESS_PLUGIN_ADDRESS, MEMBER_ACCESS_PLUGIN_SETUP_ADDRESS } from '~/core/constants';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi, spacePluginSetupAbi } from '../../abis';
+import { GeoPluginClientCore } from '../core';
 
 // @TODO: use our existing public client
 export const publicClient = createPublicClient({
   chain: goerli,
   transport: http(),
 });
+
+export class GeoPluginClientMethods extends GeoPluginClientCore {
+  public async *prepareInstallation(params: PrepareInstallationParams): AsyncGenerator<PrepareInstallationStepValue> {
+    yield* prepareGenericInstallation(this.web3, {
+      daoAddressOrEns: params.daoAddressOrEns,
+      pluginRepo: this.myPluginRepoAddress,
+      version: params.version,
+      installationAbi: BUILD_METADATA.pluginSetup.prepareInstallation.inputs,
+      installationParams: [params.settings.number],
+    });
+  }
+}
 
 /* space plugin setup */
 
@@ -26,17 +44,6 @@ const memberAccessPluginSetupAddress = MEMBER_ACCESS_PLUGIN_SETUP_ADDRESS;
 /*member access plugin */
 const memberAccessPluginAddress = MEMBER_ACCESS_PLUGIN_ADDRESS;
 
-// reads
-export async function getMemberAccessProposal(proposalId: bigint) {
-  const data = await publicClient.readContract({
-    address: memberAccessPluginAddress,
-    abi: memberAccessPluginAbi,
-    functionName: 'getProposal',
-    args: [proposalId],
-  });
-  return data;
-}
-
 // writes
 
 /* main voting plugin setup  */
@@ -44,14 +51,3 @@ export async function getMemberAccessProposal(proposalId: bigint) {
 /* main voting plugin */
 
 // reads
-
-export async function getMemberAccessProposal(proposalId: bigint) {
-  const data = await publicClient.readContract({
-    address: memberAccessPluginAddress,
-    abi: mainVotingPluginAbi,
-    functionName: 'getProposal',
-    args: [proposalId],
-  });
-  return data;
-}
-
