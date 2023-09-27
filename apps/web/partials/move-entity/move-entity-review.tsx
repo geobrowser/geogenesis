@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useWalletClient, useWalletClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
