@@ -1,47 +1,33 @@
 import { Context, ContextCore } from '@aragon/sdk-client-common';
 
+import { DEFAULT_GEO_SPACE_PLUGIN_ADDRESS, DEFAULT_GEO_SPACE_PLUGIN_REPO_ADDRESS } from '../constants';
 import { GeoPluginContextState, GeoPluginOverriddenState } from './internal/types';
-import { GeoPluginContextParams, GeoPluginContextParams } from './types';
-
-// set your defaults here or import them from a package
-const DEFAULT_SIMPLE_STORAGE_PLUGIN_ADDRESS = '0x1234567890123456789012345678901234567890';
-const DEFAULT_SIMPLE_STORAGE_Repo_ADDRESS = '0x2345678901234567890123456789012345678901';
+import { GeoPluginContextParams } from './types';
 
 export class GeoPluginContext extends ContextCore {
-  // super is called before the properties are initialized
-  // so we initialize them to the value of the parent class
   protected state: GeoPluginContextState = this.state;
-  // TODO
-  // fix typo in the overridden property name
+
+  // this typo is inherited from the original property name
   protected overriden: GeoPluginOverriddenState = this.overriden;
   constructor(contextParams?: Partial<GeoPluginContextParams>, aragonContext?: Context) {
-    // call the parent constructor
-    // so it does not complain and we
-    // can use this
     super();
-    // set the context params inherited from the context
+
     if (aragonContext) {
-      // copy the context properties to this
       Object.assign(this, aragonContext);
     }
-    // contextParams have priority over the aragonContext
+
     if (contextParams) {
-      // overide the context params with the ones passed to the constructor
+      console.log('context params', contextParams);
       this.set(contextParams);
     }
   }
 
   public set(contextParams: GeoPluginContextParams) {
-    // the super function will call this set
-    // so we need to call the parent set first
     super.set(contextParams);
     // set the default values for the new params
     this.setDefaults();
-    // override default params if specified in the context
     if (contextParams.geoSpacePluginAddress) {
-      // override the myPluginPluginAddress value
       this.state.geoSpacePluginAddress = contextParams.geoSpacePluginAddress;
-      // set the overriden flag to true in case set is called again
       this.overriden.geoSpacePluginAddress = true;
     }
 
@@ -53,11 +39,8 @@ export class GeoPluginContext extends ContextCore {
 
   private setDefaults() {
     if (!this.overriden.geoSpacePluginAddress) {
-      // set the default value for myPluginPluginAddress
-      this.state.geoSpacePluginAddress = DEFAULT_SIMPLE_STORAGE_PLUGIN_ADDRESS;
-    }
-    if (!this.overriden.geoSpacePluginAddress) {
-      this.state.geoSpacePluginAddress = DEFAULT_SIMPLE_STORAGE_Repo_ADDRESS;
+      this.state.geoSpacePluginAddress = DEFAULT_GEO_SPACE_PLUGIN_ADDRESS;
+      this.state.geoSpacePluginRepoAddress = DEFAULT_GEO_SPACE_PLUGIN_REPO_ADDRESS;
     }
   }
 

@@ -10,5 +10,6 @@ export class GeoPluginClientCore extends ClientCore {
     super(pluginContext);
     this.geoSpacePluginAddress = pluginContext.geoSpacePluginAddress;
     this.geoSpacePluginRepoAddress = pluginContext.geoSpacePluginRepoAddress;
+    console.log('plugin context', pluginContext);
   }
 }

@@ -1,12 +1,13 @@
 'use client';
 
-import { Client, Context, ContextParams } from '@aragon/sdk-client';
+import { Client, Context, ContextParams, TokenVotingClient } from '@aragon/sdk-client';
 
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useNetwork } from 'wagmi';
 
+import { GeoPluginContext } from '~/core/governance-space-plugin';
 import { GeoPluginClient } from '~/core/governance-space-plugin/client';
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
@@ -45,11 +46,19 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
       ],
     };
 
-    setContext(new Context(aragonSDKContextParams));
-  }, [ethersSigner]);
+    const contextInstance = new Context(aragonSDKContextParams);
+    const geoPluginContextInstance = new GeoPluginContext();
+    console.log('context instance', contextInstance);
+    setContext(contextInstance);
+    const tokenVotingClient = new TokenVotingClient(contextInstance);
+    const geoPluginClient = new GeoPluginClient(geoPluginContextInstance);
+    console.log('token voting', tokenVotingClient);
+    console.log('geo plugin', geoPluginClient);
+    console.log('aragon context', context);
 
-  console.log('aragon context', context);
-  console.log('geo plugin client', GeoPluginClient);
+    // setBaseClient(new Client(contextInstance));
+    // setTokenVotingClient(new TokenVotingClient(contextPlugin));
+  }, [ethersSigner]);
 
   return <AragonSDKContext.Provider value={{ context }}>{children}</AragonSDKContext.Provider>;
 };
