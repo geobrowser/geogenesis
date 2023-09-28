@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { MergeEntityProvider } from '~/core/state/merge-entity-store';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { Space, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -17,6 +18,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReadableEntityPage } from '~/partials/entity-page/readable-entity-page';
+import { MergeEntityReview } from '~/partials/merge-entity/merge-entity-review';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
 interface Props {
@@ -62,16 +64,19 @@ export function Component(props: Props) {
       initialBlockTriples={props.blockTriples}
     >
       <MoveEntityProvider>
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-        <EntityPageContentContainer>
-          <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-          <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
-          <Spacer height={40} />
-          <Editor editable={renderEditablePage} shouldHandleOwnSpacing />
-          <Page {...props} />
-          <Spacer height={40} />
-          {props.ReferencedByComponent}
-        </EntityPageContentContainer>
+        <MergeEntityProvider>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+          <EntityPageContentContainer>
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
+            <Spacer height={40} />
+            <Editor editable={renderEditablePage} shouldHandleOwnSpacing />
+            <Page {...props} />
+            <Spacer height={40} />
+            {props.ReferencedByComponent}
+          </EntityPageContentContainer>
+          <MergeEntityReview />
+        </MergeEntityProvider>
         <MoveEntityReview />
       </MoveEntityProvider>
     </EntityStoreProvider>

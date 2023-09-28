@@ -45,6 +45,7 @@ import { FilterTable } from './icons/filter-table';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { History } from './icons/history';
 import { Image } from './icons/image';
+import { LeftArrowLong } from './icons/left-arrow-long';
 import { Member } from './icons/member';
 import { Minus } from './icons/minus';
 import { MoveSpace } from './icons/move-space';
@@ -108,7 +109,8 @@ export type IconName =
   | 'checkCircle'
   | 'checkClose'
   | 'retrySmall'
-  | 'arrowLeft';
+  | 'arrowLeft'
+  | 'leftArrowLong';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -178,4 +180,5 @@ const icons: Record<IconName, React.ElementType> = {
   checkClose: CheckClose,
   retrySmall: RetrySmall,
   arrowLeft: ArrowLeft,
+  leftArrowLong: LeftArrowLong,
 };
