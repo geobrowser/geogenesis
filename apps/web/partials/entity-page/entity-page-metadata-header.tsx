@@ -19,8 +19,9 @@ import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { Menu } from '~/design-system/menu';
-import { Text } from '~/design-system/text';
+// import { CsvImport } from '~/design-system/icons/csv-import';
+import { Eye } from '~/design-system/icons/eye';
+import { Menu, MenuItem } from '~/design-system/menu';
 
 import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
@@ -192,16 +193,20 @@ export function SpacePageMetadataHeader({ spaceId }: SpacePageMetadataHeaderProp
           onOpenChange={onOpenChange}
           align="end"
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[5.8rem] whitespace-nowrap"
+          className="max-w-[180px] bg-white"
         >
-          <Link
-            href={`${pathname}/entities`}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-          >
-            <Text variant="button" className="hover:!text-text">
-              View data
-            </Text>
-          </Link>
+          <MenuItem>
+            <Link href={`${pathname}/entities`} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <Eye />
+              <span>View data</span>
+            </Link>
+          </MenuItem>
+          {/* <MenuItem>
+            <Link href={`${pathname}/import`} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <CsvImport />
+              <span>Import CSV data</span>
+            </Link>
+          </MenuItem> */}
         </Menu>
       </div>
     </div>

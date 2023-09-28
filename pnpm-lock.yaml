@@ -29,6 +29,7 @@ importers:
       '@mobily/ts-belt': ^4.0.0-rc.2
       '@next/bundle-analyzer': ^12.3.0
       '@playwright/test': ^1.37.0
+      '@radix-ui/react-accordion': ^1.1.2
       '@radix-ui/react-dialog': ^1.0.4
       '@radix-ui/react-dropdown-menu': ^2.0.5
       '@radix-ui/react-popover': ^1.0.6
@@ -80,6 +81,7 @@ importers:
       classnames: ^2.3.2
       cmdk: ^0.1.21
       connectkit: 1.5.1
+      csv: ^6.3.3
       dayjs: ^1.11.9
       diff: ^5.1.0
       effect: 2.0.0-next.21
@@ -128,6 +130,7 @@ importers:
       '@liveblocks/react': 1.0.0_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
       '@mobily/ts-belt': 4.0.0-rc.5
+      '@radix-ui/react-accordion': 1.1.2_5uumaiclxbdbzaqafclbf6maf4
       '@radix-ui/react-dialog': 1.0.4_5uumaiclxbdbzaqafclbf6maf4
       '@radix-ui/react-dropdown-menu': 2.0.5_5uumaiclxbdbzaqafclbf6maf4
       '@radix-ui/react-popover': 1.0.6_5uumaiclxbdbzaqafclbf6maf4
@@ -159,6 +162,7 @@ importers:
       classnames: 2.3.2
       cmdk: 0.1.21_rj7ozvcq3uehdlnj3cbwzbi5ce
       connectkit: 1.5.1_cmm52l5usp4p32k7ozxntkoy5q
+      csv: 6.3.3
       dayjs: 1.11.9
       diff: 5.1.0
       effect: 2.0.0-next.21
@@ -2959,6 +2963,35 @@ packages:
       '@babel/runtime': 7.22.11
     dev: false
 
+  /@radix-ui/react-accordion/1.1.2_5uumaiclxbdbzaqafclbf6maf4:
+    resolution: {integrity: sha512-fDG7jcoNKVjSK6yfmuAs0EnPDro0WMXIhMtXdTBWqEioVW206ku+4Lw07e+13lUkFkpoEQ2PdeMIAGpdqEAmDg==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0
+      react-dom: ^16.8 || ^17.0 || ^18.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+    dependencies:
+      '@babel/runtime': 7.22.11
+      '@radix-ui/primitive': 1.0.1
+      '@radix-ui/react-collapsible': 1.0.3_5uumaiclxbdbzaqafclbf6maf4
+      '@radix-ui/react-collection': 1.0.3_5uumaiclxbdbzaqafclbf6maf4
+      '@radix-ui/react-compose-refs': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-context': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-direction': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-id': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-primitive': 1.0.3_5uumaiclxbdbzaqafclbf6maf4
+      '@radix-ui/react-use-controllable-state': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@types/react': 18.0.21
+      '@types/react-dom': 18.0.6
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
+
   /@radix-ui/react-arrow/1.0.3_5uumaiclxbdbzaqafclbf6maf4:
     resolution: {integrity: sha512-wSP+pHsB/jQRaL6voubsQ/ZlrGBHHrOjmBnr19hxYgtS0WvAFwZhK2WP/YY5yF9uKECCEEDGxuLxq1NBK51wFA==}
     peerDependencies:
@@ -2974,6 +3007,34 @@ packages:
     dependencies:
       '@babel/runtime': 7.22.11
       '@radix-ui/react-primitive': 1.0.3_5uumaiclxbdbzaqafclbf6maf4
+      '@types/react': 18.0.21
+      '@types/react-dom': 18.0.6
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
+
+  /@radix-ui/react-collapsible/1.0.3_5uumaiclxbdbzaqafclbf6maf4:
+    resolution: {integrity: sha512-UBmVDkmR6IvDsloHVN+3rtx4Mi5TFvylYXpluuv0f37dtaz3H99bp8No0LGXRigVpl3UAT4l9j6bIchh42S/Gg==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0
+      react-dom: ^16.8 || ^17.0 || ^18.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+    dependencies:
+      '@babel/runtime': 7.22.11
+      '@radix-ui/primitive': 1.0.1
+      '@radix-ui/react-compose-refs': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-context': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-id': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-presence': 1.0.1_5uumaiclxbdbzaqafclbf6maf4
+      '@radix-ui/react-primitive': 1.0.3_5uumaiclxbdbzaqafclbf6maf4
+      '@radix-ui/react-use-controllable-state': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
+      '@radix-ui/react-use-layout-effect': 1.0.1_iapumuv4e6jcjznwuxpf4tt22e
       '@types/react': 18.0.21
       '@types/react-dom': 18.0.6
       react: 18.2.0
@@ -8468,6 +8529,28 @@ packages:
   /csstype/3.1.1:
     resolution: {integrity: sha512-DJR/VvkAvSZW9bTouZue2sSxDwdTN92uHjqeKVm+0dAqdfNykRzQ95tay8aXMBAAPpUiq4Qcug2L7neoRh2Egw==}
 
+  /csv-generate/4.2.8:
+    resolution: {integrity: sha512-qQ5CUs4I58kfo90EDBKjdp0SpJ3xWnN1Xk1lZ1ITvfvMtNRf+jrEP8tNPeEPiI9xJJ6Bd/km/1hMjyYlTpY42g==}
+    dev: false
+
+  /csv-parse/5.5.0:
+    resolution: {integrity: sha512-RxruSK3M4XgzcD7Trm2wEN+SJ26ChIb903+IWxNOcB5q4jT2Cs+hFr6QP39J05EohshRFEvyzEBoZ/466S2sbw==}
+    dev: false
+
+  /csv-stringify/6.4.2:
+    resolution: {integrity: sha512-DXIdnnCUQYjDKTu6TgCSzRDiAuLxDjhl4ErFP9FGMF3wzBGOVMg9bZTLaUcYtuvhXgNbeXPKeaRfpgyqE4xySw==}
+    dev: false
+
+  /csv/6.3.3:
+    resolution: {integrity: sha512-TuOM1iZgdDiB6IuwJA8oqeu7g61d9CU9EQJGzCJ1AE03amPSh/UK5BMjAVx+qZUBb/1XEo133WHzWSwifa6Yqw==}
+    engines: {node: '>= 0.1.90'}
+    dependencies:
+      csv-generate: 4.2.8
+      csv-parse: 5.5.0
+      csv-stringify: 6.4.2
+      stream-transform: 3.2.8
+    dev: false
+
   /d/1.0.1:
     resolution: {integrity: sha512-m62ShEObQ39CfralilEQRjH6oAMtNCV1xJyEx5LpRYUVN+EviphDgUc/F3hnYbADmkiNs67Y+3ylmlG7Lnu+FA==}
     dependencies:
@@ -13880,6 +13963,7 @@ packages:
 
   /loose-envify/1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
+    hasBin: true
     dependencies:
       js-tokens: 4.0.0
 
@@ -17556,6 +17640,10 @@ packages:
       looper: 3.0.0
       pull-stream: 3.6.14
     dev: true
+
+  /stream-transform/3.2.8:
+    resolution: {integrity: sha512-NUx0mBuI63KbNEEh9Yj0OzKB7iMOSTpkuODM2G7By+TTVihEIJ0cYp5X+pq/TdJRlsznt6CYR8HqxexyC6/bTw==}
+    dev: false
 
   /streamsearch/1.1.0:
     resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
