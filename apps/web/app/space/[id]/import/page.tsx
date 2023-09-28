@@ -1,4 +1,4 @@
-import { Component } from '~/app/space/[id]/import/component';
+// import { Component } from '~/app/space/[id]/import/component';
 
 type ImportPageProps = {
   params: { id: string };
@@ -7,5 +7,5 @@ type ImportPageProps = {
 export default function ImportPage({ params }: ImportPageProps) {
   return null;
 
-  return <Component spaceId={params.id} />;
+  // return <Component spaceId={params.id} />;
 }
