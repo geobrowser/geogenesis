@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { batch } from '@legendapp/state';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
@@ -29,9 +30,10 @@ interface Props {
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
+  className?: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId }: Props) {
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId, className = '' }: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
@@ -104,7 +106,10 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
         value={query}
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
-        className="m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+        className={cx(
+          'm-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+          className
+        )}
       />
       {query && (
         <div
