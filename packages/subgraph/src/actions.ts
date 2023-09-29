@@ -388,7 +388,8 @@ export function getOrCreateAction(
   entityValue: string | null = null,
   imageValue: string | null = null,
   dateValue: string | null = null,
-  urlValue: string | null = null
+  urlValue: string | null = null,
+  collectionValue: string | null = null
 ): ActionEntity {
   let action = ActionEntity.load(id)
   if (action == null) {
@@ -401,6 +402,7 @@ export function getOrCreateAction(
     if (numberValue) action.numberValue = BigDecimal.fromString(numberValue)
     if (stringValue) action.stringValue = stringValue
     if (entityValue) action.entityValue = entityValue
+    if (collectionValue) action.entityValue = collectionValue
     if (imageValue) action.stringValue = imageValue
     if (dateValue) action.stringValue = dateValue
     if (urlValue) action.stringValue = urlValue
@@ -460,6 +462,12 @@ export function handleAction(
       valueId = entityValue.id
       entValue = entityValue.id
     }
+    let collectionValue = value.asCollectionValue()
+    let collValue: string | null = null
+    if (collectionValue != null) {
+      valueId = collectionValue.id
+      collValue = collectionValue.id
+    }
     let stringValue = value.asStringValue()
     let strValue: string | null = null
     if (stringValue != null) {
@@ -484,7 +492,8 @@ export function handleAction(
       entValue,
       imgValue,
       dValue,
-      uValue
+      uValue,
+      collValue
     )
     return action.id
   }
@@ -530,6 +539,14 @@ export function handleAction(
       valueId = entityValue.id
       entValue = entityValue.id
     }
+
+    let collectionValue = value.asCollectionValue()
+    let collValue: string | null = null
+    if (collectionValue != null) {
+      valueId = collectionValue.id
+      collValue = collectionValue.id
+    }
+
     let stringValue = value.asStringValue()
     let strValue: string | null = null
     if (stringValue != null) {
@@ -554,7 +571,8 @@ export function handleAction(
       entValue,
       imgValue,
       dValue,
-      uValue
+      uValue,
+      collValue
     )
     return action.id
   }

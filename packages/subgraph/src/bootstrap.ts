@@ -90,7 +90,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: VALUE_TYPE, _1: new StringValue(VALUE_TYPE, 'Value type') },
   { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
   { _0: COLLECTION, _1: new StringValue(COLLECTION, 'Collection Value') },
-  { _0: COLLECTION_TYPE, _1: new StringValue(COLLECTION, 'Collection') },
+  { _0: COLLECTION_TYPE, _1: new StringValue(COLLECTION_TYPE, 'Collection') },
   { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
   { _0: IMAGE, _1: new StringValue(TEXT, 'Image') },
