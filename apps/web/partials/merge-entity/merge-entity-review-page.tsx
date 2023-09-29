@@ -129,6 +129,7 @@ function EntityReviewAttributes({
         );
       }
       case 'number':
+      case 'collection':
         return null;
     }
   };

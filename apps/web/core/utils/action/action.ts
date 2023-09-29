@@ -199,6 +199,7 @@ export const getValue = (action: ActionType, fallback: boolean | string = false)
 
   switch (checkedAction.value.type) {
     case 'entity':
+    case 'collection':
       value = checkedAction.value.id;
       break;
     case 'string':

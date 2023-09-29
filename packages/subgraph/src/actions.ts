@@ -294,6 +294,13 @@ export function handleCreateTripleAction(
     triple.entityValue = entityValue.id
   }
 
+  const collectionValue = fact.value.asCollectionValue()
+  if (collectionValue) {
+    triple.valueType = 'COLLECTION'
+    triple.valueId = collectionValue.id
+    triple.entityValue = collectionValue.id
+  }
+
   triple.save()
 
   log.debug(`ACTION: Created triple: ${triple.id}`, [])

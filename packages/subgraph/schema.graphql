@@ -160,4 +160,5 @@ enum ValueType {
   IMAGE
   DATE
   URL
+  COLLECTION
 }

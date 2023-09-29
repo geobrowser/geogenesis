@@ -6,6 +6,7 @@ import { EntityValue } from './EntityValue'
 import { ImageValue } from './ImageValue'
 import { DateValue } from './DateValue'
 import { UrlValue } from './UrlValue'
+import { CollectionValue } from './CollectionValue'
 
 export class Value {
   type: string
@@ -24,6 +25,10 @@ export class Value {
 
   asEntityValue(): EntityValue | null {
     return this.type == 'entity' ? (this as EntityValue) : null
+  }
+
+  asCollectionValue(): CollectionValue | null {
+    return this.type == 'collection' ? (this as CollectionValue) : null
   }
 
   asImageValue(): ImageValue | null {

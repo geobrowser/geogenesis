@@ -4,6 +4,7 @@ import { A, pipe } from '@mobily/ts-belt';
 import { ID } from '~/core/id';
 import {
   Action as ActionType,
+  CollectionValue,
   EntityValue,
   NumberValue,
   OmitStrict,
@@ -46,6 +47,10 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'entity',
       name: '',
     } as EntityValue,
+    collection: {
+      id: '',
+      type: 'collection',
+    } as CollectionValue,
     number: {
       id: ID.createValueId(),
       type: 'number',
@@ -211,6 +216,8 @@ export const getValue = (triple: Triple): string | null => {
     case 'string':
       return triple.value.value;
     case 'entity':
+      return triple.value.id;
+    case 'collection':
       return triple.value.id;
     case 'image':
       return triple.value.value;

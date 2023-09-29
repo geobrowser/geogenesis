@@ -46,6 +46,9 @@ function createValueId(value: Value): string {
       return `d~${value.value}`;
     case 'url':
       return `u~${value.value}`;
+    case 'collection':
+      return `c~${value.id}`;
+
   }
 }
 

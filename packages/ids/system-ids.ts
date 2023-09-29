@@ -28,6 +28,8 @@ export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
+export const COLLECTION = '@TODO'
+
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
 
