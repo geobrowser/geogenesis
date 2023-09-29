@@ -1,8 +1,6 @@
-import {
-  DaoAction,
-  GasFeeEstimation,
-  PrepareInstallationParams,
-  PrepareInstallationStepValue,
-} from '@aragon/sdk-client-common';
-
-export interface IGeoPluginClient {}
+export interface IGeoPluginClientMethods {
+  isMember(address: string): Promise<boolean>;
+}
+export interface IGeoPluginClient {
+  methods: IGeoPluginClientMethods;
+}

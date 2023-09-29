@@ -63,6 +63,7 @@ export class GeoPluginContext extends ContextCore {
       this.state.geoMainVotingPluginRepoAddress = DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
     }
   }
+
   get geoSpacePluginAddress(): string {
     return this.state.geoSpacePluginAddress;
   }
