@@ -20,4 +20,4 @@ ENV TURBO_REMOTE_ONLY=true
 COPY . .
 
 RUN pnpm install --recursive --frozen-lockfile
-RUN pnpm build
+RUN pnpm build --filter @geogenesis/subgraph
