@@ -709,10 +709,19 @@ export class EntityStore implements IEntityStore {
     );
   };
 
-  /*
-  Helper function to create or update the block IDs on an entity
-  Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-  */
+  // If the block triple hasn't been created yet we need to create the collection entity
+  // and the block triple for the current entity that will point to the collection entity.
+  //
+  // The collection entity is a system entity that is used as a backlink for all entities
+  // that exist in a collection.
+  //
+  // Collections have "join entities" that store the relationship between the collection
+  // and the entities that are part of it.
+  //
+  // When rendering a collection we fetch all the join entities that reference the collection
+  // entity. We then fetch the entity that the join entity references.
+  //
+  // [CURRENT ENTITY::BLOCKS TRIPLE] -> [COLLECTION ENTITY] <- [JOIN ENTITY] -> [ENTITY]
   upsertBlocksTriple = async (newBlockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
     const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(newBlockIds);
