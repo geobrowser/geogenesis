@@ -1,6 +1,6 @@
 'use client';
 
-import { Client, Context, ContextParams, TokenVotingClient } from '@aragon/sdk-client';
+import { Client, Context, ContextParams } from '@aragon/sdk-client';
 
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -50,9 +50,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     const geoPluginContextInstance = new GeoPluginContext();
 
     setContext(contextInstance);
-    const tokenVotingClient = new TokenVotingClient(contextInstance);
     const geoPluginClient = new GeoPluginClient(geoPluginContextInstance);
-    console.log('token voting', tokenVotingClient);
     console.log('geo plugin', geoPluginClient);
 
     // setBaseClient(new Client(contextInstance));

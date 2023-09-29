@@ -1,15 +1,10 @@
-import { ClientCore } from '@aragon/sdk-client-common';
-
 import { GeoPluginContext } from '../context';
+import { GeoPluginClientMethods } from './client';
 
-export class GeoPluginClientCore extends ClientCore {
-  public geoSpacePluginAddress: string;
-  public geoSpacePluginRepoAddress: string;
+export class GeoPluginClientCore {
+  public methods: GeoPluginClientMethods;
 
   constructor(pluginContext: GeoPluginContext) {
-    super(pluginContext);
-    this.geoSpacePluginAddress = pluginContext.geoSpacePluginAddress;
-    this.geoSpacePluginRepoAddress = pluginContext.geoSpacePluginRepoAddress;
-    console.log('plugin context', pluginContext);
+    this.methods = new GeoPluginClientMethods(pluginContext);
   }
 }
