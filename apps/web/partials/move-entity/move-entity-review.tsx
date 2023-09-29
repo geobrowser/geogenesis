@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
@@ -74,12 +73,12 @@ function MoveEntityReviewChanges() {
       }));
     };
 
-    const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${
-      spaceTo?.attributes[SYSTEM_IDS.NAME]
-    }`;
-    const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${
-      spaceFrom?.attributes[SYSTEM_IDS.NAME]
-    }`;
+    const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${spaceTo?.attributes[
+      SYSTEM_IDS.NAME
+    ]}`;
+    const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${spaceFrom?.attributes[
+      SYSTEM_IDS.NAME
+    ]}`;
 
     let createActions: CreateTripleAction[] = [];
     let deleteActions: DeleteTripleAction[] = [];
@@ -179,7 +178,7 @@ function MoveEntityReviewChanges() {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsMoveReviewOpen(false)} icon="close" />
           <Text variant="metadataMedium">Move entities</Text>
@@ -188,9 +187,9 @@ function MoveEntityReviewChanges() {
           <Button onClick={handlePublish}>Publish and move</Button>
         </div>
       </div>
-      <div className="mt-3 rounded-t-[16px] bg-bg shadow-big h-full ">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch] ">
-          <div className="flex flex-row sm:flex-col items-center justify-between gap-4 w-full">
+      <div className="mt-3 h-full rounded-t-[16px] bg-bg shadow-big ">
+        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px] ">
+          <div className="flex w-full flex-row items-center justify-between gap-4 sm:flex-col">
             <SpaceMoveCard
               spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
               spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
@@ -236,14 +235,14 @@ function SpaceMoveCard({
   getBgClassByState: (index: number, state: ReviewState) => string;
 }) {
   return (
-    <div className="flex flex-col border border-grey-02 rounded px-4 py-5 basis-3/5 w-full gap-3">
+    <div className="flex w-full basis-3/5 flex-col gap-3 rounded border border-grey-02 px-4 py-5">
       <div className="flex flex-row items-center justify-between gap-2">
         <Text variant="metadata">
           Step {actionType === 'create' ? 1 : 2} &middot; {actionType === 'create' ? 'Create' : 'Delete'} triples
         </Text>
         <div className="flex flex-row items-center gap-2">
           {spaceImage !== undefined && (
-            <div className="relative w-[16px] h-[16px] rounded-xs overflow-hidden">
+            <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
               <Image src={getImagePath(spaceImage)} layout="fill" objectFit="cover" />
             </div>
           )}
@@ -251,7 +250,7 @@ function SpaceMoveCard({
         </div>
       </div>
       <Divider type="horizontal" />
-      <div className="flex flex-row items-center gap-2 justify-between">
+      <div className="flex flex-row items-center justify-between gap-2">
         <StatusMessage txState={txState} handlePublish={handlePublish} />
         <div className="flex flex-row items-center gap-1.5">
           <ProgressBar txState={txState} getBgClassByState={getBgClassByState} />
@@ -306,7 +305,7 @@ function ProgressBar({
   return (
     <div className="flex flex-row items-center gap-1.5">
       {[0, 1, 2, 3].map(index => (
-        <div key={index} className={`w-[30px] h-[6px] rounded-[30px] ${getBgClassByState(index, txState)}`} />
+        <div key={index} className={`h-[6px] w-[30px] rounded-[30px] ${getBgClassByState(index, txState)}`} />
       ))}
     </div>
   );

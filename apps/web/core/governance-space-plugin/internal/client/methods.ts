@@ -4,18 +4,29 @@ import {
   PrepareInstallationStepValue,
   prepareGenericInstallation,
 } from '@aragon/sdk-client-common';
-import { createPublicClient, http } from 'viem';
-import { goerli } from 'viem/chains';
-
-import { MEMBER_ACCESS_PLUGIN_ADDRESS, MEMBER_ACCESS_PLUGIN_SETUP_ADDRESS } from '~/core/constants';
+import {GetContractReturnType, createPublicClient, createWalletClient, getContract, http } from 'viem';
+import { goerli, polygonMumbai, } from 'viem/chains';
+import { Effect } from 'effect';
+import { WalletClient } from 'wagmi';
+import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi, spacePluginSetupAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
-import { GeoPluginClientCore } from '../core';
+import { Contract } from 'viem/dist/types/types/multicall';
 
-// @TODO: use our existing public client
+
+
+// @TODO: use our existing public client and wallet client
 export const publicClient = createPublicClient({
   chain: goerli,
+  transport: http(),
+});
+
+const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+const walletClient = createWalletClient({
+  account,
+  chain: polygonMumbai,
   transport: http(),
 });
 
@@ -27,6 +38,11 @@ export class GeoPluginClientMethods extends ClientCore {
   private geoSpacePluginRepoAddress: string;
   private geoMemberAccessPluginRepoAddress: string;
   private geoMainVotingPluginRepoAddress: string;
+
+  // @TODO type these properly -- https://github.com/wagmi-dev/viem/discussions/544
+  private geoSpacePluginContrac: any;;
+  private geoMainVotingPluginContract: any;
+  private geoMemberAccessPluginContract: any;
 
   constructor(pluginContext: GeoPluginContext) {
     super(pluginContext);
@@ -40,25 +56,45 @@ export class GeoPluginClientMethods extends ClientCore {
     this.geoSpacePluginRepoAddress = pluginContext.geoSpacePluginRepoAddress;
     this.geoMemberAccessPluginRepoAddress = pluginContext.geoMemberAccessPluginRepoAddress;
     this.geoMainVotingPluginRepoAddress = pluginContext.geoMainVotingPluginRepoAddress;
+
+    // Contract instances
+    const geoSpacePluginContract = getContract({
+      address: this.geoSpacePluginAddress as `0x${string}`,
+      abi: spacePluginAbi,
+      publicClient,
+    });
+
+    const geoMainVotingPluginContract = getContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      publicClient,
+    });
+
+    const geoMemberAccessPluginContract = getContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      publicClient,
+    });
   }
+
+// reads
+
+public async isMember(address: `0x${string}`): Promise<boolean> {
+  const isMember = await publicClient.readContract({
+    address: this.geoMemberAccessPluginAddress as `0x${string}`,
+    abi: memberAccessPluginAbi,
+    functionName: 'isMember',
+    args: [address],
+  });
+  return isMember;
 }
 
-/* space plugin setup */
 
-/* space plugin */
 
-// reads
 
-// writes
+ // writes
 
-/* member access plugin setup */
 
-/*member access plugin */
 
-// writes
-
-/* main voting plugin setup  */
-
-/* main voting plugin */
-
-// reads
+  }
+}
