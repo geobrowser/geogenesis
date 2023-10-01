@@ -5,9 +5,9 @@ import {
   prepareGenericInstallation,
 } from '@aragon/sdk-client-common';
 import { Effect } from 'effect';
-import { GetContractReturnType, createPublicClient, createWalletClient, getContract, http } from 'viem';
+import { bigint } from 'effect/Equivalence';
+import { createPublicClient, createWalletClient, getContract, http } from 'viem';
 import { goerli, polygonMumbai } from 'viem/chains';
-import { Contract } from 'viem/dist/types/types/multicall';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
@@ -17,7 +17,7 @@ import { GeoPluginContext } from '../../context';
 
 // @TODO: use our existing public client and wallet client
 export const publicClient = createPublicClient({
-  chain: goerli,
+  chain: polygonMumbai,
   transport: http(),
 });
 
@@ -77,17 +77,90 @@ export class GeoPluginClientMethods extends ClientCore {
     });
   }
 
-  // reads
-
+  // Member Access Plugin: Reads
   public async isMember(address: `0x${string}`): Promise<boolean> {
-    const isMember = await publicClient.readContract({
+    const isMemberRead = await publicClient.readContract({
       address: this.geoMemberAccessPluginAddress as `0x${string}`,
       abi: memberAccessPluginAbi,
       functionName: 'isMember',
       args: [address],
     });
-    return isMember;
+    return isMemberRead;
   }
 
+  public async isEditor(address: `0x${string}`): Promise<boolean> {
+    const isEditorRead = await publicClient.readContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      functionName: 'isEditor',
+      args: [address],
+    });
+    return isEditorRead;
+  }
+
+  public async canApprove(proposalId: bigint, address: `0x${string}`): Promise<boolean> {
+    const canApproveRead = await publicClient.readContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      functionName: 'canApprove',
+      args: [proposalId, address],
+    });
+    return canApproveRead;
+  }
+
+  public async canExecute(proposalId: bigint): Promise<boolean> {
+    const canApproveRead = await publicClient.readContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      functionName: 'canExecute',
+      args: [proposalId],
+    });
+    return canApproveRead;
+  }
+
+  // public async getProposal(
+  //   proposalId: bigint
+  // ): Promise<
+  //   [
+  //     boolean,
+  //     number,
+  //     { minApprovals: number; snapshotBlock: bigint; startDate: bigint; endDate: bigint },
+  //     { to: `0x${string}`; value: bigint; data: `0x${string}` }[],
+  //     bigint,
+  //   ]
+  // > {
+  //   const getProposalRead = await publicClient.readContract({
+  //     address: this.geoMemberAccessPluginAddress as `0x${string}`,
+  //     abi: memberAccessPluginAbi,
+  //     functionName: 'getProposal',
+  //     args: [proposalId],
+  //   });
+  //   return getProposalRead;
+  // }
+
+  public async hasApproved(proposalId: bigint, address: `0x${string}`): Promise<boolean> {
+    const hasApprovedRead = await publicClient.readContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      functionName: 'hasApproved',
+      args: [proposalId, address],
+    });
+    return hasApprovedRead;
+  }
+
+  public async supportsInterface(interfaceId: `0x${string}`): Promise<boolean> {
+    const supportsInterfaceRead = await publicClient.readContract({
+      address: this.geoMemberAccessPluginAddress as `0x${string}`,
+      abi: memberAccessPluginAbi,
+      functionName: 'supportsInterface',
+      args: [interfaceId],
+    });
+    return supportsInterfaceRead;
+  }
+
+  /* function supportsInterface(bytes4 _interfaceId) returns (bool)
+function getProposal(uint256 _proposalId) returns (bool executed, uint16 approvals, ProposalParameters parameters, IDAO.Action[] actions, uint256 failsafeActionMap)
+
+*/
   // writes
 }

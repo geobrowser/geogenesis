@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import { AppConfig } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
+import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { ServerSideEnvParams } from '~/core/types';
@@ -74,6 +75,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function SpacePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
+  // const { geoPluginClient } = useAragonSDKContext();
+  // console.log('plugin client in space', geoPluginClient);
 
   const props = await getData(params.id, config);
 

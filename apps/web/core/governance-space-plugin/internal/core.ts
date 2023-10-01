@@ -1,8 +1,8 @@
 import { GeoPluginContext } from '../context';
 import { GeoPluginClientMethods } from './client';
-import { IGeoPluginClientMethods } from './interfaces';
+import { IGeoPluginClient, IGeoPluginClientMethods } from './interfaces';
 
-export class GeoPluginClientCore {
+export class GeoPluginClientCore implements IGeoPluginClient {
   public methods: IGeoPluginClientMethods;
 
   constructor(pluginContext: GeoPluginContext) {
