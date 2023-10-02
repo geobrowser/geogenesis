@@ -1,5 +1,6 @@
 import { ClientCore } from '@aragon/sdk-client-common';
 import { encodeFunctionData, getContract } from 'viem';
+import { _ } from 'vitest/dist/global-fe52f84b';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
@@ -58,7 +59,7 @@ export class GeoPluginClientEncoding extends ClientCore {
 
   // Space Plugin: Inherited Functions
 
-  public async upgradeTo(pluginAddress: `0x${string}`) {
+  public async upgradeToSpacePlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: spacePluginAbi,
       functionName: 'upgradeTo',
@@ -67,11 +68,11 @@ export class GeoPluginClientEncoding extends ClientCore {
     return upgradeToData;
   }
 
-  public async upgradeToAndCall(pluginAddress: `0x${string}`, callData: `0x${string}`) {
+  public async upgradeToAndCallSpacePlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: spacePluginAbi,
       functionName: 'upgradeToAndCall',
-      args: [pluginAddress, callData],
+      args: [pluginAddress, calldata],
     });
     return upgradeToData;
   }
@@ -112,6 +113,51 @@ export class GeoPluginClientEncoding extends ClientCore {
       args: [metadataUri, memberAddress],
     });
     return proposeRemoveMemberData;
+  }
+
+  public async approve(proposalId: bigint, earlyExecution = true) {
+    const approveData = encodeFunctionData({
+      abi: memberAccessPluginAbi,
+      functionName: 'approve',
+      args: [proposalId, earlyExecution],
+    });
+    return approveData;
+  }
+
+  public async reject(proposalId: bigint) {
+    const rejectData = encodeFunctionData({
+      abi: memberAccessPluginAbi,
+      functionName: 'reject',
+      args: [proposalId],
+    });
+    return rejectData;
+  }
+
+  public async execute(proposalId: bigint) {
+    const executeData = encodeFunctionData({
+      abi: memberAccessPluginAbi,
+      functionName: 'execute',
+      args: [proposalId],
+    });
+    return executeData;
+  }
+
+  public async upgradeToMainVotingPlugin(pluginAddress: `0x${string}`) {
+    const upgradeToData = encodeFunctionData({
+      abi: memberAccessPluginAbi,
+      functionName: 'upgradeTo',
+      args: [pluginAddress],
+    });
+    return upgradeToData;
+  }
+
+  public async upgradeToAndCallMainVotingPlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`) {
+    const upgradeToData = encodeFunctionData({
+      abi: memberAccessPluginAbi,
+      functionName: 'upgradeToAndCall',
+      args: [pluginAddress, calldata],
+    });
+    return upgradeToData;
   }
 
   // Member Access: Inherited Functions
