@@ -1,10 +1,8 @@
 import { ClientCore } from '@aragon/sdk-client-common';
-import { encodeFunctionData, getContract } from 'viem';
-import { _ } from 'vitest/dist/global-fe52f84b';
+import { encodeFunctionData } from 'viem';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
-import { publicClient } from './methods';
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -58,7 +56,6 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Space Plugin: Inherited Functions
-
   public async upgradeToSpacePlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: spacePluginAbi,
@@ -78,7 +75,6 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Member Access: Functions
-
   public async initalizeMemberAccessPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
     const initalizeData = encodeFunctionData({
       abi: memberAccessPluginAbi,
@@ -133,7 +129,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     return rejectData;
   }
 
-  public async execute(proposalId: bigint) {
+  public async executeMemberAccessPlugin(proposalId: bigint) {
     const executeData = encodeFunctionData({
       abi: memberAccessPluginAbi,
       functionName: 'execute',
@@ -142,7 +138,8 @@ export class GeoPluginClientEncoding extends ClientCore {
     return executeData;
   }
 
-  public async upgradeToMainVotingPlugin(pluginAddress: `0x${string}`) {
+  // Member Access Plugin: Inherited Functions
+  public async upgradeToMemberAccessPlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: memberAccessPluginAbi,
       functionName: 'upgradeTo',
@@ -151,7 +148,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     return upgradeToData;
   }
 
-  public async upgradeToAndCallMainVotingPlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`) {
+  public async upgradeToAndCallMemberAccessPlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: memberAccessPluginAbi,
       functionName: 'upgradeToAndCall',
@@ -160,10 +157,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     return upgradeToData;
   }
 
-  // Member Access: Inherited Functions
-
   // Main Voting: Functions
-
   public async initalizeMainVotingPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
     const initalizeData = encodeFunctionData({
       abi: mainVotingPluginAbi,
@@ -200,17 +194,16 @@ export class GeoPluginClientEncoding extends ClientCore {
     return createProposalData;
   }
 
-  public async cancelProposal() {
+  public async cancelProposal(proposalId: bigint) {
     const cancelProposalData = encodeFunctionData({
       abi: mainVotingPluginAbi,
       functionName: 'cancelProposal', // need new abi
-      args: [],
+      args: [proposalId],
     });
     return cancelProposalData;
   }
 
   // Main Voting: Inherited Functions
-
   public async vote(proposalId: bigint, vote: number, tryEarlyExecution: boolean) {
     const voteData = encodeFunctionData({
       abi: mainVotingPluginAbi,
@@ -218,5 +211,49 @@ export class GeoPluginClientEncoding extends ClientCore {
       args: [proposalId, vote, tryEarlyExecution],
     });
     return voteData;
+  }
+
+  public async executeMainVotingPlugin(proposalId: bigint) {
+    const executeData = encodeFunctionData({
+      abi: mainVotingPluginAbi,
+      functionName: 'execute',
+      args: [proposalId],
+    });
+    return executeData;
+  }
+
+  public async updateVotingSettings() {
+    const updateVotingSettingsData = encodeFunctionData({
+      abi: mainVotingPluginAbi,
+      functionName: 'updateVotingSettings',
+      args: [
+        {
+          // votingMode: 1,
+          // supportThreshold: 50,
+          // minParticipation: 10,
+          // minDuration: BigInt(86400),
+          // minProposerVotingPower: BigInt(1000),
+        },
+      ], // wrap the object in an array
+    });
+    return updateVotingSettingsData;
+  }
+
+  public async upgradeToMainVotingPlugin(pluginAddress: `0x${string}`) {
+    const upgradeToData = encodeFunctionData({
+      abi: mainVotingPluginAbi,
+      functionName: 'upgradeTo',
+      args: [pluginAddress],
+    });
+    return upgradeToData;
+  }
+
+  public async upgradeToAndCallMainVotingPlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`) {
+    const upgradeToData = encodeFunctionData({
+      abi: mainVotingPluginAbi,
+      functionName: 'upgradeToAndCall',
+      args: [pluginAddress, calldata],
+    });
+    return upgradeToData;
   }
 }

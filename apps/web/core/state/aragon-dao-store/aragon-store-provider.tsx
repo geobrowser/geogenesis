@@ -11,6 +11,9 @@ import { GeoPluginContext } from '~/core/governance-space-plugin';
 import { GeoPluginClient } from '~/core/governance-space-plugin/client';
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
+console.log('GeoPluginContext', GeoPluginContext);
+// console.log('GeoPluginClient', GeoPluginClient);
+
 export interface AragonSDKContextValue {
   context?: Context;
   geoPluginContext?: GeoPluginContext;
@@ -26,14 +29,13 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
   const { chain } = useNetwork();
   const ethersSigner = useEthersSigner({ chainId: chain?.id || 5 });
-  // const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
 
   // @TODO use our Environment.options here once we finalize -- don't want to add Goerli to Environment.options if we don't need to
   useEffect(() => {
     const aragonSDKContextParams: ContextParams = {
-      network: 'goerli', // mainnet, mumbai, etc
+      network: 'maticmum',
       signer: ethersSigner,
-      daoFactoryAddress: '0x1E4350A3c9aFbDbd70FA30B9B2350B9E8182449a',
+      daoFactoryAddress: '0xc715336B5E7F10294F36CA09f19A0493070E2eFB', // mumbai dao factory address
       web3Providers: ['https://rpc.ankr.com/eth_goerli'], // feel free to use the provider of your choosing: Alchemy, Infura, etc.
       ipfsNodes: [
         {
@@ -44,20 +46,22 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
       ],
       graphqlNodes: [
         {
-          url: 'https://subgraph.satsuma-prod.com/aragon/osx-goerli/api', // this'll be the subgraph for the dao
+          url: 'https://subgraph.satsuma-prod.com/aragon/osx-mumbai/api', // this'll be the subgraph for the dao
         },
       ],
     };
 
     const contextInstance = new Context(aragonSDKContextParams);
-    const geoPluginContextInstance = new GeoPluginContext(contextInstance);
-    const geoPluginClientInstance = new GeoPluginClient(geoPluginContextInstance);
 
-    console.log('geo plugin context', geoPluginContextInstance);
-    console.log('geo plugin client', geoPluginClient);
+    // const geoPluginContextInstance = new GeoPluginContext(contextInstance);
+    // const geoPluginClientInstance = new GeoPluginClient(geoPluginContextInstance);
+    // console.log('geo plugin context', geoPluginContextInstance);
+    // console.log('geo plugin context', geoPluginContextInstance);
+
+    // console.log('geo plugin context', geoPluginContextInstance);
     setContext(contextInstance);
-    setGeoPluginContext(geoPluginContextInstance);
-    setGeoPluginClient(geoPluginClientInstance);
+    // setGeoPluginContext(geoPluginContextInstance);
+    // setGeoPluginClient(geoPluginClientInstance);
   }, [ethersSigner, geoPluginClient]);
 
   return (

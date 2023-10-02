@@ -11,7 +11,6 @@ import { GeoPluginContextParams } from './types';
 export class GeoPluginContext extends ContextCore {
   protected state: GeoPluginContextState = this.state;
 
-  // this typo is inherited from the original property name
   protected overriden: GeoPluginOverriddenState = this.overriden;
   constructor(contextParams?: Partial<GeoPluginContextParams>, aragonContext?: Context) {
     super();

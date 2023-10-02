@@ -3,4 +3,5 @@ export interface IGeoPluginClientMethods {
 }
 export interface IGeoPluginClient {
   methods: IGeoPluginClientMethods;
+  // encoding: IGeoPluginClientEncoding;
 }
