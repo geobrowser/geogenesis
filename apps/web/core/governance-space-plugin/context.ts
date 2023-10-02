@@ -20,7 +20,6 @@ export class GeoPluginContext extends ContextCore {
     }
 
     if (contextParams) {
-      console.log('context params', contextParams);
       this.set(contextParams);
     }
   }

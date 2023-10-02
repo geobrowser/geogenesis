@@ -75,14 +75,14 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Member Access: Functions
-  public async initalizeMemberAccessPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-    const initalizeData = encodeFunctionData({
-      abi: memberAccessPluginAbi,
-      functionName: 'initialize',
-      args: [daoAddress, firstBlockContentUri],
-    });
-    return initalizeData;
-  }
+  // public async initalizeMemberAccessPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
+  //   const initalizeData = encodeFunctionData({
+  //     abi: memberAccessPluginAbi,
+  //     functionName: 'initialize',
+  //     args: [daoAddress, firstBlockContentUri],
+  //   });
+  //   return initalizeData;
+  // }
 
   public async updateMultisigSettings(proposalDuration: bigint, mainVotingPluginAddress: `0x${string}`) {
     const updateMultisigSettingsData = encodeFunctionData({
@@ -158,14 +158,14 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Main Voting: Functions
-  public async initalizeMainVotingPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-    const initalizeData = encodeFunctionData({
-      abi: mainVotingPluginAbi,
-      functionName: 'initialize',
-      // args: [daoAddress, firstBlockContentUri],
-    });
-    return initalizeData;
-  }
+  // public async initalizeMainVotingPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
+  //   const initalizeData = encodeFunctionData({
+  //     abi: mainVotingPluginAbi,
+  //     functionName: 'initialize',
+  //     // args: [daoAddress, firstBlockContentUri],
+  //   });
+  //   return initalizeData;
+  // }
 
   public async addAddresses(addresses: `0x${string}`[]) {
     const addAddressesData = encodeFunctionData({
@@ -185,14 +185,14 @@ export class GeoPluginClientEncoding extends ClientCore {
     return removeAddressesData;
   }
 
-  public async createProposal() {
-    const createProposalData = encodeFunctionData({
-      abi: mainVotingPluginAbi,
-      functionName: 'createProposal',
-      args: [],
-    });
-    return createProposalData;
-  }
+  // public async createProposal() {
+  //   const createProposalData = encodeFunctionData({
+  //     abi: mainVotingPluginAbi,
+  //     functionName: 'createProposal',
+  //     args: [],
+  //   });
+  //   return createProposalData;
+  // }
 
   public async cancelProposal(proposalId: bigint) {
     const cancelProposalData = encodeFunctionData({
@@ -222,22 +222,22 @@ export class GeoPluginClientEncoding extends ClientCore {
     return executeData;
   }
 
-  public async updateVotingSettings() {
-    const updateVotingSettingsData = encodeFunctionData({
-      abi: mainVotingPluginAbi,
-      functionName: 'updateVotingSettings',
-      args: [
-        {
-          // votingMode: 1,
-          // supportThreshold: 50,
-          // minParticipation: 10,
-          // minDuration: BigInt(86400),
-          // minProposerVotingPower: BigInt(1000),
-        },
-      ], // wrap the object in an array
-    });
-    return updateVotingSettingsData;
-  }
+  // public async updateVotingSettings() {
+  //   const updateVotingSettingsData = encodeFunctionData({
+  //     abi: mainVotingPluginAbi,
+  //     functionName: 'updateVotingSettings',
+  //     args: [
+  //       {
+  //         // votingMode: 1,
+  //         // supportThreshold: 50,
+  //         // minParticipation: 10,
+  //         // minDuration: BigInt(86400),
+  //         // minProposerVotingPower: BigInt(1000),
+  //       },
+  //     ], // wrap the object in an array
+  //   });
+  //   return updateVotingSettingsData;
+  // }
 
   public async upgradeToMainVotingPlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({

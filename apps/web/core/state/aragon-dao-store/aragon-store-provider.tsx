@@ -11,9 +11,6 @@ import { GeoPluginContext } from '~/core/governance-space-plugin';
 import { GeoPluginClient } from '~/core/governance-space-plugin/client';
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
-console.log('GeoPluginContext', GeoPluginContext);
-// console.log('GeoPluginClient', GeoPluginClient);
-
 export interface AragonSDKContextValue {
   context?: Context;
   geoPluginContext?: GeoPluginContext;
@@ -23,14 +20,16 @@ export interface AragonSDKContextValue {
 
 const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefined);
 
+// const geoPluginClientInstance = new GeoPluginClient(geoPluginContextInstance);
+
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
   const [context, setContext] = useState<Context | undefined>(undefined);
   const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginContext | undefined>(undefined);
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
   const { chain } = useNetwork();
-  const ethersSigner = useEthersSigner({ chainId: chain?.id || 5 });
+  const ethersSigner = useEthersSigner({ chainId: chain?.id || 80001 });
 
-  // @TODO use our Environment.options here once we finalize -- don't want to add Goerli to Environment.options if we don't need to
+  // @TODO use our Environment.options here once we finalize
   useEffect(() => {
     const aragonSDKContextParams: ContextParams = {
       network: 'maticmum',
@@ -40,8 +39,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
       ipfsNodes: [
         {
           url: 'https://testing-ipfs-0.aragon.network/api/v0',
-          // headers: { 'X-API-KEY': process.env.NEXT_PUBLIC_IPFS_KEY || '' }, // make sure you have the key for your IPFS node within your .env file
-          headers: { 'X-API-KEY': 'b477RhECf8s8sdM7XrkLBs2wHc4kCMwpbcFC55Kt' }, // provided by aragon for testing
+          headers: { 'X-API-KEY': process.env.NEXT_PUBLIC_IPFS_KEY || '' }, // make sure you have the key for your IPFS node within your .env file
         },
       ],
       graphqlNodes: [
@@ -50,19 +48,11 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
         },
       ],
     };
-
     const contextInstance = new Context(aragonSDKContextParams);
-
-    // const geoPluginContextInstance = new GeoPluginContext(contextInstance);
-    // const geoPluginClientInstance = new GeoPluginClient(geoPluginContextInstance);
-    // console.log('geo plugin context', geoPluginContextInstance);
-    // console.log('geo plugin context', geoPluginContextInstance);
-
-    // console.log('geo plugin context', geoPluginContextInstance);
+    const geoPluginClient = new GeoPluginClient(contextInstance);
+    console.log('geoPluginClient', geoPluginClient);
     setContext(contextInstance);
-    // setGeoPluginContext(geoPluginContextInstance);
-    // setGeoPluginClient(geoPluginClientInstance);
-  }, [ethersSigner, geoPluginClient]);
+  }, [ethersSigner]);
 
   return (
     <AragonSDKContext.Provider value={{ context, geoPluginContext, geoPluginClient }}>
