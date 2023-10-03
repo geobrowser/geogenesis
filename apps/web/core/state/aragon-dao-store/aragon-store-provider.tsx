@@ -1,13 +1,13 @@
-import { Client, Context, ContextParams } from '@aragon/sdk-client';
+import { Client, ContextParams } from '@aragon/sdk-client';
 
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-import { useNetwork } from 'wagmi';
+// import { useNetwork } from 'wagmi';
+import { GeoPluginContext } from '~/core/io/governance-space-plugin';
+import { GeoPluginClient } from '~/core/io/governance-space-plugin/client';
 
-import { GeoPluginContext } from '~/core/governance-space-plugin';
-import { GeoPluginClient } from '~/core/governance-space-plugin/client';
-import { useEthersSigner } from '~/core/wallet/ethers-adapters';
+// import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
 export interface AragonSDKContextValue {
   geoPluginContext?: GeoPluginContext;
@@ -20,10 +20,10 @@ const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefi
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
   const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginContext | undefined>(undefined);
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
-  const { chain } = useNetwork();
-  const ethersSigner = useEthersSigner({ chainId: chain?.id || 80001 });
+  // const { chain } = useNetwork();
+  // const ethersSigner = useEthersSigner({ chainId: chain?.id || 80001 });
 
-  const minimalAragonSDKContextParams: ContextParams = useMemo(
+  const aragonSDKContextParams: ContextParams = useMemo(
     () => ({
       network: 'maticmum',
       // signer: ethersSigner,
@@ -44,17 +44,17 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     []
   );
 
-  // useEffect(() => {
-  //   const geoPluginContextInstance = new GeoPluginContext(minimalAragonSDKContextParams);
-  //   setGeoPluginContext(geoPluginContextInstance);
-  // }, [minimalAragonSDKContextParams]);
+  useEffect(() => {
+    const geoPluginContextInstance = new GeoPluginContext(aragonSDKContextParams);
+    setGeoPluginContext(geoPluginContextInstance);
+  }, [aragonSDKContextParams]); // crashes with an invalid element type error
 
-  // useEffect(() => {
-  //   if (geoPluginContext) {
-  //     const geoPluginClientInstance = new GeoPluginClient(geoPluginContext);
-  //     setGeoPluginClient(geoPluginClientInstance);
-  //   }
-  // }, [geoPluginContext]);
+  useEffect(() => {
+    if (geoPluginContext) {
+      const geoPluginClientInstance = new GeoPluginClient(geoPluginContext);
+      setGeoPluginClient(geoPluginClientInstance);
+    }
+  }, [geoPluginContext]);
 
   return (
     <AragonSDKContext.Provider value={{ geoPluginContext, geoPluginClient }}>{children}</AragonSDKContext.Provider>

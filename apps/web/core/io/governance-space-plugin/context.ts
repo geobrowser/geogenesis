@@ -4,7 +4,7 @@ import {
   DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
   DEFAULT_GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
   DEFAULT_GEO_SPACE_PLUGIN_REPO_ADDRESS,
-} from '../constants';
+} from '../../constants';
 import { GeoPluginContextState, GeoPluginOverriddenState } from './internal/types';
 import { GeoPluginContextParams } from './types';
 
