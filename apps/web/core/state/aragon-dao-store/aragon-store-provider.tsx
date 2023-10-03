@@ -4,13 +4,13 @@ import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 // import { useNetwork } from 'wagmi';
-import { GeoPluginContext } from '~/core/io/governance-space-plugin';
+import { GeoPluginContext as GeoPluginBaseContext } from '~/core/io/governance-space-plugin';
 import { GeoPluginClient } from '~/core/io/governance-space-plugin/client';
 
 // import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
 export interface AragonSDKContextValue {
-  geoPluginContext?: GeoPluginContext;
+  geoPluginContext?: GeoPluginBaseContext;
   baseClient?: Client;
   geoPluginClient?: GeoPluginClient;
 }
@@ -18,15 +18,12 @@ export interface AragonSDKContextValue {
 const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefined);
 
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
-  const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginContext | undefined>(undefined);
+  const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginBaseContext | undefined>(undefined);
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
-  // const { chain } = useNetwork();
-  // const ethersSigner = useEthersSigner({ chainId: chain?.id || 80001 });
 
   const aragonSDKContextParams: ContextParams = useMemo(
     () => ({
       network: 'maticmum',
-      // signer: ethersSigner,
       daoFactoryAddress: '0xc715336B5E7F10294F36CA09f19A0493070E2eFB', // mumbai dao factory address
       web3Providers: ['https://rpc.ankr.com/eth_goerli'],
       ipfsNodes: [
@@ -45,9 +42,9 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
   );
 
   useEffect(() => {
-    const geoPluginContextInstance = new GeoPluginContext(aragonSDKContextParams);
+    const geoPluginContextInstance = new GeoPluginBaseContext(aragonSDKContextParams);
     setGeoPluginContext(geoPluginContextInstance);
-  }, [aragonSDKContextParams]); // crashes with an invalid element type error
+  }, [aragonSDKContextParams]);
 
   useEffect(() => {
     if (geoPluginContext) {
@@ -56,6 +53,8 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     }
   }, [geoPluginContext]);
 
+  console.log('geoPluginContext', geoPluginContext);
+  console.log('geoPluginClient', geoPluginClient);
   return (
     <AragonSDKContext.Provider value={{ geoPluginContext, geoPluginClient }}>{children}</AragonSDKContext.Provider>
   );
@@ -66,5 +65,5 @@ export const useAragonSDKContext = () => {
   if (!value) {
     throw new Error('useAragonSDKContext must be used within a AragonSDKProvider');
   }
-  return useContext(AragonSDKContext);
+  return value;
 };

@@ -21,13 +21,13 @@ export const publicClient = createPublicClient({
   transport: http(),
 });
 
-const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+// const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-const walletClient = createWalletClient({
-  account,
-  chain: polygonMumbai,
-  transport: http(),
-});
+// const walletClient = createWalletClient({
+//   account,
+//   chain: polygonMumbai,
+//   transport: http(),
+// });
 
 export class GeoPluginClientMethods extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -39,9 +39,9 @@ export class GeoPluginClientMethods extends ClientCore {
   private geoMainVotingPluginRepoAddress: string;
 
   // @TODO type these properly -- https://github.com/wagmi-dev/viem/discussions/544
-  private geoSpacePluginContract: any;
-  private geoMainVotingPluginContract: any;
-  private geoMemberAccessPluginContract: any;
+  // private geoSpacePluginContract: any;
+  // private geoMainVotingPluginContract: any;
+  // private geoMemberAccessPluginContract: any;
 
   constructor(pluginContext: GeoPluginContext) {
     super(pluginContext);
@@ -58,23 +58,23 @@ export class GeoPluginClientMethods extends ClientCore {
 
     // Contract Instances
     // Note: it would be less verbose to use these, but until we have a way to type them properl we lose viem's type inference
-    const geoSpacePluginContract = getContract({
-      address: this.geoSpacePluginAddress as `0x${string}`,
-      abi: spacePluginAbi,
-      publicClient,
-    });
+    // const geoSpacePluginContract = getContract({
+    //   address: this.geoSpacePluginAddress as `0x${string}`,
+    //   abi: spacePluginAbi,
+    //   publicClient,
+    // });
 
-    const geoMainVotingPluginContract = getContract({
-      address: this.geoMainVotingPluginAddress as `0x${string}`,
-      abi: mainVotingPluginAbi,
-      publicClient,
-    });
+    // const geoMainVotingPluginContract = getContract({
+    //   address: this.geoMainVotingPluginAddress as `0x${string}`,
+    //   abi: mainVotingPluginAbi,
+    //   publicClient,
+    // });
 
-    const geoMemberAccessPluginContract = getContract({
-      address: this.geoMemberAccessPluginAddress as `0x${string}`,
-      abi: memberAccessPluginAbi,
-      publicClient,
-    });
+    // const geoMemberAccessPluginContract = getContract({
+    //   address: this.geoMemberAccessPluginAddress as `0x${string}`,
+    //   abi: memberAccessPluginAbi,
+    //   publicClient,
+    // });
   }
 
   // Member Access Plugin: Reads
