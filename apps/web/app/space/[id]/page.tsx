@@ -31,26 +31,6 @@ interface Props {
   searchParams: ServerSideEnvParams;
 }
 
-const minimalAragonSDKContextParams: ContextParams = {
-  network: 'maticmum',
-  // signer: ethersSigner,
-  daoFactoryAddress: '0xc715336B5E7F10294F36CA09f19A0493070E2eFB', // mumbai dao factory address
-  web3Providers: ['https://rpc.ankr.com/eth_goerli'],
-  ipfsNodes: [
-    {
-      url: 'https://testing-ipfs-0.aragon.network/api/v0',
-      headers: { 'X-API-KEY': process.env.NEXT_PUBLIC_IPFS_KEY || '' },
-    },
-  ],
-  graphqlNodes: [
-    {
-      url: 'https://subgraph.satsuma-prod.com/aragon/osx-mumbai/api',
-    },
-  ],
-};
-
-console.log('minimalAragonSDKContextParams', minimalAragonSDKContextParams);
-
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
