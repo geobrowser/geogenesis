@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Close } from '~/design-system/icons/close';
 import { ContractSmall } from '~/design-system/icons/contract-small';
 import { Copy } from '~/design-system/icons/copy';
@@ -44,6 +45,7 @@ import { FilterTable } from './icons/filter-table';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { History } from './icons/history';
 import { Image } from './icons/image';
+import { LeftArrowLong } from './icons/left-arrow-long';
 import { Member } from './icons/member';
 import { Minus } from './icons/minus';
 import { MoveSpace } from './icons/move-space';
@@ -106,7 +108,9 @@ export type IconName =
   | 'checkCircleSmall'
   | 'checkCircle'
   | 'checkClose'
-  | 'retrySmall';
+  | 'retrySmall'
+  | 'arrowLeft'
+  | 'leftArrowLong';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -175,4 +179,6 @@ const icons: Record<IconName, React.ElementType> = {
   checkCircle: CheckCircle,
   checkClose: CheckClose,
   retrySmall: RetrySmall,
+  arrowLeft: ArrowLeft,
+  leftArrowLong: LeftArrowLong,
 };

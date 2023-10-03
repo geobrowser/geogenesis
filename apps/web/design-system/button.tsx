@@ -11,11 +11,11 @@ import type { IconName } from '~/design-system/icon';
 import { Icon } from '~/design-system/icon';
 import type { ColorName } from '~/design-system/theme/colors';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'done';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'done';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
-  icon?: IconName;
+  icon?: IconName | React.ReactNode;
   small?: boolean;
 };
 
@@ -31,6 +31,8 @@ const buttonClassNames = (className = '') =>
           secondary:
             '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-grey-02 hover:border-text focus:border-text focus:shadow-inner-text shadow-button',
           tertiary: 'text-white bg-text border-white shadow-none',
+          ghost:
+            '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-transparent hover:border-text focus:border-text focus:shadow-inner-text shadow-none hover:shadow-button',
           done: 'text-text bg-green border-green',
           // using a variant for disabled to overwrite the background/text styles
           disabled: 'text-grey-03 bg-divider hover:bg-divider border-transparent',
@@ -66,7 +68,7 @@ export const Button = forwardRef(function Button(
       disabled={disabled}
       {...rest}
     >
-      {icon && <Icon icon={icon} color={iconColor} />}
+      {typeof icon === 'string' ? <Icon icon={icon as IconName} color={iconColor} /> : icon ?? null}
       {children ?? ZERO_WIDTH_SPACE}
     </button>
   );
