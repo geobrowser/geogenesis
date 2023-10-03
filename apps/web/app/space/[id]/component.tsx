@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { GeoPluginContext } from '~/core/governance-space-plugin';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { Space, Triple } from '~/core/types';
