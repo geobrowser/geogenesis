@@ -1,0 +1,33 @@
+{
+  "ui": {},
+  "change": "Initial build.",
+  "pluginSetup": {
+    "prepareInstallation": {
+      "description": "The information required for the installation of build 1.",
+      "inputs": [
+        {
+          "name": "firstBlockContentUri",
+          "type": "string",
+          "internalType": "string",
+          "description": "The inital contents of the first block item."
+        },
+        {
+          "internalType": "address",
+          "name": "pluginUpgrader",
+          "type": "address"
+        }
+      ]
+    },
+    "prepareUpdate": {},
+    "prepareUninstallation": {
+      "description": "The information required for the uninstallation of build 1.",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "pluginUpgrader",
+          "type": "address"
+        }
+      ]
+    }
+  }
+}

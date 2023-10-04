@@ -3,11 +3,9 @@ import { Client, ContextParams } from '@aragon/sdk-client';
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-// import { useNetwork } from 'wagmi';
 import { GeoPluginContext as GeoPluginBaseContext } from '~/core/io/governance-space-plugin';
 import { GeoPluginClient } from '~/core/io/governance-space-plugin/client';
-
-// import { useEthersSigner } from '~/core/wallet/ethers-adapters';
+import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
 export interface AragonSDKContextValue {
   geoPluginContext?: GeoPluginBaseContext;
@@ -20,10 +18,12 @@ const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefi
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
   const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginBaseContext | undefined>(undefined);
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
+  const ethersSigner = useEthersSigner();
 
   const aragonSDKContextParams: ContextParams = useMemo(
     () => ({
       network: 'maticmum',
+      signer: ethersSigner,
       daoFactoryAddress: '0xc715336B5E7F10294F36CA09f19A0493070E2eFB', // mumbai dao factory address
       web3Providers: ['https://rpc.ankr.com/eth_goerli'],
       ipfsNodes: [
@@ -38,7 +38,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
         },
       ],
     }),
-    []
+    [ethersSigner]
   );
 
   useEffect(() => {
@@ -55,6 +55,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
 
   console.log('geoPluginContext', geoPluginContext);
   console.log('geoPluginClient', geoPluginClient);
+
   return (
     <AragonSDKContext.Provider value={{ geoPluginContext, geoPluginClient }}>{children}</AragonSDKContext.Provider>
   );

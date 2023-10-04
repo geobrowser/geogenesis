@@ -9,11 +9,14 @@ import { bigint } from 'effect/Equivalence';
 import { createPublicClient, createWalletClient, getContract, http } from 'viem';
 import { goerli, polygonMumbai } from 'viem/chains';
 
+import { version } from 'react';
+
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi, spacePluginSetupAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
+import * as SPACE_PLUGIN_BUILD_METADATA from '../../metadata/space-build-metadata.json';
 
 // @TODO: use our existing public client and wallet client
 export const publicClient = createPublicClient({
@@ -75,6 +78,18 @@ export class GeoPluginClientMethods extends ClientCore {
     //   abi: memberAccessPluginAbi,
     //   publicClient,
     // });
+  }
+
+  // implementation of the methods in the interface
+
+  public async *prepareInstallation(params: PrepareInstallationParams): AsyncGenerator<PrepareInstallationStepValue> {
+    yield* prepareGenericInstallation(this.web3, {
+      daoAddressOrEns: params.daoAddressOrEns,
+      pluginSetupProcessorAddress: this.geoSpacePluginAddress,
+      pluginRepo: this.geoSpacePluginRepoAddress,
+      version: params.version,
+      installationAbi: SPACE_PLUGIN_BUILD_METADATA?.pluginSetup?.prepareInstallation?.inputs,
+    });
   }
 
   // Member Access Plugin: Reads
