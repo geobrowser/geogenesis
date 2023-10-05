@@ -1,8 +1,43 @@
-import { ClientCore } from '@aragon/sdk-client-common';
-import { encodeFunctionData } from 'viem';
+import {
+  ClientCore,
 
-import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
+  PluginInstallItem,
+
+  getNamedTypesFromMetadata,
+
+} from '@aragon/sdk-client-common';
+import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
+
+import {
+  DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+  DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
+} from '~/core/constants';
+
+import {
+  mainVotingPluginAbi,
+  mainVotingPluginSetupAbi,
+  memberAccessPluginAbi,
+  memberAccessPluginSetupAbi,
+  spacePluginAbi,
+  spacePluginSetupAbi,
+} from '../../abis';
 import { GeoPluginContext } from '../../context';
+import { SpacePluginSetupAbi } from '@geogenesis/contracts';
+
+type ContractVotingSettings = [
+  votingMode: bigint,
+  supportThreshold: bigint,
+  minParticipation: bigint,
+  minDuration: bigint,
+  minProposerVotingPower: bigint
+
+]
+
+type ContractAddresslistVotingInitParams = [
+  ContractVotingSettings,
+  addresses: string[], // addresses
+  upgraderAddres: string,
+];
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -19,6 +54,38 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Space Plugin: Functions
+
+  public getSpacePluginInstallItem(params): PluginInstallItem {
+    // const networkName = getNetwork(network).name as SupportedNetwork;
+    console.log('incoming params', params);
+    // const hexBytes = defaultAbiCoder.encode(getNamedTypesFromMetadata(SpacePluginSetupAbi), [
+    //   votingSettingsToContract(params),
+    // ]);
+
+    const namedMetadata = getNamedTypesFromMetadata(SpacePluginSetupAbi);
+    console.log('named metadata', namedMetadata);
+    const hexBytes = '123';
+
+    // const hexBytes = encodeAbiParameters(
+    //   getNamedTypesFromMetadata(SpacePluginSetupAbi),
+    //   votingSettingsToContract(params)
+    // );
+
+    return {
+      id: DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
+      data: hexToBytes(hexBytes as `0x${string}`),
+    };
+  }
+
+  // public async getSpacePluginInstallItem(dao: `0x${string}`, payload: `0x${string}`) {
+  //   const spacePluginInstallData = encodeFunctionData({
+  //     abi: spacePluginSetupAbi,
+  //     functionName: 'prepareInstallation',
+  //     args: [dao, payload],
+  //   });
+  //   return spacePluginInstallData;
+  // }
+
   public async initalizeSpacePlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
     const initalizeData = encodeFunctionData({
       abi: spacePluginAbi,
@@ -83,6 +150,15 @@ export class GeoPluginClientEncoding extends ClientCore {
   //   });
   //   return initalizeData;
   // }
+
+  public async getMemberAccessPluginInstallItem(dao: `0x${string}`, payload: `0x${string}`) {
+    const spacePluginInstallData = encodeFunctionData({
+      abi: memberAccessPluginSetupAbi,
+      functionName: 'prepareInstallation',
+      args: [dao, payload],
+    });
+    return spacePluginInstallData;
+  }
 
   public async updateMultisigSettings(proposalDuration: bigint, mainVotingPluginAddress: `0x${string}`) {
     const updateMultisigSettingsData = encodeFunctionData({
@@ -166,6 +242,56 @@ export class GeoPluginClientEncoding extends ClientCore {
   //   });
   //   return initalizeData;
   // }
+
+  public getMainVotingPluginInstallItem(params: {
+    votingSettings: {
+      minDuration: number;
+        votingMode: 'EarlyExecution',
+        supportThreshold: number;
+        minParticipation: number;
+        minProposerVotingPower: bigint;
+    };
+    addresses: string[];
+    upgraderAddress?: string;
+}): PluginInstallItem {
+
+
+    // 1. Define the ABI types
+    const types = [
+        {
+            votingMode: 'uint8',
+            supportThreshold: 'uint32',
+            minParticipation: 'uint32',
+            minDuration: 'uint64',
+            minProposerVotingPower: 'uint256'
+        },
+        'address[]',
+        'address'
+    ];
+
+    const values = [
+        {
+            votingMode: params.votingSettings.votingMode,
+            supportThreshold: params.votingSettings.supportThreshold,
+            minParticipation: params.votingSettings.minParticipation,
+            minDuration: params.votingSettings.minDuration,
+            minProposerVotingPower: params.votingSettings.minProposerVotingPower
+        },
+        params.addresses,
+        params.upgraderAddress
+    ];
+
+    console.log('values', values)
+
+    // 3. Encode the parameters
+    const hexBytes = encodeAbiParameters(types, values);
+
+    return {
+        id: DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+        data: hexToBytes(hexBytes as `0x${string}`),
+    };
+}
+
 
   public async addAddresses(addresses: `0x${string}`[]) {
     const addAddressesData = encodeFunctionData({

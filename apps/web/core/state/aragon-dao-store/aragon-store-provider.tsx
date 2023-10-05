@@ -53,9 +53,6 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     }
   }, [geoPluginContext]);
 
-  console.log('geoPluginContext', geoPluginContext);
-  console.log('geoPluginClient', geoPluginClient);
-
   return (
     <AragonSDKContext.Provider value={{ geoPluginContext, geoPluginClient }}>{children}</AragonSDKContext.Provider>
   );

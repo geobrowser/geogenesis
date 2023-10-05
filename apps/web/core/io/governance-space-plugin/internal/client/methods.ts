@@ -1,3 +1,4 @@
+import { votingSettingsToContract } from '@aragon/sdk-client';
 import {
   ClientCore,
   PrepareInstallationParams,
@@ -85,10 +86,11 @@ export class GeoPluginClientMethods extends ClientCore {
   public async *prepareInstallation(params: PrepareInstallationParams): AsyncGenerator<PrepareInstallationStepValue> {
     yield* prepareGenericInstallation(this.web3, {
       daoAddressOrEns: params.daoAddressOrEns,
-      pluginSetupProcessorAddress: this.geoSpacePluginAddress,
       pluginRepo: this.geoSpacePluginRepoAddress,
       version: params.version,
       installationAbi: SPACE_PLUGIN_BUILD_METADATA?.pluginSetup?.prepareInstallation?.inputs,
+      // installationParams: [votingSettingsToContract(params.settings.votingSettings), params.settings.addresses],
+      pluginSetupProcessorAddress: this.web3.getAddress('pluginSetupProcessorAddress'),
     });
   }
 
