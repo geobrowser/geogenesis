@@ -68,6 +68,7 @@ export class Value {
     if (typeName == 'number') return NumberValue.fromJSON(__json)
     if (typeName == 'string') return StringValue.fromJSON(__json)
     if (typeName == 'entity') return EntityValue.fromJSON(__json)
+    if (typeName == 'collection') return CollectionValue.fromJSON(__json)
     if (typeName == 'image') return ImageValue.fromJSON(__json)
     if (typeName == 'date') return DateValue.fromJSON(__json)
     if (typeName == 'url') return UrlValue.fromJSON(__json)
