@@ -201,6 +201,7 @@ export class EntityStore implements IEntityStore {
         {} as Record<string, { blockId: string | null; collectionId: string | null }>
       );
 
+      // Create a join table of collection entities and the pointer to their block ids
       const mappedCollectionEntities = Object.values(blockIdsAndCollectionIdsByCollectionItemId).flatMap(
         collectionItem => {
           if (collectionItem.blockId === null || collectionItem.collectionId === null) {
@@ -211,23 +212,10 @@ export class EntityStore implements IEntityStore {
         }
       );
 
-      console.log('mappedCollectionEntities', {
-        mappedCollectionEntities,
-        blockIdsAndCollectionIdsByCollectionItemId,
-        initialBlockIdsTriple,
-        initialCollectionItemTriples,
-      });
-
-      // Create a join table of collection entities and the pointer to their block ids
       return mappedCollectionEntities;
     });
 
     this.blockIds$ = computed(() => {
-      // @TODO
-      // 1. Fetch collection items
-      // 2. Fetch blocks from collection items
-      console.log('running block ids');
-
       return this.collectionEntities$.get().map(collectionEntity => collectionEntity.blockId);
     });
 
@@ -238,8 +226,6 @@ export class EntityStore implements IEntityStore {
     this.blockTriples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
-
-      console.log('running block triples');
 
       return pipe(
         spaceActions,
@@ -260,7 +246,7 @@ export class EntityStore implements IEntityStore {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
 
-      console.log('block shit', { blockIds, blockTriples });
+      console.log('editorJson', { blockIds, blockTriples });
 
       const json = {
         type: 'doc',
