@@ -32,6 +32,7 @@ interface Props {
 
   // For the page editor
   blockTriples: Triple[];
+  collectionTriples: Triple[];
   blockIdsTriple: Triple | null;
 
   space: Space | null;
@@ -62,6 +63,7 @@ export function Component(props: Props) {
       initialSchemaTriples={[]}
       initialBlockIdsTriple={props.blockIdsTriple}
       initialBlockTriples={props.blockTriples}
+      initialCollectionItemTriples={props.collectionTriples}
     >
       <MoveEntityProvider>
         <MergeEntityProvider>

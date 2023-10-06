@@ -96,7 +96,6 @@ export default async function EntityPage({ params, searchParams }: Props) {
 
 const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
   const space = await Subgraph.fetchSpace({ id: spaceId, endpoint: config.subgraph });
-
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 
   // Redirect from space configuration page to space page
@@ -120,17 +119,61 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
   const serverCoverUrl = Entity.cover(entity?.triples);
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const collectionId = blockIdsTriple?.value.type === 'collection' ? blockIdsTriple?.value.id : null;
+
+  // Fetches all of the entities with a COLLECTION REFERENCE that points to the collection id
+  const collectionCollectionReferences = collectionId
+    ? await Subgraph.fetchTriples({
+        endpoint: config.subgraph,
+        query: '',
+        first: 1000,
+        skip: 0,
+        filter: [
+          {
+            field: 'attribute-id',
+            value: SYSTEM_IDS.COLLECTION_REFERENCE,
+          },
+          {
+            field: 'linked-to',
+            value: collectionId,
+          },
+        ],
+      })
+    : [];
+
+  // Now we need to fetch all of the blocks for each of the collection items
+  const collectionBlockReferences = (
+    await Promise.all(
+      collectionCollectionReferences.map(item => {
+        return Subgraph.fetchTriples({
+          endpoint: config.subgraph,
+          query: '',
+          first: 1000,
+          skip: 0,
+          filter: [
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.ENTITY_REFERENCE,
+            },
+            {
+              field: 'entity-id',
+              value: item.entityId,
+            },
+          ],
+        });
+      })
+    )
+  ).flatMap(triples => triples);
 
   const blockTriples = (
     await Promise.all(
-      blockIds.map(blockId => {
+      collectionBlockReferences.map(ref => {
         return Subgraph.fetchTriples({
           endpoint: config.subgraph,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
+          filter: [{ field: 'entity-id', value: ref.value.id }],
         });
       })
     )
@@ -148,6 +191,7 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     // For entity page editor
     blockIdsTriple,
     blockTriples,
+    collectionTriples: [...collectionBlockReferences, ...collectionCollectionReferences],
 
     space,
   };

@@ -20,6 +20,7 @@ interface Props {
   initialSchemaTriples: Triple[];
   initialBlockIdsTriple: Triple | null;
   initialBlockTriples: Triple[];
+  initialCollectionItemTriples: Triple[];
 }
 
 export function EntityStoreProvider({
@@ -28,6 +29,7 @@ export function EntityStoreProvider({
   children,
   initialBlockIdsTriple,
   initialBlockTriples,
+  initialCollectionItemTriples,
   initialTriples,
   initialSchemaTriples,
 }: Props) {
@@ -40,6 +42,7 @@ export function EntityStoreProvider({
       spaceId,
       initialBlockIdsTriple,
       initialBlockTriples,
+      initialCollectionItemTriples,
       initialTriples,
       initialSchemaTriples,
       id,
@@ -51,6 +54,7 @@ export function EntityStoreProvider({
   }, [
     spaceId,
     initialBlockTriples,
+    initialCollectionItemTriples,
     initialTriples,
     initialBlockIdsTriple,
     initialSchemaTriples,

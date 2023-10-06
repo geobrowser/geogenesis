@@ -88,6 +88,7 @@ interface IEntityStoreConfig {
   initialSchemaTriples: ITriple[];
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
+  initialCollectionItemTriples: ITriple[];
   ActionsStore: ActionsStore;
   LocalStore: LocalStore;
 }
@@ -100,7 +101,7 @@ export class EntityStore implements IEntityStore {
   spaceId: string;
   triples$: ObservableComputed<ITriple[]>;
   blockIds$: ObservableComputed<string[]>;
-  collectionEntities$: ObservableComputed<{ entityId: string; blockId: string }[]>;
+  collectionEntities$: ObservableComputed<{ collectionId: string; blockId: string }[]>;
   blockIdsTriple$: ObservableComputed<ITriple | null>;
   blockTriples$: ObservableComputed<ITriple[]>;
   editorJson$: ObservableComputed<JSONContent>;
@@ -115,6 +116,7 @@ export class EntityStore implements IEntityStore {
     initialTriples,
     initialBlockIdsTriple,
     initialBlockTriples,
+    initialCollectionItemTriples,
     initialSchemaTriples,
     spaceId,
     id,
@@ -169,45 +171,64 @@ export class EntityStore implements IEntityStore {
       const collectionId = blockIdsTriple?.value.type === 'collection' ? blockIdsTriple.value.id : null;
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
 
-      // Check for entities that have a backlink to the block collection.
-      const collectionEntities = pipe(
-        spaceActions,
-        actions => Action.squashChanges(actions),
-        // @TODO: pass initial collection triples
-        actions => Triple.fromActions(actions, []),
-        A.filter(
-          t =>
-            t.attributeId === SYSTEM_IDS.COLLECTION_REFERENCE &&
-            t.value.type === 'entity' &&
-            t.value.id === collectionId
-        ),
-        A.map(t => t.entityId)
+      const blockIdsAndCollectionIdsByCollectionItemId = Triple.fromActions(Action.squashChanges(spaceActions), [
+        ...initialBlockTriples,
+        ...initialCollectionItemTriples,
+      ]).reduce(
+        (acc, triple) => {
+          // Map the collection item to the blocks list collection id
+          if (
+            triple.attributeId === SYSTEM_IDS.COLLECTION_REFERENCE &&
+            triple.value.type === 'entity' &&
+            triple.value.id === collectionId
+          ) {
+            acc[triple.entityId] = {
+              blockId: acc[triple.entityId]?.blockId ?? null,
+              collectionId: triple.value.id,
+            };
+          }
+
+          // Map the collection item to the block id it references
+          if (triple.attributeId === SYSTEM_IDS.ENTITY_REFERENCE && triple.value.type === 'entity') {
+            acc[triple.entityId] = {
+              blockId: triple.value.id,
+              collectionId: acc[triple.entityId]?.collectionId ?? null,
+            };
+          }
+
+          return acc;
+        },
+        {} as Record<string, { blockId: string | null; collectionId: string | null }>
       );
 
-      // Get the block ids for each collection entity
-      const blockIds = pipe(
-        spaceActions,
-        actions => Action.squashChanges(actions),
-        // @TODO: Pass initial collection triples
-        actions => Triple.fromActions(actions, []),
-        A.filter(
-          t =>
-            t.attributeId === SYSTEM_IDS.ENTITY_REFERENCE &&
-            t.value.type === 'entity' &&
-            collectionEntities.includes(t.value.id)
-        ),
-        A.map(t => t.entityId)
+      const mappedCollectionEntities = Object.values(blockIdsAndCollectionIdsByCollectionItemId).flatMap(
+        collectionItem => {
+          if (collectionItem.blockId === null || collectionItem.collectionId === null) {
+            return [];
+          }
+
+          return [collectionItem as { blockId: string; collectionId: string }];
+        }
       );
+
+      console.log('mappedCollectionEntities', {
+        mappedCollectionEntities,
+        blockIdsAndCollectionIdsByCollectionItemId,
+        initialBlockIdsTriple,
+        initialCollectionItemTriples,
+      });
 
       // Create a join table of collection entities and the pointer to their block ids
-      return [];
+      return mappedCollectionEntities;
     });
 
     this.blockIds$ = computed(() => {
       // @TODO
       // 1. Fetch collection items
       // 2. Fetch blocks from collection items
-      return this.collectionEntities$.get().map(({ blockId }) => blockId);
+      console.log('running block ids');
+
+      return this.collectionEntities$.get().map(collectionEntity => collectionEntity.blockId);
     });
 
     this.name$ = computed(() => {
@@ -217,6 +238,8 @@ export class EntityStore implements IEntityStore {
     this.blockTriples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];
       const blockIds = this.blockIds$.get();
+
+      console.log('running block triples');
 
       return pipe(
         spaceActions,
@@ -236,6 +259,8 @@ export class EntityStore implements IEntityStore {
     this.editorJson$ = computed(() => {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
+
+      console.log('block shit', { blockIds, blockTriples });
 
       const json = {
         type: 'doc',
@@ -458,64 +483,24 @@ export class EntityStore implements IEntityStore {
   */
   createBlockTypeTriple = (node: JSONContent) => {
     const blockEntityId = getNodeId(node);
-    const entityName = this.nodeName(node);
+    const blockEntityName = this.nodeName(node);
 
     const blockTypeValue: EntityValue = getBlockTypeValue(node.type);
 
-    const existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.TYPES });
-    const existingCollectionEntityForBlock = this.collectionEntities$.get().find(c => c.blockId === blockEntityId);
+    let existingBlockTriple = this.getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.TYPES });
 
     // @TODO: Remove once we have the good shit
     if (!existingBlockTriple) {
-      this.create(
-        Triple.withId({
-          space: this.spaceId,
-          entityId: blockEntityId,
-          entityName: entityName,
-          attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Types',
-          value: blockTypeValue,
-        })
-      );
-    }
+      existingBlockTriple = Triple.withId({
+        space: this.spaceId,
+        entityId: blockEntityId,
+        entityName: blockEntityName,
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        value: blockTypeValue,
+      });
 
-    if (!existingCollectionEntityForBlock) {
-      const newEntityId = ID.createEntityId();
-
-      this.create(
-        Triple.withId({
-          space: this.spaceId,
-          entityId: newEntityId,
-          entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: `Collection item – ${newEntityId}:${blockEntityId}` },
-        })
-      );
-
-      // Create the reference to block entity
-      this.create(
-        Triple.withId({
-          space: this.spaceId,
-          entityId: newEntityId,
-          entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
-          attributeId: SYSTEM_IDS.ENTITY_REFERENCE,
-          attributeName: 'Collection Item Reference',
-          value: { id: blockEntityId, type: 'entity', name: entityName },
-        })
-      );
-
-      // Create the reference to the collection entity
-      this.create(
-        Triple.withId({
-          space: this.spaceId,
-          entityId: newEntityId,
-          entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
-          attributeId: SYSTEM_IDS.COLLECTION_REFERENCE,
-          attributeName: 'Collection Backlink',
-          value: { id: this.id, type: 'entity', name: this.name$.get() },
-        })
-      );
+      this.create(existingBlockTriple);
     }
   };
 
@@ -724,8 +709,10 @@ export class EntityStore implements IEntityStore {
   // entity. We then fetch the entity that the join entity references.
   //
   // [CURRENT ENTITY::BLOCKS TRIPLE] -> [COLLECTION ENTITY] <- [JOIN ENTITY] -> [ENTITY]
-  upsertBlocksTriple = async (newBlockIds: string[]) => {
+  upsertBlocksTriple = (newBlockIds: string[]) => {
     const existingBlockTriple = this.blockIdsTriple$.get();
+
+    // @TODO: Use collections-based comparison
     const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(newBlockIds);
 
     if (!existingBlockTriple) {
@@ -752,7 +739,6 @@ export class EntityStore implements IEntityStore {
         },
       });
 
-      // @TODO: Delete this when blocks work correctly
       const blocksTriple = Triple.withId({
         space: this.spaceId,
         entityId: this.id,
@@ -771,10 +757,12 @@ export class EntityStore implements IEntityStore {
         this.create(blocksTriple);
       });
 
-      return;
+      return blocksTriple;
     }
 
-    if (!isUpdated) return;
+    if (!isUpdated) {
+      return existingBlockTriple;
+    }
 
     // If a block is deleted we want to make sure that we delete the block entity as well.
     // The block entity might exist remotely, so we need to fetch all the triple associated
@@ -784,48 +772,40 @@ export class EntityStore implements IEntityStore {
     // to delete.
     // @TODO: Remove collection item entities
     // @TODO: Remove collection
-    const prevBlockIds = this.blockIds$.get();
+    // const prevBlockIds = this.blockIds$.get();
 
-    // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
-    const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
+    // // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
+    // const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
 
-    // Fetch all the subgraph data for all the deleted block entities.
-    const maybeRemoteBlocks = await Promise.all(
-      removedBlockIds.map(async blockId => this.subgraph.fetchEntity({ id: blockId, endpoint: this.config.subgraph }))
-    );
-    const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
+    // // Fetch all the subgraph data for all the deleted block entities.
+    // const maybeRemoteBlocks = await Promise.all(
+    //   removedBlockIds.map(async blockId => this.subgraph.fetchEntity({ id: blockId, endpoint: this.config.subgraph }))
+    // );
+    // const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
-    batch(() =>
-      // To delete an entity we delete all of its triples
-      remoteBlocks.forEach(block => {
-        block.triples.forEach(t => this.remove(t));
-      })
-    );
+    // batch(() =>
+    //   // To delete an entity we delete all of its triples
+    //   remoteBlocks.forEach(block => {
+    //     block.triples.forEach(t => this.remove(t));
+    //   })
+    // );
 
-    // Delete any local triples associated with the deleted block entities
-    const localTriplesForDeletedBlocks = pipe(
-      this.ActionsStore.allActions$.get(),
-      actions => Triple.fromActions(actions, []),
-      triples => triples.filter(t => removedBlockIds.includes(t.entityId))
-    );
+    // // Delete any local triples associated with the deleted block entities
+    // const localTriplesForDeletedBlocks = pipe(
+    //   this.ActionsStore.allActions$.get(),
+    //   actions => Triple.fromActions(actions, []),
+    //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
+    // );
 
-    batch(() => localTriplesForDeletedBlocks.forEach(t => this.remove(t)));
+    // batch(() => localTriplesForDeletedBlocks.forEach(t => this.remove(t)));
 
-    // We delete the existingBlockTriple if the page content is completely empty
-    if (newBlockIds.length === 0) {
-      return this.remove(existingBlockTriple);
-    }
+    // // We delete the existingBlockTriple if the page content is completely empty
+    // if (newBlockIds.length === 0) {
+    //   return this.remove(existingBlockTriple);
+    // }
 
-    const updatedTriple = Triple.ensureStableId({
-      ...existingBlockTriple,
-      value: {
-        ...existingBlockTriple.value,
-        type: 'string',
-        value: JSON.stringify(newBlockIds),
-      },
-    });
-
-    return this.update(updatedTriple, existingBlockTriple);
+    // this.update(updatedTriple, existingBlockTriple);
+    return existingBlockTriple;
   };
 
   /* Iterate over the content's of a TipTap editor to create or update triple blocks */
@@ -847,7 +827,7 @@ export class EntityStore implements IEntityStore {
     const blockIds = populatedContent.map(node => getNodeId(node));
 
     batch(() => {
-      this.upsertBlocksTriple(blockIds);
+      const blocksTriple = this.upsertBlocksTriple(blockIds);
 
       populatedContent.forEach(node => {
         this.createParentEntityTriple(node);
@@ -856,6 +836,53 @@ export class EntityStore implements IEntityStore {
         this.upsertBlockNameTriple(node);
         this.upsertBlockMarkdownTriple(node);
         this.createBlockImageTriple(node);
+
+        const blockEntityId = getNodeId(node);
+        const existingCollectionEntityForBlock = this.collectionEntities$.get().find(c => c.blockId === blockEntityId);
+
+        if (!existingCollectionEntityForBlock) {
+          const newEntityId = ID.createEntityId();
+
+          // Create name for the collection item entity
+          this.create(
+            Triple.withId({
+              space: this.spaceId,
+              entityId: newEntityId,
+              entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
+              attributeId: SYSTEM_IDS.NAME,
+              attributeName: 'Name',
+              value: {
+                id: ID.createValueId(),
+                type: 'string',
+                value: `Collection item – ${newEntityId}:${blockEntityId}`,
+              },
+            })
+          );
+
+          // Create the reference to block entity in the collection item entity
+          this.create(
+            Triple.withId({
+              space: this.spaceId,
+              entityId: newEntityId,
+              entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
+              attributeId: SYSTEM_IDS.ENTITY_REFERENCE,
+              attributeName: 'Collection Item Reference',
+              value: { id: blockEntityId, type: 'entity', name: this.nodeName(node) },
+            })
+          );
+
+          // Create the reference to the collection entity in the collection item entity
+          this.create(
+            Triple.withId({
+              space: this.spaceId,
+              entityId: newEntityId,
+              entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
+              attributeId: SYSTEM_IDS.COLLECTION_REFERENCE,
+              attributeName: 'Collection Backlink',
+              value: { id: blocksTriple.value.id, type: 'entity', name: blocksTriple.entityName },
+            })
+          );
+        }
       });
     });
   };

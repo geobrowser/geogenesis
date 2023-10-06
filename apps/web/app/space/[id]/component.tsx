@@ -52,6 +52,7 @@ export function Component(props: Props) {
       initialSchemaTriples={[]}
       initialBlockIdsTriple={props.blockIdsTriple}
       initialBlockTriples={props.blockTriples}
+      initialCollectionItemTriples={[]}
     >
       <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
 
