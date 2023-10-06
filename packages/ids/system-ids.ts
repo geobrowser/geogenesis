@@ -28,9 +28,10 @@ export const IMAGE = 'ba4e4146-0010-499d-a0a3-caaa7f579d0e'
 /* Example Usage: City -> VALUE_TYPE -> RELATION */
 export const RELATION = '14611456-b466-4cab-920d-2245f59ce828'
 
-export const COLLECTION_BACKLINK = '@TODO'
 export const COLLECTION_TYPE = '12a4f1e1-bc16-473e-8015-cdfcc6d85b07'
 export const COLLECTION = '12978e21-32c6-4b02-a360-d5757c19880c'
+export const COLLECTION_REFERENCE = '@TODO'
+export const ENTITY_REFERENCE = '@TODO-BLOCK-LINK'
 
 /* Example Usage: Address -> VALUE_TYPE -> TEXT */
 export const TEXT = '9edb6fcc-e454-4aa5-8611-39d7f024c010'
@@ -77,7 +78,6 @@ export const IMAGE_BLOCK = 'f0553d4d-4838-425e-bcd7-613bd8f475a5'
 
 /* Example Usage: Entity -> BLOCKS -> Some_Entity_Of_Type_TEXT_BLOCK_or_TABLE_BLOCK */
 export const BLOCKS = 'beaba5cb-a677-41a8-b353-77030613fc70'
-export const COLLECTION_ITEM_REFERENCE = '@TODO-BLOCK-LINK'
 
 /* Example Usage: Block Entity -> PARENT_ENTITY -> Some_Entity_ID */
 export const PARENT_ENTITY = 'dd4999b9-77f0-4c2b-a02b-5a26b233854e'

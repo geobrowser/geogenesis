@@ -177,7 +177,9 @@ export class EntityStore implements IEntityStore {
         actions => Triple.fromActions(actions, []),
         A.filter(
           t =>
-            t.attributeId === SYSTEM_IDS.COLLECTION_BACKLINK && t.value.type === 'entity' && t.value.id === collectionId
+            t.attributeId === SYSTEM_IDS.COLLECTION_REFERENCE &&
+            t.value.type === 'entity' &&
+            t.value.id === collectionId
         ),
         A.map(t => t.entityId)
       );
@@ -190,7 +192,7 @@ export class EntityStore implements IEntityStore {
         actions => Triple.fromActions(actions, []),
         A.filter(
           t =>
-            t.attributeId === SYSTEM_IDS.COLLECTION_ITEM_REFERENCE &&
+            t.attributeId === SYSTEM_IDS.ENTITY_REFERENCE &&
             t.value.type === 'entity' &&
             collectionEntities.includes(t.value.id)
         ),
@@ -497,7 +499,7 @@ export class EntityStore implements IEntityStore {
           space: this.spaceId,
           entityId: newEntityId,
           entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
-          attributeId: SYSTEM_IDS.COLLECTION_ITEM_REFERENCE,
+          attributeId: SYSTEM_IDS.ENTITY_REFERENCE,
           attributeName: 'Collection Item Reference',
           value: { id: blockEntityId, type: 'entity', name: entityName },
         })
@@ -509,7 +511,7 @@ export class EntityStore implements IEntityStore {
           space: this.spaceId,
           entityId: newEntityId,
           entityName: `Collection item – ${newEntityId}:${blockEntityId}`,
-          attributeId: SYSTEM_IDS.COLLECTION_BACKLINK,
+          attributeId: SYSTEM_IDS.COLLECTION_REFERENCE,
           attributeName: 'Collection Backlink',
           value: { id: this.id, type: 'entity', name: this.name$.get() },
         })
@@ -750,6 +752,7 @@ export class EntityStore implements IEntityStore {
         },
       });
 
+      // @TODO: Delete this when blocks work correctly
       const blocksTriple = Triple.withId({
         space: this.spaceId,
         entityId: this.id,
@@ -781,7 +784,6 @@ export class EntityStore implements IEntityStore {
     // to delete.
     // @TODO: Remove collection item entities
     // @TODO: Remove collection
-
     const prevBlockIds = this.blockIds$.get();
 
     // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
