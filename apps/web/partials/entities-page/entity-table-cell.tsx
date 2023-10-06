@@ -50,6 +50,11 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
           return <DateField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
         }
 
+        // Currently we don't render collection value types.
+        if (value.type === 'collection') {
+          return null;
+        }
+
         return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
       })}
     </div>

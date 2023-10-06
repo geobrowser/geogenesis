@@ -108,8 +108,9 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [data, isLoading] = useChanges(actions, activeSpace);
+  const [data, isLoading] = useChanges(actionsFromSpace, activeSpace);
+
+  console.log('actionsFromSpace', { actionsFromSpace });
 
   // Publishing logic
   const { data: wallet } = useWalletClient();
@@ -160,7 +161,7 @@ const ReviewChanges = () => {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsReviewOpen(false)} icon="close" />
           {allSpacesWithActions.length > 0 && (
@@ -206,9 +207,9 @@ const ReviewChanges = () => {
         </div>
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
-            <div className="absolute top-0 right-0 flex items-center gap-8">
+            <div className="absolute right-0 top-0 flex items-center gap-8">
               <div className="inline-flex items-center gap-2">
                 <span>
                   <span className="font-medium">
@@ -352,7 +353,7 @@ const ChangedEntity = ({
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
             Your proposed edits
-            <div className="absolute top-0 right-0">
+            <div className="absolute right-0 top-0">
               <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
             </div>
           </div>
@@ -633,7 +634,7 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
@@ -676,7 +677,7 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
@@ -722,7 +723,7 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
@@ -748,7 +749,7 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
@@ -780,7 +781,7 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>

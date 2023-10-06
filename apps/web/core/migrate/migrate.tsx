@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
-import React, { startTransition, useTransition } from 'react';
+import React, { useTransition } from 'react';
 
 import { Environment } from '../environment';
 import { useActionsStore } from '../hooks/use-actions-store';

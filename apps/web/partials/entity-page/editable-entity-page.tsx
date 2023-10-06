@@ -430,6 +430,7 @@ function EntityAttributes({
           />
         );
       case 'number':
+      case 'collection':
         return null;
       case 'date':
         return (

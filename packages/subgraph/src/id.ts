@@ -20,6 +20,9 @@ function createValueId(value: Value): string {
   const entityValue = value.asEntityValue()
   if (entityValue) return entityValue.id
 
+  const collectionValue = value.asCollectionValue()
+  if (collectionValue) return collectionValue.id
+
   throw new Error('Bad serialization of value id in createValueId()')
 }
 

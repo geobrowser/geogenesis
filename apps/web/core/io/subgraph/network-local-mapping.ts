@@ -26,10 +26,13 @@ type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
 
 type NetworkUrlValue = { valueType: 'URL'; stringValue: string };
 
+type NetworkCollectionValue = { valueType: 'COLLECTION'; entityValue: { id: string } };
+
 type NetworkValue =
   | NetworkNumberValue
   | NetworkStringValue
-  | NetworkEntityValue
+  | NetworkEntityValue 
+  | NetworkCollectionValue
   | NetworkImageValue
   | NetworkDateValue
   | NetworkUrlValue;
@@ -90,6 +93,11 @@ export function extractValue(networkTriple: NetworkTriple | NetworkAction): Valu
         id: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
+    case 'COLLECTION':
+      return {
+        type: 'collection',
+        id: networkTriple.entityValue.id,
+      };
     case 'DATE':
       return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
     case 'URL':
@@ -110,6 +118,11 @@ export function extractActionValue(networkAction: NetworkAction): Value {
         type: 'entity',
         id: networkAction.entityValue?.id ?? null,
         name: networkAction.entityValue?.name ?? null,
+      };
+    case 'COLLECTION':
+      return {
+        type: 'collection',
+        id: networkAction.entityValue.id,
       };
     case 'DATE':
       return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
@@ -136,6 +149,8 @@ function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction
     case 'NUMBER':
       return !networkTriple.numberValue;
     case 'ENTITY':
+      return !networkTriple.entityValue;
+    case 'COLLECTION':
       return !networkTriple.entityValue;
     case 'IMAGE':
       return !networkTriple.stringValue;

@@ -4,6 +4,7 @@
     "types": ["node"],
     "allowJs": true,
     "strictNullChecks": true,
+    "skipLibCheck": true,
     "resolveJsonModule": true,
     "outDir": "dist",
     "declaration": true,

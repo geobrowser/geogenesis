@@ -67,6 +67,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
         );
       }
       case 'number':
+      case 'collection':
         return null;
     }
   };

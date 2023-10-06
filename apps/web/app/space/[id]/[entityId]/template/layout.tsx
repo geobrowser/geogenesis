@@ -56,6 +56,7 @@ export default async function ProfileLayout({ children, params }: Props) {
       initialSchemaTriples={[]}
       initialBlockIdsTriple={profile.blockIdsTriple}
       initialBlockTriples={profile.blockTriples}
+      initialCollectionItemTriples={[]}
     >
       <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
       <EntityPageContentContainer>

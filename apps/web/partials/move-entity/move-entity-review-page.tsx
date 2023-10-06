@@ -67,6 +67,7 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
         );
       }
       case 'number':
+      case 'collection':
         return null;
     }
   };

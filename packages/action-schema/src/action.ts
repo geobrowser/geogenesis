@@ -49,6 +49,11 @@ interface EntityValue {
   id: string // The id of the EntityValue is the id of the entity the value is referencing
 }
 
+interface CollectionValue {
+  type: 'collection'
+  id: string // The id of the EntityValue is the id of the entity the value is referencing
+}
+
 interface DateValue {
   type: 'date'
   id: string
@@ -68,3 +73,4 @@ type Value =
   | ImageValue
   | DateValue
   | UrlValue
+  | CollectionValue

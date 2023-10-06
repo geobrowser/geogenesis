@@ -81,6 +81,11 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
           return <ImageZoom imageSrc={value.value} variant="avatar" />;
         }
 
+        // We currently don't render collection value types.
+        if (value.type === 'collection') {
+          return null;
+        }
+
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;
       }
     }
