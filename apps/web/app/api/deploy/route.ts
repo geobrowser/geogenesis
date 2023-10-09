@@ -7,14 +7,15 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   console.log('searchParams + userAddress', searchParams.get('userAddress'));
 
-  // if (searchParams.get('userAddress') === null) {
-  //   // @TODO: Correct error handling
-  //   return new Response('Missing user address', { status: 400 });
-  // }
+  if (searchParams.get('userAddress') === null) {
+    // @TODO: Correct error handling
+    return new Response('Missing user address', { status: 400 });
+  }
 
   /**
    * 1. Get beacon contract from beacon address
    * 2. Deploy proxy contract pointing to beacon contract
+   *     https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/// 7fd8a3a9f81839482d91af1df99f0b97966ee74a/packages/plugin-hardhat/test/import.js#L117
    * 3. Deploy governance contracts (how does this work?)
    * 4. Add user profile to new space
    * 5. Make user admin/editor/editorController (will we need this with governance?)
