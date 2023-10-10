@@ -115,6 +115,12 @@ export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
 
+export const MEMBERSHIP_CONTRACT_ADDRESS =
+  '0x34a94160f4B0f86d932927DFfb326354dB279181'
+
+export const MEMBERSHIP_CONTRACT_ADDRESS_TESTNET =
+  '0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E'
+
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
   Going forward we need to make sure all new permissionless and permissioned spaces are deployed using
