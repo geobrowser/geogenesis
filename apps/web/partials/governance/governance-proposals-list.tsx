@@ -21,7 +21,7 @@ interface Props {
 export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
-  const [proposals, editorsForSpace, requests] = await Promise.all([
+  const [proposals, editorsForSpace] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),
     fetchInterimMembershipRequests({ endpoint: options.production.membershipSubgraph, spaceId }),
