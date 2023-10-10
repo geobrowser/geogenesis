@@ -3,4 +3,5 @@ type MembershipRequest @entity {
 
   requestor: Bytes!
   space: Bytes!
+  createdAt: BigInt!
 }

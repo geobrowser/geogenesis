@@ -8,6 +8,7 @@ export function handleMembershipRequested(event: MembershipRequested): void {
   const newRequest = new MembershipRequest(userAccount.toHex() + space.toHex())
   newRequest.requestor = userAccount
   newRequest.space = space
+  newRequest.createdAt = event.block.timestamp
 
   newRequest.save()
 }
