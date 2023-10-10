@@ -4,6 +4,7 @@ import pluralize from 'pluralize';
 import { Cookie } from '~/core/cookie';
 import { options } from '~/core/environment/environment';
 import { Subgraph } from '~/core/io';
+import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
@@ -20,9 +21,10 @@ interface Props {
 export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
-  const [proposals, editorsForSpace] = await Promise.all([
+  const [proposals, editorsForSpace, requests] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),
+    fetchInterimMembershipRequests({ endpoint: options.production.membershipSubgraph, spaceId }),
   ]);
 
   return (
