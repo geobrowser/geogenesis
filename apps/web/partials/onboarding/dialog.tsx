@@ -1,33 +1,31 @@
-'use client';
+"use client";
 
-import { observer } from '@legendapp/state/react';
-import BoringAvatar from 'boring-avatars';
-import { Command } from 'cmdk';
-import { AnimatePresence, motion } from 'framer-motion';
-import Confetti from 'js-confetti';
+import { observer } from "@legendapp/state/react";
+import BoringAvatar from "boring-avatars";
+import cx from "classnames";
+import { Command } from "cmdk";
+import { AnimatePresence, motion } from "framer-motion";
 
-import * as React from 'react';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import * as React from "react";
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { useAccount } from 'wagmi';
+import { useAccount } from "wagmi";
 
-import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { Services } from '~/core/services';
-import { formatShortAddress, getImagePath } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { useOnboarding } from "~/core/hooks/use-onboarding";
+import { Services } from "~/core/services";
+import { getImagePath } from "~/core/utils/utils";
+import { Value } from "~/core/utils/value";
 
-import { Button, SquareButton } from '~/design-system/button';
-import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
-import { Text } from '~/design-system/text';
+import { Button, SmallButton, SquareButton } from "~/design-system/button";
+import { Text } from "~/design-system/text";
 
-type Steps = 'wallet' | 'name' | 'avatar' | 'success';
+type Step = "start" | "onboarding" | "completing" | "completed";
 
 export const OnboardingDialog = observer(() => {
   const { address } = useAccount();
-
-  const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState('');
-  const [step, setStep] = useState<Steps>('wallet');
+  const [name, setName] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [step, setStep] = useState<Step>("start");
 
   if (!address) return null;
 
@@ -38,42 +36,35 @@ export const OnboardingDialog = observer(() => {
     <Command.Dialog open={false} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
-          {step !== 'success' && (
-            <ModalCard key="onboarding">
-              <div className="relative z-10 min-h-full">
-                {step === 'wallet' && (
-                  <>
-                    <StepHeader />
-                    <StepWallet onNext={() => setStep('name')} address={address} />
-                  </>
-                )}
-                {step === 'name' && (
-                  <>
-                    <StepHeader onPrev={() => setStep('wallet')} />
-                    <StepName onNext={() => setStep('avatar')} setName={setName} name={name} />
-                  </>
-                )}
-                {step === 'avatar' && (
-                  <>
-                    <StepHeader onPrev={() => setStep('name')} />
-                    <StepAvatar
-                      onNext={() => setStep('success')}
-                      avatar={avatar}
-                      setAvatar={setAvatar}
-                      name={name}
-                      address={address}
-                    />
-                  </>
-                )}
-              </div>
+          <div className="relative z-10 flex h-full w-full items-start justify-center">
+            <ModalCard key="card">
+              {step === "start" && (
+                <>
+                  <StepHeader step={step} />
+                  <StepStart onNext={() => setStep("onboarding")} />
+                </>
+              )}
+              {step === "onboarding" && (
+                <>
+                  <StepHeader step={step} onPrev={() => setStep("start")} />
+                  <StepOnboarding
+                    onNext={() => setStep("completing")}
+                    address={address}
+                    name={name}
+                    setName={setName}
+                    avatar={avatar}
+                    setAvatar={setAvatar}
+                  />
+                </>
+              )}
+              {(step === "completing" || step === "completed") && (
+                <>
+                  <StepHeader step={step} />
+                  <StepComplete onNext={() => setStep("completed")} />
+                </>
+              )}
             </ModalCard>
-          )}
-          {step === 'success' && (
-            <ModalCard key="success">
-              <StepHeader showTitle={false} />
-              <StepSuccess />
-            </ModalCard>
-          )}
+          </div>
         </AnimatePresence>
       </div>
     </Command.Dialog>
@@ -92,8 +83,8 @@ const ModalCard = ({ key, children }: ModalCardProps) => {
       initial={{ opacity: 0, bottom: -5 }}
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
-      transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-10 mt-32 aspect-square w-full max-w-[434px] overflow-hidden rounded border border-grey-02 bg-white p-4 shadow-dropdown"
+      transition={{ ease: "easeInOut", duration: 0.225 }}
+      className="pointer-events-auto relative z-10 mt-32 aspect-square h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -101,18 +92,21 @@ const ModalCard = ({ key, children }: ModalCardProps) => {
 };
 
 type StepHeaderProps = {
+  step: Step;
   onPrev?: () => void;
-  showTitle?: boolean;
 };
 
-const StepHeader = ({ onPrev, showTitle = true }: StepHeaderProps) => {
+const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
   const { hideOnboarding } = useOnboarding();
 
   return (
-    <div className="relative z-20 flex items-center justify-between pb-12">
-      <div className="rotate-180">{onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}</div>
-      <div className="text-metadataMedium">{showTitle && 'Profile Creation'}</div>
-      <SquareButton icon="close" onClick={hideOnboarding} />
+    <div className="relative z-20 flex items-center justify-between pb-2">
+      <div className="rotate-180">
+        {onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}
+      </div>
+      {step !== "completing" && (
+        <SquareButton icon="close" onClick={hideOnboarding} />
+      )}
     </div>
   );
 };
@@ -129,7 +123,7 @@ const StepContents = ({ key, children }: StepContentsProps) => {
       initial={{ opacity: 0, right: -20 }}
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
-      transition={{ ease: 'easeInOut', duration: 0.225 }}
+      transition={{ ease: "easeInOut", duration: 0.225 }}
       className="relative"
     >
       {children}
@@ -137,72 +131,71 @@ const StepContents = ({ key, children }: StepContentsProps) => {
   );
 };
 
-function StepWallet({ onNext, address }: { onNext: () => void; address: string }) {
-  return (
-    <>
-      <StepContents key="wallet">
-        <div className="flex justify-center pb-8">
-          <Text variant="mediumTitle" className="inline-block rounded bg-divider px-2 py-1">
-            {formatShortAddress(address)}
-          </Text>
-        </div>
-        <div className="px-16 pb-3 text-center">
-          <Text variant="bodySemibold">It looks like you don’t have a Geo profile on this wallet address.</Text>
-        </div>
-      </StepContents>
-      <div className="absolute inset-x-0 bottom-6 flex justify-center">
-        <Button onClick={onNext}>Create Profile</Button>
-      </div>
-    </>
-  );
-}
-
-type StepNameProps = {
+type StepStartProps = {
   onNext: () => void;
-  name: string;
-  setName: (name: string) => void;
 };
 
-function StepName({ onNext, name, setName }: StepNameProps) {
-  const validName = name.length > 0;
-
+function StepStart({ onNext }: StepStartProps) {
   return (
     <>
-      <StepContents key="name">
-        <div className="flex justify-center">
-          <div className="inline-block pb-8">
-            <input
-              placeholder="Name..."
-              className="block px-2 py-1 text-center text-mediumTitle"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoFocus
-            />
-          </div>
+      <StepContents key="start">
+        <div className="w-full">
+          <Text
+            as="h3"
+            variant="bodySemibold"
+            className="mx-auto text-center !text-2xl"
+          >
+            Create your personal space and activity feed
+          </Text>
+          <Text
+            as="p"
+            variant="body"
+            className="mx-auto mt-2 text-center !text-base"
+          >
+            Use your personal space to update your profile and monitor your
+            account activity on GEO.
+          </Text>
         </div>
-        <Text as="h3" variant="bodySemibold" className="px-16 text-center">
-          You can use your real name or a pseudonym if you’d prefer to remain anonymous.
-        </Text>
       </StepContents>
-      <div className="absolute inset-x-0 bottom-6 flex justify-center">
-        <Button disabled={!validName} onClick={onNext}>
-          Continue
+      <div className="absolute inset-x-4 bottom-4 space-y-4">
+        <div className="aspect-video rounded bg-grey-02 shadow-lg">
+          {/* <img src="/personal-space-preview.png" alt="" /> */}
+        </div>
+        <Button onClick={onNext} className="w-full">
+          Start
         </Button>
       </div>
     </>
   );
 }
 
-type StepAvatarProps = {
+type StepOnboardingProps = {
   onNext: () => void;
+  address: string;
+  name: string;
+  setName: (name: string) => void;
   avatar: string;
   setAvatar: (hash: string) => void;
-  name: string;
-  address: string;
 };
 
-function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProps) {
+function StepOnboarding({
+  onNext,
+  address,
+  name,
+  setName,
+  avatar,
+  setAvatar,
+}: StepOnboardingProps) {
+  const validName = name.length > 0;
   const { storageClient } = Services.useServices();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileInputClick = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, []);
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -215,31 +208,53 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
 
   return (
     <>
-      <StepContents key="avatar">
-        <Text as="h3" variant="smallTitle" className="-mt-6 pb-4 text-center">
-          {name}
-        </Text>
-        <div className="flex justify-center pb-4">
-          {avatar ? (
-            <div
-              className="rounded border-8 border-black bg-cover bg-center"
-              style={{
-                backgroundImage: `url(${getImagePath(avatar)})`,
-                height: 154,
-                width: 154,
-              }}
+      <StepContents key="onboarding">
+        <div className="flex w-full justify-center">
+          <div className="inline-block pb-4">
+            <input
+              placeholder="Name..."
+              className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
+              value={name}
+              onChange={({ currentTarget: { value } }) => setName(value)}
+              autoFocus
             />
-          ) : (
-            <BoringAvatar size={154} name={address} variant="beam" />
-          )}
+          </div>
         </div>
-        <div className="flex justify-center">
-          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-            <Text variant="metadataMedium" color="ctaPrimary">
-              Upload photo
-            </Text>
+        <div className="flex justify-center pb-4">
+          <div className="rounded border-8 border-white bg-cover bg-center shadow-card">
+            <div className="overflow-hidden rounded">
+              {avatar ? (
+                <div
+                  style={{
+                    backgroundImage: `url(${getImagePath(avatar)})`,
+                    height: 154,
+                    width: 154,
+                    backgroundSize: "cover",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                />
+              ) : (
+                <BoringAvatar size={154} name={address} variant="beam" square />
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-center gap-1.5 pb-4">
+          <label
+            htmlFor="avatar-file"
+            className="inline-block cursor-pointer text-center hover:underline"
+          >
+            <SmallButton icon="upload" onClick={handleFileInputClick}>
+              Upload
+            </SmallButton>
           </label>
+          {avatar !== "" && (
+            <div>
+              <SquareButton onClick={() => setAvatar("")} icon="trash" />
+            </div>
+          )}
           <input
+            ref={fileInputRef}
             accept="image/png, image/jpeg"
             id="avatar-file"
             onChange={handleChange}
@@ -247,111 +262,153 @@ function StepAvatar({ onNext, name, avatar, setAvatar, address }: StepAvatarProp
             className="hidden"
           />
         </div>
+        <Text as="h3" variant="body" className="text-center !text-base">
+          You can update this later.
+        </Text>
       </StepContents>
-      <div className="absolute inset-x-0 bottom-6 flex justify-center">
-        <Button onClick={onNext}>Done</Button>
+      <div className="absolute inset-x-4 bottom-4 flex">
+        <Button
+          variant="secondary"
+          disabled={!validName}
+          onClick={onNext}
+          className="w-full"
+        >
+          Continue
+        </Button>
       </div>
     </>
   );
 }
 
-function StepSuccess() {
-  const canvasRef = useRef<HTMLCanvasElement>(null!);
-  const confettiRef = useRef<Confetti>(null!);
+type StepCompleteProps = {
+  onNext: () => void;
+};
+
+function StepComplete({ onNext }: StepCompleteProps) {
+  const [stage, setStage] = useState<number>(1);
 
   useEffect(() => {
-    confettiRef.current = new Confetti({ canvas: canvasRef.current });
+    if (stage >= 5) {
+      onNext();
+      return;
+    }
 
     setTimeout(() => {
-      confettiRef.current.addConfetti({
-        confettiRadius: 6,
-        confettiNumber: 500,
-      });
-    }, 675);
-
-    return confettiRef.current.clearCanvas();
-  }, []);
+      const nextStage = stage + 1;
+      setStage(nextStage);
+    }, 10_000);
+  }, [stage, onNext]);
 
   return (
-    <div className="h-full pt-8">
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 h-full w-full bg-[#000000]" />
-      <div className="relative z-10 flex justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ type: 'spring', bounce: 0.25, delay: 0.45 }}
-          className="inline-block rounded bg-white py-2 px-8 text-center shadow-onboarding"
-        >
-          <div className="flex w-full justify-center pb-3">
-            <GeoLogoLarge width={67} height={67} />
-          </div>
-          <Text as="h3" variant="input">
-            Welcome to
+    <>
+      <StepContents key="start">
+        <div className="w-full">
+          <Text
+            as="h3"
+            variant="bodySemibold"
+            className="mx-auto text-center !text-2xl"
+          >
+            {stage === 5 ? `Welcome to GEO!` : `Creating profile and feed`}
           </Text>
-          <Text as="h3" variant="largeTitle" className="-mt-1 uppercase">
-            Geo
+          <Text
+            as="p"
+            variant="body"
+            className="mx-auto mt-2 text-center !text-base"
+          >
+            {complete[stage]}
           </Text>
-        </motion.div>
+          {stage !== 5 && (
+            <div className="mx-auto mt-2 w-1/3">
+              <Progress stage={stage} />
+            </div>
+          )}
+        </div>
+      </StepContents>
+      <div className="absolute inset-x-4 bottom-4 space-y-4">
+        <div className="aspect-video rounded bg-grey-02 shadow-lg">
+          {/* <img src="/space-preview.png" alt="" /> */}
+        </div>
+        <div className="flex justify-center gap-2 whitespace-nowrap">
+          <Button
+            onClick={() => null}
+            className="!flex-1 !flex-shrink-0"
+            disabled={stage !== 5}
+          >
+            View Feed
+          </Button>
+          <Button
+            onClick={() => null}
+            className="!flex-1"
+            disabled={stage !== 5}
+          >
+            View Personal Space
+          </Button>
+        </div>
       </div>
-      <Marquees />
-      <div className="absolute inset-x-0 bottom-6 flex justify-center">
-        <Button>View Profile</Button>
-      </div>
-    </div>
+    </>
   );
 }
 
-const Marquees = () => {
+const complete: Record<number, string> = {
+  1: `Step 1. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
+  2: `Step 2. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
+  3: `Step 3. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
+  4: `Final Step. Lorem ipsum dolor sit amet, consectetur adipiscing elit sed.`,
+  5: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
+};
+
+type ProgressProps = {
+  stage: number;
+};
+
+const Progress = ({ stage }: ProgressProps) => {
   return (
-    <div className="absolute inset-0 flex h-full w-full -rotate-45 scale-[1.4] flex-col gap-4 opacity-50">
-      <Marquee direction="left" />
-      <Marquee direction="right" />
-      <Marquee direction="left" />
-      <Marquee direction="right" />
-      <Marquee direction="left" />
-      <Marquee direction="right" />
+    <div className="flex gap-1">
+      <Indicator index={1} stage={stage} />
+      <Indicator index={2} stage={stage} />
+      <Indicator index={3} stage={stage} />
+      <Indicator index={4} stage={stage} />
     </div>
   );
 };
 
-type MarqueeProps = {
-  direction?: 'left' | 'right';
+type IndicatorProps = {
+  index: number;
+  stage: number;
 };
 
-const Marquee = ({ direction = 'left' }: MarqueeProps) => {
-  const [source, destination] = coordinates[direction];
-  const renderedImages = direction === 'left' ? doubledImages : doubledImages.reverse();
+const Indicator = ({ index, stage }: IndicatorProps) => {
+  const width = getWidth(index, stage);
 
   return (
-    <div className="relative select-none overflow-hidden">
+    <div className="relative h-1.5 flex-1 overflow-clip rounded-full bg-grey-02">
       <motion.div
-        animate={{ x: [source, destination] }}
-        transition={{ ease: 'linear', repeat: Infinity, repeatType: 'loop', duration: 120 }}
-        className="flex gap-4"
-      >
-        {renderedImages.map((image: string, index: number) => (
-          <img key={index} src={image} className="h-16 w-16 rounded object-cover object-center" />
-        ))}
-      </motion.div>
+        transition={{
+          ease: "linear",
+          duration: 1,
+          bounce: 0,
+          delay: index >= stage ? 1 : 0,
+        }}
+        animate={{ width }}
+        className={cx(
+          "absolute bottom-0 left-0 top-0 bg-black",
+          index === stage && "animate-pulse"
+        )}
+      />
     </div>
   );
 };
 
-const coordinates = {
-  left: [0, -640],
-  right: [-640, 0],
+const getWidth = (index: number, stage: number) => {
+  if (index > stage) {
+    return "0%";
+  }
+
+  if (index === stage) {
+    return "50%";
+  }
+
+  if (index < stage) {
+    return "100%";
+  }
 };
-
-const images: Array<string> = [
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F882371689244143687%2F1070102478802133052%2Froot.png&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F882371689244143687%2F1070100677516333146%2Fcrypto.png&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F882371689244143687%2F1068584818910167101%2Fabundance.png&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F882371689244143687%2F1068582532611833936%2Fpeople.png&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1617791160536-598cf32026fb&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F1010259815395754147%2F1047945562336534588%2FSF-image.png&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1535914254981-b5012eebbd15&w=1920&q=75',
-  'https://www.geobrowser.io/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F882371689244143687%2F1068584843316830249%2Fend-homelessness.png&w=1920&q=75',
-];
-
-const doubledImages: Array<string> = [...images, ...images];
