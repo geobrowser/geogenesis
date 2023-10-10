@@ -83,13 +83,12 @@ export class GeoPluginClientMethods extends ClientCore {
 
   // implementation of the methods in the interface
 
-  public async *prepareInstallation(params: PrepareInstallationParams): AsyncGenerator<PrepareInstallationStepValue> {
+  public async *prepareSpacePluginInstallation(): AsyncGenerator<PrepareInstallationStepValue> {
     yield* prepareGenericInstallation(this.web3, {
       daoAddressOrEns: params.daoAddressOrEns,
-      pluginRepo: this.geoSpacePluginRepoAddress,
+      pluginRepo: this.geoMainVotingPluginRepoAddress,
       version: params.version,
       installationAbi: SPACE_PLUGIN_BUILD_METADATA?.pluginSetup?.prepareInstallation?.inputs,
-      // installationParams: [votingSettingsToContract(params.settings.votingSettings), params.settings.addresses],
       pluginSetupProcessorAddress: this.web3.getAddress('pluginSetupProcessorAddress'),
     });
   }

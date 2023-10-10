@@ -24,6 +24,7 @@ import {
 import { GeoPluginContext } from '../../context';
 import { SpacePluginSetupAbi } from '@geogenesis/contracts';
 
+
 type ContractVotingSettings = [
   votingMode: bigint,
   supportThreshold: bigint,
@@ -243,48 +244,57 @@ export class GeoPluginClientEncoding extends ClientCore {
   //   return initalizeData;
   // }
 
+
+//   from the JS side, you would do:
+// JS => client.prepareInstallation() => pluginSetup.prepareInstallation(parameters)
+// deploy new plugin + call initialize(settings)
+
   public getMainVotingPluginInstallItem(params: {
-    votingSettings: {
-      minDuration: number;
-        votingMode: 'EarlyExecution',
-        supportThreshold: number;
-        minParticipation: number;
-        minProposerVotingPower: bigint;
-    };
-    addresses: string[];
-    upgraderAddress?: string;
+
 }): PluginInstallItem {
 
 
-    // 1. Define the ABI types
-    const types = [
-        {
-            votingMode: 'uint8',
-            supportThreshold: 'uint32',
-            minParticipation: 'uint32',
-            minDuration: 'uint64',
-            minProposerVotingPower: 'uint256'
-        },
-        'address[]',
-        'address'
-    ];
+    // // 1. Define the ABI types
+    // const types = [
 
-    const values = [
-        {
-            votingMode: params.votingSettings.votingMode,
-            supportThreshold: params.votingSettings.supportThreshold,
-            minParticipation: params.votingSettings.minParticipation,
-            minDuration: params.votingSettings.minDuration,
-            minProposerVotingPower: params.votingSettings.minProposerVotingPower
-        },
-        params.addresses,
-        params.upgraderAddress
-    ];
+    //        {name: 'votingMode', type: {'uint8'},
+    //         supportThreshold: 'uint32',
+    //         minParticipation: 'uint32',
+    //         minDuration: 'uint64',
+    //         minProposerVotingPower: 'uint256'
+    //     },
+    //     'address[]',
+    //     'address'
+    // ];
 
-    console.log('values', values)
+    // const values = [
+    //     {
+    //         votingMode: params.votingSettings.votingMode,
+    //         supportThreshold: params.votingSettings.supportThreshold,
+    //         minParticipation: params.votingSettings.minParticipation,
+    //         minDuration: params.votingSettings.minDuration,
+    //         minProposerVotingPower: params.votingSettings.minProposerVotingPower
+    //     },
+    //     params.addresses,
+    //     params.upgraderAddress
+    // ];
+
+console.log('')
 
     // 3. Encode the parameters
-    const hexBytes = encodeAbiParameters(types, values);
+    // const hexBytes = encodeAbiParameters(types, values);
+    // const hexBytes = encodeAbiParameters(
+    //   [{ name: 'x', type: 'uint32' }, { name: 'y', type: 'uint32' }], 
+    //   [69420, 39381]
+    // )
+
+    // const encodedData = encodeAbiParameters(
+    //   mainVotingPluginPrepareInstallationAbi[0].inputs,
+    //   [
+
+    //   ]
+
+    // )
 
     return {
         id: DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,

@@ -57,17 +57,19 @@ export default function CreateDao() {
 
     if (!geoPluginClient) throw new Error('geoPluginClient is undefined');
 
-    const geoSpacePluginInstallItem = geoPluginClient.encoding.getMainVotingPluginInstallItem({
-      votingSettings: {
-        minDuration: 60 * 60 * 24 * 2, // seconds
-        minParticipation: 0.25, // 25%
-        supportThreshold: 0.5, // 50%
-        minProposerVotingPower: BigInt('5000'), // default 0
-        votingMode: VotingMode.EARLY_EXECUTION,
-      },
-      addresses: ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'],
-    });
-    // const geoMemberAcccessPluginInstallItem = geoPluginClient.encoding.getMemberAccessPluginInstallItem();
+    const geoSpacePluginInstallItem = geoPluginClient.methods.prepareSpacePluginInstallation();
+
+    // const geoSpacePluginInstallItem = geoPluginClient.encoding.getMainVotingPluginInstallItem({
+    //   votingSettings: {
+    //     minDuration: 60 * 60 * 24 * 2, // seconds
+    //     minParticipation: 0.25, // 25%
+    //     supportThreshold: 0.5, // 50%
+    //     minProposerVotingPower: BigInt('5000'), // default 0
+    //     votingMode: VotingMode.EARLY_EXECUTION,
+    //   },
+    //   addresses: ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'],
+    // });
+    // // const geoMemberAcccessPluginInstallItem = geoPluginClient.encoding.getMemberAccessPluginInstallItem();
 
     const createParams: CreateDaoParams = {
       metadataUri,

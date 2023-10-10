@@ -9,12 +9,13 @@
           "name": "firstBlockContentUri",
           "type": "string",
           "internalType": "string",
-          "description": "The inital contents of the first block item."
+          "description": "The initial contents of the first block item."
         },
         {
           "internalType": "address",
           "name": "pluginUpgrader",
-          "type": "address"
+          "type": "address",
+          "description": "The plugin upgrader address."
         }
       ]
     },
