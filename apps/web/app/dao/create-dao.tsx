@@ -1,16 +1,10 @@
 'use client';
 
-import {
-  AddresslistVotingClient,
-  AddresslistVotingPluginInstall,
-  Client,
-  CreateDaoParams,
-  DaoCreationSteps,
-  DaoMetadata,
-  VotingMode,
-} from '@aragon/sdk-client';
+import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
 import { GasFeeEstimation } from '@aragon/sdk-client-common';
 
+import { GeoPluginClient } from '~/core/io/governance-space-plugin';
+import { GeoPluginClientEncoding } from '~/core/io/governance-space-plugin/internal';
 import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
 
 import { Button } from '~/design-system/button';
@@ -53,28 +47,28 @@ export default function CreateDao() {
     //   'goerli'
     // );
 
-    // const geoSpacePluginInstallItem = geoPluginClient.encoding.getSpacePluginInstallItem();
-
     if (!geoPluginClient) throw new Error('geoPluginClient is undefined');
 
-    const geoSpacePluginInstallItem = geoPluginClient.methods.prepareSpacePluginInstallation();
+    // const geoMemberAccessPluginInstallItem = GeoPluginClient.encoding.getMemberAccessPluginInstallItem('');
 
-    // const geoSpacePluginInstallItem = geoPluginClient.encoding.getMainVotingPluginInstallItem({
-    //   votingSettings: {
-    //     minDuration: 60 * 60 * 24 * 2, // seconds
-    //     minParticipation: 0.25, // 25%
-    //     supportThreshold: 0.5, // 50%
-    //     minProposerVotingPower: BigInt('5000'), // default 0
-    //     votingMode: VotingMode.EARLY_EXECUTION,
-    //   },
-    //   addresses: ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'],
-    // });
-    // // const geoMemberAcccessPluginInstallItem = geoPluginClient.encoding.getMemberAccessPluginInstallItem();
+    const members: string[] = ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'];
+
+    const memberAccessPluginInstallParams = {
+      votingSettings: {
+        minApprovals: 1,
+        onlyListed: true,
+      },
+      members,
+    };
+
+    const geoMemberAccessPluginInstallItem = GeoPluginClientEncoding.getMemberAccessPluginInstallItem(
+      memberAccessPluginInstallParams
+    );
 
     const createParams: CreateDaoParams = {
       metadataUri,
       ensSubdomain: 'test-hack-the-planet-mumbai-1',
-      plugins: [geoSpacePluginInstallItem],
+      plugins: [geoMemberAccessPluginInstallItem],
     };
 
     const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);

@@ -1,8 +1,3 @@
-import {
-  IGeoPluginClient,
-  IGeoPluginClientEncoding,
-  IGeoPluginClientMethods,
-} from '../../governance-space-plugin/internal';
 import { GeoPersonalSpacePluginContext } from '../context';
 import { GeoPersonalSpacePluginClientEncoding, GeoPersonalSpacePluginClientMethods } from './client';
 import {
