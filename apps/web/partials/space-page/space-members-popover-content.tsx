@@ -5,6 +5,7 @@ import { Cookie } from '~/core/cookie';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { MemberRow } from './space-member-row';
+import { SpaceMembersPopoverMemberRequestButton } from './space-members-popover-members-request-button';
 
 interface Props {
   spaceId: string;
@@ -35,7 +36,7 @@ export async function SpaceMembersContent({ spaceId }: Props) {
           </button>
         ) : (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? 'Request to join' : 'Connect wallet'}
+            {connectedAddress ? <SpaceMembersPopoverMemberRequestButton spaceId={spaceId} /> : 'Connect wallet'}
           </button>
         )}
       </div>
