@@ -1,16 +1,33 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
 import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
+import { Effect, Either } from 'effect';
+import { v4 as uuid } from 'uuid';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon, polygonMumbai } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
+import { slog } from '~/core/utils/utils';
 
 const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
 const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
 
+class ProxyBeaconDeploymentFailedError extends Error {
+  readonly _tag = 'ProxyBeaconDeploymentFailedError';
+}
+
+class ProxyBeaconInitializeFailedError extends Error {
+  readonly _tag = 'ProxyBeaconInitializeFailedError';
+}
+
+class ProxyBeaconConfigureRolesFailedError extends Error {
+  readonly _tag = 'ProxyBeaconConfigureRolesFailedError';
+}
+
 export async function GET(request: Request) {
+  // @TODO: Make request id and pass to each step for better logging (use slogs)
+  const requestId = uuid();
   const { searchParams } = new URL(request.url);
   console.log('searchParams + userAddress', searchParams.get('userAddress'));
 
@@ -60,32 +77,38 @@ export async function GET(request: Request) {
    * ----------------    ----------    ---------------------------
    *
    */
-
-  // Beacon deployment
-  // @TODO: Remove beacon deployment and use existing beacon
-  // const beaconHash = await client.deployContract({
-  //   abi: UpgradeableBeacon.abi,
-  //   bytecode: UpgradeableBeacon.bytecode as `0x${string}`,
-  //   args: [MUMBAI_IMPL_ADDRESS],
-  //   account,
-  // });
-  // console.log('Space beacon hash', beaconHash);
-
-  // const beaconDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: beaconHash });
-  // console.log('Space beacon contract deployed at: ', beaconDeployTxReceipt.contractAddress);
-
   // Proxy deployment
-  const proxyTxHash = await client.deployContract({
-    abi: BeaconProxy.abi,
-    bytecode: BeaconProxy.bytecode as `0x${string}`,
-    args: [MUMBAI_BEACON_ADDRESS, ''],
-    // args: [beaconDeployTxReceipt.contractAddress, ''],
-    account,
-  });
-  console.log('Space proxy hash', proxyTxHash);
+  const deployBeaconProxyEffect = Effect.tryPromise({
+    try: async () => {
+      const proxyTxHash = await client.deployContract({
+        abi: BeaconProxy.abi,
+        bytecode: BeaconProxy.bytecode as `0x${string}`,
+        args: [MUMBAI_BEACON_ADDRESS, ''],
+        account,
+      });
+      slog(requestId, `Space proxy hash: ${proxyTxHash}`);
 
-  const proxyDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: proxyTxHash });
-  console.log('Space proxy contract deployed at: ', proxyDeployTxReceipt.contractAddress);
+      const proxyDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: proxyTxHash });
+      slog(requestId, `Space proxy contract deployed at: ${proxyDeployTxReceipt.contractAddress}`);
+
+      return proxyDeployTxReceipt;
+    },
+    catch: () => new ProxyBeaconDeploymentFailedError(),
+  });
+
+  const maybeDeployment = await Effect.runPromise(Effect.either(deployBeaconProxyEffect));
+
+  // Deploying the contract failed. Return a 500-ish response with reason.
+  if (Either.isLeft(maybeDeployment)) {
+    const error = maybeDeployment.left;
+    slog(requestId, `Space proxy deployment failed: ${error.message}`, 'error');
+    return new Response('Could not deploy space contract. Please try again.', {
+      status: 500,
+      statusText: error.message,
+    });
+  }
+
+  const proxyDeployTxReceipt = maybeDeployment.right;
 
   if (proxyDeployTxReceipt.contractAddress !== null) {
     // Initialize proxy contract

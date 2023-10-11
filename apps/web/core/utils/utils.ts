@@ -215,3 +215,7 @@ export const sleepWithCallback = async (callback: () => void, ms: number) => {
     resolve(null);
   });
 };
+
+export function slog(requestId: string, message: string, level: 'log' | 'info' | 'warn' | 'error' = 'log') {
+  console[level](`requestId: ${requestId} – ${message}`);
+}
