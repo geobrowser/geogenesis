@@ -33,6 +33,8 @@ export async function GET(request: Request) {
     return new Response('Missing user address', { status: 400 });
   }
 
+  const userAccount = searchParams.get('userAddress') as `0x${string}`;
+
   /**
    * 1. ~~Get beacon contract from beacon address~~
    * 2. ~~Deploy proxy contract pointing to beacon contract~~
@@ -83,15 +85,24 @@ export async function GET(request: Request) {
         args: [MUMBAI_BEACON_ADDRESS, ''],
         account,
       });
-      slog(requestId, `Space proxy hash: ${proxyTxHash}`);
+      slog({ requestId, message: `Space proxy hash: ${proxyTxHash}`, account: userAccount });
 
       const proxyDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: proxyTxHash });
-      slog(requestId, `Space proxy contract deployed at: ${proxyDeployTxReceipt.contractAddress}`);
+      slog({
+        requestId,
+        message: `Space proxy contract deployed at: ${proxyDeployTxReceipt.contractAddress}`,
+        account: userAccount,
+      });
 
       return proxyDeployTxReceipt;
     },
     catch: error => {
-      slog(requestId, `Space proxy deployment failed: ${(error as Error).message}`, 'error');
+      slog({
+        level: 'error',
+        requestId,
+        message: `Space proxy deployment failed: ${(error as Error).message}`,
+        account: userAccount,
+      });
       return new ProxyBeaconDeploymentFailedError();
     },
   });
@@ -111,7 +122,12 @@ export async function GET(request: Request) {
 
   // The contract address is null for some reason. Return an unknown error.
   if (proxyDeployTxReceipt.contractAddress === null) {
-    slog(requestId, `Space proxy deployment failed for unknown reason`, 'error');
+    slog({
+      level: 'error',
+      requestId,
+      message: `Space proxy deployment failed for unknown reason`,
+      account: userAccount,
+    });
     return new Response('Could not deploy space contract. Please try again.', {
       status: 500,
       statusText: 'Unknown error',
@@ -129,15 +145,24 @@ export async function GET(request: Request) {
       });
 
       const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
-      slog(requestId, `Initialize hash: ${simulateInitializeHash}`);
+      slog({ requestId, message: `Initialize hash: ${simulateInitializeHash}`, account: userAccount });
 
       const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
-      slog(requestId, `Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
+      slog({
+        requestId,
+        message: `Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`,
+        account: userAccount,
+      });
 
       return initializeTxResult;
     },
     catch: error => {
-      slog(requestId, `Space contract initialization failed: ${(error as Error).message}`, 'error');
+      slog({
+        level: 'error',
+        requestId,
+        message: `Space contract initialization failed: ${(error as Error).message}`,
+        account: userAccount,
+      });
       return new ProxyBeaconInitializeFailedError();
     },
   });
@@ -165,17 +190,26 @@ export async function GET(request: Request) {
       });
 
       const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
-      slog(requestId, `Configure roles hash: ${configureRolesSimulateHash}`);
+      slog({ requestId, message: `Configure roles hash: ${configureRolesSimulateHash}`, account: userAccount });
 
       const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
         hash: configureRolesSimulateHash,
       });
-      slog(requestId, `Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
+      slog({
+        requestId,
+        message: `Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`,
+        account: userAccount,
+      });
 
       return configureRolesTxResult;
     },
     catch: error => {
-      slog(requestId, `Space contract role configuration failed: ${(error as Error).message}`, 'error');
+      slog({
+        level: 'error',
+        requestId,
+        message: `Space contract role configuration failed: ${(error as Error).message}`,
+        account: userAccount,
+      });
       return new ProxyBeaconConfigureRolesFailedError();
     },
   });
@@ -192,6 +226,10 @@ export async function GET(request: Request) {
     });
   }
 
-  slog(requestId, `Space proxy deployment successful`);
+  slog({
+    requestId,
+    message: `Space proxy deployment successful for address: ${proxyDeployTxReceipt.contractAddress}`,
+    account: userAccount,
+  });
   return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
 }

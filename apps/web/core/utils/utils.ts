@@ -216,6 +216,24 @@ export const sleepWithCallback = async (callback: () => void, ms: number) => {
   });
 };
 
-export function slog(requestId: string, message: string, level: 'log' | 'info' | 'warn' | 'error' = 'log') {
-  console[level](`requestId: ${requestId} – ${message}`);
+export function slog({
+  requestId,
+  message,
+  account,
+  level,
+}: {
+  requestId: string;
+  message: string;
+  account?: `0x${string}`;
+  level?: 'log' | 'info' | 'warn' | 'error';
+}) {
+  if (!level) {
+    level = 'log';
+  }
+
+  console[level](
+    `${level.toUpperCase()}  ${new Date().toISOString()} account: ${
+      account ? account : 'NULL'
+    }  requestId: ${requestId} – ${message}`
+  );
 }
