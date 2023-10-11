@@ -1,6 +1,6 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
-import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
+// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 import { createPublicClient, createWalletClient, http } from 'viem';
@@ -11,7 +11,7 @@ import { Environment } from '~/core/environment';
 import { slog } from '~/core/utils/utils';
 
 const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
-const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
+// const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
 
 class ProxyBeaconDeploymentFailedError extends Error {
   readonly _tag = 'ProxyBeaconDeploymentFailedError';
@@ -26,21 +26,18 @@ class ProxyBeaconConfigureRolesFailedError extends Error {
 }
 
 export async function GET(request: Request) {
-  // @TODO: Make request id and pass to each step for better logging (use slogs)
   const requestId = uuid();
   const { searchParams } = new URL(request.url);
-  console.log('searchParams + userAddress', searchParams.get('userAddress'));
 
   if (searchParams.get('userAddress') === null) {
-    // @TODO: Correct error handling
     return new Response('Missing user address', { status: 400 });
   }
 
   /**
-   * 1. Get beacon contract from beacon address
-   * 2. Deploy proxy contract pointing to beacon contract
+   * 1. ~~Get beacon contract from beacon address~~
+   * 2. ~~Deploy proxy contract pointing to beacon contract~~
    *     https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/7fd8a3a9f81839482d91af1df99f0b97966ee74a/packages/plugin-hardhat/test/import.js#L117
-   * 3. Configure roles (will we still need this?)
+   * 3. ~~Configure roles (will we still need this?)~~
    * 4. Deploy governance contracts (how does this work?)
    * 5. Call `addSubspace` on permissionless registry
    * 6. Add user profile to new space
@@ -112,43 +109,82 @@ export async function GET(request: Request) {
 
   if (proxyDeployTxReceipt.contractAddress !== null) {
     // Initialize proxy contract
-    const simulateInitializeResult = await publicClient.simulateContract({
-      abi: SpaceArtifact.abi,
-      address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
-      functionName: 'initialize',
-      account,
+    const initializeContractEffect = Effect.tryPromise({
+      try: async () => {
+        const simulateInitializeResult = await publicClient.simulateContract({
+          abi: SpaceArtifact.abi,
+          address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
+          functionName: 'initialize',
+          account,
+        });
+
+        const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
+        slog(requestId, `Initialize hash: ${simulateInitializeHash}`);
+
+        const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
+        slog(requestId, `Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
+
+        return initializeTxResult;
+      },
+      catch: () => new ProxyBeaconInitializeFailedError(),
     });
 
-    const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
-    console.log(`Initialize hash: ${simulateInitializeHash}`);
+    const maybeInitialization = await Effect.runPromise(Effect.either(initializeContractEffect));
 
-    const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
-    console.log(`Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
+    // Initializing the contract failed. Return a 500-ish response with reason.
+    if (Either.isLeft(maybeInitialization)) {
+      const error = maybeInitialization.left;
 
-    // Configure roles in proxy contract
-    const simulateConfigureRolesResult = await publicClient.simulateContract({
-      abi: SpaceArtifact.abi,
-      address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
-      functionName: 'configureRoles',
-      account,
+      slog(requestId, `Space contract initialization failed: ${error.message}`, 'error');
+      return new Response(`Could not initialize space contract for address: ${proxyDeployTxReceipt.contractAddress}`, {
+        status: 500,
+        statusText: error.message,
+      });
+    }
+
+    const configureRolesEffect = Effect.tryPromise({
+      try: async () => {
+        // Configure roles in proxy contract
+        const simulateConfigureRolesResult = await publicClient.simulateContract({
+          abi: SpaceArtifact.abi,
+          address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
+          functionName: 'configureRoles',
+          account,
+        });
+
+        const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
+        slog(requestId, `Configure roles hash: ${configureRolesSimulateHash}`);
+
+        const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
+          hash: configureRolesSimulateHash,
+        });
+        slog(requestId, `Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
+
+        return configureRolesTxResult;
+      },
+      catch: () => new ProxyBeaconConfigureRolesFailedError(),
     });
 
-    const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
-    console.log(`Configure roles hash: ${simulateInitializeHash}`);
+    const maybeConfigureRoles = await Effect.runPromise(Effect.either(configureRolesEffect));
 
-    const configureRolesTxResult = await publicClient.waitForTransactionReceipt({ hash: configureRolesSimulateHash });
-    console.log(`Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
+    // Initializing the contract failed. Return a 500-ish response with reason.
+    if (Either.isLeft(maybeConfigureRoles)) {
+      const error = maybeConfigureRoles.left;
+
+      slog(requestId, `Space contract role configuration failed: ${error.message}`, 'error');
+      return new Response(`Could not configure contract roles for address: ${proxyDeployTxReceipt.contractAddress}`, {
+        status: 500,
+        statusText: error.message,
+      });
+    }
+
+    slog(requestId, `Space proxy deployment successful`);
+    return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
   }
 
-  // const idk = getContract({
-  //   abi: SpaceArtifact.abi,
-  //   address: '0xe2fc648dd2feac6663f142bb40d850ca9267d450',
-  //   publicClient,
-  //   walletClient: client,
-  // });
-
-  // const idk2 = await idk.read.owner();
-  // console.log('owner', idk2);
-
-  return; //
+  slog(requestId, `Space proxy deployment failed for unknown reason`, 'error');
+  return new Response('Could not deploy space contract. Please try again.', {
+    status: 500,
+    statusText: 'Unknown error',
+  });
 }
