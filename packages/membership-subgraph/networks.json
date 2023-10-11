@@ -1,0 +1,14 @@
+{
+  "matic": {
+    "Membership": {
+      "address": "0x34a94160f4B0f86d932927DFfb326354dB279181",
+      "startBlock": 48561392
+    }
+  },
+  "mumbai": {
+    "Membership": {
+      "address": "0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E",
+      "startBlock": 41059624
+    }
+  }
+}

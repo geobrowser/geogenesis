@@ -1,0 +1,29 @@
+specVersion: 0.0.4
+description: Statement history
+repository: https://github.com/geobrowser/geogenesis
+features:
+  - fullTextSearch
+  - ipfsOnEthereumContracts
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Membership
+    network: matic
+    source:
+      abi: Membership
+      address: "0x34a94160f4B0f86d932927DFfb326354dB279181"
+      startBlock: 48561392
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - MembershipRequested
+      abis:
+        - name: Membership
+          file: ../contracts/build/abis/Membership.json
+      eventHandlers:
+        - event: MembershipRequested(address,address)
+          handler: handleMembershipRequested
+      file: ./src/mapping.ts
