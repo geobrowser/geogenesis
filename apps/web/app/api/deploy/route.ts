@@ -107,84 +107,85 @@ export async function GET(request: Request) {
 
   const proxyDeployTxReceipt = maybeDeployment.right;
 
-  if (proxyDeployTxReceipt.contractAddress !== null) {
-    // Initialize proxy contract
-    const initializeContractEffect = Effect.tryPromise({
-      try: async () => {
-        const simulateInitializeResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
-          address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
-          functionName: 'initialize',
-          account,
-        });
-
-        const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
-        slog(requestId, `Initialize hash: ${simulateInitializeHash}`);
-
-        const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
-        slog(requestId, `Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
-
-        return initializeTxResult;
-      },
-      catch: () => new ProxyBeaconInitializeFailedError(),
+  // The contract address is null for some reason. Return an unknown error.
+  if (proxyDeployTxReceipt.contractAddress === null) {
+    slog(requestId, `Space proxy deployment failed for unknown reason`, 'error');
+    return new Response('Could not deploy space contract. Please try again.', {
+      status: 500,
+      statusText: 'Unknown error',
     });
-
-    const maybeInitialization = await Effect.runPromise(Effect.either(initializeContractEffect));
-
-    // Initializing the contract failed. Return a 500-ish response with reason.
-    if (Either.isLeft(maybeInitialization)) {
-      const error = maybeInitialization.left;
-
-      slog(requestId, `Space contract initialization failed: ${error.message}`, 'error');
-      return new Response(`Could not initialize space contract for address: ${proxyDeployTxReceipt.contractAddress}`, {
-        status: 500,
-        statusText: error.message,
-      });
-    }
-
-    const configureRolesEffect = Effect.tryPromise({
-      try: async () => {
-        // Configure roles in proxy contract
-        const simulateConfigureRolesResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
-          address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
-          functionName: 'configureRoles',
-          account,
-        });
-
-        const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
-        slog(requestId, `Configure roles hash: ${configureRolesSimulateHash}`);
-
-        const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
-          hash: configureRolesSimulateHash,
-        });
-        slog(requestId, `Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
-
-        return configureRolesTxResult;
-      },
-      catch: () => new ProxyBeaconConfigureRolesFailedError(),
-    });
-
-    const maybeConfigureRoles = await Effect.runPromise(Effect.either(configureRolesEffect));
-
-    // Initializing the contract failed. Return a 500-ish response with reason.
-    if (Either.isLeft(maybeConfigureRoles)) {
-      const error = maybeConfigureRoles.left;
-
-      slog(requestId, `Space contract role configuration failed: ${error.message}`, 'error');
-      return new Response(`Could not configure contract roles for address: ${proxyDeployTxReceipt.contractAddress}`, {
-        status: 500,
-        statusText: error.message,
-      });
-    }
-
-    slog(requestId, `Space proxy deployment successful`);
-    return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
   }
 
-  slog(requestId, `Space proxy deployment failed for unknown reason`, 'error');
-  return new Response('Could not deploy space contract. Please try again.', {
-    status: 500,
-    statusText: 'Unknown error',
+  // Initialize proxy contract
+  const initializeContractEffect = Effect.tryPromise({
+    try: async () => {
+      const simulateInitializeResult = await publicClient.simulateContract({
+        abi: SpaceArtifact.abi,
+        address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
+        functionName: 'initialize',
+        account,
+      });
+
+      const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
+      slog(requestId, `Initialize hash: ${simulateInitializeHash}`);
+
+      const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
+      slog(requestId, `Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
+
+      return initializeTxResult;
+    },
+    catch: () => new ProxyBeaconInitializeFailedError(),
   });
+
+  const maybeInitialization = await Effect.runPromise(Effect.either(initializeContractEffect));
+
+  // Initializing the contract failed. Return a 500-ish response with reason.
+  if (Either.isLeft(maybeInitialization)) {
+    const error = maybeInitialization.left;
+
+    slog(requestId, `Space contract initialization failed: ${error.message}`, 'error');
+    return new Response(`Could not initialize space contract for address: ${proxyDeployTxReceipt.contractAddress}`, {
+      status: 500,
+      statusText: error.message,
+    });
+  }
+
+  const configureRolesEffect = Effect.tryPromise({
+    try: async () => {
+      // Configure roles in proxy contract
+      const simulateConfigureRolesResult = await publicClient.simulateContract({
+        abi: SpaceArtifact.abi,
+        address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
+        functionName: 'configureRoles',
+        account,
+      });
+
+      const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
+      slog(requestId, `Configure roles hash: ${configureRolesSimulateHash}`);
+
+      const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
+        hash: configureRolesSimulateHash,
+      });
+      slog(requestId, `Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
+
+      return configureRolesTxResult;
+    },
+    catch: () => new ProxyBeaconConfigureRolesFailedError(),
+  });
+
+  const maybeConfigureRoles = await Effect.runPromise(Effect.either(configureRolesEffect));
+
+  // Initializing the contract failed. Return a 500-ish response with reason.
+  if (Either.isLeft(maybeConfigureRoles)) {
+    const error = maybeConfigureRoles.left;
+
+    slog(requestId, `Space contract role configuration failed: ${error.message}`, 'error');
+    return new Response(`Could not configure contract roles for address: ${proxyDeployTxReceipt.contractAddress}`, {
+      status: 500,
+      statusText: error.message,
+    });
+  }
+
+  slog(requestId, `Space proxy deployment successful`);
+  return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
 }
