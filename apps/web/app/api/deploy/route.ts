@@ -1,14 +1,14 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
-// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
+import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon, polygonMumbai } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
 
-const MUMBAI_BEACON_ADDRESS = '0xe5d72fc8c886b043f297319094de770647965a17';
-// const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
+const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
+const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -36,13 +36,13 @@ export async function GET(request: Request) {
   const client = createWalletClient({
     chain: polygonMumbai,
     // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    transport: http(Environment.options.testnet.rpc),
+    transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   const publicClient = createPublicClient({
     chain: polygonMumbai,
     // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    transport: http(Environment.options.testnet.rpc),
+    transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   /**
@@ -79,6 +79,7 @@ export async function GET(request: Request) {
     abi: BeaconProxy.abi,
     bytecode: BeaconProxy.bytecode as `0x${string}`,
     args: [MUMBAI_BEACON_ADDRESS, ''],
+    // args: [beaconDeployTxReceipt.contractAddress, ''],
     account,
   });
   console.log('Space proxy hash', proxyTxHash);
@@ -113,7 +114,7 @@ export async function GET(request: Request) {
     console.log(`Configure roles hash: ${simulateInitializeHash}`);
 
     const configureRolesTxResult = await publicClient.waitForTransactionReceipt({ hash: configureRolesSimulateHash });
-    console.log(`Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
+    console.log(`Configure roles for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
   }
 
   // const idk = getContract({
