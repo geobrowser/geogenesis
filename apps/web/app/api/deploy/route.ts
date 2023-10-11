@@ -1,14 +1,14 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
-import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
-import { createPublicClient, createWalletClient, getContract, http } from 'viem';
+// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
+import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon, polygonMumbai } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
 
-const MUMBAI_BEACON_ADDRESS = '0xF2e1650c83027b4190F66ec6CF3EBD6C8fD30116';
-const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
+const MUMBAI_BEACON_ADDRESS = '0xe5d72fc8c886b043f297319094de770647965a17';
+// const MUMBAI_IMPL_ADDRESS = '0x973225e76a9f22ec79131d6716531a3b57dd60b6';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -35,7 +35,6 @@ export async function GET(request: Request) {
 
   const client = createWalletClient({
     chain: polygonMumbai,
-    account,
     // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
     transport: http(Environment.options.testnet.rpc),
   });
@@ -56,43 +55,76 @@ export async function GET(request: Request) {
    *
    * We have already deployed the implementation contract and the Beacon contract.
    *
-   * ----------------      ----------    ---------------------------
-   *   Beacon Proxy   ->     Beacon   ->   Implementation Contract    <--- Calls are delegated to this contract
-   * ----------------      ----------    ---------------------------
+   * ----------------    ----------    ---------------------------
+   *   Beacon Proxy   ->   Beacon   ->   Implementation Contract    <--- Calls are delegated to this contract
+   * ----------------    ----------    ---------------------------
    *
    */
+
+  // Beacon deployment
+  // @TODO: Remove beacon deployment and use existing beacon
+  // const beaconHash = await client.deployContract({
+  //   abi: UpgradeableBeacon.abi,
+  //   bytecode: UpgradeableBeacon.bytecode as `0x${string}`,
+  //   args: [MUMBAI_IMPL_ADDRESS],
+  //   account,
+  // });
+  // console.log('Space beacon hash', beaconHash);
+
+  // const beaconDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: beaconHash });
+  // console.log('Space beacon contract deployed at: ', beaconDeployTxReceipt.contractAddress);
+
+  // Proxy deployment
   const proxyTxHash = await client.deployContract({
     abi: BeaconProxy.abi,
     bytecode: BeaconProxy.bytecode as `0x${string}`,
     args: [MUMBAI_BEACON_ADDRESS, ''],
+    account,
   });
   console.log('Space proxy hash', proxyTxHash);
 
   const proxyDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: proxyTxHash });
   console.log('Space proxy contract deployed at: ', proxyDeployTxReceipt.contractAddress);
 
-  // const contract = getContract({
-  //   abi: SpaceArtifact.abi,
-  //   address: proxyDeployTxReceipt.contractAddress,
-  //   publicClient,
-  //   walletClient: client,
-  // });
-
   if (proxyDeployTxReceipt.contractAddress !== null) {
-    const simulation = await publicClient.simulateContract({
+    // Initialize proxy contract
+    const simulateInitializeResult = await publicClient.simulateContract({
+      abi: SpaceArtifact.abi,
+      address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
+      functionName: 'initialize',
+      account,
+    });
+
+    const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
+    console.log(`Initialize hash: ${simulateInitializeHash}`);
+
+    const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
+    console.log(`Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${initializeTxResult}`);
+
+    // Configure roles in proxy contract
+    const simulateConfigureRolesResult = await publicClient.simulateContract({
       abi: SpaceArtifact.abi,
       address: proxyDeployTxReceipt.contractAddress as `0x${string}`,
       functionName: 'configureRoles',
       account,
     });
-    console.log('simulation', simulation);
 
-    const configureRolesHash = await client.writeContract(simulation.request);
-    console.log('configureRolesHash', configureRolesHash);
+    const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
+    console.log(`Configure roles hash: ${simulateInitializeHash}`);
 
-    const configureRolesTxReceipt = await publicClient.waitForTransactionReceipt({ hash: configureRolesHash });
-    console.log('configureRolesTxReceipt', configureRolesTxReceipt.transactionHash);
+    const configureRolesTxResult = await publicClient.waitForTransactionReceipt({ hash: configureRolesSimulateHash });
+    console.log(`Initialize contract for ${proxyDeployTxReceipt.contractAddress}: ${configureRolesTxResult}`);
   }
+
+  // const idk = getContract({
+  //   abi: SpaceArtifact.abi,
+  //   address: '0xe2fc648dd2feac6663f142bb40d850ca9267d450',
+  //   publicClient,
+  //   walletClient: client,
+  // });
+
+  // const idk2 = await idk.read.owner();
+  // console.log('owner', idk2);
 
   return; //
 }
