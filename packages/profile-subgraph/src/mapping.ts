@@ -6,14 +6,15 @@ import {
 import { GeoProfile } from '../generated/schema'
 import { getChecksumAddress } from './get-checksum-address'
 
-function getProfileId(account: string, space: string): string {
-  return account + '-' + space
+function getProfileId(account: string, onChainId: string): string {
+  return account + '-' + onChainId
 }
 
 export function handleGeoProfileRegistered(event: GeoProfileRegistered): void {
   const userAccount = getChecksumAddress(event.params.account)
   const space = getChecksumAddress(event.params.homeSpace)
-  const id = getProfileId(userAccount, space)
+  const onChainId = event.params.id.toString()
+  const id = getProfileId(userAccount, onChainId)
 
   const newProfile = new GeoProfile(id)
   newProfile.account = userAccount
@@ -29,7 +30,8 @@ export function handleGeoProfileHomeSpaceUpdated(
 ): void {
   const userAccount = getChecksumAddress(event.params.account)
   const space = getChecksumAddress(event.params.homeSpace)
-  const id = getProfileId(userAccount, space)
+  const onChainId = event.params.id.toString()
+  const id = getProfileId(userAccount, onChainId)
 
   const profile = GeoProfile.load(id)
 
