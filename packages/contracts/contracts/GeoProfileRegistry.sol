@@ -4,6 +4,7 @@ pragma solidity ^0.8.14;
 error AccountHasExistingProfileError(address account, uint256 profileId);
 error ProfileDoesNotExistError();
 error NotProfileOwnerError(address account, uint256 profileId);
+error ExistingHomeSpaceEqualsNewHomeSpaceError(address account, address homeSpace);
 
 struct GeoProfile {
     address homeSpace;
@@ -65,6 +66,11 @@ contract GeoProfileRegistry {
         }
 
         GeoProfile memory geoProfile = _geoProfileByAccount[msg.sender];
+
+        if (geoProfile.homeSpace == homeSpace) {
+            revert ExistingHomeSpaceEqualsNewHomeSpaceError(msg.sender, homeSpace);
+        }
+
         geoProfile.homeSpace = homeSpace;
         _geoProfileByAccount[msg.sender] = geoProfile;
         _geoProfiles[_geoProfileIndex[msg.sender]] = geoProfile;
