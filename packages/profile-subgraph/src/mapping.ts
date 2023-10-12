@@ -4,14 +4,15 @@ import {
   GeoProfileRegistered,
 } from '../generated/GeoProfileRegistry/GeoProfileRegistry'
 import { GeoProfile } from '../generated/schema'
+import { getChecksumAddress } from './get-checksum-address'
 
-function getProfileId(account: Address, space: Address): string {
-  return account.toHex() + '-' + space.toHex()
+function getProfileId(account: string, space: string): string {
+  return account + '-' + space
 }
 
 export function handleGeoProfileRegistered(event: GeoProfileRegistered): void {
-  const userAccount = event.params.account
-  const space = event.params.homeSpace
+  const userAccount = getChecksumAddress(event.params.account)
+  const space = getChecksumAddress(event.params.homeSpace)
   const id = getProfileId(userAccount, space)
 
   const newProfile = new GeoProfile(id)
@@ -26,8 +27,8 @@ export function handleGeoProfileRegistered(event: GeoProfileRegistered): void {
 export function handleGeoProfileHomeSpaceUpdated(
   event: GeoProfileHomeSpaceUpdated
 ): void {
-  const userAccount = event.params.account
-  const space = event.params.homeSpace
+  const userAccount = getChecksumAddress(event.params.account)
+  const space = getChecksumAddress(event.params.homeSpace)
   const id = getProfileId(userAccount, space)
 
   const profile = GeoProfile.load(id)
@@ -37,7 +38,7 @@ export function handleGeoProfileHomeSpaceUpdated(
   if (!profile) {
     log.error(
       'Attempted to update home space on non-existent profile. User account – {}, Non-existing profile id – {}',
-      [userAccount.toHex(), id]
+      [userAccount, id]
     )
 
     return
@@ -48,6 +49,6 @@ export function handleGeoProfileHomeSpaceUpdated(
 
   log.info('Profile home space updated. Profile id – {}. New space – {}', [
     id,
-    space.toHex(),
+    space,
   ])
 }
