@@ -26,4 +26,6 @@ dataSources:
       eventHandlers:
         - event: GeoProfileRegistered(address,address,uint256)
           handler: handleGeoProfileRegistered
+        - event: GeoProfileHomeSpaceUpdated(address,address,uint256)
+          handler: handleGeoProfileHomeSpaceUpdated
       file: ./src/mapping.ts
