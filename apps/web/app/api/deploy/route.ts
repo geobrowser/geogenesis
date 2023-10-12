@@ -231,5 +231,13 @@ export async function GET(request: Request) {
     message: `Space proxy deployment successful for address: ${proxyDeployTxReceipt.contractAddress}`,
     account: userAccount,
   });
+
+  // @TODO:
+  // - grant all roles to userAddress
+  // - renounce role for deployer (we might not want to do this until we migrate to the new governance contracts)
+  // - add user profile to space
+  // - add space to registry
+  // - map space to profile and wallet address (no idea how to do this)
+
   return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
 }
