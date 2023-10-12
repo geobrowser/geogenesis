@@ -10,7 +10,7 @@
     "create": "graph create example --node $GRAPH_NODE_URL",
     "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
     "deploy:testnet": "graph deploy --product hosted-service --network mumbai baiirun/geo-profile-registry-mumbai",
-    "deploy:production": "graph deploy --product hosted-service --network matic baiirun/geo-membership-workshop"
+    "deploy:production": "graph deploy --product hosted-service --network matic baiirun/geo-profile-registry"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "^0.55.0",

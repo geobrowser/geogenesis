@@ -99,7 +99,8 @@ export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
  */
 
 export const PROFILE_REGISTRY_ADDRESS =
-  '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // this is the mumbai address right now
+  '0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b'
+// '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
 
 // This represents the beacon proxy for the first set of deployed permissioned spaces.
 // We should use this beacon proxy for all new permissioned spaces.
