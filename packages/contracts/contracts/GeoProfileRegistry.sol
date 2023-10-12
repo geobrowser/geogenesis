@@ -48,6 +48,12 @@ contract GeoProfileRegistry {
         return profileId;
     }
 
+    /**
+     * @dev Updates the home space of the caller's Profile. Only the owner of the Profile can
+     *      update the home space for a Profile.
+     * 
+     *  @param homeSpace The new address of the profile's home space.
+     */
     function updateProfileHomeSpace(address homeSpace) public {
        if (!geoProfileExists(msg.sender)) {
             revert ProfileDoesNotExistError();

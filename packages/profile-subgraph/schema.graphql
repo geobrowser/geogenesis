@@ -1,0 +1,6 @@
+type GeoProfile @entity {
+  id: ID!
+  account: Bytes!
+  homeSpace: Bytes!
+  createdAt: BigInt!
+}

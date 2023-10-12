@@ -98,6 +98,9 @@ export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
  * you can update these addresses to point to the correct contracts on that network.
  */
 
+export const PROFILE_REGISTRY_ADDRESS =
+  '0x5dA3DB24FF052Ef3D43faEa9B1215b2F808A1160' // this is the mumbai address right now
+
 // This represents the beacon proxy for the first set of deployed permissioned spaces.
 // We should use this beacon proxy for all new permissioned spaces.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =

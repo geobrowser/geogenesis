@@ -432,6 +432,16 @@ importers:
       '@graphprotocol/graph-ts': 0.27.0
       rimraf: 3.0.2
 
+  packages/profile-subgraph:
+    specifiers:
+      '@graphprotocol/graph-cli': ^0.55.0
+      '@graphprotocol/graph-ts': ^0.27.0
+      rimraf: ^3.0.2
+    devDependencies:
+      '@graphprotocol/graph-cli': 0.55.0
+      '@graphprotocol/graph-ts': 0.27.0
+      rimraf: 3.0.2
+
   packages/subgraph:
     specifiers:
       '@geogenesis/action-schema': workspace:*

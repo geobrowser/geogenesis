@@ -46,7 +46,7 @@ export function App({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      <OnboardingDialog />
+      {/* <OnboardingDialog /> */}
       <Dialog
         open={open}
         onOpenChange={setOpen}
