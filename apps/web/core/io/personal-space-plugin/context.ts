@@ -1,14 +1,14 @@
 import { Context, ContextCore } from '@aragon/sdk-client-common';
 
-import { GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS } from '../../constants';
-import { GeoPersonalSpacePluginContextState, GeoPersonalSpacePluginOverriddenState } from './internal/types';
-import { GeoPersonalSpacePluginContextParams } from './types';
+import { GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS } from '../../constants';
+import { GeoPersonalSpaceAdminPluginContextState, GeoPersonalSpaceAdminPluginOverriddenState } from './internal/types';
+import { GeoPersonalSpaceAdminPluginContextParams } from './types';
 
 export class GeoPersonalSpacePluginContext extends ContextCore {
-  protected state: GeoPersonalSpacePluginContextState = this.state;
+  protected state: GeoPersonalSpaceAdminPluginContextState = this.state;
 
-  protected overriden: GeoPersonalSpacePluginOverriddenState = this.overriden;
-  constructor(contextParams?: Partial<GeoPersonalSpacePluginContextParams>, aragonContext?: Context) {
+  protected overriden: GeoPersonalSpaceAdminPluginOverriddenState = this.overriden;
+  constructor(contextParams?: Partial<GeoPersonalSpaceAdminPluginContextParams>, aragonContext?: Context) {
     super();
 
     if (aragonContext) {
@@ -20,28 +20,28 @@ export class GeoPersonalSpacePluginContext extends ContextCore {
     }
   }
 
-  public set(contextParams: GeoPersonalSpacePluginContextParams) {
+  public set(contextParams: GeoPersonalSpaceAdminPluginContextParams) {
     super.set(contextParams);
 
     this.setDefaults();
 
-    if (contextParams.geoPersonalSpacePluginAddress) {
-      this.state.geoPersonalSpacePluginAddress = contextParams.geoPersonalSpacePluginAddress;
-      this.overriden.geoPersonalSpacePluginAddress = true;
+    if (contextParams.geoPersonalSpaceAdminPluginAddress) {
+      this.state.geoPersonalSpaceAdminPluginAddress = contextParams.geoPersonalSpaceAdminPluginAddress;
+      this.overriden.geoPersonalSpaceAdminPluginAddress = true;
     }
   }
 
   private setDefaults() {
-    if (!this.overriden.geoPersonalSpacePluginRepoAddress) {
-      this.state.geoPersonalSpacePluginRepoAddress = GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS;
+    if (!this.overriden.geoPersonalSpaceAdminPluginRepoAddress) {
+      this.state.geoPersonalSpaceAdminPluginRepoAddress = GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS;
     }
   }
 
-  get geoPersonalSpacePluginAddress(): string {
-    return this.state.geoPersonalSpacePluginAddress;
+  get geoPersonalSpaceAdminPluginAddress(): string {
+    return this.state.geoPersonalSpaceAdminPluginAddress;
   }
 
-  get geoPersonalSpacePluginRepoAddress(): string {
-    return this.state.geoPersonalSpacePluginRepoAddress;
+  get geoPersonalSpaceAdminPluginRepoAddress(): string {
+    return this.state.geoPersonalSpaceAdminPluginRepoAddress;
   }
 }

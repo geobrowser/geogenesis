@@ -1,10 +1,10 @@
 import { ContextState, OverriddenState } from '@aragon/sdk-client-common';
 
-export type GeoPersonalSpacePluginContextState = ContextState & {
-  geoPersonalSpacePluginAddress: string;
-  geoPersonalSpacePluginRepoAddress: string;
+export type GeoPersonalSpaceAdminPluginContextState = ContextState & {
+  geoPersonalSpaceAdminPluginAddress: string;
+  geoPersonalSpaceAdminPluginRepoAddress: string;
 };
 
-export type GeoPersonalSpacePluginOverriddenState = OverriddenState & {
-  [key in keyof GeoPersonalSpacePluginContextState]: boolean;
+export type GeoPersonalSpaceAdminPluginOverriddenState = OverriddenState & {
+  [key in keyof GeoPersonalSpaceAdminPluginContextState]: boolean;
 };
