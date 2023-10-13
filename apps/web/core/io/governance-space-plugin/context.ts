@@ -1,9 +1,10 @@
 import { Context, ContextCore } from '@aragon/sdk-client-common';
 
 import {
-  DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
-  DEFAULT_GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-  DEFAULT_GEO_SPACE_PLUGIN_REPO_ADDRESS,
+  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+  GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
+  GEO_SPACE_PLUGIN_REPO_ADDRESS,
 } from '../../constants';
 import { GeoPluginContextState, GeoPluginOverriddenState } from './internal/types';
 import { GeoPluginContextParams } from './types';
@@ -52,13 +53,13 @@ export class GeoPluginContext extends ContextCore {
     // Optional: Set any settings that may have a default value here
 
     if (!this.overriden.geoSpacePluginRepoAddress) {
-      this.state.geoSpacePluginRepoAddress = DEFAULT_GEO_SPACE_PLUGIN_REPO_ADDRESS;
+      this.state.geoSpacePluginRepoAddress = GEO_SPACE_PLUGIN_REPO_ADDRESS;
     }
     if (!this.overriden.geoMemberAccessPluginRepoAddress) {
-      this.state.geoMemberAccessPluginRepoAddress = DEFAULT_GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS;
+      this.state.geoMemberAccessPluginRepoAddress = GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS;
     }
     if (!this.overriden.geoMainVotingPluginRepoAddress) {
-      this.state.geoMainVotingPluginRepoAddress = DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
+      this.state.geoMainVotingPluginRepoAddress =GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
     }
   }
 

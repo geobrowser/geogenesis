@@ -1,6 +1,6 @@
 import { Context, ContextCore } from '@aragon/sdk-client-common';
 
-import { DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS } from '../../constants';
+import { GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS, GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS } from '../../constants';
 import { GeoPersonalSpacePluginContextState, GeoPersonalSpacePluginOverriddenState } from './internal/types';
 import { GeoPersonalSpacePluginContextParams } from './types';
 
@@ -36,7 +36,7 @@ export class GeoPersonalSpacePluginContext extends ContextCore {
     // Optional: Set any settings that may have a default value here
 
     if (!this.overriden.geoPersonalSpacePluginRepoAddress) {
-      this.state.geoPersonalSpacePluginRepoAddress = DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS;
+      this.state.geoPersonalSpacePluginRepoAddress = GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS;
     }
   }
 

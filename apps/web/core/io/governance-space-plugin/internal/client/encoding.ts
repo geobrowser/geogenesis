@@ -4,9 +4,9 @@ import {
 import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
 import {
-  DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
-  DEFAULT_GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-  DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
+  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+  GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
+  GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
 } from '~/core/constants';
 
 import {
@@ -18,7 +18,7 @@ import {
   spacePluginSetupAbi,
 } from '../../abis';
 import { GeoPluginContext } from '../../context';
-import { memberAccessPluginSetupAbiNotConst } from '../../abis/member-access-plugin-setup-abi';
+import { memberAccessPluginSetupAbiNotConst, memberAccessPluginInstallationAbi } from '../../abis/member-access-plugin-setup-abi';
 import { string, number, boolean } from 'effect/Config';
 import { bigint } from 'effect/Equivalence';
 import { reject } from 'effect/STM';
@@ -55,27 +55,6 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Space Plugin: Functions
-
-  // public getSpacePluginInstallItem(params): PluginInstallItem {
-  //   console.log('incoming params', params);
-  //   // const hexBytes = defaultAbiCoder.encode(getNamedTypesFromMetadata(SpacePluginSetupAbi), [
-  //   //   votingSettingsToContract(params),
-  //   // ]);
-
-  //   const namedMetadata = getNamedTypesFromMetadata(SpacePluginSetupAbi);
-  //   console.log('named metadata', namedMetadata);
-  //   const hexBytes = '123';
-
-  //   // const hexBytes = encodeAbiParameters(
-  //   //   getNamedTypesFromMetadata(SpacePluginSetupAbi),
-  //   //   votingSettingsToContract(params)
-  //   // );
-
-  //   return {
-  //     id: DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
-  //     data: hexToBytes(hexBytes as `0x${string}`),
-  //   };
-  // }
 
   public async initalizeSpacePlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
     const initalizeData = encodeFunctionData({
@@ -132,48 +111,142 @@ export class GeoPluginClientEncoding extends ClientCore {
     return upgradeToData;
   }
 
-  // Member Access: Functions
+// Installation Functions
 
-  static getMemberAccessPluginInstallItem(params:any) {
-    // Extract the inputs for the prepareInstallation function from the ABI
-    const prepareInstallationInputs = memberAccessPluginSetupAbiNotConst.find(
-      (item) => item.name === "prepareInstallation"
-    )?.inputs;
+static getMainVotingPluginInstallItem(params: {
+  votingSettings: {
+    votingMode: number,
+    supportThreshold: number,
+    minParticipation: number,
+    minDuration: number,
+    minProposerVotingPower: number
+  },
+  initialEditors: string[],
+  pluginUpgrader: string
+}) {
+  // Define the ABI for the prepareInstallation function's inputs
+  const prepareInstallationInputs = [
+    {
+      components: [
+        {
+          internalType: "enum MajorityVotingBase.VotingMode",
+          name: "votingMode",
+          type: "uint8"
+        },
+        {
+          internalType: "uint32",
+          name: "supportThreshold",
+          type: "uint32"
+        },
+        {
+          internalType: "uint32",
+          name: "minParticipation",
+          type: "uint32"
+        },
+        {
+          internalType: "uint64",
+          name: "minDuration",
+          type: "uint64"
+        },
+        {
+          internalType: "uint256",
+          name: "minProposerVotingPower",
+          type: "uint256"
+        }
+      ],
+      internalType: "struct MajorityVotingBase.VotingSettings",
+      name: "votingSettings",
+      type: "tuple"
+    },
+    {
+      internalType: "address[]",
+      name: "initialEditors",
+      type: "address[]"
+    },
+    {
+      internalType: "address",
+      name: "pluginUpgrader",
+      type: "address"
+    }
+  ];
 
-    console.log('params', params)
+  console.log('params', params);
 
-console.log('prepare installation inputs:', prepareInstallationInputs)
+  console.log('prepare installation inputs:', prepareInstallationInputs);
+
+  if (!prepareInstallationInputs) {
+    throw new Error("Could not find inputs for prepareInstallation in the ABI");
+  }
+
+  // Encode the data using encodeAbiParameters
+  const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+    params.votingSettings,
+    params.initialEditors,
+    params.pluginUpgrader
+  ]);
+  console.log('encoded data', encodedData);
+
+  return {
+    id: GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
+    data: hexToBytes(encodedData as `0x${string}`),
+  };
+}
+
+  static getMemberAccessPluginInstallItem(params: {
+    multisigSettings: {
+      proposalDuration: number,
+      mainVotingPlugin: string
+    },
+    pluginUpgrader: string
+  }) {
+    // Define the ABI for the prepareInstallation function's inputs
+    const prepareInstallationInputs = [
+      {
+        components: [
+          {
+            internalType: 'uint64',
+            name: 'proposalDuration',
+            type: 'uint64',
+          },
+          {
+            internalType: 'contract MainVotingPlugin',
+            name: 'mainVotingPlugin',
+            type: 'address',
+          },
+        ],
+        internalType: 'struct MemberAccessPlugin.MultisigSettings',
+        name: '_multisigSettings',
+        type: 'tuple',
+        description: 'The settings of the multisig approval logic',
+      },
+      {
+        internalType: 'address',
+        name: 'pluginUpgrader',
+        type: 'address',
+      },
+    ];
+  
+    console.log('params', params);
+  
+    console.log('prepare installation inputs:', prepareInstallationInputs);
   
     if (!prepareInstallationInputs) {
       throw new Error("Could not find inputs for prepareInstallation in the ABI");
     }
   
-    const encodedData = encodeAbiParameters(prepareInstallationInputs, [params]);
-    console.log('encoded data', encodedData)
+    // Encode the data using encodeAbiParameters
+    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+      params.multisigSettings,
+      params.pluginUpgrader
+    ]);
+    console.log('encoded data', encodedData);
   
     return {
-      id: DEFAULT_GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
+      id: GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
       data: hexToBytes(encodedData as `0x${string}`),
     };
   }
 
-  // public async initalizeMemberAccessPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-  //   const initalizeData = encodeFunctionData({
-  //     abi: memberAccessPluginAbi,
-  //     functionName: 'initialize',
-  //     args: [daoAddress, firstBlockContentUri],
-  //   });
-  //   return initalizeData;
-  // }
-
-  // public async getMemberAccessPluginInstallItem(dao: `0x${string}`, payload: `0x${string}`) {
-  //   const spacePluginInstallData = encodeFunctionData({
-  //     abi: memberAccessPluginSetupAbi,
-  //     functionName: 'prepareInstallation',
-  //     args: [dao, payload],
-  //   });
-  //   return spacePluginInstallData;
-  // }
 
   public async updateMultisigSettings(proposalDuration: bigint, mainVotingPluginAddress: `0x${string}`) {
     const updateMultisigSettingsData = encodeFunctionData({

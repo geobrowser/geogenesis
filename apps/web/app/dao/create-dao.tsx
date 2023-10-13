@@ -10,6 +10,7 @@ import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
 import { Button } from '~/design-system/button';
 
 // import { useAragonSDKContext } from '../context/aragon-context';
+import { DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS } from '../../core/constants';
 
 export default function CreateDao() {
   const { geoPluginClient, geoPluginContext } = useAragonSDKContext();
@@ -33,42 +34,33 @@ export default function CreateDao() {
 
     const metadataUri = await client.methods.pinMetadata(metadata);
 
-    // const addresslistVotingPluginInstallParams: AddresslistVotingPluginInstall = {
-    //   votingSettings: {
-    //     minDuration: 60 * 60 * 24 * 2,
-    //     minParticipation: 0.25,
-    //     supportThreshold: 0.5,
-    //   },
-    //   addresses: ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94', '0x04EA475026a0AB3e280F749b206fC6332E6939F1'],
-    // };
-
-    // const addresslistVotingPluginInstallItem = AddresslistVotingClient.encoding.getPluginInstallItem(
-    //   addresslistVotingPluginInstallParams,
-    //   'goerli'
-    // );
-
     if (!geoPluginClient) throw new Error('geoPluginClient is undefined');
 
-    // const geoMemberAccessPluginInstallItem = GeoPluginClient.encoding.getMemberAccessPluginInstallItem('');
-
-    const members: string[] = ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'];
-
-    const memberAccessPluginInstallParams = {
+    const geoMainVotingPluginInstallItem = GeoPluginClientEncoding.getMainVotingPluginInstallItem({
       votingSettings: {
-        minApprovals: 1,
-        onlyListed: true,
+        votingMode: 1, // example value
+        supportThreshold: 50, // example value
+        minParticipation: 10, // example value
+        minDuration: 86400, // example value
+        minProposerVotingPower: 1000, // example value
       },
-      members,
-    };
+      initialEditors: ['0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94'], // example values
+      pluginUpgrader: '0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94',
+    });
 
-    const geoMemberAccessPluginInstallItem = GeoPluginClientEncoding.getMemberAccessPluginInstallItem(
-      memberAccessPluginInstallParams
-    );
+    const geoMemberAccessPluginInstallItem = GeoPluginClientEncoding.getMemberAccessPluginInstallItem({
+      multisigSettings: {
+        proposalDuration: 12345, // example value
+        mainVotingPlugin: DEFAULT_GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+      },
+      pluginUpgrader: '0x25709998B542f1Be27D19Fa0B3A9A67302bc1b94',
+    });
 
     const createParams: CreateDaoParams = {
       metadataUri,
       ensSubdomain: 'test-hack-the-planet-mumbai-1',
-      plugins: [geoMemberAccessPluginInstallItem],
+      // plugins: [geoMainVotingPluginInstallItem, geoMemberAccessPluginInstallItem],
+      plugins: [geoMainVotingPluginInstallItem],
     };
 
     const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);
