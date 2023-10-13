@@ -1,19 +1,18 @@
-import { ClientCore, PluginInstallItem, getNamedTypesFromMetadata } from "@aragon/sdk-client-common";
-import { SpacePluginSetupAbi } from "@geogenesis/contracts";
-import { hexToBytes, encodeFunctionData } from "viem";
-import { DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS } from "~/core/constants";
-import { personalSpaceAdminPluginAbi } from '../../abis/personal-space-admin-plugin-abi';
-import { GeoPersonalSpacePluginContext } from "../../context";
+import { ClientCore, PluginInstallItem, getNamedTypesFromMetadata } from '@aragon/sdk-client-common';
+import { SpacePluginSetupAbi } from '@geogenesis/contracts';
+import { encodeFunctionData, hexToBytes } from 'viem';
 
+import { GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS } from '~/core/constants';
+
+import { personalSpaceAdminPluginAbi } from '../../abis/personal-space-admin-plugin-abi';
+import { GeoPersonalSpacePluginContext } from '../../context';
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoPersonalSpacePluginAddress: string;
 
-
   constructor(pluginContext: GeoPersonalSpacePluginContext) {
     super(pluginContext);
 
-    // Plugin Address
     this.geoPersonalSpacePluginAddress = pluginContext.geoPersonalSpacePluginAddress;
   }
 
@@ -35,7 +34,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     // );
 
     return {
-      id: DEFAULT_GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
+      id: GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
       data: hexToBytes(hexBytes as `0x${string}`),
     };
   }
@@ -48,3 +47,4 @@ export class GeoPluginClientEncoding extends ClientCore {
   //   });
   //   return initalizeData;
   // }
+}

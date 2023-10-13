@@ -6,7 +6,6 @@ import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 import {
   GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
   GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-  GEO_PERSONAL_SPACE_PLUGIN_REPO_ADDRESS,
 } from '~/core/constants';
 
 import {

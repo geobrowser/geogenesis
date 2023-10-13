@@ -2,7 +2,6 @@ import { Context, ContextCore } from '@aragon/sdk-client-common';
 
 import {
   GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
-  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
   GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
   GEO_SPACE_PLUGIN_REPO_ADDRESS,
 } from '../../constants';
@@ -59,7 +58,7 @@ export class GeoPluginContext extends ContextCore {
       this.state.geoMemberAccessPluginRepoAddress = GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS;
     }
     if (!this.overriden.geoMainVotingPluginRepoAddress) {
-      this.state.geoMainVotingPluginRepoAddress =GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
+      this.state.geoMainVotingPluginRepoAddress = GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
     }
   }
 
