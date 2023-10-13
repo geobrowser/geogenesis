@@ -41,6 +41,30 @@
         "@geogenesis/membership-subgraph#codegen"
       ],
       "outputs": ["dist/**", "build/**", "generated/**"]
+    },
+    "@geogenesis/profile-subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
+
+    "@geogenesis/profile-subgraph#build": {
+      "dependsOn": [
+        "@geogenesis/contracts#build",
+        "@geogenesis/profile-subgraph#codegen"
+      ],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
+    "@geogenesis/permissionless-subgraph#codegen": {
+      "dependsOn": ["@geogenesis/contracts#build"],
+      "outputs": ["dist/**", "build/**", "generated/**"]
+    },
+
+    "@geogenesis/permissionless-subgraph#build": {
+      "dependsOn": [
+        "@geogenesis/contracts#build",
+        "@geogenesis/permissionless-subgraph#codegen"
+      ],
+      "outputs": ["dist/**", "build/**", "generated/**"]
     }
   }
 }
