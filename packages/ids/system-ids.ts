@@ -103,7 +103,8 @@ export const PROFILE_REGISTRY_ADDRESS =
 // '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
 
 // This represents the beacon for the first set of deployed permissioned spaces.
-// We should use this beacon for all new permissioned spaces.
+// We should use this beacon for all new permissioned spaces. We need to track the beacon
+// address in case we decide to upgrade the implementation of the permissionless space.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =
   '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
 
@@ -112,7 +113,8 @@ export const PERMISSIONED_SPACE_BEACON_ADDRESS =
 export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
   '0x170b749413328ac9a94762031a7A05b00c1D2e34'
 
-// This represents the beacon for all permissionless spaces.
+// This represents the beacon for all permissionless spaces. We need to track the beacon
+// address in case we decide to upgrade the implementation of the permissionless space.
 export const PERMISSIONLESS_SPACE_BEACON_ADDRESS =
   '0xB21d4C7C4b8c661c7eFabCE410214a568268957E'
 // '0xc90513962Db42C1fb44fBb97a8eb0c2E102701Da' // mumbai
