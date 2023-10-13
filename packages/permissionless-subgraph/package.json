@@ -1,0 +1,43 @@
+{
+  "private": true,
+  "name": "@geogenesis/permissionless-subgraph",
+  "version": "0.0.1",
+  "license": "MIT",
+  "scripts": {
+    "clean": "rimraf build generated .turbo",
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "create": "graph create example --node $GRAPH_NODE_URL",
+    "deploy": "graph deploy example --ipfs $IPFS_URL --node $GRAPH_NODE_URL --version-label v0.0.1",
+    "deploy:testnet": "graph deploy --product hosted-service --network mumbai baiirun/geo-permissionless-mumbai",
+    "deploy:production": "graph deploy --product hosted-service --network matic baiirun/geo-permissionless",
+    "deploy:staging": "graph deploy --product hosted-service --network matic baiirun/geo-staging",
+    "cat": "cat subgraph.yaml",
+    "local": "GRAPH_NODE_URL=http://127.0.0.1:8020 IPFS_URL=https://api.thegraph.com/ipfs npm run",
+    "local:create": "npm run local create",
+    "local:deploy": "npm run local deploy",
+    "update-contract-address:local": "yq -i \".mainnet.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/localhost.json)\" networks.json",
+    "update-contract-address:mumbai": "yq -i \".mumbai.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/80001.json)\" networks.json",
+    "update-block-number:mumbai": "yq -i \".mumbai.SpaceRegistry.startBlock = $(jq .SpaceRegistry.startBlock ../contracts/addresses/80001.json)\" networks.json",
+    "update-config:mumbai": "npm run update-contract-address:mumbai && npm run update-block-number:mumbai",
+    "update-contract-address:matic": "yq -i \".matic.SpaceRegistry.address = $(jq .SpaceRegistry.address ../contracts/addresses/137.json)\" networks.json",
+    "update-block-number:matic": "yq -i \".matic.SpaceRegistry.startBlock = $(jq .SpaceRegistry.startBlock ../contracts/addresses/137.json)\" networks.json",
+    "update-config:matic": "npm run update-contract-address:matic && npm run update-block-number:matic",
+    "copy-subgraph-config": "docker cp $(docker ps -q --filter=\"name=devnet\"):/app/packages/subgraph/subgraph.yaml ."
+  },
+  "devDependencies": {
+    "@geogenesis/action-schema": "workspace:*",
+    "@geogenesis/contracts": "workspace:^0.1.0",
+    "@geogenesis/data-uri": "workspace:*",
+    "@geogenesis/ids": "workspace:*",
+    "@graphprotocol/graph-cli": "^0.55.0",
+    "@graphprotocol/graph-ts": "^0.27.0",
+    "rimraf": "^3.0.2"
+  },
+  "dependencies": {
+    "as-base64": "^0.2.0",
+    "assemblyscript-json": "^1.1.0",
+    "babel-polyfill": "^6.26.0",
+    "babel-register": "^6.26.0"
+  }
+}

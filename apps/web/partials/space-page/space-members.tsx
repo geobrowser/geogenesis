@@ -8,6 +8,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { SpaceMembersChip } from './space-members-chip';
+import { SpaceMembersJoinButton } from './space-members-join-button';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersMenu } from './space-members-menu';
@@ -68,7 +69,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
       <div className="h-4 w-px bg-divider" />
 
-      <p className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text">Join</p>
+      <SpaceMembersJoinButton spaceId={spaceId} />
     </div>
   );
 }

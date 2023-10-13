@@ -1,0 +1,14 @@
+{
+  "mumbai": {
+    "GeoProfileRegistry": {
+      "address": "0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458",
+      "startBlock": 41134741
+    }
+  },
+  "matic": {
+    "GeoProfileRegistry": {
+      "address": "0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b",
+      "startBlock": 48640368
+    }
+  }
+}
