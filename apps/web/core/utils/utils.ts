@@ -240,7 +240,7 @@ export function slog({
   }
 
   console[level](
-    `${level.toUpperCase()}  ${new Date().toISOString()} account: ${
+    `${level.toUpperCase()}  ${new Date().toISOString()}  account: ${
       account ? account : 'NULL'
     }  requestId: ${requestId} – ${message}`
   );

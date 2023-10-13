@@ -15,8 +15,10 @@ export async function GET(request: Request) {
   }
 
   const userAccount = searchParams.get('userAddress') as `0x${string}`;
+  const username = searchParams.get('username') as string;
+  const avatarUri = searchParams.get('avatarUri') as string;
 
-  const deployment = makeDeployEffect(requestId, userAccount);
+  const deployment = makeDeployEffect(requestId, { account: userAccount, username, avatarUri });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
 
   if (Either.isLeft(maybeDeployment)) {
@@ -49,6 +51,11 @@ export async function GET(request: Request) {
           status: 500,
           statusText: error.message,
         });
+      case 'CreateProfileGeoEntityFailedError':
+        return new Response(`Could not create profile Geo Entity for user: ${userAccount}`, {
+          status: 500,
+          statusText: error.message,
+        });
     }
   }
 
@@ -56,9 +63,10 @@ export async function GET(request: Request) {
 
   slog({
     requestId,
-    message: `Space proxy deployment successful for address: ${proxyDeployTxReceipt.contractAddress}`,
+    message: `Space deployment and Geo registration successful: ${proxyDeployTxReceipt.contractAddress}`,
     account: userAccount,
   });
 
+  // @TODO: Anything else we should return here?
   return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
 }
