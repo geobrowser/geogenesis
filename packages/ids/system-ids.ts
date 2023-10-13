@@ -113,11 +113,15 @@ export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
   '0x170b749413328ac9a94762031a7A05b00c1D2e34'
 
 // This represents the beacon for all permissionless spaces.
-export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
+export const PERMISSIONLESS_SPACE_BEACON_ADDRESS =
+  '0xB21d4C7C4b8c661c7eFabCE410214a568268957E'
+// '0xc90513962Db42C1fb44fBb97a8eb0c2E102701Da' // mumbai
 
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
-export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
+export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS =
+  '0x9DcB2aB0723C60Ac536954FC2696aF33EEE2171e'
+// '0x05a813a18740e17A499771Edd020e3827aaabB6E' // mumbai
 
 export const MEMBERSHIP_CONTRACT_ADDRESS =
   '0x34a94160f4B0f86d932927DFfb326354dB279181'
