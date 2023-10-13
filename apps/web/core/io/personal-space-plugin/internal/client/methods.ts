@@ -5,8 +5,6 @@ import {
   PrepareInstallationStepValue,
   prepareGenericInstallation,
 } from '@aragon/sdk-client-common';
-import { Effect } from 'effect';
-import { bigint } from 'effect/Equivalence';
 import { createPublicClient, createWalletClient, getContract, http } from 'viem';
 import { goerli, polygonMumbai } from 'viem/chains';
 
@@ -47,26 +45,6 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
 
     // Plugin Repo Addresses
     this.geoPersonalSpaceAdminPluginRepoAddress = pluginContext.geoPersonalSpaceAdminPluginRepoAddress;
-
-    // Contract Instances
-    // Note: it would be less verbose to use these, but until we have a way to type them properl we lose viem's type inference
-    // const geoSpacePluginContract = getContract({
-    //   address: this.geoSpacePluginAddress as `0x${string}`,
-    //   abi: spacePluginAbi,
-    //   publicClient,
-    // });
-
-    // const geoMainVotingPluginContract = getContract({
-    //   address: this.geoMainVotingPluginAddress as `0x${string}`,
-    //   abi: mainVotingPluginAbi,
-    //   publicClient,
-    // });
-
-    // const geoMemberAccessPluginContract = getContract({
-    //   address: this.geoMemberAccessPluginAddress as `0x${string}`,
-    //   abi: memberAccessPluginAbi,
-    //   publicClient,
-    // });
   }
 
   // implementation of the methods in the interface
@@ -81,14 +59,49 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   //   });
   // }
 
-  // Personal Space Admin Plugin: Reads
-  public async isMember(address: `0x${string}`): Promise<boolean> {
-    const isMemberRead = await publicClient.readContract({
-      address: this.geoPersonalSpacePluginAddress as `0x${string}`,
+  // Personal Space Admin Plugin: Writes
+
+  public async initializePersonalSpaceAdminPlugin(daoAddress: `0x${string}`) {
+    const initializeData = await prepareWriteContract({
+      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+      abi: personalSpaceAdminPluginAbi,
+      functionName: 'initialize',
+      args: [daoAddress],
+    });
+    return initializeData;
+  }
+
+  public async executeProposal(
+    metadata: `0x${string}`,
+    actions: readonly { to: `0x${string}`; value: bigint; data: `0x${string}` }[],
+    allowFailureMap: bigint
+  ) {
+    const executeProposalData = await prepareWriteContract({
+      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+      abi: personalSpaceAdminPluginAbi,
+      functionName: 'executeProposal',
+      args: [metadata, actions, allowFailureMap],
+    });
+    return executeProposalData;
+  }
+
+  public async isEditor(address: `0x${string}`): Promise<boolean> {
+    const isEditorRead = await publicClient.readContract({
+      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
       abi: memberAccessPluginAbi,
-      functionName: 'isMember',
+      functionName: 'isEditor',
       args: [address],
     });
-    return isMemberRead;
+    return isEditorRead;
+  }
+
+  public async supportsInterface(interfaceId: `0x${string}`): Promise<boolean> {
+    const supportsInterfaceRead = await publicClient.readContract({
+      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+      abi: personalSpaceAdminPluginAbi,
+      functionName: 'supportsInterface',
+      args: [interfaceId],
+    });
+    return supportsInterfaceRead;
   }
 }
