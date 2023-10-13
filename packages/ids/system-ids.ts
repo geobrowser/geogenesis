@@ -102,8 +102,8 @@ export const PROFILE_REGISTRY_ADDRESS =
   '0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b'
 // '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
 
-// This represents the beacon proxy for the first set of deployed permissioned spaces.
-// We should use this beacon proxy for all new permissioned spaces.
+// This represents the beacon for the first set of deployed permissioned spaces.
+// We should use this beacon for all new permissioned spaces.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =
   '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
 
@@ -112,7 +112,7 @@ export const PERMISSIONED_SPACE_BEACON_ADDRESS =
 export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
   '0x170b749413328ac9a94762031a7A05b00c1D2e34'
 
-// This represents the beacon proxy for all permissionless spaces.
+// This represents the beacon for all permissionless spaces.
 export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
 
 // This represents the PermissionlessSpace contract acting as the registry for all
@@ -121,9 +121,7 @@ export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
 
 export const MEMBERSHIP_CONTRACT_ADDRESS =
   '0x34a94160f4B0f86d932927DFfb326354dB279181'
-
-export const MEMBERSHIP_CONTRACT_ADDRESS_TESTNET =
-  '0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E'
+// 0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E // mumbai
 
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
