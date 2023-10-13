@@ -1,31 +1,31 @@
-"use client";
+'use client';
 
-import { observer } from "@legendapp/state/react";
-import BoringAvatar from "boring-avatars";
-import cx from "classnames";
-import { Command } from "cmdk";
-import { AnimatePresence, motion } from "framer-motion";
+import { observer } from '@legendapp/state/react';
+import BoringAvatar from 'boring-avatars';
+import cx from 'classnames';
+import { Command } from 'cmdk';
+import { AnimatePresence, motion } from 'framer-motion';
 
-import * as React from "react";
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import * as React from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 
-import { useAccount } from "wagmi";
+import { useAccount } from 'wagmi';
 
-import { useOnboarding } from "~/core/hooks/use-onboarding";
-import { Services } from "~/core/services";
-import { getImagePath } from "~/core/utils/utils";
-import { Value } from "~/core/utils/value";
+import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { Services } from '~/core/services';
+import { getImagePath } from '~/core/utils/utils';
+import { Value } from '~/core/utils/value';
 
-import { Button, SmallButton, SquareButton } from "~/design-system/button";
-import { Text } from "~/design-system/text";
+import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Text } from '~/design-system/text';
 
-type Step = "start" | "onboarding" | "completing" | "completed";
+type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 
 export const OnboardingDialog = observer(() => {
   const { address } = useAccount();
-  const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("");
-  const [step, setStep] = useState<Step>("start");
+  const [name, setName] = useState('');
+  const [avatar, setAvatar] = useState('');
+  const [step, setStep] = useState<Step>('start');
 
   if (!address) return null;
 
@@ -38,17 +38,17 @@ export const OnboardingDialog = observer(() => {
         <AnimatePresence initial={false} mode="wait">
           <div className="relative z-10 flex h-full w-full items-start justify-center">
             <ModalCard key="card">
-              {step === "start" && (
+              {step === 'start' && (
                 <>
                   <StepHeader step={step} />
-                  <StepStart onNext={() => setStep("onboarding")} />
+                  <StepStart onNext={() => setStep('onboarding')} />
                 </>
               )}
-              {step === "onboarding" && (
+              {step === 'onboarding' && (
                 <>
-                  <StepHeader step={step} onPrev={() => setStep("start")} />
+                  <StepHeader step={step} onPrev={() => setStep('start')} />
                   <StepOnboarding
-                    onNext={() => setStep("completing")}
+                    onNext={() => setStep('completing')}
                     address={address}
                     name={name}
                     setName={setName}
@@ -57,10 +57,10 @@ export const OnboardingDialog = observer(() => {
                   />
                 </>
               )}
-              {(step === "completing" || step === "completed") && (
+              {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete onNext={() => setStep("completed")} />
+                  <StepComplete onNext={() => setStep('completed')} />
                 </>
               )}
             </ModalCard>
@@ -83,7 +83,7 @@ const ModalCard = ({ key, children }: ModalCardProps) => {
       initial={{ opacity: 0, bottom: -5 }}
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
-      transition={{ ease: "easeInOut", duration: 0.225 }}
+      transition={{ ease: 'easeInOut', duration: 0.225 }}
       className="pointer-events-auto relative z-10 mt-32 aspect-square h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
@@ -101,12 +101,8 @@ const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
-      <div className="rotate-180">
-        {onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}
-      </div>
-      {step !== "completing" && (
-        <SquareButton icon="close" onClick={hideOnboarding} />
-      )}
+      <div className="rotate-180">{onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}</div>
+      {step !== 'completing' && <SquareButton icon="close" onClick={hideOnboarding} />}
     </div>
   );
 };
@@ -123,7 +119,7 @@ const StepContents = ({ key, children }: StepContentsProps) => {
       initial={{ opacity: 0, right: -20 }}
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
-      transition={{ ease: "easeInOut", duration: 0.225 }}
+      transition={{ ease: 'easeInOut', duration: 0.225 }}
       className="relative"
     >
       {children}
@@ -140,20 +136,11 @@ function StepStart({ onNext }: StepStartProps) {
     <>
       <StepContents key="start">
         <div className="w-full">
-          <Text
-            as="h3"
-            variant="bodySemibold"
-            className="mx-auto text-center !text-2xl"
-          >
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
             Create your personal space and activity feed
           </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center !text-base"
-          >
-            Use your personal space to update your profile and monitor your
-            account activity on GEO.
+          <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
+            Use your personal space to update your profile and monitor your account activity on GEO.
           </Text>
         </div>
       </StepContents>
@@ -178,14 +165,7 @@ type StepOnboardingProps = {
   setAvatar: (hash: string) => void;
 };
 
-function StepOnboarding({
-  onNext,
-  address,
-  name,
-  setName,
-  avatar,
-  setAvatar,
-}: StepOnboardingProps) {
+function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: StepOnboardingProps) {
   const validName = name.length > 0;
   const { storageClient } = Services.useServices();
 
@@ -229,8 +209,8 @@ function StepOnboarding({
                     backgroundImage: `url(${getImagePath(avatar)})`,
                     height: 154,
                     width: 154,
-                    backgroundSize: "cover",
-                    backgroundRepeat: "no-repeat",
+                    backgroundSize: 'cover',
+                    backgroundRepeat: 'no-repeat',
                   }}
                 />
               ) : (
@@ -240,17 +220,14 @@ function StepOnboarding({
           </div>
         </div>
         <div className="flex items-center justify-center gap-1.5 pb-4">
-          <label
-            htmlFor="avatar-file"
-            className="inline-block cursor-pointer text-center hover:underline"
-          >
+          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
             <SmallButton icon="upload" onClick={handleFileInputClick}>
               Upload
             </SmallButton>
           </label>
-          {avatar !== "" && (
+          {avatar !== '' && (
             <div>
-              <SquareButton onClick={() => setAvatar("")} icon="trash" />
+              <SquareButton onClick={() => setAvatar('')} icon="trash" />
             </div>
           )}
           <input
@@ -267,12 +244,7 @@ function StepOnboarding({
         </Text>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 flex">
-        <Button
-          variant="secondary"
-          disabled={!validName}
-          onClick={onNext}
-          className="w-full"
-        >
+        <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
           Continue
         </Button>
       </div>
@@ -303,18 +275,10 @@ function StepComplete({ onNext }: StepCompleteProps) {
     <>
       <StepContents key="start">
         <div className="w-full">
-          <Text
-            as="h3"
-            variant="bodySemibold"
-            className="mx-auto text-center !text-2xl"
-          >
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
             {stage === 5 ? `Welcome to GEO!` : `Creating profile and feed`}
           </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center !text-base"
-          >
+          <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
             {complete[stage]}
           </Text>
           {stage !== 5 && (
@@ -325,22 +289,12 @@ function StepComplete({ onNext }: StepCompleteProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded bg-grey-02 shadow-lg">
-          {/* <img src="/space-preview.png" alt="" /> */}
-        </div>
+        <div className="aspect-video rounded bg-grey-02 shadow-lg">{/* <img src="/space-preview.png" alt="" /> */}</div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Button
-            onClick={() => null}
-            className="!flex-1 !flex-shrink-0"
-            disabled={stage !== 5}
-          >
+          <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 5}>
             View Feed
           </Button>
-          <Button
-            onClick={() => null}
-            className="!flex-1"
-            disabled={stage !== 5}
-          >
+          <Button onClick={() => null} className="!flex-1" disabled={stage !== 5}>
             View Personal Space
           </Button>
         </div>
@@ -384,16 +338,13 @@ const Indicator = ({ index, stage }: IndicatorProps) => {
     <div className="relative h-1.5 flex-1 overflow-clip rounded-full bg-grey-02">
       <motion.div
         transition={{
-          ease: "linear",
+          ease: 'linear',
           duration: 1,
           bounce: 0,
           delay: index >= stage ? 1 : 0,
         }}
         animate={{ width }}
-        className={cx(
-          "absolute bottom-0 left-0 top-0 bg-black",
-          index === stage && "animate-pulse"
-        )}
+        className={cx('absolute bottom-0 left-0 top-0 bg-black', index === stage && 'animate-pulse')}
       />
     </div>
   );
@@ -401,14 +352,14 @@ const Indicator = ({ index, stage }: IndicatorProps) => {
 
 const getWidth = (index: number, stage: number) => {
   if (index > stage) {
-    return "0%";
+    return '0%';
   }
 
   if (index === stage) {
-    return "50%";
+    return '50%';
   }
 
   if (index < stage) {
-    return "100%";
+    return '100%';
   }
 };

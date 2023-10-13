@@ -4,6 +4,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -64,9 +65,17 @@ export function NavbarActions({ spaceId }: Props) {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
+        <AvatarMenuItem>
+          <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+            <div className="relative h-4 w-4 overflow-hidden rounded-full">
+              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+            </div>
+            <p className="text-button">Personal Home</p>
+          </Link>
+        </AvatarMenuItem>
         <AvatarMenuItem disabled>
           <div className="flex items-center gap-2 grayscale">
-            <div className="relative rounded-full overflow-hidden w-4 h-4">
+            <div className="relative h-4 w-4 overflow-hidden rounded-full">
               <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
             </div>
             <p className="text-button">Personal Space</p>
@@ -208,7 +217,7 @@ function ModeToggle({ spaceId }: Props) {
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
                 <MotionPopoverContent
-                  className="z-10 origin-top-right rounded bg-text text-white p-2 shadow-button focus:outline-none max-w-[164px]"
+                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-none"
                   side="bottom"
                   align="end"
                   alignOffset={-8}
@@ -222,7 +231,7 @@ function ModeToggle({ spaceId }: Props) {
                     bounce: 0,
                   }}
                 >
-                  <h1 className="text-breadcrumb text-center">You don’t have edit access in this space</h1>
+                  <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
                   <Popover.Arrow />
                 </MotionPopoverContent>
               )}
