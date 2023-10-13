@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@geogenesis/subgraph",
+  "name": "@geogenesis/permissionless-subgraph",
   "version": "0.0.1",
   "license": "MIT",
   "scripts": {
