@@ -1,78 +1,78 @@
-import { cva } from 'class-variance-authority';
-
-import { SquareButton } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 
 interface Props {
+  // @TODO remove index
+  index: number;
   isEditor: boolean;
   // vote: "ACCEPTED" | 'REJECTED';
 }
 
+// @TODO remove index
 export function GovernanceProposalVoteState({ isEditor }: Props) {
+  // @TODO add real isActive value
+  const isActive = false;
+
+  // @TODO add real status value
+  const status = 'ACCEPTED';
+
   return (
-    <div className="flex items-center gap-8">
-      <div className="flex items-center gap-2 text-metadataMedium">
-        <p>Accepted</p>
-        <div className="rounded-small rounded-lg h-1 w-[76px] bg-green" />
-        <p>100%</p>
-        {isEditor && <VoteAcceptButton userVote="ACCEPTED" />}
+    <>
+      <div className="inline-flex flex-[2] items-center justify-center gap-8">
+        <div className="flex items-center gap-2 text-metadataMedium">
+          <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <Tick />
+          </div>
+          <div className="relative h-1 w-24 overflow-clip rounded-full bg-grey-02">
+            <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: '100%' }} />
+          </div>
+          <div>100%</div>
+        </div>
+        <div className="flex items-center gap-2 text-metadataMedium">
+          <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <Close />
+          </div>
+          <div className="relative h-1 w-24 overflow-clip rounded-full bg-grey-02">
+            <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: '0%' }} />
+          </div>
+          <div>0%</div>
+        </div>
       </div>
-
-      <div className="flex items-center gap-2 text-metadataMedium">
-        <p>Rejected</p>
-        <div className="rounded-small rounded-lg h-1 w-[76px] bg-divider" />
-        <p>0%</p>
-        {isEditor && <VoteRejectButton userVote="ACCEPTED" />}
+      {/* @TODO restore */}
+      <div className="inline-flex flex-[1] items-center justify-end gap-2 !opacity-0">
+        {isActive ? (
+          <>
+            <SmallButton>Reject</SmallButton>
+            <SmallButton>Accept</SmallButton>
+          </>
+        ) : (
+          <StatusBadge status={status} />
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
-const voteButtonStyles = cva(
-  'relative box-border flex h-6 w-6 items-center justify-center rounded-sm border p-1  transition duration-200 ease-in-out focus:outline-none',
-  {
-    variants: {
-      ACCEPTED: {
-        true: 'bg-green text-white border-green cursor-not-allowed',
-      },
-      REJECTED: {
-        true: 'bg-red-01 text-white border-red-01 cursor-not-allowed',
-      },
-      DISABLED: {
-        true: 'bg-divider text-grey-03 border-divider cursor-not-allowed',
-      },
-    },
-    defaultVariants: {
-      ACCEPTED: true,
-    },
+type StatusBadgeProps = {
+  status: 'ACCEPTED' | 'REJECTED';
+};
+
+const StatusBadge = ({ status }: StatusBadgeProps) => {
+  switch (status) {
+    case 'ACCEPTED':
+      return (
+        <div className="gap-1.5 rounded-sm bg-green/10 px-1.5 py-1 text-smallButton text-xs font-medium leading-none tracking-[-0.17px] text-green">
+          You accepted this
+        </div>
+      );
+    case 'REJECTED':
+      return (
+        <div className="gap-1.5 rounded-sm bg-red-01/10 px-1.5 py-1 text-smallButton text-xs font-medium leading-none tracking-[-0.17px] text-red-01">
+          You rejected this
+        </div>
+      );
+    default:
+      return <></>;
   }
-);
-
-interface VoteButtonProps {
-  userVote?: 'ACCEPTED' | 'REJECTED';
-}
-
-function VoteAcceptButton({ userVote }: VoteButtonProps) {
-  if (!userVote) {
-    return <SquareButton icon="tick" />;
-  }
-
-  return (
-    <button className={voteButtonStyles({ ACCEPTED: true, DISABLED: userVote !== 'ACCEPTED' })}>
-      <Tick />
-    </button>
-  );
-}
-
-function VoteRejectButton({ userVote }: VoteButtonProps) {
-  if (!userVote) {
-    return <SquareButton icon="close" />;
-  }
-
-  return (
-    <button className={voteButtonStyles({ ACCEPTED: false, DISABLED: userVote !== 'REJECTED' })}>
-      <Close />
-    </button>
-  );
-}
+};

@@ -26,14 +26,15 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
   ]);
 
   return (
-    <div className="flex flex-col gap-3">
-      {proposals.map(p => {
+    <div className="flex flex-col divide-y divide-grey-01">
+      {/* @TODO remove index */}
+      {proposals.map((p, index) => {
         const changeCount = Action.getChangeCount(
           p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
         );
 
         return (
-          <div key={p.id} className="w-full rounded border border-grey-02 p-4 shadow-button">
+          <div key={p.id} className="w-full py-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{p.name}</h3>
@@ -56,9 +57,11 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
-
-                <GovernanceProposalVoteState isEditor={editorsForSpace.isEditor} />
+                <div className="flex-[1]">
+                  <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
+                </div>
+                {/* @TODO remove index */}
+                <GovernanceProposalVoteState isEditor={editorsForSpace.isEditor} index={index} />
               </div>
             </div>
           </div>
