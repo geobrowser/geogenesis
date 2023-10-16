@@ -29,8 +29,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
 
   return (
     <div className="flex flex-col divide-y divide-grey-01">
-      {/* @TODO remove index */}
-      {proposals.map((p, index) => {
+      {proposals.map(p => {
         const changeCount = Action.getChangeCount(
           p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
         );
@@ -62,8 +61,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
                 <div className="flex-[1]">
                   <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
                 </div>
-                {/* @TODO remove index */}
-                <GovernanceProposalVoteState isEditor={editorsForSpace.isEditor} index={index} />
+                <GovernanceProposalVoteState isEditor={editorsForSpace.isEditor} />
               </div>
             </div>
           </div>

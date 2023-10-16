@@ -3,13 +3,10 @@ import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 
 interface Props {
-  // @TODO remove index
-  index: number;
   isEditor: boolean;
   // vote: "ACCEPTED" | 'REJECTED';
 }
 
-// @TODO remove index
 export function GovernanceProposalVoteState({ isEditor }: Props) {
   // @TODO add real isActive value
   const isActive = false;
