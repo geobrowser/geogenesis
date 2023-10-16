@@ -1,8 +1,12 @@
 import { ClientCore } from '@aragon/sdk-client-common';
 import { Effect } from 'effect';
-import { createPublicClient, http } from 'viem';
-import { polygonMumbai } from 'viem/chains';
+import { boolean, string } from 'effect/Config';
+import { async } from 'effect/Effect';
+import { bigint } from 'effect/Equivalence';
+import error from 'next/error';
+import { Transaction } from 'viem';
 
+import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { memberAccessPluginAbi } from '~/core/io/governance-space-plugin/abis';
@@ -15,14 +19,10 @@ import {
 
 import { personalSpaceAdminPluginAbi, personalSpaceAdminPluginSetupAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
+import { InitializePersonalSpaceAdminPluginOptions } from '../../types';
+import { metadata } from '~/app/layout';
 
 // import * as SPACE_PLUGIN_BUILD_METADATA from '../../metadata/space-build-metadata.json';
-
-// @TODO: use our existing public client and wallet client
-export const publicClient = createPublicClient({
-  chain: polygonMumbai,
-  transport: http(),
-});
 
 export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   private geoPersonalSpaceAdminPluginAddress: string;
@@ -51,16 +51,23 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   //   });
   // }
 
+  // Internal Types
+
   // Personal Space Admin Plugin: Write Functions
 
   // Initialize Personal Space Admin Plugin for an already existing DAO
-  public async initializePersonalSpaceAdminPlugin(daoAddress: `0x${string}`) {
+  public async initializePersonalSpaceAdminPlugin({
+    wallet,
+    daoAddress,
+    onInitStateChange,
+  }: InitializePersonalSpaceAdminPluginOptions): Promise<void> {
     const prepareInitEffect = Effect.tryPromise({
       try: () =>
         prepareWriteContract({
-          address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
           abi: personalSpaceAdminPluginAbi,
+          address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
           functionName: 'initialize',
+          walletClient: wallet,
           args: [daoAddress],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
@@ -193,7 +200,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
 
   // Personal Space Admin Plugin: Read Functions
   public async isEditor(address: `0x${string}`): Promise<boolean> {
-    const isEditorRead = await publicClient.readContract({
+    const isEditorRead = await readContract({
       address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
       abi: memberAccessPluginAbi,
       functionName: 'isEditor',
@@ -203,7 +210,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   }
 
   public async supportsInterface(interfaceId: `0x${string}`): Promise<boolean> {
-    const supportsInterfaceRead = await publicClient.readContract({
+    const supportsInterfaceRead = await readContract({
       address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
       abi: personalSpaceAdminPluginAbi,
       functionName: 'supportsInterface',
@@ -214,7 +221,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
 
   // Personal Space Admin Plugin: Inherited Functions
   public async proposalCount(): Promise<bigint> {
-    const proposalCountRead = await publicClient.readContract({
+    const proposalCountRead = await readContract({
       address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
       abi: personalSpaceAdminPluginAbi,
       functionName: 'proposalCount',
