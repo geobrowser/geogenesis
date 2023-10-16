@@ -15,7 +15,9 @@ export async function GET(request: Request) {
   const userAccount = searchParams.get('userAddress') as `0x${string}` | null;
 
   if (userAccount === null) {
-    return new Response('Missing user address', { status: 400 });
+    return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
+      status: 400,
+    });
   }
 
   const username = searchParams.get('username');
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
 
     switch (error._tag) {
       case 'ProxyBeaconDeploymentFailedError':
-        return new Response('Could not deploy space contract. Please try again.', {
+        return new Response(JSON.stringify({ error: 'Deployment error', reason: 'Proxy Beacon failed to deploy' }), {
           status: 500,
           statusText: error.message,
         });
@@ -46,40 +48,76 @@ export async function GET(request: Request) {
           message: `Space proxy deployment failed for unknown reason`,
           account: userAccount,
         });
-        return new Response('Could not deploy space contract. Please try again.', {
+        return new Response(JSON.stringify({ error: 'Deployment error', reason: 'Deployed space has null address' }), {
           status: 500,
           statusText: 'Unknown error',
         });
       case 'ProxyBeaconInitializeFailedError':
-        return new Response(`Could not initialize space contract for user: ${userAccount}`, {
-          status: 500,
-          statusText: error.message,
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Contract could not be initialized',
+            reason: `Could not initialize space contract for user: ${userAccount}`,
+          }),
+          {
+            status: 500,
+            statusText: error.message,
+          }
+        );
       case 'ProxyBeaconConfigureRolesFailedError':
-        return new Response(`Could not configure contract roles for user: ${userAccount}`, {
-          status: 500,
-          statusText: error.message,
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Contract could not be configured',
+            reason: `Could not configure contract roles for user: ${userAccount}`,
+          }),
+          {
+            status: 500,
+            statusText: error.message,
+          }
+        );
       case 'CreateProfileGeoEntityFailedError':
-        return new Response(`Could not create profile Geo Entity for user: ${userAccount}`, {
-          status: 500,
-          statusText: error.message,
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Could not create profile entity',
+            reason: `Could not create profile Geo Entity for user: ${userAccount}`,
+          }),
+          {
+            status: 500,
+            statusText: error.message,
+          }
+        );
       case 'AddToSpaceRegistryError':
-        return new Response(`Could not add user to space registry for user: ${userAccount}`, {
-          status: 500,
-          statusText: error.message,
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Could not add contract to space registry',
+            reason: `Could not add space to space registry for user: ${userAccount}`,
+          }),
+          {
+            status: 500,
+            statusText: error.message,
+          }
+        );
       case 'GrantAdminRole':
-        return new Response(`Could not grant admin role for user: ${userAccount}`, {
-          status: 500,
-          statusText: error.message,
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Could not grant roles to user',
+            reason: `Could not grant admin role for user: ${userAccount}`,
+          }),
+          {
+            status: 500,
+            statusText: error.message,
+          }
+        );
       default:
-        return new Response('Could not deploy space contract. Please try again.', {
-          status: 500,
-          statusText: 'Unknown error',
-        });
+        return new Response(
+          JSON.stringify({
+            error: 'Unable to deploy contract for unknown reasons',
+            reason: 'Could not deploy space contract. Please try again.',
+          }),
+          {
+            status: 500,
+            statusText: 'Unknown error',
+          }
+        );
     }
   }
 
@@ -91,6 +129,5 @@ export async function GET(request: Request) {
     account: userAccount,
   });
 
-  // @TODO: Anything else we should return here?
-  return new Response(proxyDeployTxReceipt.contractAddress, { status: 200 });
+  return new Response(JSON.stringify({ spaceAddress: proxyDeployTxReceipt.contractAddress }), { status: 200 });
 }

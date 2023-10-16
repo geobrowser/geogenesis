@@ -12,8 +12,9 @@ import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getImagePath } from '~/core/utils/utils';
+import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -26,14 +27,34 @@ export const OnboardingDialog = observer(() => {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
   const [step, setStep] = useState<Step>('start');
+  const [workflowStep, setWorkflowStep] = useState<'idle' | 'creating-spaces' | 'creating-profile' | 'done'>('idle');
 
   if (!address) return null;
+
+  async function onRunOnboardingWorkflow() {
+    if (address && workflowStep === 'idle') {
+      setStep('completing');
+
+      setWorkflowStep('creating-spaces');
+
+      const { spaceAddress } = await deploySpaceContract({
+        account: address,
+        username: name || null,
+        avatarUri: avatar || null,
+      });
+
+      console.log('spaceAddress', spaceAddress);
+      setWorkflowStep('creating-profile');
+
+      await sleepWithCallback(() => setWorkflowStep('done'), 5000);
+    }
+  }
 
   // Note: set open to true or to isOnboardingVisible to see the onboarding flow
   // Currently stubbed as we don't have a way to create a profile yet
   // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={false} label="Onboarding profile">
+    <Command.Dialog open={true} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <div className="relative z-10 flex h-full w-full items-start justify-center">
@@ -48,7 +69,7 @@ export const OnboardingDialog = observer(() => {
                 <>
                   <StepHeader step={step} onPrev={() => setStep('start')} />
                   <StepOnboarding
-                    onNext={() => setStep('completing')}
+                    onNext={onRunOnboardingWorkflow}
                     address={address}
                     name={name}
                     setName={setName}
@@ -60,7 +81,7 @@ export const OnboardingDialog = observer(() => {
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete onNext={() => setStep('completed')} />
+                  <StepComplete onNext={() => setStep('completed')} workflowStep={workflowStep} />
                 </>
               )}
             </ModalCard>
@@ -254,36 +275,42 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 
 type StepCompleteProps = {
   onNext: () => void;
+  workflowStep: 'idle' | 'creating-spaces' | 'creating-profile' | 'done';
 };
 
-function StepComplete({ onNext }: StepCompleteProps) {
-  const [stage, setStage] = useState<number>(1);
+function StepComplete({ onNext, workflowStep: stage }: StepCompleteProps) {
+  // useEffect(() => {
+  //   if (stage >= 5) {
+  //     onNext();
+  //     return;
+  //   }
 
-  useEffect(() => {
-    if (stage >= 5) {
-      onNext();
-      return;
-    }
+  //   setTimeout(() => {
+  //     const nextStage = stage + 1;
+  //     setStage(nextStage);
+  //   }, 10_000);
+  // }, [stage, onNext]);
 
-    setTimeout(() => {
-      const nextStage = stage + 1;
-      setStage(nextStage);
-    }, 10_000);
-  }, [stage, onNext]);
+  const stageAsNumber = {
+    idle: 0,
+    'creating-spaces': 1,
+    'creating-profile': 2,
+    done: 3,
+  };
 
   return (
     <>
       <StepContents key="start">
         <div className="w-full">
           <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            {stage === 5 ? `Welcome to GEO!` : `Creating profile and feed`}
+            {stage === 'creating-spaces' ? `Welcome to GEO!` : `Creating profile and feed`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
-            {complete[stage]}
+            {complete[stageAsNumber[stage]]}
           </Text>
-          {stage !== 5 && (
+          {stage !== 'creating-profile' && (
             <div className="mx-auto mt-2 w-1/3">
-              <Progress stage={stage} />
+              <Progress stage={stageAsNumber[stage]} />
             </div>
           )}
         </div>
@@ -293,10 +320,10 @@ function StepComplete({ onNext }: StepCompleteProps) {
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 5}>
+          <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
             View Feed
           </Button>
-          <Button onClick={() => null} className="!flex-1" disabled={stage !== 5}>
+          <Button onClick={() => null} className="!flex-1" disabled={stage !== 'done'}>
             View Personal Space
           </Button>
         </div>
@@ -323,7 +350,6 @@ const Progress = ({ stage }: ProgressProps) => {
       <Indicator index={1} stage={stage} />
       <Indicator index={2} stage={stage} />
       <Indicator index={3} stage={stage} />
-      <Indicator index={4} stage={stage} />
     </div>
   );
 };
