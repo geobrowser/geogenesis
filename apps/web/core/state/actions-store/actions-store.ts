@@ -66,13 +66,15 @@ export class ActionsStore implements IActionsStore {
           adjustData: {
             save: (data: SpaceActions) => {
               const savedData: SpaceActions = {};
-              const spaces = Object.keys(data);
-              spaces.forEach(spaceId => {
-                const persistedActions: ActionType[] = data[spaceId].filter(action => !action.hasBeenPublished);
+
+              Object.entries(data).forEach(([spaceId, actions]) => {
+                const persistedActions = actions.filter(action => !action.hasBeenPublished);
+
                 if (persistedActions.length > 0) {
                   savedData[spaceId] = persistedActions;
                 }
               });
+
               return savedData;
             },
           },
