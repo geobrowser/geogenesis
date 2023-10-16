@@ -1,6 +1,5 @@
 'use client';
 
-import { observer } from '@legendapp/state/react';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
@@ -22,7 +21,7 @@ import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 
-export const OnboardingDialog = observer(() => {
+export const OnboardingDialog = () => {
   const { address } = useAccount();
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
@@ -92,7 +91,7 @@ export const OnboardingDialog = observer(() => {
       </div>
     </Command.Dialog>
   );
-});
+};
 
 type ModalCardProps = {
   key: string;
