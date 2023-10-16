@@ -333,11 +333,9 @@ function StepComplete({ onNext, workflowStep: stage }: StepCompleteProps) {
 }
 
 const complete: Record<number, string> = {
-  1: `Step 1. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
-  2: `Step 2. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
-  3: `Step 3. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.`,
-  4: `Final Step. Lorem ipsum dolor sit amet, consectetur adipiscing elit sed.`,
-  5: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
+  1: `Step 1. Creating your personal space.`,
+  2: `Step 2. Sign the transaction to create your profile.`,
+  3: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
 };
 
 type ProgressProps = {
