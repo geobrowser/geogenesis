@@ -61,7 +61,24 @@ export class ActionsStore implements IActionsStore {
     // https://legendapp.com/open-source/state/persistence/#persistobservable
     if (typeof window !== 'undefined') {
       persistObservable(actions, {
-        local: 'actionsStore',
+        local: {
+          name: 'actionsStore',
+          adjustData: {
+            save: (data: SpaceActions) => {
+              const savedData: SpaceActions = {};
+              const spaces = Object.keys(data);
+              spaces.forEach(spaceId => {
+                const persistedActions: ActionType[] = data[spaceId].filter(action => !action.hasBeenPublished);
+                if (persistedActions.length === 0) {
+                  delete savedData[spaceId];
+                } else {
+                  savedData[spaceId] = persistedActions;
+                }
+              });
+              return savedData;
+            },
+          },
+        },
       });
     }
 
