@@ -7,7 +7,7 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount } from 'wagmi';
 
@@ -47,6 +47,8 @@ export const OnboardingDialog = observer(() => {
       setWorkflowStep('creating-profile');
 
       await sleepWithCallback(() => setWorkflowStep('done'), 5000);
+
+      setStep('completed');
     }
   }
 
@@ -81,7 +83,7 @@ export const OnboardingDialog = observer(() => {
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete onNext={() => setStep('completed')} workflowStep={workflowStep} />
+                  <StepComplete workflowStep={workflowStep} />
                 </>
               )}
             </ModalCard>
@@ -274,30 +276,17 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 }
 
 type StepCompleteProps = {
-  onNext: () => void;
   workflowStep: 'idle' | 'creating-spaces' | 'creating-profile' | 'done';
 };
 
-function StepComplete({ onNext, workflowStep: stage }: StepCompleteProps) {
-  // useEffect(() => {
-  //   if (stage >= 5) {
-  //     onNext();
-  //     return;
-  //   }
+const stageAsNumber = {
+  idle: 0,
+  'creating-spaces': 1,
+  'creating-profile': 2,
+  done: 3,
+};
 
-  //   setTimeout(() => {
-  //     const nextStage = stage + 1;
-  //     setStage(nextStage);
-  //   }, 10_000);
-  // }, [stage, onNext]);
-
-  const stageAsNumber = {
-    idle: 0,
-    'creating-spaces': 1,
-    'creating-profile': 2,
-    done: 3,
-  };
-
+function StepComplete({ workflowStep: stage }: StepCompleteProps) {
   return (
     <>
       <StepContents key="start">
