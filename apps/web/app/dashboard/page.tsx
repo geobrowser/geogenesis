@@ -2,7 +2,10 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 import { options } from '~/core/environment/environment';
-import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
+import {
+  type MembershipRequest,
+  fetchInterimMembershipRequests,
+} from '~/core/io/subgraph/fetch-interim-membership-requests';
 
 import { Component } from './component';
 
@@ -15,7 +18,10 @@ export default async function PersonalHomePage() {
     spaces.map(spaceId => fetchInterimMembershipRequests({ endpoint: options.production.membershipSubgraph, spaceId }))
   );
 
-  const membershipRequests = membershipRequestsBySpace.flat();
+  const membershipRequests: MembershipRequest[] = membershipRequestsBySpace
+    .flat()
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+    .reverse();
 
   return <Component membershipRequests={membershipRequests} />;
 }

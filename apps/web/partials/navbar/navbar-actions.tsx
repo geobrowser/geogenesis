@@ -17,9 +17,9 @@ import { useEditable } from '~/core/state/editable-store/editable-store';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
+import { Icon } from '~/design-system/icon';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { Menu } from '~/design-system/menu';
 
 function useUserProfile(address?: string) {
@@ -65,28 +65,19 @@ export function NavbarActions({ spaceId }: Props) {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
+        <AvatarMenuItem disabled>
+          <div className="flex items-center gap-2 grayscale">
+            <div className="relative h-4 w-4 overflow-hidden rounded-full">
+              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+            </div>
+            <p className="text-button">Personal space</p>
+          </div>
+        </AvatarMenuItem>
         <AvatarMenuItem>
           <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-            <div className="relative h-4 w-4 overflow-hidden rounded-full">
-              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
-            </div>
-            <p className="text-button">Personal Home</p>
+            <Icon icon="home" />
+            <p className="text-button">Personal home</p>
           </Link>
-        </AvatarMenuItem>
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <div className="relative h-4 w-4 overflow-hidden rounded-full">
-              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
-            </div>
-            <p className="text-button">Personal Space</p>
-          </div>
-        </AvatarMenuItem>
-
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <NotificationEmpty />
-            <p className="text-button">Notifications</p>
-          </div>
         </AvatarMenuItem>
         <AvatarMenuItem>
           <GeoConnectButton />

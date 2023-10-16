@@ -6,19 +6,26 @@ import { useQuery } from '@tanstack/react-query';
 import { useWalletClient } from 'wagmi';
 import { useAccount } from 'wagmi';
 
+import { useLocalStorage } from '~/core/hooks/use-local-storage';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Publish } from '~/core/io';
+import type { MembershipRequest} from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Services } from '~/core/services';
 import type { Space } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
+import { ClientOnly } from '~/design-system/client-only';
 import { TabGroup } from '~/design-system/tab-group';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
-export const Component = ({ membershipRequests }: any) => {
+type Props = {
+  membershipRequests: MembershipRequest[];
+};
+
+export const Component = ({ membershipRequests }: Props) => {
   return (
     <div className="mx-auto max-w-[784px]">
       <PersonalHomeHeader />
@@ -65,7 +72,11 @@ const PersonalHomeNavigation = () => {
   );
 };
 
-const PersonalHomeDashboard = ({ membershipRequests }: any) => {
+type PersonalHomeDashboardProps = {
+  membershipRequests: MembershipRequest[];
+};
+
+const PersonalHomeDashboard = ({ membershipRequests }: PersonalHomeDashboardProps) => {
   return (
     <div className="mt-8 flex gap-8">
       <div className="w-2/3">
@@ -76,17 +87,26 @@ const PersonalHomeDashboard = ({ membershipRequests }: any) => {
   );
 };
 
-const PendingRequests = ({ membershipRequests }: any) => {
+type PendingRequestsProps = {
+  membershipRequests: MembershipRequest[];
+};
+
+const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
   return (
     <div className="space-y-4">
-      {membershipRequests.map((request: any) => (
+      {membershipRequests.map((request: MembershipRequest) => (
         <MembershipRequest key={request.id} request={request} />
       ))}
     </div>
   );
 };
 
-const MembershipRequest = ({ request }: any) => {
+type MembershipRequestProps = {
+  request: MembershipRequest;
+};
+
+const MembershipRequest = ({ request }: MembershipRequestProps) => {
+  const [dismissedRequests, setDismissedRequests] = useLocalStorage<Array<string>>('dismissedRequests', []);
   const { spaces } = useSpaces();
   const address = request.requestor;
   const profile = useUserProfile(address);
@@ -100,37 +120,49 @@ const MembershipRequest = ({ request }: any) => {
     }
   };
 
+  const handleReject = () => {
+    if (!dismissedRequests.includes(request.id)) {
+      const newDismissedRequests = [...dismissedRequests, request.id]
+      setDismissedRequests(newDismissedRequests);
+    }
+  };
+
+  if (dismissedRequests.includes(request.id)) {
+    return null;
+  }
+
   return (
-    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-smallTitle">{profile?.name ?? address}</div>
-        <div className="relative h-5 w-5 overflow-hidden rounded-full">
-          <Avatar value={address} avatarUrl={profile?.avatarUrl} size={20} />
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
-        <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-          <img
-            src={getSpaceImage(spaces, request.space)}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-            alt=""
-          />
-        </span>
-        <span>{spaces.find(({ id }) => id === request.space)?.attributes.name ?? 'Space'}</span>
-      </div>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-smallButton text-xs leading-none">
-            Member request 0/1 votes needed
+    <ClientOnly>
+      <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-smallTitle">{profile?.name ?? address}</div>
+          <div className="relative h-5 w-5 overflow-hidden rounded-full">
+            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={20} />
           </div>
         </div>
-        <div className="inline-flex items-center gap-2">
-          {/* @TODO add reject behavior */}
-          <SmallButton>Reject</SmallButton>
-          <SmallButton onClick={handleAccept}>Accept</SmallButton>
+        <div className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
+          <span className="relative h-3 w-3 overflow-hidden rounded-sm">
+            <img
+              src={getSpaceImage(spaces, request.space)}
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              alt=""
+            />
+          </span>
+          <span>{spaces.find(({ id }) => id === request.space)?.attributes.name ?? 'Space'}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-smallButton text-xs leading-none">
+              Member request 0/1 votes needed
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-2">
+            <SmallButton onClick={handleReject}>Reject</SmallButton>
+            <SmallButton onClick={handleAccept}>Accept</SmallButton>
+          </div>
         </div>
       </div>
-    </div>
+    </ClientOnly>
   );
 };
 
