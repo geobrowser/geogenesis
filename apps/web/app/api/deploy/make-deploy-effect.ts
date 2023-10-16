@@ -9,12 +9,12 @@ import { polygon, polygonMumbai } from 'viem/chains';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
-// import { ID } from '~/core/id';
-// import { StorageClient } from '~/core/io/storage/storage';
-// import { OmitStrict, Triple } from '~/core/types';
+import { ID } from '~/core/id';
+import { StorageClient } from '~/core/io/storage/storage';
+import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
-// import { makeProposalServer } from './make-proposal-server';
+import { makeProposalServer } from './make-proposal-server';
 
 const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
 
@@ -34,13 +34,17 @@ class SpaceProxyContractAddressNullError extends Error {
   readonly _tag = 'SpaceProxyContractAddressNullError';
 }
 
-class GrantAdminRoleError extends Error {
+class GrantRoleError extends Error {
   readonly _tag = 'GrantAdminRole';
 }
 
-// class CreateProfileGeoEntityFailedError extends Error {
-//   readonly _tag = 'CreateProfileGeoEntityFailedError';
-// }
+class RenounceRoleError extends Error {
+  readonly _tag = 'GrantAdminRole';
+}
+
+class CreateProfileGeoEntityFailedError extends Error {
+  readonly _tag = 'CreateProfileGeoEntityFailedError';
+}
 
 interface UserConfig {
   account: `0x${string}`;
@@ -64,31 +68,19 @@ const ROLES = [
 ];
 
 export function makeDeployEffect(requestId: string, { account: userAccount, username, avatarUri }: UserConfig) {
-  /**
-   * 1. ~~Get beacon contract from beacon address~~
-   * 2. ~~Deploy proxy contract pointing to beacon contract~~
-   *     https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/7fd8a3a9f81839482d91af1df99f0b97966ee74a/packages/plugin-hardhat/test/import.js#L117
-   * 3. ~~Configure roles (will we still need this?)~~
-   * 4. Deploy governance contracts (how does this work?)
-   * 5. Call `addSubspace` on permissionless registry
-   * 6. Add user profile to new space
-   * 7. Make user admin/editor/editorController (will we need this with governance?)
-   * 7.5. This should be indexed by the Person indexer into a Person Id <-> Space Id mapping
-   * 8. Remove deployer from admin/editor/editorController
-   */
   const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
 
   const client = createWalletClient({
     account,
-    chain: polygon,
-    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
+    chain: polygonMumbai,
+    // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
+    chain: polygonMumbai,
+    // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   /**
@@ -117,8 +109,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
           const proxyTxHash = await client.deployContract({
             abi: BeaconProxy.abi,
             bytecode: BeaconProxy.bytecode as `0x${string}`,
-            // args: [MUMBAI_BEACON_ADDRESS, ''],
-            args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
+            args: [MUMBAI_BEACON_ADDRESS, ''],
+            // args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
             account,
           });
           slog({ requestId, message: `Space proxy hash: ${proxyTxHash}`, account: userAccount });
@@ -219,6 +211,79 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       })
     );
 
+    yield* unwrap(
+      Effect.tryPromise({
+        try: async () => {
+          const actions: CreateTripleAction[] = [];
+
+          if (username) {
+            const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+              entityId: ID.createEntityId(),
+              entityName: username ?? '',
+              attributeId: SYSTEM_IDS.NAME,
+              attributeName: 'Name',
+              space: deployProxyEffect.contractAddress as string,
+              value: {
+                type: 'string',
+                value: username,
+                id: ID.createValueId(),
+              },
+            };
+
+            actions.push({
+              type: 'createTriple',
+              // @TODO: Somehow link to on-chain profilePerson
+              id: ID.createTripleId(nameTripleWithoutId),
+              ...nameTripleWithoutId,
+            });
+          }
+
+          if (avatarUri) {
+            const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
+              entityId: ID.createEntityId(),
+              entityName: username ?? '',
+              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+              attributeName: 'Avatar',
+              space: deployProxyEffect.contractAddress as string,
+              value: {
+                type: 'image',
+                value: avatarUri,
+                id: ID.createValueId(),
+              },
+            };
+
+            actions.push({
+              type: 'createTriple',
+              id: ID.createTripleId(avatarTripleWithoutId),
+              ...avatarTripleWithoutId,
+            });
+          }
+
+          makeProposalServer({
+            actions,
+            name: `Creating profile for ${userAccount}`,
+            space: deployProxyEffect.contractAddress as string,
+            // @TODO: Use storage client configured by environment
+            storageClient: new StorageClient(Environment.options.production.ipfs),
+            account,
+            wallet: client,
+            publicClient,
+          });
+        },
+        catch: error => {
+          slog({
+            level: 'error',
+            requestId,
+            message: `Creating Geo entity Profile in space address ${deployProxyEffect.contractAddress} failed: ${
+              (error as Error).message
+            }`,
+            account: userAccount,
+          });
+          return new CreateProfileGeoEntityFailedError();
+        },
+      })
+    );
+
     // @TODO: Batch?
     for (const role of ROLES) {
       yield* unwrap(
@@ -258,7 +323,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
               message: `Granting ${role.role} role failed: ${(error as Error).message}`,
               account: userAccount,
             });
-            return new GrantAdminRoleError();
+            return new GrantRoleError();
           },
         })
       );
@@ -281,7 +346,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
             slog({
               requestId,
-              message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
+              message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,
               account: userAccount,
             });
 
@@ -303,7 +368,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
               message: `Renouncing ${role.role} role failed: ${(error as Error).message}`,
               account: userAccount,
             });
-            return new GrantAdminRoleError();
+            return new RenounceRoleError();
           },
         })
       );
@@ -315,54 +380,6 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
     // - add user profile geo entity to space
     // - add space to registry with addEntries (eventually this will be removed and we will use governance contracts)
     // - map space to profile and wallet address (no idea how to do this)
-
-    // yield* unwrap(
-    //   Effect.tryPromise({
-    //     try: async () => {
-    //       const tripleWithoutId: OmitStrict<Triple, 'id'> = {
-    //         entityId: ID.createEntityId(),
-    //         entityName: username ?? '',
-    //         attributeId: SYSTEM_IDS.NAME,
-    //         attributeName: 'Name',
-    //         space: deployProxyEffect.contractAddress as string,
-    //         value: {
-    //           type: 'string',
-    //           value: username ?? '',
-    //           id: ID.createValueId(),
-    //         },
-    //       };
-
-    //       makeProposalServer({
-    //         actions: [
-    //           // @TODO: Add avatarUri as image value type
-    //           {
-    //             type: 'createTriple',
-    //             // @TODO: Somehow link to on-chain profilePerson
-    //             id: ID.createTripleId(tripleWithoutId),
-    //             ...tripleWithoutId,
-    //           },
-    //         ],
-    //         name: `Creating profile for ${userAccount}`,
-    //         space: deployProxyEffect.contractAddress as string,
-    //         // @TODO: Use storage client configured by environment
-    //         storageClient: new StorageClient(Environment.options.production.ipfs),
-    //         wallet: client,
-    //         publicClient,
-    //       });
-    //     },
-    //     catch: error => {
-    //       slog({
-    //         level: 'error',
-    //         requestId,
-    //         message: `Creating Geo entity Profile in space address ${deployProxyEffect.contractAddress} failed: ${
-    //           (error as Error).message
-    //         }`,
-    //         account: userAccount,
-    //       });
-    //       return new CreateProfileGeoEntityFailedError();
-    //     },
-    //   })
-    // );
 
     return deployProxyEffect;
   });
