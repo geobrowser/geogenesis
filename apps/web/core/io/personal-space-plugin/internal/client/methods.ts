@@ -1,17 +1,17 @@
-import { votingSettingsToContract } from '@aragon/sdk-client';
-import {
-  ClientCore,
-  PrepareInstallationParams,
-  PrepareInstallationStepValue,
-  prepareGenericInstallation,
-} from '@aragon/sdk-client-common';
-import { createPublicClient, createWalletClient, getContract, http } from 'viem';
-import { goerli, polygonMumbai } from 'viem/chains';
+import { ClientCore } from '@aragon/sdk-client-common';
+import { Effect } from 'effect';
+import { createPublicClient, http } from 'viem';
+import { polygonMumbai } from 'viem/chains';
 
-import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { memberAccessPluginAbi } from '~/core/io/governance-space-plugin/abis';
+import {
+  TransactionPrepareFailedError,
+  TransactionRevertedError,
+  TransactionWriteFailedError,
+  WaitForTransactionBlockError,
+} from '~/core/io/publish';
 
 import { personalSpaceAdminPluginAbi, personalSpaceAdminPluginSetupAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
@@ -24,14 +24,6 @@ export const publicClient = createPublicClient({
   transport: http(),
 });
 
-// const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-
-// const walletClient = createWalletClient({
-//   account,
-//   chain: polygonMumbai,
-//   transport: http(),
-// });
-
 export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   private geoPersonalSpaceAdminPluginAddress: string;
 
@@ -40,10 +32,10 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   constructor(pluginContext: GeoPersonalSpacePluginContext) {
     super(pluginContext);
 
-    // Plugin Addresses
+    // Plugin Address
     this.geoPersonalSpaceAdminPluginAddress = pluginContext.geoPersonalSpaceAdminPluginAddress;
 
-    // Plugin Repo Addresses
+    // Plugin Repo Address
     this.geoPersonalSpaceAdminPluginRepoAddress = pluginContext.geoPersonalSpaceAdminPluginRepoAddress;
   }
 
@@ -59,32 +51,147 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   //   });
   // }
 
-  // Personal Space Admin Plugin: Writes
+  // Personal Space Admin Plugin: Write Functions
 
+  // Initialize Personal Space Admin Plugin for an already existing DAO
   public async initializePersonalSpaceAdminPlugin(daoAddress: `0x${string}`) {
-    const initializeData = await prepareWriteContract({
-      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
-      abi: personalSpaceAdminPluginAbi,
-      functionName: 'initialize',
-      args: [daoAddress],
+    const prepareInitEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+          abi: personalSpaceAdminPluginAbi,
+          functionName: 'initialize',
+          args: [daoAddress],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });
-    return initializeData;
+
+    const writeInitEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareInitEffect);
+
+      onInitStateChange('initializing-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Initialization failed: ${error}`),
+        })
+      );
+    });
+
+    const initializePluginProgram = Effect.gen(function* (awaited) {
+      const writeInitResult = yield* awaited(writeInitEffect);
+
+      console.log('Transaction hash: ', writeInitResult.hash);
+      onInitStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeInitResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(initializePluginProgram);
   }
 
+  // Execute Personal Space Admin Plugin Proposals
   public async executeProposal(
     metadata: `0x${string}`,
     actions: readonly { to: `0x${string}`; value: bigint; data: `0x${string}` }[],
     allowFailureMap: bigint
   ) {
-    const executeProposalData = await prepareWriteContract({
-      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
-      abi: personalSpaceAdminPluginAbi,
-      functionName: 'executeProposal',
-      args: [metadata, actions, allowFailureMap],
+    const prepareExecutionEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+          abi: personalSpaceAdminPluginAbi,
+          functionName: 'executeProposal',
+          args: [metadata, actions, allowFailureMap],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });
-    return executeProposalData;
+
+    const writeExecutionEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareExecutionEffect);
+
+      onProposalStateChange('initializing-proposal');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Execution failed: ${error}`),
+        })
+      );
+    });
+
+    const executeProgram = Effect.gen(function* (awaited) {
+      const writeExecutionResult = yield* awaited(writeExecutionEffect);
+
+      console.log('Transaction hash: ', writeExecutionResult.hash);
+      onProposalStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeExecutionResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(executeProgram);
   }
 
+  // Personal Space Admin Plugin: Read Functions
   public async isEditor(address: `0x${string}`): Promise<boolean> {
     const isEditorRead = await publicClient.readContract({
       address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
@@ -103,5 +210,15 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
       args: [interfaceId],
     });
     return supportsInterfaceRead;
+  }
+
+  // Personal Space Admin Plugin: Inherited Functions
+  public async proposalCount(): Promise<bigint> {
+    const proposalCountRead = await publicClient.readContract({
+      address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+      abi: personalSpaceAdminPluginAbi,
+      functionName: 'proposalCount',
+    });
+    return proposalCountRead;
   }
 }
