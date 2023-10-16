@@ -15,8 +15,10 @@ export async function GET(request: Request) {
   }
 
   const userAccount = searchParams.get('userAddress') as `0x${string}`;
-  const username = searchParams.get('username') as string;
-  const avatarUri = searchParams.get('avatarUri') as string;
+  const username = searchParams.get('username');
+  const avatarUri = searchParams.get('avatarUri');
+
+  console.log('user info', { username, avatarUri });
 
   const deployment = makeDeployEffect(requestId, { account: userAccount, username, avatarUri });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
@@ -65,6 +67,11 @@ export async function GET(request: Request) {
         return new Response(`Could not grant admin role for user: ${userAccount}`, {
           status: 500,
           statusText: error.message,
+        });
+      default:
+        return new Response('Could not deploy space contract. Please try again.', {
+          status: 500,
+          statusText: 'Unknown error',
         });
     }
   }

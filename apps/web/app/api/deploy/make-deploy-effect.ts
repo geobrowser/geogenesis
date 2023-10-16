@@ -18,6 +18,8 @@ import { makeProposalServer } from './make-proposal-server';
 
 const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
 
+export const maxDuration = 180;
+
 class ProxyBeaconInitializeFailedError extends Error {
   readonly _tag = 'ProxyBeaconInitializeFailedError';
 }
@@ -105,7 +107,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
    * to register their profile and set up their space.
    *
    */
-  // Proxy deployment
+  // Deploy proxy contract
   const deploymentEffect = Effect.gen(function* (unwrap) {
     const deployProxyEffect = yield* unwrap(
       Effect.tryPromise({
@@ -144,6 +146,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       return yield* unwrap(Effect.fail(new SpaceProxyContractAddressNullError()));
     }
 
+    // Initialize proxy contract
     yield* unwrap(
       Effect.tryPromise({
         try: async () => {
@@ -178,10 +181,10 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       })
     );
 
+    // Configure roles in proxy contract
     yield* unwrap(
       Effect.tryPromise({
         try: async () => {
-          // Configure roles in proxy contract
           const simulateConfigureRolesResult = await publicClient.simulateContract({
             abi: SpaceArtifact.abi,
             address: deployProxyEffect.contractAddress as `0x${string}`,
@@ -215,6 +218,69 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       })
     );
 
+    // Add the new space to the permissionless space registry
+    yield* unwrap(
+      Effect.tryPromise({
+        try: async () => {
+          const spaceAddressTripleWithoutId: OmitStrict<Triple, 'id'> = {
+            entityId: ID.createEntityId(),
+            entityName: `${username}'s Space`,
+            attributeId: SYSTEM_IDS.SPACE,
+            attributeName: 'Space',
+            space: deployProxyEffect.contractAddress as string,
+            value: {
+              type: 'string',
+              value: deployProxyEffect.contractAddress as string,
+              id: ID.createValueId(),
+            },
+          };
+
+          slog({
+            requestId,
+            message: `Adding space ${deployProxyEffect.contractAddress} to space registry`,
+            account: userAccount,
+          });
+
+          const proposalEffect = await makeProposalServer({
+            actions: [
+              {
+                type: 'createTriple',
+                id: ID.createTripleId(spaceAddressTripleWithoutId),
+                ...spaceAddressTripleWithoutId,
+              },
+            ],
+            name: `Adding space ${deployProxyEffect.contractAddress} for ${userAccount} to space registry`,
+            space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
+            // @TODO: Use storage client configured by environment
+            storageClient: new StorageClient(Environment.options.production.ipfs),
+            account,
+            wallet: client,
+            publicClient,
+          });
+
+          await Effect.runPromise(proposalEffect);
+
+          slog({
+            requestId,
+            message: `Successfully added space ${deployProxyEffect.contractAddress} to space registry`,
+            account: userAccount,
+          });
+        },
+        catch: error => {
+          slog({
+            level: 'error',
+            requestId,
+            message: `Adding space ${deployProxyEffect.contractAddress} to space registry failed: ${
+              (error as Error).message
+            }`,
+            account: userAccount,
+          });
+          return new AddToSpaceRegistryError();
+        },
+      })
+    );
+
+    // Add geo profile entity to new space
     yield* unwrap(
       Effect.tryPromise({
         try: async () => {
@@ -269,7 +335,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             account: userAccount,
           });
 
-          makeProposalServer({
+          const proposalEffect = await makeProposalServer({
             actions,
             name: `Creating profile for ${userAccount}`,
             space: deployProxyEffect.contractAddress as string,
@@ -279,6 +345,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             wallet: client,
             publicClient,
           });
+
+          await Effect.runPromise(proposalEffect);
 
           slog({
             requestId,
@@ -301,11 +369,11 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
     );
 
     // @TODO: Batch?
+    // Configure roles in proxy contract
     for (const role of ROLES) {
       yield* unwrap(
         Effect.tryPromise({
           try: async () => {
-            // Configure roles in proxy contract
             const simulateGrantRoleResult = await publicClient.simulateContract({
               abi: SpaceArtifact.abi,
               address: deployProxyEffect.contractAddress as `0x${string}`,
@@ -346,11 +414,11 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
     }
 
     // @TODO Batch?
+    // Renounce deployer roles in proxy contract
     for (const role of ROLES) {
       yield* unwrap(
         Effect.tryPromise({
           try: async () => {
-            // Configure roles in proxy contract
             const simulateRenounceRoleResult = await publicClient.simulateContract({
               abi: SpaceArtifact.abi,
               address: deployProxyEffect.contractAddress as `0x${string}`,
@@ -389,73 +457,6 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
         })
       );
     }
-
-    // Add the new space to the permissionless space registry
-    yield* unwrap(
-      Effect.tryPromise({
-        try: async () => {
-          const spaceAddressTripleWithoutId: OmitStrict<Triple, 'id'> = {
-            entityId: ID.createEntityId(),
-            entityName: `${username}'s Space`,
-            attributeId: SYSTEM_IDS.SPACE,
-            attributeName: 'Space',
-            space: deployProxyEffect.contractAddress as string,
-            value: {
-              type: 'string',
-              value: deployProxyEffect.contractAddress as string,
-              id: ID.createValueId(),
-            },
-          };
-
-          slog({
-            requestId,
-            message: `Adding space ${deployProxyEffect.contractAddress} to space registry`,
-            account: userAccount,
-          });
-
-          makeProposalServer({
-            actions: [
-              {
-                type: 'createTriple',
-                id: ID.createTripleId(spaceAddressTripleWithoutId),
-                ...spaceAddressTripleWithoutId,
-              },
-            ],
-            name: `Creating profile for ${userAccount}`,
-            space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
-            // @TODO: Use storage client configured by environment
-            storageClient: new StorageClient(Environment.options.production.ipfs),
-            account,
-            wallet: client,
-            publicClient,
-          });
-
-          slog({
-            requestId,
-            message: `Successfully added space ${deployProxyEffect.contractAddress} to space registry`,
-            account: userAccount,
-          });
-        },
-        catch: error => {
-          slog({
-            level: 'error',
-            requestId,
-            message: `Adding space ${deployProxyEffect.contractAddress} to space registry failed: ${
-              (error as Error).message
-            }`,
-            account: userAccount,
-          });
-          return new AddToSpaceRegistryError();
-        },
-      })
-    );
-
-    // @TODO:
-    // - grant all roles to userAddress
-    // - renounce role for deployer (we might not want to do this until we migrate to the new governance contracts)
-    // - add user profile geo entity to space
-    // - add space to registry with addEntries (eventually this will be removed and we will use governance contracts)
-    // - map space to profile and wallet address (no idea how to do this)
 
     return deployProxyEffect;
   });

@@ -12,8 +12,8 @@ dataSources:
     network: mumbai
     source:
       abi: PermissionlessSpaceRegistry
-      address: "0x05a813a18740e17A499771Edd020e3827aaabB6E"
-      startBlock: 41168012
+      address: "0x42096035524630382E73cfFAE1CA319CFa72F4dC"
+      startBlock: 41274221
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6

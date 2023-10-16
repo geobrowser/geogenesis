@@ -51,8 +51,10 @@ export async function makeProposalServer({
   name,
   storageClient,
   publicClient,
-}: MakeProposalServerOptions): Promise<void> {
+}: MakeProposalServerOptions) {
   const cids: string[] = [];
+
+  console.log('actions', actions);
 
   for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
     console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
@@ -128,5 +130,5 @@ export async function makeProposalServer({
     `);
   });
 
-  await Effect.runPromise(publishProgram);
+  return publishProgram;
 }
