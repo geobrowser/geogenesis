@@ -40,6 +40,16 @@
       "address": "0x05a813a18740e17A499771Edd020e3827aaabB6E",
       "txHash": "0x1d5f13572d68040af3e6dec8a1aacb03d7811be28c677a9566b5d2073dd2b5a1",
       "kind": "beacon"
+    },
+    {
+      "address": "0x4Ec3d080F6f087744059ed127e93F558BcD41449",
+      "txHash": "0x4b9ba29909709c2686abd358a1da5fe293f1deb4d48d0af31709743cd7e82895",
+      "kind": "beacon"
+    },
+    {
+      "address": "0x42096035524630382E73cfFAE1CA319CFa72F4dC",
+      "txHash": "0xdaa3a15dc5198a1370d99aa48f5604fbc329fdd4785cc736ea828b7c48574505",
+      "kind": "beacon"
     }
   ],
   "impls": {

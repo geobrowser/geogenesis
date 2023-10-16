@@ -40,7 +40,7 @@ async function main() {
 
   saveAddress({
     chainId,
-    contractName: 'SpaceRegistry',
+    contractName: 'PermissionlessSpaceRegistry',
     address: spaceRegistry.address,
     startBlock: spaceRegistry.deployTransaction.blockNumber!,
   })
@@ -48,7 +48,7 @@ async function main() {
   if (networkId === 'localhost') {
     saveAddress({
       chainId: 'localhost',
-      contractName: 'SpaceRegistry',
+      contractName: 'PermissionlessSpaceRegistry',
       address: spaceRegistry.address,
       startBlock: spaceRegistry.deployTransaction.blockNumber!,
     })
