@@ -69,9 +69,7 @@ export class ActionsStore implements IActionsStore {
               const spaces = Object.keys(data);
               spaces.forEach(spaceId => {
                 const persistedActions: ActionType[] = data[spaceId].filter(action => !action.hasBeenPublished);
-                if (persistedActions.length === 0) {
-                  delete savedData[spaceId];
-                } else {
+                if (persistedActions.length > 0) {
                   savedData[spaceId] = persistedActions;
                 }
               });
