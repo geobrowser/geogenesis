@@ -5,7 +5,7 @@ import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/con
 import { Effect } from 'effect';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { polygon, polygonMumbai } from 'viem/chains';
+import { polygon } from 'viem/chains';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
@@ -15,8 +15,6 @@ import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from './make-proposal-server';
-
-export const maxDuration = 180;
 
 class ProxyBeaconInitializeFailedError extends Error {
   readonly _tag = 'ProxyBeaconInitializeFailedError';

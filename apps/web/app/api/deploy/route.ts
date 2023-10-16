@@ -6,6 +6,8 @@ import { slog } from '~/core/utils/utils';
 
 import { makeDeployEffect } from './make-deploy-effect';
 
+export const maxDuration = 180;
+
 export async function GET(request: Request) {
   const requestId = uuid();
   const { searchParams } = new URL(request.url);
