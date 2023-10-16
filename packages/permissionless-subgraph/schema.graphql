@@ -1,0 +1,163 @@
+type Space @entity {
+  id: ID!
+
+  """
+  Permissions
+
+  We should think of our initial governance model as an implementation
+  detail. These array-based lists of roles won't scale well, but should
+  be fine until we build out a proper governance protocol, at which point
+  we can update the mapping.
+  """
+  admins: [Account!]!
+  editorControllers: [Account!]!
+  editors: [Account!]!
+
+  isRootSpace: Boolean!
+  createdAtBlock: BigInt!
+  entity: GeoEntity
+}
+
+type Account @entity {
+  id: ID!
+  adminOf: [Space!]! @derivedFrom(field: "admins")
+  editorControllerOf: [Space!]! @derivedFrom(field: "editorControllers")
+  editorOf: [Space!]! @derivedFrom(field: "editors")
+}
+
+"""
+An entry in the Log contract.
+"""
+type LogEntry @entity {
+  id: ID!
+  createdAtBlock: BigInt!
+  uri: String!
+  createdBy: Bytes!
+  mimeType: String
+
+  space: Space!
+
+  """
+  The binary data located at the uri.
+  """
+  decoded: Bytes
+
+  """
+  The decoded actions located at the uri.
+  """
+  json: String
+}
+
+"""
+A node within the knowledge graph.
+"""
+type GeoEntity @entity {
+  id: ID!
+  name: String
+
+  typeIds: [String!]! # Maybe we want to make this non nullable? I think it's better like this though
+  """
+  This may not be performant. We can do all the same queries
+  via triples(where: { entity: $id })) if needed.
+  """
+  entityOf: [Triple!]! @derivedFrom(field: "entity")
+
+  version: Version # The version number of the entity
+  versions: [Version!]! # All versions an entity has had
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+type Proposal @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  space: String!
+  status: ProposalStatus! # status of the proposal
+  createdAt: BigInt! # block timestamp
+  proposedVersions: [ProposedVersion!]! # All proposed versions for this Proposal
+  createdAtBlock: BigInt!
+}
+
+type ActionCount @entity {
+  id: ID! #always 1
+  count: BigInt!
+}
+
+type ProposedVersion @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  entity: GeoEntity! # entity we are describing
+  createdAt: BigInt! # block timestamp
+  actions: [Action!]! # All actions to be taken if this version is finalized
+  createdAtBlock: BigInt!
+}
+
+type Version @entity {
+  id: ID!
+  name: String
+  description: String
+  createdBy: Account
+  createdAt: BigInt! # block timestamp
+  proposedVersion: ProposedVersion! # the proposed version that was finalized to make this entity
+  actions: [Action!]! # All actions taken from genesis to this version
+  createdAtBlock: BigInt!
+}
+
+#An action to take as part of a version
+type Action @entity {
+  id: ID!
+  actionType: ActionType!
+  entity: GeoEntity!
+  # the rest of these are all nullable because we create entity action
+  # lacks these fields
+  attribute: GeoEntity
+  valueType: ValueType
+  valueId: String
+  numberValue: BigDecimal
+  stringValue: String
+  entityValue: GeoEntity
+  arrayValue: [String!]
+}
+
+enum ActionType {
+  CREATE
+  DELETE
+}
+
+"""
+An edge within the knowledge graph.
+
+Triples are 3-tuples of (entity, attribute, value).
+"""
+type Triple @entity {
+  id: ID! # TODO: namespace ids with space id
+  entity: GeoEntity!
+  attribute: GeoEntity!
+  valueType: ValueType!
+  valueId: String!
+  numberValue: BigDecimal
+  stringValue: String
+  arrayValue: [String!]
+  entityValue: GeoEntity
+  isProtected: Boolean!
+  space: Space!
+}
+
+enum ValueType {
+  NULL
+  NUMBER
+  STRING
+  ENTITY
+  IMAGE
+  DATE
+  URL
+}

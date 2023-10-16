@@ -4,6 +4,7 @@ import pluralize from 'pluralize';
 import { Cookie } from '~/core/cookie';
 
 import { getEditorsForSpace } from './get-editors-for-space';
+import { SpaceEditorsPopoverEditorRequestButton } from './space-editors-popover-editor-request-button';
 import { MemberRow } from './space-member-row';
 
 interface Props {
@@ -32,9 +33,9 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
             {connectedAddress ? 'Leave as editor' : 'Connect wallet'}
           </button>
         ) : (
-          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? 'Request to be an editor' : 'Connect wallet'}
-          </button>
+          <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
+            {connectedAddress ? <SpaceEditorsPopoverEditorRequestButton spaceId={spaceId} /> : 'Connect wallet'}
+          </div>
         )}
       </div>
     </div>
