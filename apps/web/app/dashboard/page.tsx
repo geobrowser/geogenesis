@@ -20,8 +20,7 @@ export default async function PersonalHomePage() {
 
   const membershipRequests: MembershipRequest[] = membershipRequestsBySpace
     .flat()
-    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
-    .reverse();
+    .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
   return <Component membershipRequests={membershipRequests} />;
 }
