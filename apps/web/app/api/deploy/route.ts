@@ -18,8 +18,6 @@ export async function GET(request: Request) {
   const username = searchParams.get('username');
   const avatarUri = searchParams.get('avatarUri');
 
-  console.log('user info', { username, avatarUri });
-
   const deployment = makeDeployEffect(requestId, { account: userAccount, username, avatarUri });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
 
