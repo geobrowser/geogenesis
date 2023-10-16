@@ -46,6 +46,10 @@ class CreateProfileGeoEntityFailedError extends Error {
   readonly _tag = 'CreateProfileGeoEntityFailedError';
 }
 
+class AddToSpaceRegistryError extends Error {
+  readonly _tag = 'AddToSpaceRegistryError';
+}
+
 interface UserConfig {
   account: `0x${string}`;
   username: string | null;
@@ -259,6 +263,12 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             });
           }
 
+          slog({
+            requestId,
+            message: `Adding profile to space ${deployProxyEffect.contractAddress}`,
+            account: userAccount,
+          });
+
           makeProposalServer({
             actions,
             name: `Creating profile for ${userAccount}`,
@@ -268,6 +278,12 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             account,
             wallet: client,
             publicClient,
+          });
+
+          slog({
+            requestId,
+            message: `Successfully added profile to space ${deployProxyEffect.contractAddress}`,
+            account: userAccount,
           });
         },
         catch: error => {
@@ -373,6 +389,66 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
         })
       );
     }
+
+    // Add the new space to the permissionless space registry
+    yield* unwrap(
+      Effect.tryPromise({
+        try: async () => {
+          const spaceAddressTripleWithoutId: OmitStrict<Triple, 'id'> = {
+            entityId: ID.createEntityId(),
+            entityName: `${username}'s Space`,
+            attributeId: SYSTEM_IDS.SPACE,
+            attributeName: 'Space',
+            space: deployProxyEffect.contractAddress as string,
+            value: {
+              type: 'string',
+              value: deployProxyEffect.contractAddress as string,
+              id: ID.createValueId(),
+            },
+          };
+
+          slog({
+            requestId,
+            message: `Adding space ${deployProxyEffect.contractAddress} to space registry`,
+            account: userAccount,
+          });
+
+          makeProposalServer({
+            actions: [
+              {
+                type: 'createTriple',
+                id: ID.createTripleId(spaceAddressTripleWithoutId),
+                ...spaceAddressTripleWithoutId,
+              },
+            ],
+            name: `Creating profile for ${userAccount}`,
+            space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
+            // @TODO: Use storage client configured by environment
+            storageClient: new StorageClient(Environment.options.production.ipfs),
+            account,
+            wallet: client,
+            publicClient,
+          });
+
+          slog({
+            requestId,
+            message: `Successfully added space ${deployProxyEffect.contractAddress} to space registry`,
+            account: userAccount,
+          });
+        },
+        catch: error => {
+          slog({
+            level: 'error',
+            requestId,
+            message: `Adding space ${deployProxyEffect.contractAddress} to space registry failed: ${
+              (error as Error).message
+            }`,
+            account: userAccount,
+          });
+          return new AddToSpaceRegistryError();
+        },
+      })
+    );
 
     // @TODO:
     // - grant all roles to userAddress

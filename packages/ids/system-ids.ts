@@ -122,12 +122,12 @@ export const PERMISSIONLESS_SPACE_BEACON_ADDRESS =
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS =
-  '0x9DcB2aB0723C60Ac536954FC2696aF33EEE2171e'
-// '0x05a813a18740e17A499771Edd020e3827aaabB6E' // mumbai
+  // '0x9DcB2aB0723C60Ac536954FC2696aF33EEE2171e'
+  '0x05a813a18740e17A499771Edd020e3827aaabB6E' // mumbai
 
 export const MEMBERSHIP_CONTRACT_ADDRESS =
-  '0x34a94160f4B0f86d932927DFfb326354dB279181'
-// 0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E // mumbai
+  // '0x34a94160f4B0f86d932927DFfb326354dB279181'
+  '0x22e4484e71ec9ea3b115aa21fd3d9f98edbe5d4e' // mumbai
 
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.

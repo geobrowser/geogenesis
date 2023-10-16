@@ -56,7 +56,7 @@ class EntityAutocomplete {
         const merged = this.mergedDataSource;
 
         const fetchEntitiesEffect = Effect.either(
-          Effect.tryPromiseInterrupt({
+          Effect.tryPromise({
             try: () =>
               merged.fetchEntities({
                 endpoint: config.subgraph,

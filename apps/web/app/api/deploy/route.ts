@@ -56,6 +56,11 @@ export async function GET(request: Request) {
           status: 500,
           statusText: error.message,
         });
+      case 'AddToSpaceRegistryError':
+        return new Response(`Could not add user to space registry for user: ${userAccount}`, {
+          status: 500,
+          statusText: error.message,
+        });
       case 'GrantAdminRole':
         return new Response(`Could not grant admin role for user: ${userAccount}`, {
           status: 500,
