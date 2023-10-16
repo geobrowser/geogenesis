@@ -146,7 +146,7 @@ function StepStart({ onNext }: StepStartProps) {
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="aspect-video rounded bg-grey-02 shadow-lg">
-          {/* <img src="/personal-space-preview.png" alt="" /> */}
+          <img src="/create.png" alt="" className="h-full w-full" />
         </div>
         <Button onClick={onNext} className="w-full">
           Start
@@ -289,7 +289,9 @@ function StepComplete({ onNext }: StepCompleteProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded bg-grey-02 shadow-lg">{/* <img src="/space-preview.png" alt="" /> */}</div>
+        <div className="aspect-video rounded bg-grey-02 shadow-lg">
+          <img src="/creating.png" alt="" className="h-full w-full" />
+        </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 5}>
             View Feed
