@@ -16,8 +16,6 @@ import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from './make-proposal-server';
 
-const MUMBAI_BEACON_ADDRESS = '0xf7239cb6d1ac800f2025a2571ce32bde190059cb';
-
 export const maxDuration = 180;
 
 class ProxyBeaconInitializeFailedError extends Error {
@@ -78,15 +76,15 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
 
   const client = createWalletClient({
     account,
-    chain: polygonMumbai,
-    // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    transport: http(Environment.options.testnet.rpc, { batch: true }),
+    chain: polygon,
+    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    // transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   const publicClient = createPublicClient({
-    chain: polygonMumbai,
-    // transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
-    transport: http(Environment.options.testnet.rpc, { batch: true }),
+    chain: polygon,
+    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    // transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   /**
@@ -105,7 +103,6 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
    *
    * When a user makes a new profile there are several steps we need to complete
    * to register their profile and set up their space.
-   *
    */
   // Deploy proxy contract
   const deploymentEffect = Effect.gen(function* (unwrap) {
@@ -115,8 +112,9 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
           const proxyTxHash = await client.deployContract({
             abi: BeaconProxy.abi,
             bytecode: BeaconProxy.bytecode as `0x${string}`,
-            args: [MUMBAI_BEACON_ADDRESS, ''],
-            // args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
+            // We are deploying a permissioned space to a permissionless registry.
+            // Make sure we're pointing to the correct beacon.
+            args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
             account,
           });
           slog({ requestId, message: `Space proxy hash: ${proxyTxHash}`, account: userAccount });
