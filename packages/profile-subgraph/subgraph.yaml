@@ -1,0 +1,31 @@
+specVersion: 0.0.4
+description: Statement history
+repository: https://github.com/geobrowser/geogenesis
+features:
+  - fullTextSearch
+  - ipfsOnEthereumContracts
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: GeoProfileRegistry
+    network: matic
+    source:
+      abi: GeoProfileRegistry
+      address: "0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b"
+      startBlock: 48640368
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - GeoProfileRegistered
+      abis:
+        - name: GeoProfileRegistry
+          file: ../contracts/build/abis/GeoProfileRegistry.json
+      eventHandlers:
+        - event: GeoProfileRegistered(address,address,uint256)
+          handler: handleGeoProfileRegistered
+        - event: GeoProfileHomeSpaceUpdated(address,address,uint256)
+          handler: handleGeoProfileHomeSpaceUpdated
+      file: ./src/mapping.ts

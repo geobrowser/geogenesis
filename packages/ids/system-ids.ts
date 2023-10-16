@@ -98,8 +98,13 @@ export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
  * you can update these addresses to point to the correct contracts on that network.
  */
 
-// This represents the beacon proxy for the first set of deployed permissioned spaces.
-// We should use this beacon proxy for all new permissioned spaces.
+export const PROFILE_REGISTRY_ADDRESS =
+  '0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b'
+// '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
+
+// This represents the beacon for the first set of deployed permissioned spaces.
+// We should use this beacon for all new permissioned spaces. We need to track the beacon
+// address in case we decide to upgrade the implementation of the permissionless space.
 export const PERMISSIONED_SPACE_BEACON_ADDRESS =
   '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF'
 
@@ -108,18 +113,21 @@ export const PERMISSIONED_SPACE_BEACON_ADDRESS =
 export const PERMISSIONED_SPACE_REGISTRY_ADDRESS =
   '0x170b749413328ac9a94762031a7A05b00c1D2e34'
 
-// This represents the beacon proxy for all permissionless spaces.
-export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = ''
+// This represents the beacon for all permissionless spaces. We need to track the beacon
+// address in case we decide to upgrade the implementation of the permissionless space.
+export const PERMISSIONLESS_SPACE_BEACON_ADDRESS =
+  '0xB21d4C7C4b8c661c7eFabCE410214a568268957E'
+// '0xc90513962Db42C1fb44fBb97a8eb0c2E102701Da' // mumbai
 
 // This represents the PermissionlessSpace contract acting as the registry for all
 // permissionless spaces.
-export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = ''
+export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS =
+  '0x9DcB2aB0723C60Ac536954FC2696aF33EEE2171e'
+// '0x05a813a18740e17A499771Edd020e3827aaabB6E' // mumbai
 
 export const MEMBERSHIP_CONTRACT_ADDRESS =
   '0x34a94160f4B0f86d932927DFfb326354dB279181'
-
-export const MEMBERSHIP_CONTRACT_ADDRESS_TESTNET =
-  '0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E'
+// 0x22E4484e71Ec9ea3B115aA21fD3D9f98EdBe5d4E // mumbai
 
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.

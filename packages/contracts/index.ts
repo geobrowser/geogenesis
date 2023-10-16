@@ -1,3 +1,4 @@
 import SpaceAbi from './build/abis/Space.json'
 import MembershipAbi from './build/abis/Membership.json'
-export { SpaceAbi, MembershipAbi }
+import GeoProfileRegistryAbi from './build/abis/GeoProfileRegistry.json'
+export { SpaceAbi, MembershipAbi, GeoProfileRegistryAbi }
