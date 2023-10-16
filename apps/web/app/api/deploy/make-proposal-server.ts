@@ -75,7 +75,7 @@ export async function makeProposalServer({
       publicClient.simulateContract({
         account,
         abi: SpaceAbi,
-        address: space as unknown as `0x${string}`,
+        address: space as `0x${string}`,
         functionName: 'addEntries',
         args: [cids],
       }),

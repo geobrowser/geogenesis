@@ -1,10 +1,17 @@
-import { ByteArray, crypto, log } from '@graphprotocol/graph-ts'
+import {
+  Address,
+  BigInt,
+  ByteArray,
+  crypto,
+  log,
+} from '@graphprotocol/graph-ts'
 import { Account, Space } from '../generated/schema'
 
 class RoleAddedParams {
-  account: string
+  account: Address
   role: ByteArray
-  space: string
+  space: Address
+  createdAtBlock: BigInt
 }
 
 const ADMIN_ROLE = crypto.keccak256(ByteArray.fromUTF8('ADMIN_ROLE'))
@@ -14,19 +21,23 @@ const EDITOR_CONTROLLER_ROLE = crypto.keccak256(
 const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 export function addRole(params: RoleAddedParams): void {
-  const address = params.account
+  const address = params.account.toHexString()
   const role = params.role
-  const spaceAddress = params.space
+  const spaceAddress = params.space.toHexString()
 
-  const account = (Account.load(address) || new Account(address))!
-
-  account.save()
-
-  const space = Space.load(spaceAddress)
+  let space = Space.load(spaceAddress)
 
   if (!space) {
+    log.error(`Space {} not found when adding role for {}`, [
+      spaceAddress,
+      address,
+    ])
+
     return
   }
+
+  const account = (Account.load(address) || new Account(address))!
+  account.save()
 
   if (role == ADMIN_ROLE && !space.admins.includes(address)) {
     space.admins = space.admins.concat([address])
@@ -47,13 +58,18 @@ export function addRole(params: RoleAddedParams): void {
 }
 
 export function removeRole(params: RoleAddedParams): void {
-  const address = params.account
+  const address = params.account.toHexString()
   const role = params.role
-  const spaceAddress = params.space
+  const spaceAddress = params.space.toHexString()
 
-  const space = Space.load(spaceAddress)
+  let space = Space.load(spaceAddress)
 
   if (!space) {
+    log.error(`Space {} not found when removing role for {}`, [
+      spaceAddress,
+      address,
+    ])
+
     return
   }
 

@@ -10,13 +10,20 @@ export async function GET(request: Request) {
   const requestId = uuid();
   const { searchParams } = new URL(request.url);
 
-  if (searchParams.get('userAddress') === null) {
+  const userAccount = searchParams.get('userAddress') as `0x${string}` | null;
+
+  if (userAccount === null) {
     return new Response('Missing user address', { status: 400 });
   }
 
-  const userAccount = searchParams.get('userAddress') as `0x${string}`;
   const username = searchParams.get('username');
   const avatarUri = searchParams.get('avatarUri');
+
+  slog({
+    requestId,
+    account: userAccount,
+    message: `Setting up profile and contracts for user: ${{ userAccount, username, avatarUri }}`,
+  });
 
   const deployment = makeDeployEffect(requestId, { account: userAccount, username, avatarUri });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));

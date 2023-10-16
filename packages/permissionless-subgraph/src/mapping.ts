@@ -4,8 +4,8 @@ import {
   RoleGranted,
   RoleRevoked,
 } from '../generated/templates/Space/Space'
-import { addRole, removeRole } from './access-control'
 import { addEntry } from './add-entry'
+import { addRole, removeRole } from './access-control'
 import { getChecksumAddress } from './get-checksum-address'
 
 export function handleEntryAdded(event: EntryAdded): void {
@@ -29,16 +29,18 @@ export function handleEntryAdded(event: EntryAdded): void {
 
 export function handleRoleGranted(event: RoleGranted): void {
   addRole({
-    space: getChecksumAddress(event.address),
+    space: event.address,
     role: event.params.role,
-    account: getChecksumAddress(event.params.account),
+    account: event.params.account,
+    createdAtBlock: event.block.number,
   })
 }
 
 export function handleRoleRevoked(event: RoleRevoked): void {
   removeRole({
-    space: getChecksumAddress(event.address),
+    space: event.address,
     role: event.params.role,
-    account: getChecksumAddress(event.params.account),
+    account: event.params.account,
+    createdAtBlock: event.block.number,
   })
 }

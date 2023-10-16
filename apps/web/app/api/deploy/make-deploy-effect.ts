@@ -179,43 +179,6 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       })
     );
 
-    // Configure roles in proxy contract
-    yield* unwrap(
-      Effect.tryPromise({
-        try: async () => {
-          const simulateConfigureRolesResult = await publicClient.simulateContract({
-            abi: SpaceArtifact.abi,
-            address: deployProxyEffect.contractAddress as `0x${string}`,
-            functionName: 'configureRoles',
-            account,
-          });
-
-          const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
-          slog({ requestId, message: `Configure roles hash: ${configureRolesSimulateHash}`, account: userAccount });
-
-          const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
-            hash: configureRolesSimulateHash,
-          });
-          slog({
-            requestId,
-            message: `Configure roles for ${deployProxyEffect.contractAddress}: ${configureRolesTxResult.transactionHash}`,
-            account: userAccount,
-          });
-
-          return configureRolesTxResult;
-        },
-        catch: error => {
-          slog({
-            level: 'error',
-            requestId,
-            message: `Space contract role configuration failed: ${(error as Error).message}`,
-            account: userAccount,
-          });
-          return new ProxyBeaconConfigureRolesFailedError();
-        },
-      })
-    );
-
     // Add the new space to the permissionless space registry
     yield* unwrap(
       Effect.tryPromise({
@@ -225,7 +188,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
             entityName: `${username}'s Space`,
             attributeId: SYSTEM_IDS.SPACE,
             attributeName: 'Space',
-            space: deployProxyEffect.contractAddress as string,
+            space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
             value: {
               type: 'string',
               value: deployProxyEffect.contractAddress as string,
@@ -235,7 +198,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
 
           slog({
             requestId,
-            message: `Adding space ${deployProxyEffect.contractAddress} to space registry`,
+            message: `Adding space ${deployProxyEffect.contractAddress} for ${userAccount} to space registry at ${SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS}`,
             account: userAccount,
           });
 
@@ -278,15 +241,55 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
       })
     );
 
+    // Configure roles in proxy contract. We need to configure the roles after adding to the registry.
+    // This is because the indexer will not pick up events that happen before the indexer starts indexing
+    // a dynamic data source.
+    yield* unwrap(
+      Effect.tryPromise({
+        try: async () => {
+          const simulateConfigureRolesResult = await publicClient.simulateContract({
+            abi: SpaceArtifact.abi,
+            address: deployProxyEffect.contractAddress as `0x${string}`,
+            functionName: 'configureRoles',
+            account,
+          });
+
+          const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
+          slog({ requestId, message: `Configure roles hash: ${configureRolesSimulateHash}`, account: userAccount });
+
+          const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
+            hash: configureRolesSimulateHash,
+          });
+          slog({
+            requestId,
+            message: `Configure roles for ${deployProxyEffect.contractAddress}: ${configureRolesTxResult.transactionHash}`,
+            account: userAccount,
+          });
+
+          return configureRolesTxResult;
+        },
+        catch: error => {
+          slog({
+            level: 'error',
+            requestId,
+            message: `Space contract role configuration failed: ${(error as Error).message}`,
+            account: userAccount,
+          });
+          return new ProxyBeaconConfigureRolesFailedError();
+        },
+      })
+    );
+
     // Add geo profile entity to new space
     yield* unwrap(
       Effect.tryPromise({
         try: async () => {
           const actions: CreateTripleAction[] = [];
+          const entityId = ID.createEntityId();
 
           if (username) {
             const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
-              entityId: ID.createEntityId(),
+              entityId,
               entityName: username ?? '',
               attributeId: SYSTEM_IDS.NAME,
               attributeName: 'Name',
@@ -308,7 +311,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
 
           if (avatarUri) {
             const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
-              entityId: ID.createEntityId(),
+              entityId,
               entityName: username ?? '',
               attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
               attributeName: 'Avatar',
@@ -326,6 +329,25 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
               ...avatarTripleWithoutId,
             });
           }
+
+          const typeTriple: OmitStrict<Triple, 'id'> = {
+            attributeId: SYSTEM_IDS.SCHEMA_TYPE,
+            attributeName: 'Type',
+            entityId,
+            entityName: username ?? '',
+            space: deployProxyEffect.contractAddress as string,
+            value: {
+              type: 'entity',
+              name: 'Person',
+              id: SYSTEM_IDS.PERSON_TYPE,
+            },
+          };
+
+          actions.push({
+            type: 'createTriple',
+            id: ID.createTripleId(typeTriple),
+            ...typeTriple,
+          });
 
           slog({
             requestId,

@@ -12,8 +12,8 @@ dataSources:
     network: matic
     source:
       abi: PermissionlessSpaceRegistry
-      address: "0xC970aE97a7a7537d0dAaA89C5BC45924dcb320f8"
-      startBlock: 48678720
+      address: "0x717a842318951c8D2eCc94C448483fea0f6da957"
+      startBlock: 48797127
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
