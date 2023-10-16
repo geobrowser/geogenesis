@@ -1,9 +1,12 @@
 import { Space } from '../generated/schema'
-import { EntryAdded, RoleGranted } from '../generated/templates/Space/Space'
+import {
+  EntryAdded,
+  RoleGranted,
+  RoleRevoked,
+} from '../generated/templates/Space/Space'
 import { addEntry } from './add-entry'
 import { addRole, removeRole } from './access-control'
 import { getChecksumAddress } from './get-checksum-address'
-import { RoleRevoked } from '../generated/SpaceRegistry/SpaceRegistry'
 
 export function handleEntryAdded(event: EntryAdded): void {
   const address = getChecksumAddress(event.address)

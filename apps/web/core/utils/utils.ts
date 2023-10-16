@@ -215,3 +215,33 @@ export const sleepWithCallback = async (callback: () => void, ms: number) => {
     resolve(null);
   });
 };
+
+/**
+ * Provides structured logging for Geo.
+ * @param requestId - A unique identifier for the request. This should be used across all logs for a single request/workflow.
+ * @param message - The message to log.
+ * @param account - The account that initiated the request. This is usually the user's wallet address. This helps debug user-specific
+ *                  issues.
+ * @param level - The log level. Defaults to 'info'.
+ */
+export function slog({
+  requestId,
+  message,
+  account,
+  level,
+}: {
+  requestId: string;
+  message: string;
+  account?: `0x${string}`;
+  level?: 'log' | 'info' | 'warn' | 'error';
+}) {
+  if (!level) {
+    level = 'info';
+  }
+
+  console[level](
+    `${level.toUpperCase()}  ${new Date().toISOString()}  account: ${
+      account ? account : 'NULL'
+    }  requestId: ${requestId} – ${message}`
+  );
+}
