@@ -51,9 +51,10 @@ const PersonalHomeHeader = () => {
         <h2 className="text-largeTitle">{profile?.name ?? 'Anonymous'}</h2>
       </div>
       {onchainProfile?.homeSpace && (
-      <Link href={NavUtils.toSpace(onchainProfile.homeSpace)}>
-        <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
-      </Link>)}
+        <Link href={NavUtils.toSpace(onchainProfile.homeSpace)}>
+          <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
+        </Link>
+      )}
     </div>
   );
 };
