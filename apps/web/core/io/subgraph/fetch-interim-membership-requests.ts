@@ -18,12 +18,12 @@ export interface FetchProposalsOptions {
   signal?: AbortController['signal'];
 }
 
-interface MembershipRequest {
+export type MembershipRequest = {
   id: string;
   requestor: string;
   space: string;
   createdAt: string;
-}
+};
 
 interface NetworkResult {
   membershipRequests: MembershipRequest[];
@@ -57,7 +57,7 @@ export async function fetchInterimMembershipRequests({
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchInterimMembershipRequests. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint}
-            
+
             queryString: ${getFetchMembershipRequestsQuery(spaceId)}
             `,
             error.message
