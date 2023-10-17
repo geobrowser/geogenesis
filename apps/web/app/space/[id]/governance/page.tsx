@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { Subgraph } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
@@ -19,6 +20,21 @@ interface Props {
 }
 
 export default async function GovernancePage({ params, searchParams }: Props) {
+  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+  const config = Params.getConfigFromParams(searchParams, env);
+
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
+
   const proposalsCount = await getProposalsCount({ params, searchParams });
 
   const votingPeriod = '24h';
