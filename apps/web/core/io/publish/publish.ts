@@ -202,7 +202,7 @@ export async function revokeRole({
   return tx.hash;
 }
 
-export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`) {
+export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
   const contractConfig = await prepareWriteContract({
     abi: GeoProfileRegistryAbi,
     address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
@@ -214,5 +214,5 @@ export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${str
   const tx = await writeContract(contractConfig);
   console.log(`Geo profile created. Transaction hash: ${tx.hash}`);
 
-  return contractConfig.result;
+  return contractConfig.result as string;
 }
