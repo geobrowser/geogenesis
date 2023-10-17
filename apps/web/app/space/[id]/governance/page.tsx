@@ -21,7 +21,7 @@ interface Props {
 
 export default async function GovernancePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  let config = Params.getConfigFromParams(searchParams, env);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
@@ -32,7 +32,10 @@ export default async function GovernancePage({ params, searchParams }: Props) {
   }
 
   if (usePermissionlessSubgraph) {
-    config.subgraph = config.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   const proposalsCount = await getProposalsCount({ params, searchParams });

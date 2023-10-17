@@ -6,6 +6,7 @@ import {
   log,
 } from '@graphprotocol/graph-ts'
 import { Account, Space } from '../generated/schema'
+import { getChecksumAddress } from './get-checksum-address'
 
 class RoleAddedParams {
   account: Address
@@ -21,7 +22,7 @@ const EDITOR_CONTROLLER_ROLE = crypto.keccak256(
 const EDITOR_ROLE = crypto.keccak256(ByteArray.fromUTF8('EDITOR_ROLE'))
 
 export function addRole(params: RoleAddedParams): void {
-  const address = params.account.toHexString()
+  const address = getChecksumAddress(params.account)
   const role = params.role
   const spaceAddress = params.space.toHexString()
 
@@ -58,7 +59,7 @@ export function addRole(params: RoleAddedParams): void {
 }
 
 export function removeRole(params: RoleAddedParams): void {
-  const address = params.account.toHexString()
+  const address = getChecksumAddress(params.account)
   const role = params.role
   const spaceAddress = params.space.toHexString()
 

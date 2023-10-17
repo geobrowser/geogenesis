@@ -5,6 +5,7 @@ import { cva } from 'class-variance-authority';
 import classnames from 'classnames';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -23,11 +24,10 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 
-interface Props {
-  spaceId?: string;
-}
+export function NavbarActions() {
+  const params = useParams();
+  const spaceId = params?.['id'] as string | undefined;
 
-export function NavbarActions({ spaceId }: Props) {
   const [open, onOpenChange] = React.useState(false);
 
   const { address } = useAccount();
@@ -127,7 +127,7 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle({ spaceId }: Props) {
+function ModeToggle({ spaceId }: { spaceId?: string }) {
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
   const controls = useAnimation();
