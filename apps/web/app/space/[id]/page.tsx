@@ -72,12 +72,26 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function SpacePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+
   const config = Params.getConfigFromParams(searchParams, env);
+
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
+
   const props = await getData(params.id, config);
 
   return (
     // @ts-expect-error async JSX function
-    <SpaceLayout params={params} searchParams={searchParams}>
+    <SpaceLayout params={params} searchParams={searchParams} usePermissionlessSpace={usePermissionlessSubgraph}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
