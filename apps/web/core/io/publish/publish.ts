@@ -213,5 +213,6 @@ export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${str
 
   const tx = await writeContract(contractConfig);
   console.log(`Geo profile created. Transaction hash: ${tx.hash}`);
-  return tx.hash;
+
+  return contractConfig.result;
 }

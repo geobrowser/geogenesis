@@ -37,6 +37,8 @@ export default async function ProfileLayout({ children, params }: Props) {
   // Layouts do not receive search params (hmm)
   const config = Params.getConfigFromParams({}, env);
 
+  params.entityId = decodeURI(params.entityId);
+
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
 

@@ -1,13 +1,28 @@
-export async function deploySpaceContract({
+export async function deploySpaceContract({ account }: { account: string }): Promise<{ spaceAddress: `0x${string}` }> {
+  const url = new URL(`/api/contracts/deploy?userAddress=${account}`, window.location.href);
+
+  // @TODO: Error and success handling with Effect
+  const spaceContractDeploymentResponse = await fetch(url);
+  return await spaceContractDeploymentResponse.json();
+}
+
+export async function createProfileEntity({
+  spaceAddress,
+  profileId,
   account,
   username,
   avatarUri,
 }: {
+  spaceAddress: `0x${string}`;
+  profileId: string;
   account: string;
   username: string | null;
   avatarUri: string | null;
-}): Promise<{ spaceAddress: `0x${string}` }> {
-  const url = new URL(`/api/deploy?userAddress=${account}`, window.location.href);
+}): Promise<{ spaceAddress: string; entityId: string }> {
+  const url = new URL(
+    `/api/profile/deploy?userAddress=${account}&spaceAddress=${spaceAddress}&profileId=${profileId}`,
+    window.location.href
+  );
 
   if (username) {
     url.searchParams.set('username', username);
@@ -17,7 +32,6 @@ export async function deploySpaceContract({
     url.searchParams.set('avatarUri', avatarUri);
   }
 
-  // @TODO: Error and success handling with Effect
-  const spaceContractDeploymentResponse = await fetch(url);
-  return await spaceContractDeploymentResponse.json();
+  const createProfileResponse = await fetch(url);
+  return await createProfileResponse.json();
 }

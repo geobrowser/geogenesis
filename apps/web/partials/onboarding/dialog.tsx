@@ -12,7 +12,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { deploySpaceContract } from '~/core/io/publish/contracts';
+import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -31,7 +31,9 @@ export const OnboardingDialog = () => {
   const [avatar, setAvatar] = useState('');
 
   const [step, setStep] = useState<Step>('start');
-  const [workflowStep, setWorkflowStep] = useState<'idle' | 'creating-spaces' | 'creating-profile' | 'done'>('idle');
+  const [workflowStep, setWorkflowStep] = useState<
+    'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done'
+  >('idle');
 
   const { isOnboardingVisible } = useOnboarding();
   const { profile, isLoading } = useGeoProfile(address);
@@ -45,13 +47,24 @@ export const OnboardingDialog = () => {
 
       const { spaceAddress } = await deploySpaceContract({
         account: address,
-        username: name || null,
-        avatarUri: avatar || null,
       });
 
-      setWorkflowStep('creating-profile');
+      setWorkflowStep('registering-profile');
 
-      await publish.registerGeoProfile(wallet, spaceAddress);
+      const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+
+      setWorkflowStep('creating-geo-profile-entity');
+
+      const { entityId: profileEntityId } = await createProfileEntity({
+        account: address,
+        spaceAddress,
+        avatarUri: avatar || null,
+        username: name || null,
+        profileId,
+      });
+
+      console.log('profileEntityId', { profileEntityId, spaceAddress });
+
       setWorkflowStep('done');
       setStep('completed');
     }
@@ -286,13 +299,13 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 }
 
 type StepCompleteProps = {
-  workflowStep: 'idle' | 'creating-spaces' | 'creating-profile' | 'done';
+  workflowStep: 'idle' | 'creating-spaces' | 'registering-profile' | 'done';
 };
 
 const stageAsNumber = {
   idle: 0,
   'creating-spaces': 1,
-  'creating-profile': 2,
+  'registering-profile': 2,
   done: 3,
 };
 
@@ -307,7 +320,7 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
             {complete[stageAsNumber[stage]]}
           </Text>
-          {stage !== 'creating-profile' && (
+          {stage !== 'registering-profile' && (
             <div className="mx-auto mt-2 w-1/3">
               <Progress stage={stageAsNumber[stage]} />
             </div>

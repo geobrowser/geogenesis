@@ -20,16 +20,13 @@ export async function GET(request: Request) {
     });
   }
 
-  const username = searchParams.get('username');
-  const avatarUri = searchParams.get('avatarUri');
-
   slog({
     requestId,
     account: userAccount,
-    message: `Setting up profile and contracts for user: ${{ userAccount, username, avatarUri }}`,
+    message: `Setting up profile and contracts for user: ${{ userAccount }}`,
   });
 
-  const deployment = makeDeployEffect(requestId, { account: userAccount, username, avatarUri });
+  const deployment = makeDeployEffect(requestId, { account: userAccount });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
 
   if (Either.isLeft(maybeDeployment)) {
@@ -74,33 +71,11 @@ export async function GET(request: Request) {
             statusText: error.message,
           }
         );
-      case 'CreateProfileGeoEntityFailedError':
-        return new Response(
-          JSON.stringify({
-            error: 'Could not create profile entity',
-            reason: `Could not create profile Geo Entity for user: ${userAccount}`,
-          }),
-          {
-            status: 500,
-            statusText: error.message,
-          }
-        );
       case 'AddToSpaceRegistryError':
         return new Response(
           JSON.stringify({
             error: 'Could not add contract to space registry',
             reason: `Could not add space to space registry for user: ${userAccount}`,
-          }),
-          {
-            status: 500,
-            statusText: error.message,
-          }
-        );
-      case 'GrantAdminRole':
-        return new Response(
-          JSON.stringify({
-            error: 'Could not grant roles to user',
-            reason: `Could not grant admin role for user: ${userAccount}`,
           }),
           {
             status: 500,
