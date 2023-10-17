@@ -1,5 +1,8 @@
 'use client';
 
+import { observable } from '@legendapp/state';
+import { useSelector } from '@legendapp/state/react';
+
 import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
 
@@ -21,8 +24,14 @@ interface Props {
   children: ReactNode;
 }
 
+export const secondarySubgraph$ = observable<boolean>(false);
+export const setSecondarySubgraphAsMain = (value: boolean) => {
+  secondarySubgraph$.set(value);
+};
+
 export function ServicesProvider({ children }: Props) {
   const { chain } = useNetwork();
+  const secondarySubgraph = useSelector(secondarySubgraph$);
 
   // Default to production chain
   const chainId = chain ? String(chain.id) : Environment.options.production.chainId;
@@ -31,13 +40,17 @@ export function ServicesProvider({ children }: Props) {
     const config = Environment.getConfig(chainId);
     const storageClient = new Storage.StorageClient(config.ipfs);
 
+    if (secondarySubgraph) {
+      config.subgraph = config.permissionlessSubgraph;
+    }
+
     return {
       config,
       storageClient,
       subgraph: Subgraph,
       publish: Publish,
     };
-  }, [chainId]);
+  }, [chainId, secondarySubgraph]);
 
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }

@@ -29,4 +29,7 @@ export type { FetchProposedVersionOptions } from './fetch-proposed-version';
 export { fetchTableRowEntities } from './fetch-table-row-entities';
 export type { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';
 
+export { fetchOnchainProfile } from './fetch-on-chain-profile';
+export type { FetchOnchainProfileOptions } from './fetch-on-chain-profile';
+
 export * as Errors from './errors';

@@ -21,6 +21,18 @@ interface Props {
 export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
+  let space = await Subgraph.fetchSpace({ endpoint: options.production.subgraph, id: spaceId });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: options.production.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    options.production.subgraph = options.production.permissionlessSubgraph;
+  }
+
   const [proposals, editorsForSpace] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),

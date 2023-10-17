@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cookies } from 'next/headers';
 
+import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Params } from '~/core/params';
 import { ServerSideEnvParams } from '~/core/types';
@@ -16,6 +17,18 @@ interface Props {
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
+
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
 
   const types = await fetchEntityType({
     endpoint: config.subgraph,

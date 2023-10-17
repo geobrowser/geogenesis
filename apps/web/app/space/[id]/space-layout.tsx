@@ -29,13 +29,18 @@ interface Props {
   params: { id: string };
   searchParams: ServerSideEnvParams;
   children: React.ReactNode;
+  usePermissionlessSpace?: boolean;
 }
 
 // We don't want this layout to nest within the space/ route component tree,
 // so we use it like normal React component instead of a Next.js route layout.
-export async function SpaceLayout({ params, searchParams, children }: Props) {
+export async function SpaceLayout({ params, searchParams, children, usePermissionlessSpace }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const config = Params.getConfigFromParams(searchParams, env);
+
+  if (usePermissionlessSpace) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
 
   const props = await getData(params.id, config);
 
@@ -98,8 +103,8 @@ export async function SpaceLayout({ params, searchParams, children }: Props) {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {

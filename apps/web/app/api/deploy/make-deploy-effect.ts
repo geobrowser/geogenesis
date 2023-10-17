@@ -329,8 +329,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
           }
 
           const typeTriple: OmitStrict<Triple, 'id'> = {
-            attributeId: SYSTEM_IDS.SCHEMA_TYPE,
-            attributeName: 'Type',
+            attributeId: SYSTEM_IDS.TYPES,
+            attributeName: 'Types',
             entityId,
             entityName: username ?? '',
             space: deployProxyEffect.contractAddress as string,

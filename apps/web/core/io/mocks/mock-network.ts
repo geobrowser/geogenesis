@@ -202,6 +202,10 @@ export class MockNetwork implements ISubgraph {
     return null;
   };
 
+  fetchOnchainProfile = async () => {
+    return null;
+  };
+
   fetchProposedVersion = async () => {
     return null;
   };

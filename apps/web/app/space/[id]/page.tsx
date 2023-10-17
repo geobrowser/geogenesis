@@ -72,12 +72,26 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function SpacePage({ params, searchParams }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+
   const config = Params.getConfigFromParams(searchParams, env);
+
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
+
   const props = await getData(params.id, config);
 
   return (
     // @ts-expect-error async JSX function
-    <SpaceLayout params={params} searchParams={searchParams}>
+    <SpaceLayout params={params} searchParams={searchParams} usePermissionlessSpace={usePermissionlessSubgraph}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
@@ -90,8 +104,13 @@ export default async function SpacePage({ params, searchParams }: Props) {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+  // Attempt to fetch the space from the public subgraph first. If the space doesn't exist there, try the permissionless subgraph.
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+  }
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
