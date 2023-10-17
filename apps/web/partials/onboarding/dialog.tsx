@@ -21,6 +21,7 @@ import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
+type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
 
 export const OnboardingDialog = () => {
   const { publish } = Services.useServices();
@@ -31,9 +32,7 @@ export const OnboardingDialog = () => {
   const [avatar, setAvatar] = useState('');
 
   const [step, setStep] = useState<Step>('start');
-  const [workflowStep, setWorkflowStep] = useState<
-    'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done'
-  >('idle');
+  const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
   const { isOnboardingVisible } = useOnboarding();
   const { profile, isLoading } = useGeoProfile(address);
@@ -299,14 +298,15 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 }
 
 type StepCompleteProps = {
-  workflowStep: 'idle' | 'creating-spaces' | 'registering-profile' | 'done';
+  workflowStep: PublishingStep;
 };
 
 const stageAsNumber = {
   idle: 0,
   'creating-spaces': 1,
   'registering-profile': 2,
-  done: 3,
+  'creating-geo-profile-entity': 3,
+  done: 4,
 };
 
 function StepComplete({ workflowStep: stage }: StepCompleteProps) {
