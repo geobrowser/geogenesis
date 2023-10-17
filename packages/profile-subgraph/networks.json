@@ -7,8 +7,8 @@
   },
   "matic": {
     "GeoProfileRegistry": {
-      "address": "0xa55917aF3055cbB2ABAbAB8552b3358B0A27d87b",
-      "startBlock": 48640368
+      "address": "0xc42Cd03dFfE4Ff10959d65428A7adA2C752B5822",
+      "startBlock": 48810387
     }
   }
 }

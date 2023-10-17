@@ -1,8 +1,8 @@
 {
   "matic": {
     "PermissionlessSpaceRegistry": {
-      "address": "0x717a842318951c8D2eCc94C448483fea0f6da957",
-      "startBlock": 48797127
+      "address": "0x68930a23A91A8FA97C6053cD5057431BaD3eEB52",
+      "startBlock": 48810411
     }
   },
   "mumbai": {
