@@ -37,11 +37,14 @@ export function ServicesProvider({ children }: Props) {
   const chainId = chain ? String(chain.id) : Environment.options.production.chainId;
 
   const services = useMemo((): Services => {
-    const config = Environment.getConfig(chainId);
+    let config = Environment.getConfig(chainId);
     const storageClient = new Storage.StorageClient(config.ipfs);
 
     if (secondarySubgraph) {
-      config.subgraph = config.permissionlessSubgraph;
+      config = {
+        ...config,
+        subgraph: config.permissionlessSubgraph,
+      };
     }
 
     return {

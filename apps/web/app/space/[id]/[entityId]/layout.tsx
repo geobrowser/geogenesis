@@ -35,7 +35,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
 
   // Layouts do not receive search params (hmm)
-  const config = Params.getConfigFromParams({}, env);
+  let config = Params.getConfigFromParams({}, env);
 
   params.entityId = decodeURIComponent(params.entityId);
 
@@ -48,7 +48,10 @@ export default async function ProfileLayout({ children, params }: Props) {
   }
 
   if (usePermissionlessSubgraph) {
-    config.subgraph = config.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   const types = await fetchEntityType({

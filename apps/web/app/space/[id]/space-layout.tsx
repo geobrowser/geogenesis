@@ -36,10 +36,13 @@ interface Props {
 // so we use it like normal React component instead of a Next.js route layout.
 export async function SpaceLayout({ params, searchParams, children, usePermissionlessSpace }: Props) {
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  let config = Params.getConfigFromParams(searchParams, env);
 
   if (usePermissionlessSpace) {
-    config.subgraph = config.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   const props = await getData(params.id, config);

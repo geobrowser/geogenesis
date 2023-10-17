@@ -10,7 +10,7 @@ type EditorsForSpace = {
 };
 
 export async function getEditorsForSpace(spaceId: string, connectedAddress?: string): Promise<EditorsForSpace> {
-  const config = Params.getConfigFromParams({}, undefined);
+  let config = Params.getConfigFromParams({}, undefined);
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSpace = false;
 
@@ -20,7 +20,10 @@ export async function getEditorsForSpace(spaceId: string, connectedAddress?: str
   }
 
   if (usePermissionlessSpace) {
-    config.subgraph = config.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   if (!space) {

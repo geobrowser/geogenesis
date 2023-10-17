@@ -29,10 +29,12 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  const config = Params.getConfigFromParams(searchParams, env);
+  let config = Params.getConfigFromParams(searchParams, env);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;
+
+  console.log('space', space);
 
   if (!space) {
     space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
@@ -40,8 +42,13 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
   }
 
   if (usePermissionlessSubgraph) {
-    config.subgraph = config.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
+
+  console.log('config entities', config);
 
   const props = await getData({ space, config, initialParams });
 
