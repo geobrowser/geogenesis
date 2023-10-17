@@ -1,7 +1,7 @@
 import { Root } from '@geogenesis/action-schema';
 import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect } from 'effect';
+import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
