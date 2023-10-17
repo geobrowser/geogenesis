@@ -17,9 +17,7 @@ export async function deploySpaceContract({
     url.searchParams.set('avatarUri', avatarUri);
   }
 
-  console.log('url', url);
-
   // @TODO: Error and success handling with Effect
-  const idk = await fetch(url);
-  return await idk.json();
+  const spaceContractDeploymentResponse = await fetch(url);
+  return await spaceContractDeploymentResponse.json();
 }
