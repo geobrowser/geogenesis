@@ -4,22 +4,21 @@ import { EntryAdded as RegistryEntryAdded } from '../generated/PermissionlessSpa
 import { handleSpaceAdded } from './actions'
 import { addEntry } from './add-entry'
 import { bootstrapRootSpaceCoreTypes } from './bootstrap'
-import { getChecksumAddress } from './get-checksum-address'
 
 export function handleRootEntryAdded(event: RegistryEntryAdded): void {
-  const address = getChecksumAddress(event.address)
+  const address = event.address
   const createdAtBlock = event.block.number
   const createdAtTimestamp = event.block.timestamp
 
   bootstrapRootSpace(
-    address,
+    address.toHexString(),
     createdAtBlock,
     createdAtTimestamp,
     event.transaction.from
   )
 
   addEntry({
-    space: address,
+    space: address.toHexString(),
     index: event.params.index,
     uri: event.params.uri,
     createdBy: event.params.author,
