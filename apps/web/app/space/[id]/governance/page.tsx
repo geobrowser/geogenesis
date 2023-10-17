@@ -37,6 +37,11 @@ export default async function GovernancePage({ params, searchParams }: Props) {
 
   const proposalsCount = await getProposalsCount({ params, searchParams });
 
+  const votingPeriod = '24h';
+  const passThreshold = '51%';
+  const acceptedProposalsCount = proposalsCount === 1000 ? '1,000+' : proposalsCount.toString();
+  const rejectedProposalsCount = 0;
+
   return (
     // @ts-expect-error async JSX function
     <SpaceLayout params={params} searchParams={searchParams}>
@@ -44,11 +49,11 @@ export default async function GovernancePage({ params, searchParams }: Props) {
         <div className="flex items-center gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Voting period</h2>
-            <p className="text-mediumTitle">24h</p>
+            <p className="text-mediumTitle">{votingPeriod}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-            <p className="text-mediumTitle">51%</p>
+            <p className="text-mediumTitle">{passThreshold}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Active proposals</h2>
@@ -57,17 +62,15 @@ export default async function GovernancePage({ params, searchParams }: Props) {
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
             <div className="flex items-center gap-3 text-mediumTitle">
-              <span>{proposalsCount}</span>
+              <span>{acceptedProposalsCount}</span>
               <div className="h-4 w-px bg-grey-02" />
-              <span>0</span>
+              <span>{rejectedProposalsCount}</span>
             </div>
           </GovernanceMetadataBox>
         </div>
-
         <SmallButton variant="secondary" icon="chevronDownSmall">
           All Proposals
         </SmallButton>
-
         {/* @ts-expect-error async JSX function */}
         <GovernanceProposalsList spaceId={params.id} />
       </div>
