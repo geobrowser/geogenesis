@@ -6,7 +6,7 @@ export async function deploySpaceContract({
   account: string;
   username: string | null;
   avatarUri: string | null;
-}): Promise<{ spaceAddress: string }> {
+}): Promise<{ spaceAddress: `0x${string}` }> {
   const url = new URL(`/api/deploy?userAddress=${account}`, window.location.href);
 
   if (username) {

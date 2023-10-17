@@ -1,5 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
-import { SpaceAbi } from '@geogenesis/contracts';
+import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect } from 'effect';
 
 import { WalletClient } from 'wagmi';
@@ -198,5 +199,19 @@ export async function revokeRole({
 
   const tx = await writeContract(contractConfig);
   console.log(`Role revoked from ${userAddress}. Transaction hash: ${tx.hash}`);
+  return tx.hash;
+}
+
+export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`) {
+  const contractConfig = await prepareWriteContract({
+    abi: GeoProfileRegistryAbi,
+    address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
+    functionName: 'registerGeoProfile',
+    walletClient: wallet,
+    args: [spaceId],
+  });
+
+  const tx = await writeContract(contractConfig);
+  console.log(`Geo profile created. Transaction hash: ${tx.hash}`);
   return tx.hash;
 }

@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { deploySpaceContract } from '~/core/io/publish/contracts';
@@ -22,7 +22,9 @@ import { Text } from '~/design-system/text';
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 
 export const OnboardingDialog = () => {
+  const { publish } = Services.useServices();
   const { address } = useAccount();
+  const { data: wallet } = useWalletClient();
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
   const [step, setStep] = useState<Step>('start');
@@ -31,7 +33,7 @@ export const OnboardingDialog = () => {
   if (!address) return null;
 
   async function onRunOnboardingWorkflow() {
-    if (address && workflowStep === 'idle') {
+    if (address && workflowStep === 'idle' && wallet) {
       setStep('completing');
 
       setWorkflowStep('creating-spaces');
@@ -45,7 +47,8 @@ export const OnboardingDialog = () => {
       console.log('spaceAddress', spaceAddress);
       setWorkflowStep('creating-profile');
 
-      await sleepWithCallback(() => setWorkflowStep('done'), 5000);
+      await publish.registerGeoProfile(wallet, spaceAddress);
+      setWorkflowStep('done');
 
       setStep('completed');
     }
