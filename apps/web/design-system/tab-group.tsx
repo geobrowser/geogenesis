@@ -1,6 +1,7 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,14 +9,15 @@ import { usePathname } from 'next/navigation';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string }>;
+  tabs: Array<{ href: string; label: string; disabled?: boolean }>;
+  className?: string;
 }
 
-export function TabGroup({ tabs }: TabGroupProps) {
+export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
-    <div className="flex items-center gap-6 border-b border-grey-02 pb-2">
+    <div className={cx('flex items-center gap-6 border-b border-grey-02 pb-2', className)}>
       {tabs.map(t => (
-        <Tab key={t.href} href={t.href} label={t.label} />
+        <Tab key={t.href} href={t.href} label={t.label} disabled={t.disabled} />
       ))}
     </div>
   );
@@ -24,6 +26,7 @@ export function TabGroup({ tabs }: TabGroupProps) {
 interface TabProps {
   href: string;
   label: string;
+  disabled?: boolean;
 }
 
 const tabStyles = cva('relative text-quoteMedium transition-colors duration-100', {
@@ -32,13 +35,17 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
       true: 'text-text',
       false: 'text-grey-04 hover:text-text',
     },
+    disabled: {
+      true: 'cursor-not-allowed hover:!text-grey-04 opacity-25',
+      false: '',
+    },
   },
   defaultVariants: {
     active: false,
   },
 });
 
-function Tab({ href, label }: TabProps) {
+function Tab({ href, label, disabled }: TabProps) {
   const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
@@ -46,8 +53,12 @@ function Tab({ href, label }: TabProps) {
 
   console.log('tab', { href, decodedHref, path });
 
+  if (disabled) {
+    return <div className={tabStyles({ active, disabled })}>{label}</div>;
+  }
+
   return (
-    <Link className={tabStyles({ active })} href={href}>
+    <Link className={tabStyles({ active, disabled })} href={href}>
       {active && (
         // @HACK: This is a hack to workaround issues in the app directory. Right now (08/2023)
         // nested layouts in the app directory re-render when search params change. This causes

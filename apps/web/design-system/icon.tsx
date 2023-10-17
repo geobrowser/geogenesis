@@ -43,6 +43,7 @@ import { EyeSmall } from './icons/eye-small';
 import { FilterTable } from './icons/filter-table';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { History } from './icons/history';
+import { Home } from './icons/home';
 import { Image } from './icons/image';
 import { Member } from './icons/member';
 import { Minus } from './icons/minus';
@@ -106,7 +107,8 @@ export type IconName =
   | 'checkCircleSmall'
   | 'checkCircle'
   | 'checkClose'
-  | 'retrySmall';
+  | 'retrySmall'
+  | 'home';
 
 type IconProps = React.ComponentPropsWithoutRef<'svg'> & {
   icon: IconName;
@@ -175,4 +177,5 @@ const icons: Record<IconName, React.ElementType> = {
   checkCircle: CheckCircle,
   checkClose: CheckClose,
   retrySmall: RetrySmall,
+  home: Home,
 };

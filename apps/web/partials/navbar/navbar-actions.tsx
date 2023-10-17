@@ -1,7 +1,6 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import classnames from 'classnames';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
@@ -19,9 +18,9 @@ import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
+import { Icon } from '~/design-system/icon';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
@@ -68,12 +67,11 @@ export function NavbarActions({ spaceId }: Props) {
             )}
           </div>
         </AvatarMenuItem>
-
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <NotificationEmpty />
-            <p className="text-button">Notifications</p>
-          </div>
+        <AvatarMenuItem>
+          <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+            <Icon icon="home" />
+            <p className="text-button">Personal home</p>
+          </Link>
         </AvatarMenuItem>
         <AvatarMenuItem>
           <GeoConnectButton />
