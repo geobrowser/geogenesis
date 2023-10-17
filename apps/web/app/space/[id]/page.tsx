@@ -90,8 +90,13 @@ export default async function SpacePage({ params, searchParams }: Props) {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+  // Attempt to fetch the space from the public subgraph first. If the space doesn't exist there, try the permissionless subgraph.
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+  }
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
@@ -13,13 +14,27 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
+
+function useOnchainProfile(account?: `0x${string}`) {
+  const { subgraph, config } = Services.useServices();
+
+  const { data: profile } = useQuery({
+    queryKey: ['onchain-profile', account],
+    queryFn: async () => {
+      if (!account) return null;
+      return await subgraph.fetchOnchainProfile({ address: account, endpoint: config.profileSubgraph });
+    },
+  });
+
+  return profile ?? null;
+}
 
 export const OnboardingDialog = () => {
   const { publish } = Services.useServices();
@@ -29,6 +44,8 @@ export const OnboardingDialog = () => {
   const [avatar, setAvatar] = useState('');
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'creating-spaces' | 'creating-profile' | 'done'>('idle');
+
+  const profile = useOnchainProfile(address);
 
   if (!address) return null;
 
@@ -58,7 +75,7 @@ export const OnboardingDialog = () => {
   // Currently stubbed as we don't have a way to create a profile yet
   // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={true} label="Onboarding profile">
+    <Command.Dialog open={address && !profile} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <div className="relative z-10 flex h-full w-full items-start justify-center">
