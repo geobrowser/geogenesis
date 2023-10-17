@@ -11,6 +11,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount, useWalletClient } from 'wagmi';
 
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
@@ -22,37 +23,27 @@ import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 
-function useOnchainProfile(account?: `0x${string}`) {
-  const { subgraph, config } = Services.useServices();
-
-  const { data: profile } = useQuery({
-    queryKey: ['onchain-profile', account],
-    queryFn: async () => {
-      if (!account) return null;
-      return await subgraph.fetchOnchainProfile({ address: account, endpoint: config.profileSubgraph });
-    },
-  });
-
-  return profile ?? null;
-}
-
 export const OnboardingDialog = () => {
   const { publish } = Services.useServices();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
+
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
+
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'creating-spaces' | 'creating-profile' | 'done'>('idle');
 
-  const profile = useOnchainProfile(address);
+  const { isOnboardingVisible } = useOnboarding();
+  const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address) return null;
+  console.log('isOnboardingVisible', isOnboardingVisible);
+
+  if (!address || isLoading || !isOnboardingVisible) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
       setStep('completing');
-
       setWorkflowStep('creating-spaces');
 
       const { spaceAddress } = await deploySpaceContract({
@@ -66,7 +57,6 @@ export const OnboardingDialog = () => {
 
       await publish.registerGeoProfile(wallet, spaceAddress);
       setWorkflowStep('done');
-
       setStep('completed');
     }
   }
@@ -75,7 +65,7 @@ export const OnboardingDialog = () => {
   // Currently stubbed as we don't have a way to create a profile yet
   // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={address && !profile} label="Onboarding profile">
+    <Command.Dialog open={!profile} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <div className="relative z-10 flex h-full w-full items-start justify-center">
@@ -140,6 +130,7 @@ type StepHeaderProps = {
 
 const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
   const { hideOnboarding } = useOnboarding();
+  console.log('step', step);
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">

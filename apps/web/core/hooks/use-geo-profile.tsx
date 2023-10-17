@@ -1,26 +1,25 @@
-import { useAccount } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
 
-import { useHydrated } from './use-hydrated';
+import { Services } from '../services';
 
-export function useGeoProfile() {
-  /* Note! Stub hook! Need to have profile backend ready... */
+export function useGeoProfile(account?: `0x${string}`) {
+  const { subgraph, config } = Services.useServices();
 
-  // We need to wait for the client to check the status of the client-side wallet
-  // before setting state. Otherwise there will be client-server hydration mismatches.
-  const hydrated = useHydrated();
-  const { address } = useAccount();
-  // const { admins, editors, editorControllers } = useSpaces();
-
-  if (!address || !hydrated) {
-    return { profile: null };
-  }
-
-  // Stubbing for now...
-  return {
-    profile: {
-      id: address,
-      name: 'John Doe',
-      avatar: 'https://avatars.githubusercontent.com/u/1234567?v=4',
+  const {
+    data: profile,
+    isLoading,
+    isFetched,
+  } = useQuery({
+    queryKey: ['onchain-profile', account],
+    queryFn: async () => {
+      if (!account) return null;
+      return await subgraph.fetchOnchainProfile({ address: account, endpoint: config.profileSubgraph });
     },
+  });
+
+  return {
+    profile: profile ?? null,
+    isLoading,
+    isFetched,
   };
 }

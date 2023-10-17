@@ -1,27 +1,27 @@
 import { observable } from '@legendapp/state';
+import { useSelector } from '@legendapp/state/react';
 
 import { useAccount } from 'wagmi';
 
-// import { useGeoProfile } from './use-geo-profile';
-
 /* Extracting state outside component so any component can use this hook and share the same state */
-const isOnboardingVisible = observable(false);
+const isOnboardingVisible$ = observable(true);
 
 export function useOnboarding() {
-  /* Note! Stub hook! Need to have profile backend ready... */
-  // const { profile } = useGeoProfile();
+  const isOnboardingVisible = useSelector(isOnboardingVisible$);
 
   useAccount({
-    onDisconnect: () => isOnboardingVisible.set(false),
+    onDisconnect: () => isOnboardingVisible$.set(false),
     onConnect({ address, isReconnected }) {
       // If the user autoconnects, we don't want to show the modal.
       if (address && !isReconnected) {
-        isOnboardingVisible.set(true);
+        isOnboardingVisible$.set(true);
       }
     },
   });
 
-  const hideOnboarding = () => isOnboardingVisible.set(false);
+  const hideOnboarding = () => {
+    isOnboardingVisible$.set(false);
+  };
 
-  return { isOnboardingVisible: isOnboardingVisible.get(), hideOnboarding };
+  return { isOnboardingVisible, hideOnboarding };
 }
