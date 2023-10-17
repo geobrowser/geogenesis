@@ -62,8 +62,6 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   const profile = await getProfilePage(params.entityId, config.subgraph);
 
-  console.log('params', params);
-
   return (
     <EntityStoreProvider
       id={params.entityId}
