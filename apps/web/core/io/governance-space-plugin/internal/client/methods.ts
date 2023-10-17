@@ -1,4 +1,3 @@
-import { votingSettingsToContract } from '@aragon/sdk-client';
 import {
   ClientCore,
   PrepareInstallationParams,
@@ -6,15 +5,10 @@ import {
   prepareGenericInstallation,
 } from '@aragon/sdk-client-common';
 import { Effect } from 'effect';
-import { bigint } from 'effect/Equivalence';
-import { createPublicClient, createWalletClient, getContract, http } from 'viem';
-import { goerli, polygonMumbai } from 'viem/chains';
 
-import { version } from 'react';
-
-import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
+import { InitializePersonalSpaceAdminPluginOptions } from '~/core/io/personal-space-plugin';
 import {
   TransactionPrepareFailedError,
   TransactionRevertedError,
@@ -31,21 +25,15 @@ import {
 } from '../../abis';
 import { GeoPluginContext } from '../../context';
 import * as SPACE_PLUGIN_BUILD_METADATA from '../../metadata/space-build-metadata.json';
-import { CreateMainVotingPluginProposalOptions, InitializeMainVotingPluginOptions } from '../../types';
-
-// @TODO: use our existing public client and wallet client
-export const publicClient = createPublicClient({
-  chain: polygonMumbai,
-  transport: http(),
-});
-
-// const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-
-// const walletClient = createWalletClient({
-//   account,
-//   chain: polygonMumbai,
-//   transport: http(),
-// });
+import {
+  CancelMainVotingPluginProposalOptions,
+  CreateMainVotingPluginProposalOptions,
+  ExecuteMainVotingPluginProposalOptions,
+  InitializeMainVotingPluginOptions,
+  InitializeSpacePluginOptions,
+  SetContentSpacePluginOptions,
+  VoteMainVotingPluginProposalOptions,
+} from '../../types';
 
 export class GeoPluginClientMethods extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -69,6 +57,159 @@ export class GeoPluginClientMethods extends ClientCore {
     this.geoMemberAccessPluginRepoAddress = pluginContext.geoMemberAccessPluginRepoAddress;
     this.geoMainVotingPluginRepoAddress = pluginContext.geoMainVotingPluginRepoAddress;
   }
+
+  // Space Plugin: Initialize on a fresh DAO
+
+  // Space Plugin: Write Functions
+
+  // Initialize Space Plugin for an already existing DAO
+  public async initializeSpacePlugin({
+    wallet,
+    daoAddress,
+    firstBlockUri,
+    onInitStateChange,
+  }: InitializeSpacePluginOptions): Promise<void> {
+    const prepareInitEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          abi: spacePluginAbi,
+          address: this.geoSpacePluginAddress as `0x${string}`,
+          functionName: 'initialize',
+          walletClient: wallet,
+          args: [daoAddress, firstBlockUri],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeInitEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareInitEffect);
+
+      onInitStateChange('initializing-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Initialization failed: ${error}`),
+        })
+      );
+    });
+
+    const initializePluginProgram = Effect.gen(function* (awaited) {
+      const writeInitResult = yield* awaited(writeInitEffect);
+
+      console.log('Transaction hash: ', writeInitResult.hash);
+      onInitStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeInitResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(initializePluginProgram);
+  }
+
+  // Set Space Content
+  public async setContent({
+    wallet,
+    blockIndex,
+    itemIndex,
+    contentUri,
+    onProposalStateChange,
+  }: SetContentSpacePluginOptions): Promise<void> {
+    const prepareExecutionEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoSpacePluginAddress as `0x${string}`,
+          abi: spacePluginAbi,
+          functionName: 'setContent',
+          walletClient: wallet,
+          args: [blockIndex, itemIndex, contentUri],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeExecutionEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareExecutionEffect);
+
+      onProposalStateChange('initializing-proposal-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Execution failed: ${error}`),
+        })
+      );
+    });
+
+    const executeProgram = Effect.gen(function* (awaited) {
+      const writeExecutionResult = yield* awaited(writeExecutionEffect);
+
+      console.log('Transaction hash: ', writeExecutionResult.hash);
+      onProposalStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeExecutionResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(executeProgram);
+  }
+
+  // Space Plugin: Read Functions
 
   // Member Access Plugin: Initialize
 
@@ -218,6 +359,7 @@ export class GeoPluginClientMethods extends ClientCore {
 
   // Create Main Voting Plugin Proposals
   public async createProposal({
+    wallet,
     metadata,
     actions,
     allowFailureMap,
@@ -233,7 +375,226 @@ export class GeoPluginClientMethods extends ClientCore {
           address: this.geoMainVotingPluginAddress as `0x${string}`,
           abi: mainVotingPluginAbi,
           functionName: 'createProposal',
+          walletClient: wallet,
           args: [metadata, actions, allowFailureMap, arg3, arg4, voteOption, tryEarlyExecution],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeExecutionEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareExecutionEffect);
+
+      onProposalStateChange('initializing-proposal-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Execution failed: ${error}`),
+        })
+      );
+    });
+
+    const executeProgram = Effect.gen(function* (awaited) {
+      const writeExecutionResult = yield* awaited(writeExecutionEffect);
+
+      console.log('Transaction hash: ', writeExecutionResult.hash);
+      onProposalStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeExecutionResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(executeProgram);
+  }
+
+  // Cancel Main Voting Plugin Proposal
+  public async cancelProposal({
+    proposalId,
+    onProposalStateChange,
+  }: CancelMainVotingPluginProposalOptions): Promise<void> {
+    const prepareExecutionEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoMainVotingPluginAddress as `0x${string}`,
+          abi: mainVotingPluginAbi,
+          functionName: 'cancelProposal',
+          args: [proposalId],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeExecutionEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareExecutionEffect);
+
+      onProposalStateChange('initializing-proposal-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Execution failed: ${error}`),
+        })
+      );
+    });
+
+    const executeProgram = Effect.gen(function* (awaited) {
+      const writeExecutionResult = yield* awaited(writeExecutionEffect);
+
+      console.log('Transaction hash: ', writeExecutionResult.hash);
+      onProposalStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeExecutionResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(executeProgram);
+  }
+
+  // Main Voting Plugin: Inherited Write Functions
+
+  // Vote on a proposal
+  public async voteProposal({
+    wallet,
+    proposalId,
+    vote,
+    tryEarlyExecution,
+    onProposalStateChange,
+  }: VoteMainVotingPluginProposalOptions): Promise<void> {
+    const prepareExecutionEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoMainVotingPluginAddress as `0x${string}`,
+          abi: mainVotingPluginAbi,
+          functionName: 'vote',
+          walletClient: wallet,
+          args: [proposalId, vote, tryEarlyExecution],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeExecutionEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareExecutionEffect);
+
+      onProposalStateChange('initializing-proposal-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Execution failed: ${error}`),
+        })
+      );
+    });
+
+    const executeProgram = Effect.gen(function* (awaited) {
+      const writeExecutionResult = yield* awaited(writeExecutionEffect);
+
+      console.log('Transaction hash: ', writeExecutionResult.hash);
+      onProposalStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeExecutionResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(executeProgram);
+  }
+
+  // Execute a proposal
+  public async executeProposal({
+    wallet,
+    proposalId,
+    onProposalStateChange,
+  }: ExecuteMainVotingPluginProposalOptions): Promise<void> {
+    const prepareExecutionEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          address: this.geoMainVotingPluginAddress as `0x${string}`,
+          abi: mainVotingPluginAbi,
+          functionName: 'execute',
+          walletClient: wallet,
+          args: [proposalId],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });
