@@ -9,5 +9,5 @@ export interface IPublish {
   getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE'): Promise<string>;
   grantRole(options: { spaceId: string; wallet: WalletClient; role: string; userAddress: string }): Promise<string>;
   revokeRole(options: { spaceId: string; wallet: WalletClient; role: string; userAddress: string }): Promise<string>;
-  registerGeoProfile: (wallet: WalletClient, spaceId: `0x${string}`) => Promise<void>;
+  registerGeoProfile: (wallet: WalletClient, spaceId: `0x${string}`) => Promise<string>;
 }
