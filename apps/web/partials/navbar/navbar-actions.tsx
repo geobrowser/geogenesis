@@ -55,7 +55,7 @@ export function NavbarActions({ spaceId }: Props) {
         <AvatarMenuItem disabled={!profile?.homeSpace}>
           <div
             className={classnames('flex items-center gap-2', {
-              grayscale: profile?.homeSpace,
+              grayscale: !profile?.homeSpace,
             })}
           >
             <div className="relative h-4 w-4 overflow-hidden rounded-full">
