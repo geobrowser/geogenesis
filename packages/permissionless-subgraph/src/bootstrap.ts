@@ -19,6 +19,7 @@ import {
   MARKDOWN_CONTENT,
   NAME,
   PARENT_ENTITY,
+  PERSON_TYPE,
   RELATION,
   ROW_TYPE,
   SCHEMA_TYPE,
@@ -69,6 +70,7 @@ const entities: string[] = [
   RELATION_VALUE_RELATIONSHIP_TYPE,
   DATE,
   WEB_URL,
+  PERSON_TYPE,
 ]
 
 class Tuple<T, U> {
@@ -102,6 +104,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: IMAGE_BLOCK, _1: new StringValue(IMAGE_BLOCK, 'Image Block') },
   { _0: BLOCKS, _1: new StringValue(BLOCKS, 'Blocks') },
   { _0: PARENT_ENTITY, _1: new StringValue(PARENT_ENTITY, 'Parent Entity') },
+  { _0: PERSON_TYPE, _1: new StringValue(PERSON_TYPE, 'Person') },
   {
     _0: MARKDOWN_CONTENT,
     _1: new StringValue(MARKDOWN_CONTENT, 'Markdown Content'),
