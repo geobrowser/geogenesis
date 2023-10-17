@@ -1,8 +1,6 @@
 import { ClientCore } from '@aragon/sdk-client-common';
 import { Effect } from 'effect';
-import { boolean, string } from 'effect/Config';
-import { async } from 'effect/Effect';
-import { bigint } from 'effect/Equivalence';
+import { string } from 'effect/Config';
 import error from 'next/error';
 import { Transaction } from 'viem';
 
@@ -19,8 +17,7 @@ import {
 
 import { personalSpaceAdminPluginAbi, personalSpaceAdminPluginSetupAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
-import { InitializePersonalSpaceAdminPluginOptions } from '../../types';
-import { metadata } from '~/app/layout';
+import { ExecutePersonalSpaceAdminPluginProposalOptions, InitializePersonalSpaceAdminPluginOptions } from '../../types';
 
 // import * as SPACE_PLUGIN_BUILD_METADATA from '../../metadata/space-build-metadata.json';
 
@@ -128,11 +125,12 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   }
 
   // Execute Personal Space Admin Plugin Proposals
-  public async executeProposal(
-    metadata: `0x${string}`,
-    actions: readonly { to: `0x${string}`; value: bigint; data: `0x${string}` }[],
-    allowFailureMap: bigint
-  ) {
+  public async executeProposal({
+    metadata,
+    actions,
+    allowFailureMap,
+    onProposalStateChange,
+  }: ExecutePersonalSpaceAdminPluginProposalOptions): Promise<void> {
     const prepareExecutionEffect = Effect.tryPromise({
       try: () =>
         prepareWriteContract({
@@ -147,7 +145,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
     const writeExecutionEffect = Effect.gen(function* (awaited) {
       const contractConfig = yield* awaited(prepareExecutionEffect);
 
-      onProposalStateChange('initializing-proposal');
+      onProposalStateChange('initializing-proposal-plugin');
 
       return yield* awaited(
         Effect.tryPromise({
