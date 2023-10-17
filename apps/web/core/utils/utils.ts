@@ -30,21 +30,23 @@ export const NavUtils = {
     filterValue?: string | null
   ) => {
     if (typeId && filterId && filterValue) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
+      return decodeURIComponent(
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`
+      );
     }
 
     if (typeId) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
-    return `/space/${spaceId}/${newEntityId}`;
+    return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return `/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`;
+      return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);
     }
 
-    return `/space/${spaceId}/${entityId}/activity`;
+    return decodeURIComponent(`/space/${spaceId}/${entityId}/activity`);
   },
 };
 

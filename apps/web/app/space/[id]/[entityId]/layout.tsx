@@ -37,7 +37,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   // Layouts do not receive search params (hmm)
   const config = Params.getConfigFromParams({}, env);
 
-  params.entityId = decodeURI(params.entityId);
+  params.entityId = decodeURIComponent(params.entityId);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
@@ -87,9 +87,8 @@ export default async function ProfileLayout({ children, params }: Props) {
           tabs={TABS.map(label => {
             const href =
               label === 'Overview'
-                ? // @TODO: These links should be updated when we integrate templates in production for everyone
-                  `${NavUtils.toEntity(params.id, params.entityId)}`
-                : `${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`;
+                ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
             return {
               href,
               label,

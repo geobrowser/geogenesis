@@ -39,9 +39,12 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
 });
 
 function Tab({ href, label }: TabProps) {
+  const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
-  const active = path === href;
+  const active = decodeURIComponent(path ?? '') === decodedHref;
+
+  console.log('tab', { href, decodedHref, path });
 
   return (
     <Link className={tabStyles({ active })} href={href}>

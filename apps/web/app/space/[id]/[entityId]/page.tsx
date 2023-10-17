@@ -35,7 +35,7 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     id: params.entityId,
   });
 
-  params.entityId = decodeURI(params.entityId);
+  params.entityId = decodeURIComponent(params.entityId);
 
   if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     // @ts-expect-error async JSX function
