@@ -153,6 +153,7 @@ const types: Tuple<string, string[]>[] = [
   { _0: IMAGE_BLOCK, _1: [IMAGE_ATTRIBUTE, PARENT_ENTITY] },
   { _0: TABLE_BLOCK, _1: [ROW_TYPE, PARENT_ENTITY] },
   { _0: TEXT_BLOCK, _1: [MARKDOWN_CONTENT, PARENT_ENTITY] },
+  { _0: PERSON_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
 ]
 
 export function bootstrapRootSpaceCoreTypes(
