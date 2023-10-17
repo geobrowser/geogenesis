@@ -60,9 +60,11 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   const profile = await getProfilePage(params.entityId, config.subgraph);
 
+  console.log('params', params);
+
   return (
     <EntityStoreProvider
-      id={profile.id}
+      id={params.entityId}
       spaceId={params.id}
       initialTriples={profile.triples}
       initialSchemaTriples={[]}
@@ -73,8 +75,8 @@ export default async function ProfileLayout({ children, params }: Props) {
       <EntityPageContentContainer>
         <EditableHeading
           spaceId={params.id}
-          entityId={profile.id}
-          name={profile.name ?? profile.id}
+          entityId={params.entityId}
+          name={profile.name ?? params.entityId}
           triples={profile.triples}
           showAccessControl
         />

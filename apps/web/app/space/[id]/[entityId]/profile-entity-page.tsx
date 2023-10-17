@@ -32,7 +32,7 @@ export function ProfilePageComponent(props: Props) {
 
       <Spacer height={40} />
       <motion.div key="entity-page-entity-attributes" layout="position">
-        <ToggleEntityPage id={props.id} spaceId={props.id} triples={props.triples} />
+        <ToggleEntityPage id={props.id} spaceId={props.spaceId} triples={props.triples} />
       </motion.div>
     </>
   );

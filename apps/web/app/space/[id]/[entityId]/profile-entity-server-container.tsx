@@ -52,5 +52,5 @@ export async function ProfileEntityServerContainer({ params, searchParams }: Pro
     coverUrl: Entity.cover(person.triples),
   };
 
-  return <ProfilePageComponent id={profile.id} triples={profile.triples} spaceId={params.id} />;
+  return <ProfilePageComponent id={params.entityId} triples={profile.triples} spaceId={params.id} />;
 }

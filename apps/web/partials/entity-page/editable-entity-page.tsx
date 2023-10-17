@@ -497,7 +497,7 @@ function EntityAttributes({
         </Text>
         <PageStringField variant="body" placeholder="Entity name..." value={name} onChange={onNameChange} />
         {nameTriple && (
-          <div className="absolute top-[6px] right-0 flex items-center gap-8">
+          <div className="absolute right-0 top-[6px] flex items-center gap-8">
             <SquareButton
               icon="trash"
               onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: nameTriple } })}
@@ -516,7 +516,7 @@ function EntityAttributes({
           onChange={onDescriptionChange}
         />
         {descriptionTriple && (
-          <div className="absolute top-[6px] right-0 flex items-center gap-8">
+          <div className="absolute right-0 top-[6px] flex items-center gap-8">
             <SquareButton
               icon="trash"
               onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: descriptionTriple } })}
@@ -564,7 +564,7 @@ function EntityAttributes({
                     .map(triple => triple.value.id)}
                 />
               )}
-              <div className="absolute top-6 right-0 flex items-center gap-1">
+              <div className="absolute right-0 top-6 flex items-center gap-1">
                 {isEntityGroup ? (
                   <AttributeConfigurationMenu
                     trigger={<SquareButton icon="cogSmall" />}
