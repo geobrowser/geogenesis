@@ -45,8 +45,7 @@ export function Navbar({ onSearchClick }: Props) {
             <Icon icon="search" />
           </button>
           <div className="flex items-center sm:hidden">
-            {/* <NavbarActions spaceId={urlComponents?.[1]} /> */}
-            <NavbarActions spaceId={''} />
+            <NavbarActions />
           </div>
         </div>
       </ClientOnly>

@@ -34,8 +34,6 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;
 
-  console.log('space', space);
-
   if (!space) {
     space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
     if (space) usePermissionlessSubgraph = true;
@@ -47,8 +45,6 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
       subgraph: config.permissionlessSubgraph,
     };
   }
-
-  console.log('config entities', config);
 
   const props = await getData({ space, config, initialParams });
 
