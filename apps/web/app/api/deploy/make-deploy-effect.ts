@@ -5,7 +5,7 @@ import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/con
 import { Effect } from 'effect';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
+import { polygon, polygonMumbai } from 'viem/chains';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
@@ -329,8 +329,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount, user
           }
 
           const typeTriple: OmitStrict<Triple, 'id'> = {
-            attributeId: SYSTEM_IDS.SCHEMA_TYPE,
-            attributeName: 'Type',
+            attributeId: SYSTEM_IDS.TYPES,
+            attributeName: 'Types',
             entityId,
             entityName: username ?? '',
             space: deployProxyEffect.contractAddress as string,
