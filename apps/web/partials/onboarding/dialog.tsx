@@ -37,8 +37,6 @@ export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
   const { profile, isLoading } = useGeoProfile(address);
 
-  console.log('isOnboardingVisible', isOnboardingVisible);
-
   if (!address || isLoading || !isOnboardingVisible) return null;
 
   async function onRunOnboardingWorkflow() {
@@ -52,7 +50,6 @@ export const OnboardingDialog = () => {
         avatarUri: avatar || null,
       });
 
-      console.log('spaceAddress', spaceAddress);
       setWorkflowStep('creating-profile');
 
       await publish.registerGeoProfile(wallet, spaceAddress);
@@ -68,7 +65,12 @@ export const OnboardingDialog = () => {
     <Command.Dialog open={!profile} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
-          <div className="relative z-10 flex h-full w-full items-start justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
+            className="relative z-10 flex h-full w-full items-start justify-center"
+          >
             <ModalCard key="card">
               {step === 'start' && (
                 <>
@@ -96,7 +98,7 @@ export const OnboardingDialog = () => {
                 </>
               )}
             </ModalCard>
-          </div>
+          </motion.div>
         </AnimatePresence>
       </div>
     </Command.Dialog>
@@ -130,7 +132,6 @@ type StepHeaderProps = {
 
 const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
   const { hideOnboarding } = useOnboarding();
-  console.log('step', step);
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
