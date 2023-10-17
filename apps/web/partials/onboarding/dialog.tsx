@@ -4,6 +4,7 @@ import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -14,7 +15,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -30,6 +31,7 @@ export const OnboardingDialog = () => {
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
+  const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
@@ -62,8 +64,9 @@ export const OnboardingDialog = () => {
         profileId,
       });
 
-      console.log('profileEntityId', { profileEntityId, spaceAddress });
+      console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
 
+      setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
       setStep('completed');
     }
@@ -105,7 +108,7 @@ export const OnboardingDialog = () => {
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete workflowStep={workflowStep} />
+                  <StepComplete workflowStep={workflowStep} spaceAddress={spaceAddress} />
                 </>
               )}
             </ModalCard>
@@ -299,6 +302,7 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 
 type StepCompleteProps = {
   workflowStep: PublishingStep;
+  spaceAddress: string | null;
 };
 
 const stageAsNumber = {
@@ -309,7 +313,7 @@ const stageAsNumber = {
   done: 4,
 };
 
-function StepComplete({ workflowStep: stage }: StepCompleteProps) {
+function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) {
   return (
     <>
       <StepContents key="start">
@@ -332,12 +336,16 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
-            View Feed
-          </Button>
-          <Button onClick={() => null} className="!flex-1" disabled={stage !== 'done'}>
-            View Personal Space
-          </Button>
+          <Link href={NavUtils.toDashboard()}>
+            <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
+              View Feed
+            </Button>
+          </Link>
+          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)}>
+            <Button className="!flex-1" disabled={stage !== 'done'}>
+              View Personal Space
+            </Button>
+          </Link>
         </div>
       </div>
     </>
@@ -347,7 +355,8 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
 const complete: Record<number, string> = {
   1: `Step 1. Creating your personal space.`,
   2: `Step 2. Sign the transaction to create your profile.`,
-  3: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
+  3: `Step 3. Finishing setting up your space..`,
+  4: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
 };
 
 type ProgressProps = {
@@ -360,6 +369,7 @@ const Progress = ({ stage }: ProgressProps) => {
       <Indicator index={1} stage={stage} />
       <Indicator index={2} stage={stage} />
       <Indicator index={3} stage={stage} />
+      <Indicator index={4} stage={stage} />
     </div>
   );
 };

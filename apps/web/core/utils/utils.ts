@@ -20,6 +20,7 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
 }
 
 export const NavUtils = {
+  toDashboard: () => `/dashboard`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (
