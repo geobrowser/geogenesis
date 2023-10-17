@@ -51,8 +51,6 @@ function Tab({ href, label, disabled }: TabProps) {
   const path = usePathname();
   const active = decodeURIComponent(path ?? '') === decodedHref;
 
-  console.log('tab', { href, decodedHref, path });
-
   if (disabled) {
     return <div className={tabStyles({ active, disabled })}>{label}</div>;
   }
