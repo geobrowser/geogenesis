@@ -97,6 +97,11 @@ type PendingRequestsProps = {
 };
 
 const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
+  if (membershipRequests.length === 0) {
+    return <p className="text-body text-grey-04">There are no pending requests in any of your spaces.</p>
+  }
+
+
   return (
     <div className="space-y-4">
       {membershipRequests.map((request: MembershipRequest) => (
