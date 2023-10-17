@@ -34,6 +34,7 @@ import {
   RELATION_VALUE_RELATIONSHIP_TYPE,
   DATE,
   WEB_URL,
+  WALLETS_ATTRIBUTE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -113,6 +114,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: AVATAR_ATTRIBUTE, _1: new StringValue(AVATAR_ATTRIBUTE, 'Avatar') },
   { _0: COVER_ATTRIBUTE, _1: new StringValue(COVER_ATTRIBUTE, 'Cover') },
   { _0: FILTER, _1: new StringValue(FILTER, 'Filter') },
+  { _0: WALLETS_ATTRIBUTE, _1: new StringValue(WALLETS_ATTRIBUTE, 'Wallets') },
   {
     _0: RELATION_VALUE_RELATIONSHIP_TYPE,
     _1: new StringValue(
@@ -140,6 +142,7 @@ const attributes: Tuple<string, string>[] = [
   { _0: RELATION_VALUE_RELATIONSHIP_TYPE, _1: RELATION },
   { _0: AVATAR_ATTRIBUTE, _1: IMAGE },
   { _0: COVER_ATTRIBUTE, _1: IMAGE },
+  { _0: WALLETS_ATTRIBUTE, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */

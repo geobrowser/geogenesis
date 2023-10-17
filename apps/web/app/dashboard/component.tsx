@@ -2,9 +2,11 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import { useWalletClient } from 'wagmi';
 import { useAccount } from 'wagmi';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -12,7 +14,7 @@ import { Publish } from '~/core/io';
 import type { MembershipRequest} from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Services } from '~/core/services';
 import type { Space } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -38,6 +40,7 @@ export const Component = ({ membershipRequests }: Props) => {
 const PersonalHomeHeader = () => {
   const { address } = useAccount();
   const profile = useUserProfile(address);
+  const {profile: onchainProfile} = useGeoProfile(address)
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -47,9 +50,11 @@ const PersonalHomeHeader = () => {
         </div>
         <h2 className="text-largeTitle">{profile?.name ?? 'Anonymous'}</h2>
       </div>
-      <div>
-        <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
-      </div>
+      {onchainProfile?.homeSpace && (
+        <Link href={NavUtils.toSpace(onchainProfile.homeSpace)}>
+          <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
+        </Link>
+      )}
     </div>
   );
 };
@@ -92,6 +97,11 @@ type PendingRequestsProps = {
 };
 
 const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
+  if (membershipRequests.length === 0) {
+    return <p className="text-body text-grey-04">There are no pending requests in any of your spaces.</p>
+  }
+
+
   return (
     <div className="space-y-4">
       {membershipRequests.map((request: MembershipRequest) => (

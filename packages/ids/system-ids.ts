@@ -99,7 +99,7 @@ export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
  */
 
 export const PROFILE_REGISTRY_ADDRESS =
-  '0xc42Cd03dFfE4Ff10959d65428A7adA2C752B5822'
+  '0xc066E89bF7669b905f869Cb936818b0fd0bc456d'
 // '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
 
 // This represents the beacon for the first set of deployed permissioned spaces.

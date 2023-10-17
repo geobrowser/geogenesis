@@ -1,72 +1,73 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount, useWalletClient } from 'wagmi';
 
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { deploySpaceContract } from '~/core/io/publish/contracts';
+import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
-
-function useOnchainProfile(account?: `0x${string}`) {
-  const { subgraph, config } = Services.useServices();
-
-  const { data: profile } = useQuery({
-    queryKey: ['onchain-profile', account],
-    queryFn: async () => {
-      if (!account) return null;
-      return await subgraph.fetchOnchainProfile({ address: account, endpoint: config.profileSubgraph });
-    },
-  });
-
-  return profile ?? null;
-}
+type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
 
 export const OnboardingDialog = () => {
   const { publish } = Services.useServices();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
+
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
+  const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
+
   const [step, setStep] = useState<Step>('start');
-  const [workflowStep, setWorkflowStep] = useState<'idle' | 'creating-spaces' | 'creating-profile' | 'done'>('idle');
+  const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
-  const profile = useOnchainProfile(address);
+  const { isOnboardingVisible } = useOnboarding();
+  const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address) return null;
+  if (!address || isLoading || !isOnboardingVisible) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
       setStep('completing');
-
       setWorkflowStep('creating-spaces');
 
       const { spaceAddress } = await deploySpaceContract({
         account: address,
-        username: name || null,
-        avatarUri: avatar || null,
       });
 
-      console.log('spaceAddress', spaceAddress);
-      setWorkflowStep('creating-profile');
+      setWorkflowStep('registering-profile');
 
-      await publish.registerGeoProfile(wallet, spaceAddress);
+      const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+
+      setWorkflowStep('creating-geo-profile-entity');
+
+      const { entityId: profileEntityId } = await createProfileEntity({
+        account: address,
+        spaceAddress,
+        avatarUri: avatar || null,
+        username: name || null,
+        profileId,
+      });
+
+      console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
+
+      setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
-
       setStep('completed');
     }
   }
@@ -75,10 +76,15 @@ export const OnboardingDialog = () => {
   // Currently stubbed as we don't have a way to create a profile yet
   // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={address && !profile} label="Onboarding profile">
+    <Command.Dialog open={!profile} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
-          <div className="relative z-10 flex h-full w-full items-start justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
+            className="relative z-10 flex h-full w-full items-start justify-center"
+          >
             <ModalCard key="card">
               {step === 'start' && (
                 <>
@@ -102,11 +108,11 @@ export const OnboardingDialog = () => {
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete workflowStep={workflowStep} />
+                  <StepComplete workflowStep={workflowStep} spaceAddress={spaceAddress} />
                 </>
               )}
             </ModalCard>
-          </div>
+          </motion.div>
         </AnimatePresence>
       </div>
     </Command.Dialog>
@@ -295,17 +301,19 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 }
 
 type StepCompleteProps = {
-  workflowStep: 'idle' | 'creating-spaces' | 'creating-profile' | 'done';
+  workflowStep: PublishingStep;
+  spaceAddress: string | null;
 };
 
 const stageAsNumber = {
   idle: 0,
   'creating-spaces': 1,
-  'creating-profile': 2,
-  done: 3,
+  'registering-profile': 2,
+  'creating-geo-profile-entity': 3,
+  done: 4,
 };
 
-function StepComplete({ workflowStep: stage }: StepCompleteProps) {
+function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) {
   return (
     <>
       <StepContents key="start">
@@ -316,7 +324,7 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
             {complete[stageAsNumber[stage]]}
           </Text>
-          {stage !== 'creating-profile' && (
+          {stage !== 'registering-profile' && (
             <div className="mx-auto mt-2 w-1/3">
               <Progress stage={stageAsNumber[stage]} />
             </div>
@@ -328,12 +336,16 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Button onClick={() => null} className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
-            View Feed
-          </Button>
-          <Button onClick={() => null} className="!flex-1" disabled={stage !== 'done'}>
-            View Personal Space
-          </Button>
+          <Link href={NavUtils.toDashboard()}>
+            <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
+              View Feed
+            </Button>
+          </Link>
+          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)}>
+            <Button className="!flex-1" disabled={stage !== 'done'}>
+              View Personal Space
+            </Button>
+          </Link>
         </div>
       </div>
     </>
@@ -343,7 +355,8 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
 const complete: Record<number, string> = {
   1: `Step 1. Creating your personal space.`,
   2: `Step 2. Sign the transaction to create your profile.`,
-  3: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
+  3: `Step 3. Finishing setting up your space..`,
+  4: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
 };
 
 type ProgressProps = {
@@ -356,6 +369,7 @@ const Progress = ({ stage }: ProgressProps) => {
       <Indicator index={1} stage={stage} />
       <Indicator index={2} stage={stage} />
       <Indicator index={3} stage={stage} />
+      <Indicator index={4} stage={stage} />
     </div>
   );
 };

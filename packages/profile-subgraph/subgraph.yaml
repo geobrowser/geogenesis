@@ -12,8 +12,8 @@ dataSources:
     network: matic
     source:
       abi: GeoProfileRegistry
-      address: "0xc42Cd03dFfE4Ff10959d65428A7adA2C752B5822"
-      startBlock: 48810387
+      address: "0xc066E89bF7669b905f869Cb936818b0fd0bc456d"
+      startBlock: 48833716
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6

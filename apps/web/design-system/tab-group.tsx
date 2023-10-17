@@ -46,9 +46,10 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
 });
 
 function Tab({ href, label, disabled }: TabProps) {
+  const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
-  const active = path === href;
+  const active = decodeURIComponent(path ?? '') === decodedHref;
 
   if (disabled) {
     return <div className={tabStyles({ active, disabled })}>{label}</div>;

@@ -37,6 +37,8 @@ export default async function ProfileLayout({ children, params }: Props) {
   // Layouts do not receive search params (hmm)
   const config = Params.getConfigFromParams({}, env);
 
+  params.entityId = decodeURIComponent(params.entityId);
+
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
 
@@ -62,7 +64,7 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   return (
     <EntityStoreProvider
-      id={profile.id}
+      id={params.entityId}
       spaceId={params.id}
       initialTriples={profile.triples}
       initialSchemaTriples={[]}
@@ -73,8 +75,8 @@ export default async function ProfileLayout({ children, params }: Props) {
       <EntityPageContentContainer>
         <EditableHeading
           spaceId={params.id}
-          entityId={profile.id}
-          name={profile.name ?? profile.id}
+          entityId={params.entityId}
+          name={profile.name ?? params.entityId}
           triples={profile.triples}
           showAccessControl
         />
@@ -85,9 +87,8 @@ export default async function ProfileLayout({ children, params }: Props) {
           tabs={TABS.map(label => {
             const href =
               label === 'Overview'
-                ? // @TODO: These links should be updated when we integrate templates in production for everyone
-                  `${NavUtils.toEntity(params.id, params.entityId)}`
-                : `${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`;
+                ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
             return {
               href,
               label,
