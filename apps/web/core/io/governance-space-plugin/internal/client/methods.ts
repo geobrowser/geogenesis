@@ -30,6 +30,7 @@ import {
   CreateMainVotingPluginProposalOptions,
   ExecuteMainVotingPluginProposalOptions,
   InitializeMainVotingPluginOptions,
+  InitializeMemberAccessePluginOptions,
   InitializeSpacePluginOptions,
   SetContentSpacePluginOptions,
   VoteMainVotingPluginProposalOptions,
@@ -135,7 +136,7 @@ export class GeoPluginClientMethods extends ClientCore {
     await Effect.runPromise(initializePluginProgram);
   }
 
-  // Set Space Content
+  // Set Space Content -- this may be unnecessary and only needed as an encoded function since it would likely only be passed into a proposal as an action that would execute upon passing
   public async setContent({
     wallet,
     blockIndex,
@@ -209,13 +210,82 @@ export class GeoPluginClientMethods extends ClientCore {
     await Effect.runPromise(executeProgram);
   }
 
-  // Space Plugin: Read Functions
-
   // Member Access Plugin: Initialize
 
   // Member Access Plugin: Write Functions
 
   // Initialize Member Access Plugin for an already existing DAO
+  public async initializeMemberAccessPlugin({
+    wallet,
+    daoAddress,
+    firstBlockContentUri,
+    onInitStateChange,
+  }: InitializeMemberAccessePluginOptions): Promise<void> {
+    const prepareInitEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          abi: memberAccessPluginAbi,
+          address: this.geoMemberAccessPluginAddress as `0x${string}`,
+          functionName: 'initialize',
+          walletClient: wallet,
+          args: [daoAddress, firstBlockContentUri],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeInitEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareInitEffect);
+
+      onInitStateChange('initializing-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Initialization failed: ${error}`),
+        })
+      );
+    });
+
+    const initializePluginProgram = Effect.gen(function* (awaited) {
+      const writeInitResult = yield* awaited(writeInitEffect);
+
+      console.log('Transaction hash: ', writeInitResult.hash);
+      onInitStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeInitResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(initializePluginProgram);
+  }
 
   // Member Access Plugin: Read Functions
   public async isMember(address: `0x${string}`): Promise<boolean> {
@@ -283,7 +353,6 @@ export class GeoPluginClientMethods extends ClientCore {
   // Main Voting Plugin: Write Functions
 
   // Initialize Main Voting Plugin for an already existing DAO
-
   public async initializeMainVotingPlugin({
     wallet,
     daoAddress,

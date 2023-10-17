@@ -54,16 +54,7 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Space Plugin: Functions
-
-  public async initalizeSpacePlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-    const initalizeData = encodeFunctionData({
-      abi: spacePluginAbi,
-      functionName: 'initialize',
-      args: [daoAddress, firstBlockContentUri],
-    });
-    return initalizeData;
-  }
-
+ // encoded functions would be passed in as actions in a proposal
   public async setContent(blockIndex: number, itemIndex: number, contentUri: string) {
     const setContentData = encodeFunctionData({
       abi: spacePluginAbi,
@@ -111,7 +102,6 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
 // Installation Functions
-
 static getMainVotingPluginInstallItem(params: {
   votingSettings: {
     votingMode: number,

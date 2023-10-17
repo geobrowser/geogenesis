@@ -51,6 +51,13 @@ export type SetContentSpacePluginOptions = {
   onProposalStateChange: (newState: ProposalInitState) => void;
 };
 
+export type InitializeMemberAccessPluginOptions = {
+  wallet: WalletClient;
+  daoAddress: `0x${string}`;
+  firstBlockUri: string;
+  onInitStateChange: (newState: PluginInitState) => void;
+};
+
 export type MainVotingPluginVotingSettings = {
   votingMode: number;
   supportThreshold: number;
