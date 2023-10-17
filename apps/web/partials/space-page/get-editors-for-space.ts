@@ -11,7 +11,17 @@ type EditorsForSpace = {
 
 export async function getEditorsForSpace(spaceId: string, connectedAddress?: string): Promise<EditorsForSpace> {
   const config = Params.getConfigFromParams({}, undefined);
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let usePermissionlessSpace = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSpace = true;
+  }
+
+  if (usePermissionlessSpace) {
+    config.subgraph = config.permissionlessSubgraph;
+  }
 
   if (!space) {
     throw new Error("Space doesn't exist");

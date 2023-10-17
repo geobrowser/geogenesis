@@ -217,9 +217,6 @@ export function handleCreateTripleAction(
   const dateValue = fact.value.asDateValue()
   if (dateValue) {
     log.debug('Creating date value', [])
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, dateValue.value)
-    }
     triple.valueType = 'DATE'
     triple.valueId = dateValue.id
     triple.stringValue = dateValue.value
@@ -228,9 +225,6 @@ export function handleCreateTripleAction(
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, stringValue.id)
-    }
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
     triple.stringValue = stringValue.value
@@ -253,9 +247,7 @@ export function handleCreateTripleAction(
   const urlValue = fact.value.asUrlValue()
   if (urlValue) {
     log.debug('Creating url value', [])
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, urlValue.value)
-    }
+
     triple.valueType = 'URL'
     triple.valueId = urlValue.id
     triple.stringValue = urlValue.value
@@ -276,9 +268,6 @@ export function handleCreateTripleAction(
 
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, numberValue.id)
-    }
     triple.valueType = 'NUMBER'
     triple.valueId = numberValue.id
     triple.numberValue = BigDecimal.fromString(numberValue.value)

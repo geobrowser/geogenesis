@@ -6,10 +6,9 @@ import {
 } from '../generated/templates/Space/Space'
 import { addEntry } from './add-entry'
 import { addRole, removeRole } from './access-control'
-import { getChecksumAddress } from './get-checksum-address'
 
 export function handleEntryAdded(event: EntryAdded): void {
-  const address = getChecksumAddress(event.address)
+  const address = event.address.toHexString()
 
   const rootSpace = Space.load(address)
 
