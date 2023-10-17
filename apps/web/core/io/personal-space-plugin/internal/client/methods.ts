@@ -1,10 +1,6 @@
 import { ClientCore } from '@aragon/sdk-client-common';
 import { Effect } from 'effect';
-import { string } from 'effect/Config';
-import error from 'next/error';
-import { Transaction } from 'viem';
 
-import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { memberAccessPluginAbi } from '~/core/io/governance-space-plugin/abis';
@@ -15,7 +11,7 @@ import {
   WaitForTransactionBlockError,
 } from '~/core/io/publish';
 
-import { personalSpaceAdminPluginAbi, personalSpaceAdminPluginSetupAbi } from '../../abis';
+import { personalSpaceAdminPluginAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
 import { ExecutePersonalSpaceAdminPluginProposalOptions, InitializePersonalSpaceAdminPluginOptions } from '../../types';
 
@@ -36,19 +32,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
     this.geoPersonalSpaceAdminPluginRepoAddress = pluginContext.geoPersonalSpaceAdminPluginRepoAddress;
   }
 
-  // implementation of the methods in the interface
-
-  // public async *prepareSpacePluginInstallation(): AsyncGenerator<PrepareInstallationStepValue> {
-  //   yield* prepareGenericInstallation(this.web3, {
-  //     daoAddressOrEns: params.daoAddressOrEns,
-  //     pluginRepo: this.geoMainVotingPluginRepoAddress,
-  //     version: params.version,
-  //     installationAbi: SPACE_PLUGIN_BUILD_METADATA?.pluginSetup?.prepareInstallation?.inputs,
-  //     pluginSetupProcessorAddress: this.web3.getAddress('pluginSetupProcessorAddress'),
-  //   });
-  // }
-
-  // Internal Types
+  // Plugin Installation
 
   // Personal Space Admin Plugin: Write Functions
 
