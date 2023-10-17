@@ -82,20 +82,20 @@ const names: Tuple<string, StringValue>[] = [
   { _0: TYPES, _1: new StringValue(TYPES, 'Types') },
   { _0: NAME, _1: new StringValue(NAME, 'Name') },
   { _0: ATTRIBUTE, _1: new StringValue(ATTRIBUTE, 'Attribute') },
-  { _0: SPACE, _1: new StringValue(SPACE, 'Space') },
+  { _0: SPACE, _1: new StringValue(SPACE, 'Indexed Space') },
   { _0: ATTRIBUTES, _1: new StringValue(ATTRIBUTES, 'Attributes') },
   { _0: SCHEMA_TYPE, _1: new StringValue(SCHEMA_TYPE, 'Type') },
   { _0: VALUE_TYPE, _1: new StringValue(VALUE_TYPE, 'Value type') },
   { _0: RELATION, _1: new StringValue(RELATION, 'Relation') },
   { _0: TEXT, _1: new StringValue(TEXT, 'Text') },
-  { _0: IMAGE, _1: new StringValue(TEXT, 'Image') },
+  { _0: IMAGE, _1: new StringValue(IMAGE, 'Image') },
   { _0: DATE, _1: new StringValue(DATE, 'Date') },
   { _0: WEB_URL, _1: new StringValue(WEB_URL, 'Web URL') },
   { _0: IMAGE_ATTRIBUTE, _1: new StringValue(IMAGE_ATTRIBUTE, 'Image') },
   { _0: DESCRIPTION, _1: new StringValue(DESCRIPTION, 'Description') },
   {
     _0: SPACE_CONFIGURATION,
-    _1: new StringValue(SPACE_CONFIGURATION, 'Space Configuration'),
+    _1: new StringValue(SPACE_CONFIGURATION, 'Space'),
   },
   { _0: FOREIGN_TYPES, _1: new StringValue(FOREIGN_TYPES, 'Foreign Types') },
   { _0: TABLE_BLOCK, _1: new StringValue(TABLE_BLOCK, 'Table Block') },
@@ -138,6 +138,8 @@ const attributes: Tuple<string, string>[] = [
   { _0: PARENT_ENTITY, _1: RELATION },
   { _0: FILTER, _1: TEXT },
   { _0: RELATION_VALUE_RELATIONSHIP_TYPE, _1: RELATION },
+  { _0: AVATAR_ATTRIBUTE, _1: IMAGE },
+  { _0: COVER_ATTRIBUTE, _1: IMAGE },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
