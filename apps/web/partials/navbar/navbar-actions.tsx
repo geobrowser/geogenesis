@@ -3,16 +3,19 @@
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
+import classnames from 'classnames';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { Services } from '~/core/services';
 import { useEditable } from '~/core/state/editable-store/editable-store';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
@@ -20,21 +23,6 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { Menu } from '~/design-system/menu';
-
-function useUserProfile(address?: string) {
-  const { subgraph, config } = Services.useServices();
-
-  // @TODO: Merge with local data
-  const { data } = useQuery({
-    queryKey: ['user-profile', address],
-    queryFn: async () => {
-      if (!address) return null;
-      return await subgraph.fetchProfile({ address, endpoint: config.subgraph });
-    },
-  });
-
-  return data ? data[1] : null;
-}
 
 interface Props {
   spaceId?: string;
@@ -44,7 +32,7 @@ export function NavbarActions({ spaceId }: Props) {
   const [open, onOpenChange] = React.useState(false);
 
   const { address } = useAccount();
-  const profile = useUserProfile(address);
+  const { profile } = useGeoProfile(address);
 
   if (!address) {
     return <GeoConnectButton />;
@@ -57,19 +45,27 @@ export function NavbarActions({ spaceId }: Props) {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
+            <Avatar value={address} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <div className="relative rounded-full overflow-hidden w-4 h-4">
-              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+        <AvatarMenuItem disabled={!profile?.homeSpace}>
+          <div
+            className={classnames('flex items-center gap-2', {
+              grayscale: profile?.homeSpace,
+            })}
+          >
+            <div className="relative h-4 w-4 overflow-hidden rounded-full">
+              <Avatar value={address} size={16} />
             </div>
-            <p className="text-button">Personal Space</p>
+            {profile?.homeSpace && (
+              <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                Personal Space
+              </Link>
+            )}
           </div>
         </AvatarMenuItem>
 
@@ -208,7 +204,7 @@ function ModeToggle({ spaceId }: Props) {
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
                 <MotionPopoverContent
-                  className="z-10 origin-top-right rounded bg-text text-white p-2 shadow-button focus:outline-none max-w-[164px]"
+                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-none"
                   side="bottom"
                   align="end"
                   alignOffset={-8}
@@ -222,7 +218,7 @@ function ModeToggle({ spaceId }: Props) {
                     bounce: 0,
                   }}
                 >
-                  <h1 className="text-breadcrumb text-center">You don’t have edit access in this space</h1>
+                  <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
                   <Popover.Arrow />
                 </MotionPopoverContent>
               )}
