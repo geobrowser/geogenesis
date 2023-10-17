@@ -62,7 +62,7 @@ export function NavbarActions({ spaceId }: Props) {
             </div>
             {profile?.homeSpace && (
               <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
-                Personal Space
+                Personal space
               </Link>
             )}
           </div>
