@@ -12,6 +12,7 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
+import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
