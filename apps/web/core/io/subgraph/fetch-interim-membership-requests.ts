@@ -133,7 +133,7 @@ export async function fetchInterimMembershipRequests({
     const profile = memberAddressToProfilesMap.get(request.requestor);
     const space = requestIdToSpaceMap.get(request.id);
 
-    const spaceRendering = {
+    const spaceMetadata = {
       id: space?.id ?? request.space,
       name: space?.attributes.name ?? request.space,
       image: space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
@@ -141,7 +141,7 @@ export async function fetchInterimMembershipRequests({
 
     return {
       ...request,
-      space: spaceRendering,
+      space: spaceMetadata,
       requestor: profile ?? {
         id: request.requestor,
         avatarUrl: null,
