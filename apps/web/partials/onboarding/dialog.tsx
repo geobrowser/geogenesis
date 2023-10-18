@@ -338,7 +338,7 @@ function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) 
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={NavUtils.toDashboard()}>
             <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
-              View Feed
+              View Personal Home
             </Button>
           </Link>
           <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)}>

@@ -2,10 +2,8 @@ import { cookies } from 'next/headers';
 
 import { Cookie } from '~/core/cookie';
 import { options } from '~/core/environment/environment';
-import {
-  type MembershipRequest,
-  fetchInterimMembershipRequests,
-} from '~/core/io/subgraph/fetch-interim-membership-requests';
+import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
+import { Space } from '~/core/types';
 
 import { Component } from './component';
 
@@ -18,9 +16,7 @@ export default async function PersonalHomePage() {
     spaces.map(spaceId => fetchInterimMembershipRequests({ endpoint: options.production.membershipSubgraph, spaceId }))
   );
 
-  const membershipRequests: MembershipRequest[] = membershipRequestsBySpace
-    .flat()
-    .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+  const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
   return <Component membershipRequests={membershipRequests} />;
 }
@@ -51,7 +47,7 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
 
     const { data } = (await response.json()) as any;
 
-    const spaces = data.spaces.map((space: any) => space.id);
+    const spaces = data.spaces.map((space: Space) => space.id);
 
     return spaces;
   } catch (error) {

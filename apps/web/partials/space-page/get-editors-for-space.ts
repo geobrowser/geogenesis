@@ -42,6 +42,8 @@ export async function getEditorsForSpace(spaceId: string, connectedAddress?: str
     id: profile[1].id,
     avatarUrl: profile[1].avatarUrl,
     name: profile[1].name,
+    address: profile[1].address,
+    profileLink: profile[1].profileLink,
   }));
 
   const firstThreeEditors = allEditors.slice(0, 3);
