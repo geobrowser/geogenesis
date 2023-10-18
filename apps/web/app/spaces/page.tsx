@@ -66,7 +66,7 @@ const HIDDEN_SPACES: Array<string> = [
 ];
 
 export default async function Spaces() {
-  const config = Environment.getConfig(process.env.APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);

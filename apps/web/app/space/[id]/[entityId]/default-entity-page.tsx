@@ -41,7 +41,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = params.entityId;
-  const config = Environment.getConfig(process.env.APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
@@ -72,7 +72,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const props = await getData(params.id, params.entityId, config);
 

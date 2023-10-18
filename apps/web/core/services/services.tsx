@@ -32,9 +32,6 @@ export function ServicesProvider({ children }: Props) {
 
   const services = useMemo((): Services => {
     let config = Environment.getConfig(process.env.NEXT_APP_ENV);
-
-    console.log('config', { config, env: process.env.NEXT_PUBLIC_APP_ENV });
-
     const storageClient = new Storage.StorageClient(config.ipfs);
 
     if (secondarySubgraph) {

@@ -27,7 +27,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;
@@ -80,7 +80,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SpacePage({ params }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;

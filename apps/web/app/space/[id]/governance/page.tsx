@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default async function GovernancePage({ params }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
@@ -88,7 +88,7 @@ interface NetworkResult {
 }
 
 async function getProposalsCount({ params }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;

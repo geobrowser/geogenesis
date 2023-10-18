@@ -37,7 +37,7 @@ export default async function ActivityPage({ searchParams, params }: Props) {
 }
 
 async function ActivityList({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const [personEntity, spaces] = await Promise.all([
     Subgraph.fetchEntity({

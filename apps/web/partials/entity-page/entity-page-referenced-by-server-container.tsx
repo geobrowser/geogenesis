@@ -19,7 +19,7 @@ interface Props {
 }
 
 export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;

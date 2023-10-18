@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;

@@ -50,7 +50,7 @@ export function getConfig(env?: string): AppConfig {
     env = DEFAULT_ENV;
   }
 
-  if (env in options) {
+  if (!(env in options)) {
     console.error(`No config for env ${env}`);
     env = DEFAULT_ENV;
   }

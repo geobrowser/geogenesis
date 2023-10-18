@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default async function Layout({ children, params }: Props) {
-  const config = Environment.getConfig(process.env.APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;

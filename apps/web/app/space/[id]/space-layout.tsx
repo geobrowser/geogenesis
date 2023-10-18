@@ -31,7 +31,7 @@ interface Props {
 // We don't want this layout to nest within the space/ route component tree,
 // so we use it like normal React component instead of a Next.js route layout.
 export async function SpaceLayout({ params, children, usePermissionlessSpace }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   if (usePermissionlessSpace) {
     config = {

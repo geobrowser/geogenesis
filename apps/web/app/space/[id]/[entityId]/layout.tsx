@@ -29,7 +29,7 @@ interface Props {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  let config = Environment.getConfig(process.env.APP_ENV);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   params.entityId = decodeURIComponent(params.entityId);
 
