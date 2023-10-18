@@ -75,6 +75,7 @@ export async function makeProfileEffect(
         try: async () => {
           const actions: CreateTripleAction[] = [];
 
+          // Add triples for a Person entity
           if (username) {
             const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
               entityId: profileId,
@@ -135,6 +136,47 @@ export async function makeProfileEffect(
             type: 'createTriple',
             id: ID.createTripleId(typeTriple),
             ...typeTriple,
+          });
+
+          // Add triples for creating a space configuration entity
+          const spaceConfigurationId = ID.createEntityId();
+
+          const spaceTriple: OmitStrict<Triple, 'id'> = {
+            attributeId: SYSTEM_IDS.TYPES,
+            attributeName: 'Types',
+            entityId: spaceConfigurationId,
+            entityName: `${username ?? userAccount}'s Space`,
+            space: spaceAddress,
+            value: {
+              type: 'entity',
+              name: 'Space',
+              id: SYSTEM_IDS.SPACE_CONFIGURATION,
+            },
+          };
+
+          actions.push({
+            type: 'createTriple',
+            id: ID.createTripleId(spaceTriple),
+            ...spaceTriple,
+          });
+
+          const spaceNameTriple: OmitStrict<Triple, 'id'> = {
+            attributeId: SYSTEM_IDS.NAME,
+            attributeName: 'Name',
+            entityId: spaceConfigurationId,
+            entityName: `${username ?? userAccount}'s Space`,
+            space: spaceAddress,
+            value: {
+              type: 'string',
+              value: `${username ?? userAccount}'s Space`,
+              id: ID.createValueId(),
+            },
+          };
+
+          actions.push({
+            type: 'createTriple',
+            id: ID.createTripleId(spaceNameTriple),
+            ...spaceNameTriple,
           });
 
           slog({

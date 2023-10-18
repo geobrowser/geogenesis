@@ -164,6 +164,19 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
             },
           };
 
+          const spaceNameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+            entityId: ID.createEntityId(),
+            entityName: `${userAccount}'s Space`,
+            attributeId: SYSTEM_IDS.NAME,
+            attributeName: 'Name',
+            space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
+            value: {
+              type: 'string',
+              value: `${userAccount}'s Space`,
+              id: ID.createValueId(),
+            },
+          };
+
           slog({
             requestId,
             message: `Adding space ${deployProxyEffect.contractAddress} for ${userAccount} to space registry at ${SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS}`,
@@ -176,6 +189,11 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
                 type: 'createTriple',
                 id: ID.createTripleId(spaceAddressTripleWithoutId),
                 ...spaceAddressTripleWithoutId,
+              },
+              {
+                type: 'createTriple',
+                id: ID.createTripleId(spaceNameTripleWithoutId),
+                ...spaceNameTripleWithoutId,
               },
             ],
             name: `Adding space ${deployProxyEffect.contractAddress} for ${userAccount} to space registry`,
