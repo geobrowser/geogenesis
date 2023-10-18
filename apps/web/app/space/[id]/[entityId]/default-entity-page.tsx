@@ -1,19 +1,16 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
 
 import type { Metadata } from 'next';
 
-import { AppConfig } from '~/core/environment';
+import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -34,18 +31,17 @@ import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: ServerSideEnvParams & {
+  searchParams: {
     typeId?: string;
     filterId?: string;
     filterValue?: string;
   };
 }
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = params.entityId;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  const config = Environment.getConfig(process.env.APP_ENV);
 
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
@@ -76,8 +72,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 }
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  const config = Environment.getConfig(process.env.APP_ENV);
 
   const props = await getData(params.id, params.entityId, config);
 

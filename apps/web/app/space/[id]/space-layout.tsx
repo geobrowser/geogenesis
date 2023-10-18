@@ -1,16 +1,13 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { AppConfig } from '~/core/environment';
+import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -27,16 +24,14 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams;
   children: React.ReactNode;
   usePermissionlessSpace?: boolean;
 }
 
 // We don't want this layout to nest within the space/ route component tree,
 // so we use it like normal React component instead of a Next.js route layout.
-export async function SpaceLayout({ params, searchParams, children, usePermissionlessSpace }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  let config = Params.getConfigFromParams(searchParams, env);
+export async function SpaceLayout({ params, children, usePermissionlessSpace }: Props) {
+  let config = Environment.getConfig(process.env.APP_ENV);
 
   if (usePermissionlessSpace) {
     config = {

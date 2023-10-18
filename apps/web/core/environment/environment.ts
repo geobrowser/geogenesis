@@ -1,6 +1,6 @@
 import { AppEnv } from '../types';
 
-export type SupportedChainId = '137' | '1337' | '80001' | '31337';
+type SupportedChainId = '137' | '1337' | '80001' | '31337';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -20,15 +20,6 @@ export const options: Record<AppEnv, AppConfig> = {
     rpc: 'http://localhost:8545',
     ipfs: 'https://api.thegraph.com/ipfs',
     subgraph: 'http://localhost:8000/subgraphs/name/example',
-    permissionlessSubgraph: '',
-    membershipSubgraph: '',
-    profileSubgraph: '',
-  },
-  staging: {
-    chainId: '1337',
-    rpc: 'https://devnet-dabbott.cloud.okteto.net',
-    ipfs: 'https://api.thegraph.com/ipfs',
-    subgraph: 'https://graph-node-8000-dabbott.cloud.okteto.net/subgraphs/name/example',
     permissionlessSubgraph: '',
     membershipSubgraph: '',
     profileSubgraph: '',
@@ -53,13 +44,16 @@ export const options: Record<AppEnv, AppConfig> = {
   },
 };
 
-export function getConfig(chainId: string) {
-  const config = Object.values(options).find(options => options.chainId === chainId);
-
-  if (!config) {
-    console.error(`No config for chain ${chainId}`);
-    return options.production;
+export function getConfig(env?: string): AppConfig {
+  if (!env) {
+    console.error(`No env passed in. Defaulting to ${DEFAULT_ENV}`);
+    env = DEFAULT_ENV;
   }
 
-  return config;
+  if (env in options) {
+    console.error(`No config for env ${env}`);
+    env = DEFAULT_ENV;
+  }
+
+  return options[env as AppEnv];
 }

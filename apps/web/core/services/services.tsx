@@ -6,8 +6,6 @@ import { useSelector } from '@legendapp/state/react';
 import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
 
-import { useNetwork } from 'wagmi';
-
 import { Environment } from '~/core/environment';
 import { Publish, Storage, Subgraph } from '~/core/io';
 
@@ -30,14 +28,13 @@ export const setSecondarySubgraphAsMain = (value: boolean) => {
 };
 
 export function ServicesProvider({ children }: Props) {
-  const { chain } = useNetwork();
   const secondarySubgraph = useSelector(secondarySubgraph$);
 
-  // Default to production chain
-  const chainId = chain ? String(chain.id) : Environment.options.production.chainId;
-
   const services = useMemo((): Services => {
-    let config = Environment.getConfig(chainId);
+    let config = Environment.getConfig(process.env.NEXT_APP_ENV);
+
+    console.log('config', { config, env: process.env.NEXT_PUBLIC_APP_ENV });
+
     const storageClient = new Storage.StorageClient(config.ipfs);
 
     if (secondarySubgraph) {
@@ -53,7 +50,7 @@ export function ServicesProvider({ children }: Props) {
       subgraph: Subgraph,
       publish: Publish,
     };
-  }, [chainId, secondarySubgraph]);
+  }, [secondarySubgraph]);
 
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }
