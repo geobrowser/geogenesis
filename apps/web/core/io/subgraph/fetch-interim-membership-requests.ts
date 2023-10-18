@@ -1,8 +1,9 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { options } from '~/core/environment/environment';
-import { Profile } from '~/core/types';
+import { OmitStrict, Profile, Space } from '~/core/types';
 
 import { Subgraph } from '..';
 import { graphql } from './graphql';
@@ -31,7 +32,11 @@ export type MembershipRequest = {
 
 export interface MembershipRequestWithProfile {
   id: string;
-  space: string;
+  space: {
+    id: string;
+    name: string;
+    image: string | null;
+  };
   createdAt: string;
   requestor: Profile;
 }
@@ -91,13 +96,27 @@ export async function fetchInterimMembershipRequests({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const memberProfiles = (
-    await Promise.all(
+  const [maybeMemberProfiles, maybeSpaces] = await Promise.all([
+    Promise.all(
       result.membershipRequests.map(request =>
         Subgraph.fetchProfile({ endpoint: options.production.subgraph, address: request.requestor })
       )
-    )
-  ).flatMap(profile => (profile ? [profile] : []));
+    ),
+    Promise.all(
+      result.membershipRequests.map(async request => {
+        const space = await Subgraph.fetchSpace({ endpoint: options.production.subgraph, id: request.space });
+
+        if (!space) {
+          return null;
+        }
+
+        return [request.id, space];
+      })
+    ),
+  ]);
+
+  const memberProfiles = maybeMemberProfiles.filter((profile): profile is [string, Profile] => !!profile);
+  const spaces = maybeSpaces.filter((space): space is [string, Space] => !!space);
 
   // Write a function to map the requestor address to the profile
   const memberAddressToProfilesMap = memberProfiles.reduce((acc, [, profile]) => {
@@ -105,11 +124,24 @@ export async function fetchInterimMembershipRequests({
     return acc;
   }, new Map<string, Profile>());
 
+  const requestIdToSpaceMap = spaces.reduce((acc, [requestId, space]) => {
+    acc.set(requestId, space);
+    return acc;
+  }, new Map<string, Space>());
+
   return result.membershipRequests.map((request): MembershipRequestWithProfile => {
     const profile = memberAddressToProfilesMap.get(request.requestor);
+    const space = requestIdToSpaceMap.get(request.id);
+
+    const spaceRendering = {
+      id: space?.id ?? request.space,
+      name: space?.attributes.name ?? request.space,
+      image: space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
+    };
 
     return {
       ...request,
+      space: spaceRendering,
       requestor: profile ?? {
         id: request.requestor,
         avatarUrl: null,
