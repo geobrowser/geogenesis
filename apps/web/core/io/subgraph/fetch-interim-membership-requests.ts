@@ -2,8 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
-import { options } from '~/core/environment/environment';
-import { OmitStrict, Profile, Space } from '~/core/types';
+import { Environment } from '~/core/environment';
+import { Profile, Space } from '~/core/types';
 
 import { Subgraph } from '..';
 import { graphql } from './graphql';
@@ -51,6 +51,7 @@ export async function fetchInterimMembershipRequests({
   signal,
 }: FetchProposalsOptions): Promise<MembershipRequestWithProfile[]> {
   const queryId = uuid();
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
@@ -99,12 +100,15 @@ export async function fetchInterimMembershipRequests({
   const [maybeMemberProfiles, maybeSpaces] = await Promise.all([
     Promise.all(
       result.membershipRequests.map(request =>
-        Subgraph.fetchProfile({ endpoint: options.production.subgraph, address: request.requestor })
+        Subgraph.fetchProfile({
+          endpoint: config.subgraph,
+          address: request.requestor,
+        })
       )
     ),
     Promise.all(
       result.membershipRequests.map(async request => {
-        const space = await Subgraph.fetchSpace({ endpoint: options.production.subgraph, id: request.space });
+        const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: request.space });
 
         if (!space) {
           return null;

@@ -190,7 +190,7 @@ export async function makeProfileEffect(
             name: `Creating profile for ${userAccount}`,
             space: spaceAddress,
             // @TODO: Use storage client configured by environment
-            storageClient: new StorageClient(Environment.options.production.ipfs),
+            storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
             account,
             wallet: client,
             publicClient,

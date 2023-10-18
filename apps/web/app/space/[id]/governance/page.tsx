@@ -1,12 +1,10 @@
 import { Effect, Either } from 'effect';
-import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { Params } from '~/core/params';
-import { ServerSideEnvParams } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -16,12 +14,10 @@ import { SpaceLayout } from '../space-layout';
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams;
 }
 
-export default async function GovernancePage({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  let config = Params.getConfigFromParams(searchParams, env);
+export default async function GovernancePage({ params }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
@@ -38,7 +34,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
     };
   }
 
-  const proposalsCount = await getProposalsCount({ params, searchParams });
+  const proposalsCount = await getProposalsCount({ params });
 
   const votingPeriod = '24h';
   const passThreshold = '51%';
@@ -47,7 +43,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
 
   return (
     // @ts-expect-error async JSX function
-    <SpaceLayout params={params} searchParams={searchParams}>
+    <SpaceLayout params={params}>
       <div className="space-y-4">
         <div className="flex items-center gap-5">
           <GovernanceMetadataBox>
@@ -91,9 +87,23 @@ interface NetworkResult {
   }[];
 }
 
-async function getProposalsCount({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+async function getProposalsCount({ params }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: config.subgraph,

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
-import { options } from '~/core/environment/environment';
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -20,21 +20,25 @@ interface Props {
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: options.production.subgraph, id: spaceId });
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;
 
   if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: options.production.permissionlessSubgraph, id: spaceId });
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
     if (space) usePermissionlessSubgraph = true;
   }
 
   if (usePermissionlessSubgraph) {
-    options.production.subgraph = options.production.permissionlessSubgraph;
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   const [proposals, editorsForSpace] = await Promise.all([
-    Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
+    Subgraph.fetchProposals({ spaceId, first: 5, endpoint: config.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),
   ]);
 

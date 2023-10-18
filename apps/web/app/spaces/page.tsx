@@ -1,12 +1,11 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { ServerSideEnvParams, Space } from '~/core/types';
+import { Space } from '~/core/types';
 
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
@@ -66,9 +65,8 @@ const HIDDEN_SPACES: Array<string> = [
   '0x2C423d74eEC59867b16693Ec2870292b302729ec', // Web3 economics
 ];
 
-export default async function Spaces({ searchParams }: { searchParams: ServerSideEnvParams }) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+export default async function Spaces() {
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);

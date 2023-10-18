@@ -1,14 +1,11 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { AppConfig } from '~/core/environment';
+import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { ServerSideEnvParams } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -26,13 +23,11 @@ export const runtime = 'edge';
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams;
 }
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  let config = Params.getConfigFromParams(searchParams, env);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;
@@ -84,10 +79,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function SpacePage({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-
-  let config = Params.getConfigFromParams(searchParams, env);
+export default async function SpacePage({ params }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;
@@ -108,13 +101,13 @@ export default async function SpacePage({ params, searchParams }: Props) {
 
   return (
     // @ts-expect-error async JSX function
-    <SpaceLayout params={params} searchParams={searchParams} usePermissionlessSpace={usePermissionlessSubgraph}>
+    <SpaceLayout params={params} usePermissionlessSpace={usePermissionlessSubgraph}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
         {/* @ts-expect-error async JSX function */}
-        <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
       </React.Suspense>
     </SpaceLayout>
   );

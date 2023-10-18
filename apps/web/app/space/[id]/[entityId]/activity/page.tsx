@@ -1,13 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { Params } from '~/core/params';
-import { Action as IAction, ServerSideEnvParams } from '~/core/types';
+import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -20,7 +19,7 @@ export const runtime = 'edge';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: ServerSideEnvParams & {
+  searchParams: {
     spaceId?: string;
   };
 }
@@ -38,8 +37,7 @@ export default async function ActivityPage({ searchParams, params }: Props) {
 }
 
 async function ActivityList({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const [personEntity, spaces] = await Promise.all([
     Subgraph.fetchEntity({

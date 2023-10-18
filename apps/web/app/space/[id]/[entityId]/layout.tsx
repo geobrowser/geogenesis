@@ -1,11 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
-import { Params } from '~/core/params';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { Entity as IEntity, Triple } from '~/core/types';
@@ -22,8 +21,6 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
-export const runtime = 'edge';
-
 const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
@@ -32,10 +29,7 @@ interface Props {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-
-  // Layouts do not receive search params (hmm)
-  let config = Params.getConfigFromParams({}, env);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   params.entityId = decodeURIComponent(params.entityId);
 

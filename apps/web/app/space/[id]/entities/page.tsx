@@ -1,9 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { AppConfig } from '~/core/environment';
+import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
@@ -11,14 +10,14 @@ import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-
 import { Params } from '~/core/params';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
-import { ServerSideEnvParams, Space } from '~/core/types';
+import { Space } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams & {
+  searchParams: {
     query?: string;
     page?: string;
     typeId?: string;
@@ -27,9 +26,8 @@ interface Props {
 
 export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  let config = Params.getConfigFromParams(searchParams, env);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
   let usePermissionlessSubgraph = false;

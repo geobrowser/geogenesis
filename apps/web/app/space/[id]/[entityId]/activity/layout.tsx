@@ -9,12 +9,10 @@ interface Props {
   children: React.ReactNode;
 }
 
-export const runtime = 'edge';
-
 export default function Layout({ params, children }: Props) {
   return (
     <div>
-      <div className="flex items-center gap-2 w-full pb-3 border-b border-divider">
+      <div className="flex w-full items-center gap-2 border-b border-divider pb-3">
         <SmallButton variant="secondary" icon="chevronDownSmall">
           Proposals
         </SmallButton>

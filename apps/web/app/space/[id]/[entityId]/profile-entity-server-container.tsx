@@ -1,23 +1,17 @@
-import { cookies } from 'next/headers';
-
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { ServerSideEnvParams } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
-// import { setOnboardingDismissedCookie } from '~/partials/profile/actions';
 import { ProfilePageComponent } from './profile-entity-page';
 
 export const runtime = 'edge';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: ServerSideEnvParams;
 }
 
-export async function ProfileEntityServerContainer({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  let config = Params.getConfigFromParams(searchParams, env);
+export async function ProfileEntityServerContainer({ params }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
   let usePermissionlessSubgraph = false;

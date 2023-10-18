@@ -63,10 +63,11 @@ function getFetchProfileQuery(address: string) {
 // Eventually this will all be indexed in the subgraph and we will be able to query for a Profile directly.
 export async function fetchProfile(options: FetchProfileOptions): Promise<[string, Profile] | null> {
   const queryId = uuid();
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const maybePermissionlessProfile = await fetchProfilePermissionless({
     address: options.address,
-    endpoint: Environment.options.production.permissionlessSubgraph,
+    endpoint: config.permissionlessSubgraph,
   });
 
   if (maybePermissionlessProfile) {

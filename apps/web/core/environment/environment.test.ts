@@ -4,15 +4,15 @@ import { getConfig, options } from './environment';
 
 describe('Config', () => {
   it('Parses production config from chainId', () => {
-    expect(getConfig('137')).toBe(options.production);
+    expect(getConfig('production')).toBe(options.production);
   });
 
   it('Parses testnet config from chainId', () => {
-    expect(getConfig('80001')).toBe(options.testnet);
+    expect(getConfig('testnet')).toBe(options.testnet);
   });
 
   it('Parses development config from chainId', () => {
-    expect(getConfig('31337')).toBe(options.development);
+    expect(getConfig('development')).toBe(options.development);
   });
 
   it('Returns production config if given invalid chainId', () => {
