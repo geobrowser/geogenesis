@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
@@ -9,11 +8,9 @@ import { useAccount } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
-import { useSpaces } from '~/core/hooks/use-spaces';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Services } from '~/core/services';
-import type { Space } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -116,15 +113,14 @@ type MembershipRequestProps = {
 
 const MembershipRequest = ({ request }: MembershipRequestProps) => {
   const [dismissedRequests, setDismissedRequests] = useLocalStorage<Array<string>>('dismissedRequests', []);
-  const { spaces } = useSpaces();
   const profile = request.requestor;
 
   const { data: wallet } = useWalletClient();
 
   const handleAccept = async () => {
     if (wallet && request.space && profile.id) {
-      const roleToChange = await Publish.getRole(request.space, 'EDITOR_ROLE');
-      await Publish.grantRole({ spaceId: request.space, role: roleToChange, wallet, userAddress: profile.address });
+      const roleToChange = await Publish.getRole(request.space.id, 'EDITOR_ROLE');
+      await Publish.grantRole({ spaceId: request.space.id, role: roleToChange, wallet, userAddress: profile.address });
       const newDismissedRequests = [...dismissedRequests, request.id];
       setDismissedRequests(newDismissedRequests);
     }
@@ -150,16 +146,19 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
             <Avatar value={profile.id} avatarUrl={profile?.avatarUrl} size={20} />
           </div>
         </Link>
-        <div className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
+        <Link
+          href={NavUtils.toSpace(request.space.id)}
+          className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
+        >
           <span className="relative h-3 w-3 overflow-hidden rounded-sm">
             <img
-              src={getSpaceImage(spaces, request.space)}
+              src={request.space.image ? getImagePath(request.space.image) : undefined}
               className="absolute inset-0 h-full w-full object-cover object-center"
               alt=""
             />
           </span>
-          <span>{spaces.find(({ id }) => id === request.space)?.attributes.name ?? 'Space'}</span>
-        </div>
+          <span>{request.space.name ?? 'Space'}</span>
+        </Link>
         <div className="flex items-center justify-between">
           <div>
             <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-smallButton text-xs leading-none">
@@ -175,14 +174,6 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
     </ClientOnly>
   );
 };
-
-// @TODO convert to reusable util and share with `review.tsx`
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-  );
-}
 
 // @TODO convert to reusable hook and share with `navbar-actions.tsx`
 function useUserProfile(address?: string) {
