@@ -100,18 +100,24 @@ export async function fetchInterimMembershipRequests({
   ).flatMap(profile => (profile ? [profile] : []));
 
   // Write a function to map the requestor address to the profile
-  const memberAddressToProfilesMap = Object.fromEntries(memberProfiles.flatMap(p => (p ? [p] : [])));
+  const memberAddressToProfilesMap = memberProfiles.reduce((acc, [, profile]) => {
+    acc.set(profile.address, profile);
+    return acc;
+  }, new Map<string, Profile>());
 
-  return result.membershipRequests.map(
-    (request): MembershipRequestWithProfile => ({
+  return result.membershipRequests.map((request): MembershipRequestWithProfile => {
+    const profile = memberAddressToProfilesMap.get(request.requestor);
+
+    return {
       ...request,
-      requestor: memberAddressToProfilesMap[request.requestor] ?? {
+      requestor: profile ?? {
         id: request.requestor,
-        avatarUrl: '',
-        coverUrl: '',
-        name: '',
-        profileLink: '/',
+        avatarUrl: null,
+        coverUrl: null,
+        name: null,
+        profileLink: null,
+        address: request.requestor as `0x${string}`,
       },
-    })
-  );
+    };
+  });
 }
