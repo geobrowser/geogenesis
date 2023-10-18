@@ -45,9 +45,13 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
       }),
     });
 
-    const { data } = (await response.json()) as any;
+    const { data } = (await response.json()) as {
+      data: {
+        spaces: Space[];
+      };
+    };
 
-    const spaces = data.spaces.map((space: Space) => space.id);
+    const spaces = data.spaces.map(space => space.id);
 
     return spaces;
   } catch (error) {
