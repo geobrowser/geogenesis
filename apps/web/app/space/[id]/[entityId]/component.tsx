@@ -24,7 +24,7 @@ import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 interface Props {
   triples: Triple[];
   id: string;
-  name: string;
+  name: string | null;
   description: string | null;
   spaceId: string;
   serverAvatarUrl: string | null;

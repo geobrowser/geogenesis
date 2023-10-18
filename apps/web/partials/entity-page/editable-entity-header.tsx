@@ -29,7 +29,7 @@ export function EditableHeading({
 }: {
   spaceId: string;
   entityId: string;
-  name: string;
+  name: string | null;
   triples: Triple[];
   showAccessControl?: boolean;
 }) {
@@ -49,7 +49,7 @@ export function EditableHeading({
     context: {
       entityId,
       spaceId,
-      entityName: name,
+      entityName: name ?? '',
     },
     api: {
       create,
@@ -72,7 +72,7 @@ export function EditableHeading({
     <div className="relative">
       {!showAccessControl && isEditing ? (
         <div>
-          <PageStringField variant="mainPage" placeholder="Entity name..." value={name} onChange={onNameChange} />
+          <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
           {/*
             This height differs from the readable page height due to how we're using an expandable textarea for editing
             the entity name. We can't perfectly match the height of the normal <Text /> field with the textarea, so we
@@ -85,7 +85,7 @@ export function EditableHeading({
           <div className="flex items-center justify-between">
             <Truncate maxLines={3} shouldTruncate>
               <Text as="h1" variant="mainPage">
-                {name}
+                {name ?? entityId}
               </Text>
             </Truncate>
             {isEditing && (
