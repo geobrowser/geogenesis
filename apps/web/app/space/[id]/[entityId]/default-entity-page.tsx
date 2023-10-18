@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -117,15 +117,9 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
 }
 
 const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

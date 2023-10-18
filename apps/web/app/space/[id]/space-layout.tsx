@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -40,8 +40,9 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
       subgraph: config.permissionlessSubgraph,
     };
   }
-
+  console.time('SpaceLayout: fetch data');
   const props = await getData(params.id, config);
+  console.timeEnd('SpaceLayout: fetch data');
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
@@ -111,15 +112,11 @@ function MembersSkeleton() {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  console.time('SpaceLayout: Fetching space');
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
+  console.timeEnd('SpaceLayout: Fetching space');
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 
 import { TypesStoreProvider } from './types-store';
@@ -14,15 +14,9 @@ interface Props {
 export async function TypesStoreServerContainer({ spaceId, children }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
@@ -35,6 +29,9 @@ export async function TypesStoreServerContainer({ spaceId, children }: Props) {
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
     space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
   ]);
+
+  console.timeEnd('TypesStoreServerContainer: Fetch types');
+  console.log('-----------------------------------------------------------------------');
 
   return (
     <TypesStoreProvider space={space} initialTypes={[...types, ...foreignTypes]}>

@@ -5,7 +5,7 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -29,13 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
-
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
+  const spaceResponse = await fetch(`${process.env.ENV_URL}/api/space/${params.id}`);
+  const { isPermissionlessSubgraph: usePermissionlessSubgraph, space } = await spaceResponse.json();
 
   if (usePermissionlessSubgraph) {
     config = {
@@ -82,26 +77,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
+  console.time('Page: Setup config');
+  const { isPermissionlessSpace } = await API.space(params.id);
+  console.timeEnd('Page: Setup config');
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
     };
   }
 
+  console.time('Page: Fetch space data');
   const props = await getData(params.id, config);
+  console.timeEnd('Page: Fetch space data');
 
   return (
     // @ts-expect-error async JSX function
-    <SpaceLayout params={params} usePermissionlessSpace={usePermissionlessSubgraph}>
+    <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
@@ -114,16 +107,11 @@ export default async function SpacePage({ params }: Props) {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  // Attempt to fetch the space from the public subgraph first. If the space doesn't exist there, try the permissionless subgraph.
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  console.time('Page: Fetching space');
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
+  console.timeEnd('Page: Fetching space');
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
