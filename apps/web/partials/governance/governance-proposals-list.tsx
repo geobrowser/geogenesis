@@ -1,10 +1,10 @@
 import { cookies } from 'next/headers';
+import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
 import { options } from '~/core/environment/environment';
 import { Subgraph } from '~/core/io';
-import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
@@ -36,7 +36,6 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
   const [proposals, editorsForSpace] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: options.production.subgraph }),
     getEditorsForSpace(spaceId, connectedAddress),
-    fetchInterimMembershipRequests({ endpoint: options.production.membershipSubgraph, spaceId }),
   ]);
 
   return (
@@ -52,12 +51,15 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{p.name}</h3>
                 <div className="flex items-center gap-5 text-breadcrumb text-grey-04">
-                  <div className="flex items-center gap-1.5">
+                  <Link
+                    href={p.createdBy?.profileLink ?? ''}
+                    className="flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
+                  >
                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
                       <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.id} />
                     </div>
                     <p>{p.createdBy.name ?? p.createdBy.id}</p>
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-1.5">
                     <p>
                       {changeCount} {pluralize('edit', changeCount)}

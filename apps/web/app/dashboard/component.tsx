@@ -140,9 +140,9 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
   }
 
   return (
-    <div>
+    <ClientOnly>
       <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-        <Link href={profile.homeSpaceLink} className="flex items-center justify-between">
+        <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
           <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
           <div className="relative h-5 w-5 overflow-hidden rounded-full">
             <Avatar value={profile.id} avatarUrl={profile?.avatarUrl} size={20} />
@@ -170,7 +170,7 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
           </div>
         </div>
       </div>
-    </div>
+    </ClientOnly>
   );
 };
 

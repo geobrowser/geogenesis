@@ -110,6 +110,7 @@ export async function fetchInterimMembershipRequests({
         avatarUrl: '',
         coverUrl: '',
         name: '',
+        profileLink: '/',
       },
     })
   );

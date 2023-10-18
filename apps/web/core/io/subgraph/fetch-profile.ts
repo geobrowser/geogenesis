@@ -165,7 +165,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
       name: maybePerson.name,
       avatarUrl,
       coverUrl,
-      homeSpaceLink: NavUtils.toEntity(SYSTEM_IDS.PEOPLE_SPACE, maybePerson.id),
+      profileLink: NavUtils.toEntity(SYSTEM_IDS.PEOPLE_SPACE, maybePerson.id),
       address: options.address as `0x${string}`,
     },
   ];

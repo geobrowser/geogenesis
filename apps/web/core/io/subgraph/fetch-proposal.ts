@@ -119,11 +119,25 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     ...proposal,
-    createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+    createdBy:
+      maybeProfile !== null
+        ? maybeProfile[1]
+        : {
+            ...proposal.createdBy,
+            address: proposal.createdBy.id as `0x${string}`,
+            profileLink: null,
+          },
     proposedVersions: proposal.proposedVersions.map(v => {
       return {
         ...v,
-        createdBy: maybeProfile !== null ? maybeProfile[1] : proposal.createdBy,
+        createdBy:
+          maybeProfile !== null
+            ? maybeProfile[1]
+            : {
+                ...proposal.createdBy,
+                address: proposal.createdBy.id as `0x${string}`,
+                profileLink: null,
+              },
         actions: fromNetworkActions(v.actions, proposal.space),
       };
     }),

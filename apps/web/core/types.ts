@@ -187,7 +187,7 @@ export type Profile = {
   name: string | null;
   avatarUrl: string | null;
   coverUrl: string | null;
-  homeSpaceLink: string;
+  profileLink: string | null;
   address: `0x${string}`;
 };
 

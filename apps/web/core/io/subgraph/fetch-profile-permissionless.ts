@@ -36,7 +36,7 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
     name: profile.name,
     avatarUrl: Entity.avatar(profile.triples),
     coverUrl: Entity.cover(profile.triples),
-    homeSpaceLink: NavUtils.toEntity(onchainProfile.homeSpace, onchainProfile.id),
+    profileLink: NavUtils.toEntity(onchainProfile.homeSpace, onchainProfile.id),
     address: onchainProfile.account as `0x${string}`,
   };
 }
