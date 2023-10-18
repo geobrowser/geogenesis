@@ -124,7 +124,7 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
   const handleAccept = async () => {
     if (wallet && request.space && profile.id) {
       const roleToChange = await Publish.getRole(request.space, 'EDITOR_ROLE');
-      await Publish.grantRole({ spaceId: request.space, role: roleToChange, wallet, userAddress: profile.id });
+      await Publish.grantRole({ spaceId: request.space, role: roleToChange, wallet, userAddress: profile.address });
     }
   };
 
