@@ -91,6 +91,8 @@ export const FILTER = 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103'
 
 export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
 
+export const PEOPLE_SPACE = '0xb4476A42A66eC1356A58D300555169E17db6756c'
+
 /**
  * Addresses for important contracts on Polygon mainnet.
  *

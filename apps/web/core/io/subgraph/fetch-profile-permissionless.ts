@@ -1,49 +1,10 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
-import { v4 as uuid } from 'uuid';
-
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
-import { Subgraph } from '..';
 import { fetchEntity } from './fetch-entity';
 import { fetchOnchainProfile } from './fetch-on-chain-profile';
-import { graphql } from './graphql';
-import { NetworkEntity } from './network-local-mapping';
-
-// We fetch for geoEntities -> name because the id of the wallet entity might not be the
-// same as the actual wallet address.
-function getFetchProfileQuery(profileId: string) {
-  return `query {
-    geoEntity(id: "${profileId}") {
-      id
-      name
-      entityOf {
-        id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
-          id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
-        }
-      }
-    }
-  }`;
-}
 
 export interface FetchProfilePermissionlessOptions {
   endpoint: string;
@@ -75,5 +36,6 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
     name: profile.name,
     avatarUrl: Entity.avatar(profile.triples),
     coverUrl: Entity.cover(profile.triples),
+    homeSpaceLink: NavUtils.toEntity(onchainProfile.homeSpace, onchainProfile.id),
   };
 }

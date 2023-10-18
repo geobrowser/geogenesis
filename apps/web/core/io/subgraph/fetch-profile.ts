@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { fetchEntity } from './fetch-entity';
 import { fetchProfilePermissionless } from './fetch-profile-permissionless';
@@ -153,13 +154,18 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
   const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
 
+  if (!maybePerson) {
+    return null;
+  }
+
   return [
     options.address,
     {
-      id: maybePerson?.id ?? '',
-      name: maybePerson?.name ?? null,
+      id: maybePerson.id,
+      name: maybePerson.name,
       avatarUrl,
       coverUrl,
+      homeSpaceLink: NavUtils.toEntity(SYSTEM_IDS.PEOPLE_SPACE, maybePerson.id),
     },
   ];
 }

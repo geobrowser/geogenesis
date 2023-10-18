@@ -187,6 +187,7 @@ export type Profile = {
   name: string | null;
   avatarUrl: string | null;
   coverUrl: string | null;
+  homeSpaceLink: string;
 };
 
 export type AppEnv = 'development' | 'staging' | 'testnet' | 'production';
