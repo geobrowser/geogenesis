@@ -122,7 +122,20 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
 }
 
 const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  const space = await Subgraph.fetchSpace({ id: spaceId, endpoint: config.subgraph });
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 

@@ -106,7 +106,20 @@ export async function SpaceLayout({ params, searchParams, children, usePermissio
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const entityId = space?.spaceConfigEntityId;
 
