@@ -11,9 +11,8 @@ export function useOnboarding() {
 
   useAccount({
     onDisconnect: () => isOnboardingVisible$.set(false),
-    onConnect({ address, isReconnected }) {
-      // If the user autoconnects, we don't want to show the modal.
-      if (address && !isReconnected) {
+    onConnect({ address }) {
+      if (address) {
         isOnboardingVisible$.set(true);
       }
     },
