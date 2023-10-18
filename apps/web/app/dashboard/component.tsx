@@ -6,12 +6,12 @@ import Link from 'next/link';
 
 import { useWalletClient } from 'wagmi';
 import { useAccount } from 'wagmi';
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Publish } from '~/core/io';
-import type { MembershipRequest} from '~/core/io/subgraph/fetch-interim-membership-requests';
+import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Services } from '~/core/services';
 import type { Space } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -24,7 +24,7 @@ import { TabGroup } from '~/design-system/tab-group';
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 type Props = {
-  membershipRequests: MembershipRequest[];
+  membershipRequests: MembershipRequestWithProfile[];
 };
 
 export const Component = ({ membershipRequests }: Props) => {
@@ -40,7 +40,7 @@ export const Component = ({ membershipRequests }: Props) => {
 const PersonalHomeHeader = () => {
   const { address } = useAccount();
   const profile = useUserProfile(address);
-  const {profile: onchainProfile} = useGeoProfile(address)
+  const { profile: onchainProfile } = useGeoProfile(address);
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -78,7 +78,7 @@ const PersonalHomeNavigation = () => {
 };
 
 type PersonalHomeDashboardProps = {
-  membershipRequests: MembershipRequest[];
+  membershipRequests: MembershipRequestWithProfile[];
 };
 
 const PersonalHomeDashboard = ({ membershipRequests }: PersonalHomeDashboardProps) => {
@@ -93,18 +93,17 @@ const PersonalHomeDashboard = ({ membershipRequests }: PersonalHomeDashboardProp
 };
 
 type PendingRequestsProps = {
-  membershipRequests: MembershipRequest[];
+  membershipRequests: MembershipRequestWithProfile[];
 };
 
 const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
   if (membershipRequests.length === 0) {
-    return <p className="text-body text-grey-04">There are no pending requests in any of your spaces.</p>
+    return <p className="text-body text-grey-04">There are no pending requests in any of your spaces.</p>;
   }
-
 
   return (
     <div className="space-y-4">
-      {membershipRequests.map((request: MembershipRequest) => (
+      {membershipRequests.map(request => (
         <MembershipRequest key={request.id} request={request} />
       ))}
     </div>
@@ -112,27 +111,26 @@ const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
 };
 
 type MembershipRequestProps = {
-  request: MembershipRequest;
+  request: MembershipRequestWithProfile;
 };
 
 const MembershipRequest = ({ request }: MembershipRequestProps) => {
   const [dismissedRequests, setDismissedRequests] = useLocalStorage<Array<string>>('dismissedRequests', []);
   const { spaces } = useSpaces();
-  const address = request.requestor;
-  const profile = useUserProfile(address);
+  const profile = request.requestor;
 
   const { data: wallet } = useWalletClient();
 
   const handleAccept = async () => {
-    if (wallet && request.space && address) {
+    if (wallet && request.space && profile.id) {
       const roleToChange = await Publish.getRole(request.space, 'EDITOR_ROLE');
-      await Publish.grantRole({ spaceId: request.space, role: roleToChange, wallet, userAddress: address as string });
+      await Publish.grantRole({ spaceId: request.space, role: roleToChange, wallet, userAddress: profile.id });
     }
   };
 
   const handleReject = () => {
     if (!dismissedRequests.includes(request.id)) {
-      const newDismissedRequests = [...dismissedRequests, request.id]
+      const newDismissedRequests = [...dismissedRequests, request.id];
       setDismissedRequests(newDismissedRequests);
     }
   };
@@ -145,9 +143,9 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
     <ClientOnly>
       <div className="space-y-4 rounded-lg border border-grey-02 p-4">
         <div className="flex items-center justify-between">
-          <div className="text-smallTitle">{profile?.name ?? address}</div>
+          <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
           <div className="relative h-5 w-5 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={20} />
+            <Avatar value={profile.id} avatarUrl={profile?.avatarUrl} size={20} />
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
@@ -176,10 +174,17 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
   );
 };
 
+// @TODO convert to reusable util and share with `review.tsx`
+function getSpaceImage(spaces: Space[], spaceId: string): string {
+  return getImagePath(
+    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
+      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
+  );
+}
+
 // @TODO convert to reusable hook and share with `navbar-actions.tsx`
 function useUserProfile(address?: string) {
   const { subgraph, config } = Services.useServices();
-
   const { data } = useQuery({
     queryKey: ['user-profile', address],
     queryFn: async () => {
@@ -187,14 +192,5 @@ function useUserProfile(address?: string) {
       return await subgraph.fetchProfile({ address, endpoint: config.subgraph });
     },
   });
-
   return data ? data[1] : null;
-}
-
-// @TODO convert to reusable util and share with `review.tsx`
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-  );
 }

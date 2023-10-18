@@ -7,7 +7,7 @@ import { GeoProfile } from '../generated/schema'
 import { getChecksumAddress } from './get-checksum-address'
 
 function getProfileId(account: string, onChainId: string): string {
-  return account + '-' + onChainId
+  return account + '–' + onChainId
 }
 
 export function handleGeoProfileRegistered(event: GeoProfileRegistered): void {

@@ -9,11 +9,11 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: GeoProfileRegistry
-    network: matic
+    network: mumbai
     source:
       abi: GeoProfileRegistry
-      address: "0xc066E89bF7669b905f869Cb936818b0fd0bc456d"
-      startBlock: 48833716
+      address: "0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458"
+      startBlock: 41134741
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
