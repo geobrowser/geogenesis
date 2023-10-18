@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { SmallButton } from '~/design-system/button';
@@ -17,23 +17,6 @@ interface Props {
 }
 
 export default async function GovernancePage({ params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
-
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
   const proposalsCount = await getProposalsCount({ params });
 
   const votingPeriod = '24h';
@@ -90,15 +73,9 @@ interface NetworkResult {
 async function getProposalsCount({ params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace } = await API.space(params.id);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

@@ -1,5 +1,5 @@
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
 type EditorsForSpace = {
@@ -12,15 +12,9 @@ type EditorsForSpace = {
 export async function getEditorsForSpace(spaceId: string, connectedAddress?: string): Promise<EditorsForSpace> {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSpace = false;
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSpace = true;
-  }
-
-  if (usePermissionlessSpace) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

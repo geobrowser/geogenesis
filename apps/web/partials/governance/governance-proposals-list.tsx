@@ -4,7 +4,7 @@ import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
@@ -22,15 +22,9 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace } = await API.space(spaceId);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

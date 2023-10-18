@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
@@ -33,15 +33,9 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   params.entityId = decodeURIComponent(params.entityId);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace } = await API.space(params.id);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

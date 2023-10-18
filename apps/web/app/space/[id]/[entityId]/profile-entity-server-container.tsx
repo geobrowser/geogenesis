@@ -1,5 +1,5 @@
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
 
 import { ProfilePageComponent } from './profile-entity-page';
@@ -13,15 +13,9 @@ interface Props {
 export async function ProfileEntityServerContainer({ params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace } = await API.space(params.id);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

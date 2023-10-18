@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -12,6 +12,7 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
+import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TabGroup } from '~/design-system/tab-group';
 
@@ -39,7 +40,6 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
       subgraph: config.permissionlessSubgraph,
     };
   }
-
   const props = await getData(params.id, config);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
@@ -69,12 +69,12 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
           <SpacePageMetadataHeader
             spaceId={props.spaceId}
             membersComponent={
-              <>
+              <React.Suspense fallback={<MembersSkeleton />}>
                 {/* @ts-expect-error async JSX function */}
                 <SpaceEditors spaceId={params.id} />
                 {/* @ts-expect-error async JSX function */}
                 <SpaceMembers spaceId={params.id} />
-              </>
+              </React.Suspense>
             }
           />
 
@@ -100,16 +100,19 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
   );
 }
 
+function MembersSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      <Skeleton className="h-6 w-24" />
+      <Skeleton className="h-6 w-36" />
+    </div>
+  );
+}
+
 const getData = async (spaceId: string, config: AppConfig) => {
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

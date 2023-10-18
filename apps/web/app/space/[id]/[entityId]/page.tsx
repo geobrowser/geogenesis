@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { API } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 
 import DefaultEntityPage from './default-entity-page';
@@ -19,15 +19,9 @@ interface Props {
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: params.id });
-  let usePermissionlessSubgraph = false;
+  const { isPermissionlessSpace } = await API.space(params.id);
 
-  if (!space) {
-    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: params.id });
-    if (space) usePermissionlessSubgraph = true;
-  }
-
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
