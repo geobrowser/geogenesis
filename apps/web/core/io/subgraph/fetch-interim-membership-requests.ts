@@ -5,7 +5,6 @@ import { options } from '~/core/environment/environment';
 import { Profile } from '~/core/types';
 
 import { Subgraph } from '..';
-import { fetchProfilePermissionless } from './fetch-profile-permissionless';
 import { graphql } from './graphql';
 
 const getFetchMembershipRequestsQuery = (spaceId: string) => `query {
@@ -94,30 +93,19 @@ export async function fetchInterimMembershipRequests({
 
   const memberProfiles = (
     await Promise.all(
-      result.membershipRequests.map(async request => {
-        console.log('request.requestor', request.requestor);
-        const maybeProfile = await fetchProfilePermissionless({ address: request.requestor, endpoint });
-
-        if (!maybeProfile) {
-          return Subgraph.fetchProfile({ endpoint: options.production.subgraph, address: request.requestor });
-        }
-
-        return maybeProfile;
-      })
+      result.membershipRequests.map(request =>
+        Subgraph.fetchProfile({ endpoint: options.production.subgraph, address: request.requestor })
+      )
     )
   ).flatMap(profile => (profile ? [profile] : []));
 
-  let membershipAddressToProfilesMap = new Map<string, Profile>();
-
-  console.log('memberProfiles', memberProfiles);
-
   // Write a function to map the requestor address to the profile
-  // const memberAddressToProfilesMap = Object.fromEntries(memberProfiles.flatMap(p => (p ? [p] : [])));
+  const memberAddressToProfilesMap = Object.fromEntries(memberProfiles.flatMap(p => (p ? [p] : [])));
 
   return result.membershipRequests.map(
     (request): MembershipRequestWithProfile => ({
       ...request,
-      requestor: membershipAddressToProfilesMap.get(request.requestor) ?? {
+      requestor: memberAddressToProfilesMap[request.requestor] ?? {
         id: request.requestor,
         avatarUrl: '',
         coverUrl: '',

@@ -2,9 +2,11 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 
 import { fetchEntity } from './fetch-entity';
+import { fetchProfilePermissionless } from './fetch-profile-permissionless';
 import { graphql } from './graphql';
 import { NetworkEntity } from './network-local-mapping';
 
@@ -60,6 +62,15 @@ function getFetchProfileQuery(address: string) {
 // Eventually this will all be indexed in the subgraph and we will be able to query for a Profile directly.
 export async function fetchProfile(options: FetchProfileOptions): Promise<[string, Profile] | null> {
   const queryId = uuid();
+
+  const maybePermissionlessProfile = await fetchProfilePermissionless({
+    address: options.address,
+    endpoint: Environment.options.production.permissionlessSubgraph,
+  });
+
+  if (maybePermissionlessProfile) {
+    return [options.address, maybePermissionlessProfile];
+  }
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,

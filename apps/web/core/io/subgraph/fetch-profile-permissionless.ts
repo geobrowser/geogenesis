@@ -57,8 +57,6 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
     endpoint: Environment.options.production.profileSubgraph,
   });
 
-  console.log('onchain profile', onchainProfile);
-
   if (!onchainProfile) {
     return null;
   }
@@ -67,8 +65,6 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
     endpoint: Environment.options.production.permissionlessSubgraph,
     id: onchainProfile.id,
   });
-
-  console.log('profile', profile);
 
   if (!profile) {
     return null;
