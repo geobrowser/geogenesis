@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     message: `Setting up profile and contracts for user: ${{ userAccount }}`,
   });
 
-  const deployment = makeDeployEffect(requestId, { account: userAccount });
+  const deployment = Effect.retryN(makeDeployEffect(requestId, { account: userAccount }), 3);
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
 
   if (Either.isLeft(maybeDeployment)) {

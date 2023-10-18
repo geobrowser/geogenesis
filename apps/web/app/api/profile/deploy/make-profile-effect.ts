@@ -71,193 +71,201 @@ export async function makeProfileEffect(
   const createProfileEntityEffect = Effect.gen(function* (unwrap) {
     // Add geo profile entity to new space
     yield* unwrap(
-      Effect.tryPromise({
-        try: async () => {
-          const actions: CreateTripleAction[] = [];
+      Effect.retryN(
+        Effect.tryPromise({
+          try: async () => {
+            const actions: CreateTripleAction[] = [];
 
-          // Add triples for a Person entity
-          if (username) {
-            const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+            // Add triples for a Person entity
+            if (username) {
+              const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+                entityId: profileId,
+                entityName: username ?? '',
+                attributeId: SYSTEM_IDS.NAME,
+                attributeName: 'Name',
+                space: spaceAddress,
+                value: {
+                  type: 'string',
+                  value: username,
+                  id: ID.createValueId(),
+                },
+              };
+
+              actions.push({
+                type: 'createTriple',
+                // @TODO: Somehow link to on-chain profilePerson
+                id: ID.createTripleId(nameTripleWithoutId),
+                ...nameTripleWithoutId,
+              });
+            }
+
+            if (avatarUri) {
+              const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
+                entityId: profileId,
+                entityName: username ?? '',
+                attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+                attributeName: 'Avatar',
+                space: spaceAddress,
+                value: {
+                  type: 'image',
+                  value: avatarUri,
+                  id: ID.createValueId(),
+                },
+              };
+
+              actions.push({
+                type: 'createTriple',
+                id: ID.createTripleId(avatarTripleWithoutId),
+                ...avatarTripleWithoutId,
+              });
+            }
+
+            const typeTriple: OmitStrict<Triple, 'id'> = {
+              attributeId: SYSTEM_IDS.TYPES,
+              attributeName: 'Types',
               entityId: profileId,
               entityName: username ?? '',
+              space: spaceAddress,
+              value: {
+                type: 'entity',
+                name: 'Person',
+                id: SYSTEM_IDS.PERSON_TYPE,
+              },
+            };
+
+            actions.push({
+              type: 'createTriple',
+              id: ID.createTripleId(typeTriple),
+              ...typeTriple,
+            });
+
+            // Add triples for creating a space configuration entity
+            const spaceConfigurationId = ID.createEntityId();
+
+            const spaceTriple: OmitStrict<Triple, 'id'> = {
+              attributeId: SYSTEM_IDS.TYPES,
+              attributeName: 'Types',
+              entityId: spaceConfigurationId,
+              entityName: `${username ?? userAccount}'s Space`,
+              space: spaceAddress,
+              value: {
+                type: 'entity',
+                name: 'Space',
+                id: SYSTEM_IDS.SPACE_CONFIGURATION,
+              },
+            };
+
+            actions.push({
+              type: 'createTriple',
+              id: ID.createTripleId(spaceTriple),
+              ...spaceTriple,
+            });
+
+            const spaceNameTriple: OmitStrict<Triple, 'id'> = {
               attributeId: SYSTEM_IDS.NAME,
               attributeName: 'Name',
+              entityId: spaceConfigurationId,
+              entityName: `${username ?? userAccount}'s Space`,
               space: spaceAddress,
               value: {
                 type: 'string',
-                value: username,
+                value: `${username ?? userAccount}'s Space`,
                 id: ID.createValueId(),
               },
             };
 
             actions.push({
               type: 'createTriple',
-              // @TODO: Somehow link to on-chain profilePerson
-              id: ID.createTripleId(nameTripleWithoutId),
-              ...nameTripleWithoutId,
+              id: ID.createTripleId(spaceNameTriple),
+              ...spaceNameTriple,
             });
-          }
 
-          if (avatarUri) {
-            const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
-              entityId: profileId,
-              entityName: username ?? '',
-              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-              attributeName: 'Avatar',
+            slog({
+              requestId,
+              message: `Adding profile to space ${spaceAddress}`,
+              account: userAccount,
+            });
+
+            const proposalEffect = await makeProposalServer({
+              actions,
+              name: `Creating profile for ${userAccount}`,
               space: spaceAddress,
-              value: {
-                type: 'image',
-                value: avatarUri,
-                id: ID.createValueId(),
-              },
-            };
-
-            actions.push({
-              type: 'createTriple',
-              id: ID.createTripleId(avatarTripleWithoutId),
-              ...avatarTripleWithoutId,
+              // @TODO: Use storage client configured by environment
+              storageClient: new StorageClient(Environment.options.production.ipfs),
+              account,
+              wallet: client,
+              publicClient,
             });
-          }
 
-          const typeTriple: OmitStrict<Triple, 'id'> = {
-            attributeId: SYSTEM_IDS.TYPES,
-            attributeName: 'Types',
-            entityId: profileId,
-            entityName: username ?? '',
-            space: spaceAddress,
-            value: {
-              type: 'entity',
-              name: 'Person',
-              id: SYSTEM_IDS.PERSON_TYPE,
-            },
-          };
+            await Effect.runPromise(proposalEffect);
 
-          actions.push({
-            type: 'createTriple',
-            id: ID.createTripleId(typeTriple),
-            ...typeTriple,
-          });
-
-          // Add triples for creating a space configuration entity
-          const spaceConfigurationId = ID.createEntityId();
-
-          const spaceTriple: OmitStrict<Triple, 'id'> = {
-            attributeId: SYSTEM_IDS.TYPES,
-            attributeName: 'Types',
-            entityId: spaceConfigurationId,
-            entityName: `${username ?? userAccount}'s Space`,
-            space: spaceAddress,
-            value: {
-              type: 'entity',
-              name: 'Space',
-              id: SYSTEM_IDS.SPACE_CONFIGURATION,
-            },
-          };
-
-          actions.push({
-            type: 'createTriple',
-            id: ID.createTripleId(spaceTriple),
-            ...spaceTriple,
-          });
-
-          const spaceNameTriple: OmitStrict<Triple, 'id'> = {
-            attributeId: SYSTEM_IDS.NAME,
-            attributeName: 'Name',
-            entityId: spaceConfigurationId,
-            entityName: `${username ?? userAccount}'s Space`,
-            space: spaceAddress,
-            value: {
-              type: 'string',
-              value: `${username ?? userAccount}'s Space`,
-              id: ID.createValueId(),
-            },
-          };
-
-          actions.push({
-            type: 'createTriple',
-            id: ID.createTripleId(spaceNameTriple),
-            ...spaceNameTriple,
-          });
-
-          slog({
-            requestId,
-            message: `Adding profile to space ${spaceAddress}`,
-            account: userAccount,
-          });
-
-          const proposalEffect = await makeProposalServer({
-            actions,
-            name: `Creating profile for ${userAccount}`,
-            space: spaceAddress,
-            // @TODO: Use storage client configured by environment
-            storageClient: new StorageClient(Environment.options.production.ipfs),
-            account,
-            wallet: client,
-            publicClient,
-          });
-
-          await Effect.runPromise(proposalEffect);
-
-          slog({
-            requestId,
-            message: `Successfully added profile to space ${spaceAddress}`,
-            account: userAccount,
-          });
-        },
-        catch: error => {
-          slog({
-            level: 'error',
-            requestId,
-            message: `Creating Geo entity Profile in space address ${spaceAddress} failed: ${(error as Error).message}`,
-            account: userAccount,
-          });
-          return new CreateProfileGeoEntityFailedError();
-        },
-      })
+            slog({
+              requestId,
+              message: `Successfully added profile to space ${spaceAddress}`,
+              account: userAccount,
+            });
+          },
+          catch: error => {
+            slog({
+              level: 'error',
+              requestId,
+              message: `Creating Geo entity Profile in space address ${spaceAddress} failed: ${
+                (error as Error).message
+              }`,
+              account: userAccount,
+            });
+            return new CreateProfileGeoEntityFailedError();
+          },
+        }),
+        3
+      )
     );
 
     // @TODO: Batch?
     // Configure roles in proxy contract
     for (const role of ROLES) {
       yield* unwrap(
-        Effect.tryPromise({
-          try: async () => {
-            const simulateGrantRoleResult = await publicClient.simulateContract({
-              abi: SpaceArtifact.abi,
-              address: spaceAddress as `0x${string}`,
-              functionName: 'grantRole',
-              account,
-              args: [role.binary, userAccount],
-            });
+        Effect.retryN(
+          Effect.tryPromise({
+            try: async () => {
+              const simulateGrantRoleResult = await publicClient.simulateContract({
+                abi: SpaceArtifact.abi,
+                address: spaceAddress as `0x${string}`,
+                functionName: 'grantRole',
+                account,
+                args: [role.binary, userAccount],
+              });
 
-            const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
-            slog({
-              requestId,
-              message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
-              account: userAccount,
-            });
+              const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
+              slog({
+                requestId,
+                message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
+                account: userAccount,
+              });
 
-            const grantRoleTxHash = await publicClient.waitForTransactionReceipt({
-              hash: grantRoleSimulateHash,
-            });
-            slog({
-              requestId,
-              message: `Granted ${role.role} role for ${spaceAddress}: ${grantRoleTxHash.transactionHash}`,
-              account: userAccount,
-            });
+              const grantRoleTxHash = await publicClient.waitForTransactionReceipt({
+                hash: grantRoleSimulateHash,
+              });
+              slog({
+                requestId,
+                message: `Granted ${role.role} role for ${spaceAddress}: ${grantRoleTxHash.transactionHash}`,
+                account: userAccount,
+              });
 
-            return grantRoleSimulateHash;
-          },
-          catch: error => {
-            slog({
-              level: 'error',
-              requestId,
-              message: `Granting ${role.role} role failed: ${(error as Error).message}`,
-              account: userAccount,
-            });
-            return new GrantRoleError();
-          },
-        })
+              return grantRoleSimulateHash;
+            },
+            catch: error => {
+              slog({
+                level: 'error',
+                requestId,
+                message: `Granting ${role.role} role failed: ${(error as Error).message}`,
+                account: userAccount,
+              });
+              return new GrantRoleError();
+            },
+          }),
+          3
+        )
       );
     }
 
@@ -265,44 +273,47 @@ export async function makeProfileEffect(
     // Renounce deployer roles in proxy contract
     for (const role of ROLES) {
       yield* unwrap(
-        Effect.tryPromise({
-          try: async () => {
-            const simulateRenounceRoleResult = await publicClient.simulateContract({
-              abi: SpaceArtifact.abi,
-              address: spaceAddress as `0x${string}`,
-              functionName: 'renounceRole',
-              account,
-              args: [role.binary, account.address],
-            });
+        Effect.retryN(
+          Effect.tryPromise({
+            try: async () => {
+              const simulateRenounceRoleResult = await publicClient.simulateContract({
+                abi: SpaceArtifact.abi,
+                address: spaceAddress as `0x${string}`,
+                functionName: 'renounceRole',
+                account,
+                args: [role.binary, account.address],
+              });
 
-            const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
-            slog({
-              requestId,
-              message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,
-              account: userAccount,
-            });
+              const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
+              slog({
+                requestId,
+                message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,
+                account: userAccount,
+              });
 
-            const renounceRoleTxResult = await publicClient.waitForTransactionReceipt({
-              hash: grantRoleSimulateHash,
-            });
-            slog({
-              requestId,
-              message: `Renounced ${role.role} role for Geo deployer ${spaceAddress}: ${renounceRoleTxResult.transactionHash}`,
-              account: userAccount,
-            });
+              const renounceRoleTxResult = await publicClient.waitForTransactionReceipt({
+                hash: grantRoleSimulateHash,
+              });
+              slog({
+                requestId,
+                message: `Renounced ${role.role} role for Geo deployer ${spaceAddress}: ${renounceRoleTxResult.transactionHash}`,
+                account: userAccount,
+              });
 
-            return renounceRoleTxResult;
-          },
-          catch: error => {
-            slog({
-              level: 'error',
-              requestId,
-              message: `Renouncing ${role.role} role failed: ${(error as Error).message}`,
-              account: userAccount,
-            });
-            return new RenounceRoleError();
-          },
-        })
+              return renounceRoleTxResult;
+            },
+            catch: error => {
+              slog({
+                level: 'error',
+                requestId,
+                message: `Renouncing ${role.role} role failed: ${(error as Error).message}`,
+                account: userAccount,
+              });
+              return new RenounceRoleError();
+            },
+          }),
+          3
+        )
       );
     }
   });

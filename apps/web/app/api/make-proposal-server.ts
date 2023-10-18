@@ -70,28 +70,34 @@ export async function makeProposalServer({
     cids.push(`ipfs://${cidString}`);
   }
 
-  const prepareTxEffect = Effect.tryPromise({
-    try: () =>
-      publicClient.simulateContract({
-        account,
-        abi: SpaceAbi,
-        address: space as `0x${string}`,
-        functionName: 'addEntries',
-        args: [cids],
-      }),
-    catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
-  });
+  const prepareTxEffect = Effect.retryN(
+    Effect.tryPromise({
+      try: () =>
+        publicClient.simulateContract({
+          account,
+          abi: SpaceAbi,
+          address: space as `0x${string}`,
+          functionName: 'addEntries',
+          args: [cids],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    }),
+    3
+  );
 
-  const writeTxEffect = Effect.gen(function* (awaited) {
-    const contractConfig = yield* awaited(prepareTxEffect);
+  const writeTxEffect = Effect.retryN(
+    Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareTxEffect);
 
-    return yield* awaited(
-      Effect.tryPromise({
-        try: () => wallet.writeContract(contractConfig.request),
-        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-      })
-    );
-  });
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => wallet.writeContract(contractConfig.request),
+          catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+        })
+      );
+    }),
+    3
+  );
 
   const publishProgram = Effect.gen(function* (awaited) {
     const writeTxHash = yield* awaited(writeTxEffect);
