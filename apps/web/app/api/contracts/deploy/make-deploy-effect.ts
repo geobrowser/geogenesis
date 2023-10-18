@@ -199,7 +199,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
             name: `Adding space ${deployProxyEffect.contractAddress} for ${userAccount} to space registry`,
             space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
             // @TODO: Use storage client configured by environment
-            storageClient: new StorageClient(Environment.options.production.ipfs),
+            storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
             account,
             wallet: client,
             publicClient,

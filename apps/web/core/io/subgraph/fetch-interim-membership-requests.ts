@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
-import { options } from '~/core/environment/environment';
+import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 
 import { Subgraph } from '..';
@@ -94,7 +94,10 @@ export async function fetchInterimMembershipRequests({
   const memberProfiles = (
     await Promise.all(
       result.membershipRequests.map(request =>
-        Subgraph.fetchProfile({ endpoint: options.production.subgraph, address: request.requestor })
+        Subgraph.fetchProfile({
+          endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
+          address: request.requestor,
+        })
       )
     )
   ).flatMap(profile => (profile ? [profile] : []));

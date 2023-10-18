@@ -13,9 +13,11 @@ export interface FetchProfilePermissionlessOptions {
 }
 
 export async function fetchProfilePermissionless(options: FetchProfilePermissionlessOptions): Promise<Profile | null> {
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
   const onchainProfile = await fetchOnchainProfile({
     address: options.address,
-    endpoint: Environment.options.production.profileSubgraph,
+    endpoint: config.profileSubgraph,
   });
 
   if (!onchainProfile) {
@@ -23,7 +25,7 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
   }
 
   const profile = await fetchEntity({
-    endpoint: Environment.options.production.permissionlessSubgraph,
+    endpoint: config.permissionlessSubgraph,
     id: onchainProfile.id,
   });
 
