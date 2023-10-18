@@ -32,9 +32,23 @@ interface Props {
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  let config = Params.getConfigFromParams(searchParams, env);
 
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let usePermissionlessSubgraph = false;
+
+  if (!space) {
+    space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -109,9 +123,18 @@ export default async function SpacePage({ params, searchParams }: Props) {
 const getData = async (spaceId: string, config: AppConfig) => {
   // Attempt to fetch the space from the public subgraph first. If the space doesn't exist there, try the permissionless subgraph.
   let space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  let usePermissionlessSubgraph = false;
 
   if (!space) {
     space = await Subgraph.fetchSpace({ endpoint: config.permissionlessSubgraph, id: spaceId });
+    if (space) usePermissionlessSubgraph = true;
+  }
+
+  if (usePermissionlessSubgraph) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
   }
 
   const entityId = space?.spaceConfigEntityId;
