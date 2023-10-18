@@ -23,15 +23,10 @@ export async function TypesStoreServerContainer({ spaceId, children }: Props) {
     };
   }
 
-  console.time('TypesStoreServerContainer: Fetch types');
-
   const [types, foreignTypes] = await Promise.all([
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
     space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph) : [],
   ]);
-
-  console.timeEnd('TypesStoreServerContainer: Fetch types');
-  console.log('-----------------------------------------------------------------------');
 
   return (
     <TypesStoreProvider space={space} initialTypes={[...types, ...foreignTypes]}>

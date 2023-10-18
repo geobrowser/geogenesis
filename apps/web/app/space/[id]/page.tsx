@@ -77,9 +77,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  console.time('Page: Setup config');
   const { isPermissionlessSpace } = await API.space(params.id);
-  console.timeEnd('Page: Setup config');
 
   if (isPermissionlessSpace) {
     config = {
@@ -88,9 +86,7 @@ export default async function SpacePage({ params }: Props) {
     };
   }
 
-  console.time('Page: Fetch space data');
   const props = await getData(params.id, config);
-  console.timeEnd('Page: Fetch space data');
 
   return (
     // @ts-expect-error async JSX function
@@ -107,9 +103,7 @@ export default async function SpacePage({ params }: Props) {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  console.time('Page: Fetching space');
   const { isPermissionlessSpace, space } = await API.space(spaceId);
-  console.timeEnd('Page: Fetching space');
 
   if (isPermissionlessSpace) {
     config = {

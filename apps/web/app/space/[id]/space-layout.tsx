@@ -40,9 +40,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
       subgraph: config.permissionlessSubgraph,
     };
   }
-  console.time('SpaceLayout: fetch data');
   const props = await getData(params.id, config);
-  console.timeEnd('SpaceLayout: fetch data');
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
@@ -112,9 +110,7 @@ function MembersSkeleton() {
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  console.time('SpaceLayout: Fetching space');
   const { isPermissionlessSpace, space } = await API.space(spaceId);
-  console.timeEnd('SpaceLayout: Fetching space');
 
   if (isPermissionlessSpace) {
     config = {

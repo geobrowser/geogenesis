@@ -10,12 +10,7 @@ interface Props {
 }
 
 export default async function Layout({ children, params }: Props) {
-  console.log('-----------------------------------------------------------------------');
-  console.log('PROFILING SPACE DATA LOADING FOR ' + params.id);
-
-  console.time('Layout: Fetching space');
   const { isPermissionlessSpace } = await API.space(params.id);
-  console.timeEnd('Layout: Fetching space');
 
   return <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>{children}</SpaceConfigProvider>;
 }
