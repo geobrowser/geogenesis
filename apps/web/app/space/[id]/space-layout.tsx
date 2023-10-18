@@ -69,12 +69,12 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
           <SpacePageMetadataHeader
             spaceId={props.spaceId}
             membersComponent={
-              <>
+              <React.Suspense fallback={<MembersSkeleton />}>
                 {/* @ts-expect-error async JSX function */}
                 <SpaceEditors spaceId={params.id} />
                 {/* @ts-expect-error async JSX function */}
                 <SpaceMembers spaceId={params.id} />
-              </>
+              </React.Suspense>
             }
           />
 
@@ -97,6 +97,15 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         </EntityPageContentContainer>
       </EntityStoreProvider>
     </TypesStoreServerContainer>
+  );
+}
+
+function MembersSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      <Skeleton className="h-6 w-24" />
+      <Skeleton className="h-6 w-36" />
+    </div>
   );
 }
 
