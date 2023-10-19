@@ -2,7 +2,6 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import classnames from 'classnames';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -43,57 +42,57 @@ export function NavbarActions() {
   }
 
   return (
-    <>
-      <div className="flex items-center gap-4">
-        <ModeToggle spaceId={spaceId} />
+    <div className="flex items-center gap-4">
+      <ModeToggle spaceId={spaceId} />
 
-        <Menu
-          trigger={
-            <div className="relative h-7 w-7 overflow-hidden rounded-full">
-              <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
-            </div>
-          }
-          open={open}
-          onOpenChange={onOpenChange}
-          className="max-w-[165px]"
-        >
-          {!geoEntityProfile && profile ? (
-            <AvatarMenuItem>
-              <div className="flex items-center gap-2">
-                <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={address} size={16} />
-                </div>
-                <button onClick={showCreateProfile}>Create profile</button>
+      <Menu
+        trigger={
+          <div className="relative h-7 w-7 overflow-hidden rounded-full">
+            <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
+          </div>
+        }
+        open={open}
+        onOpenChange={onOpenChange}
+        className="max-w-[165px]"
+      >
+        {!geoEntityProfile && profile ? (
+          <AvatarMenuItem>
+            <div className="flex items-center gap-2">
+              <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                <Avatar value={address} size={16} />
               </div>
-            </AvatarMenuItem>
-          ) : (
-            <>
-              <AvatarMenuItem disabled={!profile?.homeSpace}>
-                <div className="flex items-center gap-2">
-                  <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                    <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
-                  </div>
-                  {profile?.homeSpace && (
+              <button onClick={showCreateProfile}>Create profile</button>
+            </div>
+          </AvatarMenuItem>
+        ) : (
+          <>
+            {profile?.homeSpace && (
+              <>
+                <AvatarMenuItem>
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                      <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+                    </div>
                     <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
                       Personal space
                     </Link>
-                  )}
-                </div>
-              </AvatarMenuItem>
-              <AvatarMenuItem>
-                <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-                  <Icon icon="home" />
-                  <p className="text-button">Personal home</p>
-                </Link>
-              </AvatarMenuItem>
-            </>
-          )}
-          <AvatarMenuItem>
-            <GeoConnectButton />
-          </AvatarMenuItem>
-        </Menu>
-      </div>
-    </>
+                  </div>
+                </AvatarMenuItem>
+                <AvatarMenuItem>
+                  <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+                    <Icon icon="home" />
+                    <p className="text-button">Personal home</p>
+                  </Link>
+                </AvatarMenuItem>
+              </>
+            )}
+          </>
+        )}
+        <AvatarMenuItem>
+          <GeoConnectButton />
+        </AvatarMenuItem>
+      </Menu>
+    </div>
   );
 }
 
