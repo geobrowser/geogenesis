@@ -24,11 +24,14 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 
+import { useCreateProfile } from '../onboarding/create-profile-dialog';
+
 export function NavbarActions() {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
 
   const [open, onOpenChange] = React.useState(false);
+  const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
   const { profile } = useGeoProfile(address);
@@ -38,46 +41,51 @@ export function NavbarActions() {
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <ModeToggle spaceId={spaceId} />
+    <>
+      <div className="flex items-center gap-4">
+        <ModeToggle spaceId={spaceId} />
 
-      <Menu
-        trigger={
-          <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} size={28} />
-          </div>
-        }
-        open={open}
-        onOpenChange={onOpenChange}
-        className="max-w-[165px]"
-      >
-        <AvatarMenuItem disabled={!profile?.homeSpace}>
-          <div
-            className={classnames('flex items-center gap-2', {
-              grayscale: !profile?.homeSpace,
-            })}
-          >
-            <div className="relative h-4 w-4 overflow-hidden rounded-full">
-              <Avatar value={address} size={16} />
+        <Menu
+          trigger={
+            <div className="relative h-7 w-7 overflow-hidden rounded-full">
+              <Avatar value={address} size={28} />
             </div>
-            {profile?.homeSpace && (
-              <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
-                Personal space
-              </Link>
-            )}
-          </div>
-        </AvatarMenuItem>
-        <AvatarMenuItem>
-          <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-            <Icon icon="home" />
-            <p className="text-button">Personal home</p>
-          </Link>
-        </AvatarMenuItem>
-        <AvatarMenuItem>
-          <GeoConnectButton />
-        </AvatarMenuItem>
-      </Menu>
-    </div>
+          }
+          open={open}
+          onOpenChange={onOpenChange}
+          className="max-w-[165px]"
+        >
+          <AvatarMenuItem>
+            <button onClick={showCreateProfile}>Create profile</button>
+          </AvatarMenuItem>
+          <AvatarMenuItem disabled={!profile?.homeSpace}>
+            <div
+              className={classnames('flex items-center gap-2', {
+                grayscale: !profile?.homeSpace,
+              })}
+            >
+              <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                <Avatar value={address} size={16} />
+              </div>
+              {profile?.homeSpace && (
+                <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                  Personal space
+                </Link>
+              )}
+            </div>
+          </AvatarMenuItem>
+          <AvatarMenuItem>
+            <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+              <Icon icon="home" />
+              <p className="text-button">Personal home</p>
+            </Link>
+          </AvatarMenuItem>
+          <AvatarMenuItem>
+            <GeoConnectButton />
+          </AvatarMenuItem>
+        </Menu>
+      </div>
+    </>
   );
 }
 
