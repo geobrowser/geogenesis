@@ -1,7 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
+import { batch, event } from '@legendapp/state';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -33,7 +33,14 @@ interface Props {
   className?: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId, className = '' }: Props) {
+export const EntityTextAutocomplete = React.memo(function EntityTextAutocomplete({
+  placeholder,
+  itemIds,
+  onDone,
+  allowedTypes,
+  spaceId,
+  className = '',
+}: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
@@ -42,17 +49,6 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
-
-  useEffect(() => {
-    const handleQueryChange = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onQueryChange('');
-      }
-    };
-
-    document.addEventListener('click', handleQueryChange);
-    return () => document.removeEventListener('click', handleQueryChange);
-  }, [onQueryChange]);
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -107,9 +103,10 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
         className={cx(
-          'm-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
           className
         )}
+        onClick={evt => evt.preventDefault()}
       />
       {query && (
         <div
@@ -180,4 +177,4 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
       )}
     </div>
   );
-}
+});
