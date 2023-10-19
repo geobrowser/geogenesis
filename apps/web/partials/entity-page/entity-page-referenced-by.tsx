@@ -23,6 +23,8 @@ type ReferencedByEntitiesProps = {
 };
 
 export function EntityPageReferencedBy({ referencedByEntities, name }: ReferencedByEntitiesProps) {
+  if (referencedByEntities.length === 0 && !name) return null;
+
   return (
     <div>
       <Text as="h2" variant="mediumTitle">
