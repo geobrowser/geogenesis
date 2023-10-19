@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
 import { Providers } from '~/core/providers';
-import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
 import { EditableEntityPage } from './editable-entity-page';
 

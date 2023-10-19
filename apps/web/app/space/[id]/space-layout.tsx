@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
-import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';

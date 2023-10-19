@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { EntityStore } from '~/core/state/entity-page-store';
+import { EntityStore } from '~/core/state/entity-page-store/entity-store';
 import { ImageValue, Triple as TripleType, TripleValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
