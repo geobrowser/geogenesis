@@ -35,7 +35,7 @@ export function EditableHeading({
 }) {
   const { triples: localTriples, update, create, remove } = useEntityPageStore();
   const { editable } = useEditable();
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
+  const { isEditor } = useAccessControl(spaceId);
   const { actionsFromSpace } = useActionsStore(spaceId);
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
