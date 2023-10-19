@@ -4,6 +4,7 @@ import pluralize from 'pluralize';
 import { Cookie } from '~/core/cookie';
 
 import { getEditorsForSpace } from './get-editors-for-space';
+import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { MemberRow } from './space-member-row';
 import { SpaceMembersPopoverMemberRequestButton } from './space-members-popover-members-request-button';
 
@@ -15,7 +16,10 @@ export async function SpaceMembersContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
   // For now we use editors for both editors and members until we have the new membership
-  const { allEditors, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
+  const [{ allEditors, totalEditors }, isEditor] = await Promise.all([
+    getEditorsForSpace(spaceId),
+    getIsEditorForSpace(spaceId, connectedAddress),
+  ]);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">

@@ -6,11 +6,10 @@ import { Cookie } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
-import { getEditorsForSpace } from './get-editors-for-space';
+import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
+import { SpaceEditorsDialogServerContainer } from './space-editors-dialog-server-container';
 import { SpaceEditorsContent } from './space-editors-popover-content';
-import { SpaceMembersManageDialog } from './space-members-manage-dialog';
-import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
 
@@ -20,7 +19,7 @@ interface Props {
 
 export async function SpaceEditors({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-  const { isEditor, totalEditors, allEditors } = await getEditorsForSpace(spaceId, connectedAddress);
+  const isEditor = await getIsEditorForSpace(spaceId, connectedAddress);
 
   if (isEditor) {
     return (
@@ -40,11 +39,10 @@ export async function SpaceEditors({ spaceId }: Props) {
         <SpaceMembersMenu
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
-            <SpaceMembersManageDialog
-              header={<h1 className="text-smallTitle">{totalEditors} editors</h1>}
-              trigger={<p className="px-3 py-2">Manage editors</p>}
-              content={<SpaceMembersManageDialogContent members={allEditors} />}
-            />
+            <React.Suspense>
+              {/* @ts-expect-error async JSX function */}
+              <SpaceEditorsDialogServerContainer spaceId={spaceId} />
+            </React.Suspense>
           }
         />
       </div>
