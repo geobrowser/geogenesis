@@ -29,10 +29,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const spaceResponse = await fetch(`${process.env.ENV_URL}/api/space/${params.id}`);
-  const { isPermissionlessSubgraph: usePermissionlessSubgraph, space } = await spaceResponse.json();
+  const { isPermissionlessSpace, space } = await API.space(params.id);
 
-  if (usePermissionlessSubgraph) {
+  if (isPermissionlessSpace) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
