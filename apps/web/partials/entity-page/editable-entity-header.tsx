@@ -35,7 +35,7 @@ export function EditableHeading({
 }) {
   const { triples: localTriples, update, create, remove } = useEntityPageStore();
   const { editable } = useEditable();
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
+  const { isEditor } = useAccessControl(spaceId);
   const { actionsFromSpace } = useActionsStore(spaceId);
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
@@ -89,20 +89,11 @@ export function EditableHeading({
               </Text>
             </Truncate>
             {isEditing && (
-              <div className="flex shrink-0 items-center gap-2">
-                {(isAdmin || isEditorController) && (
-                  <Link href={NavUtils.toAdmin(spaceId)}>
-                    <Button className="shrink" variant="secondary">
-                      Access control
-                    </Button>
-                  </Link>
-                )}
-                <Link href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
-                  <Button icon="create" data-testid="create-entity-button">
-                    New entity
-                  </Button>
-                </Link>
-              </div>
+              <Link className="shrink-0" href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
+                <Button icon="create" data-testid="create-entity-button">
+                  New entity
+                </Button>
+              </Link>
             )}
           </div>
           <Spacer height={12} />

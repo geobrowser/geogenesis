@@ -23,7 +23,7 @@ export function useAccessControl(spaceId?: string | null) {
     },
   });
 
-  if (process.env.NEXT_APP_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development') {
     return {
       isAdmin: true,
       isEditorController: true,
