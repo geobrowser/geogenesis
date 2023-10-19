@@ -1,13 +1,13 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch, event } from '@legendapp/state';
+import { batch } from '@legendapp/state';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -33,14 +33,7 @@ interface Props {
   className?: string;
 }
 
-export const EntityTextAutocomplete = React.memo(function EntityTextAutocomplete({
-  placeholder,
-  itemIds,
-  onDone,
-  allowedTypes,
-  spaceId,
-  className = '',
-}: Props) {
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId, className = '' }: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
@@ -106,7 +99,6 @@ export const EntityTextAutocomplete = React.memo(function EntityTextAutocomplete
           'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
           className
         )}
-        onClick={evt => evt.preventDefault()}
       />
       {query && (
         <div
@@ -177,4 +169,4 @@ export const EntityTextAutocomplete = React.memo(function EntityTextAutocomplete
       )}
     </div>
   );
-});
+}
