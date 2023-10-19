@@ -30,7 +30,7 @@ import {
   CreateMainVotingPluginProposalOptions,
   ExecuteMainVotingPluginProposalOptions,
   InitializeMainVotingPluginOptions,
-  InitializeMemberAccessePluginOptions,
+  InitializeMemberAccessPluginOptions,
   InitializeSpacePluginOptions,
   SetContentSpacePluginOptions,
   VoteMainVotingPluginProposalOptions,
@@ -218,9 +218,9 @@ export class GeoPluginClientMethods extends ClientCore {
   public async initializeMemberAccessPlugin({
     wallet,
     daoAddress,
-    firstBlockContentUri,
+    memberAccessSettings,
     onInitStateChange,
-  }: InitializeMemberAccessePluginOptions): Promise<void> {
+  }: InitializeMemberAccessPluginOptions): Promise<void> {
     const prepareInitEffect = Effect.tryPromise({
       try: () =>
         prepareWriteContract({
@@ -228,7 +228,7 @@ export class GeoPluginClientMethods extends ClientCore {
           address: this.geoMemberAccessPluginAddress as `0x${string}`,
           functionName: 'initialize',
           walletClient: wallet,
-          args: [daoAddress, firstBlockContentUri],
+          args: [daoAddress, memberAccessSettings],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });
@@ -723,4 +723,138 @@ export class GeoPluginClientMethods extends ClientCore {
   }
 
   // Main Voting Plugin: Read Functions
+
+  public async canVote(proposalId: bigint, voterAddress: `0x${string}`, voteOption: number): Promise<boolean> {
+    const canVoteRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'canVote',
+      args: [proposalId, voterAddress, voteOption],
+    });
+    return canVoteRead;
+  }
+
+  public async canExecuteMainVoting(proposalId: bigint): Promise<boolean> {
+    const canExecuteMainVotingRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'canExecute',
+      args: [proposalId],
+    });
+    return canExecuteMainVotingRead;
+  }
+
+  public async getProposal(proposalId: bigint) {
+    const getProposalRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'getProposal',
+      args: [proposalId],
+    });
+    return getProposalRead;
+  }
+
+  public async getVoteOption(proposalId: bigint, voterAddress: `0x${string}`): Promise<number> {
+    const getVoteOptionRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'getVoteOption',
+      args: [proposalId, voterAddress],
+    });
+    return getVoteOptionRead;
+  }
+
+  public async isSupportThresholdReached(proposalId: bigint): Promise<boolean> {
+    const isSupportThresholdReachedRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'isSupportThresholdReached',
+      args: [proposalId],
+    });
+    return isSupportThresholdReachedRead;
+  }
+
+  public async isSupportThresholdReachedEarly(proposalId: bigint): Promise<boolean> {
+    const isSupportThresholdReachedEarlyRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'isSupportThresholdReachedEarly',
+      args: [proposalId],
+    });
+    return isSupportThresholdReachedEarlyRead;
+  }
+
+  public async isMinParticipationReached(proposalId: bigint): Promise<boolean> {
+    const isMinParticipationReachedRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'isMinParticipationReached',
+      args: [proposalId],
+    });
+    return isMinParticipationReachedRead;
+  }
+
+  public async supportThreshold(): Promise<number> {
+    const supportThresholdRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'supportThreshold',
+    });
+    return supportThresholdRead;
+  }
+
+  public async minParticipation(): Promise<number> {
+    const minParticipationRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'minParticipation',
+    });
+    return minParticipationRead;
+  }
+
+  public async minDuration(): Promise<bigint> {
+    const minDurationRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'minDuration',
+    });
+    return minDurationRead;
+  }
+
+  public async minProposerVotingPower(): Promise<bigint> {
+    const minProposerVotingPowerRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'minProposerVotingPower',
+    });
+    return minProposerVotingPowerRead;
+  }
+
+  public async votingMode(): Promise<number> {
+    const votingModeRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'votingMode',
+    });
+    return votingModeRead;
+  }
+
+  public async totalVotingPower(blockNumber: bigint): Promise<bigint> {
+    const totalVotingPowerRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'totalVotingPower',
+      args: [blockNumber],
+    });
+    return totalVotingPowerRead;
+  }
+
+  public async implementationMainVoting(): Promise<`0x${string}`> {
+    const implementationMainVotingRead = await readContract({
+      address: this.geoMainVotingPluginAddress as `0x${string}`,
+      abi: mainVotingPluginAbi,
+      functionName: 'implementation',
+    });
+    return implementationMainVotingRead;
+  }
 }

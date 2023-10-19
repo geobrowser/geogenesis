@@ -54,7 +54,10 @@ export type SetContentSpacePluginOptions = {
 export type InitializeMemberAccessPluginOptions = {
   wallet: WalletClient;
   daoAddress: `0x${string}`;
-  firstBlockUri: string;
+  memberAccessSettings: {
+    proposalDuration: bigint;
+    mainVotingPlugin: `0x${string}`;
+  };
   onInitStateChange: (newState: PluginInitState) => void;
 };
 

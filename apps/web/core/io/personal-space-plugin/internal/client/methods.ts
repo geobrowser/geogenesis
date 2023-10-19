@@ -15,8 +15,6 @@ import { personalSpaceAdminPluginAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
 import { ExecutePersonalSpaceAdminPluginProposalOptions, InitializePersonalSpaceAdminPluginOptions } from '../../types';
 
-// import * as SPACE_PLUGIN_BUILD_METADATA from '../../metadata/space-build-metadata.json';
-
 export class GeoPersonalSpacePluginClientMethods extends ClientCore {
   private geoPersonalSpaceAdminPluginAddress: string;
 
@@ -32,7 +30,7 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
     this.geoPersonalSpaceAdminPluginRepoAddress = pluginContext.geoPersonalSpaceAdminPluginRepoAddress;
   }
 
-  // Plugin Installation
+  // Plugin Installation -  Initialize and install the Personal Space Plugin for a new DAO
 
   // Personal Space Admin Plugin: Write Functions
 
