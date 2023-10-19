@@ -7,9 +7,7 @@ import { fetchEntity } from './fetch-entity';
 import { fetchOnchainProfile } from './fetch-on-chain-profile';
 
 export interface FetchProfilePermissionlessOptions {
-  endpoint: string;
   address: string;
-  signal?: AbortController['signal'];
 }
 
 export async function fetchProfilePermissionless(options: FetchProfilePermissionlessOptions): Promise<Profile | null> {

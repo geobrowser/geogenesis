@@ -14,9 +14,9 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
-import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { usePublish } from '~/core/hooks/use-publish';
 import { ID } from '~/core/id';
+import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
 import { Services } from '~/core/services';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
@@ -51,34 +51,33 @@ export function useCreateProfile() {
  * this process. These are accounts with an onchain Geo profile _and_ a personal space.
  */
 export const CreateProfileDialog = () => {
-  const { subgraph, config } = Services.useServices();
   const { makeProposal } = usePublish();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
-  const { profile: onchainProfile } = useGeoProfile(address);
+  const { profile: onchainProfile, isLoading } = useGeoProfile(address);
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
   const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
 
-  const { profile, isLoading } = useGeoProfile(address);
   const { isCreateProfileVisible } = useCreateProfile();
 
-  const { data: profileTriplesInSpace } = useQuery({
+  const { data: profile } = useQuery({
     queryKey: ['profile-triples-in-space', onchainProfile?.homeSpace, onchainProfile?.id],
-    queryFn: () =>
-      subgraph.fetchTriples({
-        query: '',
-        space: onchainProfile?.homeSpace,
-        endpoint: config.permissionlessSubgraph,
-        filter: [
-          {
-            field: 'entity-id',
-            value: onchainProfile?.id,
-          },
-        ],
-      }),
+    queryFn: async () => {
+      if (!onchainProfile) {
+        return null;
+      }
+
+      const result = await fetchProfilePermissionless({
+        address: onchainProfile.account,
+      });
+
+      return result ?? null;
+    },
   });
+
+  console.log('profile', profile);
 
   if (!address || isLoading || !isCreateProfileVisible) return null;
 
@@ -216,7 +215,7 @@ export const CreateProfileDialog = () => {
   // Currently stubbed as we don't have a way to create a profile yet
   // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={!profile} label="Onboarding profile">
+    <Command.Dialog open={Boolean(onchainProfile && !profile)} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <motion.div

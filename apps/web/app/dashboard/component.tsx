@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
 import { useWalletClient } from 'wagmi';
@@ -11,7 +10,6 @@ import { useLocalStorage } from '~/core/hooks/use-local-storage';
 import { useUserProfile } from '~/core/hooks/use-user-profile';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
-import { Services } from '~/core/services';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
