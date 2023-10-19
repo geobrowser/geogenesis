@@ -3,11 +3,11 @@ import { API, Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
 type EditorsForSpace = {
-  allEditors: OmitStrict<Profile, 'coverUrl'>[];
+  firstThreeEditors: OmitStrict<Profile, 'coverUrl'>[];
   totalEditors: number;
 };
 
-export async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
+export async function getFirstThreeEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const { isPermissionlessSpace, space } = await API.space(spaceId);
@@ -26,12 +26,18 @@ export async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpa
   // For now we use editors for both editors and members until we have the new membership
   // model in place.
   const maybeEditorsProfiles = await Promise.all(
-    space.editors.map(editor => Subgraph.fetchProfile({ endpoint: config.subgraph, address: editor }))
+    space.editors.slice(0, 3).map(editor => Subgraph.fetchProfile({ endpoint: config.subgraph, address: editor }))
   );
 
-  const allEditors = maybeEditorsProfiles.map(profile => {
+  const firstThreeEditors = maybeEditorsProfiles.map((profile, i) => {
     if (!profile) {
-      return null;
+      return {
+        id: space.editors[i],
+        avatarUrl: null,
+        name: null,
+        address: space.editors[i] as `0x${string}`,
+        profileLink: '',
+      };
     }
 
     return {
@@ -43,10 +49,8 @@ export async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpa
     };
   });
 
-  const allEditorsWithProfiles = allEditors.filter((editor): editor is Profile => editor !== null);
-
   return {
-    allEditors: allEditorsWithProfiles,
+    firstThreeEditors,
     totalEditors: space.editors.length,
   };
 }

@@ -1,22 +1,17 @@
-import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
-
-import { Cookie } from '~/core/cookie';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
 
-import { getEditorsForSpace } from './get-editors-for-space';
+import { getFirstThreeEditorsForSpace } from './get-first-three-editors-for-space';
 
 interface Props {
   spaceId: string;
 }
 
 export async function SpaceEditorsChip({ spaceId }: Props) {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-
   // For now we use editors for both editors and members until we have the new membership
-  const { firstThreeEditors, totalEditors } = await getEditorsForSpace(spaceId, connectedAddress);
+  const { firstThreeEditors, totalEditors } = await getFirstThreeEditorsForSpace(spaceId);
 
   return (
     <div className="flex items-center gap-1">

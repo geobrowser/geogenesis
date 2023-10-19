@@ -4,6 +4,7 @@ import pluralize from 'pluralize';
 import { Cookie } from '~/core/cookie';
 
 import { getEditorsForSpace } from './get-editors-for-space';
+import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { SpaceEditorsPopoverEditorRequestButton } from './space-editors-popover-editor-request-button';
 import { MemberRow } from './space-member-row';
 
@@ -14,7 +15,10 @@ interface Props {
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
 
-  const { allEditors: allMembers, totalEditors, isEditor } = await getEditorsForSpace(spaceId, connectedAddress);
+  const [{ allEditors: allMembers, totalEditors }, isEditor] = await Promise.all([
+    getEditorsForSpace(spaceId),
+    getIsEditorForSpace(spaceId, connectedAddress),
+  ]);
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
