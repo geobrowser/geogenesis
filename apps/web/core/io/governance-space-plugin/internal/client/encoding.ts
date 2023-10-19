@@ -1,44 +1,11 @@
-import {
-  ClientCore,
-} from '@aragon/sdk-client-common';
+import { ClientCore } from '@aragon/sdk-client-common';
 import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
-import {
-  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
-  GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-} from '~/core/constants';
+import { GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS } from '~/core/constants';
 
-import {
-  mainVotingPluginAbi,
-  mainVotingPluginSetupAbi,
-  memberAccessPluginAbi,
-  memberAccessPluginSetupAbi,
-  spacePluginAbi,
-  spacePluginSetupAbi,
-} from '../../abis';
+import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
-import { memberAccessPluginSetupAbiNotConst, memberAccessPluginInstallationAbi } from '../../abis/member-access-plugin-setup-abi';
-import { string, number, boolean } from 'effect/Config';
-import { bigint } from 'effect/Equivalence';
-import { reject } from 'effect/STM';
-import { async } from 'effect/Stream';
 import { MainVotingSettingsType } from '../../types';
-
-
-type ContractVotingSettings = [
-  votingMode: bigint,
-  supportThreshold: bigint,
-  minParticipation: bigint,
-  minDuration: bigint,
-  minProposerVotingPower: bigint
-
-]
-
-type ContractAddresslistVotingInitParams = [
-  ContractVotingSettings,
-  addresses: string[], // addresses
-  upgraderAddres: string,
-];
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -55,7 +22,7 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Space Plugin: Functions
- // encoded functions would be passed in as actions in a proposal
+  // encoded functions would be passed in as actions in a proposal
   public async setContent(blockIndex: number, itemIndex: number, contentUri: string) {
     const setContentData = encodeFunctionData({
       abi: spacePluginAbi,
@@ -83,7 +50,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     return removeSubspaceData;
   }
 
-  // Space Plugin: Inherited Functions
+  // Space Plugin: Encoded Inherited Functions
   public async upgradeToSpacePlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: spacePluginAbi,
@@ -102,92 +69,92 @@ export class GeoPluginClientEncoding extends ClientCore {
     return upgradeToData;
   }
 
-// Installation Functions
-static getMainVotingPluginInstallItem(params: {
-  votingSettings: {
-    votingMode: number,
-    supportThreshold: number,
-    minParticipation: number,
-    minDuration: number,
-    minProposerVotingPower: number
-  },
-  initialEditors: string[],
-  pluginUpgrader: string
-}) {
-  // Define the ABI for the prepareInstallation function's inputs
-  const prepareInstallationInputs = [
-    {
-      components: [
-        {
-          internalType: "enum MajorityVotingBase.VotingMode",
-          name: "votingMode",
-          type: "uint8"
-        },
-        {
-          internalType: "uint32",
-          name: "supportThreshold",
-          type: "uint32"
-        },
-        {
-          internalType: "uint32",
-          name: "minParticipation",
-          type: "uint32"
-        },
-        {
-          internalType: "uint64",
-          name: "minDuration",
-          type: "uint64"
-        },
-        {
-          internalType: "uint256",
-          name: "minProposerVotingPower",
-          type: "uint256"
-        }
-      ],
-      internalType: "struct MajorityVotingBase.VotingSettings",
-      name: "votingSettings",
-      type: "tuple"
-    },
-    {
-      internalType: "address[]",
-      name: "initialEditors",
-      type: "address[]"
-    },
-    {
-      internalType: "address",
-      name: "pluginUpgrader",
-      type: "address"
+  // Installation Functions
+  static getMainVotingPluginInstallItem(params: {
+    votingSettings: {
+      votingMode: number;
+      supportThreshold: number;
+      minParticipation: number;
+      minDuration: number;
+      minProposerVotingPower: number;
+    };
+    initialEditors: string[];
+    pluginUpgrader: string;
+  }) {
+    // Define the ABI for the prepareInstallation function's inputs
+    const prepareInstallationInputs = [
+      {
+        components: [
+          {
+            internalType: 'enum MajorityVotingBase.VotingMode',
+            name: 'votingMode',
+            type: 'uint8',
+          },
+          {
+            internalType: 'uint32',
+            name: 'supportThreshold',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint32',
+            name: 'minParticipation',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint64',
+            name: 'minDuration',
+            type: 'uint64',
+          },
+          {
+            internalType: 'uint256',
+            name: 'minProposerVotingPower',
+            type: 'uint256',
+          },
+        ],
+        internalType: 'struct MajorityVotingBase.VotingSettings',
+        name: 'votingSettings',
+        type: 'tuple',
+      },
+      {
+        internalType: 'address[]',
+        name: 'initialEditors',
+        type: 'address[]',
+      },
+      {
+        internalType: 'address',
+        name: 'pluginUpgrader',
+        type: 'address',
+      },
+    ];
+
+    console.log('params', params);
+
+    console.log('prepare installation inputs:', prepareInstallationInputs);
+
+    if (!prepareInstallationInputs) {
+      throw new Error('Could not find inputs for prepareInstallation in the ABI');
     }
-  ];
 
-  console.log('params', params);
+    // Encode the data using encodeAbiParameters
+    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+      params.votingSettings,
+      params.initialEditors,
+      params.pluginUpgrader,
+    ]);
+    console.log('encoded data', encodedData);
 
-  console.log('prepare installation inputs:', prepareInstallationInputs);
-
-  if (!prepareInstallationInputs) {
-    throw new Error("Could not find inputs for prepareInstallation in the ABI");
+    return {
+      id: GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
+      data: hexToBytes(encodedData as `0x${string}`),
+    };
   }
-
-  // Encode the data using encodeAbiParameters
-  const encodedData = encodeAbiParameters(prepareInstallationInputs, [
-    params.votingSettings,
-    params.initialEditors,
-    params.pluginUpgrader
-  ]);
-  console.log('encoded data', encodedData);
-
-  return {
-    id: GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
-    data: hexToBytes(encodedData as `0x${string}`),
-  };
-}
 
   static getMemberAccessPluginInstallItem(params: {
     multisigSettings: {
-      proposalDuration: number,
-      mainVotingPlugin: string
-    },
-    pluginUpgrader: string
+      proposalDuration: number;
+      mainVotingPlugin: string;
+    };
+    pluginUpgrader: string;
   }) {
     // Define the ABI for the prepareInstallation function's inputs
     const prepareInstallationInputs = [
@@ -215,22 +182,22 @@ static getMainVotingPluginInstallItem(params: {
         type: 'address',
       },
     ];
-  
+
     console.log('params', params);
-  
+
     console.log('prepare installation inputs:', prepareInstallationInputs);
-  
+
     if (!prepareInstallationInputs) {
-      throw new Error("Could not find inputs for prepareInstallation in the ABI");
+      throw new Error('Could not find inputs for prepareInstallation in the ABI');
     }
-  
+
     // Encode the data using encodeAbiParameters
     const encodedData = encodeAbiParameters(prepareInstallationInputs, [
       params.multisigSettings,
-      params.pluginUpgrader
+      params.pluginUpgrader,
     ]);
     console.log('encoded data', encodedData);
-  
+
     return {
       id: GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
       data: hexToBytes(encodedData as `0x${string}`),
@@ -311,7 +278,7 @@ static getMainVotingPluginInstallItem(params: {
     return upgradeToData;
   }
 
-// Main Voting Plugin: Encoded Functions
+  // Main Voting Plugin: Encoded Functions
   public async addAddresses(addresses: `0x${string}`[]) {
     const addAddressesData = encodeFunctionData({
       abi: mainVotingPluginAbi,
@@ -331,7 +298,7 @@ static getMainVotingPluginInstallItem(params: {
   }
 
   // Main Voting: Encoded Inherited Functions
-  public async updateVotingSettings({mainVotingSettings}: MainVotingSettingsType) {
+  public async updateVotingSettings({ mainVotingSettings }: MainVotingSettingsType) {
     const updateVotingSettingsData = encodeFunctionData({
       abi: mainVotingPluginAbi,
       functionName: 'updateVotingSettings',
