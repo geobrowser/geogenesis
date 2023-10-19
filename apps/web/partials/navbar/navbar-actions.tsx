@@ -57,31 +57,37 @@ export function NavbarActions() {
           onOpenChange={onOpenChange}
           className="max-w-[165px]"
         >
-          <AvatarMenuItem>
-            <button onClick={showCreateProfile}>Create profile</button>
-          </AvatarMenuItem>
-          <AvatarMenuItem disabled={!profile?.homeSpace}>
-            <div
-              className={classnames('flex items-center gap-2', {
-                grayscale: !profile?.homeSpace,
-              })}
-            >
-              <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+          {!geoEntityProfile && profile ? (
+            <AvatarMenuItem>
+              <div className="flex items-center gap-2">
+                <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                  <Avatar value={address} size={16} />
+                </div>
+                <button onClick={showCreateProfile}>Create profile</button>
               </div>
-              {profile?.homeSpace && (
-                <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
-                  Personal space
+            </AvatarMenuItem>
+          ) : (
+            <>
+              <AvatarMenuItem disabled={!profile?.homeSpace}>
+                <div className="flex items-center gap-2">
+                  <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                    <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+                  </div>
+                  {profile?.homeSpace && (
+                    <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                      Personal space
+                    </Link>
+                  )}
+                </div>
+              </AvatarMenuItem>
+              <AvatarMenuItem>
+                <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+                  <Icon icon="home" />
+                  <p className="text-button">Personal home</p>
                 </Link>
-              )}
-            </div>
-          </AvatarMenuItem>
-          <AvatarMenuItem>
-            <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-              <Icon icon="home" />
-              <p className="text-button">Personal home</p>
-            </Link>
-          </AvatarMenuItem>
+              </AvatarMenuItem>
+            </>
+          )}
           <AvatarMenuItem>
             <GeoConnectButton />
           </AvatarMenuItem>
