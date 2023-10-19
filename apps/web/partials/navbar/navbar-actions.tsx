@@ -14,6 +14,7 @@ import { useAccount } from 'wagmi';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { useUserProfile } from '~/core/hooks/use-user-profile';
 import { useEditable } from '~/core/state/editable-store/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -35,6 +36,7 @@ export function NavbarActions() {
 
   const { address } = useAccount();
   const { profile } = useGeoProfile(address);
+  const geoEntityProfile = useUserProfile(address);
 
   if (!address) {
     return <GeoConnectButton />;
@@ -48,7 +50,7 @@ export function NavbarActions() {
         <Menu
           trigger={
             <div className="relative h-7 w-7 overflow-hidden rounded-full">
-              <Avatar value={address} size={28} />
+              <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
             </div>
           }
           open={open}
@@ -65,7 +67,7 @@ export function NavbarActions() {
               })}
             >
               <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} size={16} />
+                <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
               </div>
               {profile?.homeSpace && (
                 <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
