@@ -69,6 +69,16 @@ export type MainVotingPluginVotingSettings = {
   minProposerVotingPower: bigint;
 };
 
+export type MainVotingSettingsType = {
+  mainVotingSettings: {
+    votingMode: number;
+    supportThreshold: number;
+    minParticipation: number;
+    minDuration: bigint;
+    minProposerVotingPower: bigint;
+  };
+};
+
 export type InitializeMainVotingPluginOptions = {
   wallet: WalletClient;
   daoAddress: `0x${string}`;

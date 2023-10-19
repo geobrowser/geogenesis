@@ -22,6 +22,7 @@ import { string, number, boolean } from 'effect/Config';
 import { bigint } from 'effect/Equivalence';
 import { reject } from 'effect/STM';
 import { async } from 'effect/Stream';
+import { MainVotingSettingsType } from '../../types';
 
 
 type ContractVotingSettings = [
@@ -236,7 +237,7 @@ static getMainVotingPluginInstallItem(params: {
     };
   }
 
-
+  // Main Voting Plugin: Encoded Functions
   public async updateMultisigSettings(proposalDuration: bigint, mainVotingPluginAddress: `0x${string}`) {
     const updateMultisigSettingsData = encodeFunctionData({
       abi: memberAccessPluginAbi,
@@ -291,7 +292,7 @@ static getMainVotingPluginInstallItem(params: {
     return executeData;
   }
 
-  // Member Access Plugin: Inherited Functions
+  // Member Access Plugin: Encoded Inherited Functions
   public async upgradeToMemberAccessPlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
       abi: memberAccessPluginAbi,
@@ -310,20 +311,7 @@ static getMainVotingPluginInstallItem(params: {
     return upgradeToData;
   }
 
-  // Main Voting: Functions
-  // public async initalizeMainVotingPlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-  //   const initalizeData = encodeFunctionData({
-  //     abi: mainVotingPluginAbi,
-  //     functionName: 'initialize',
-  //     // args: [daoAddress, firstBlockContentUri],
-  //   });
-  //   return initalizeData;
-  // }
-
-
- 
-
-
+// Main Voting Plugin: Encoded Functions
   public async addAddresses(addresses: `0x${string}`[]) {
     const addAddressesData = encodeFunctionData({
       abi: mainVotingPluginAbi,
@@ -342,59 +330,15 @@ static getMainVotingPluginInstallItem(params: {
     return removeAddressesData;
   }
 
-  // public async createProposal() {
-  //   const createProposalData = encodeFunctionData({
-  //     abi: mainVotingPluginAbi,
-  //     functionName: 'createProposal',
-  //     args: [],
-  //   });
-  //   return createProposalData;
-  // }
-
-  public async cancelProposal(proposalId: bigint) {
-    const cancelProposalData = encodeFunctionData({
+  // Main Voting: Encoded Inherited Functions
+  public async updateVotingSettings({mainVotingSettings}: MainVotingSettingsType) {
+    const updateVotingSettingsData = encodeFunctionData({
       abi: mainVotingPluginAbi,
-      functionName: 'cancelProposal', // need new abi
-      args: [proposalId],
+      functionName: 'updateVotingSettings',
+      args: [mainVotingSettings],
     });
-    return cancelProposalData;
+    return updateVotingSettingsData;
   }
-
-  // Main Voting: Inherited Functions
-  public async vote(proposalId: bigint, vote: number, tryEarlyExecution: boolean) {
-    const voteData = encodeFunctionData({
-      abi: mainVotingPluginAbi,
-      functionName: 'vote',
-      args: [proposalId, vote, tryEarlyExecution],
-    });
-    return voteData;
-  }
-
-  public async executeMainVotingPlugin(proposalId: bigint) {
-    const executeData = encodeFunctionData({
-      abi: mainVotingPluginAbi,
-      functionName: 'execute',
-      args: [proposalId],
-    });
-    return executeData;
-  }
-
-  // public async updateVotingSettings() {
-  //   const updateVotingSettingsData = encodeFunctionData({
-  //     abi: mainVotingPluginAbi,
-  //     functionName: 'updateVotingSettings',
-  //     args: [
-  //       {
-  //         // votingMode: 1,
-  //         // supportThreshold: 50,
-  //         // minParticipation: 10,
-  //         // minDuration: BigInt(86400),
-  //         // minProposerVotingPower: BigInt(1000),
-  //       },
-  //     ], // wrap the object in an array
-  //   });
-  //   return updateVotingSettingsData;
-  // }
 
   public async upgradeToMainVotingPlugin(pluginAddress: `0x${string}`) {
     const upgradeToData = encodeFunctionData({
