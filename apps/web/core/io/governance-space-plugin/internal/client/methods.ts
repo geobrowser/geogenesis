@@ -360,6 +360,7 @@ export class GeoPluginClientMethods extends ClientCore {
     initialEditors,
     onInitStateChange,
   }: InitializeMainVotingPluginOptions): Promise<void> {
+    console.log('main voting', '0xc0D3f3630A8Ca173AD039085c539F0e59b21F2c3');
     const prepareInitEffect = Effect.tryPromise({
       try: () =>
         prepareWriteContract({
@@ -375,7 +376,7 @@ export class GeoPluginClientMethods extends ClientCore {
     const writeInitEffect = Effect.gen(function* (awaited) {
       const contractConfig = yield* awaited(prepareInitEffect);
 
-      onInitStateChange('initializing-plugin');
+      // onInitStateChange('initializing-plugin');
 
       return yield* awaited(
         Effect.tryPromise({
@@ -389,7 +390,7 @@ export class GeoPluginClientMethods extends ClientCore {
       const writeInitResult = yield* awaited(writeInitEffect);
 
       console.log('Transaction hash: ', writeInitResult.hash);
-      onInitStateChange('waiting-for-transaction');
+      // onInitStateChange('waiting-for-transaction');
 
       const waitForTransactionEffect = yield* awaited(
         Effect.tryPromise({

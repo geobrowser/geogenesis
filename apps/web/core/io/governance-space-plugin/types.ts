@@ -80,11 +80,11 @@ export type MainVotingSettingsType = {
 };
 
 export type InitializeMainVotingPluginOptions = {
-  wallet: WalletClient;
+  wallet?: WalletClient;
   daoAddress: `0x${string}`;
   votingSettings: MainVotingPluginVotingSettings;
   initialEditors: `0x${string}`[];
-  onInitStateChange: (newState: PluginInitState) => void;
+  onInitStateChange?: (newState: PluginInitState) => void;
 };
 
 export type CreateMainVotingPluginProposalOptions = {
