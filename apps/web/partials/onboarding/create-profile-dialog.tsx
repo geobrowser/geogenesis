@@ -60,7 +60,7 @@ export const CreateProfileDialog = () => {
   const [avatar, setAvatar] = useState('');
   const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
 
-  const { isCreateProfileVisible } = useCreateProfile();
+  const { isCreateProfileVisible, hideCreateProfile } = useCreateProfile();
 
   const { data: profile } = useQuery({
     queryKey: ['profile-triples-in-space', onchainProfile?.homeSpace, onchainProfile?.id],
@@ -76,8 +76,6 @@ export const CreateProfileDialog = () => {
       return result ?? null;
     },
   });
-
-  console.log('profile', profile);
 
   if (!address || isLoading || !isCreateProfileVisible) return null;
 
@@ -205,9 +203,10 @@ export const CreateProfileDialog = () => {
         },
       });
 
-      console.log('Profile and personal space created:', { profileEntityId: onchainProfile.id, spaceAddress });
+      console.log('Profile created:', { profileEntityId: onchainProfile.id, spaceAddress });
 
       setSpaceAddress(spaceAddress);
+      hideCreateProfile();
     }
   }
 
