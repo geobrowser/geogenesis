@@ -27,7 +27,7 @@ import { Value } from '~/core/utils/value';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-const isCreateProfileVisible$ = observable(true);
+const isCreateProfileVisible$ = observable(false);
 
 export function useCreateProfile() {
   const isCreateProfileVisible = useSelector(isCreateProfileVisible$);
