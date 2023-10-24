@@ -107,8 +107,6 @@ export interface IGeoPluginClientEncoding {
 
   removeAddresses(addresses: `0x${string}`[]): Promise<`0x${string}`>;
 
-  // updateVotingSettings
-
   upgradeToMainVotingPlugin(pluginAddress: `0x${string}`): Promise<`0x${string}`>;
 
   upgradeToAndCallMainVotingPlugin(pluginAddress: `0x${string}`, calldata: `0x${string}`): Promise<`0x${string}`>;

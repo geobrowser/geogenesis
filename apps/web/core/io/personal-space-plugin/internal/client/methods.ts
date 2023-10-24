@@ -34,6 +34,77 @@ export class GeoPersonalSpacePluginClientMethods extends ClientCore {
 
   // Personal Space Admin Plugin: Write Functions
 
+  public async preparePersonalSpaceInstallation({
+    wallet,
+    daoAddress,
+    onInitStateChange,
+  }: InitializePersonalSpaceAdminPluginOptions): Promise<void> {
+    const prepareInitEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          abi: personalSpaceAdminPluginAbi,
+          address: this.geoPersonalSpaceAdminPluginAddress as `0x${string}`,
+          functionName: 'initialize',
+          walletClient: wallet,
+          args: [daoAddress],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeInitEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareInitEffect);
+
+      onInitStateChange('initializing-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Initialization failed: ${error}`),
+        })
+      );
+    });
+
+    const initializePluginProgram = Effect.gen(function* (awaited) {
+      const writeInitResult = yield* awaited(writeInitEffect);
+
+      console.log('Transaction hash: ', writeInitResult.hash);
+      onInitStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeInitResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(initializePluginProgram);
+  }
+
   // Initialize Personal Space Admin Plugin for an already existing DAO
   public async initializePersonalSpaceAdminPlugin({
     wallet,

@@ -19,6 +19,7 @@ import {
 import {
   mainVotingPluginAbi,
   memberAccessPluginAbi,
+  memberAccessPluginSetupAbi,
   personalSpaceAdminPluginAbi,
   spacePluginAbi,
   spacePluginSetupAbi,
@@ -32,6 +33,7 @@ import {
   InitializeMainVotingPluginOptions,
   InitializeMemberAccessPluginOptions,
   InitializeSpacePluginOptions,
+  PrepareSetupMemberAccessPluginOptions,
   SetContentSpacePluginOptions,
   VoteMainVotingPluginProposalOptions,
 } from '../../types';
@@ -210,7 +212,79 @@ export class GeoPluginClientMethods extends ClientCore {
     await Effect.runPromise(executeProgram);
   }
 
-  // Member Access Plugin: Initialize
+  // Member Access Plugin: Initialize for a fresh DAO
+
+  // @TODO: Still encountering issue with this requiring a DAO's address due to the function params
+  public async prepareSetupMemberAccess({
+    wallet,
+    memberAccessSettings,
+    onInitStateChange,
+  }: PrepareSetupMemberAccessPluginOptions): Promise<void> {
+    const prepareInitEffect = Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          abi: memberAccessPluginSetupAbi,
+          address: this.geoMemberAccessPluginAddress as `0x${string}`,
+          functionName: 'prepareInstallation',
+          walletClient: wallet,
+          args: [memberAccessSettings],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
+    const writeInitEffect = Effect.gen(function* (awaited) {
+      const contractConfig = yield* awaited(prepareInitEffect);
+
+      onInitStateChange('initializing-plugin');
+
+      return yield* awaited(
+        Effect.tryPromise({
+          try: () => writeContract(contractConfig),
+          catch: error => new TransactionWriteFailedError(`Initialization failed: ${error}`),
+        })
+      );
+    });
+
+    const initializePluginProgram = Effect.gen(function* (awaited) {
+      const writeInitResult = yield* awaited(writeInitEffect);
+
+      console.log('Transaction hash: ', writeInitResult.hash);
+      onInitStateChange('waiting-for-transaction');
+
+      const waitForTransactionEffect = yield* awaited(
+        Effect.tryPromise({
+          try: () =>
+            waitForTransaction({
+              hash: writeInitResult.hash,
+            }),
+          catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+        })
+      );
+
+      if (waitForTransactionEffect.status !== 'success') {
+        return yield* awaited(
+          Effect.fail(
+            new TransactionRevertedError(`Transaction reverted: 
+        hash: ${waitForTransactionEffect.transactionHash}
+        status: ${waitForTransactionEffect.status}
+        blockNumber: ${waitForTransactionEffect.blockNumber}
+        blockHash: ${waitForTransactionEffect.blockHash}
+        ${JSON.stringify(waitForTransactionEffect)}
+        `)
+          )
+        );
+      }
+
+      console.log(`Transaction successful. Receipt: 
+      hash: ${waitForTransactionEffect.transactionHash}
+      status: ${waitForTransactionEffect.status}
+      blockNumber: ${waitForTransactionEffect.blockNumber}
+      blockHash: ${waitForTransactionEffect.blockHash}
+      `);
+    });
+
+    await Effect.runPromise(initializePluginProgram);
+  }
 
   // Member Access Plugin: Write Functions
 
@@ -348,7 +422,7 @@ export class GeoPluginClientMethods extends ClientCore {
     return supportsInterfaceRead;
   }
 
-  // Main Voting Plugin: Initialize
+  // Main Voting Plugin: Initialize for a fresh DAO
 
   // Main Voting Plugin: Write Functions
 

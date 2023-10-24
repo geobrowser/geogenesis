@@ -61,6 +61,15 @@ export type InitializeMemberAccessPluginOptions = {
   onInitStateChange: (newState: PluginInitState) => void;
 };
 
+export type PrepareSetupMemberAccessPluginOptions = {
+  wallet: WalletClient;
+  memberAccessSettings: {
+    proposalDuration: bigint;
+    mainVotingPlugin: `0x${string}`;
+  };
+  onInitStateChange: (newState: PluginInitState) => void;
+};
+
 export type MainVotingPluginVotingSettings = {
   votingMode: number;
   supportThreshold: number;

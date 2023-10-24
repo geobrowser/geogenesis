@@ -1,13 +1,11 @@
-import { ClientCore, PluginInstallItem, getNamedTypesFromMetadata } from '@aragon/sdk-client-common';
-import { SpacePluginSetupAbi } from '@geogenesis/contracts';
-import { encodeFunctionData, hexToBytes } from 'viem';
+import { ClientCore } from '@aragon/sdk-client-common';
+import { encodeAbiParameters, hexToBytes } from 'viem';
 
 import { GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS } from '~/core/constants';
 
-import { personalSpaceAdminPluginAbi } from '../../abis';
 import { GeoPersonalSpacePluginContext } from '../../context';
 
-export class GeoPluginClientEncoding extends ClientCore {
+export class GeoPersonalSpacePluginClientEncoding extends ClientCore {
   private geoPersonalSpacePluginAddress: string;
 
   constructor(pluginContext: GeoPersonalSpacePluginContext) {
@@ -17,34 +15,31 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Personal Space Plugin: Functions
+  static getPersonalSpacePluginInstallItem(params: { initialEditorAddress: string }) {
+    // Define the ABI for the prepareInstallation function's inputs
+    const prepareInstallationInputs = [
+      {
+        name: '_initialEditorAddress',
+        type: 'address',
+        internalType: 'address',
+        description: 'The address of the first address to be granted the editor permission.',
+      },
+    ];
 
-  public getPersonalSpacePluginInstallItem(params): PluginInstallItem {
-    console.log('incoming params', params);
-    // const hexBytes = defaultAbiCoder.encode(getNamedTypesFromMetadata(SpacePluginSetupAbi), [
-    //   votingSettingsToContract(params),
-    // ]);
+    console.log('params', params);
 
-    const namedMetadata = getNamedTypesFromMetadata(SpacePluginSetupAbi);
-    console.log('named metadata', namedMetadata);
-    const hexBytes = '123';
+    console.log('prepare installation inputs:', prepareInstallationInputs);
 
-    // const hexBytes = encodeAbiParameters(
-    //   getNamedTypesFromMetadata(SpacePluginSetupAbi),
-    //   votingSettingsToContract(params)
-    // );
+    if (!prepareInstallationInputs) {
+      throw new Error('Could not find inputs for prepareInstallation in the ABI');
+    }
+
+    // Encode the data using encodeAbiParameters
+    const encodedData = encodeAbiParameters(prepareInstallationInputs, [params.initialEditorAddress]);
 
     return {
-      id: GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
-      data: hexToBytes(hexBytes as `0x${string}`),
+      id: GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
+      data: hexToBytes(encodedData as `0x${string}`),
     };
   }
-
-  // public async initalizePersonalSpacePlugin(daoAddress: `0x${string}`, firstBlockContentUri: string) {
-  //   const initalizeData = encodeFunctionData({
-  //     abi: personalSpaceAdminPluginAbi,
-  //     functionName: 'initialize',
-  //     args: [daoAddress, firstBlockContentUri],
-  //   });
-  //   return initalizeData;
-  // }
 }

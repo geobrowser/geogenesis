@@ -141,7 +141,6 @@ export class GeoPluginClientEncoding extends ClientCore {
       params.initialEditors,
       params.pluginUpgrader,
     ]);
-    console.log('encoded data', encodedData);
 
     return {
       id: GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
@@ -183,10 +182,6 @@ export class GeoPluginClientEncoding extends ClientCore {
       },
     ];
 
-    console.log('params', params);
-
-    console.log('prepare installation inputs:', prepareInstallationInputs);
-
     if (!prepareInstallationInputs) {
       throw new Error('Could not find inputs for prepareInstallation in the ABI');
     }
@@ -196,7 +191,6 @@ export class GeoPluginClientEncoding extends ClientCore {
       params.multisigSettings,
       params.pluginUpgrader,
     ]);
-    console.log('encoded data', encodedData);
 
     return {
       id: GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
