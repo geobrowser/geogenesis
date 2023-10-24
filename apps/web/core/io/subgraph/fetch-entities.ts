@@ -46,14 +46,12 @@ function getFetchEntitiesQuery(
     }
 
     const multiFilterStartsWithQuery = whereStartsWithMultipleTypeIds.map(f => `{${f}}`).join(', ');
-    const multiFilterContainsQuery = whereContainsMultipleTypeIds.map(f => `{${f}}`).join(', ');
 
     constructedWhere.start = `{or: [${multiFilterStartsWithQuery}]}`;
-    constructedWhere.contain = `{or: [${multiFilterContainsQuery}]}`;
   }
 
   return `query {
-    startEntities: geoEntities(where: ${constructedWhere.start}, first: ${first}, skip: ${skip}) {
+    startEntities: geoEntities(where: ${constructedWhere.start}, first: ${first}, skip: ${skip}, orderBy: name) {
       id,
       name
       entityOf {
@@ -79,7 +77,7 @@ function getFetchEntitiesQuery(
         }
       }
     }
-    containEntities: geoEntities(where: ${constructedWhere.contain}, first: ${first}, skip: ${skip}) {
+    containEntities: geoEntities(where: ${constructedWhere.contain}, first: ${first}, skip: ${skip}, orderBy: name) {
       id,
       name,
       entityOf {
@@ -169,7 +167,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
             `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${
               options.endpoint
             } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
-          
+
           queryString: ${getFetchEntitiesQuery(
             options.query,
             entityOfWhere,

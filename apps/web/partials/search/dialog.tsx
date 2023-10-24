@@ -32,7 +32,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
           <div className={cx('relative p-2', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
             <AnimatePresence mode="wait">
               {autocomplete.isLoading ? (
-                <div className="absolute top-[50%] left-5 z-100">
+                <div className="absolute left-5 top-[50%] z-100">
                   <motion.span
                     key="dots"
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -44,7 +44,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   </motion.span>
                 </div>
               ) : (
-                <div className="absolute top-[1.125rem] left-5 z-100">
+                <div className="absolute left-5 top-[1.125rem] z-100">
                   <motion.span
                     key="search"
                     initial={{ opacity: 0, scale: 0.95 }}

@@ -67,7 +67,6 @@ function MoveEntityReviewChanges() {
     const onCreateNewTriples = (): CreateTripleAction[] => {
       return triples.map(t => ({
         ...t,
-
         type: 'createTriple',
         space: spaceIdTo,
       }));
@@ -89,9 +88,9 @@ function MoveEntityReviewChanges() {
 
         await makeProposal({
           actions: createActions,
-          spaceId: spaceIdTo,
           name: createProposalName,
           onChangePublishState: reviewState => createDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
+          spaceId: spaceIdTo,
         });
         createDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
         setFirstPublishComplete(true); // so the user can re-enter the second publish only if this succeeds
@@ -113,9 +112,9 @@ function MoveEntityReviewChanges() {
 
       await makeProposal({
         actions: deleteActions,
-        spaceId: spaceIdFrom,
         name: deleteProposalName,
         onChangePublishState: reviewState => deleteDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
+        spaceId: spaceIdFrom,
       });
       deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
     } catch (e: unknown) {
@@ -132,7 +131,7 @@ function MoveEntityReviewChanges() {
     // close the review UI after displaying the state messages for 2 seconds
     await sleepWithCallback(() => {
       setIsMoveReviewOpen(false);
-      router.push(`/space/${spaceIdTo}/${entityId}`);
+      router.push(`/space/${spaceIdTo}`);
     }, 2000);
   }, [
     wallet,
@@ -227,7 +226,7 @@ function SpaceMoveCard({
   handlePublish,
   getBgClassByState,
 }: {
-  spaceName: string | undefined; // to satisfiy potentially undefined
+  spaceName: string | undefined; // to satisfy potentially undefined
   spaceImage: string | undefined; // to satisfy potentially undefined
   actionType: 'delete' | 'create';
   txState: ReviewState;

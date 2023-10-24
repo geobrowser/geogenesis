@@ -1,4 +1,6 @@
 import { Observable, computed, observable } from '@legendapp/state';
+import { configureObservablePersistence, persistObservable } from '@legendapp/state/persist';
+import { ObservablePersistIndexedDB } from '@legendapp/state/persist-plugins/indexeddb';
 
 import { Storage } from '~/core/io';
 import {
@@ -12,8 +14,20 @@ import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
+configureObservablePersistence({
+  persistLocal: ObservablePersistIndexedDB,
+  persistLocalOptions: {
+    indexedDB: {
+      databaseName: 'Legend',
+      version: 1,
+      tableNames: ['actionsStore'],
+    },
+  },
+});
+
 interface IActionsStore {
   restore(spaceActions: SpaceActions): void;
+  addActionsToSpaces(spaceActionss: SpaceActions): void;
   create(triple: ITriple): void;
   update(triple: ITriple, oldTriple: ITriple): void;
   remove(triple: ITriple): void;
@@ -40,6 +54,33 @@ export class ActionsStore implements IActionsStore {
 
   constructor({ storageClient }: IActionsStoreConfig) {
     const actions = observable<SpaceActions>({});
+
+    // `persistObservable` can be used to automatically persist an observable, both locally and
+    // remotely; it will be saved whenever you change anything anywhere within the observable, and
+    // the observable will be filled with the local state right after calling persistObservable
+    // https://legendapp.com/open-source/state/persistence/#persistobservable
+    if (typeof window !== 'undefined') {
+      persistObservable(actions, {
+        local: {
+          name: 'actionsStore',
+          adjustData: {
+            save: (data: SpaceActions) => {
+              const savedData: SpaceActions = {};
+
+              Object.entries(data).forEach(([spaceId, actions]) => {
+                const persistedActions = actions.filter(action => !action.hasBeenPublished);
+
+                if (persistedActions.length > 0) {
+                  savedData[spaceId] = persistedActions;
+                }
+              });
+
+              return savedData;
+            },
+          },
+        },
+      });
+    }
 
     this.storageClient = storageClient;
     this.actions$ = actions;
@@ -102,6 +143,18 @@ export class ActionsStore implements IActionsStore {
 
   restore = (spaceActions: SpaceActions) => {
     this.actions$.set(spaceActions);
+  };
+
+  addActionsToSpaces = (spaceActions: SpaceActions) => {
+    const prevActions: SpaceActions = this.actions$.get() ?? {};
+
+    const newActions: SpaceActions = {};
+
+    for (const [spaceId, actions] of Object.entries(spaceActions)) {
+      newActions[spaceId] = [...(prevActions[spaceId] ?? []), ...actions];
+    }
+
+    this.actions$.set(newActions);
   };
 
   deleteActions = (spaceId: string, actionIdsToDelete: Array<string>) => {

@@ -74,8 +74,10 @@ export const Editor = React.memo(function Editor({ placeholder = null, shouldHan
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
   const editable = useUserIsEditing(spaceId);
 
+  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+
   const editor = useEditor({
-    extensions: [...tiptapExtensions, createIdExtension(spaceId)],
+    extensions,
     editable: true,
     content: editorJson,
     onBlur({ editor }) {

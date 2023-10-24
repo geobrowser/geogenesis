@@ -2,11 +2,12 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { batch } from '@legendapp/state';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -29,9 +30,10 @@ interface Props {
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
+  className?: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId }: Props) {
+export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId, className = '' }: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
@@ -40,17 +42,6 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
-
-  useEffect(() => {
-    const handleQueryChange = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onQueryChange('');
-      }
-    };
-
-    document.addEventListener('click', handleQueryChange);
-    return () => document.removeEventListener('click', handleQueryChange);
-  }, [onQueryChange]);
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -104,7 +95,10 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
         value={query}
         onChange={e => onQueryChange(e.target.value)}
         placeholder={placeholder}
-        className="m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+        className={cx(
+          'relative z-10 m-0 h-full w-full bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+          className
+        )}
       />
       {query && (
         <div

@@ -66,6 +66,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <FlowBar />
         <Review />
         <Compare />
+        {/* @TODO remove */}
         <Persistence />
       </ClientOnly>
       <Analytics />

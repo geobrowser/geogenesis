@@ -28,6 +28,7 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     };
   }
 
+
   const types = await fetchEntityType({
     endpoint: config.subgraph,
     id: params.entityId,

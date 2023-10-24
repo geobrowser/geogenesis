@@ -78,6 +78,8 @@ module.exports = {
     extend: {
       animation: {
         'fade-in': 'fadeIn 0.15s ease-in-out',
+        'slide-down': 'slideDown 300ms ease-in-out',
+        'slide-up': 'slideUp 300ms ease-in-out',
       },
       keyframes: {
         fadeIn: {
@@ -88,6 +90,14 @@ module.exports = {
           '100%': {
             transform: 'translateX(100%)',
           },
+        },
+        slideDown: {
+          from: { height: 0 },
+          to: { height: 'var(--radix-accordion-content-height)' },
+        },
+        slideUp: {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: 0 },
         },
       },
       fontSize: {
