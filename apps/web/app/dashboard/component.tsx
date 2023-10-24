@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
 import { useWalletClient } from 'wagmi';
@@ -8,9 +7,9 @@ import { useAccount } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
+import { useUserProfile } from '~/core/hooks/use-user-profile';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
-import { Services } from '~/core/services';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -174,16 +173,3 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
     </ClientOnly>
   );
 };
-
-// @TODO convert to reusable hook and share with `navbar-actions.tsx`
-function useUserProfile(address?: string) {
-  const { subgraph, config } = Services.useServices();
-  const { data } = useQuery({
-    queryKey: ['user-profile', address],
-    queryFn: async () => {
-      if (!address) return null;
-      return await subgraph.fetchProfile({ address, endpoint: config.subgraph });
-    },
-  });
-  return data ? data[1] : null;
-}

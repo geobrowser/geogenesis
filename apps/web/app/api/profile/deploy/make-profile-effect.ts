@@ -16,16 +16,16 @@ import { makeProposalServer } from '../../make-proposal-server';
 
 const ROLES = [
   {
-    role: 'ADMIN_ROLE',
-    binary: ADMIN_ROLE_BINARY,
-  },
-  {
     role: 'EDITOR_ROLE',
     binary: EDITOR_ROLE_BINARY,
   },
   {
     role: 'EDITOR_CONTROLLER_ROLE',
     binary: EDITOR_CONTROLLER_ROLE_BINARY,
+  },
+  {
+    role: 'ADMIN_ROLE',
+    binary: ADMIN_ROLE_BINARY,
   },
 ];
 

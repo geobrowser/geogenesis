@@ -45,12 +45,12 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   [
     polygon,
     // Only make the dev chains available in development
-    ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [polygonMumbai, LOCAL_CHAIN] : []),
+    ...(process.env.NODE_ENV !== 'production' ? [polygonMumbai, LOCAL_CHAIN] : []),
   ],
   [
     alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
     // We need to use another provider if using a local chain
-    ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
+    ...(process.env.NODE_ENV !== 'production' ? [publicProvider()] : []),
   ]
 );
 

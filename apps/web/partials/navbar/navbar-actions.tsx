@@ -2,7 +2,6 @@
 
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
-import classnames from 'classnames';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -14,6 +13,7 @@ import { useAccount } from 'wagmi';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { useUserProfile } from '~/core/hooks/use-user-profile';
 import { useEditable } from '~/core/state/editable-store/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -24,14 +24,18 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 
+import { useCreateProfile } from '../onboarding/create-profile-dialog';
+
 export function NavbarActions() {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
 
   const [open, onOpenChange] = React.useState(false);
+  const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
   const { profile } = useGeoProfile(address);
+  const geoEntityProfile = useUserProfile(address);
 
   if (!address) {
     return <GeoConnectButton />;
@@ -44,35 +48,46 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} size={28} />
+            <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        <AvatarMenuItem disabled={!profile?.homeSpace}>
-          <div
-            className={classnames('flex items-center gap-2', {
-              grayscale: !profile?.homeSpace,
-            })}
-          >
-            <div className="relative h-4 w-4 overflow-hidden rounded-full">
-              <Avatar value={address} size={16} />
+        {!geoEntityProfile && profile ? (
+          <AvatarMenuItem>
+            <div className="flex items-center gap-2">
+              <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                <Avatar value={address} size={16} />
+              </div>
+              <button onClick={showCreateProfile}>Create profile</button>
             </div>
+          </AvatarMenuItem>
+        ) : (
+          <>
             {profile?.homeSpace && (
-              <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
-                Personal space
-              </Link>
+              <>
+                <AvatarMenuItem>
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                      <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+                    </div>
+                    <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                      Personal space
+                    </Link>
+                  </div>
+                </AvatarMenuItem>
+                <AvatarMenuItem>
+                  <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+                    <Icon icon="home" />
+                    <p className="text-button">Personal home</p>
+                  </Link>
+                </AvatarMenuItem>
+              </>
             )}
-          </div>
-        </AvatarMenuItem>
-        <AvatarMenuItem>
-          <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-            <Icon icon="home" />
-            <p className="text-button">Personal home</p>
-          </Link>
-        </AvatarMenuItem>
+          </>
+        )}
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>
