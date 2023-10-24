@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -18,14 +19,15 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { ID } from '~/core/id';
 import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
 import { Services } from '~/core/services';
+import { useStatusBar } from '~/core/state/status-bar-store';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
-import { getImagePath } from '~/core/utils/utils';
+import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-const isCreateProfileVisible$ = observable(false);
+const isCreateProfileVisible$ = observable(true);
 
 export function useCreateProfile() {
   const isCreateProfileVisible = useSelector(isCreateProfileVisible$);
@@ -51,6 +53,7 @@ export function useCreateProfile() {
  * this process. These are accounts with an onchain Geo profile _and_ a personal space.
  */
 export const CreateProfileDialog = () => {
+  const { dispatch } = useStatusBar();
   const { makeProposal } = usePublish();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
@@ -58,9 +61,9 @@ export const CreateProfileDialog = () => {
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
-  const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'creating-profile' | 'done' | 'error'>('idle');
 
-  const { isCreateProfileVisible, hideCreateProfile } = useCreateProfile();
+  const { isCreateProfileVisible } = useCreateProfile();
 
   const { data: profile } = useQuery({
     queryKey: ['profile-triples-in-space', onchainProfile?.homeSpace, onchainProfile?.id],
@@ -85,7 +88,7 @@ export const CreateProfileDialog = () => {
 
       if (!onchainIdFromProfileId) {
         console.log(`No onchain profile id found skipping profile creation for id ${onchainProfile.id}`);
-        return null;
+        return;
       }
 
       const actions: CreateTripleAction[] = [];
@@ -194,19 +197,37 @@ export const CreateProfileDialog = () => {
         ...spaceNameTriple,
       });
 
-      await makeProposal({
-        actions,
-        name: `Creating profile for ${address}`,
-        spaceId: onchainProfile.homeSpace,
-        onChangePublishState: () => {
-          //
-        },
-      });
+      try {
+        setStatus('creating-profile');
 
-      console.log('Profile created:', { profileEntityId: onchainProfile.id, spaceAddress });
+        await makeProposal({
+          actions,
+          name: `Creating profile for ${address}`,
+          spaceId: onchainProfile.homeSpace,
+          onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
+        });
 
-      setSpaceAddress(spaceAddress);
-      hideCreateProfile();
+        console.log('Profile created:', { profileEntityId: onchainProfile.id, spaceAddress: onchainProfile.homeSpace });
+
+        dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+        setStatus('done');
+
+        // want to show the "complete" state for 3s
+        await sleepWithCallback(() => {
+          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+        }, 3000);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
+            setStatus('idle');
+            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+            return;
+          }
+
+          setStatus('error');
+          dispatch({ type: 'ERROR', payload: e.message });
+        }
+      }
     }
   }
 
@@ -232,6 +253,8 @@ export const CreateProfileDialog = () => {
                 setName={setName}
                 avatar={avatar}
                 setAvatar={setAvatar}
+                status={status}
+                space={onchainProfile?.homeSpace ?? null}
               />
             </ModalCard>
           </motion.div>
@@ -298,11 +321,14 @@ type StepOnboardingProps = {
   setName: (name: string) => void;
   avatar: string;
   setAvatar: (hash: string) => void;
+  status: 'idle' | 'creating-profile' | 'done' | 'error';
+  space: string | null;
 };
 
-function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: StepOnboardingProps) {
+function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar, status, space }: StepOnboardingProps) {
   const validName = name.length > 0;
   const { storageClient } = Services.useServices();
+  const { hideCreateProfile } = useCreateProfile();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -379,9 +405,32 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
         </Text>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 flex">
-        <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
-          Continue
-        </Button>
+        {space && (
+          <>
+            {status === 'done' && (
+              <Link href={NavUtils.toSpace(space)} onClick={hideCreateProfile} className="w-full">
+                <Button variant="primary" className="w-full">
+                  View Home Space
+                </Button>
+              </Link>
+            )}
+            {status === 'idle' && (
+              <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
+                Create profile
+              </Button>
+            )}
+            {status === 'creating-profile' && (
+              <Button variant="secondary" disabled onClick={onNext} className="w-full">
+                Creating profile...
+              </Button>
+            )}
+            {status === 'error' && (
+              <Button variant="secondary" className="w-full border border-red-01">
+                Something went wrong
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </>
   );
