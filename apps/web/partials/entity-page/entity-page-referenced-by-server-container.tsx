@@ -14,7 +14,7 @@ import { ReferencedByEntity } from './types';
 
 interface Props {
   entityId: string;
-  name: string;
+  name: string | null;
   spaceId: string;
 }
 

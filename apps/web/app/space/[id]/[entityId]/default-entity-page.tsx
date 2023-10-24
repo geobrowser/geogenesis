@@ -168,7 +168,7 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
   return {
     triples: entity?.triples ?? [],
     id: entityId,
-    name: entity?.name ?? entityId,
+    name: entity?.name ?? null,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
     space,

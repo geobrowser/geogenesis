@@ -21,7 +21,7 @@ import { ReferencedByEntity } from './types';
 
 type ReferencedByEntitiesProps = {
   referencedByEntities: Array<ReferencedByEntity>;
-  name: string;
+  name: string | null;
 };
 
 export function EntityPageReferencedBy({ referencedByEntities, name: serverName }: ReferencedByEntitiesProps) {
