@@ -6,7 +6,8 @@ import React from 'react';
 import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
-import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
+import { ActionsStoreContext } from '~/core/state/actions-store/actions-store-provider';
 import { editable$ } from '~/core/state/editable-store';
 import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store';
 
@@ -22,7 +23,11 @@ describe('Flow Bar', () => {
     });
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />
         </ActionsStoreContext.Provider>
@@ -38,7 +43,11 @@ describe('Flow Bar', () => {
     });
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />
         </ActionsStoreContext.Provider>
@@ -86,7 +95,12 @@ describe('Flow Bar', () => {
     });
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
+        {' '}
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />
         </ActionsStoreContext.Provider>
@@ -114,7 +128,12 @@ describe('Flow Bar', () => {
     });
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
+        {' '}
         <ActionsStoreContext.Provider value={store}>
           <FlowBar />
         </ActionsStoreContext.Provider>

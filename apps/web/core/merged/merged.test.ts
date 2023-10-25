@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ActionsStore } from '~/core/state/actions-store';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
 import { CreateTripleAction, StringValue, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 

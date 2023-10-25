@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import { MockNetworkData } from '~/core/io';
+import { options } from '~/core/environment/environment';
+import { MockNetworkData, Subgraph } from '~/core/io';
+import { StorageClient } from '~/core/io/storage/storage';
 
-import { ActionsStore } from '../actions-store';
-import { LocalStore } from '../local-store';
+import { ActionsStore } from '../actions-store/actions-store';
 import { EntityStore, createInitialDefaultTriples } from './entity-store';
 
 describe('EntityStore', () => {
   it('Initializes to defaults', async () => {
-    const network = new MockNetworkData.MockNetwork();
-    const actionsStore = new ActionsStore({ api: network });
+    const storage = new StorageClient(options.production.ipfs);
+    const actionsStore = new ActionsStore({ storageClient: storage });
     const store = new EntityStore({
       id: 'e',
-      api: network,
       spaceId: 's',
+      subgraph: Subgraph,
+      config: options.production,
       initialTriples: [],
       initialSchemaTriples: [],
       ActionsStore: actionsStore,
       initialBlockIdsTriple: null,
       initialBlockTriples: [],
-      LocalStore: new LocalStore({ store: actionsStore }),
     });
 
     const defaultTriples = createInitialDefaultTriples('s', 'e');
@@ -36,22 +37,21 @@ describe('EntityStore', () => {
 
   it('Returns schema placeholders for text attributes', async () => {
     const typeTriple = MockNetworkData.makeStubTripleWithType('SomeTypeId');
-    const textAttribute = MockNetworkData.makeStubTextAttribute('Nickname');
     const initialEntityStoreTriples = [typeTriple];
 
-    const network = new MockNetworkData.MockNetwork({ triples: [textAttribute] });
-    const actionsStore = new ActionsStore({ api: network });
+    const storage = new StorageClient(options.production.ipfs);
+    const actionsStore = new ActionsStore({ storageClient: storage });
 
     const store = new EntityStore({
       id: 'e',
-      api: network,
       spaceId: 's',
       initialTriples: initialEntityStoreTriples,
       initialSchemaTriples: [],
-      ActionsStore: new ActionsStore({ api: network }),
+      ActionsStore: actionsStore,
       initialBlockIdsTriple: null,
       initialBlockTriples: [],
-      LocalStore: new LocalStore({ store: actionsStore }),
+      subgraph: Subgraph,
+      config: options.production,
     });
 
     expect(store.schemaTriples$.get()).toHaveLength(3);
