@@ -36,8 +36,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  console.log('config', { config, space });
-
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -121,6 +119,8 @@ const getData = async (spaceId: string, config: AppConfig) => {
   }
 
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+
+  console.log('entity', entity);
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
