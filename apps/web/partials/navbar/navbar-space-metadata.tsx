@@ -59,7 +59,7 @@ export function NavbarSpaceMetadata() {
 
       return {
         name: spaceConfig.name ?? space.id,
-        img: Entity.avatar(spaceConfig.triples),
+        img: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples),
         href: NavUtils.toSpace(space.id),
       };
     },
