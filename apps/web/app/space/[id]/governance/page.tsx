@@ -9,6 +9,7 @@ import { graphql } from '~/core/io/subgraph/graphql';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
@@ -55,8 +56,10 @@ export default async function GovernancePage({ params }: Props) {
         <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           All Proposals
         </SmallButton>
-        {/* @ts-expect-error async JSX function */}
-        <GovernanceProposalsList spaceId={params.id} />
+        <React.Suspense>
+          {/* @ts-expect-error async JSX function */}
+          <GovernanceProposalsList spaceId={params.id} />
+        </React.Suspense>
       </div>
     </SpaceLayout>
   );
