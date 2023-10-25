@@ -44,6 +44,7 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
       body: JSON.stringify({
         query: query,
       }),
+      cache: 'no-store',
     });
 
     const { data } = (await response.json()) as {
