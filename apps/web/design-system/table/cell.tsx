@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { SquareButton } from '~/design-system/button';
 
+import { ContractSmall } from '../icons/contract-small';
+import { ExpandSmall } from '../icons/expand-small';
 import { RightArrowLongSmall } from '../icons/right-arrow-long-small';
 
 interface Props {
@@ -36,7 +38,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
         {isHovered && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-1">
             {isExpandable && (
-              <SquareButton onClick={toggleExpanded} icon={isExpanded ? 'contractSmall' : 'expandSmall'} />
+              <SquareButton onClick={toggleExpanded} icon={isExpanded ? <ContractSmall /> : <ExpandSmall />} />
             )}
             {isLinkable && href && (
               <Link href={href}>

@@ -34,8 +34,11 @@ import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
+import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
+import { Dash } from '~/design-system/icons/dash';
 import { Minus } from '~/design-system/icons/minus';
+import { Tick } from '~/design-system/icons/tick';
 import { Trash } from '~/design-system/icons/trash';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spacer } from '~/design-system/spacer';
@@ -219,7 +222,7 @@ const ReviewChanges = () => {
                   selected to publish
                 </span>
                 <SquareButton
-                  icon={totalEdits === 0 ? 'blank' : totalEdits === totalChanges ? 'tick' : 'dash'}
+                  icon={totalEdits === 0 ? <Blank /> : totalEdits === totalChanges ? <Tick /> : <Dash />}
                   onClick={() => setUnstagedChanges({})}
                 />
               </div>
@@ -641,7 +644,7 @@ const ChangedAttribute = ({
                 icon={<Trash />}
                 className="opacity-0 group-hover:opacity-100"
               />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
@@ -688,7 +691,7 @@ const ChangedAttribute = ({
                 icon={<Trash />}
                 className="opacity-0 group-hover:opacity-100"
               />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
@@ -738,7 +741,7 @@ const ChangedAttribute = ({
                 icon={<Trash />}
                 className="opacity-0 group-hover:opacity-100"
               />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
@@ -768,7 +771,7 @@ const ChangedAttribute = ({
                 icon={<Trash />}
                 className="opacity-0 group-hover:opacity-100"
               />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
@@ -804,7 +807,7 @@ const ChangedAttribute = ({
                 icon={<Trash />}
                 className="opacity-0 group-hover:opacity-100"
               />
-              <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
+              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
