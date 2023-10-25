@@ -93,25 +93,38 @@ type PendingRequestsProps = {
 };
 
 const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
+  const [dismissedRequests, setDismissedRequests] = useLocalStorage<Array<string>>('dismissedRequests', []);
+
   if (membershipRequests.length === 0) {
     return <p className="text-body text-grey-04">There are no pending requests in any of your spaces.</p>;
   }
 
+  const dismissedSet = new Set(dismissedRequests);
+
+  const onRequestProcessed = (requestId: string) => {
+    if (!dismissedSet.has(requestId)) {
+      const newDismissedRequests = [...dismissedRequests, requestId];
+      setDismissedRequests(newDismissedRequests);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {membershipRequests.map(request => (
-        <MembershipRequest key={request.id} request={request} />
-      ))}
+      {membershipRequests
+        .filter(r => !dismissedSet.has(r.id))
+        .map(request => (
+          <MembershipRequest key={request.id} request={request} onRequestProcessed={onRequestProcessed} />
+        ))}
     </div>
   );
 };
 
 type MembershipRequestProps = {
   request: MembershipRequestWithProfile;
+  onRequestProcessed: (requestId: string) => void;
 };
 
-const MembershipRequest = ({ request }: MembershipRequestProps) => {
-  const [dismissedRequests, setDismissedRequests] = useLocalStorage<Array<string>>('dismissedRequests', []);
+const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestProps) => {
   const profile = request.requestor;
 
   const { data: wallet } = useWalletClient();
@@ -120,21 +133,13 @@ const MembershipRequest = ({ request }: MembershipRequestProps) => {
     if (wallet && request.space && profile.id) {
       const roleToChange = await Publish.getRole(request.space.id, 'EDITOR_ROLE');
       await Publish.grantRole({ spaceId: request.space.id, role: roleToChange, wallet, userAddress: profile.address });
-      const newDismissedRequests = [...dismissedRequests, request.id];
-      setDismissedRequests(newDismissedRequests);
+      onRequestProcessed(request.id);
     }
   };
 
   const handleReject = () => {
-    if (!dismissedRequests.includes(request.id)) {
-      const newDismissedRequests = [...dismissedRequests, request.id];
-      setDismissedRequests(newDismissedRequests);
-    }
+    onRequestProcessed(request.id);
   };
-
-  if (dismissedRequests.includes(request.id)) {
-    return null;
-  }
 
   return (
     <ClientOnly>
