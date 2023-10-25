@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
-import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -17,8 +17,9 @@ import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { CreateProfileDialog } from '~/partials/onboarding/create-profile-dialog';
+import { FlowBar } from '~/partials/review/flow-bar';
+import { Review } from '~/partials/review/review';
 // import { OnboardingDialog } from '~/partials/onboarding/dialog';
-import { FlowBar, Review } from '~/partials/review';
 import { Dialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {

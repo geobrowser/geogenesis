@@ -6,7 +6,7 @@ import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';

@@ -2,7 +2,7 @@ import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
 // import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
-import { Effect } from 'effect';
+import * as Effect from 'effect/Effect';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon } from 'viem/chains';

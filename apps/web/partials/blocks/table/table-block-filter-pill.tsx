@@ -1,7 +1,8 @@
-import { useEditable } from '~/core/state/editable-store/editable-store';
-import { TableBlockFilter } from '~/core/state/table-block-store/table-block-store';
+import { useEditable } from '~/core/state/editable-store';
+import { TableBlockFilter } from '~/core/state/table-block-store';
 
 import { IconButton } from '~/design-system/button';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { colors } from '~/design-system/theme/colors';
 
 function PublishedFilterIconFilled() {
@@ -34,7 +35,7 @@ export function TableBlockFilterPill({
         <span>·</span>
         <span>{value}</span>
       </div>
-      {editable && <IconButton icon="checkCloseSmall" color="grey-04" onClick={onDelete} />}
+      {editable && <IconButton icon={<CheckCloseSmall />} color="grey-04" onClick={onDelete} />}
     </div>
   );
 }

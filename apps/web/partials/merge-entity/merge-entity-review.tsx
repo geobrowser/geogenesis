@@ -20,6 +20,7 @@ import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { CheckCircleReview } from '~/design-system/icons/check-circle-review';
+import { Close } from '~/design-system/icons/close';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
@@ -163,7 +164,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <SquareButton onClick={() => setIsMergeReviewOpen(false)} icon="close" />
+          <SquareButton onClick={() => setIsMergeReviewOpen(false)} icon={<Close />} />
           <Text variant="metadataMedium">Merge entities</Text>
         </div>
         <div>

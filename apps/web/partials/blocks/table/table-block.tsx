@@ -12,12 +12,14 @@ import * as React from 'react';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useTableBlock } from '~/core/state/table-block-store/table-block-store';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton, SmallButton } from '~/design-system/button';
-import { Icon } from '~/design-system/icon';
+import { FilterTable } from '~/design-system/icons/filter-table';
+import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
+import { Search } from '~/design-system/icons/search';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
@@ -121,7 +123,7 @@ export function TableBlock({ spaceId }: Props) {
               //
             }}
           >
-            <Icon icon="search" color="grey-02" />
+            <Search color="grey-02" />
           </span>
 
           <AnimatePresence initial={false} mode="wait">
@@ -136,7 +138,7 @@ export function TableBlock({ spaceId }: Props) {
               >
                 <IconButton
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  icon="filterTableWithFilters"
+                  icon={<FilterTableWithFilters />}
                   color="grey-04"
                 />
               </motion.div>
@@ -149,7 +151,7 @@ export function TableBlock({ spaceId }: Props) {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.15, bounce: 0.2 }}
               >
-                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon="filterTable" color="grey-04" />
+                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon={<FilterTable />} color="grey-04" />
               </motion.div>
             )}
           </AnimatePresence>

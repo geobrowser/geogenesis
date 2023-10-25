@@ -1,4 +1,5 @@
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 
 import * as React from 'react';
 
@@ -7,6 +8,7 @@ import { API } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { SmallButton } from '~/design-system/button';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
@@ -50,7 +52,7 @@ export default async function GovernancePage({ params }: Props) {
             </div>
           </GovernanceMetadataBox>
         </div>
-        <SmallButton variant="secondary" icon="chevronDownSmall">
+        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           All Proposals
         </SmallButton>
         {/* @ts-expect-error async JSX function */}

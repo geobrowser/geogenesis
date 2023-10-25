@@ -1,11 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store/table-block-store';
+import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
 import { TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
+import { CreateSmall } from '~/design-system/icons/create-small';
 
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
@@ -73,7 +74,7 @@ export function TableBlockEditableFilters() {
       options={filterableColumns}
       onCreate={onCreateFilter}
       trigger={
-        <SmallButton icon="createSmall" variant="secondary">
+        <SmallButton icon={<CreateSmall />} variant="secondary">
           Filter
         </SmallButton>
       }

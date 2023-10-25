@@ -21,11 +21,13 @@ import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { IconName } from '~/design-system/icon';
+import { CogSmall } from '~/design-system/icons/cog-small';
+import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
+import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
@@ -156,7 +158,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           />
         </div>
         <div className="p-4">
-          <Button onClick={onCreateNewTriple} variant="secondary" icon="create">
+          <Button onClick={onCreateNewTriple} variant="secondary" icon={<Create />}>
             Add triple
           </Button>
         </div>
@@ -499,7 +501,7 @@ function EntityAttributes({
         {nameTriple && (
           <div className="absolute right-0 top-[6px] flex items-center gap-8">
             <SquareButton
-              icon="trash"
+              icon={<Trash />}
               onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: nameTriple } })}
             />
           </div>
@@ -518,7 +520,7 @@ function EntityAttributes({
         {descriptionTriple && (
           <div className="absolute right-0 top-[6px] flex items-center gap-8">
             <SquareButton
-              icon="trash"
+              icon={<Trash />}
               onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: descriptionTriple } })}
             />
           </div>
@@ -567,7 +569,7 @@ function EntityAttributes({
               <div className="absolute right-0 top-6 flex items-center gap-1">
                 {isEntityGroup ? (
                   <AttributeConfigurationMenu
-                    trigger={<SquareButton icon="cogSmall" />}
+                    trigger={<SquareButton icon={<CogSmall />} />}
                     attributeId={attributeId}
                     attributeName={attributeName}
                   />
@@ -575,7 +577,7 @@ function EntityAttributes({
                 {!isPlaceholder && (
                   <>
                     <TripleTypeDropdown
-                      value={tripleType as IconName}
+                      value={tripleType}
                       options={[
                         {
                           label: (
@@ -642,7 +644,7 @@ function EntityAttributes({
                   </>
                 )}
                 <SquareButton
-                  icon="trash"
+                  icon={<Trash />}
                   onClick={
                     isPlaceholder
                       ? () => hideSchema(attributeId)

@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { SquareButton } from '~/design-system/button';
 
+import { RightArrowLongSmall } from '../icons/right-arrow-long-small';
+
 interface Props {
   href?: string;
   children: React.ReactNode;
@@ -38,7 +40,7 @@ export function TableCell({ children, width, isExpandable, isLinkable, href, tog
             )}
             {isLinkable && href && (
               <Link href={href}>
-                <SquareButton icon="rightArrowLongSmall" />
+                <SquareButton icon={<RightArrowLongSmall />} />
               </Link>
             )}
           </div>

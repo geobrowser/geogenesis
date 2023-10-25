@@ -4,7 +4,8 @@ import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+// import { Subgraph } from '~/core/io';
+import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Space } from '~/core/types';
 
 import { Card } from '~/design-system/card';
@@ -68,7 +69,7 @@ const HIDDEN_SPACES: Array<string> = [
 export default async function Spaces() {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
+  const spaces = await fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
   return (
@@ -85,7 +86,7 @@ export default async function Spaces() {
           />
         ))}
       </div>
-      <Spacer height={100} />
+      {/* <Spacer height={100} /> */}
       <div className="max-w-[830px] self-center text-center">
         <h2 className="text-largeTitle">
           Together we can change how society is organized, put power into the hands of those who’ve earned it, and

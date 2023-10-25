@@ -8,12 +8,14 @@ import produce from 'immer';
 import { useState } from 'react';
 
 import { useWindowSize } from '~/core/hooks/use-window-size';
-import { initialFilterState } from '~/core/state/triple-store';
+import { initialFilterState } from '~/core/state/triple-store/triple-store';
 import { FilterClause, FilterField, FilterState } from '~/core/types';
 import { intersperse } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
+import { Create } from '~/design-system/icons/create';
 import { Filter } from '~/design-system/icons/filter';
+import { Trash } from '~/design-system/icons/trash';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -58,7 +60,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
         <button
           className={cx(
             open ? 'bg-grey-01' : 'bg-white',
-            'h-full py-2 px-3 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary'
+            'h-full px-3 py-2 text-grey-04 transition-colors duration-150 ease-in-out hover:cursor-pointer hover:bg-grey-01 hover:text-text focus:text-text focus:ring-ctaPrimary active:text-text active:ring-ctaPrimary'
           )}
           aria-label="advanced-filter-button"
         >
@@ -116,7 +118,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
             <Spacer height={12} />
             <div className="flex items-center justify-between">
               <Button
-                icon="create"
+                icon={<Create />}
                 variant="secondary"
                 disabled={getFilterOptions(filterState).length === 0}
                 onClick={() => {
@@ -133,7 +135,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
               </Button>
               <div className="flex items-center justify-between">
                 <Button
-                  icon="trash"
+                  icon={<Trash />}
                   variant="secondary"
                   onClick={() => {
                     setFilterState(initialFilterState());

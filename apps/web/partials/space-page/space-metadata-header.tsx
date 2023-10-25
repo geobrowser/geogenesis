@@ -18,7 +18,9 @@ import { Context } from '~/design-system/icons/context';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
-import { HistoryEmpty, HistoryItem, HistoryPanel } from '../history';
+import { HistoryEmpty } from '../history/history-empty';
+import { HistoryItem } from '../history/history-item';
+import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;

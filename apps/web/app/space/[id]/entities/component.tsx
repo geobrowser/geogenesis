@@ -1,4 +1,5 @@
-import { EntityTableStoreProvider, InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
+import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
+import { EntityTableStoreProvider  } from '~/core/state/entity-table-store/entity-table-store-provider';
 import { TypesStoreProvider } from '~/core/state/types-store/types-store';
 import { Column, Row, Space, Triple } from '~/core/types';
 

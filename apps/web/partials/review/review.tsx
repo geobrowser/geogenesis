@@ -22,7 +22,7 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
@@ -34,7 +34,9 @@ import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
+import { Close } from '~/design-system/icons/close';
 import { Minus } from '~/design-system/icons/minus';
+import { Trash } from '~/design-system/icons/trash';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spacer } from '~/design-system/spacer';
 import { colors } from '~/design-system/theme/colors';
@@ -160,9 +162,9 @@ const ReviewChanges = () => {
 
   return (
     <>
-      <div className="flex w-full items-center justify-between gap-1 bg-white py-1 px-4 shadow-big md:py-3 md:px-4">
+      <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <SquareButton onClick={() => setIsReviewOpen(false)} icon="close" />
+          <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
           {allSpacesWithActions.length > 0 && (
             <div className="inline-flex items-center gap-2">
               <span className="text-metadataMedium leading-none">Review your edits in</span>
@@ -206,9 +208,9 @@ const ReviewChanges = () => {
         </div>
       </div>
       <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
-        <div className="mx-auto max-w-[1200px] pt-10 pb-20 xl:pt-[40px] xl:pr-[2ch] xl:pb-[4ch] xl:pl-[2ch]">
+        <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
-            <div className="absolute top-0 right-0 flex items-center gap-8">
+            <div className="absolute right-0 top-0 flex items-center gap-8">
               <div className="inline-flex items-center gap-2">
                 <span>
                   <span className="font-medium">
@@ -352,7 +354,7 @@ const ChangedEntity = ({
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
             Your proposed edits
-            <div className="absolute top-0 right-0">
+            <div className="absolute right-0 top-0">
               <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
             </div>
           </div>
@@ -633,8 +635,12 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                onClick={handleDeleteActions}
+                icon={<Trash />}
+                className="opacity-0 group-hover:opacity-100"
+              />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -676,8 +682,12 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                onClick={handleDeleteActions}
+                icon={<Trash />}
+                className="opacity-0 group-hover:opacity-100"
+              />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -722,8 +732,12 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                onClick={handleDeleteActions}
+                icon={<Trash />}
+                className="opacity-0 group-hover:opacity-100"
+              />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -748,8 +762,12 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                onClick={handleDeleteActions}
+                icon={<Trash />}
+                className="opacity-0 group-hover:opacity-100"
+              />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
@@ -780,8 +798,12 @@ const ChangedAttribute = ({
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4">
-            <div className="absolute top-0 right-0 inline-flex items-center gap-4 p-4">
-              <SquareButton onClick={handleDeleteActions} icon="trash" className="opacity-0 group-hover:opacity-100" />
+            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+              <SquareButton
+                onClick={handleDeleteActions}
+                icon={<Trash />}
+                className="opacity-0 group-hover:opacity-100"
+              />
               <SquareButton onClick={handleStaging} icon={unstaged ? 'blank' : 'tick'} />
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>

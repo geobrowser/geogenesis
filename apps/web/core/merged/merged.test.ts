@@ -7,7 +7,7 @@ import { Entity } from '~/core/utils/entity';
 import { options } from '../environment/environment';
 import { Storage } from '../io';
 import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
-import { LocalStore } from '../state/local-store/local-store';
+import { LocalStore } from '../state/local-store';
 import { Merged as MergeDataSource } from './merged';
 
 const storageClient = new Storage.StorageClient(options.development.ipfs);

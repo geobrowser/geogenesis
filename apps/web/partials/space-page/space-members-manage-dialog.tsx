@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import * as React from 'react';
 
 import { SquareButton } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
 
 const MotionContent = motion(Content);
 const MotionOverlay = motion(Overlay);
@@ -41,7 +42,7 @@ export function SpaceMembersManageDialog(props: Props) {
             <div className="flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between">
                 {props.header}
-                <SquareButton onClick={() => onOpenChange(false)} icon="close" />
+                <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
               </div>
 
               {props.content}

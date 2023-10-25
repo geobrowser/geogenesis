@@ -8,7 +8,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/state/editable-store';
 import { useTypesStore } from '~/core/state/types-store/types-store';
 import { Entity, GeoType } from '~/core/types';
 

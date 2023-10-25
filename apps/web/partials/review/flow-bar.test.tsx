@@ -8,7 +8,7 @@ import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { ActionsStore, ActionsStoreContext } from '~/core/state/actions-store';
 import { editable$ } from '~/core/state/editable-store';
-import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store/status-bar-store';
+import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store';
 
 import { FlowBar } from './flow-bar';
 

@@ -18,7 +18,10 @@ import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
-import { Icon } from '~/design-system/icon';
+import { CheckCircle } from '~/design-system/icons/check-circle';
+import { Close } from '~/design-system/icons/close';
+import { RetrySmall } from '~/design-system/icons/retry-small';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 import { Spinner } from '~/design-system/spinner';
@@ -179,7 +182,7 @@ function MoveEntityReviewChanges() {
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <SquareButton onClick={() => setIsMoveReviewOpen(false)} icon="close" />
+          <SquareButton onClick={() => setIsMoveReviewOpen(false)} icon={<Close />} />
           <Text variant="metadataMedium">Move entities</Text>
         </div>
         <div>
@@ -197,7 +200,7 @@ function MoveEntityReviewChanges() {
               handlePublish={handlePublish}
               getBgClassByState={getBgClassByState}
             />
-            <Icon icon="rightArrowLongSmall" color="grey-04" />
+            <RightArrowLongSmall color="grey-04" />
             <SpaceMoveCard
               spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
               spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
@@ -276,7 +279,7 @@ function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handl
       {txState === 'publishing-ipfs' || txState === 'signing-wallet' || txState === 'publishing-contract' ? (
         <Spinner />
       ) : null}
-      {txState === 'publish-complete' ? <Icon icon="checkCircle" color="green" /> : null}
+      {txState === 'publish-complete' ? <CheckCircle color="green" /> : null}
       {txState === 'publish-error' ? (
         <div className="flex flex-row items-center">
           <Warning color="red-01" />
@@ -285,7 +288,7 @@ function StatusMessage({ txState, handlePublish }: { txState: ReviewState; handl
       <Text variant="metadata">{reviewStateText[txState]}</Text>
       {txState === 'publish-error' ? (
         <div className="flex flex-row items-center gap-1.5">
-          <SmallButton icon="retrySmall" color="white" className="bg-white text-grey-04" onClick={handlePublish}>
+          <SmallButton icon={<RetrySmall />} color="white" className="bg-white text-grey-04" onClick={handlePublish}>
             Re-try
           </SmallButton>
         </div>

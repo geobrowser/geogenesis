@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 
 import { Component } from './component';
 

@@ -17,7 +17,7 @@ import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/state/editable-store';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';

@@ -20,8 +20,7 @@ import { ValueTypeId } from '~/core/value-types';
 import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
-import { ActionsStore } from '../actions-store';
-import { LocalStore } from '../local-store';
+import { ActionsStore } from '../actions-store/actions-store';
 
 const markdownConverter = new showdown.Converter();
 
@@ -89,11 +88,9 @@ interface IEntityStoreConfig {
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
   ActionsStore: ActionsStore;
-  LocalStore: LocalStore;
 }
 
 export class EntityStore implements IEntityStore {
-  private LocalStore: LocalStore;
   private subgraph: Subgraph.ISubgraph;
   private config: Environment.AppConfig;
   id: string;
@@ -118,7 +115,6 @@ export class EntityStore implements IEntityStore {
     spaceId,
     id,
     ActionsStore,
-    LocalStore,
     subgraph,
     config,
   }: IEntityStoreConfig) {
@@ -130,7 +126,6 @@ export class EntityStore implements IEntityStore {
     this.schemaTriples$ = observable([...initialSchemaTriples, ...defaultTriples]);
     this.spaceId = spaceId;
     this.ActionsStore = ActionsStore;
-    this.LocalStore = LocalStore;
 
     this.triples$ = computed(() => {
       const spaceActions = ActionsStore.actions$.get()[spaceId] ?? [];

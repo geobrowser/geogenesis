@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { SmallButton } from '~/design-system/button';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { ActivitySpaceFilter } from '~/partials/profile/activity-space-filter';
 
@@ -13,7 +14,7 @@ export default function Layout({ params, children }: Props) {
   return (
     <div>
       <div className="flex w-full items-center gap-2 border-b border-divider pb-3">
-        <SmallButton variant="secondary" icon="chevronDownSmall">
+        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           Proposals
         </SmallButton>
         <p>in</p>

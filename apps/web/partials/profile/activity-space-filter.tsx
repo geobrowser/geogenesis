@@ -12,6 +12,7 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
@@ -59,7 +60,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
       align="start"
       asChild
       trigger={
-        <SmallButton variant="secondary" icon="chevronDownSmall">
+        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           {name}
         </SmallButton>
       }

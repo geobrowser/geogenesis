@@ -7,15 +7,11 @@ import { forwardRef } from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
-import type { IconName } from '~/design-system/icon';
-import { Icon } from '~/design-system/icon';
-import type { ColorName } from '~/design-system/theme/colors';
-
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'done';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
-  icon?: IconName | React.ReactNode;
+  icon?: React.ReactNode;
   small?: boolean;
 };
 
@@ -59,7 +55,7 @@ export const Button = forwardRef(function Button(
   { variant = 'primary', icon, small = false, className = '', disabled = false, children, ...rest }: ButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-  const iconColor = !small && variant === 'secondary' ? 'ctaPrimary' : undefined;
+  // const iconColor = !small && variant === 'secondary' ? 'ctaPrimary' : undefined;
 
   return (
     <button
@@ -68,14 +64,14 @@ export const Button = forwardRef(function Button(
       disabled={disabled}
       {...rest}
     >
-      {typeof icon === 'string' ? <Icon icon={icon as IconName} color={iconColor} /> : icon ?? null}
+      {icon ?? null}
       {children ?? ZERO_WIDTH_SPACE}
     </button>
   );
 });
 
 type SquareButtonProps = React.ComponentPropsWithoutRef<'button'> & {
-  icon?: IconName;
+  icon?: React.ReactNode;
   isActive?: boolean;
 };
 
@@ -96,18 +92,17 @@ export const SquareButton = forwardRef(function SquareButton(
       style={{ fontFeatureSettings: '"tnum" 1', ...style }}
       {...rest}
     >
-      {icon ? <Icon icon={icon} /> : <>{children}</>}
+      {icon ? icon : <>{children}</>}
     </button>
   );
 });
 
 type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
-  icon: IconName;
-  color?: ColorName;
+  icon: React.ReactNode;
 };
 
 export const IconButton = forwardRef(function IconButton(
-  { icon, color, disabled = false, ...rest }: IconButtonProps,
+  { icon, disabled = false, ...rest }: IconButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const iconButtonClassNames = cva([
@@ -117,7 +112,7 @@ export const IconButton = forwardRef(function IconButton(
 
   return (
     <button ref={ref} className={iconButtonClassNames()} {...rest}>
-      <Icon icon={icon} color={color} />
+      {icon}
     </button>
   );
 });

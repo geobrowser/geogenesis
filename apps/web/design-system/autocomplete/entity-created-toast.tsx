@@ -6,7 +6,9 @@ import { useToast } from '~/core/hooks/use-toast';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
-import { Icon } from '~/design-system/icon';
+
+import { Close } from '../icons/close';
+import { NewTab } from '../icons/new-tab';
 
 interface Props {
   entityId: string;
@@ -20,11 +22,15 @@ export function EntityCreatedToast({ entityId, spaceId }: Props) {
   return (
     <div className="flex items-center gap-3">
       <button onClick={() => setToast(false)}>
-        <Icon icon="close" />
+        <Close />
       </button>
       <p className="text-button">New entity created</p>
 
-      <SmallButton onClick={() => router.push(NavUtils.toEntity(spaceId, entityId))} icon="newTab" variant="tertiary">
+      <SmallButton
+        onClick={() => router.push(NavUtils.toEntity(spaceId, entityId))}
+        icon={<NewTab />}
+        variant="tertiary"
+      >
         Open
       </SmallButton>
     </div>

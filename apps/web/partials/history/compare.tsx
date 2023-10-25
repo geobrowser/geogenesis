@@ -16,7 +16,7 @@ import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -31,7 +31,8 @@ import { SlideUp } from '~/design-system/slide-up';
 import { colors } from '~/design-system/theme/colors';
 
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
-import { DateTimeDiff } from '~/partials/review';
+
+import { DateTimeDiff } from '../review/review';
 
 export const Compare = () => {
   const { isCompareOpen, setIsCompareOpen } = useDiff();

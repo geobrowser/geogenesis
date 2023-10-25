@@ -8,8 +8,8 @@ import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
-import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
+import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 import { Space } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
