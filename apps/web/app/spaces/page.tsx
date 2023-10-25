@@ -4,7 +4,6 @@ import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-// import { Subgraph } from '~/core/io';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Space } from '~/core/types';
 
@@ -86,7 +85,7 @@ export default async function Spaces() {
           />
         ))}
       </div>
-      {/* <Spacer height={100} /> */}
+      <Spacer height={100} />
       <div className="max-w-[830px] self-center text-center">
         <h2 className="text-largeTitle">
           Together we can change how society is organized, put power into the hands of those who’ve earned it, and

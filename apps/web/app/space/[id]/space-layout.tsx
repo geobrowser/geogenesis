@@ -4,9 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { API } from '~/core/io';
-import { fetchEntity } from '~/core/io/subgraph/fetch-entity';
-import { fetchTriples } from '~/core/io/subgraph/fetch-triples';
+import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -128,7 +126,7 @@ const getData = async (spaceId: string, config: AppConfig) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
@@ -149,7 +147,7 @@ const getData = async (spaceId: string, config: AppConfig) => {
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return fetchTriples({
+        return Subgraph.fetchTriples({
           endpoint: config.subgraph,
           query: '',
           skip: 0,
