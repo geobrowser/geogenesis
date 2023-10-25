@@ -100,7 +100,6 @@ const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
   }
 
   const dismissedSet = new Set(dismissedRequests);
-  console.log('dismissed', dismissedRequests);
 
   const onRequestProcessed = (requestId: string) => {
     if (!dismissedSet.has(requestId)) {
