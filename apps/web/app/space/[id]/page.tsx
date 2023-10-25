@@ -36,6 +36,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
+  console.log('config', { config, space });
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -108,6 +110,8 @@ const getData = async (spaceId: string, config: AppConfig) => {
       subgraph: config.permissionlessSubgraph,
     };
   }
+
+  console.log('config', { config, space });
 
   const entityId = space?.spaceConfigEntityId;
 
