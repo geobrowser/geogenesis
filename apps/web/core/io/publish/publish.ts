@@ -1,14 +1,15 @@
 import { Root } from '@geogenesis/action-schema';
-import { SpaceAbi } from '@geogenesis/contracts';
-import { Effect } from 'effect';
+import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
+import { UPLOAD_CHUNK_SIZE } from '~/core/constants';
+
 import { Action, ReviewState } from '../../types';
 import { Storage } from '../storage';
-
-const UPLOAD_CHUNK_SIZE = 2000;
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -199,4 +200,19 @@ export async function revokeRole({
   const tx = await writeContract(contractConfig);
   console.log(`Role revoked from ${userAddress}. Transaction hash: ${tx.hash}`);
   return tx.hash;
+}
+
+export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
+  const contractConfig = await prepareWriteContract({
+    abi: GeoProfileRegistryAbi,
+    address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
+    functionName: 'registerGeoProfile',
+    walletClient: wallet,
+    args: [spaceId],
+  });
+
+  const tx = await writeContract(contractConfig);
+  console.log(`Geo profile created. Transaction hash: ${tx.hash}`);
+
+  return contractConfig.result as string;
 }

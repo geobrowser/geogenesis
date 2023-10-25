@@ -1,16 +1,27 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+
 import { useAccount } from 'wagmi';
 
+import { Services } from '../services';
 import { useHydrated } from './use-hydrated';
-import { useSpaces } from './use-spaces';
 
-export function useAccessControl(space?: string | null) {
+export function useAccessControl(spaceId?: string | null) {
+  const { subgraph, config } = Services.useServices();
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();
   const { address } = useAccount();
-  const { admins, editors, editorControllers } = useSpaces();
+
+  const { data: space } = useQuery({
+    queryKey: ['access-control', spaceId, address],
+    queryFn: async () => {
+      if (!spaceId || !address) return null;
+
+      return await subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+    },
+  });
 
   if (process.env.NODE_ENV === 'development') {
     return {
@@ -29,8 +40,8 @@ export function useAccessControl(space?: string | null) {
   }
 
   return {
-    isAdmin: (admins[space] || []).includes(address),
-    isEditorController: (editorControllers[space] || []).includes(address),
-    isEditor: (editors[space] || []).includes(address),
+    isAdmin: space.admins.includes(address),
+    isEditorController: space.editorControllers.includes(address),
+    isEditor: space.editors.includes(address),
   };
 }

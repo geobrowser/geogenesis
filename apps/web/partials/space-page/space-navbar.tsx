@@ -26,12 +26,6 @@ const SpaceActions = ({ spaceId }: Props) => {
     <div className="flex items-center">
       {(isEditor || isAdmin || isEditorController) && editable && (
         <div className="flex w-full items-center justify-between">
-          {(isEditorController || isAdmin) && (
-            <Link href={NavUtils.toAdmin(spaceId)}>
-              <Button variant="secondary">Access control</Button>
-            </Link>
-          )}
-          {isAdmin && isEditor && <Spacer width={8} />}
           {isEditor && (
             <>
               <Spacer width={12} />

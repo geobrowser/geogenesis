@@ -44,6 +44,7 @@ import { EyeSmall } from './icons/eye-small';
 import { FilterTable } from './icons/filter-table';
 import { FilterTableWithFilters } from './icons/filter-table-with-filters';
 import { History } from './icons/history';
+import { Home } from './icons/home';
 import { Image } from './icons/image';
 import { LeftArrowLong } from './icons/left-arrow-long';
 import { Member } from './icons/member';
@@ -109,6 +110,7 @@ export type IconName =
   | 'checkCircle'
   | 'checkClose'
   | 'retrySmall'
+  | 'home'
   | 'arrowLeft'
   | 'leftArrowLong';
 
@@ -179,6 +181,7 @@ const icons: Record<IconName, React.ElementType> = {
   checkCircle: CheckCircle,
   checkClose: CheckClose,
   retrySmall: RetrySmall,
+  home: Home,
   arrowLeft: ArrowLeft,
   leftArrowLong: LeftArrowLong,
 };

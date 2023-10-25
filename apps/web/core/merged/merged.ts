@@ -30,6 +30,7 @@ interface IMergedDataSource
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'
+    | 'fetchOnchainProfile'
   > {
   // Rows and columns aren't part of the subgraph API and instead are higher-order functions that
   // call the subgraph APIs themselves. This is because rows and columns are not entities in the

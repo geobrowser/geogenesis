@@ -1,0 +1,52 @@
+specVersion: 0.0.4
+description: Statement history
+repository: https://github.com/geobrowser/geogenesis
+features:
+  - fullTextSearch
+  - ipfsOnEthereumContracts
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: PermissionlessSpaceRegistry
+    network: mumbai
+    source:
+      abi: PermissionlessSpaceRegistry
+      address: "0x42096035524630382E73cfFAE1CA319CFa72F4dC"
+      startBlock: 41274221
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - LogEntry
+      abis:
+        - name: PermissionlessSpaceRegistry
+          file: ../contracts/build/abis/PermissionlessSpace.json
+      eventHandlers:
+        - event: EntryAdded(uint256,string,address)
+          handler: handleRootEntryAdded
+      file: ./src/root-mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Space
+    network: mumbai
+    source:
+      abi: Space
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - LogEntry
+      abis:
+        - name: Space
+          file: ../contracts/build/abis/Space.json
+      eventHandlers:
+        - event: EntryAdded(uint256,string,address)
+          handler: handleEntryAdded
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleRevoked
+      file: ./src/mapping.ts

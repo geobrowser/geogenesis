@@ -3,8 +3,10 @@ import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Profile } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { fetchEntity } from './fetch-entity';
+import { fetchProfilePermissionless } from './fetch-profile-permissionless';
 import { graphql } from './graphql';
 import { NetworkEntity } from './network-local-mapping';
 
@@ -60,6 +62,14 @@ function getFetchProfileQuery(address: string) {
 // Eventually this will all be indexed in the subgraph and we will be able to query for a Profile directly.
 export async function fetchProfile(options: FetchProfileOptions): Promise<[string, Profile] | null> {
   const queryId = uuid();
+
+  const maybePermissionlessProfile = await fetchProfilePermissionless({
+    address: options.address,
+  });
+
+  if (maybePermissionlessProfile) {
+    return [options.address, maybePermissionlessProfile];
+  }
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: options.endpoint,
@@ -142,13 +152,19 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   const avatarTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
   const avatarUrl = avatarTriple?.value.type === 'image' ? avatarTriple.value.value : null;
 
+  if (!maybePerson) {
+    return null;
+  }
+
   return [
     options.address,
     {
-      id: maybePerson?.id ?? '',
-      name: maybePerson?.name ?? null,
+      id: maybePerson.id,
+      name: maybePerson.name,
       avatarUrl,
       coverUrl,
+      profileLink: NavUtils.toEntity(SYSTEM_IDS.PEOPLE_SPACE, maybePerson.id),
+      address: options.address as `0x${string}`,
     },
   ];
 }

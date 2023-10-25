@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
 import { Providers } from '~/core/providers';
-import { EntityStoreProvider } from '~/core/state/entity-page-store';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
 import { EditableEntityPage } from './editable-entity-page';
 
@@ -13,7 +13,11 @@ describe('Editable Entity Page', () => {
     userEvent.setup();
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <EntityStoreProvider
           id="1"
           spaceId="1"
@@ -29,22 +33,7 @@ describe('Editable Entity Page', () => {
             },
           ]}
         >
-          <EditableEntityPage
-            id="1"
-            name="Banana"
-            spaceId="1"
-            triples={[]}
-            serverAvatarUrl={null}
-            serverCoverUrl={null}
-            schemaTriples={[
-              {
-                ...MockNetworkData.makeStubTriple('Schema'),
-                attributeName: 'Schema',
-                attributeId: 'Schema',
-                placeholder: true,
-              },
-            ]}
-          />
+          <EditableEntityPage id="1" spaceId="1" triples={[]} />
         </EntityStoreProvider>
       </Providers>
     );
@@ -57,7 +46,11 @@ describe('Editable Entity Page', () => {
     userEvent.setup();
 
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <EntityStoreProvider
           id="1"
           spaceId="1"
@@ -78,27 +71,7 @@ describe('Editable Entity Page', () => {
             },
           ]}
         >
-          <EditableEntityPage
-            id="1"
-            name="Banana"
-            spaceId="1"
-            triples={[]}
-            serverAvatarUrl={null}
-            serverCoverUrl={null}
-            schemaTriples={[
-              {
-                ...MockNetworkData.makeStubTriple('Schema'),
-                attributeName: 'Schema',
-                attributeId: 'Schema',
-                value: {
-                  type: 'entity',
-                  name: '',
-                  id: '',
-                },
-                placeholder: true,
-              },
-            ]}
-          />
+          <EditableEntityPage id="1" spaceId="1" triples={[]} />
         </EntityStoreProvider>
       </Providers>
     );

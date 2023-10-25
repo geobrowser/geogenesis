@@ -1,50 +1,41 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { Services } from '~/core/services';
+import { useUserProfile } from '~/core/hooks/use-user-profile';
 import { useEditable } from '~/core/state/editable-store/editable-store';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
+import { Icon } from '~/design-system/icon';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { NotificationEmpty } from '~/design-system/icons/notification-empty';
 import { Menu } from '~/design-system/menu';
 
-function useUserProfile(address?: string) {
-  const { subgraph, config } = Services.useServices();
+import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
-  // @TODO: Merge with local data
-  const { data } = useQuery({
-    queryKey: ['user-profile', address],
-    queryFn: async () => {
-      if (!address) return null;
-      return await subgraph.fetchProfile({ address, endpoint: config.subgraph });
-    },
-  });
+export function NavbarActions() {
+  const params = useParams();
+  const spaceId = params?.['id'] as string | undefined;
 
-  return data ? data[1] : null;
-}
-
-interface Props {
-  spaceId?: string;
-}
-
-export function NavbarActions({ spaceId }: Props) {
   const [open, onOpenChange] = React.useState(false);
+  const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
-  const profile = useUserProfile(address);
+  const { profile } = useGeoProfile(address);
+  const geoEntityProfile = useUserProfile(address);
 
   if (!address) {
     return <GeoConnectButton />;
@@ -57,28 +48,46 @@ export function NavbarActions({ spaceId }: Props) {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <div className="relative rounded-full overflow-hidden w-4 h-4">
-              <Avatar value={address} avatarUrl={profile?.avatarUrl} size={16} />
+        {!geoEntityProfile && profile ? (
+          <AvatarMenuItem>
+            <div className="flex items-center gap-2">
+              <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                <Avatar value={address} size={16} />
+              </div>
+              <button onClick={showCreateProfile}>Create profile</button>
             </div>
-            <p className="text-button">Personal Space</p>
-          </div>
-        </AvatarMenuItem>
-
-        <AvatarMenuItem disabled>
-          <div className="flex items-center gap-2 grayscale">
-            <NotificationEmpty />
-            <p className="text-button">Notifications</p>
-          </div>
-        </AvatarMenuItem>
+          </AvatarMenuItem>
+        ) : (
+          <>
+            {profile?.homeSpace && (
+              <>
+                <AvatarMenuItem>
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                      <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+                    </div>
+                    <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                      Personal space
+                    </Link>
+                  </div>
+                </AvatarMenuItem>
+                <AvatarMenuItem>
+                  <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+                    <Icon icon="home" />
+                    <p className="text-button">Personal home</p>
+                  </Link>
+                </AvatarMenuItem>
+              </>
+            )}
+          </>
+        )}
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>
@@ -133,7 +142,7 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle({ spaceId }: Props) {
+function ModeToggle({ spaceId }: { spaceId?: string }) {
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
   const controls = useAnimation();
@@ -208,7 +217,7 @@ function ModeToggle({ spaceId }: Props) {
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
                 <MotionPopoverContent
-                  className="z-10 origin-top-right rounded bg-text text-white p-2 shadow-button focus:outline-none max-w-[164px]"
+                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-none"
                   side="bottom"
                   align="end"
                   alignOffset={-8}
@@ -222,7 +231,7 @@ function ModeToggle({ spaceId }: Props) {
                     bounce: 0,
                   }}
                 >
-                  <h1 className="text-breadcrumb text-center">You don’t have edit access in this space</h1>
+                  <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
                   <Popover.Arrow />
                 </MotionPopoverContent>
               )}

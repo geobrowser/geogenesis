@@ -20,6 +20,36 @@
       "address": "0x42f7efb71E7126bff66eEF89D52769B710B46803",
       "txHash": "0x223b8662661e67d703399f3055749e3c379f6c9ff4b17188242293cc5528bdb1",
       "kind": "beacon"
+    },
+    {
+      "address": "0x9DcB2aB0723C60Ac536954FC2696aF33EEE2171e",
+      "txHash": "0xf8c2c32943a95d08200fcb3828519614b81ecbb60d663eb2f0439c24496df6b8",
+      "kind": "beacon"
+    },
+    {
+      "address": "0xD5fa21aAEb411e49FE1690AEB0Af63003A0B374A",
+      "txHash": "0x2ce317c94b2ae891344b07cfc942a7465fd1b072e6dd1ad009ed868cf6bb27b3",
+      "kind": "beacon"
+    },
+    {
+      "address": "0xC970aE97a7a7537d0dAaA89C5BC45924dcb320f8",
+      "txHash": "0xffcad9fbfaa0a616de2a081db4e2744b4fb06ed210086694b192e8c8667a94c8",
+      "kind": "beacon"
+    },
+    {
+      "address": "0x06f36F22F404E9363B3a9C6503cbE5bF2c116863",
+      "txHash": "0x32100b2f9c0a743acd4e12a11042a5eb8b80f74b9ac3fd9605046facef09c6f9",
+      "kind": "beacon"
+    },
+    {
+      "address": "0x717a842318951c8D2eCc94C448483fea0f6da957",
+      "txHash": "0x1a76bc30fc68a7e2b18ce3375e1b04ca824899cab2f6959b617f2f879f2290ad",
+      "kind": "beacon"
+    },
+    {
+      "address": "0x68930a23A91A8FA97C6053cD5057431BaD3eEB52",
+      "txHash": "0xf4a2666decd37a0f402869684e133bfdc08f8c6b763345e6239e8638800b1cc8",
+      "kind": "beacon"
     }
   ],
   "impls": {
@@ -187,6 +217,80 @@
           "t_uint256": {
             "label": "uint256",
             "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        }
+      }
+    },
+    "d933ca1cf0dfccbc64daf012ce5b938b026d6553ad9d95b38ccea699f0f93e25": {
+      "address": "0xEf88e03464126beC87fe9da61C3a876E28ceFb0b",
+      "txHash": "0x5d0b6ac4a9262f26218e1e524c24191623e8d61df889d0f97a8d34c63e6b6a21",
+      "layout": {
+        "solcVersion": "0.8.14",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:62",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:67"
+          },
+          {
+            "label": "_entries",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_struct(Entry)2505_storage)dyn_storage",
+            "contract": "PermissionlessSpace",
+            "src": "contracts/PermissionlessSpace.sol:15"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_struct(Entry)2505_storage)dyn_storage": {
+            "label": "struct Entry[]",
+            "numberOfBytes": "32"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Entry)2505_storage": {
+            "label": "struct Entry",
+            "members": [
+              {
+                "label": "uri",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "author",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
           },
           "t_uint8": {
             "label": "uint8",
