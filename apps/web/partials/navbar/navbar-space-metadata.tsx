@@ -14,7 +14,7 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
 
-export function NavbarSpaceMetadata() {
+export async function NavbarSpaceMetadata() {
   let { config } = Services.useServices();
   const { subgraph } = Services.useServices();
   const params = useParams();
@@ -59,7 +59,7 @@ export function NavbarSpaceMetadata() {
 
       return {
         name: spaceConfig.name ?? space.id,
-        img: Entity.avatar(spaceConfig.triples),
+        img: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples),
         href: NavUtils.toSpace(space.id),
       };
     },
