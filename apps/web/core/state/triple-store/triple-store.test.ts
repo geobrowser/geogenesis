@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 
-import { ActionsStore } from '../actions-store';
+import { ActionsStore } from '../actions-store/actions-store';
 import { TripleStore } from './triple-store';
 
 const storageClient = new Storage.StorageClient(options.development.ipfs);

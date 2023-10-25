@@ -4,7 +4,7 @@ import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Space } from '~/core/types';
 
 import { Card } from '~/design-system/card';
@@ -68,7 +68,7 @@ const HIDDEN_SPACES: Array<string> = [
 export default async function Spaces() {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
+  const spaces = await fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
   return (

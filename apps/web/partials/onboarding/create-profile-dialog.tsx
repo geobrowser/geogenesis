@@ -25,6 +25,9 @@ import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
+import { Trash } from '~/design-system/icons/trash';
+import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
 const isCreateProfileVisible$ = observable(false);
@@ -289,7 +292,7 @@ const StepHeader = () => {
 
   return (
     <div className="relative z-20 flex items-center justify-end pb-2">
-      <SquareButton icon="close" onClick={hideCreateProfile} />
+      <SquareButton icon={<Close />} onClick={hideCreateProfile} />
     </div>
   );
 };
@@ -382,13 +385,13 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar, sta
         </div>
         <div className="flex items-center justify-center gap-1.5 pb-4">
           <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-            <SmallButton icon="upload" onClick={handleFileInputClick}>
+            <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
               Upload
             </SmallButton>
           </label>
           {avatar !== '' && (
             <div>
-              <SquareButton onClick={() => setAvatar('')} icon="trash" />
+              <SquareButton onClick={() => setAvatar('')} icon={<Trash />} />
             </div>
           )}
           <input

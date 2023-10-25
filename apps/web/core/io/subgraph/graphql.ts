@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import * as Effect from 'effect/Effect';
 
 import { AbortError, GraphqlRuntimeError, HttpError, JsonParseError } from './errors';
 

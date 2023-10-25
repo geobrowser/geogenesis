@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store/table-block-store';
+import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
 import { Entity, Space, TripleValueType } from '~/core/types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -329,8 +329,8 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(s =>
-    s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(debouncedQuery.toLowerCase())
+  const results = spaces.filter(
+    s => s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(debouncedQuery.toLowerCase())
   );
 
   const onSelectSpace = (space: Space) => {

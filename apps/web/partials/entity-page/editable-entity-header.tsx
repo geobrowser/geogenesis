@@ -9,13 +9,14 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { ID } from '~/core/id';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/state/editable-store';
 import { Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
@@ -90,7 +91,7 @@ export function EditableHeading({
             </Truncate>
             {isEditing && (
               <Link className="shrink-0" href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
-                <Button icon="create" data-testid="create-entity-button">
+                <Button icon={<Create />} data-testid="create-entity-button">
                   New entity
                 </Button>
               </Link>

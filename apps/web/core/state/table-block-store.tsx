@@ -17,7 +17,6 @@ import { Subgraph } from '~/core/io';
 import { FetchRowsOptions } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
 import { Column, EntityValue, GeoType, Entity as IEntity, Triple as ITriple, Row, TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
@@ -25,7 +24,9 @@ import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
-import { LocalStore, useLocalStoreInstance } from '../local-store';
+import { ActionsStore } from './actions-store/actions-store';
+import { useActionsStoreInstance } from './actions-store/actions-store-provider';
+import { LocalStore, useLocalStoreInstance } from './local-store';
 
 export const PAGE_SIZE = 10;
 

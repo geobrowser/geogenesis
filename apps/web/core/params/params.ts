@@ -1,6 +1,7 @@
-import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
-import { InitialTripleStoreParams } from '~/core/state/triple-store';
+import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { FilterField, FilterState } from '~/core/types';
+
+import { InitialTripleStoreParams } from '../state/triple-store/triple-store';
 
 export function parseTripleQueryFilterFromParams(params: { query?: string; page?: string }): InitialTripleStoreParams {
   const filterStateResult = Object.entries(params)

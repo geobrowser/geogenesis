@@ -1,5 +1,6 @@
 // import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { slog } from '~/core/utils/utils';

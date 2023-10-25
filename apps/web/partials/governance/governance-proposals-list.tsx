@@ -10,7 +10,6 @@ import { Action } from '~/core/utils/action';
 
 import { Avatar } from '~/design-system/avatar';
 
-import { getEditorsForSpace } from '../space-page/get-editors-for-space';
 import { getIsEditorForSpace } from '../space-page/get-is-editor-for-space';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
@@ -32,9 +31,8 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
     };
   }
 
-  const [proposals, editorsForSpace, isEditor] = await Promise.all([
+  const [proposals, isEditor] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5, endpoint: config.subgraph }),
-    getEditorsForSpace(spaceId),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
 

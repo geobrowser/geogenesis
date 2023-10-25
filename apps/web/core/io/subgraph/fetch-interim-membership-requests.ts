@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';

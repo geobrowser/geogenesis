@@ -8,9 +8,9 @@ import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { Merged } from '~/core/merged';
-import { ActionsStore } from '~/core/state/actions-store';
-import { SpaceStore } from '~/core/state/spaces-store';
-import { CreateType } from '~/core/type';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
+import { SpaceStore } from '~/core/state/space-store';
+import { createForeignType, createType } from '~/core/type/create-type';
 import { Column, EntityValue, GeoType, Row, Space, Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
@@ -364,15 +364,10 @@ export class EntityTableStore implements IEntityTableStore {
   };
 
   createForeignType = (foreignType: TripleType) => {
-    CreateType.createForeignType(
-      foreignType,
-      this.spaceId,
-      this.space$.spaceConfigEntityId.get(),
-      this.ActionsStore.create
-    );
+    createForeignType(foreignType, this.spaceId, this.space$.spaceConfigEntityId.get(), this.ActionsStore.create);
   };
 
   createType = (entityName: string) => {
-    return CreateType.createType(entityName, this.spaceId, this.ActionsStore.create);
+    return createType(entityName, this.spaceId, this.ActionsStore.create);
   };
 }

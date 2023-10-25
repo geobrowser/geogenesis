@@ -19,6 +19,10 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { Trash } from '~/design-system/icons/trash';
+import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
@@ -149,8 +153,8 @@ const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
-      <div className="rotate-180">{onPrev && <SquareButton icon="rightArrowLongSmall" onClick={onPrev} />}</div>
-      {step !== 'completing' && <SquareButton icon="close" onClick={hideOnboarding} />}
+      <div className="rotate-180">{onPrev && <SquareButton icon={<RightArrowLongSmall />} onClick={onPrev} />}</div>
+      {step !== 'completing' && <SquareButton icon={<Close />} onClick={hideOnboarding} />}
     </div>
   );
 };
@@ -269,13 +273,13 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
         </div>
         <div className="flex items-center justify-center gap-1.5 pb-4">
           <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-            <SmallButton icon="upload" onClick={handleFileInputClick}>
+            <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
               Upload
             </SmallButton>
           </label>
           {avatar !== '' && (
             <div>
-              <SquareButton onClick={() => setAvatar('')} icon="trash" />
+              <SquareButton onClick={() => setAvatar('')} icon={<Trash />} />
             </div>
           )}
           <input

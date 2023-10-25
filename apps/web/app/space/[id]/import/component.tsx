@@ -18,10 +18,14 @@ import { GeoDate } from '~/core/utils/utils';
 import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
+import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/icons/text';
+import { Trash } from '~/design-system/icons/trash';
+import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
 import { Select } from '~/design-system/select';
 
@@ -197,12 +201,12 @@ export const Component = ({ spaceId }: Props) => {
     <div className="mx-auto max-w-3xl space-y-16 overflow-visible">
       <div className="space-y-4">
         <Link href={spacePath}>
-          <SquareButton icon="arrowLeft" />
+          <SquareButton icon={<ArrowLeft />} />
         </Link>
         <div className="flex w-full items-center justify-between">
           <div className="text-mediumTitle">Import CSV data</div>
           <div className="inline-flex items-center gap-3">
-            <Button onClick={handleReset} variant="ghost" icon="retrySmall">
+            <Button onClick={handleReset} variant="ghost" icon={<RetrySmall />}>
               Reset form
             </Button>
             <Button onClick={handleGenerateActions} variant="primary" disabled={!isGenerationReady}>
@@ -225,7 +229,7 @@ export const Component = ({ spaceId }: Props) => {
               {entityType ? (
                 <>
                   <div className="text-smallButton">{entityType.name}</div>
-                  <SquareButton onClick={() => setEntityType(undefined)} icon="trash" />
+                  <SquareButton onClick={() => setEntityType(undefined)} icon={<Trash />} />
                 </>
               ) : (
                 <EntitySearchAutocomplete
@@ -249,14 +253,14 @@ export const Component = ({ spaceId }: Props) => {
           <Accordion.Content>
             <div className="inline-flex items-center gap-3">
               <label htmlFor="csv-file">
-                <SmallButton onClick={handleFileInputClick} icon="upload">
+                <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
                   Upload CSV
                 </SmallButton>
               </label>
               {file ? (
                 <div className="inline-flex items-center gap-1.5">
                   <div className="text-smallButton text-grey-04">{file}</div>
-                  <SquareButton onClick={() => setFile(undefined)} icon="trash" />
+                  <SquareButton onClick={() => setFile(undefined)} icon={<Trash />} />
                 </div>
               ) : (
                 <div>

@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
-import { pipe } from 'effect';
 
 import { Services } from '../services';
 import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '../types';

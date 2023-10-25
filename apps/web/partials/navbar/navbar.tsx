@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { ClientOnly } from '~/design-system/client-only';
-import { Icon } from '~/design-system/icon';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
+import { Search } from '~/design-system/icons/search';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { NavbarActions } from './navbar-actions';
@@ -42,7 +42,7 @@ export function Navbar({ onSearchClick }: Props) {
             className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"
             onClick={onSearchClick}
           >
-            <Icon icon="search" />
+            <Search />
           </button>
           <div className="flex items-center sm:hidden">
             <NavbarActions />

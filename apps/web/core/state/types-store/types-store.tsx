@@ -7,11 +7,12 @@ import { A, pipe } from '@mobily/ts-belt';
 
 import * as React from 'react';
 
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
 import { GeoType, Space, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
+import { ActionsStore } from '../actions-store/actions-store';
+import { useActionsStoreInstance } from '../actions-store/actions-store-provider';
 import { LocalStore, useLocalStoreInstance } from '../local-store';
 
 export class TypesStore {

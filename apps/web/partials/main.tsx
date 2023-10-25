@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { useDiff } from '~/core/state/diff-store/diff-store';
+import { useDiff } from '~/core/state/diff-store';
 
 type MainProps = {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className="mx-auto max-w-[1200px] pt-8 pb-16 xl:px-[2ch]"
+      className="mx-auto max-w-[1200px] pb-16 pt-8 xl:px-[2ch]"
     >
       {children}
     </motion.main>

@@ -6,10 +6,10 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import * as React from 'react';
 
 import { Services } from './services';
-import { ActionsStoreProvider } from './state/actions-store';
-import { DiffProvider } from './state/diff-store/diff-store';
+import { ActionsStoreProvider } from './state/actions-store/actions-store-provider';
+import { DiffProvider } from './state/diff-store';
 import { LocalStoreProvider } from './state/local-store';
-import { SpaceStoreProvider } from './state/spaces-store';
+import { SpaceStoreProvider } from './state/space-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 

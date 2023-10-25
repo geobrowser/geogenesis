@@ -8,8 +8,8 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
-import { useDiff } from '~/core/state/diff-store/diff-store';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useDiff } from '~/core/state/diff-store';
+import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -103,9 +103,9 @@ const StatusBar = () => {
   };
 
   return (
-    <div className="z-[1000] fixed bottom-0 right-0 left-0 flex flex-col items-center origin-center">
+    <div className="fixed bottom-0 left-0 right-0 z-[1000] flex origin-center flex-col items-center">
       <motion.div layout transition={{ type: 'spring', bounce: 0.2, duration: 0.2 }}>
-        <div className="m-8 px-3 py-2.5 rounded bg-text text-button text-white overflow-hidden h-10">
+        <div className="m-8 h-10 overflow-hidden rounded bg-text px-3 py-2.5 text-button text-white">
           <AnimatePresence mode="wait">
             <div className="flex items-center justify-center gap-2">
               {state.reviewState === 'publish-error' && state.error ? (

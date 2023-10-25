@@ -6,7 +6,7 @@ import { FilterState, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
-import { ActionsStore } from '../actions-store';
+import { ActionsStore } from '../actions-store/actions-store';
 
 interface ITripleStore {
   triples$: ObservableComputed<TripleType[]>;

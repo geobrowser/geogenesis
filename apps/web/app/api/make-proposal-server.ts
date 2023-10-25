@@ -1,6 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
 import { SpaceAbi } from '@geogenesis/contracts';
-import { Effect } from 'effect';
+import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
 import { UPLOAD_CHUNK_SIZE } from '~/core/constants';

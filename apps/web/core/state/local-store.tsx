@@ -7,12 +7,14 @@ import { pipe } from '@mobily/ts-belt';
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { makeOptionalComputed } from '~/core/utils/utils';
+
+import { useActionsStoreInstance } from './actions-store/actions-store-provider';
 
 export class LocalStore {
   private store: ActionsStore;

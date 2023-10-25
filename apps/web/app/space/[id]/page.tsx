@@ -36,8 +36,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  console.log('config', { config, space });
-
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {

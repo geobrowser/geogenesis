@@ -6,9 +6,11 @@ on:
   push:
     branches:
       - master
+      - stream/social
   pull_request:
     branches:
       - master
+      - stream/social
 
 jobs:
   run-linters:

@@ -7,8 +7,10 @@ import * as React from 'react';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
-import { Icon } from '~/design-system/icon';
+import { Copy } from '~/design-system/icons/copy';
 import { Merge } from '~/design-system/icons/merge';
+import { MoveSpace } from '~/design-system/icons/move-space';
+import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
 
 import { MergeEntityMenu } from '../merge-entity/merge-entity-menu';
@@ -49,12 +51,12 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       className="max-w-[160px]"
       open={isMenuOpen}
       onOpenChange={onMenuOpenChange}
-      trigger={<Icon icon="context" color="grey-04" />}
+      trigger={<Copy color="grey-04" />}
       side="bottom"
     >
       <EntityPageContextMenuItem>
         <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyId}>
-          <Icon icon="copy" />
+          <Copy color="grey-04" />
           Copy ID
         </button>
       </EntityPageContextMenuItem>
@@ -69,7 +71,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
                   className="flex h-full w-full items-center gap-2 px-2 py-2"
                   onClick={() => onMoveEntityMenuOpenChange(true)}
                 >
-                  <Icon icon="moveSpace" />
+                  <MoveSpace />
                   Move to space
                 </button>
               }
@@ -98,7 +100,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
           </EntityPageContextMenuItem>
           <EntityPageContextMenuItem>
             <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
-              <Icon icon="trash" />
+              <Trash />
               Delete entity
             </button>
           </EntityPageContextMenuItem>

@@ -1,6 +1,7 @@
 'use client';
 
-import { InitialTripleStoreParams, TripleStoreProvider } from '~/core/state/triple-store';
+import { InitialTripleStoreParams } from '~/core/state/triple-store/triple-store';
+import { TripleStoreProvider } from '~/core/state/triple-store/triple-store-provider';
 import { Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';

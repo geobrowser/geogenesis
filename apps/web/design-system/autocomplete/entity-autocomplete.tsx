@@ -24,6 +24,7 @@ import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { TextButton } from '~/design-system/text-button';
 
+import { CreateSmall } from '../icons/create-small';
 import { EntityCreatedToast } from './entity-created-toast';
 import { ResultContent, ResultsList } from './results-list';
 
@@ -128,7 +129,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <SquareButton icon="createSmall" />
+        <SquareButton icon={<CreateSmall />} />
       </PopoverPrimitive.Trigger>
       <AnimatePresence mode="wait">
         {open ? (
@@ -145,7 +146,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
             <div className="relative p-2">
               <AnimatePresence initial={false} mode="wait">
                 {autocomplete.isLoading ? (
-                  <div className="absolute top-[50%] left-5 z-100">
+                  <div className="absolute left-5 top-[50%] z-100">
                     <motion.span
                       key="dots"
                       initial={{ opacity: 0, scale: 0.95 }}
@@ -157,7 +158,7 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                     </motion.span>
                   </div>
                 ) : (
-                  <div className="absolute top-[1.125rem] left-5 z-100">
+                  <div className="absolute left-5 top-[1.125rem] z-100">
                     <motion.span
                       key="search"
                       initial={{ opacity: 0, scale: 0.95 }}

@@ -16,6 +16,7 @@ import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { SquareButton } from '~/design-system/button';
+import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
 import { ConfiguredCommandExtension } from './command-extension';
@@ -130,7 +131,7 @@ export const Editor = React.memo(function Editor({ placeholder = null, shouldHan
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
-          <SquareButton onClick={openCommandMenu} icon="plus" />
+          <SquareButton onClick={openCommandMenu} icon={<Plus />} />
         </div>
       </FloatingMenu>
       {shouldHandleOwnSpacing && <Spacer height={60} />}

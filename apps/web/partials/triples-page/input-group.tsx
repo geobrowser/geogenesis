@@ -3,6 +3,7 @@ import * as React from 'react';
 import { FilterClause, FilterField } from '~/core/types';
 
 import { Button } from '~/design-system/button';
+import { Trash } from '~/design-system/icons/trash';
 import { Input } from '~/design-system/input';
 import { Select } from '~/design-system/select';
 import { Spacer } from '~/design-system/spacer';
@@ -51,7 +52,7 @@ export function FilterInputGroup({ filterClause, onChange, options, label, onDel
       {isDeletable && (
         <>
           <Spacer width={12} />
-          <Button icon="trash" variant="secondary" onClick={onDelete} />
+          <Button icon={<Trash />} variant="secondary" onClick={onDelete} />
         </>
       )}
     </div>

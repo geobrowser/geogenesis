@@ -14,14 +14,14 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useUserProfile } from '~/core/hooks/use-user-profile';
-import { useEditable } from '~/core/state/editable-store/editable-store';
+import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
-import { Icon } from '~/design-system/icon';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
+import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
@@ -80,7 +80,7 @@ export function NavbarActions() {
                 </AvatarMenuItem>
                 <AvatarMenuItem>
                   <Link href="/dashboard" className="flex items-center gap-2 grayscale">
-                    <Icon icon="home" />
+                    <Home />
                     <p className="text-button">Personal home</p>
                   </Link>
                 </AvatarMenuItem>
