@@ -109,8 +109,6 @@ const getData = async (spaceId: string, config: AppConfig) => {
     };
   }
 
-  console.log('config', { config, space });
-
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
