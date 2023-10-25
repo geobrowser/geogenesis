@@ -40,6 +40,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
       subgraph: config.permissionlessSubgraph,
     };
   }
+
   const props = await getData(params.id, config);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;

@@ -19,8 +19,6 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { SpaceLayout } from './space-layout';
 
-export const runtime = 'edge';
-
 interface Props {
   params: { id: string };
 }
