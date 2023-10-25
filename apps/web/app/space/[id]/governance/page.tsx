@@ -9,7 +9,6 @@ import { graphql } from '~/core/io/subgraph/graphql';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Skeleton } from '~/design-system/skeleton';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
