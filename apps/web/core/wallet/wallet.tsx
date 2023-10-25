@@ -12,7 +12,7 @@ import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { MockConnector } from 'wagmi/connectors/mock';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
-import { alchemyProvider } from 'wagmi/providers/alchemy';
+import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 import { publicProvider } from 'wagmi/providers/public';
 
 import { Button } from '~/design-system/button';
@@ -48,7 +48,20 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
     ...(process.env.NODE_ENV !== 'production' ? [polygonMumbai, LOCAL_CHAIN] : []),
   ],
   [
-    alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
+    jsonRpcProvider({
+      rpc: (chainId: Chain) => {
+        if (chainId.id === polygon.id) {
+          return {
+            http: process.env.NEXT_PUBLIC_RPC_URL!,
+            wss: process.env.NEXT_PUBLIC_WSS_URL!,
+          };
+        }
+
+        return {
+          http: polygon.rpcUrls.default.http[0],
+        };
+      },
+    }),
     // We need to use another provider if using a local chain
     ...(process.env.NODE_ENV !== 'production' ? [publicProvider()] : []),
   ]
