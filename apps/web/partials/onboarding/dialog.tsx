@@ -60,14 +60,6 @@ export const OnboardingDialog = () => {
 
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
 
-      // Update the query cache with the new profile while we wait for the profiles subgraph to
-      // index the new onchain profile.
-      queryClient.setQueryData(['onchain-profile', address], {
-        id: getGeoPersonIdFromOnchainId(address, profileId),
-        homeSpace: spaceAddress,
-        account: address,
-      });
-
       setWorkflowStep('creating-geo-profile-entity');
 
       const { entityId: profileEntityId } = await createProfileEntity({
@@ -83,6 +75,17 @@ export const OnboardingDialog = () => {
       setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
       setStep('completed');
+
+      // Update the query cache with the new profile while we wait for the profiles subgraph to
+      // index the new onchain profile.
+      //
+      // We have to do it at the end of the workflow so we don't prematurely close the onboarding
+      // dialog.
+      queryClient.setQueryData(['onchain-profile', address], {
+        id: '0xF0a42b89cbf7bAb42b410E5AA67d0c4F4DBf602D–42',
+        homeSpace: '0xd5356562d5d3cd213a1e85accae157159e317935',
+        account: '0xF0a42b89cbf7bAb42b410E5AA67d0c4F4DBf602D',
+      });
     }
   }
 
