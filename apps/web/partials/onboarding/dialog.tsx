@@ -42,10 +42,10 @@ export const OnboardingDialog = () => {
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
-  const { isOnboardingVisible, setHasOnboarded, hasOnboarded } = useOnboarding();
+  const { isOnboardingVisible } = useOnboarding();
   const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address || isLoading || !isOnboardingVisible || hasOnboarded) return null;
+  if (!address || isLoading || !isOnboardingVisible) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
