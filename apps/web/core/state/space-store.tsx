@@ -2,7 +2,7 @@ import { ObservableComputed, computed } from '@legendapp/state';
 
 import React from 'react';
 
-import { AppConfig } from '~/core/environment';
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Space } from '~/core/types';
@@ -17,14 +17,16 @@ export class SpaceStore {
   editorControllers$: ObservableComputed<SpacesAccounts>;
   editors$: ObservableComputed<SpacesAccounts>;
 
-  constructor({ subgraph, config }: { subgraph: Subgraph.ISubgraph; config: AppConfig }) {
+  constructor({ subgraph }: { subgraph: Subgraph.ISubgraph }) {
     this.subgraph = subgraph;
 
     this.spaces$ = makeOptionalComputed(
       [],
       computed(async () => {
         try {
-          return await this.subgraph.fetchSpaces({ endpoint: config.subgraph });
+          return await this.subgraph.fetchSpaces({
+            endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
+          });
         } catch (e) {
           return [];
         }
@@ -70,10 +72,10 @@ const SpaceStoreContext = React.createContext<SpaceStore | null>(null);
 // of spaces in different subgraphs and we'll need to rely on merging local data with
 // a remote cache (like RQ) instead.
 export function SpaceStoreProvider({ children }: { children: React.ReactNode }) {
-  const { config, subgraph } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const spaceStore = React.useMemo(() => {
-    return new SpaceStore({ subgraph, config });
-  }, [subgraph, config]);
+    return new SpaceStore({ subgraph });
+  }, [subgraph]);
 
   return <SpaceStoreContext.Provider value={spaceStore}>{children}</SpaceStoreContext.Provider>;
 }
