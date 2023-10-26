@@ -83,7 +83,6 @@ export const OnboardingDialog = () => {
       setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
       setStep('completed');
-      setHasOnboarded();
     }
   }
 
