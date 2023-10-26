@@ -2,7 +2,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { slog } from '~/core/utils/utils';
+import { getGeoPersonIdFromOnchainId, slog } from '~/core/utils/utils';
 
 import { makeProfileEffect } from './make-profile-effect';
 
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const geoEntityIdFromOnchainId = `${userAddress}–${profileId}`;
+  const geoEntityIdFromOnchainId = getGeoPersonIdFromOnchainId(userAddress, profileId);
 
   const createProfileEffect = await makeProfileEffect(requestId, {
     account: userAddress as `0x${string}`,

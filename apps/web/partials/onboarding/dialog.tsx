@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
@@ -15,7 +16,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getGeoPersonIdFromOnchainId, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -29,6 +30,7 @@ type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
 
 export const OnboardingDialog = () => {
+  const queryClient = useQueryClient();
   const { publish } = Services.useServices();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
@@ -57,6 +59,14 @@ export const OnboardingDialog = () => {
       setWorkflowStep('registering-profile');
 
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+
+      // Update the query cache with the new profile while we wait for the profiles subgraph to
+      // index the new onchain profile.
+      queryClient.setQueryData(['onchain-profile', address], {
+        id: getGeoPersonIdFromOnchainId(address, profileId),
+        homeSpace: spaceAddress,
+        account: address,
+      });
 
       setWorkflowStep('creating-geo-profile-entity');
 
