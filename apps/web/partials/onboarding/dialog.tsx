@@ -355,7 +355,7 @@ function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) 
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={NavUtils.toDashboard()}>
+          <Link href={NavUtils.toDashboard()} onClick={hideOnboarding}>
             <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
               View Personal Home
             </Button>
