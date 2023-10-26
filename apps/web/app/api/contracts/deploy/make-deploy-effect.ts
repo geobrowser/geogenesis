@@ -144,7 +144,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
 
   // Logic for registering the proxy contract address in the permissionless registry.
   // We add the contract address to the space registry as a Geo Entity with a specific "Indexed Space"
-  // type. This triggers the permissionless subgraph to create a dynamic data source for this address.
+  // type. This triggers the permissionless subgraph to create a dynamic data source for this address
+  // and begin indexing events from this address.
   //
   // @TODO: With substreams we won't need to add the contract address to the registry since substreams
   // map over every block.
@@ -198,7 +199,6 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
           ],
           name: `Adding space ${contractAddress} for ${userAccount} to space registry`,
           space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
-          // @TODO: Use storage client configured by environment
           storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
           account,
           wallet: client,
