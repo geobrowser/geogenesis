@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
   const geoEntityIdFromOnchainId = `${userAddress}–${profileId}`;
 
-  const createProfileEffect = makeProfileEffect(requestId, {
+  const createProfileEffect = await makeProfileEffect(requestId, {
     account: userAddress as `0x${string}`,
     username,
     avatarUri,
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     profileId: geoEntityIdFromOnchainId,
   });
 
-  const profileEffect = await Effect.runPromise(Effect.either(await createProfileEffect));
+  const profileEffect = await Effect.runPromise(Effect.either(createProfileEffect));
 
   if (Either.isLeft(profileEffect)) {
     const error = profileEffect.left;
