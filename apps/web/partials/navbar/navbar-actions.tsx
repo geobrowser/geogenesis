@@ -13,7 +13,7 @@ import { useAccount } from 'wagmi';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { useUserProfile } from '~/core/hooks/use-user-profile';
+import { usePerson } from '~/core/hooks/use-person';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -27,15 +27,12 @@ import { Menu } from '~/design-system/menu';
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
 export function NavbarActions() {
-  const params = useParams();
-  const spaceId = params?.['id'] as string | undefined;
-
   const [open, onOpenChange] = React.useState(false);
   const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
   const { profile } = useGeoProfile(address);
-  const geoEntityProfile = useUserProfile(address);
+  const geoEntityProfile = usePerson(address);
 
   if (!address) {
     return <GeoConnectButton />;
@@ -43,7 +40,7 @@ export function NavbarActions() {
 
   return (
     <div className="flex items-center gap-4">
-      <ModeToggle spaceId={spaceId} />
+      <ModeToggle />
 
       <Menu
         trigger={
@@ -142,12 +139,17 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle({ spaceId }: { spaceId?: string }) {
+function ModeToggle() {
+  const params = useParams();
+  const spaceId = params?.['id'] as string | undefined;
+
   const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
+
   const controls = useAnimation();
   const canUserEdit = isEditor || isAdmin || isEditorController;
   const isUserEditing = isEditor && editable;
+
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
