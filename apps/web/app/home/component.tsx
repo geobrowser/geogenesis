@@ -59,7 +59,7 @@ const PersonalHomeNavigation = () => {
   return (
     <TabGroup
       tabs={TABS.map(label => {
-        const href = label === 'For You' ? `/dashboard` : `/dashboard/${label.toLowerCase()}`;
+        const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
         const disabled = label === 'For You' ? false : true;
 
         return {

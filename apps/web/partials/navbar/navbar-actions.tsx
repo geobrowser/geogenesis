@@ -79,7 +79,7 @@ export function NavbarActions() {
                   </div>
                 </AvatarMenuItem>
                 <AvatarMenuItem>
-                  <Link href="/dashboard" className="flex items-center gap-2 grayscale">
+                  <Link href="/home" className="flex items-center gap-2 grayscale">
                     <Home />
                     <p className="text-button">Personal home</p>
                   </Link>
