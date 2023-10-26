@@ -28,7 +28,6 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     };
   }
 
-
   const types = await fetchEntityType({
     endpoint: config.subgraph,
     id: params.entityId,
@@ -41,6 +40,5 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     return <ProfileEntityServerContainer params={params} />;
   }
 
-  // @ts-expect-error async JSX function
   return <DefaultEntityPage params={params} searchParams={searchParams} />;
 }

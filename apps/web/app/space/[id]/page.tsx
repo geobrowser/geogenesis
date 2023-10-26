@@ -86,13 +86,11 @@ export default async function SpacePage({ params }: Props) {
   const props = await getData(params.id, config);
 
   return (
-    // @ts-expect-error async JSX function
     <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
-        {/* @ts-expect-error async JSX function */}
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
       </React.Suspense>
     </SpaceLayout>
@@ -128,6 +126,7 @@ const getData = async (spaceId: string, config: AppConfig) => {
   }
 
   return {
+    name: entity?.name ?? null,
     triples: entity?.triples ?? [],
     id: entityId,
     spaceId,

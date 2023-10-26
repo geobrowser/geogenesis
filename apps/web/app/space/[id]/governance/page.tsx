@@ -29,7 +29,6 @@ export default async function GovernancePage({ params }: Props) {
   const { isPermissionlessSpace } = await API.space(params.id);
 
   return (
-    // @ts-expect-error async JSX function
     <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
       <div className="space-y-4">
         <div className="flex items-center gap-5">
@@ -58,7 +57,6 @@ export default async function GovernancePage({ params }: Props) {
           All Proposals
         </SmallButton>
         <React.Suspense>
-          {/* @ts-expect-error async JSX function */}
           <GovernanceProposalsList spaceId={params.id} />
         </React.Suspense>
       </div>
