@@ -40,10 +40,10 @@ export const OnboardingDialog = () => {
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
-  const { isOnboardingVisible } = useOnboarding();
+  const { isOnboardingVisible, setHasOnboarded, hasOnboarded } = useOnboarding();
   const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address || isLoading || !isOnboardingVisible) return null;
+  if (!address || isLoading || !isOnboardingVisible || hasOnboarded) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
@@ -73,6 +73,7 @@ export const OnboardingDialog = () => {
       setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
       setStep('completed');
+      setHasOnboarded();
     }
   }
 
@@ -318,6 +319,8 @@ const stageAsNumber = {
 };
 
 function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) {
+  const { hideOnboarding } = useOnboarding();
+
   return (
     <>
       <StepContents key="start">
@@ -345,7 +348,7 @@ function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) 
               View Personal Home
             </Button>
           </Link>
-          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)}>
+          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)} onClick={hideOnboarding}>
             <Button className="!flex-1" disabled={stage !== 'done'}>
               View Personal Space
             </Button>
