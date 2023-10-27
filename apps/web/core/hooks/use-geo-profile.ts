@@ -20,6 +20,10 @@ export function useGeoProfile(account?: `0x${string}`) {
         endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).profileSubgraph,
       });
     },
+    // Only fetch the profile when the page is loaded. If a user has gone through onboarding,
+    // we optimistically update the cache with their profile, so this query will begin reading
+    // from the cache for the lifetime of the browser tab.
+    staleTime: Infinity,
   });
 
   return {

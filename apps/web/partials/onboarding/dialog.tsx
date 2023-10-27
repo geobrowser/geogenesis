@@ -12,7 +12,6 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount, useWalletClient } from 'wagmi';
 
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
@@ -43,9 +42,8 @@ export const OnboardingDialog = () => {
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
   const { isOnboardingVisible } = useOnboarding();
-  const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address || isLoading || !isOnboardingVisible) return null;
+  if (!address) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
@@ -82,18 +80,15 @@ export const OnboardingDialog = () => {
       // We have to do it at the end of the workflow so we don't prematurely close the onboarding
       // dialog.
       queryClient.setQueryData(['onchain-profile', address], {
-        id: '0xF0a42b89cbf7bAb42b410E5AA67d0c4F4DBf602D–42',
-        homeSpace: '0xd5356562d5d3cd213a1e85accae157159e317935',
-        account: '0xF0a42b89cbf7bAb42b410E5AA67d0c4F4DBf602D',
+        id: getGeoPersonIdFromOnchainId(address, profileId),
+        homeSpace: spaceAddress,
+        account: address,
       });
     }
   }
 
-  // Note: set open to true or to isOnboardingVisible to see the onboarding flow
-  // Currently stubbed as we don't have a way to create a profile yet
-  // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={!profile} label="Onboarding profile">
+    <Command.Dialog open={isOnboardingVisible} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <motion.div
