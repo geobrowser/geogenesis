@@ -248,3 +248,7 @@ export function slog({
     }  requestId: ${requestId} – ${message}`
   );
 }
+
+export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
+  return `${address}–${onchainId}`;
+}

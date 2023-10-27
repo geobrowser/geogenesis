@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
@@ -11,11 +12,10 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount, useWalletClient } from 'wagmi';
 
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils, getGeoPersonIdFromOnchainId, getImagePath } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -29,6 +29,7 @@ type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
 
 export const OnboardingDialog = () => {
+  const queryClient = useQueryClient();
   const { publish } = Services.useServices();
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
@@ -41,9 +42,8 @@ export const OnboardingDialog = () => {
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
 
   const { isOnboardingVisible } = useOnboarding();
-  const { profile, isLoading } = useGeoProfile(address);
 
-  if (!address || isLoading || !isOnboardingVisible) return null;
+  if (!address) return null;
 
   async function onRunOnboardingWorkflow() {
     if (address && workflowStep === 'idle' && wallet) {
@@ -57,6 +57,14 @@ export const OnboardingDialog = () => {
       setWorkflowStep('registering-profile');
 
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+
+      // Update the query cache with the new profile while we wait for the profiles subgraph to
+      // index the new onchain profile.
+      queryClient.setQueryData(['onchain-profile', address], {
+        id: getGeoPersonIdFromOnchainId(address, profileId),
+        homeSpace: spaceAddress,
+        account: address,
+      });
 
       setWorkflowStep('creating-geo-profile-entity');
 
@@ -76,11 +84,8 @@ export const OnboardingDialog = () => {
     }
   }
 
-  // Note: set open to true or to isOnboardingVisible to see the onboarding flow
-  // Currently stubbed as we don't have a way to create a profile yet
-  // Also note that setting open to true will cause SSR issues in dev mode
   return (
-    <Command.Dialog open={!profile} label="Onboarding profile">
+    <Command.Dialog open={isOnboardingVisible} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
         <AnimatePresence initial={false} mode="wait">
           <motion.div
@@ -318,6 +323,8 @@ const stageAsNumber = {
 };
 
 function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) {
+  const { hideOnboarding } = useOnboarding();
+
   return (
     <>
       <StepContents key="start">
@@ -340,12 +347,12 @@ function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) 
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={NavUtils.toDashboard()}>
+          <Link href={NavUtils.toDashboard()} onClick={hideOnboarding}>
             <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
               View Personal Home
             </Button>
           </Link>
-          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)}>
+          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)} onClick={hideOnboarding}>
             <Button className="!flex-1" disabled={stage !== 'done'}>
               View Personal Space
             </Button>

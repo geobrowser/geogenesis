@@ -73,16 +73,7 @@ export const FlowBar = () => {
             </motion.div>
           </div>
         )}
-        {/* @TODO: Manage flowbar and review states globally.
-          1. Idle (don't show status bar)
-          2. Reviewing (don't show status bar)
-          3. Publishing (show status bar)
-          4. Error (show status bar)
 
-          - In any of the states where we show the status bar we need to hide the flowbar.
-
-          - Additionally we don't show the flowbar when reviewing.
-      */}
         {statusBarState.reviewState !== 'idle' && statusBarState.reviewState !== 'reviewing' && <StatusBar />}
       </div>
     </AnimatePresence>
