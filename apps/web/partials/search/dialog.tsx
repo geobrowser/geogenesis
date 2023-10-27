@@ -3,7 +3,7 @@ import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/types';
 
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function Dialog({ onDone, open, onOpenChange }: Props) {
-  const autocomplete = useAutocomplete();
+  const autocomplete = useGlobalSearch();
   const { spaces } = useSpaces();
 
   if (!open) return null;

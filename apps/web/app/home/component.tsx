@@ -7,7 +7,7 @@ import { useAccount } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
-import { useUserProfile } from '~/core/hooks/use-user-profile';
+import { usePerson } from '~/core/hooks/use-person';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -35,7 +35,7 @@ export const Component = ({ membershipRequests }: Props) => {
 
 const PersonalHomeHeader = () => {
   const { address } = useAccount();
-  const profile = useUserProfile(address);
+  const profile = usePerson(address);
   const { profile: onchainProfile } = useGeoProfile(address);
 
   return (
@@ -59,7 +59,7 @@ const PersonalHomeNavigation = () => {
   return (
     <TabGroup
       tabs={TABS.map(label => {
-        const href = label === 'For You' ? `/dashboard` : `/dashboard/${label.toLowerCase()}`;
+        const href = label === 'For You' ? `/home` : `/home/${label.toLowerCase()}`;
         const disabled = label === 'For You' ? false : true;
 
         return {

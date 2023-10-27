@@ -85,8 +85,7 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   const typeId = searchParams.typeId ?? null;
 
   return (
-    // @ts-expect-error async JSX function
-    <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
+    <TypesStoreServerContainer spaceId={params.id}>
       <EntityStoreProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -105,8 +104,7 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
             <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
             <Spacer height={40} />
             <Suspense fallback={<EntityReferencedByLoading />}>
-              {/* @ts-expect-error async JSX function */}
-              <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
+              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
             </Suspense>
           </EntityPageContentContainer>
           <MoveEntityReview />

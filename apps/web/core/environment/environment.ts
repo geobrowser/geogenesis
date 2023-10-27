@@ -44,7 +44,7 @@ export const options: Record<AppEnv, AppConfig> = {
   },
 };
 
-export function getConfig(env?: string): AppConfig {
+export const getConfig = (env?: string): AppConfig => {
   if (!env) {
     console.log(`No env passed in. Defaulting to ${DEFAULT_ENV}`);
     return options['production'];
@@ -52,8 +52,8 @@ export function getConfig(env?: string): AppConfig {
 
   if (!(env in options)) {
     console.error(`No config for env ${env}`);
-    env = DEFAULT_ENV;
+    return options['production'];
   }
 
   return options[env as AppEnv];
-}
+};

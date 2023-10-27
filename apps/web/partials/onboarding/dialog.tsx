@@ -36,7 +36,6 @@ export const OnboardingDialog = () => {
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
-  const [spaceAddress, setSpaceAddress] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>('start');
   const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
@@ -78,7 +77,6 @@ export const OnboardingDialog = () => {
 
       console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
 
-      setSpaceAddress(spaceAddress);
       setWorkflowStep('done');
       setStep('completed');
     }
@@ -117,7 +115,7 @@ export const OnboardingDialog = () => {
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete workflowStep={workflowStep} spaceAddress={spaceAddress} />
+                  <StepComplete workflowStep={workflowStep} />
                 </>
               )}
             </ModalCard>
@@ -311,7 +309,6 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 
 type StepCompleteProps = {
   workflowStep: PublishingStep;
-  spaceAddress: string | null;
 };
 
 const stageAsNumber = {
@@ -322,7 +319,7 @@ const stageAsNumber = {
   done: 4,
 };
 
-function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) {
+function StepComplete({ workflowStep: stage }: StepCompleteProps) {
   const { hideOnboarding } = useOnboarding();
 
   return (
@@ -347,14 +344,9 @@ function StepComplete({ workflowStep: stage, spaceAddress }: StepCompleteProps) 
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={NavUtils.toDashboard()} onClick={hideOnboarding}>
-            <Button className="!flex-1 !flex-shrink-0" disabled={stage !== 'done'}>
+          <Link href={NavUtils.toHome()} className="w-full" onClick={hideOnboarding}>
+            <Button className="w-full" disabled={stage !== 'done'}>
               View Personal Home
-            </Button>
-          </Link>
-          <Link href={spaceAddress === null ? '/' : NavUtils.toSpace(spaceAddress)} onClick={hideOnboarding}>
-            <Button className="!flex-1" disabled={stage !== 'done'}>
-              View Personal Space
             </Button>
           </Link>
         </div>

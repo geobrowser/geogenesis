@@ -26,11 +26,9 @@ export async function SpaceMembers({ spaceId }: Props) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
         <SpaceMembersPopover
-          // @ts-expect-error async JSX function
           trigger={<SpaceMembersChip spaceId={spaceId} />}
           content={
             <React.Suspense>
-              {/* @ts-expect-error async JSX function */}
               <SpaceMembersContent spaceId={spaceId} />
             </React.Suspense>
           }
@@ -39,7 +37,6 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersMenu
           manageMembersComponent={
             <React.Suspense>
-              {/* @ts-expect-error async JSX function */}
               <SpaceMembersDialogServerContainer spaceId={spaceId} />
             </React.Suspense>
           }
@@ -52,11 +49,9 @@ export async function SpaceMembers({ spaceId }: Props) {
   return (
     <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
       <SpaceMembersPopover
-        // @ts-expect-error async JSX function
         trigger={<SpaceMembersChip spaceId={spaceId} />}
         content={
           <React.Suspense>
-            {/* @ts-expect-error async JSX function */}
             <SpaceMembersContent spaceId={spaceId} />
           </React.Suspense>
         }
