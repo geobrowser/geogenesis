@@ -1,4 +1,5 @@
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
@@ -138,11 +139,19 @@ export async function fetchProposalsByUser({
       name: p.name,
       description: p.description,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profile?.[1] ?? p.createdBy,
+      createdBy: profile?.[1] ?? {
+        ...p.createdBy,
+        address: p.createdBy.id as `0x${string}`,
+        profileLink: null,
+      },
       proposedVersions: p.proposedVersions.map(v => {
         return {
           ...v,
-          createdBy: profile?.[1] ?? p.createdBy,
+          createdBy: profile?.[1] ?? {
+            ...p.createdBy,
+            address: p.createdBy.id as `0x${string}`,
+            profileLink: null,
+          },
           actions: fromNetworkActions(v.actions, userId),
         };
       }),

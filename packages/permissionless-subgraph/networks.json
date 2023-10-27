@@ -1,0 +1,14 @@
+{
+  "matic": {
+    "PermissionlessSpaceRegistry": {
+      "address": "0x68930a23A91A8FA97C6053cD5057431BaD3eEB52",
+      "startBlock": 48810411
+    }
+  },
+  "mumbai": {
+    "PermissionlessSpaceRegistry": {
+      "address": "0x42096035524630382E73cfFAE1CA319CFa72F4dC",
+      "startBlock": 41274221
+    }
+  }
+}

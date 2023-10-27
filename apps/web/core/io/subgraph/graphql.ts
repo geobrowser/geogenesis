@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import * as Effect from 'effect/Effect';
 
 import { AbortError, GraphqlRuntimeError, HttpError, JsonParseError } from './errors';
 
@@ -23,6 +23,9 @@ export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
         },
         body: JSON.stringify({ query }),
         signal,
+        next: {
+          revalidate: 60,
+        },
       }),
     catch: e => {
       if (e instanceof Error && e.name === 'AbortError') {

@@ -1,9 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 
-import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { ServerSideEnvParams } from '~/core/types';
+import { Environment } from '~/core/environment';
+import { API, Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
 import { getRandomArrayItem } from '~/core/utils/utils';
 
@@ -16,13 +14,21 @@ import { ReferencedByEntity } from './types';
 
 interface Props {
   entityId: string;
-  name: string;
-  searchParams: ServerSideEnvParams;
+  name: string | null;
+  spaceId: string;
 }
 
-export async function EntityReferencedByServerContainer({ entityId, name, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  const { isPermissionlessSpace } = await API.space(spaceId);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const [related, spaces] = await Promise.all([
     Subgraph.fetchEntities({

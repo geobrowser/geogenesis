@@ -1,4 +1,5 @@
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { ProposedVersion } from '~/core/types';

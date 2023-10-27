@@ -2,7 +2,7 @@
 
 import { useSelector } from '@legendapp/state/react';
 
-import { useEntityTableStoreInstance } from '../state/entity-table-store';
+import { useEntityTableStoreInstance } from '../state/entity-table-store/entity-table-store-provider';
 
 export const useEntityTable = () => {
   const {

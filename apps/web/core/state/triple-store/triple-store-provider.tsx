@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { Services } from '~/core/services';
 
-import { useActionsStoreInstance } from '../actions-store';
+import { useActionsStoreInstance } from '../actions-store/actions-store-provider';
 import { InitialTripleStoreParams, TripleStore } from './triple-store';
 
 const TripleStoreContext = createContext<TripleStore | undefined>(undefined);

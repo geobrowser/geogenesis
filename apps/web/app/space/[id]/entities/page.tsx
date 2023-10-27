@@ -1,22 +1,23 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { Subgraph } from '~/core/io';
+import { AppConfig, Environment } from '~/core/environment';
+import { API, Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
-import { ServerSideEnvParams } from '~/core/types';
+import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
+import { Space } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams & {
+  searchParams: {
     query?: string;
     page?: string;
     typeId?: string;
@@ -24,22 +25,40 @@ interface Props {
 }
 
 export default async function EntitiesPage({ params, searchParams }: Props) {
-  const props = await getData({ params, searchParams });
+  const spaceId = params.id;
+  const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
+
+  const props = await getData({ space, config, initialParams });
 
   return <Component {...props} />;
 }
 
-const getData = async ({ params, searchParams }: Props) => {
-  const spaceId = params.id;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
+const getData = async ({
+  space,
+  config,
+  initialParams,
+}: {
+  space: Space | null;
+  config: AppConfig;
+  initialParams: InitialEntityTableStoreParams;
+}) => {
+  if (!space) {
+    notFound();
+  }
 
-  const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  const config = Params.getConfigFromParams(searchParams, env);
+  const spaceId = space.id;
 
   const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId);
-
-  if (!space) notFound();
 
   const spaceImage = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));

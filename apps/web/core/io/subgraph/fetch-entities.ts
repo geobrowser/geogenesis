@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Entity as IEntity } from '~/core/types';
@@ -148,8 +149,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     signal: options?.signal,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 

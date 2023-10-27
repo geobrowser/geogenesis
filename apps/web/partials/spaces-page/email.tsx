@@ -100,7 +100,7 @@ export function Email() {
                 {state.type === 'pending' && (
                   <motion.div
                     key="email-pending"
-                    className="py-px px-6"
+                    className="px-6 py-px"
                     initial={{ scale: 0.1 }}
                     animate={{ scale: 1 }}
                     exit={{ scale: 0.1 }}
@@ -124,7 +124,7 @@ export function Email() {
                 {state.type === 'success' && (
                   <motion.div
                     key="email-success"
-                    className="py-px px-6"
+                    className="px-6 py-px"
                     initial={{ scale: 0.1 }}
                     animate={{ scale: 1 }}
                     exit={{ scale: 0.1 }}

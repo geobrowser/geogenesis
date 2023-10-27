@@ -1,7 +1,7 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 
 import { Subgraph } from '~/core/io';
-import { ActionsStore } from '~/core/state/actions-store';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
 import { LocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -30,6 +30,7 @@ interface IMergedDataSource
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'
+    | 'fetchOnchainProfile'
   > {
   // Rows and columns aren't part of the subgraph API and instead are higher-order functions that
   // call the subgraph APIs themselves. This is because rows and columns are not entities in the

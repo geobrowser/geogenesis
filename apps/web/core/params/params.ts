@@ -1,9 +1,7 @@
-import { AppConfig, Environment } from '~/core/environment';
-import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store';
-import { InitialTripleStoreParams } from '~/core/state/triple-store';
-import { AppEnv, FilterField, FilterState, ServerSideEnvParams } from '~/core/types';
+import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
+import { FilterField, FilterState } from '~/core/types';
 
-export const ENV_PARAM_NAME = 'env';
+import { InitialTripleStoreParams } from '../state/triple-store/triple-store';
 
 export function parseTripleQueryFilterFromParams(params: { query?: string; page?: string }): InitialTripleStoreParams {
   const filterStateResult = Object.entries(params)
@@ -109,52 +107,4 @@ export function getAdvancedQueryParams(filterState: FilterState): Record<FilterF
 
     return acc;
   }, {});
-}
-
-/**
- * We currently set the environment and API URLs based on the chain that the connected wallet
- * is connected to. As a dev this can be annoying since we may not have a wallet connected or
- * may want to connect to a different environment.
- *
- * There is an escape hatch for this by setting the `ENV_PARAM_NAME` query param in the URL.
- * Each SSR'd page should read from this param and set the application config in server-fetched
- * situations based on this param.
- *
- * As a developer experience enhancement, we set this configured escape hatch in a cookie so you
- * don't have to manually add the param to the URL each time there is a page navigation.
- *
- * The priority order of URL param and cookie is:
- * 1. URL param
- * 2. Cookie
- * 3. Defaults to production if neither are set.
- *
- * @param url -- The full URL to parse the param from.
- * @param cookie -- The cookie value for the environment from the `ENV_PARAM_NAME` cookie name.
- * @returns AppConfig
- */
-export function getConfigFromUrl(url: string, cookie: string | undefined): AppConfig {
-  const params = new URLSearchParams(url.split('?')[1]);
-  const env: AppEnv = params.get('env') as AppEnv;
-
-  if (!(cookie && cookie in Environment.options) && !(env in Environment.options)) {
-    console.log(`Invalid environment "${env}", defaulting to ${Environment.DEFAULT_ENV}`);
-    return Environment.options[Environment.DEFAULT_ENV];
-  }
-
-  // Default to the environment if it's set, otherwise use the cookie
-  const config = Environment.options[env ?? cookie];
-  return Environment.getConfig(config.chainId);
-}
-
-export function getConfigFromParams(searchParams: ServerSideEnvParams, cookie: string | undefined): AppConfig {
-  const env: AppEnv | undefined = searchParams['env'] as AppEnv;
-
-  if (!(cookie && cookie in Environment.options) && !(env && env in Environment.options)) {
-    console.log(`Invalid environment "${env}", defaulting to ${Environment.DEFAULT_ENV}`);
-    return Environment.options[Environment.DEFAULT_ENV];
-  }
-
-  // Default to the environment if it's set, otherwise use the cookie
-  const config = Environment.options[env ?? cookie];
-  return Environment.getConfig(config.chainId);
 }

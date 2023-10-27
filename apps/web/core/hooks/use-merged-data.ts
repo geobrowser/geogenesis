@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Merged } from '../merged';
 import { Services } from '../services';
-import { useActionsStoreInstance } from '../state/actions-store';
+import { useActionsStoreInstance } from '../state/actions-store/actions-store-provider';
 import { useLocalStoreInstance } from '../state/local-store';
 
 export function useMergedData() {

@@ -13,8 +13,10 @@ import * as React from 'react';
 
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useHydrated } from '~/core/hooks/use-hydrated';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { SquareButton } from '~/design-system/button';
+import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
 import { ConfiguredCommandExtension } from './command-extension';
@@ -25,7 +27,6 @@ import { ParagraphNode } from './paragraph-node';
 import { TableNode } from './table-node';
 
 interface Props {
-  editable?: boolean;
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
 }
@@ -70,15 +71,14 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({
-  placeholder = null,
-  shouldHandleOwnSpacing,
-  editable = true,
-}: Props) {
+export const Editor = React.memo(function Editor({ placeholder = null, shouldHandleOwnSpacing }: Props) {
   const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
+  const editable = useUserIsEditing(spaceId);
+
+  const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
   const editor = useEditor({
-    extensions: [...tiptapExtensions, createIdExtension(spaceId)],
+    extensions,
     editable: true,
     content: editorJson,
     onBlur({ editor }) {
@@ -131,7 +131,7 @@ export const Editor = React.memo(function Editor({
       <EditorContent editor={editor} />
       <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
-          <SquareButton onClick={openCommandMenu} icon="plus" />
+          <SquareButton onClick={openCommandMenu} icon={<Plus />} />
         </div>
       </FloatingMenu>
       {shouldHandleOwnSpacing && <Spacer height={60} />}

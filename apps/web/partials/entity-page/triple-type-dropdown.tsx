@@ -7,24 +7,42 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { TripleValueType } from '~/core/types';
+
 import { SquareButton } from '~/design-system/button';
-import type { IconName } from '~/design-system/icon';
+import { Date } from '~/design-system/icons/date';
+import { Image } from '~/design-system/icons/image';
+import { Relation } from '~/design-system/icons/relation';
+import { Text } from '~/design-system/icons/text';
+import { Url } from '~/design-system/icons/url';
+import { ColorName } from '~/design-system/theme/colors';
 
 const MotionContent = motion(DropdownPrimitive.Content);
 
+const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName }>> = {
+  date: Date,
+  entity: Relation,
+  string: Text,
+  number: Text,
+  image: Image,
+  url: Url,
+};
+
 interface Props {
-  value: IconName;
-  options: { value: IconName; label: React.ReactNode; onClick: () => void; disabled: boolean }[];
+  value: TripleValueType;
+  options: { value: TripleValueType; label: React.ReactNode; onClick: () => void; disabled: boolean }[];
 }
 
 export const TripleTypeDropdown = ({ value, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
+  const Icon = icons[value];
+
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownPrimitive.Trigger className="inline-flex flex-1 items-center justify-between">
-        <SquareButton icon={value} isActive={open} />
+        <SquareButton icon={<Icon />} isActive={open} />
       </DropdownPrimitive.Trigger>
       <AnimatePresence>
         {open && (
@@ -47,7 +65,7 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
                   key={`triple-type-dropdown-${index}`}
                   onClick={option.disabled ? undefined : option.onClick}
                   className={cx(
-                    'flex w-full select-none items-center justify-between py-2 px-3 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
+                    'flex w-full select-none items-center justify-between px-3 py-2 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
                     value === option.value && '!bg-bg !text-text'
                   )}
                 >

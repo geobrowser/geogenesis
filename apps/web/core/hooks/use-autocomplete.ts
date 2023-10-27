@@ -3,17 +3,19 @@
 import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
 import { useSelector } from '@legendapp/state/react';
 import { A, S } from '@mobily/ts-belt';
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 
 import { useMemo } from 'react';
 
 import { Subgraph } from '~/core/io';
 import { Merged } from '~/core/merged';
 import { Services } from '~/core/services';
-import { ActionsStore, useActionsStoreInstance } from '~/core/state/actions-store';
+import { ActionsStore } from '~/core/state/actions-store/actions-store';
 import { makeOptionalComputed } from '~/core/utils/utils';
 
 import { Environment } from '../environment';
+import { useActionsStoreInstance } from '../state/actions-store/actions-store-provider';
 import { LocalStore, useLocalStoreInstance } from '../state/local-store';
 import { Entity as EntityType, FilterState } from '../types';
 
@@ -56,7 +58,7 @@ class EntityAutocomplete {
         const merged = this.mergedDataSource;
 
         const fetchEntitiesEffect = Effect.either(
-          Effect.tryPromiseInterrupt({
+          Effect.tryPromise({
             try: () =>
               merged.fetchEntities({
                 endpoint: config.subgraph,

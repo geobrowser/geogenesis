@@ -114,8 +114,7 @@ export const commandItems: CommandSuggestionItem[] = [
 
         // It doesn't really matter which configuration we use here since all IPFS
         // nodes are essentially production.
-        const chainId = Environment.options.production.chainId;
-        const config = Environment.getConfig(chainId);
+        const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
         const src = await Publish.uploadFile(new Storage.StorageClient(config.ipfs), file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };

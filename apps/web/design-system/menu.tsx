@@ -1,3 +1,5 @@
+'use client';
+
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -11,6 +13,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   align?: 'start' | 'center' | 'end';
   side?: 'bottom' | 'left' | 'right' | 'top';
+  sideOffset?: number;
   className?: string;
   asChild?: boolean;
   modal?: boolean;
@@ -36,8 +39,9 @@ export function Menu({
   trigger,
   open,
   onOpenChange,
+  side,
+  sideOffset = 8,
   align = 'end',
-  side = undefined,
   asChild = false,
   className = '',
   modal = false,
@@ -59,7 +63,7 @@ export function Menu({
             }}
             align={align}
             side={side}
-            sideOffset={8}
+            sideOffset={sideOffset}
             className={contentStyles({ align, className })}
           >
             {children}

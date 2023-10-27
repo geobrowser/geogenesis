@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { Cookie } from '~/core/cookie';
 import { Providers } from '~/core/providers';
 
 import '../styles/fonts.css';
@@ -93,7 +94,7 @@ export default function RootLayout({
       </head>
       <body>
         <div className="relative">
-          <Providers>
+          <Providers onConnectionChange={Cookie.onConnectionChange}>
             <App>{children}</App>
           </Providers>
         </div>

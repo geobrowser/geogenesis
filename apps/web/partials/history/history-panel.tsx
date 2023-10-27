@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Icon } from '~/design-system/icon';
+import { History } from '~/design-system/icons/history';
 import { Menu } from '~/design-system/menu';
 
 interface Props {
@@ -16,7 +16,7 @@ export function HistoryPanel({ children }: Props) {
     <Menu
       open={open}
       onOpenChange={onOpenChange}
-      trigger={<Icon icon="history" color="grey-04" />}
+      trigger={<History color="grey-04" />}
       side="bottom"
       className="max-h-[320px] overflow-y-scroll"
     >

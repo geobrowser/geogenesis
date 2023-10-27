@@ -2,6 +2,7 @@ import { Entity, Profile, Proposal, ProposedVersion, Space, Triple } from '~/cor
 
 import { FetchEntitiesOptions } from './fetch-entities';
 import { FetchEntityOptions } from './fetch-entity';
+import { FetchOnchainProfileOptions } from './fetch-on-chain-profile';
 import { FetchProfileOptions } from './fetch-profile';
 import { FetchProposalOptions } from './fetch-proposal';
 import { FetchProposalsOptions } from './fetch-proposals';
@@ -19,6 +20,9 @@ export interface ISubgraph {
   fetchSpace: (options: FetchSpaceOptions) => Promise<Space | null>;
   fetchEntity: (options: FetchEntityOptions) => Promise<Entity | null>;
   fetchProfile: (options: FetchProfileOptions) => Promise<[string, Profile] | null>;
+  fetchOnchainProfile: (
+    options: FetchOnchainProfileOptions
+  ) => Promise<{ id: string; homeSpace: string; account: string } | null>;
   fetchProposals: (options: FetchProposalsOptions) => Promise<Proposal[]>;
   fetchProposal: (options: FetchProposalOptions) => Promise<Proposal | null>;
   fetchProposedVersions: (options: FetchProposedVersionsOptions) => Promise<ProposedVersion[]>;

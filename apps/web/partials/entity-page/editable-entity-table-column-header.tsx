@@ -12,7 +12,6 @@ import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { valueTypes } from '~/core/value-types';
 
-import { IconName } from '~/design-system/icon';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
@@ -104,7 +103,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
       {isUnpublished && (
         <TripleTypeDropdown
-          value={valueTypes[valueType] as IconName}
+          value={valueTypes[valueType]}
           options={[
             {
               label: (

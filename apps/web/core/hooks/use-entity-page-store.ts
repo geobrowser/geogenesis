@@ -4,7 +4,7 @@ import { useSelector } from '@legendapp/state/react';
 
 import { Triple as ITriple } from '~/core/types';
 
-import { useEntityStoreInstance } from '../state/entity-page-store';
+import { useEntityStoreInstance } from '../state/entity-page-store/entity-store-provider';
 import { useConfiguredAttributeRelationTypes } from './use-configured-attribute-relation-types';
 
 export function useEntityPageStore() {

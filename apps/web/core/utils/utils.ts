@@ -20,6 +20,7 @@ export function intersperse<T>(elements: T[], separator: T | (({ index }: { inde
 }
 
 export const NavUtils = {
+  toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
   toEntity: (
@@ -30,21 +31,23 @@ export const NavUtils = {
     filterValue?: string | null
   ) => {
     if (typeId && filterId && filterValue) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`;
+      return decodeURIComponent(
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`
+      );
     }
 
     if (typeId) {
-      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
-    return `/space/${spaceId}/${newEntityId}`;
+    return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return `/space/${spaceId}/${entityId}/template/activity?spaceId=${spaceIdParam}`;
+      return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);
     }
 
-    return `/space/${spaceId}/${entityId}/template/activity`;
+    return decodeURIComponent(`/space/${spaceId}/${entityId}/activity`);
   },
 };
 
@@ -215,3 +218,37 @@ export const sleepWithCallback = async (callback: () => void, ms: number) => {
     resolve(null);
   });
 };
+
+/**
+ * Provides structured logging for Geo.
+ * @param requestId - A unique identifier for the request. This should be used across all logs for a single request/workflow.
+ * @param message - The message to log.
+ * @param account - The account that initiated the request. This is usually the user's wallet address. This helps debug user-specific
+ *                  issues.
+ * @param level - The log level. Defaults to 'info'.
+ */
+export function slog({
+  requestId,
+  message,
+  account,
+  level,
+}: {
+  requestId: string;
+  message: string;
+  account?: `0x${string}`;
+  level?: 'log' | 'info' | 'warn' | 'error';
+}) {
+  if (!level) {
+    level = 'info';
+  }
+
+  console[level](
+    `${level.toUpperCase()}  ${new Date().toISOString()}  account: ${
+      account ? account : 'NULL'
+    }  requestId: ${requestId} – ${message}`
+  );
+}
+
+export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
+  return `${address}–${onchainId}`;
+}

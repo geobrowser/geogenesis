@@ -1,4 +1,5 @@
-import { Effect, Either } from 'effect';
+import * as Effect from 'effect/Effect';
+import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
@@ -7,8 +8,8 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
 
-const getFetchSpaceProposalsQuery = (spaceId: string, skip: number) => `query {
-  proposals(first: 10, where: {space: ${JSON.stringify(
+const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
+  proposals(first: ${first}, where: {space: ${JSON.stringify(
     spaceId
   )}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
     id
@@ -57,6 +58,7 @@ export interface FetchProposalsOptions {
   spaceId: string;
   signal?: AbortController['signal'];
   page?: number;
+  first?: number;
 }
 
 interface NetworkResult {
@@ -68,12 +70,13 @@ export async function fetchProposals({
   spaceId,
   signal,
   page = 0,
+  first = 10,
 }: FetchProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
-    query: getFetchSpaceProposalsQuery(spaceId, page * 10),
+    query: getFetchSpaceProposalsQuery(spaceId, first, page * 10),
     signal,
   });
 
@@ -93,7 +96,7 @@ export async function fetchProposals({
           console.error(
             `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getFetchSpaceProposalsQuery(spaceId, page * 10)}
+            queryString: ${getFetchSpaceProposalsQuery(spaceId, first, page * 10)}
             `,
             error.message
           );
@@ -132,11 +135,19 @@ export async function fetchProposals({
       name: p.name,
       description: p.description,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[p.createdBy.id] ?? p.createdBy,
+      createdBy: profiles[p.createdBy.id] ?? {
+        ...p.createdBy,
+        address: p.createdBy.id as `0x${string}`,
+        profileLink: null,
+      },
       proposedVersions: p.proposedVersions.map(v => {
         return {
           ...v,
-          createdBy: profiles[v.createdBy.id] ?? v.createdBy,
+          createdBy: profiles[v.createdBy.id] ?? {
+            ...p.createdBy,
+            address: p.createdBy.id as `0x${string}`,
+            profileLink: null,
+          },
           actions: fromNetworkActions(v.actions, spaceId),
         };
       }),

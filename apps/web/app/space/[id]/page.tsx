@@ -1,42 +1,41 @@
-import { ContextParams } from '@aragon/sdk-client-common';
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
+import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { AppConfig } from '~/core/environment';
-import { Subgraph } from '~/core/io';
-import { Params } from '~/core/params';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { ServerSideEnvParams } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { AppConfig, Environment } from '~/core/environment';
+import { API, Subgraph } from '~/core/io';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
+import { Spacer } from '~/design-system/spacer';
+
+import { Editor } from '~/partials/editor/editor';
 import {
   EntityReferencedByLoading,
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { Component } from './component';
-
-export const runtime = 'edge';
+import { SpaceLayout } from './space-layout';
 
 interface Props {
   params: { id: string };
-  searchParams: ServerSideEnvParams;
 }
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: spaceId });
+  const { isPermissionlessSpace, space } = await API.space(params.id);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -72,31 +71,42 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function SpacePage({ params, searchParams }: Props) {
-  const env = cookies().get(Params.ENV_PARAM_NAME)?.value;
-  const config = Params.getConfigFromParams(searchParams, env);
+export default async function SpacePage({ params }: Props) {
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  const { isPermissionlessSpace } = await API.space(params.id);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const props = await getData(params.id, config);
 
   return (
-    // @ts-expect-error async JSX function
-    <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
-      <Component
-        {...props}
-        ReferencedByComponent={
-          <Suspense fallback={<EntityReferencedByLoading />}>
-            {/* @ts-expect-error async JSX function */}
-            <EntityReferencedByServerContainer entityId={props.id} name={props.name} searchParams={searchParams} />
-          </Suspense>
-        }
-      />
-    </TypesStoreServerContainer>
+    <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
+      <Editor shouldHandleOwnSpacing />
+      <ToggleEntityPage {...props} />
+      <Spacer height={40} />
+      <React.Suspense fallback={<EntityReferencedByLoading />}>
+        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+      </React.Suspense>
+    </SpaceLayout>
   );
 }
 
 const getData = async (spaceId: string, config: AppConfig) => {
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
-  const space = spaces.find(s => s.id === spaceId) ?? null;
+  const { isPermissionlessSpace, space } = await API.space(spaceId);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
+
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -115,40 +125,10 @@ const getData = async (spaceId: string, config: AppConfig) => {
     }
   }
 
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
-
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
-
-  const blockTriples = (
-    await Promise.all(
-      blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
-      })
-    )
-  ).flatMap(triples => triples);
-
   return {
+    name: entity?.name ?? null,
     triples: entity?.triples ?? [],
     id: entityId,
-    name: entity?.name ?? spaceName ?? '',
-    description: Entity.description(entity?.triples ?? []),
     spaceId,
-    serverAvatarUrl,
-    serverCoverUrl,
-
-    // For entity page editor
-    blockIdsTriple,
-    blockTriples,
-
-    space,
   };
 };

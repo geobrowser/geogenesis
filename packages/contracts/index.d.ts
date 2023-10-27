@@ -7,6 +7,9 @@ import PersonalSpaceAdminPluginSetupAbi from './build/abis/PersonalSpaceAdminPlu
 import PersonalSpaceAdminPluginAbi from './build/abis/PersonalSpaceAdminPlugin.json'
 import SpacePluginSetupAbi from './build/abis/SpacePluginSetup.json'
 import SpacePluginAbi from './build/abis/SpacePlugin.json'
+import SpaceArtifact from './build/contracts/contracts/Space.sol/Space.json'
+import MembershipAbi from './build/abis/Membership.json'
+import GeoProfileRegistryAbi from './build/abis/GeoProfileRegistry.json'
 
 export {
   SpaceAbi,
@@ -18,4 +21,7 @@ export {
   PersonalSpaceAdminPluginSetupAbi,
   SpacePluginAbi,
   SpacePluginSetupAbi,
+  MembershipAbi,
+  GeoProfileRegistryAbi,
+  SpaceArtifact,
 }

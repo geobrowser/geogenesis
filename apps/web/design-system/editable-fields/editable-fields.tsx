@@ -12,6 +12,9 @@ import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
+import { Trash } from '../icons/trash';
+import { Upload } from '../icons/upload';
+
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
   // of -1px to compensate for this. This results in the correct line heights between both edit and
@@ -153,11 +156,11 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
 
       <div className="flex justify-center gap-2 pt-2">
         <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon="upload">
+          <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
             Upload
           </SmallButton>
         </label>
-        {imageSrc && <SquareButton onClick={onImageRemove} icon="trash" />}
+        {imageSrc && <SquareButton onClick={onImageRemove} icon={<Trash />} />}
       </div>
 
       <input
@@ -198,7 +201,7 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
         </div>
       ) : (
         <label htmlFor="avatar-file">
-          <SmallButton onClick={handleFileInputClick} icon="upload">
+          <SmallButton onClick={handleFileInputClick} icon={<Upload />}>
             Upload
           </SmallButton>
         </label>
@@ -207,9 +210,9 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
       {imageSrc && (
         <div className="flex justify-center gap-2 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
           <label htmlFor="avatar-file">
-            <SquareButton onClick={handleFileInputClick} icon="upload" />
+            <SquareButton onClick={handleFileInputClick} icon={<Upload />} />
           </label>
-          <SquareButton onClick={onImageRemove} icon="trash" />
+          <SquareButton onClick={onImageRemove} icon={<Trash />} />
         </div>
       )}
 
