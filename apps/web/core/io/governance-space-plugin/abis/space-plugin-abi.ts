@@ -79,7 +79,7 @@ export const spacePluginAbi = [
         type: 'string',
       },
     ],
-    name: 'ContentChanged',
+    name: 'GeoProposalProcessed',
     type: 'event',
   },
   {
@@ -119,6 +119,19 @@ export const spacePluginAbi = [
       },
     ],
     name: 'SubspaceRemoved',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'predecessorSpace',
+        type: 'address',
+      },
+    ],
+    name: 'SuccessorSpaceCreated',
     type: 'event',
   },
   {
@@ -198,6 +211,11 @@ export const spacePluginAbi = [
         name: '_firstBlockContentUri',
         type: 'string',
       },
+      {
+        internalType: 'address',
+        name: '_predecessorSpace',
+        type: 'address',
+      },
     ],
     name: 'initialize',
     outputs: [],
@@ -215,6 +233,29 @@ export const spacePluginAbi = [
       },
     ],
     stateMutability: 'pure',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint32',
+        name: '_blockIndex',
+        type: 'uint32',
+      },
+      {
+        internalType: 'uint32',
+        name: '_itemIndex',
+        type: 'uint32',
+      },
+      {
+        internalType: 'string',
+        name: '_contentUri',
+        type: 'string',
+      },
+    ],
+    name: 'processGeoProposal',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
@@ -239,29 +280,6 @@ export const spacePluginAbi = [
       },
     ],
     name: 'removeSubspace',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'uint32',
-        name: '_blockIndex',
-        type: 'uint32',
-      },
-      {
-        internalType: 'uint32',
-        name: '_itemIndex',
-        type: 'uint32',
-      },
-      {
-        internalType: 'string',
-        name: '_contentUri',
-        type: 'string',
-      },
-    ],
-    name: 'setContent',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',

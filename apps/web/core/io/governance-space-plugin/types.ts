@@ -43,7 +43,7 @@ export type InitializeSpacePluginOptions = {
   onInitStateChange: (newState: PluginInitState) => void;
 };
 
-export type SetContentSpacePluginOptions = {
+export type ProcessGeoProposalSpacePluginOptions = {
   wallet: WalletClient;
   blockIndex: number;
   itemIndex: number;

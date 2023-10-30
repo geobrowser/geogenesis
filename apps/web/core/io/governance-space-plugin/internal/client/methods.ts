@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
+import { ZERO_ADDRESS } from '~/core/constants';
 import { InitializePersonalSpaceAdminPluginOptions } from '~/core/io/personal-space-plugin';
 import {
   TransactionPrepareFailedError,
@@ -34,7 +35,7 @@ import {
   InitializeMemberAccessPluginOptions,
   InitializeSpacePluginOptions,
   PrepareSetupMemberAccessPluginOptions,
-  SetContentSpacePluginOptions,
+  ProcessGeoProposalSpacePluginOptions,
   VoteMainVotingPluginProposalOptions,
 } from '../../types';
 
@@ -79,7 +80,9 @@ export class GeoPluginClientMethods extends ClientCore {
           address: this.geoSpacePluginAddress as `0x${string}`,
           functionName: 'initialize',
           walletClient: wallet,
-          args: [daoAddress, firstBlockUri],
+          // @TODO: Add predecessor space address. If there isn't one,
+          // use the zero address.
+          args: [daoAddress, firstBlockUri, ZERO_ADDRESS],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });
@@ -139,19 +142,19 @@ export class GeoPluginClientMethods extends ClientCore {
   }
 
   // Set Space Content -- this may be unnecessary and only needed as an encoded function since it would likely only be passed into a proposal as an action that would execute upon passing
-  public async setContent({
+  public async processGeoProposal({
     wallet,
     blockIndex,
     itemIndex,
     contentUri,
     onProposalStateChange,
-  }: SetContentSpacePluginOptions): Promise<void> {
+  }: ProcessGeoProposalSpacePluginOptions): Promise<void> {
     const prepareExecutionEffect = Effect.tryPromise({
       try: () =>
         prepareWriteContract({
           address: this.geoSpacePluginAddress as `0x${string}`,
           abi: spacePluginAbi,
-          functionName: 'setContent',
+          functionName: 'processGeoProposal',
           walletClient: wallet,
           args: [blockIndex, itemIndex, contentUri],
         }),
@@ -227,7 +230,7 @@ export class GeoPluginClientMethods extends ClientCore {
           address: this.geoMemberAccessPluginAddress as `0x${string}`,
           functionName: 'prepareInstallation',
           walletClient: wallet,
-          args: [memberAccessSettings],
+          args: [memberAccessSettings.mainVotingPlugin],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
     });

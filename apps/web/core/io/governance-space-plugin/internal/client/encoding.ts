@@ -23,13 +23,13 @@ export class GeoPluginClientEncoding extends ClientCore {
 
   // Space Plugin: Functions
   // encoded functions would be passed in as actions in a proposal
-  public async setContent(blockIndex: number, itemIndex: number, contentUri: string) {
-    const setContentData = encodeFunctionData({
+  public async processGeoProposal(blockIndex: number, itemIndex: number, contentUri: string) {
+    const processProposalData = encodeFunctionData({
       abi: spacePluginAbi,
-      functionName: 'setContent',
+      functionName: 'processGeoProposal',
       args: [blockIndex, itemIndex, contentUri],
     });
-    return setContentData;
+    return processProposalData;
   }
 
   public async acceptSubspace(subspaceDaoAddress: `0x${string}`) {

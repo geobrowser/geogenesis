@@ -5,7 +5,7 @@ import {
   InitializeMainVotingPluginOptions,
   InitializeMemberAccessPluginOptions,
   InitializeSpacePluginOptions,
-  SetContentSpacePluginOptions,
+  ProcessGeoProposalSpacePluginOptions,
   VoteMainVotingPluginProposalOptions,
 } from '../types';
 
@@ -16,13 +16,13 @@ export interface IGeoPluginClientMethods {
     firstBlockUri,
     onInitStateChange,
   }: InitializeSpacePluginOptions): Promise<void>;
-  setContent({
+  processGeoProposal({
     wallet,
     blockIndex,
     itemIndex,
     contentUri,
     onProposalStateChange,
-  }: SetContentSpacePluginOptions): Promise<void>;
+  }: ProcessGeoProposalSpacePluginOptions): Promise<void>;
   initializeMemberAccessPlugin({
     wallet,
     daoAddress,
@@ -77,7 +77,7 @@ export interface IGeoPluginClientMethods {
   implementationMainVoting(): Promise<`0x${string}`>;
 }
 export interface IGeoPluginClientEncoding {
-  setContent(blockIndex: number, itemIndex: number, contentUri: string): Promise<`0x${string}`>;
+  processGeoProposal(blockIndex: number, itemIndex: number, contentUri: string): Promise<`0x${string}`>;
 
   acceptSubspace(subspaceDaoAddress: `0x${string}`): Promise<`0x${string}`>;
 
