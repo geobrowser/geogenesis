@@ -3,34 +3,43 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
-import { useWalletClient } from 'wagmi';
-import { useAccount } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { Services } from '~/core/services';
+import { useActiveProposal } from '~/core/state/active-proposal-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
+import { Icon } from '~/design-system/icon';
+import { Close } from '~/design-system/icons/close';
+import { Tick } from '~/design-system/icons/tick';
 import { TabGroup } from '~/design-system/tab-group';
+
+import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 type Props = {
+  activeProposals: any[];
   membershipRequests: MembershipRequestWithProfile[];
 };
 
-export const Component = ({ membershipRequests }: Props) => {
+export const Component = ({ activeProposals = [], membershipRequests }: Props) => {
   return (
-    <div className="mx-auto max-w-[784px]">
-      <PersonalHomeHeader />
-      <PersonalHomeNavigation />
-      <PersonalHomeDashboard membershipRequests={membershipRequests} />
-    </div>
+    <>
+      <div className="mx-auto max-w-[784px]">
+        <PersonalHomeHeader />
+        <PersonalHomeNavigation />
+        <PersonalHomeDashboard activeProposals={activeProposals} membershipRequests={membershipRequests} />
+      </div>
+      <ActiveProposal />
+    </>
   );
 };
 
@@ -75,16 +84,105 @@ const PersonalHomeNavigation = () => {
 };
 
 type PersonalHomeDashboardProps = {
+  activeProposals: any[];
   membershipRequests: MembershipRequestWithProfile[];
 };
 
-const PersonalHomeDashboard = ({ membershipRequests }: PersonalHomeDashboardProps) => {
+const PersonalHomeDashboard = ({ activeProposals, membershipRequests }: PersonalHomeDashboardProps) => {
   return (
     <div className="mt-8 flex gap-8">
-      <div className="w-2/3">
+      <div className="w-2/3 space-y-8">
+        <PendingProposals activeProposals={activeProposals} />
         <PendingRequests membershipRequests={membershipRequests} />
       </div>
       <div className="w-1/3">{/* dashboard sidebar */}</div>
+    </div>
+  );
+};
+
+type PendingProposalsProps = {
+  activeProposals: any[];
+};
+
+const PendingProposals = ({ activeProposals }: PendingProposalsProps) => {
+  if (activeProposals.length === 0) {
+    return <p className="text-body text-grey-04">There are no active proposals in any of your spaces.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {activeProposals.map(proposal => (
+        <PendingProposal key={proposal} proposal={proposal} />
+      ))}
+    </div>
+  );
+};
+
+type PendingProposalProps = {
+  proposal: any;
+};
+
+const PendingProposal = ({ proposal }: PendingProposalProps) => {
+  const { setIsActiveProposalOpen, setActiveProposalId } = useActiveProposal();
+
+  const handleOpenActiveProposal = () => {
+    setActiveProposalId('someId');
+    setIsActiveProposalOpen(true);
+  };
+
+  return (
+    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+      <button onClick={handleOpenActiveProposal}>
+        <div className="text-smallTitle">Changes to x, y, and z across several pages</div>
+      </button>
+      <Link href="" className="flex items-center gap-1.5 text-breadcrumb text-grey-04">
+        <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
+          <Link href={''} className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
+            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+              <Avatar avatarUrl={''} value={''} />
+            </div>
+            <p>Anonymous</p>
+          </Link>
+          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
+            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+              <img src="/mosaic.png" alt="" className="h-full w-full object-cover" />
+            </div>
+            <p>Space</p>
+          </div>
+        </div>
+      </Link>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="inline-flex gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-smallButton text-xs leading-none">
+            <Icon icon="time" />
+            <span>6h 30m remaining</span>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2">
+          <SmallButton onClick={() => null}>Reject</SmallButton>
+          <SmallButton onClick={() => null}>Accept</SmallButton>
+        </div>
+      </div>
+      <div className="flex w-full flex-col gap-4">
+        <div className="flex items-center gap-2 text-metadataMedium">
+          <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <Tick />
+          </div>
+          <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
+            <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: '75%' }} />
+          </div>
+          <div>75%</div>
+        </div>
+        <div className="flex items-center gap-2 text-metadataMedium">
+          <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <Close />
+          </div>
+          <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
+            <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: '25%' }} />
+          </div>
+          <div>25%</div>
+        </div>
+      </div>
     </div>
   );
 };
