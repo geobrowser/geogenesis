@@ -1,7 +1,11 @@
 import { ClientCore } from '@aragon/sdk-client-common';
 import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
-import { GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS } from '~/core/constants';
+import {
+  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
+  GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
+  GEO_SPACE_PLUGIN_REPO_ADDRESS,
+} from '~/core/constants';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
 import { GeoPluginContext } from '../../context';
@@ -144,7 +148,7 @@ export class GeoPluginClientEncoding extends ClientCore {
 
     return {
       id: GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
-      data: hexToBytes(encodedData as `0x${string}`),
+      data: hexToBytes(encodedData),
     };
   }
 
@@ -194,7 +198,7 @@ export class GeoPluginClientEncoding extends ClientCore {
 
     return {
       id: GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-      data: hexToBytes(encodedData as `0x${string}`),
+      data: hexToBytes(encodedData),
     };
   }
 

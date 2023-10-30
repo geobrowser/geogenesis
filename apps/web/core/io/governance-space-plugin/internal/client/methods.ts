@@ -80,8 +80,6 @@ export class GeoPluginClientMethods extends ClientCore {
           address: this.geoSpacePluginAddress as `0x${string}`,
           functionName: 'initialize',
           walletClient: wallet,
-          // @TODO: Add predecessor space address. If there isn't one,
-          // use the zero address.
           args: [daoAddress, firstBlockUri, ZERO_ADDRESS],
         }),
       catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),

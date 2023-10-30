@@ -39,7 +39,7 @@ export class GeoPersonalSpacePluginClientEncoding extends ClientCore {
 
     return {
       id: GEO_PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
-      data: hexToBytes(encodedData as `0x${string}`),
+      data: hexToBytes(encodedData),
     };
   }
 }
