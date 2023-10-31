@@ -5,6 +5,7 @@ import {
   GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
   GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
   GEO_SPACE_PLUGIN_REPO_ADDRESS,
+  ZERO_ADDRESS,
 } from '~/core/constants';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
@@ -71,6 +72,59 @@ export class GeoPluginClientEncoding extends ClientCore {
       args: [pluginAddress, calldata],
     });
     return upgradeToData;
+  }
+
+  // Installation Functions
+  static getSpacePluginInstallItem({
+    firstBlockContentUri,
+    pluginUpgrader,
+    precedessorSpace = ZERO_ADDRESS,
+  }: {
+    firstBlockContentUri: string;
+    pluginUpgrader: string;
+    precedessorSpace?: string;
+  }) {
+    // Define the ABI for the prepareInstallation function's inputs. This comes from the
+    // `space-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
+    const prepareInstallationInputs = [
+      {
+        name: 'firstBlockContentUri',
+        type: 'string',
+        internalType: 'string',
+        description: 'The inital contents of the first block item.',
+      },
+      {
+        internalType: 'address',
+        name: 'predecessorAddress',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'pluginUpgrader',
+        type: 'address',
+      },
+    ];
+
+    console.log('prepare installation inputs:', prepareInstallationInputs);
+
+    if (!prepareInstallationInputs) {
+      throw new Error('Could not find inputs for prepareInstallation in the ABI');
+    }
+
+    // Encode the data using encodeAbiParameterso
+    // string memory _firstBlockContentUri,
+    // address _predecessorAddress,
+    // address _pluginUpgrader
+    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+      firstBlockContentUri,
+      precedessorSpace,
+      pluginUpgrader,
+    ]);
+
+    return {
+      id: GEO_SPACE_PLUGIN_REPO_ADDRESS,
+      data: hexToBytes(encodedData),
+    };
   }
 
   // Installation Functions
