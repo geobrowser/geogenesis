@@ -98,6 +98,7 @@ importers:
       eslint-plugin-prettier: ^4.0.0
       eslint-plugin-react: ^7.31.11
       eslint-plugin-react-hooks: ^4.6.0
+      ethers: ^5.0.0
       fake-indexeddb: ^4.0.2
       framer-motion: ^10.15.2
       immer: ^9.0.16
@@ -179,6 +180,7 @@ importers:
       dayjs: 1.11.9
       diff: 5.1.0
       effect: 2.0.0-next.48
+      ethers: 5.7.2
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
       js-confetti: 0.11.0
