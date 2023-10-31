@@ -25,8 +25,8 @@ export function publicClientToProvider(publicClient: PublicClient) {
 }
 
 /** Hook to convert a viem Public Client to an ethers.js Provider. */
-export function useEthersProvider({ chainId }: { chainId?: number } = {}) {
-  const publicClient = usePublicClient({ chainId: chainId || 5 }); // set to goerli if none passed in
+export function useEthersProvider({ chainId = 137 }: { chainId?: number } = {}) {
+  const publicClient = usePublicClient({ chainId });
   return React.useMemo(() => publicClientToProvider(publicClient), [publicClient]);
 }
 

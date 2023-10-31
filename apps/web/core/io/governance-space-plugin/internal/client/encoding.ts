@@ -105,13 +105,7 @@ export class GeoPluginClientEncoding extends ClientCore {
       },
     ];
 
-    console.log('prepare installation inputs:', prepareInstallationInputs);
-
-    if (!prepareInstallationInputs) {
-      throw new Error('Could not find inputs for prepareInstallation in the ABI');
-    }
-
-    // Encode the data using encodeAbiParameterso
+    // Encode the data using encodeAbiParameter
     // string memory _firstBlockContentUri,
     // address _predecessorAddress,
     // address _pluginUpgrader
@@ -185,14 +179,6 @@ export class GeoPluginClientEncoding extends ClientCore {
       },
     ];
 
-    console.log('params', params);
-
-    console.log('prepare installation inputs:', prepareInstallationInputs);
-
-    if (!prepareInstallationInputs) {
-      throw new Error('Could not find inputs for prepareInstallation in the ABI');
-    }
-
     // Encode the data using encodeAbiParameters
     const encodedData = encodeAbiParameters(prepareInstallationInputs, [
       params.votingSettings,
@@ -239,10 +225,6 @@ export class GeoPluginClientEncoding extends ClientCore {
         type: 'address',
       },
     ];
-
-    if (!prepareInstallationInputs) {
-      throw new Error('Could not find inputs for prepareInstallation in the ABI');
-    }
 
     // Encode the data using encodeAbiParameters
     const encodedData = encodeAbiParameters(prepareInstallationInputs, [
