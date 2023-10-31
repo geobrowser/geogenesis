@@ -19,7 +19,7 @@ export default async function PersonalHomePage() {
 
   const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
-  return <Component membershipRequests={membershipRequests} />;
+  return <Component activeProposals={[]} membershipRequests={membershipRequests} />;
 }
 
 export const metadata = {
