@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store/actions-store-provider';
+import { ActiveProposalProvider } from './state/active-proposal-store';
 import { DiffProvider } from './state/diff-store';
 import { LocalStoreProvider } from './state/local-store';
 import { SpaceStoreProvider } from './state/space-store';
@@ -29,7 +30,9 @@ export function Providers({ children, onConnectionChange }: Props) {
             <SpaceStoreProvider>
               <LocalStoreProvider>
                 <StatusBarContextProvider>
-                  <DiffProvider>{children}</DiffProvider>
+                  <DiffProvider>
+                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                  </DiffProvider>
                 </StatusBarContextProvider>
               </LocalStoreProvider>
             </SpaceStoreProvider>
