@@ -15,6 +15,7 @@ interface Props {
   id: string;
   spaceId: string;
   triples: Triple[];
+  referencedByComponent: React.ReactNode;
 }
 
 export function ProfilePageComponent(props: Props) {
@@ -34,6 +35,8 @@ export function ProfilePageComponent(props: Props) {
       <motion.div key="entity-page-entity-attributes" layout="position">
         <ToggleEntityPage id={props.id} spaceId={props.spaceId} triples={props.triples} />
       </motion.div>
+      <Spacer height={40} />
+      {props.referencedByComponent}
     </>
   );
 }
