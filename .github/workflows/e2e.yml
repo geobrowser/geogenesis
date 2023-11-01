@@ -10,6 +10,9 @@ on:
     branches:
       - master
 
+env:
+  NEXT_PUBLIC_IS_TEST: true
+
 jobs:
   playwright:
     name: 🎭 Playwright

@@ -8,6 +8,9 @@ on:
     branches:
       - master
 
+env:
+  NEXT_PUBLIC_IS_TEST_ENV: true
+
 jobs:
   test:
     name: Unit tests

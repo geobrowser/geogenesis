@@ -50,6 +50,8 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   [
     jsonRpcProvider({
       rpc: (chain: Chain): { http: string; webSocket?: string } => {
+        console.log('chain', chain);
+
         if (chain.id === polygon.id) {
           return {
             http: process.env.NEXT_PUBLIC_RPC_URL!,
@@ -78,6 +80,8 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
     ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
   ]
 );
+
+console.log('chains', { chains, publicClient, webSocketPublicClient });
 
 const getMockWalletClient = () =>
   createWalletClient({
