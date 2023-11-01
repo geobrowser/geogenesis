@@ -55,6 +55,10 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
             http: process.env.NEXT_PUBLIC_RPC_URL!,
             wss: process.env.NEXT_PUBLIC_WSS_URL!,
           };
+        } else if (chainId.id === polygonMumbai.id) {
+          return {
+            http: polygonMumbai.rpcUrls.default.http[0],
+          };
         }
 
         return {
@@ -63,7 +67,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
       },
     }),
     // We need to use another provider if using a local chain
-    ...(process.env.NODE_ENV !== 'production' ? [publicProvider()] : []),
+    ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
   ]
 );
 
