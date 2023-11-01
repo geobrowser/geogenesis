@@ -7,8 +7,6 @@ import { Space } from '~/core/types';
 
 import { Component } from './component';
 
-export const dynamic = 'force-dynamic';
-
 export default async function PersonalHomePage() {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
