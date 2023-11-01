@@ -81,8 +81,6 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   ]
 );
 
-console.log('chains', { chains, publicClient, webSocketPublicClient });
-
 const getMockWalletClient = () =>
   createWalletClient({
     transport: http(polygon.rpcUrls.default.http[0]),
