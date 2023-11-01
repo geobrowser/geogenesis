@@ -55,11 +55,15 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
             http: process.env.NEXT_PUBLIC_RPC_URL!,
             wss: process.env.NEXT_PUBLIC_WSS_URL!,
           };
-        } else if (chainId.id === polygonMumbai.id) {
+        }
+
+        if (chainId.id === polygonMumbai.id) {
           return {
             http: polygonMumbai.rpcUrls.default.http[0],
           };
-        } else if (chainId.id === LOCAL_CHAIN.id) {
+        }
+
+        if (chainId.id === LOCAL_CHAIN.id) {
           return {
             http: LOCAL_CHAIN.rpcUrls.default.http[0],
           };
