@@ -59,6 +59,10 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
           return {
             http: polygonMumbai.rpcUrls.default.http[0],
           };
+        } else if (chainId.id === LOCAL_CHAIN.id) {
+          return {
+            http: LOCAL_CHAIN.rpcUrls.default.http[0],
+          };
         }
 
         return {
