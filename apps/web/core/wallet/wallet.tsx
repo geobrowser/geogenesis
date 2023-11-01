@@ -49,21 +49,21 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   ],
   [
     jsonRpcProvider({
-      rpc: (chainId: Chain) => {
-        if (chainId.id === polygon.id) {
+      rpc: (chain: Chain): { http: string; webSocket?: string } => {
+        if (chain.id === polygon.id) {
           return {
             http: process.env.NEXT_PUBLIC_RPC_URL!,
-            wss: process.env.NEXT_PUBLIC_WSS_URL!,
+            webSocket: process.env.NEXT_PUBLIC_WSS_URL!,
           };
         }
 
-        if (chainId.id === polygonMumbai.id) {
+        if (chain.id === polygonMumbai.id) {
           return {
             http: polygonMumbai.rpcUrls.default.http[0],
           };
         }
 
-        if (chainId.id === LOCAL_CHAIN.id) {
+        if (chain.id === LOCAL_CHAIN.id) {
           return {
             http: LOCAL_CHAIN.rpcUrls.default.http[0],
           };
