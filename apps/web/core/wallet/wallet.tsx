@@ -50,8 +50,6 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   [
     jsonRpcProvider({
       rpc: (chain: Chain): { http: string; webSocket?: string } => {
-        console.log('chain', chain);
-
         if (chain.id === polygon.id) {
           return {
             http: process.env.NEXT_PUBLIC_RPC_URL!,
