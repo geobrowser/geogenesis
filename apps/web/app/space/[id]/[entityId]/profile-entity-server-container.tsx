@@ -1,6 +1,13 @@
+import * as React from 'react';
+
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
+
+import {
+  EntityReferencedByLoading,
+  EntityReferencedByServerContainer,
+} from '~/partials/entity-page/entity-page-referenced-by-server-container';
 
 import { ProfilePageComponent } from './profile-entity-page';
 
@@ -43,5 +50,16 @@ export async function ProfileEntityServerContainer({ params }: Props) {
     coverUrl: Entity.cover(person.triples),
   };
 
-  return <ProfilePageComponent id={params.entityId} triples={profile.triples} spaceId={params.id} />;
+  return (
+    <ProfilePageComponent
+      id={params.entityId}
+      triples={profile.triples}
+      spaceId={params.id}
+      referencedByComponent={
+        <React.Suspense fallback={<EntityReferencedByLoading />}>
+          <EntityReferencedByServerContainer entityId={person.id} name={person.name} spaceId={params.id} />
+        </React.Suspense>
+      }
+    />
+  );
 }
