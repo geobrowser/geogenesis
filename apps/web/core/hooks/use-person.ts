@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { Services } from "../services";
+import { useQuery } from '@tanstack/react-query';
 
-export function useUserProfile(address?: string) {
+import { Services } from '../services';
+
+export function usePerson(address?: string) {
   const { subgraph, config } = Services.useServices();
   const { data } = useQuery({
     queryKey: ['user-profile', address],

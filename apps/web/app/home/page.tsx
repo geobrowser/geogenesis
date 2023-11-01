@@ -19,7 +19,7 @@ export default async function PersonalHomePage() {
 
   const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
-  return <Component membershipRequests={membershipRequests} />;
+  return <Component activeProposals={[]} membershipRequests={membershipRequests} />;
 }
 
 export const metadata = {
@@ -44,6 +44,7 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
       body: JSON.stringify({
         query: query,
       }),
+      cache: 'no-store',
     });
 
     const { data } = (await response.json()) as {

@@ -47,8 +47,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
 
   return (
-    // @ts-expect-error async JSX function
-    <TypesStoreServerContainer spaceId={params.id} endpoint={config.subgraph}>
+    <TypesStoreServerContainer spaceId={params.id}>
       <EntityStoreProvider
         id={props.id}
         spaceId={props.spaceId}
@@ -71,9 +70,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
             spaceId={props.spaceId}
             membersComponent={
               <React.Suspense fallback={<MembersSkeleton />}>
-                {/* @ts-expect-error async JSX function */}
                 <SpaceEditors spaceId={params.id} />
-                {/* @ts-expect-error async JSX function */}
                 <SpaceMembers spaceId={params.id} />
               </React.Suspense>
             }

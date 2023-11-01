@@ -149,8 +149,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     signal: options?.signal,
   });
 
-  // @TODO: Catch by known tag and unexpected errors
-  // retries
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 

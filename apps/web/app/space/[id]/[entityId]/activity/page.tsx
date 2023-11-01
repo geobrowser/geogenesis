@@ -30,7 +30,6 @@ export default async function ActivityPage({ searchParams, params }: Props) {
     // require a manually defined suspense boundary.
     // https://github.com/vercel/next.js/issues/43548
     <Suspense key={`?spaceId=${searchParams?.spaceId}`} fallback={<Loading />}>
-      {/* @ts-expect-error async JSX */}
       <ActivityList params={params} searchParams={searchParams} />
     </Suspense>
   );
