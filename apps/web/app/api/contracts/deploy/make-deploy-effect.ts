@@ -63,13 +63,13 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
   const client = createWalletClient({
     account,
     chain: polygon,
-    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
     // transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
   const publicClient = createPublicClient({
     chain: polygon,
-    transport: http(process.env.ALCHEMY_ENDPOINT, { batch: true }),
+    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
     // transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
