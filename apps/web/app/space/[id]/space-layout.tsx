@@ -43,7 +43,6 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
 
   const props = await getData(params.id, config);
 
-  const avatarUrl = Entity.avatar(props.triples);
   const coverUrl = Entity.cover(props.triples);
 
   return (
@@ -56,7 +55,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
 
         <EntityPageContentContainer>
           <EditableHeading
