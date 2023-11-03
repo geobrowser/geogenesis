@@ -38,6 +38,8 @@ async function ActivityList({ params, searchParams }: Props) {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const id = decodeURIComponent(params.entityId);
+  // Alternatively we can fetch the on-chain profile from the id and use
+  // the address associated with the on-chain profile. But this works.
   const address = id.split('–')[0];
 
   const [proposals, spaces] = await Promise.all([
