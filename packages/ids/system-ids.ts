@@ -93,6 +93,8 @@ export const WALLETS_ATTRIBUTE = '31f6922e-0d4e-4f14-a1ee-8c7689457715'
 
 export const PEOPLE_SPACE = '0xb4476A42A66eC1356A58D300555169E17db6756c'
 
+export const BROADER_SPACES = '03aa11ed-d69a-4d5e-a0ae-a0f197614cfd'
+
 /**
  * Addresses for important contracts on Polygon mainnet.
  *

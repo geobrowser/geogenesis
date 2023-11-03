@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
+import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -22,6 +23,7 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
+import { Subspaces } from '~/partials/space-page/subspaces';
 
 interface Props {
   params: { id: string };
@@ -57,7 +59,6 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         initialBlockTriples={props.blockTriples}
       >
         <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-
         <EntityPageContentContainer>
           <EditableHeading
             spaceId={props.spaceId}
@@ -75,7 +76,6 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
               </React.Suspense>
             }
           />
-
           <Spacer height={40} />
           <TabGroup
             tabs={[
@@ -90,13 +90,26 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
             ]}
           />
           <Spacer height={20} />
-
+          <React.Suspense fallback={null}>
+            <SubspacesContainer entityId={props.id} />
+          </React.Suspense>
           {children}
         </EntityPageContentContainer>
       </EntityStoreProvider>
     </TypesStoreServerContainer>
   );
 }
+
+type SubspacesContainerProps = {
+  entityId: string;
+};
+
+const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const subspaces = await fetchSubspaces({ entityId, endpoint: config.subgraph });
+
+  return <Subspaces subspaces={subspaces} />;
+};
 
 function MembersSkeleton() {
   return (
