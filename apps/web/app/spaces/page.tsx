@@ -95,7 +95,7 @@ export default async function Spaces() {
     <div className="flex flex-col">
       <h1 className="text-mainPage">All spaces</h1>
       <Spacer height={40} />
-      <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
+      <div className="grid grid-cols-3 gap-8 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
         {spaceConfigs.map(config => (
           <Card
             key={config.id}
