@@ -4,8 +4,10 @@ import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
+import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
-import { Space } from '~/core/types';
+import { Entity, Space } from '~/core/types';
+import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
@@ -71,17 +73,35 @@ export default async function Spaces() {
   const spaces = await fetchSpaces({ endpoint: config.subgraph });
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
+  const spacesWithSpaceConfigs = filteredAndSortedSpaces.filter(
+    (s): s is Space & { spaceConfigEntityId: string } => s.spaceConfigEntityId !== null
+  );
+
+  const spaceConfigToSpaceMap = new Map<string, string>();
+
+  for (const space of spacesWithSpaceConfigs) {
+    if (space.spaceConfigEntityId) {
+      spaceConfigToSpaceMap.set(space.spaceConfigEntityId, space.id);
+    }
+  }
+
+  const spaceConfigs = (
+    await Promise.all(
+      spacesWithSpaceConfigs.map(space => fetchEntity({ endpoint: config.subgraph, id: space.spaceConfigEntityId }))
+    )
+  ).filter((c): c is Entity => c !== null);
+
   return (
     <div className="flex flex-col">
       <h1 className="text-mainPage">All spaces</h1>
       <Spacer height={40} />
       <div className="grid grid-cols-3 gap-4 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
-        {filteredAndSortedSpaces.map((space: Space) => (
+        {spaceConfigs.map(config => (
           <Card
-            key={space.id}
-            spaceId={space.id}
-            name={space.attributes.name}
-            image={space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+            key={config.id}
+            spaceId={spaceConfigToSpaceMap.get(config.id) ?? ''}
+            name={config.name ?? undefined}
+            image={EntityModule.cover(config.triples) ?? undefined}
           />
         ))}
       </div>
