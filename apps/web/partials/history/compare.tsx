@@ -7,6 +7,7 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffArrays, diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -71,7 +72,7 @@ const CompareChanges = () => {
 };
 
 const Versions = () => {
-  const { selectedVersion, previousVersion } = useDiff();
+  const { selectedVersion, previousVersion, setIsCompareOpen } = useDiff();
   const [data, isLoading] = useChangesFromVersions(selectedVersion, previousVersion);
 
   if (isLoading) {
@@ -139,7 +140,11 @@ const Versions = () => {
               <>
                 <div className="text-mediumTitle">{versions.previous.name}</div>
                 <div className="mt-1 flex items-center gap-4">
-                  <div className="inline-flex items-center gap-1">
+                  <Link
+                    href={versions.previous.createdBy.profileLink!}
+                    className="inline-flex items-center gap-1"
+                    onClick={() => setIsCompareOpen(false)}
+                  >
                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
                       <Avatar
                         alt={`Avatar for ${versions.previous.createdBy.name ?? versions.previous.createdBy.id}`}
@@ -150,7 +155,7 @@ const Versions = () => {
                     <p className="text-smallButton">
                       {versions.previous.createdBy.name ?? formatShortAddress(versions.previous.createdBy.id)}
                     </p>
-                  </div>
+                  </Link>
                   <div>
                     <p className="text-smallButton">
                       {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
@@ -165,7 +170,11 @@ const Versions = () => {
             <div className="text-body">Selected version</div>
             <div className="text-mediumTitle">{versions.selected.name}</div>
             <div className="mt-1 flex items-center gap-4">
-              <div className="inline-flex items-center gap-1">
+              <Link
+                href={versions.selected.createdBy.profileLink!}
+                className="inline-flex items-center gap-1"
+                onClick={() => setIsCompareOpen(false)}
+              >
                 <div className="relative h-3 w-3 overflow-hidden rounded-full">
                   <Avatar
                     alt={`Avatar for ${versions.selected.createdBy.name ?? versions.selected.createdBy.id}`}
@@ -176,7 +185,7 @@ const Versions = () => {
                 <p className="text-smallButton">
                   {versions.selected.createdBy.name ?? formatShortAddress(versions.selected.createdBy.id)}
                 </p>
-              </div>
+              </Link>
               <div>
                 <p className="text-smallButton">
                   {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
@@ -197,7 +206,7 @@ const Versions = () => {
 };
 
 const Proposals = () => {
-  const { selectedProposal, previousProposal } = useDiff();
+  const { selectedProposal, previousProposal, setIsCompareOpen } = useDiff();
   const [data, isLoading] = useChangesFromProposals(selectedProposal, previousProposal);
 
   if (isLoading) {
@@ -275,7 +284,11 @@ const Proposals = () => {
               <>
                 <div className="text-mediumTitle">{proposals.previous.name}</div>
                 <div className="mt-1 flex items-center gap-4">
-                  <div className="inline-flex items-center gap-1">
+                  <Link
+                    href={proposals.previous.createdBy.profileLink!}
+                    className="inline-flex items-center gap-1"
+                    onClick={() => setIsCompareOpen(false)}
+                  >
                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
                       <Avatar
                         alt={`Avatar for ${proposals.previous.createdBy.name ?? proposals.previous.createdBy.id}`}
@@ -286,7 +299,7 @@ const Proposals = () => {
                     <p className="text-smallButton">
                       {proposals.previous.createdBy.name ?? formatShortAddress(proposals.previous.createdBy.id)}
                     </p>
-                  </div>
+                  </Link>
                   <div>
                     <p className="text-smallButton">
                       {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
@@ -301,7 +314,11 @@ const Proposals = () => {
             <div className="text-body">Selected proposal</div>
             <div className="text-mediumTitle">{proposals.selected.name}</div>
             <div className="mt-1 flex items-center gap-4">
-              <div className="inline-flex items-center gap-1">
+              <Link
+                href={proposals.selected.createdBy.profileLink!}
+                className="inline-flex items-center gap-1"
+                onClick={() => setIsCompareOpen(false)}
+              >
                 <div className="relative h-3 w-3 overflow-hidden rounded-full">
                   <Avatar
                     alt={`Avatar for ${proposals.selected.createdBy.name ?? proposals.selected.createdBy.id}`}
@@ -312,7 +329,7 @@ const Proposals = () => {
                 <p className="text-smallButton">
                   {proposals.selected.createdBy.name ?? formatShortAddress(proposals.selected.createdBy.id)}
                 </p>
-              </div>
+              </Link>
               <div>
                 <p className="text-smallButton">
                   {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}

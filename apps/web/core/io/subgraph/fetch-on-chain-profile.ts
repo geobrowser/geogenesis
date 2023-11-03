@@ -24,8 +24,10 @@ interface NetworkResult {
 // same as the actual wallet address.
 function getFetchProfileQuery(address: string) {
   // Have to fetch the profiles as an array as we can't query an individual profile by it's account.
+  // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
+  // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    geoProfiles(where: {account: "${address}"} first: 1) {
+    geoProfiles(where: {account_starts_with_nocase: "${address}"} first: 1) {
       id
       homeSpace
       account

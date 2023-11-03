@@ -2,6 +2,10 @@ import cn from 'classnames';
 
 import * as React from 'react';
 
-export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('animate-pulse rounded-sm bg-grey-02', className)} {...props} />;
+interface Props extends React.HTMLAttributes<HTMLDivElement> {
+  radius?: 'rounded-full' | 'rounded-sm';
+}
+
+export function Skeleton({ className, radius = 'rounded-sm', ...props }: Props) {
+  return <div className={cn(`animate-pulse bg-grey-02 ${radius}`, className)} {...props} />;
 }

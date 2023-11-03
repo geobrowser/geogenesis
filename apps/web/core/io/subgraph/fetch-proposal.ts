@@ -124,7 +124,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       maybeProfile !== null
         ? maybeProfile[1]
         : {
-            ...proposal.createdBy,
+            id: proposal.createdBy.id,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
             address: proposal.createdBy.id as `0x${string}`,
             profileLink: null,
           },
@@ -135,7 +138,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
           maybeProfile !== null
             ? maybeProfile[1]
             : {
-                ...proposal.createdBy,
+                id: proposal.createdBy.id,
+                name: null,
+                avatarUrl: null,
+                coverUrl: null,
                 address: proposal.createdBy.id as `0x${string}`,
                 profileLink: null,
               },

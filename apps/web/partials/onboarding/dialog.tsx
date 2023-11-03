@@ -55,6 +55,8 @@ export const OnboardingDialog = () => {
 
       setWorkflowStep('registering-profile');
 
+      // @TODO: The main way that onboarding might fail is if the user's transaction fails.
+      // We should handle retries from the UI here. Nate has a design for it.
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
 
       // Update the query cache with the new profile while we wait for the profiles subgraph to
@@ -332,11 +334,9 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
             {complete[stageAsNumber[stage]]}
           </Text>
-          {stage !== 'registering-profile' && (
-            <div className="mx-auto mt-2 w-1/3">
-              <Progress stage={stageAsNumber[stage]} />
-            </div>
-          )}
+          <div className="mx-auto mt-2 w-1/3">
+            <Progress stage={stageAsNumber[stage]} />
+          </div>
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
@@ -358,7 +358,7 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
 const complete: Record<number, string> = {
   1: `Step 1. Creating your personal space.`,
   2: `Step 2. Sign the transaction to create your profile.`,
-  3: `Step 3. Finishing setting up your space..`,
+  3: `Step 3. Finishing setting up your space...`,
   4: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
 };
 
@@ -372,7 +372,6 @@ const Progress = ({ stage }: ProgressProps) => {
       <Indicator index={1} stage={stage} />
       <Indicator index={2} stage={stage} />
       <Indicator index={3} stage={stage} />
-      <Indicator index={4} stage={stage} />
     </div>
   );
 };
@@ -389,8 +388,8 @@ const Indicator = ({ index, stage }: IndicatorProps) => {
     <div className="relative h-1.5 flex-1 overflow-clip rounded-full bg-grey-02">
       <motion.div
         transition={{
-          ease: 'linear',
-          duration: 1,
+          ease: 'easeOut',
+          duration: 0.5,
           bounce: 0,
           delay: index >= stage ? 1 : 0,
         }}

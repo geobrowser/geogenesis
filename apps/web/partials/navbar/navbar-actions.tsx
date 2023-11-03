@@ -23,6 +23,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
@@ -31,11 +32,20 @@ export function NavbarActions() {
   const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
-  const { profile } = useGeoProfile(address);
-  const geoEntityProfile = usePerson(address);
+  const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
+  const { person, isLoading: isPersonLoading } = usePerson(address);
 
   if (!address) {
     return <GeoConnectButton />;
+  }
+
+  if (isProfileLoading || isPersonLoading) {
+    return (
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
+        <Skeleton className="h-7 w-7" radius="rounded-full" />
+      </div>
+    );
   }
 
   return (
@@ -45,14 +55,14 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {!geoEntityProfile && profile ? (
+        {!person && profile ? (
           <AvatarMenuItem>
             <div className="flex items-center gap-2">
               <div className="relative h-4 w-4 overflow-hidden rounded-full">
@@ -68,9 +78,9 @@ export function NavbarActions() {
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={geoEntityProfile?.avatarUrl} size={16} />
+                      <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
                     </div>
-                    <Link href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
                       Personal space
                     </Link>
                   </div>

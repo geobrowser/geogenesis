@@ -24,7 +24,7 @@ export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
         body: JSON.stringify({ query }),
         signal,
         next: {
-          revalidate: 60,
+          revalidate: 20,
         },
       }),
     catch: e => {

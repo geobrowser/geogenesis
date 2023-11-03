@@ -116,6 +116,16 @@ export async function fetchProposedVersion({
 
   return {
     ...proposedVersion,
-    createdBy: maybeProfile !== null ? maybeProfile[1] : proposedVersion.createdBy,
+    createdBy:
+      maybeProfile !== null
+        ? maybeProfile[1]
+        : {
+            id: proposedVersion.createdBy.id,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
+            address: proposedVersion.createdBy.id as `0x${string}`,
+            profileLink: null,
+          },
   };
 }

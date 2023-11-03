@@ -4,7 +4,7 @@ import { Services } from '../services';
 
 export function usePerson(address?: string) {
   const { subgraph, config } = Services.useServices();
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['user-profile', address],
     queryFn: async () => {
       if (!address) return null;
@@ -12,5 +12,8 @@ export function usePerson(address?: string) {
     },
   });
 
-  return data ? data[1] : null;
+  return {
+    isLoading,
+    person: data ? data[1] : null,
+  };
 }
