@@ -1,4 +1,4 @@
-import { Account, Action, Entity, OmitStrict, Profile, ProposedVersion, Space, Triple, Value } from '~/core/types';
+import { Account, Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value } from '~/core/types';
 
 export type NetworkSpace = {
   id: string;
@@ -57,7 +57,9 @@ export type NetworkProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & 
 
   // The NetworkVersion does not have a name or avatar associated
   // with the createdBy field
-  createdBy: Profile;
+  createdBy: {
+    id: string;
+  };
   entity: {
     id: string;
     name: string;
@@ -66,7 +68,9 @@ export type NetworkProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & 
 
 export type NetworkProposal = {
   id: string;
-  createdBy: Profile;
+  createdBy: {
+    id: string;
+  };
   createdAt: number;
   createdAtBlock: string;
   name: string | null;

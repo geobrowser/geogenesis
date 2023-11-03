@@ -45,8 +45,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
 
   const props = await getData(params.id, config);
 
-  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
+  const coverUrl = Entity.cover(props.triples);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
@@ -58,7 +57,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
         <EntityPageContentContainer>
           <EditableHeading
             spaceId={props.spaceId}
@@ -149,8 +148,6 @@ const getData = async (spaceId: string, config: AppConfig) => {
   }
 
   const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-  const serverAvatarUrl = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
@@ -175,8 +172,6 @@ const getData = async (spaceId: string, config: AppConfig) => {
     name: entity?.name ?? spaceName ?? '',
     description: Entity.description(entity?.triples ?? []),
     spaceId,
-    serverAvatarUrl,
-    serverCoverUrl,
 
     // For entity page editor
     blockIdsTriple,

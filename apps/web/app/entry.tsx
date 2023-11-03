@@ -17,9 +17,9 @@ import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { CreateProfileDialog } from '~/partials/onboarding/create-profile-dialog';
+import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { Review } from '~/partials/review/review';
-// import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { Dialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {
@@ -48,7 +48,7 @@ export function App({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      {/* <OnboardingDialog /> */}
+      <OnboardingDialog />
       <CreateProfileDialog />
       <Dialog
         open={open}

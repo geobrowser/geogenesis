@@ -44,19 +44,19 @@ export const Component = ({ activeProposals, membershipRequests }: Props) => {
 
 const PersonalHomeHeader = () => {
   const { address } = useAccount();
-  const profile = usePerson(address);
+  const { person } = usePerson(address);
   const { profile: onchainProfile } = useGeoProfile(address);
 
   return (
     <div className="flex w-full items-center justify-between">
       <div className="flex items-center gap-4">
         <div className="relative h-14 w-14 overflow-hidden rounded-sm bg-grey-01">
-          <Avatar value={address} avatarUrl={profile?.avatarUrl} size={56} square={true} />
+          <Avatar value={address} avatarUrl={person?.avatarUrl} size={56} square={true} />
         </div>
-        <h2 className="text-largeTitle">{profile?.name ?? 'Anonymous'}</h2>
+        <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>
       </div>
       {onchainProfile?.homeSpace && (
-        <Link href={NavUtils.toSpace(onchainProfile.homeSpace)}>
+        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpace)}>
           <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
         </Link>
       )}

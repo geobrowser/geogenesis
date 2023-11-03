@@ -3,8 +3,6 @@ import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
 
-import type { Metadata } from 'next';
-
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -12,7 +10,6 @@ import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -35,39 +32,6 @@ interface Props {
     typeId?: string;
     filterId?: string;
     filterValue?: string;
-  };
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const spaceId = params.id;
-  const entityId = params.entityId;
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
-  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
-
-  return {
-    title: entityName ?? 'New entity',
-    description,
-    openGraph: {
-      title: entityName ?? 'New entity',
-      description,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      description,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
   };
 }
 

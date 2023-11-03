@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
+import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Merge } from '~/design-system/icons/merge';
 import { MoveSpace } from '~/design-system/icons/move-space';
@@ -51,7 +52,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
       className="max-w-[160px]"
       open={isMenuOpen}
       onOpenChange={onMenuOpenChange}
-      trigger={<Copy color="grey-04" />}
+      trigger={<Context color="grey-04" />}
       side="bottom"
     >
       <EntityPageContextMenuItem>
