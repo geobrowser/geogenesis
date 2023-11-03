@@ -48,9 +48,9 @@ const MobileSlider = ({ label, children }: SliderProps) => {
 
   return (
     <>
-      {slides.length > 1 && (
-        <div className="mb-2 hidden h-8 items-center justify-between xl:flex">
-          <h4 className="text-smallTitle">{label}</h4>
+      <div className="mb-2 hidden h-8 items-center justify-between xl:flex">
+        <h4 className="text-smallTitle">{label}</h4>
+        {slides.length > 1 && (
           <div className="flex items-center gap-5 text-text">
             <IconButton
               onClick={handlePrev}
@@ -67,8 +67,8 @@ const MobileSlider = ({ label, children }: SliderProps) => {
               disabled={!hasNext}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
       <div className="no-scrollbar -mx-4 hidden w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-y-clip overflow-x-scroll xl:flex">
         {slides.map((slide: ReactNode, index: number) => (
           <Slide key={index} mode="mobile" index={index} id={`${prefix}-slider-mobile-${index}`} onChange={setPage}>
@@ -105,9 +105,9 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
 
   return (
     <>
-      {slides.length > 1 && (
-        <div className="mb-2 flex h-8 items-center justify-between xl:hidden">
-          <h4 className="text-smallTitle">{label}</h4>
+      <div className="mb-2 flex h-8 items-center justify-between xl:hidden">
+        <h4 className="text-smallTitle">{label}</h4>
+        {slides.length > 1 && (
           <div className="flex items-center gap-5 text-text">
             <IconButton
               onClick={handlePrev}
@@ -124,8 +124,8 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
               disabled={!hasNext}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
       <div className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] max-w-[calc(100%+2rem)] snap-x snap-mandatory overflow-y-clip overflow-x-scroll xl:hidden">
         {slides.map((slide: ReactNode, index: number) => (
           <Slide key={index} mode="desktop" index={index} id={`${prefix}-slider-desktop-${index}`} onChange={setPage}>
