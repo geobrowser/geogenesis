@@ -38,39 +38,6 @@ interface Props {
   };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const spaceId = params.id;
-  const entityId = params.entityId;
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
-  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
-
-  return {
-    title: entityName ?? 'New entity',
-    description,
-    openGraph: {
-      title: entityName ?? 'New entity',
-      description,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      description,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
-    },
-  };
-}
-
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
