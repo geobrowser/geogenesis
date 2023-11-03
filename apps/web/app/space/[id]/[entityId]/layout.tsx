@@ -34,8 +34,18 @@ export const runtime = 'edge';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  const entityId = params.entityId;
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const entityId = decodeURIComponent(params.entityId);
+
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  const { isPermissionlessSpace } = await API.space(params.id);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
 
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
