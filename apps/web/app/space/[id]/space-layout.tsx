@@ -58,13 +58,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
 
         <EntityPageContentContainer>
-          <EditableHeading
-            spaceId={props.spaceId}
-            entityId={props.id}
-            name={props.name}
-            triples={props.triples}
-            showAccessControl
-          />
+          <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
           <SpacePageMetadataHeader
             spaceId={props.spaceId}
             membersComponent={

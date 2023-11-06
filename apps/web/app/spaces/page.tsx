@@ -1,5 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';

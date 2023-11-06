@@ -116,7 +116,6 @@ export default async function ProfileLayout({ children, params }: Props) {
           entityId={params.entityId}
           name={profile.name ?? params.entityId}
           triples={profile.triples}
-          showAccessControl
         />
         <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
