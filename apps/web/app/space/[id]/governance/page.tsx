@@ -65,7 +65,9 @@ export default async function GovernancePage({ params }: Props) {
 }
 
 function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
-  return <div className="flex w-full flex-col items-center gap-1 rounded border border-grey-02 py-3">{children}</div>;
+  return (
+    <div className="flex w-full flex-col items-center gap-1 rounded-lg border border-grey-02 py-3">{children}</div>
+  );
 }
 
 interface NetworkResult {

@@ -84,78 +84,84 @@ export function Email() {
 
   return (
     <form name="email" onSubmit={onSubmitEmail} noValidate>
-      <div className="flex flex-col items-center overflow-hidden rounded bg-divider p-[60px]">
-        <Text as="h2" variant="largeTitle">
-          Stay updated with the latest content
-        </Text>
-        <Text as="h3">New content is added by the Geo community every day - never miss out on a thing!</Text>
-        <Spacer height={16} />
-        <div>
-          <div className="relative flex w-[340px] items-center gap-2 sm:max-w-full sm:flex-col">
-            <div className="w-[243px]">
-              <Input aria-label="Email" ref={inputRef} name="address" type="email" placeholder="Email..." />
-            </div>
-            <Button variant={getButtonVariant(state)}>
-              <AnimatePresence mode="wait" initial={false}>
-                {state.type === 'pending' && (
+      <div className="rounded-lg bg-divider pb-[60px]">
+        <div className="flex flex-col items-center overflow-hidden p-[60px] pb-0">
+          <Text as="h2" variant="largeTitle">
+            Stay updated with the latest content
+          </Text>
+          <Text as="h3">New content is added by the Geo community every day - never miss out on a thing!</Text>
+          <Spacer height={16} />
+          <div>
+            <div className="relative flex w-[340px] items-center gap-2 sm:max-w-full sm:flex-col">
+              <div className="w-[243px]">
+                <Input aria-label="Email" ref={inputRef} name="address" type="email" placeholder="Email..." />
+              </div>
+              <Button variant={getButtonVariant(state)}>
+                <AnimatePresence mode="wait" initial={false}>
+                  {state.type === 'pending' && (
+                    <motion.div
+                      key="email-pending"
+                      className="px-6 py-px"
+                      initial={{ scale: 0.1 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.1 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <EmailSpinner />
+                    </motion.div>
+                  )}
+                  {(state.type === 'idle' || state.type === 'error') && (
+                    <motion.span
+                      initial={{ scale: 0.1 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.1 }}
+                      transition={{ duration: 0.1 }}
+                      key="email-idle"
+                      className="whitespace-nowrap"
+                    >
+                      Notify me
+                    </motion.span>
+                  )}
+                  {state.type === 'success' && (
+                    <motion.div
+                      key="email-success"
+                      className="px-6 py-px"
+                      initial={{ scale: 0.1 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.1 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <Tick />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Button>
+              <AnimatePresence>
+                {state.message && (
                   <motion.div
-                    key="email-pending"
-                    className="px-6 py-px"
-                    initial={{ scale: 0.1 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0.1 }}
+                    key="email-error-container"
+                    className="self-start"
+                    style={{ position: 'absolute', bottom: -18 }}
+                    initial={{ y: -10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -10, opacity: 0 }}
                     transition={{ duration: 0.1 }}
                   >
-                    <EmailSpinner />
-                  </motion.div>
-                )}
-                {(state.type === 'idle' || state.type === 'error') && (
-                  <motion.span
-                    initial={{ scale: 0.1 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0.1 }}
-                    transition={{ duration: 0.1 }}
-                    key="email-idle"
-                    className="whitespace-nowrap"
-                  >
-                    Notify me
-                  </motion.span>
-                )}
-                {state.type === 'success' && (
-                  <motion.div
-                    key="email-success"
-                    className="px-6 py-px"
-                    initial={{ scale: 0.1 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0.1 }}
-                    transition={{ duration: 0.1 }}
-                  >
-                    <Tick />
+                    <Text variant="smallButton" color="red-01">
+                      {state.message}
+                    </Text>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </Button>
-            <AnimatePresence>
-              {state.message && (
-                <motion.div
-                  key="email-error-container"
-                  className="self-start"
-                  style={{ position: 'absolute', bottom: -18 }}
-                  initial={{ y: -10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -10, opacity: 0 }}
-                  transition={{ duration: 0.1 }}
-                >
-                  <Text variant="smallButton" color="red-01">
-                    {state.message}
-                  </Text>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            </div>
           </div>
         </div>
         <Spacer height={32} />
-        <img src="/example-spaces.svg" alt="images of example Spaces like Vitamic C, Fungi, Storms" />
+        <img
+          className="w-full"
+          src="/example-spaces.svg"
+          alt="images of example Spaces like Vitamic C, Fungi, Storms"
+        />
       </div>
     </form>
   );

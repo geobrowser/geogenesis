@@ -114,7 +114,7 @@ export function ImageZoom({ imageSrc, variant = 'default' }: ImageZoomProps) {
   return (
     <Zoom>
       <div className="relative" style={imageStyles[variant]}>
-        <img src={getImagePath(imageSrc)} className="h-full rounded object-cover" />
+        <img src={getImagePath(imageSrc)} className="h-full rounded-lg object-cover" />
       </div>
     </Zoom>
   );
