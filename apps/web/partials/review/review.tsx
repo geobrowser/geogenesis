@@ -116,7 +116,7 @@ const ReviewChanges = () => {
 
           spacesMap.set(id, {
             id,
-            name: config.name ?? null,
+            name: config.name,
             image,
           });
         }
