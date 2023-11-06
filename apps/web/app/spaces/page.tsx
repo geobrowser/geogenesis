@@ -67,6 +67,8 @@ const HIDDEN_SPACES: Array<string> = [
   '0x2C423d74eEC59867b16693Ec2870292b302729ec', // Web3 economics
 ];
 
+export const revalidate = 60; // 1 minute
+
 export default async function Spaces() {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
