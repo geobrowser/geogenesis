@@ -141,7 +141,7 @@ const Versions = () => {
                 <div className="text-mediumTitle">{versions.previous.name}</div>
                 <div className="mt-1 flex items-center gap-4">
                   <Link
-                    href={versions.previous.createdBy.profileLink!}
+                    href={versions.previous.createdBy.profileLink ? versions.previous.createdBy.profileLink : ''}
                     className="inline-flex items-center gap-1"
                     onClick={() => setIsCompareOpen(false)}
                   >
@@ -171,7 +171,7 @@ const Versions = () => {
             <div className="text-mediumTitle">{versions.selected.name}</div>
             <div className="mt-1 flex items-center gap-4">
               <Link
-                href={versions.selected.createdBy.profileLink!}
+                href={versions.selected.createdBy.profileLink ? versions.selected.createdBy.profileLink : ''}
                 className="inline-flex items-center gap-1"
                 onClick={() => setIsCompareOpen(false)}
               >
@@ -285,7 +285,7 @@ const Proposals = () => {
                 <div className="text-mediumTitle">{proposals.previous.name}</div>
                 <div className="mt-1 flex items-center gap-4">
                   <Link
-                    href={proposals.previous.createdBy.profileLink!}
+                    href={proposals.previous.createdBy.profileLink ? proposals.previous.createdBy.profileLink : ''}
                     className="inline-flex items-center gap-1"
                     onClick={() => setIsCompareOpen(false)}
                   >
@@ -315,7 +315,7 @@ const Proposals = () => {
             <div className="text-mediumTitle">{proposals.selected.name}</div>
             <div className="mt-1 flex items-center gap-4">
               <Link
-                href={proposals.selected.createdBy.profileLink!}
+                href={proposals.selected.createdBy.profileLink ? proposals.selected.createdBy.profileLink : ''}
                 className="inline-flex items-center gap-1"
                 onClick={() => setIsCompareOpen(false)}
               >
