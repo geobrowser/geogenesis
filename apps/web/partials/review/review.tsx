@@ -65,13 +65,6 @@ type Proposal = {
 
 type EntityId = string;
 
-const getImage = (triples: Triple[]) => {
-  const cover = Entity.cover(triples);
-  const avatar = Entity.avatar(triples);
-
-  return cover ?? avatar;
-};
-
 type GatewaySpaceWithEntityConfig = {
   space: {
     spaceConfigEntityId: string;
@@ -118,7 +111,7 @@ const ReviewChanges = () => {
         const id = spaceConfigToSpaceMap.get(config.id);
 
         if (id) {
-          const maybeImageHash = getImage(config.triples);
+          const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
           const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
 
           spacesMap.set(id, {
