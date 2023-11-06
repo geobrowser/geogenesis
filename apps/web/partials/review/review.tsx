@@ -112,16 +112,24 @@ const ReviewChanges = () => {
         )
       ).filter((c): c is EntityType => c !== null);
 
-      return spaceConfigs.map(c => {
-        const maybeImageHash = getImage(c.triples);
-        const image = maybeImageHash ? getImagePath(maybeImageHash) : undefined;
+      const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
-        return {
-          id: spaceConfigToSpaceMap.get(c.id) ?? '',
-          name: c.name ?? null,
-          image,
-        };
-      });
+      for (const config of spaceConfigs) {
+        const id = spaceConfigToSpaceMap.get(config.id);
+
+        if (id) {
+          const maybeImageHash = getImage(config.triples);
+          const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
+
+          spacesMap.set(id, {
+            id,
+            name: config.name ?? null,
+            image,
+          });
+        }
+      }
+
+      return spacesMap;
     },
   });
 
@@ -145,12 +153,12 @@ const ReviewChanges = () => {
       <span className="inline-flex items-center gap-2 text-button text-text">
         <span className="relative h-4 w-4 overflow-hidden rounded-sm">
           <img
-            src={spaces?.find(({ id }) => id === spaceId)?.image ?? undefined}
+            src={spaces?.get(spaceId)?.image ?? undefined}
             className="absolute inset-0 h-full w-full object-cover object-center"
             alt=""
           />
         </span>
-        <span>{spaces?.find(s => s.id === spaceId)?.name}</span>
+        <span>{spaces?.get(spaceId)?.name}</span>
       </span>
     ),
     disabled: activeSpace === spaceId,
@@ -227,12 +235,12 @@ const ReviewChanges = () => {
                 <span className="inline-flex items-center gap-2 text-button text-text ">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <img
-                      src={spaces?.find(({ id }) => id === activeSpace)?.image ?? undefined}
+                      src={spaces?.get(activeSpace)?.image ?? undefined}
                       className="absolute inset-0 h-full w-full object-cover object-center"
                       alt=""
                     />
                   </span>
-                  <span>{spaces?.find(({ id }) => id === activeSpace)?.name}</span>
+                  <span>{spaces?.get(activeSpace)?.name}</span>
                 </span>
               )}
               {allSpacesWithActions.length > 1 && (
@@ -241,12 +249,12 @@ const ReviewChanges = () => {
                     <span className="inline-flex items-center gap-2">
                       <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                         <img
-                          src={spaces?.find(({ id }) => id === activeSpace)?.image ?? undefined}
+                          src={spaces?.get(activeSpace)?.image ?? undefined}
                           className="absolute inset-0 h-full w-full object-cover object-center"
                           alt=""
                         />
                       </span>
-                      <span>{spaces?.find(({ id }) => id === activeSpace)?.name}</span>
+                      <span>{spaces?.get(activeSpace)?.name}</span>
                     </span>
                   }
                   align="start"
