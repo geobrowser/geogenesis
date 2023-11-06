@@ -174,7 +174,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   });
 
   return (
-    <div className="overflow-x-scroll rounded">
+    <div className="overflow-x-scroll rounded-lg">
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (

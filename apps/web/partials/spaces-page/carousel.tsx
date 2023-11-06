@@ -99,7 +99,7 @@ export function OboardingCarousel() {
       <Spacer height={22} />
       {/* Wait for the arrow position to calculate so there's no weird arrow layout shift */}
       <motion.div
-        className="relative flex max-w-[880px] flex-col rounded border border-text p-5"
+        className="relative flex max-w-[880px] flex-col rounded-lg border border-text p-5"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5, duration: 0.5 }}

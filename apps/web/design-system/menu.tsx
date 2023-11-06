@@ -22,7 +22,7 @@ interface Props {
 const MotionContent = motion(PopoverContent);
 
 const contentStyles = cva(
-  'z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded border border-grey-02 shadow-lg',
+  'z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg',
   {
     variants: {
       align: {

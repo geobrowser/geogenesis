@@ -242,14 +242,14 @@ module.exports = {
         metadata: [
           '1rem',
           {
-            lineHeight: '0.9375rem',
+            lineHeight: '1.2rem',
             fontWeight: '400',
           },
         ],
         metadataMedium: [
           '1rem',
           {
-            lineHeight: '0.9375rem',
+            lineHeight: '1.2rem',
             fontWeight: '500',
           },
         ],

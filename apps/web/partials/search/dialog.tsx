@@ -28,7 +28,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
-        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded border border-grey-02 bg-white shadow-dropdown">
+        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <div className={cx('relative p-2', A.isNotEmpty(autocomplete.results) && 'border-b border-grey-02')}>
             <AnimatePresence mode="wait">
               {autocomplete.isLoading ? (
