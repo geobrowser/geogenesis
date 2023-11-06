@@ -1,47 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { ID } from '~/core/id';
-import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
-
-import { Button } from '~/design-system/button';
-import { Create } from '~/design-system/icons/create';
-import { Spacer } from '~/design-system/spacer';
 import { TabLink } from '~/design-system/tab-link';
 
 interface Props {
   spaceId: string;
 }
-
-const SpaceActions = ({ spaceId }: Props) => {
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const { editable } = useEditable();
-
-  return (
-    <div className="flex items-center">
-      {(isEditor || isAdmin || isEditorController) && editable && (
-        <div className="flex w-full items-center justify-between">
-          {isEditor && (
-            <>
-              <Spacer width={12} />
-              <Link href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
-                <Button icon={<Create />} data-testid="create-entity-button">
-                  New entity
-                </Button>
-              </Link>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const SpaceNavbar = ({ spaceId }: Props) => {
   const path = usePathname();
@@ -71,7 +38,6 @@ export const SpaceNavbar = ({ spaceId }: Props) => {
           </TabLink>
         ))}
       </div>
-      <SpaceActions spaceId={spaceId} />
     </div>
   );
 };

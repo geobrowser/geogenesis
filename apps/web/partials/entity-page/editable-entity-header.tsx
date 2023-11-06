@@ -1,22 +1,16 @@
 'use client';
 
-import Link from 'next/link';
-
 import * as React from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
-import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
-import { Button } from '~/design-system/button';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
@@ -26,13 +20,11 @@ export function EditableHeading({
   entityId,
   name: serverName,
   triples: serverTriples,
-  showAccessControl = false,
 }: {
   spaceId: string;
   entityId: string;
   name: string | null;
   triples: Triple[];
-  showAccessControl?: boolean;
 }) {
   const { triples: localTriples, update, create, remove } = useEntityPageStore();
   const { editable } = useEditable();
@@ -71,7 +63,7 @@ export function EditableHeading({
 
   return (
     <div className="relative">
-      {!showAccessControl && isEditing ? (
+      {isEditing ? (
         <div>
           <PageStringField variant="mainPage" placeholder="Entity name..." value={name ?? ''} onChange={onNameChange} />
           {/*
@@ -89,13 +81,6 @@ export function EditableHeading({
                 {name ?? entityId}
               </Text>
             </Truncate>
-            {isEditing && (
-              <Link className="shrink-0" href={NavUtils.toEntity(spaceId, ID.createEntityId())}>
-                <Button icon={<Create />} data-testid="create-entity-button">
-                  New entity
-                </Button>
-              </Link>
-            )}
           </div>
           <Spacer height={12} />
         </div>
