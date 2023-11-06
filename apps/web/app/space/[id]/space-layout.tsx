@@ -55,7 +55,7 @@ export async function SpaceLayout({ params, children, usePermissionlessSpace }: 
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
-        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
+        <EntityPageCover avatarUrl={null} coverUrl={coverUrl} space />
 
         <EntityPageContentContainer>
           <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
