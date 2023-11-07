@@ -22,8 +22,13 @@ export interface FetchSubspacesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: NetworkEntity[];
+  geoEntities: SpaceEntity[];
 }
+
+type SpaceEntity = {
+  id: string;
+  name: string | null;
+};
 
 export async function fetchSubspaces(options: FetchSubspacesOptions) {
   const queryId = uuid();

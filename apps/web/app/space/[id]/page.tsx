@@ -108,12 +108,7 @@ const SubspacesSkeleton = () => {
     <>
       <div className="h-10" />
       <div className="no-scrollbar grid grid-cols-3 gap-8 overflow-x-scroll xl:grid-cols-2" aria-hidden>
-        <div>
-          <Skeleton className="aspect-video w-full" />
-          <div className="mt-2 text-metadataMedium text-text opacity-0">
-            Need a placeholder that wraps around to two lines.
-          </div>
-        </div>
+        <Skeleton className="aspect-video w-full" />
         <Skeleton className="aspect-video w-full" />
         <Skeleton className="aspect-video w-full xl:hidden" />
       </div>
