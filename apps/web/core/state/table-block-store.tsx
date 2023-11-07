@@ -144,7 +144,6 @@ export function useTableBlock() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      // @TODO: Why are we doing uniqBy? If this was for the fromActions bug it should be fixed now.
       const mergedTriples = Triple.fromActions(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
