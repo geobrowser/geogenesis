@@ -24,7 +24,7 @@ export function useTableBlockStoreV2({ spaceId }: TableBlockStoreConfig) {
   const merged = useMergedData();
   const { actionsByEntityId } = useActionsStore();
 
-  const { data: blockEntity, isLoading: isLoadingBlockEntity } = useQuery({
+  const { data: blockEntity } = useQuery({
     queryKey: ['table-block-entity', entityId, actionsByEntityId[entityId]],
     queryFn: () => merged.fetchEntity({ id: entityId, endpoint: config.subgraph }),
   });
