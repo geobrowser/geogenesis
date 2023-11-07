@@ -70,9 +70,19 @@ export function useTableBlock() {
 
   // We track the name triple separately from the normal `blockEntities.triples`
   // flow so we can avoid re-rendering the block when the name changes.
+  // 1. Get the initial version of the name triple if it exists. This triple can
+  //    either be local or remote as we merge the local and remote triples when
+  //    fetching the blockEntity.
+  // 2. Since we only merge the local and remote triples when non-name triples
+  //    have changed, we need to merge these with the local actions to get any
+  //    up-to-date version of the name triple.
+  // 3. fromActions takes _all_ the actions on the entity, so we need to filter
+  //    again for the name triple. We could do this up-front as well, but the
+  //    current implementation fewer data structures.
   const nameTriple = React.useMemo(() => {
     const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-    return Triple.fromActions(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : [])?.[0] ?? null;
+    const mergedTriples = Triple.fromActions(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
+    return mergedTriples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
   }, [blockEntity?.triples, actionsForEntityId]);
 
   const filterTriple = React.useMemo(() => {
@@ -275,7 +285,7 @@ export function useTableBlock() {
     [create, update, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
   );
 
-  const onNameChange = React.useCallback(
+  const setName = React.useCallback(
     (newName: string) => {
       TableBlockSdk.upsertName({
         newName: newName,
@@ -311,7 +321,7 @@ export function useTableBlock() {
 
     nameTriple,
     name: Value.stringValue(nameTriple ?? undefined),
-    onNameChange,
+    setName,
   };
 }
 
