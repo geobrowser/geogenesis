@@ -17,6 +17,8 @@ type SubspacesProps = {
 export const Subspaces = ({ subspaces }: SubspacesProps) => {
   const { spaces } = useSpaces();
 
+  if (subspaces.length === 0) return null;
+
   return (
     <>
       <Slider label="Subspaces">
