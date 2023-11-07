@@ -32,7 +32,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
 
           return (
             <Link key={index} href={href} className="group">
-              <div className="relative aspect-[16/9] w-full overflow-clip rounded bg-grey-01">
+              <div className="relative aspect-[16/9] w-full overflow-clip rounded-lg bg-grey-01">
                 <Image
                   src={src}
                   className="transition-transform duration-150 ease-in-out group-hover:scale-105"
