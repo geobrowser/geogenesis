@@ -20,7 +20,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
-import { useTableBlockStoreV2 } from '~/core/state/table-block-store-v2';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -232,7 +232,7 @@ function useOptimisticAttributes({
 
 export function TableBlockContextMenu() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { type, spaceId, entityId } = useTableBlockStoreV2();
+  const { type, spaceId, entityId } = useTableBlock();
 
   const isEditing = useUserIsEditing(spaceId);
 
@@ -341,7 +341,7 @@ const resultsListActionBarStyles = cva(
 );
 
 function AddAttribute() {
-  const { type } = useTableBlockStoreV2();
+  const { type } = useTableBlock();
 
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
@@ -434,7 +434,7 @@ function AddAttribute() {
 }
 
 function SchemaAttributes() {
-  const { type } = useTableBlockStoreV2();
+  const { type } = useTableBlock();
   const { create, update } = useActionsStore();
 
   const {

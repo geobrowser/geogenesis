@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEditable } from '~/core/state/editable-store';
-import { useTableBlockStoreV2 } from '~/core/state/table-block-store-v2';
+import { useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -81,7 +81,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnRelationTypes } = useTableBlockStoreV2();
+    const { columns, columnRelationTypes } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;

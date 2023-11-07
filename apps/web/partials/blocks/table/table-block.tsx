@@ -13,7 +13,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { useTableBlockStoreV2 } from '~/core/state/table-block-store-v2';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -38,7 +37,7 @@ interface Props {
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { setFilterState } = useTableBlockStoreV2();
+  const { setFilterState } = useTableBlock();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
@@ -55,7 +54,7 @@ export function TableBlock({ spaceId }: Props) {
     hasPreviousPage,
     pageNumber,
     type,
-  } = useTableBlockStoreV2();
+  } = useTableBlock();
 
   const shownColumns = [
     ...(blockEntity?.triples

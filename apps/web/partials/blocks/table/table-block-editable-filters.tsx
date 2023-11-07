@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { TableBlockFilter, useTableBlockStoreV2 } from '~/core/state/table-block-store-v2';
+import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
 import { TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
@@ -11,7 +11,7 @@ import { CreateSmall } from '~/design-system/icons/create-small';
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
 export function TableBlockEditableFilters() {
-  const { setFilterState, columns, filterState } = useTableBlockStoreV2();
+  const { setFilterState, columns, filterState } = useTableBlock();
 
   // We treat Name and Space as special filters even though they are not always
   // columns on the type schema for a table. We allow users to be able to filter

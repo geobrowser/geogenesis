@@ -8,7 +8,6 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { useTableBlockStoreV2 } from '~/core/state/table-block-store-v2';
 import { Entity, Space, TripleValueType } from '~/core/types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -159,7 +158,7 @@ const reducer = (state: PromptState, action: PromptAction): PromptState => {
 };
 
 export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBlockFilterPromptProps) {
-  const { columnRelationTypes } = useTableBlockStoreV2();
+  const { columnRelationTypes } = useTableBlock();
 
   const [state, dispatch] = React.useReducer(reducer, {
     selectedColumn: SYSTEM_IDS.NAME,
