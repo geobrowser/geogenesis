@@ -35,28 +35,45 @@ export function useTableBlock() {
   // since not all of the triples for an entity will be part of the
   // actions store.
   //
-  // Right now the block will re-render if changes are made to _any_
+  // Typicall the block will re-render if changes are made to _any_
   // triple on the block entity. This works mostly as intended except
-  // when making changes to the name triple. The name triple shouldn't
-  // re-render the block, but currently it does.
+  // when making changes to the name triple.
   //
-  // We can't filter out the name triple from the array of actions since
-  // toggling edit mode will revert back to the original representation of
-  // the name at the time of mounting the block. Any subsequent changes
-  // won't be visible.
+  // We track the actions minus the name triple so we can avoid re-fetching
+  // the entire block entity again when the name changes as changes to
+  // the name triple should not affect any of the data fetching.
   const actionsForEntityId = React.useMemo(() => {
     return Entity.actionsForEntityId(allActions, entityId);
   }, [allActions, entityId]);
 
+  const actionsForEntityIdWithoutName = React.useMemo(() => {
+    return actionsForEntityId.filter(a => {
+      switch (a.type) {
+        case 'createTriple':
+        case 'deleteTriple':
+          return a.attributeId !== SYSTEM_IDS.NAME;
+        case 'editTriple':
+          return a.after.attributeId !== SYSTEM_IDS.NAME;
+      }
+    });
+  }, [actionsForEntityId]);
+
+  // We only re-fetch the block entity when actions besides changes
+  // to the name triple happen. This is so we can avoid re-fetching
+  // when we change the name triple as it shouldn't affect any of
+  // the data fetching.
   const { data: blockEntity, isLoading } = useQuery({
     // Refetch the entity if there have been local changes
-    queryKey: ['table-block-entity', entityId, actionsForEntityId],
+    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName],
     queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, endpoint: config.subgraph, signal }),
   });
 
+  // We track the name triple separately from the normal `blockEntities.triples`
+  // flow so we can avoid re-rendering the block when the name changes.
   const nameTriple = React.useMemo(() => {
-    return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
-  }, [blockEntity?.triples]);
+    const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+    return Triple.fromActions(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : [])?.[0] ?? null;
+  }, [blockEntity?.triples, actionsForEntityId]);
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -258,6 +275,19 @@ export function useTableBlock() {
     [create, update, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
   );
 
+  const onNameChange = React.useCallback(
+    (newName: string) => {
+      TableBlockSdk.upsertName({
+        newName: newName,
+        nameTriple,
+        spaceId,
+        entityId,
+        api: { update, create },
+      });
+    },
+    [create, entityId, nameTriple, spaceId, update]
+  );
+
   return {
     blockEntity,
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
@@ -280,16 +310,11 @@ export function useTableBlock() {
     isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState || isLoading,
 
     nameTriple,
+    name: Value.stringValue(nameTriple ?? undefined),
+    onNameChange,
   };
 }
 
-// This component is used to wrap table blocks in the entity page
-// and provide store context for the table to load and edit data
-// for that specific table block.
-//
-// It works similarly to the EntityTableStoreProvider, but it's
-// scoped specifically for table blocks since it has functionality
-// unique to table blocks.
 const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
   undefined
 );
