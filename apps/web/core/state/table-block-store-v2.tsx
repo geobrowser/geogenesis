@@ -37,7 +37,7 @@ export function useTableBlockStoreV2({ spaceId }: TableBlockStoreConfig) {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
 
-  const { data: filterState } = useQuery({
+  const { data: filterState, isLoading: isFilterStateLoading } = useQuery({
     queryKey: ['table-block-filter-value', filterTriple?.value],
     queryFn: async () => {
       const filterValue = Value.stringValue(filterTriple ?? undefined) ?? '';
@@ -121,14 +121,42 @@ export function useTableBlockStoreV2({ spaceId }: TableBlockStoreConfig) {
     },
   });
 
+  const setPage = React.useCallback(
+    (page: number | 'next' | 'previous') => {
+      switch (page) {
+        case 'next':
+          setPageNumber(prev => prev + 1);
+          break;
+        case 'previous': {
+          setPageNumber(prev => {
+            if (prev - 1 < 0) return 0;
+            return prev - 1;
+          });
+          break;
+        }
+        default:
+          setPageNumber(page);
+      }
+    },
+    [setPageNumber]
+  );
+
   console.log('table block v2', { blockEntity, nameTriple, filterTriple, filterState, rows, columns });
 
   return {
     blockEntity,
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
-    hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
     columns: columns ?? [],
-    isLoading: isLoadingBlockEntity || isLoadingColumns || isLoadingRows,
+    filterState: filterState ?? [],
+
+    pageNumber,
+    hasNextPage: rows ? rows?.length > PAGE_SIZE : false,
+    hasPreviousPage: pageNumber > 0,
+    setPage,
+
+    type: selectedType,
+
+    isLoading: isLoadingColumns || isLoadingRows || isFilterStateLoading,
   };
 }
 

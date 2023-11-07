@@ -38,25 +38,24 @@ interface Props {
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const {
-    columns,
-    rows,
-    blockEntity,
-    hasNextPage,
-    hasPreviousPage,
-    setPage,
-    pageNumber,
-    filterState,
-    setFilterState,
-    isLoading,
-    type,
-  } = useTableBlock();
+  const { setFilterState } = useTableBlock();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  useTableBlockStoreV2({
+  const {
+    columns,
+    rows,
+    setPage,
+    filterState,
+    isLoading,
+    hasNextPage,
+    blockEntity,
+    hasPreviousPage,
+    pageNumber,
+    type,
+  } = useTableBlockStoreV2({
     spaceId,
   });
 
